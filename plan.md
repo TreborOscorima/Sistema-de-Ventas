@@ -1,7 +1,7 @@
 # Plan: Sistema Completo de Gestión de Ventas e Inventario
 
 ## Objetivo
-Desarrollar un sistema completo de gestión de ventas e inventario con interfaz moderna, sidebar navegable, formularios interactivos, y base de datos integrada para rastrear productos, ingresos, ventas e historial.
+Desarrollar un sistema completo de gestión de ventas e inventario con interfaz moderna, sidebar navegable, formularios interactivos, base de datos integrada, y sistema de autenticación con control de privilegios.
 
 ---
 
@@ -54,7 +54,7 @@ Desarrollar un sistema completo de gestión de ventas e inventario con interfaz 
 - [x] Agregar gráficos con recharts para visualizar tendencias de Ingresos vs Ventas por día
 - [x] Implementar sección de Productos Más Vendidos (Top 5)
 - [x] Agregar alertas de Productos con Stock Bajo (≤10 unidades)
-- [x] Implementar exportación de datos a CSV
+- [x] Implementar exportación de datos a Excel
 - [x] Optimizar diseño responsivo en todos los módulos
 - [x] Implementar notificaciones/toasts para confirmaciones de acciones
 - [x] Añadir botón para resetear todos los filtros
@@ -62,34 +62,57 @@ Desarrollar un sistema completo de gestión de ventas e inventario con interfaz 
 
 ---
 
-## ✅ SISTEMA COMPLETO
+## Phase 4: Sistema de Autenticación y Login
+**Objetivo:** Implementar sistema de login con usuario superadmin predefinido
 
-### Funcionalidades Implementadas:
-✅ **Sidebar Navegable** - Colapsable con navegación fluida entre módulos
-✅ **Módulo de Ingreso** - Formulario dinámico para registrar múltiples productos con cálculos automáticos
-✅ **Módulo de Venta** - Sistema inteligente con autocompletado y validación de stock
-✅ **Inventario Actual** - Vista completa con búsqueda, indicadores de stock bajo y valores totales
-✅ **Historial Completo** - Tabla con filtros avanzados (tipo, producto, fechas) y paginación
-✅ **Estadísticas en Tiempo Real** - Cards con métricas clave (ingresos, ventas, ganancia, movimientos)
-✅ **Gráficos Interactivos** - Visualización de tendencias con recharts (Ingresos vs Ventas)
-✅ **Productos Más Vendidos** - Top 5 productos con mayor rotación
-✅ **Alertas de Stock** - Productos con inventario bajo (≤10 unidades)
-✅ **Exportación CSV** - Descarga de datos filtrados del historial
-✅ **Diseño Moderno** - Estilo SaaS con paleta indigo/gray, fuente Poppins, totalmente responsivo
+### Tareas:
+- [ ] Crear modelo de datos para usuarios (username, password hash, role, privileges)
+- [ ] Implementar página de login con formulario de autenticación
+- [ ] Crear usuario superadmin predefinido con credenciales por defecto (admin/admin)
+- [ ] Agregar sistema de hash de contraseñas con bcrypt
+- [ ] Implementar lógica de autenticación (validar credenciales)
+- [ ] Crear estado de sesión para usuario autenticado con rx.LocalStorage
+- [ ] Proteger todas las rutas principales (requieren autenticación)
+- [ ] Agregar botón de logout en el sidebar
+- [ ] Implementar redirección automática a login si no está autenticado
+- [ ] Mostrar nombre de usuario y rol en el sidebar/header con avatar
 
-### Tecnologías Utilizadas:
-- **Framework:** Reflex 0.8.17
-- **Estilos:** TailwindCSS v3
-- **Gráficos:** Recharts (integrado en Reflex)
-- **Fuente:** Poppins (Google Fonts)
-- **Diseño:** Modern SaaS style
+---
+
+## Phase 5: Módulo de Configuración - Gestión de Usuarios
+**Objetivo:** Crear módulo de configuración para crear y administrar usuarios del sistema
+
+### Tareas:
+- [ ] Agregar opción "Configuracion" al menú del sidebar
+- [ ] Crear página de Configuración con sección de Gestión de Usuarios
+- [ ] Implementar formulario para crear nuevos usuarios (username, password, confirmar password, rol)
+- [ ] Agregar tabla para listar todos los usuarios existentes con acciones
+- [ ] Implementar funcionalidad de edición de usuarios (cambiar password, rol, privilegios)
+- [ ] Agregar botón para eliminar usuarios (protegido: no se puede eliminar admin ni a sí mismo)
+- [ ] Validar que solo usuarios con privilegio manage_users puedan acceder al módulo
+- [ ] Implementar validaciones: username único, passwords coinciden, campos requeridos
+
+---
+
+## Phase 6: Sistema de Privilegios con Switches
+**Objetivo:** Implementar sistema de permisos granulares para cada usuario
+
+### Tareas:
+- [ ] Definir privilegios del sistema: view_ingresos, create_ingresos, view_ventas, create_ventas, view_inventario, edit_inventario, view_historial, export_data, manage_users
+- [ ] Crear interfaz con switches activables/desactivables para cada privilegio en formulario de usuario
+- [ ] Implementar lógica para guardar privilegios por usuario en el estado
+- [ ] Proteger cada módulo según privilegios del usuario autenticado (validación en event handlers)
+- [ ] Ocultar/mostrar secciones del UI según privilegios del usuario
+- [ ] Implementar superadmin con todos los privilegios habilitados por defecto
+- [ ] Agregar indicadores visuales de privilegios activos
+- [ ] Validar privilegios antes de ejecutar acciones críticas (crear ingreso, venta, exportar, etc.)
 
 ---
 
 ## Notas Técnicas
-- **Estado:** Gestión completa con Reflex State, computed vars para cálculos en tiempo real
-- **Validaciones:** Formularios con validación en tiempo real y mensajes de error claros
-- **Autocompletado:** Búsqueda inteligente de productos en ventas
-- **Responsividad:** Sidebar colapsable, tablas adaptativas, diseño mobile-first
-- **UX:** Notificaciones toast, estados vacíos, animaciones suaves
-- **Performance:** Paginación para grandes volúmenes, filtros optimizados
+- **Autenticación:** Hash de passwords con bcrypt, sesión persistente con rx.LocalStorage
+- **Roles:** Superadmin (todos los privilegios), Usuario Normal (privilegios personalizables)
+- **Privilegios:** Sistema granular con switches para cada funcionalidad
+- **Seguridad:** Validación en frontend y backend, protección de rutas
+- **UX:** Login moderno, gestión intuitiva de usuarios, feedback visual claro
+- **Superadmin por defecto:** Username: admin, Password: admin

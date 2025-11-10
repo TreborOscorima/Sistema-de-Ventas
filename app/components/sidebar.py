@@ -1,5 +1,6 @@
 import reflex as rx
 from app.state import State
+from app.states.auth_state import AuthState
 
 
 def nav_item(text: str, icon: str, page: str) -> rx.Component:
@@ -46,9 +47,40 @@ def sidebar() -> rx.Component:
                 nav_item("Venta", "arrow-up-from-line", "Venta"),
                 nav_item("Inventario", "boxes", "Inventario"),
                 nav_item("Historial", "history", "Historial"),
+                nav_item("Configuracion", "settings", "Configuracion"),
                 class_name="flex flex-col gap-2 p-4",
             ),
             class_name="flex-1 overflow-auto",
+        ),
+        rx.el.div(
+            rx.el.div(
+                rx.image(
+                    src=f"https://api.dicebear.com/9.x/initials/svg?seed={State.current_user['username']}",
+                    class_name="h-10 w-10 rounded-full",
+                ),
+                rx.cond(
+                    State.sidebar_open,
+                    rx.el.div(
+                        rx.el.p(
+                            State.current_user["username"], class_name="font-semibold"
+                        ),
+                        rx.el.p(
+                            State.current_user["role"],
+                            class_name="text-xs text-gray-500",
+                        ),
+                        class_name="flex flex-col",
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="flex items-center gap-3 p-4",
+            ),
+            rx.el.button(
+                rx.icon("log-out", class_name="h-5 w-5"),
+                rx.cond(State.sidebar_open, rx.el.span("Cerrar Sesión"), rx.fragment()),
+                on_click=State.logout,
+                class_name="flex items-center gap-3 w-full text-left px-4 py-2 text-red-500 hover:bg-red-100",
+            ),
+            class_name="border-t",
         ),
         class_name=rx.cond(
             State.sidebar_open,
