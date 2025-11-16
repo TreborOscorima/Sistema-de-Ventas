@@ -9,6 +9,7 @@ from app.states.auth_state import AuthState, User, Privileges
 
 class Product(TypedDict):
     id: str
+    barcode: str
     description: str
     stock: float
     unit: str
@@ -18,6 +19,7 @@ class Product(TypedDict):
 
 class TransactionItem(TypedDict):
     temp_id: str
+    barcode: str
     description: str
     quantity: float
     unit: str
@@ -62,6 +64,7 @@ class State(AuthState):
     items_per_page: int = 10
     new_entry_item: TransactionItem = {
         "temp_id": "",
+        "barcode": "",
         "description": "",
         "quantity": 0,
         "unit": "Unidad",
@@ -71,6 +74,7 @@ class State(AuthState):
     new_entry_items: list[TransactionItem] = []
     new_sale_item: TransactionItem = {
         "temp_id": "",
+        "barcode": "",
         "description": "",
         "quantity": 0,
         "unit": "Unidad",
@@ -78,6 +82,7 @@ class State(AuthState):
         "subtotal": 0,
     }
     new_sale_items: list[TransactionItem] = []
+    entry_autocomplete_suggestions: list[str] = []
     autocomplete_suggestions: list[str] = []
     show_user_form: bool = False
     editing_user: User | None = None
@@ -128,12 +133,17 @@ class State(AuthState):
     def inventory_list(self) -> list[Product]:
         if not self.current_user["privileges"]["view_inventario"]:
             return []
+        for product in self.inventory.values():
+            if "barcode" not in product:
+                product["barcode"] = ""
         if self.inventory_search_term:
+            search = self.inventory_search_term.lower()
             return sorted(
                 [
                     p
                     for p in self.inventory.values()
-                    if self.inventory_search_term.lower() in p["description"].lower()
+                    if search in p["description"].lower()
+                    or search in p.get("barcode", "").lower()
                 ],
                 key=lambda p: p["description"],
             )
@@ -255,7 +265,10 @@ class State(AuthState):
 
     @rx.event
     def set_page(self, page: str):
+        previous_page = self.current_page
         self.current_page = page
+        if page == "Venta" and previous_page != "Venta":
+            self._reset_sale_form()
         if self.sidebar_open:
             pass
 
@@ -273,6 +286,21 @@ class State(AuthState):
             self.new_entry_item["subtotal"] = (
                 self.new_entry_item["quantity"] * self.new_entry_item["price"]
             )
+            if field == "description":
+                if value:
+                    search = str(value).lower()
+                    self.entry_autocomplete_suggestions = [
+                        p["description"]
+                        for p in self.inventory.values()
+                        if search in p["description"].lower()
+                    ][:5]
+                else:
+                    self.entry_autocomplete_suggestions = []
+            elif field == "barcode":
+                product = self._find_product_by_barcode(str(value))
+                if product:
+                    self._fill_entry_item_from_product(product)
+                    self.entry_autocomplete_suggestions = []
         except ValueError as e:
             logging.exception(f"Error parsing entry value: {e}")
 
@@ -291,14 +319,7 @@ class State(AuthState):
         item_copy = self.new_entry_item.copy()
         item_copy["temp_id"] = str(uuid.uuid4())
         self.new_entry_items.append(item_copy)
-        self.new_entry_item = {
-            "temp_id": "",
-            "description": "",
-            "quantity": 0,
-            "unit": "Unidad",
-            "price": 0,
-            "subtotal": 0,
-        }
+        self._reset_entry_form()
 
     @rx.event
     def remove_item_from_entry(self, temp_id: str):
@@ -315,12 +336,18 @@ class State(AuthState):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         for item in self.new_entry_items:
             product_id = item["description"].lower().strip()
+            barcode = item.get("barcode", "").strip()
             if product_id in self.inventory:
+                if "barcode" not in self.inventory[product_id]:
+                    self.inventory[product_id]["barcode"] = ""
                 self.inventory[product_id]["stock"] += item["quantity"]
                 self.inventory[product_id]["purchase_price"] = item["price"]
+                if barcode:
+                    self.inventory[product_id]["barcode"] = barcode
             else:
                 self.inventory[product_id] = {
                     "id": product_id,
+                    "barcode": barcode,
                     "description": item["description"],
                     "stock": item["quantity"],
                     "unit": item["unit"],
@@ -339,7 +366,85 @@ class State(AuthState):
                 }
             )
         self.new_entry_items = []
+        self._reset_entry_form()
         return rx.toast("Ingreso de productos confirmado.", duration=3000)
+
+    def _reset_entry_form(self):
+        self.new_entry_item = {
+            "temp_id": "",
+            "barcode": "",
+            "description": "",
+            "quantity": 0,
+            "unit": "Unidad",
+            "price": 0,
+            "subtotal": 0,
+        }
+        self.entry_autocomplete_suggestions = []
+
+    def _find_product_by_barcode(self, barcode: str) -> Product | None:
+        code = barcode.strip()
+        if not code:
+            return None
+        for product in self.inventory.values():
+            product_code = product.get("barcode", "")
+            if product_code and product_code.strip() == code:
+                return product
+        return None
+
+    def _fill_entry_item_from_product(self, product: Product):
+        self.new_entry_item["description"] = product["description"]
+        self.new_entry_item["unit"] = product["unit"]
+        self.new_entry_item["price"] = product["purchase_price"]
+        self.new_entry_item["barcode"] = product.get("barcode", "")
+        self.new_entry_item["subtotal"] = (
+            self.new_entry_item["quantity"] * self.new_entry_item["price"]
+        )
+
+    @rx.event
+    def select_product_for_entry(self, description: str):
+        if isinstance(description, dict):
+            description = (
+                description.get("value")
+                or description.get("description")
+                or description.get("label")
+                or ""
+            )
+        product_id = description.lower().strip()
+        if product_id in self.inventory:
+            self._fill_entry_item_from_product(self.inventory[product_id])
+        self.entry_autocomplete_suggestions = []
+
+    def _fill_sale_item_from_product(
+        self, product: Product, keep_quantity: bool = False
+    ):
+        quantity = (
+            self.new_sale_item["quantity"]
+            if keep_quantity and self.new_sale_item["quantity"] > 0
+            else 1
+        )
+        self.new_sale_item = {
+            "temp_id": "",
+            "barcode": product.get("barcode", ""),
+            "description": product["description"],
+            "quantity": quantity,
+            "unit": product["unit"],
+            "price": product["sale_price"],
+            "subtotal": quantity * product["sale_price"],
+        }
+        if not keep_quantity:
+            self.autocomplete_suggestions = []
+
+    def _reset_sale_form(self):
+        self.new_sale_item = {
+            "temp_id": "",
+            "barcode": "",
+            "description": "",
+            "quantity": 0,
+            "unit": "Unidad",
+            "price": 0,
+            "subtotal": 0,
+        }
+        self.autocomplete_suggestions = []
 
     @rx.event
     def handle_sale_change(self, field: str, value: Union[str, float]):
@@ -360,22 +465,27 @@ class State(AuthState):
                     ][:5]
                 else:
                     self.autocomplete_suggestions = []
+            elif field == "barcode":
+                product = self._find_product_by_barcode(str(value))
+                if product:
+                    self._fill_sale_item_from_product(product, keep_quantity=True)
+                    self.autocomplete_suggestions = []
         except ValueError as e:
             logging.exception(f"Error parsing sale value: {e}")
 
     @rx.event
     def select_product_for_sale(self, description: str):
+        if isinstance(description, dict):
+            description = (
+                description.get("value")
+                or description.get("description")
+                or description.get("label")
+                or ""
+            )
         product_id = description.lower().strip()
         if product_id in self.inventory:
             product = self.inventory[product_id]
-            self.new_sale_item = {
-                "temp_id": "",
-                "description": product["description"],
-                "quantity": 1,
-                "unit": product["unit"],
-                "price": product["sale_price"],
-                "subtotal": product["sale_price"],
-            }
+            self._fill_sale_item_from_product(product)
         self.autocomplete_suggestions = []
 
     @rx.event
@@ -398,14 +508,7 @@ class State(AuthState):
         item_copy = self.new_sale_item.copy()
         item_copy["temp_id"] = str(uuid.uuid4())
         self.new_sale_items.append(item_copy)
-        self.new_sale_item = {
-            "temp_id": "",
-            "description": "",
-            "quantity": 0,
-            "unit": "Unidad",
-            "price": 0,
-            "subtotal": 0,
-        }
+        self._reset_sale_form()
 
     @rx.event
     def remove_item_from_sale(self, temp_id: str):
@@ -440,6 +543,7 @@ class State(AuthState):
                     f"Stock insuficiente para {item['description']}.", duration=3000
                 )
         self.new_sale_items = []
+        self._reset_sale_form()
         return rx.toast("Venta confirmada.", duration=3000)
 
     @rx.event

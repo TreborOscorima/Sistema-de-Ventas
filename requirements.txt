@@ -1,5 +1,3 @@
-
-text
 reflex==0.8.17
 openpyxl
 bcrypt

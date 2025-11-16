@@ -4,6 +4,7 @@ from app.state import State
 
 def item_entry_row(item: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
+        rx.el.td(item["barcode"], class_name="py-3 px-4"),
         rx.el.td(item["description"], class_name="py-3 px-4"),
         rx.el.td(item["quantity"].to_string(), class_name="py-3 px-4 text-center"),
         rx.el.td(item["unit"], class_name="py-3 px-4 text-center"),
@@ -37,6 +38,21 @@ def ingreso_page() -> rx.Component:
             rx.el.div(
                 rx.el.div(
                     rx.el.label(
+                        "Codigo de Barra",
+                        class_name="block text-sm font-medium text-gray-600 mb-1",
+                    ),
+                    rx.el.input(
+                        placeholder="Ej: 7791234567890",
+                        on_change=lambda val: State.handle_entry_change(
+                            "barcode", val
+                        ),
+                        class_name="w-full p-2 border rounded-md",
+                        value=State.new_entry_item["barcode"],
+                    ),
+                    class_name="w-48",
+                ),
+                rx.el.div(
+                    rx.el.label(
                         "Descripción",
                         class_name="block text-sm font-medium text-gray-600 mb-1",
                     ),
@@ -46,9 +62,27 @@ def ingreso_page() -> rx.Component:
                             "description", val
                         ),
                         class_name="w-full p-2 border rounded-md",
-                        default_value=State.new_entry_item["description"],
+                        value=State.new_entry_item["description"],
                     ),
-                    class_name="flex-grow",
+                    rx.cond(
+                        State.entry_autocomplete_suggestions.length() > 0,
+                        rx.el.div(
+                            rx.foreach(
+                                State.entry_autocomplete_suggestions,
+                                lambda suggestion: rx.el.button(
+                                    suggestion,
+                                    on_click=lambda _,
+                                    suggestion=suggestion: State.select_product_for_entry(
+                                        suggestion
+                                    ),
+                                    class_name="w-full text-left p-2 hover:bg-gray-100",
+                                ),
+                            ),
+                            class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
+                        ),
+                        rx.fragment(),
+                    ),
+                    class_name="flex-grow relative",
                 ),
                 rx.el.div(
                     rx.el.label(
@@ -61,7 +95,7 @@ def ingreso_page() -> rx.Component:
                             "quantity", val
                         ),
                         class_name="w-full p-2 border rounded-md",
-                        default_value=State.new_entry_item["quantity"].to_string(),
+                        value=State.new_entry_item["quantity"].to_string(),
                     ),
                     class_name="w-24",
                 ),
@@ -89,7 +123,7 @@ def ingreso_page() -> rx.Component:
                         type="number",
                         on_change=lambda val: State.handle_entry_change("price", val),
                         class_name="w-full p-2 border rounded-md",
-                        default_value=State.new_entry_item["price"].to_string(),
+                        value=State.new_entry_item["price"].to_string(),
                     ),
                     class_name="w-32",
                 ),
@@ -125,6 +159,9 @@ def ingreso_page() -> rx.Component:
                 rx.el.table(
                     rx.el.thead(
                         rx.el.tr(
+                            rx.el.th(
+                                "Codigo de Barra", class_name="py-2 px-4 text-left"
+                            ),
                             rx.el.th("Descripción", class_name="py-2 px-4 text-left"),
                             rx.el.th("Cantidad", class_name="py-2 px-4 text-center"),
                             rx.el.th("Unidad", class_name="py-2 px-4 text-center"),

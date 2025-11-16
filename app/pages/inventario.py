@@ -19,6 +19,7 @@ def inventario_page() -> rx.Component:
             rx.el.table(
                 rx.el.thead(
                     rx.el.tr(
+                        rx.el.th("Codigo de Barra", class_name="py-3 px-4 text-left"),
                         rx.el.th("Descripción", class_name="py-3 px-4 text-left"),
                         rx.el.th("Stock", class_name="py-3 px-4 text-center"),
                         rx.el.th("Unidad", class_name="py-3 px-4 text-center"),
@@ -36,6 +37,10 @@ def inventario_page() -> rx.Component:
                     rx.foreach(
                         State.inventory_list,
                         lambda product: rx.el.tr(
+                            rx.el.td(
+                                product["barcode"],
+                                class_name="py-3 px-4",
+                            ),
                             rx.el.td(
                                 product["description"],
                                 class_name="py-3 px-4 font-medium",

@@ -39,10 +39,14 @@ def user_form() -> rx.Component:
         ),
         rx.cond(
             State.show_user_form,
-            rx.radix.primitives.dialog.content(
-                rx.radix.primitives.dialog.title(
-                    rx.cond(State.editing_user, "Editar Usuario", "Crear Nuevo Usuario")
+            rx.radix.primitives.dialog.portal(
+                rx.radix.primitives.dialog.overlay(
+                    class_name="fixed inset-0 bg-black/40"
                 ),
+                rx.radix.primitives.dialog.content(
+                    rx.radix.primitives.dialog.title(
+                        rx.cond(State.editing_user, "Editar Usuario", "Crear Nuevo Usuario")
+                    ),
                 rx.el.div(
                     rx.el.div(
                         rx.el.label("Nombre de Usuario", class_name="font-medium"),
@@ -123,6 +127,8 @@ def user_form() -> rx.Component:
                         class_name="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700",
                     ),
                     class_name="flex justify-end gap-4 mt-6",
+                ),
+                class_name="fixed left-1/2 top-1/2 w-full max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-6 shadow-xl focus:outline-none",
                 ),
             ),
             rx.fragment(),
