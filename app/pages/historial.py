@@ -219,10 +219,12 @@ def historial_page() -> rx.Component:
                     rx.el.tr(
                         rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
                         rx.el.th("Tipo", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Descripción", class_name="py-3 px-4 text-left"),
+                        rx.el.th("Descripcion", class_name="py-3 px-4 text-left"),
                         rx.el.th("Cantidad", class_name="py-3 px-4 text-center"),
                         rx.el.th("Unidad", class_name="py-3 px-4 text-center"),
                         rx.el.th("Total", class_name="py-3 px-4 text-right"),
+                        rx.el.th("Metodo de Pago", class_name="py-3 px-4 text-left"),
+                        rx.el.th("Detalle Pago", class_name="py-3 px-4 text-left"),
                         class_name="bg-gray-100",
                     )
                 ),
@@ -254,6 +256,21 @@ def historial_page() -> rx.Component:
                             rx.el.td(
                                 f"${movement['total'].to_string()}",
                                 class_name="py-3 px-4 text-right font-medium",
+                            ),
+                            rx.el.td(
+                                rx.cond(
+                                    movement.get("payment_method"),
+                                    rx.el.span(
+                                        movement.get("payment_method"),
+                                        class_name="font-medium",
+                                    ),
+                                    rx.el.span("-", class_name="text-gray-400"),
+                                ),
+                                class_name="py-3 px-4",
+                            ),
+                            rx.el.td(
+                                movement.get("payment_details", "-"),
+                                class_name="py-3 px-4 text-sm text-gray-600",
                             ),
                             class_name="border-b",
                         ),

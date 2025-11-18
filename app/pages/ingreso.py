@@ -6,18 +6,42 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
         rx.el.td(item["barcode"], class_name="py-3 px-4"),
         rx.el.td(item["description"], class_name="py-3 px-4"),
+        rx.el.td(item.get("category", "General"), class_name="py-3 px-4"),
         rx.el.td(item["quantity"].to_string(), class_name="py-3 px-4 text-center"),
         rx.el.td(item["unit"], class_name="py-3 px-4 text-center"),
         rx.el.td(f"${item['price'].to_string()}", class_name="py-3 px-4 text-right"),
+        rx.el.td(
+            f"${item['sale_price'].to_string()}",
+            class_name="py-3 px-4 text-right text-green-600",
+        ),
         rx.el.td(
             f"${item['subtotal'].to_string()}",
             class_name="py-3 px-4 text-right font-semibold",
         ),
         rx.el.td(
-            rx.el.button(
-                rx.icon("trash-2", class_name="h-4 w-4"),
-                on_click=lambda: State.remove_item_from_entry(item["temp_id"]),
-                class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+            rx.el.div(
+                rx.el.select(
+                    rx.foreach(
+                        State.categories,
+                        lambda category: rx.el.option(category, value=category),
+                    ),
+                    value=item.get("category", "General"),
+                    on_change=lambda value, temp_id=item["temp_id"]: State.update_entry_item_category(
+                        temp_id, value
+                    ),
+                    class_name="w-40 p-2 border rounded-md",
+                ),
+                rx.el.button(
+                    rx.icon("pencil", class_name="h-4 w-4"),
+                    on_click=lambda: State.edit_item_from_entry(item["temp_id"]),
+                    class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
+                ),
+                rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda: State.remove_item_from_entry(item["temp_id"]),
+                    class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                ),
+                class_name="flex justify-center items-center gap-2",
             ),
             class_name="py-3 px-4 text-center",
         ),
@@ -129,6 +153,21 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.el.div(
                     rx.el.label(
+                        "Precio Venta",
+                        class_name="block text-sm font-medium text-gray-600 mb-1",
+                    ),
+                    rx.el.input(
+                        type="number",
+                        on_change=lambda val: State.handle_entry_change(
+                            "sale_price", val
+                        ),
+                        class_name="w-full p-2 border rounded-md",
+                        value=State.new_entry_item["sale_price"].to_string(),
+                    ),
+                    class_name="w-32",
+                ),
+                rx.el.div(
+                    rx.el.label(
                         "Subtotal",
                         class_name="block text-sm font-medium text-gray-600 mb-1",
                     ),
@@ -163,9 +202,11 @@ def ingreso_page() -> rx.Component:
                                 "Codigo de Barra", class_name="py-2 px-4 text-left"
                             ),
                             rx.el.th("Descripción", class_name="py-2 px-4 text-left"),
+                            rx.el.th("Categoría", class_name="py-2 px-4 text-left"),
                             rx.el.th("Cantidad", class_name="py-2 px-4 text-center"),
                             rx.el.th("Unidad", class_name="py-2 px-4 text-center"),
                             rx.el.th("P. Compra", class_name="py-2 px-4 text-right"),
+                            rx.el.th("P. Venta", class_name="py-2 px-4 text-right"),
                             rx.el.th("Subtotal", class_name="py-2 px-4 text-right"),
                             rx.el.th("Acción", class_name="py-2 px-4 text-center"),
                         ),

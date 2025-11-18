@@ -4,6 +4,7 @@ import datetime
 import uuid
 import logging
 import bcrypt
+import json
 from app.states.auth_state import AuthState, User, Privileges
 
 
@@ -11,6 +12,7 @@ class Product(TypedDict):
     id: str
     barcode: str
     description: str
+    category: str
     stock: float
     unit: str
     purchase_price: float
@@ -21,9 +23,11 @@ class TransactionItem(TypedDict):
     temp_id: str
     barcode: str
     description: str
+    category: str
     quantity: float
     unit: str
     price: float
+    sale_price: float
     subtotal: float
 
 
@@ -35,6 +39,8 @@ class Movement(TypedDict):
     quantity: float
     unit: str
     total: float
+    payment_method: str
+    payment_details: str
 
 
 class NewUser(TypedDict):
@@ -62,13 +68,17 @@ class State(AuthState):
     staged_history_filter_end_date: str = ""
     current_page_history: int = 1
     items_per_page: int = 10
+    categories: list[str] = ["General"]
+    new_category_name: str = ""
     new_entry_item: TransactionItem = {
         "temp_id": "",
         "barcode": "",
         "description": "",
+        "category": "General",
         "quantity": 0,
         "unit": "Unidad",
         "price": 0,
+        "sale_price": 0,
         "subtotal": 0,
     }
     new_entry_items: list[TransactionItem] = []
@@ -76,14 +86,35 @@ class State(AuthState):
         "temp_id": "",
         "barcode": "",
         "description": "",
+        "category": "General",
         "quantity": 0,
         "unit": "Unidad",
         "price": 0,
+        "sale_price": 0,
         "subtotal": 0,
     }
     new_sale_items: list[TransactionItem] = []
     entry_autocomplete_suggestions: list[str] = []
     autocomplete_suggestions: list[str] = []
+    last_sale_receipt: list[TransactionItem] = []
+    last_sale_total: float = 0
+    last_sale_timestamp: str = ""
+    sale_receipt_ready: bool = False
+    payment_method: str = "Efectivo"
+    payment_method_description: str = "Billetes, Monedas"
+    payment_cash_amount: float = 0
+    payment_cash_message: str = ""
+    payment_cash_status: str = "neutral"
+    payment_card_type: str = "Credito"
+    payment_wallet_choice: str = "Yape"
+    payment_wallet_provider: str = "Yape"
+    payment_mixed_cash: float = 0
+    payment_mixed_card: float = 0
+    payment_mixed_wallet: float = 0
+    payment_mixed_message: str = ""
+    payment_mixed_status: str = "neutral"
+    payment_mixed_notes: str = ""
+    last_payment_summary: str = ""
     show_user_form: bool = False
     editing_user: User | None = None
     new_user_data: NewUser = {
@@ -130,12 +161,18 @@ class State(AuthState):
         return sum((item["subtotal"] for item in self.new_sale_items))
 
     @rx.var
+    def payment_summary(self) -> str:
+        return self._generate_payment_summary()
+
+    @rx.var
     def inventory_list(self) -> list[Product]:
         if not self.current_user["privileges"]["view_inventario"]:
             return []
         for product in self.inventory.values():
             if "barcode" not in product:
                 product["barcode"] = ""
+            if "category" not in product:
+                product["category"] = self.categories[0] if self.categories else ""
         if self.inventory_search_term:
             search = self.inventory_search_term.lower()
             return sorted(
@@ -144,6 +181,7 @@ class State(AuthState):
                     for p in self.inventory.values()
                     if search in p["description"].lower()
                     or search in p.get("barcode", "").lower()
+                    or search in p.get("category", "").lower()
                 ],
                 key=lambda p: p["description"],
             )
@@ -277,9 +315,43 @@ class State(AuthState):
         self.sidebar_open = not self.sidebar_open
 
     @rx.event
+    def update_new_category_name(self, value: str):
+        self.new_category_name = value
+
+    @rx.event
+    def add_category(self):
+        name = self.new_category_name.strip()
+        if not name:
+            return rx.toast("El nombre de la categoría no puede estar vacío.", duration=3000)
+        if name in self.categories:
+            return rx.toast("La categoría ya existe.", duration=3000)
+        self.categories.append(name)
+        if not self.new_entry_item["category"]:
+            self.new_entry_item["category"] = name
+        self.new_category_name = ""
+        return rx.toast(f"Categoría {name} creada.", duration=3000)
+
+    @rx.event
+    def remove_category(self, name: str):
+        if name == "General":
+            return rx.toast("No puedes eliminar la categoría predeterminada.", duration=3000)
+        if name not in self.categories:
+            return
+        self.categories = [cat for cat in self.categories if cat != name]
+        fallback = self.categories[0] if self.categories else ""
+        if self.new_entry_item["category"] == name:
+            self.new_entry_item["category"] = fallback
+        if self.new_sale_item["category"] == name:
+            self.new_sale_item["category"] = fallback
+        for product in self.inventory.values():
+            if product.get("category") == name:
+                product["category"] = fallback
+        return rx.toast(f"Categoría {name} eliminada.", duration=3000)
+
+    @rx.event
     def handle_entry_change(self, field: str, value: str):
         try:
-            if field in ["quantity", "price"]:
+            if field in ["quantity", "price", "sale_price"]:
                 self.new_entry_item[field] = float(value) if value else 0
             else:
                 self.new_entry_item[field] = value
@@ -310,8 +382,10 @@ class State(AuthState):
             return rx.toast("No tiene permisos para crear ingresos.", duration=3000)
         if (
             not self.new_entry_item["description"]
+            or not self.new_entry_item["category"]
             or self.new_entry_item["quantity"] <= 0
             or self.new_entry_item["price"] <= 0
+            or self.new_entry_item["sale_price"] <= 0
         ):
             return rx.toast(
                 "Por favor, complete todos los campos correctamente.", duration=3000
@@ -328,6 +402,24 @@ class State(AuthState):
         ]
 
     @rx.event
+    def update_entry_item_category(self, temp_id: str, category: str):
+        for item in self.new_entry_items:
+            if item["temp_id"] == temp_id:
+                item["category"] = category
+                break
+
+    @rx.event
+    def edit_item_from_entry(self, temp_id: str):
+        for item in self.new_entry_items:
+            if item["temp_id"] == temp_id:
+                self.new_entry_item = item.copy()
+                self.new_entry_items = [
+                    entry for entry in self.new_entry_items if entry["temp_id"] != temp_id
+                ]
+                self.entry_autocomplete_suggestions = []
+                return
+
+    @rx.event
     def confirm_entry(self):
         if not self.current_user["privileges"]["create_ingresos"]:
             return rx.toast("No tiene permisos para crear ingresos.", duration=3000)
@@ -337,6 +429,7 @@ class State(AuthState):
         for item in self.new_entry_items:
             product_id = item["description"].lower().strip()
             barcode = item.get("barcode", "").strip()
+            sale_price = item.get("sale_price", 0)
             if product_id in self.inventory:
                 if "barcode" not in self.inventory[product_id]:
                     self.inventory[product_id]["barcode"] = ""
@@ -344,15 +437,19 @@ class State(AuthState):
                 self.inventory[product_id]["purchase_price"] = item["price"]
                 if barcode:
                     self.inventory[product_id]["barcode"] = barcode
+                if sale_price > 0:
+                    self.inventory[product_id]["sale_price"] = sale_price
+                self.inventory[product_id]["category"] = item["category"]
             else:
                 self.inventory[product_id] = {
                     "id": product_id,
                     "barcode": barcode,
                     "description": item["description"],
+                    "category": item["category"],
                     "stock": item["quantity"],
                     "unit": item["unit"],
                     "purchase_price": item["price"],
-                    "sale_price": item["price"] * 1.25,
+                    "sale_price": sale_price if sale_price > 0 else item["price"] * 1.25,
                 }
             self.history.append(
                 {
@@ -363,6 +460,8 @@ class State(AuthState):
                     "quantity": item["quantity"],
                     "unit": item["unit"],
                     "total": item["subtotal"],
+                    "payment_method": "",
+                    "payment_details": "",
                 }
             )
         self.new_entry_items = []
@@ -374,9 +473,11 @@ class State(AuthState):
             "temp_id": "",
             "barcode": "",
             "description": "",
+            "category": self.categories[0] if self.categories else "",
             "quantity": 0,
             "unit": "Unidad",
             "price": 0,
+            "sale_price": 0,
             "subtotal": 0,
         }
         self.entry_autocomplete_suggestions = []
@@ -395,6 +496,8 @@ class State(AuthState):
         self.new_entry_item["description"] = product["description"]
         self.new_entry_item["unit"] = product["unit"]
         self.new_entry_item["price"] = product["purchase_price"]
+        self.new_entry_item["sale_price"] = product["sale_price"]
+        self.new_entry_item["category"] = product.get("category", self.categories[0] if self.categories else "")
         self.new_entry_item["barcode"] = product.get("barcode", "")
         self.new_entry_item["subtotal"] = (
             self.new_entry_item["quantity"] * self.new_entry_item["price"]
@@ -426,9 +529,11 @@ class State(AuthState):
             "temp_id": "",
             "barcode": product.get("barcode", ""),
             "description": product["description"],
+            "category": product.get("category", self.categories[0] if self.categories else ""),
             "quantity": quantity,
             "unit": product["unit"],
             "price": product["sale_price"],
+            "sale_price": product["sale_price"],
             "subtotal": quantity * product["sale_price"],
         }
         if not keep_quantity:
@@ -439,9 +544,11 @@ class State(AuthState):
             "temp_id": "",
             "barcode": "",
             "description": "",
+            "category": self.categories[0] if self.categories else "",
             "quantity": 0,
             "unit": "Unidad",
             "price": 0,
+            "sale_price": 0,
             "subtotal": 0,
         }
         self.autocomplete_suggestions = []
@@ -492,6 +599,7 @@ class State(AuthState):
     def add_item_to_sale(self):
         if not self.current_user["privileges"]["create_ventas"]:
             return rx.toast("No tiene permisos para crear ventas.", duration=3000)
+        self.sale_receipt_ready = False
         if (
             not self.new_sale_item["description"]
             or self.new_sale_item["quantity"] <= 0
@@ -509,12 +617,23 @@ class State(AuthState):
         item_copy["temp_id"] = str(uuid.uuid4())
         self.new_sale_items.append(item_copy)
         self._reset_sale_form()
+        self._refresh_payment_feedback()
 
     @rx.event
     def remove_item_from_sale(self, temp_id: str):
         self.new_sale_items = [
             item for item in self.new_sale_items if item["temp_id"] != temp_id
         ]
+        self.sale_receipt_ready = False
+        self._refresh_payment_feedback()
+        self.sale_receipt_ready = False
+
+    @rx.event
+    def clear_sale_items(self):
+        self.new_sale_items = []
+        self._reset_sale_form()
+        self.sale_receipt_ready = False
+        self._refresh_payment_feedback()
 
     @rx.event
     def confirm_sale(self):
@@ -522,29 +641,109 @@ class State(AuthState):
             return rx.toast("No tiene permisos para crear ventas.", duration=3000)
         if not self.new_sale_items:
             return rx.toast("No hay productos en la venta.", duration=3000)
+        if not self.payment_method:
+            return rx.toast("Seleccione un método de pago.", duration=3000)
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sale_snapshot = [item.copy() for item in self.new_sale_items]
+        sale_total = sum(item["subtotal"] for item in sale_snapshot)
+        payment_summary = self._generate_payment_summary()
         for item in self.new_sale_items:
             product_id = item["description"].lower().strip()
             if self.inventory[product_id]["stock"] >= item["quantity"]:
                 self.inventory[product_id]["stock"] -= item["quantity"]
                 self.history.append(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "timestamp": timestamp,
-                        "type": "Venta",
-                        "product_description": item["description"],
-                        "quantity": item["quantity"],
-                        "unit": item["unit"],
-                        "total": item["subtotal"],
-                    }
-                )
+                        {
+                            "id": str(uuid.uuid4()),
+                            "timestamp": timestamp,
+                            "type": "Venta",
+                            "product_description": item["description"],
+                            "quantity": item["quantity"],
+                            "unit": item["unit"],
+                            "total": item["subtotal"],
+                            "payment_method": self.payment_method,
+                            "payment_details": payment_summary,
+                        }
+                    )
             else:
                 return rx.toast(
                     f"Stock insuficiente para {item['description']}.", duration=3000
                 )
+        self.last_sale_receipt = sale_snapshot
+        self.last_sale_total = sale_total
+        self.last_sale_timestamp = timestamp
+        self.last_payment_summary = payment_summary
+        self.sale_receipt_ready = True
         self.new_sale_items = []
         self._reset_sale_form()
+        self._refresh_payment_feedback()
         return rx.toast("Venta confirmada.", duration=3000)
+
+    @rx.event
+    def print_sale_receipt(self):
+        if not self.sale_receipt_ready or not self.last_sale_receipt:
+            return rx.toast(
+                "No hay comprobante disponible. Confirme una venta primero.",
+                duration=3000,
+            )
+        rows = "".join(
+            f"<tr><td>{item['barcode']}</td><td>{item['description']}</td>"
+            f"<td>{item['quantity']}</td><td>{item['unit']}</td>"
+            f"<td>${item['price']:.2f}</td><td>${item['subtotal']:.2f}</td></tr>"
+            for item in self.last_sale_receipt
+        )
+        html_content = f"""
+        <html>
+            <head>
+                <meta charset='utf-8' />
+                <title>Comprobante de Venta</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; padding: 24px; }}
+                    h1 {{ text-align: center; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                    th {{ background-color: #f3f4f6; }}
+                    tfoot td {{ font-weight: bold; }}
+                </style>
+            </head>
+            <body>
+                <h1>Comprobante de Venta</h1>
+                <p><strong>Fecha:</strong> {self.last_sale_timestamp}</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Cantidad</th>
+                            <th>Unidad</th>
+                            <th>P. Venta</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="5">Total</td>
+                            <td>${self.last_sale_total:.2f}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="5">Metodo de Pago</td>
+                            <td>{self.last_payment_summary}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </body>
+        </html>
+        """
+        script = f"""
+        const receiptWindow = window.open('', '_blank');
+        receiptWindow.document.write({json.dumps(html_content)});
+        receiptWindow.document.close();
+        receiptWindow.focus();
+        receiptWindow.print();
+        """
+        return rx.call_script(script)
 
     @rx.event
     def set_history_page(self, page_num: int):
@@ -577,7 +776,16 @@ class State(AuthState):
         workbook = openpyxl.Workbook()
         sheet = workbook.active
         sheet.title = "Historial Movimientos"
-        headers = ["Fecha y Hora", "Tipo", "Descripción", "Cantidad", "Unidad", "Total"]
+        headers = [
+            "Fecha y Hora",
+            "Tipo",
+            "Descripcion",
+            "Cantidad",
+            "Unidad",
+            "Total",
+            "Metodo de Pago",
+            "Detalle Pago",
+        ]
         sheet.append(headers)
         for movement in self.filtered_history:
             sheet.append(
@@ -588,6 +796,8 @@ class State(AuthState):
                     movement["quantity"],
                     movement["unit"],
                     movement["total"],
+                    movement.get("payment_method", ""),
+                    movement.get("payment_details", ""),
                 ]
             )
         file_stream = BytesIO()
@@ -704,3 +914,155 @@ class State(AuthState):
         if self.users.pop(username, None):
             return rx.toast(f"Usuario {username} eliminado.", duration=3000)
         return rx.toast(f"Usuario {username} no encontrado.", duration=3000)
+
+    def _generate_payment_summary(self) -> str:
+        method = self.payment_method or "No especificado"
+        if method == "Efectivo":
+            detail = f"Monto ${self.payment_cash_amount:.2f}"
+            if self.payment_cash_message:
+                detail += f" ({self.payment_cash_message})"
+            return f"{method} - {detail}"
+        if method == "Tarjeta":
+            return f"{method} - {self.payment_card_type}"
+        if method == "Pago QR / Billetera Digital":
+            provider = (
+                self.payment_wallet_provider
+                or self.payment_wallet_choice
+                or "Proveedor no especificado"
+            )
+            return f"{method} - {provider}"
+        if method == "Pagos Mixtos":
+            parts = []
+            if self.payment_mixed_cash > 0:
+                parts.append(f"Efectivo ${self.payment_mixed_cash:.2f}")
+            if self.payment_mixed_card > 0:
+                parts.append(
+                    f"Tarjeta ({self.payment_card_type}) ${self.payment_mixed_card:.2f}"
+                )
+            if self.payment_mixed_wallet > 0:
+                provider = (
+                    self.payment_wallet_provider
+                    or self.payment_wallet_choice
+                    or "Billetera"
+                )
+                parts.append(f"{provider} ${self.payment_mixed_wallet:.2f}")
+            if self.payment_mixed_notes:
+                parts.append(self.payment_mixed_notes)
+            if not parts:
+                parts.append("Sin detalle")
+            if self.payment_mixed_message:
+                parts.append(self.payment_mixed_message)
+            return f"{method} - {' / '.join(parts)}"
+        return f"{method} - {self.payment_method_description}"
+
+    def _safe_amount(self, value: str) -> float:
+        try:
+            return float(value) if value else 0
+        except ValueError:
+            return 0
+
+    def _update_cash_feedback(self):
+        amount = self.payment_cash_amount
+        diff = amount - self.sale_total
+        if amount <= 0:
+            self.payment_cash_message = "Ingrese un monto valido."
+            self.payment_cash_status = "warning"
+        elif diff > 0:
+            self.payment_cash_message = f"Vuelto ${diff:.2f}"
+            self.payment_cash_status = "change"
+        elif diff < 0:
+            self.payment_cash_message = f"Faltan ${abs(diff):.2f}"
+            self.payment_cash_status = "due"
+        else:
+            self.payment_cash_message = "Monto exacto."
+            self.payment_cash_status = "exact"
+
+    def _update_mixed_message(self):
+        paid = (
+            self.payment_mixed_cash
+            + self.payment_mixed_card
+            + self.payment_mixed_wallet
+        )
+        total = self.sale_total
+        if paid <= 0:
+            self.payment_mixed_message = "Ingrese montos para los metodos seleccionados."
+            self.payment_mixed_status = "warning"
+        else:
+            diff = paid - total
+            if diff > 0:
+                self.payment_mixed_message = f"Vuelto ${diff:.2f}"
+                self.payment_mixed_status = "change"
+            elif diff < 0:
+                self.payment_mixed_message = f"Restan ${abs(diff):.2f}"
+                self.payment_mixed_status = "due"
+            else:
+                self.payment_mixed_message = "Montos completos."
+                self.payment_mixed_status = "exact"
+
+    def _refresh_payment_feedback(self):
+        if self.payment_method == "Efectivo":
+            self._update_cash_feedback()
+        if self.payment_method == "Pagos Mixtos":
+            self._update_mixed_message()
+
+    @rx.event
+    def select_payment_method(self, method: str, description: str):
+        self.payment_method = method
+        self.payment_method_description = description
+        self.payment_cash_amount = 0
+        self.payment_cash_message = ""
+        self.payment_cash_status = "neutral"
+        self.payment_card_type = "Credito"
+        self.payment_wallet_choice = "Yape"
+        self.payment_wallet_provider = "Yape"
+        self.payment_mixed_cash = 0
+        self.payment_mixed_card = 0
+        self.payment_mixed_wallet = 0
+        self.payment_mixed_message = ""
+        self.payment_mixed_status = "neutral"
+        self.payment_mixed_notes = ""
+
+    @rx.event
+    def set_cash_amount(self, value: str):
+        try:
+            amount = float(value) if value else 0
+        except ValueError:
+            amount = 0
+        self.payment_cash_amount = amount
+        self._update_cash_feedback()
+
+    @rx.event
+    def set_card_type(self, card_type: str):
+        self.payment_card_type = card_type
+
+    @rx.event
+    def choose_wallet_provider(self, provider: str):
+        self.payment_wallet_choice = provider
+        if provider == "Otro":
+            self.payment_wallet_provider = ""
+        else:
+            self.payment_wallet_provider = provider
+
+    @rx.event
+    def set_wallet_provider_custom(self, value: str):
+        self.payment_wallet_provider = value
+        self.payment_wallet_choice = "Otro"
+
+    @rx.event
+    def set_mixed_notes(self, notes: str):
+        self.payment_mixed_notes = notes
+
+    @rx.event
+    def set_mixed_cash_amount(self, value: str):
+        self.payment_mixed_cash = self._safe_amount(value)
+        self._update_mixed_message()
+
+    @rx.event
+    def set_mixed_card_amount(self, value: str):
+        self.payment_mixed_card = self._safe_amount(value)
+        self._update_mixed_message()
+
+    @rx.event
+    def set_mixed_wallet_amount(self, value: str):
+        self.payment_mixed_wallet = self._safe_amount(value)
+        self._update_mixed_message()
