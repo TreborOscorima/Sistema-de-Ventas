@@ -675,6 +675,7 @@ class State(AuthState):
         self.sale_receipt_ready = True
         self.new_sale_items = []
         self._reset_sale_form()
+        self._reset_payment_fields()
         self._refresh_payment_feedback()
         return rx.toast("Venta confirmada.", duration=3000)
 
@@ -743,6 +744,8 @@ class State(AuthState):
         receiptWindow.focus();
         receiptWindow.print();
         """
+        self._reset_payment_fields()
+        self._refresh_payment_feedback()
         return rx.call_script(script)
 
     @rx.event
@@ -1005,8 +1008,7 @@ class State(AuthState):
         if self.payment_method == "Pagos Mixtos":
             self._update_mixed_message()
 
-    @rx.event
-    def select_payment_method(self, method: str, description: str):
+    def _set_payment_method(self, method: str, description: str):
         self.payment_method = method
         self.payment_method_description = description
         self.payment_cash_amount = 0
@@ -1021,6 +1023,13 @@ class State(AuthState):
         self.payment_mixed_message = ""
         self.payment_mixed_status = "neutral"
         self.payment_mixed_notes = ""
+
+    def _reset_payment_fields(self):
+        self._set_payment_method("Efectivo", "Billetes, Monedas")
+
+    @rx.event
+    def select_payment_method(self, method: str, description: str):
+        self._set_payment_method(method, description)
 
     @rx.event
     def set_cash_amount(self, value: str):
