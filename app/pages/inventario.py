@@ -2,6 +2,320 @@ import reflex as rx
 from app.state import State
 
 
+def inventory_adjustment_modal() -> rx.Component:
+    return rx.cond(
+        State.inventory_check_modal_open,
+        rx.el.div(
+            rx.el.div(
+                on_click=State.close_inventory_check_modal,
+                class_name="fixed inset-0 bg-black/40",
+            ),
+            rx.el.div(
+                rx.el.div(
+                    rx.el.h3(
+                        "Registro de Inventario Fisico",
+                        class_name="text-xl font-semibold text-gray-800",
+                    ),
+                    rx.el.button(
+                        rx.icon("x", class_name="h-4 w-4"),
+                        on_click=State.close_inventory_check_modal,
+                        class_name="p-2 rounded-full hover:bg-gray-100",
+                    ),
+                    class_name="flex items-start justify-between gap-4",
+                ),
+                rx.el.p(
+                    "Indique el resultado del inventario fisico y registre notas para sustentar cualquier re ajuste.",
+                    class_name="text-sm text-gray-600 mt-2",
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        rx.icon("circle_check", class_name="h-4 w-4"),
+                        "Inventario Perfecto",
+                        on_click=lambda: State.set_inventory_check_status("perfecto"),
+                        class_name=rx.cond(
+                            State.inventory_check_status == "perfecto",
+                            "px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold flex items-center justify-center gap-2",
+                            "px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2",
+                        ),
+                    ),
+                    rx.el.button(
+                        rx.icon("triangle_alert", class_name="h-4 w-4"),
+                        "Re Ajuste de Inventario",
+                        on_click=lambda: State.set_inventory_check_status("ajuste"),
+                        class_name=rx.cond(
+                            State.inventory_check_status == "ajuste",
+                            "px-4 py-2 rounded-lg bg-amber-600 text-white font-semibold flex items-center justify-center gap-2",
+                            "px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2",
+                        ),
+                    ),
+                    class_name="grid grid-cols-1 md:grid-cols-2 gap-3",
+                ),
+                rx.cond(
+                    State.inventory_check_status == "ajuste",
+                    rx.el.div(
+                        rx.el.h4(
+                            "Productos con diferencias",
+                            class_name="text-sm font-semibold text-gray-700",
+                        ),
+                        rx.el.div(
+                            rx.el.label(
+                                "Buscar producto",
+                                class_name="text-sm font-medium text-gray-600",
+                            ),
+                            rx.el.div(
+                                rx.el.input(
+                                    placeholder="Ej: Gaseosa 500ml",
+                                    value=State.inventory_adjustment_item[
+                                        "description"
+                                    ],
+                                    on_change=lambda value: State.handle_inventory_adjustment_change(
+                                        "description", value
+                                    ),
+                                    class_name="w-full p-2 border rounded-md",
+                                ),
+                                rx.cond(
+                                    State.inventory_adjustment_suggestions.length()
+                                    > 0,
+                                    rx.el.div(
+                                        rx.foreach(
+                                            State.inventory_adjustment_suggestions,
+                                            lambda suggestion: rx.el.button(
+                                                suggestion,
+                                                on_click=lambda _,
+                                                suggestion=suggestion: State.select_inventory_adjustment_product(
+                                                    suggestion
+                                                ),
+                                                class_name="w-full text-left px-3 py-2 hover:bg-gray-100",
+                                            ),
+                                        ),
+                                        class_name="absolute z-20 w-full mt-1 border rounded-md bg-white shadow-lg max-h-48 overflow-y-auto",
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                class_name="relative",
+                            ),
+                            class_name="mt-3",
+                        ),
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.label(
+                                    "Codigo de barra",
+                                    class_name="text-xs text-gray-500 uppercase",
+                                ),
+                                rx.el.input(
+                                    value=State.inventory_adjustment_item["barcode"],
+                                    is_disabled=True,
+                                    class_name="w-full p-2 border rounded-md bg-gray-100",
+                                ),
+                            ),
+                            rx.el.div(
+                                rx.el.label(
+                                    "Categoria",
+                                    class_name="text-xs text-gray-500 uppercase",
+                                ),
+                                rx.el.input(
+                                    value=State.inventory_adjustment_item["category"],
+                                    is_disabled=True,
+                                    class_name="w-full p-2 border rounded-md bg-gray-100",
+                                ),
+                            ),
+                            rx.el.div(
+                                rx.el.label(
+                                    "Unidad",
+                                    class_name="text-xs text-gray-500 uppercase",
+                                ),
+                                rx.el.input(
+                                    value=State.inventory_adjustment_item["unit"],
+                                    is_disabled=True,
+                                    class_name="w-full p-2 border rounded-md bg-gray-100",
+                                ),
+                            ),
+                            rx.el.div(
+                                rx.el.label(
+                                    "Stock disponible",
+                                    class_name="text-xs text-gray-500 uppercase",
+                                ),
+                                rx.el.input(
+                                    value=State.inventory_adjustment_item[
+                                        "current_stock"
+                                    ].to_string(),
+                                    is_disabled=True,
+                                    class_name="w-full p-2 border rounded-md bg-gray-100",
+                                ),
+                            ),
+                            class_name="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4",
+                        ),
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.label(
+                                    "Cantidad a ajustar",
+                                    class_name="text-sm font-medium text-gray-700",
+                                ),
+                                rx.el.input(
+                                    type="number",
+                                    min="0",
+                                    step="0.01",
+                                    value=State.inventory_adjustment_item[
+                                        "adjust_quantity"
+                                    ].to_string(),
+                                    on_change=lambda value: State.handle_inventory_adjustment_change(
+                                        "adjust_quantity", value
+                                    ),
+                                    class_name="w-full p-2 border rounded-md",
+                                ),
+                            ),
+                            rx.el.div(
+                                rx.el.label(
+                                    "Motivo del ajuste",
+                                    class_name="text-sm font-medium text-gray-700",
+                                ),
+                                rx.el.textarea(
+                                    placeholder="Ej: Producto dañado, consumo interno, vencido, etc.",
+                                    value=State.inventory_adjustment_item["reason"],
+                                    on_change=lambda value: State.handle_inventory_adjustment_change(
+                                        "reason", value
+                                    ),
+                                    class_name="w-full h-24 p-2 border rounded-md",
+                                ),
+                            ),
+                            class_name="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4",
+                        ),
+                        rx.el.button(
+                            rx.icon("plus", class_name="h-4 w-4"),
+                            "Agregar producto al ajuste",
+                            on_click=State.add_inventory_adjustment_item,
+                            class_name="mt-4 flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700",
+                        ),
+                        rx.cond(
+                            State.inventory_adjustment_items.length() > 0,
+                            rx.el.div(
+                                rx.el.table(
+                                    rx.el.thead(
+                                        rx.el.tr(
+                                            rx.el.th(
+                                                "Producto",
+                                                class_name="py-2 px-3 text-left",
+                                            ),
+                                            rx.el.th(
+                                                "Unidad",
+                                                class_name="py-2 px-3 text-center",
+                                            ),
+                                            rx.el.th(
+                                                "Stock",
+                                                class_name="py-2 px-3 text-center",
+                                            ),
+                                            rx.el.th(
+                                                "Cantidad Ajuste",
+                                                class_name="py-2 px-3 text-center",
+                                            ),
+                                            rx.el.th(
+                                                "Motivo",
+                                                class_name="py-2 px-3 text-left",
+                                            ),
+                                            rx.el.th(
+                                                "Accion",
+                                                class_name="py-2 px-3 text-center",
+                                            ),
+                                            class_name="bg-gray-100",
+                                        )
+                                    ),
+                                    rx.el.tbody(
+                                        rx.foreach(
+                                            State.inventory_adjustment_items,
+                                            lambda item: rx.el.tr(
+                                                rx.el.td(
+                                                    item["description"],
+                                                    class_name="py-2 px-3 font-medium",
+                                                ),
+                                                rx.el.td(
+                                                    item["unit"],
+                                                    class_name="py-2 px-3 text-center",
+                                                ),
+                                                rx.el.td(
+                                                    item["current_stock"].to_string(),
+                                                    class_name="py-2 px-3 text-center text-gray-500",
+                                                ),
+                                                rx.el.td(
+                                                    item["adjust_quantity"].to_string(),
+                                                    class_name="py-2 px-3 text-center text-red-600 font-semibold",
+                                                ),
+                                                rx.el.td(
+                                                    rx.cond(
+                                                        item["reason"] == "",
+                                                        "-",
+                                                        item["reason"],
+                                                    ),
+                                                    class_name="py-2 px-3 text-sm text-gray-600",
+                                                ),
+                                                rx.el.td(
+                                                    rx.el.button(
+                                                        rx.icon(
+                                                            "trash-2",
+                                                            class_name="h-4 w-4",
+                                                        ),
+                                                        on_click=lambda _,
+                                                        temp_id=item[
+                                                            "temp_id"
+                                                        ]: State.remove_inventory_adjustment_item(
+                                                            temp_id
+                                                        ),
+                                                        class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                                                    ),
+                                                    class_name="py-2 px-3 text-center",
+                                                ),
+                                                class_name="border-b",
+                                            ),
+                                        )
+                                    ),
+                                    class_name="w-full text-sm",
+                                ),
+                                class_name="mt-6 rounded-lg border overflow-hidden",
+                            ),
+                            rx.el.p(
+                                "Aun no hay productos seleccionados para el ajuste.",
+                                class_name="mt-4 text-sm text-gray-500",
+                            ),
+                        ),
+                        rx.el.div(
+                            rx.el.label(
+                                "Notas generales del ajuste",
+                                class_name="text-sm font-semibold text-gray-700 mt-4",
+                            ),
+                            rx.el.textarea(
+                                placeholder="Detalles adicionales que respalden el ajuste realizado.",
+                                value=State.inventory_adjustment_notes,
+                                on_change=lambda value: State.set_inventory_adjustment_notes(
+                                    value
+                                ),
+                                class_name="w-full mt-2 p-3 border rounded-lg h-32",
+                            ),
+                        ),
+                        class_name="mt-4 space-y-4",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        "Cancelar",
+                        on_click=State.close_inventory_check_modal,
+                        class_name="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50",
+                    ),
+                    rx.el.button(
+                        rx.icon("save", class_name="h-4 w-4"),
+                        "Guardar Registro",
+                        on_click=State.submit_inventory_check,
+                        class_name="flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+                    ),
+                    class_name="flex flex-col gap-3 sm:flex-row sm:justify-end",
+                ),
+                class_name="relative z-10 w-full max-w-3xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto space-y-4",
+            ),
+            class_name="fixed inset-0 z-50 flex items-start md:items-center justify-center px-4 py-6 overflow-y-auto",
+        ),
+        rx.fragment(),
+    )
+
+
 def inventario_page() -> rx.Component:
     return rx.el.div(
         rx.el.h1(
@@ -54,9 +368,24 @@ def inventario_page() -> rx.Component:
             rx.el.input(
                 placeholder="Buscar producto...",
                 on_change=State.set_inventory_search_term,
-                class_name="w-full p-2 border rounded-md mb-4",
+                class_name="w-full p-2 border rounded-md",
             ),
-            class_name="bg-white p-6 rounded-lg shadow-md mb-6",
+            rx.el.div(
+                rx.el.button(
+                    rx.icon("download", class_name="h-4 w-4"),
+                    "Exportar Inventario",
+                    on_click=State.export_inventory_to_excel,
+                    class_name="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700",
+                ),
+                rx.el.button(
+                    rx.icon("clipboard_check", class_name="h-4 w-4"),
+                    "Registrar Inventario Fisico",
+                    on_click=State.open_inventory_check_modal,
+                    class_name="flex items-center justify-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700",
+                ),
+                class_name="flex flex-col gap-2 w-full md:w-auto md:flex-row",
+            ),
+            class_name="bg-white p-6 rounded-lg shadow-md mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between",
         ),
         rx.el.div(
             rx.el.table(
@@ -148,5 +477,6 @@ def inventario_page() -> rx.Component:
             ),
             class_name="bg-white p-6 rounded-lg shadow-md overflow-x-auto",
         ),
+        inventory_adjustment_modal(),
         class_name="p-6",
     )

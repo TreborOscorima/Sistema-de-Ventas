@@ -41,6 +41,31 @@ class Movement(TypedDict):
     total: float
     payment_method: str
     payment_details: str
+    user: str
+    sale_id: str
+
+
+class CashboxSale(TypedDict):
+    sale_id: str
+    timestamp: str
+    user: str
+    payment_method: str
+    payment_details: str
+    total: float
+    items: list[TransactionItem]
+    is_deleted: bool
+    delete_reason: str
+
+
+class InventoryAdjustment(TypedDict):
+    temp_id: str
+    barcode: str
+    description: str
+    category: str
+    unit: str
+    current_stock: float
+    adjust_quantity: float
+    reason: str
 
 
 class NewUser(TypedDict):
@@ -115,6 +140,31 @@ class State(AuthState):
     payment_mixed_status: str = "neutral"
     payment_mixed_notes: str = ""
     last_payment_summary: str = ""
+    inventory_check_modal_open: bool = False
+    inventory_check_status: str = "perfecto"
+    inventory_adjustment_notes: str = ""
+    inventory_adjustment_item: InventoryAdjustment = {
+        "temp_id": "",
+        "barcode": "",
+        "description": "",
+        "category": "",
+        "unit": "",
+        "current_stock": 0,
+        "adjust_quantity": 0,
+        "reason": "",
+    }
+    inventory_adjustment_items: list[InventoryAdjustment] = []
+    inventory_adjustment_suggestions: list[str] = []
+    cashbox_sales: list[CashboxSale] = []
+    cashbox_filter_start_date: str = ""
+    cashbox_filter_end_date: str = ""
+    cashbox_staged_start_date: str = ""
+    cashbox_staged_end_date: str = ""
+    cashbox_current_page: int = 1
+    cashbox_items_per_page: int = 10
+    sale_delete_modal_open: bool = False
+    sale_to_delete: str = ""
+    sale_delete_reason: str = ""
     show_user_form: bool = False
     editing_user: User | None = None
     new_user_data: NewUser = {
@@ -187,6 +237,10 @@ class State(AuthState):
             )
         return sorted(list(self.inventory.values()), key=lambda p: p["description"])
 
+    @rx.event
+    def set_inventory_search_term(self, value: str):
+        self.inventory_search_term = value or ""
+
     @rx.var
     def filtered_history(self) -> list[Movement]:
         if not self.current_user["privileges"]["view_historial"]:
@@ -239,6 +293,50 @@ class State(AuthState):
         if total_items == 0:
             return 1
         return (total_items + self.items_per_page - 1) // self.items_per_page
+
+    @rx.var
+    def filtered_cashbox_sales(self) -> list[CashboxSale]:
+        sales = sorted(
+            self.cashbox_sales, key=lambda s: s["timestamp"], reverse=True
+        )
+        if self.cashbox_filter_start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                    self.cashbox_filter_start_date, "%Y-%m-%d"
+                ).date()
+                sales = [
+                    sale
+                    for sale in sales
+                    if self._sale_date(sale) and self._sale_date(sale) >= start_date
+                ]
+            except ValueError as e:
+                logging.exception(f"Error parsing cashbox start date: {e}")
+        if self.cashbox_filter_end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    self.cashbox_filter_end_date, "%Y-%m-%d"
+                ).date()
+                sales = [
+                    sale
+                    for sale in sales
+                    if self._sale_date(sale) and self._sale_date(sale) <= end_date
+                ]
+            except ValueError as e:
+                logging.exception(f"Error parsing cashbox end date: {e}")
+        return sales
+
+    @rx.var
+    def paginated_cashbox_sales(self) -> list[CashboxSale]:
+        start_index = (self.cashbox_current_page - 1) * self.cashbox_items_per_page
+        end_index = start_index + self.cashbox_items_per_page
+        return self.filtered_cashbox_sales[start_index:end_index]
+
+    @rx.var
+    def cashbox_total_pages(self) -> int:
+        total = len(self.filtered_cashbox_sales)
+        if total == 0:
+            return 1
+        return (total + self.cashbox_items_per_page - 1) // self.cashbox_items_per_page
 
     @rx.var
     def total_ingresos(self) -> float:
@@ -462,6 +560,8 @@ class State(AuthState):
                     "total": item["subtotal"],
                     "payment_method": "",
                     "payment_details": "",
+                    "user": self.current_user["username"],
+                    "sale_id": "",
                 }
             )
         self.new_entry_items = []
@@ -491,6 +591,26 @@ class State(AuthState):
             if product_code and product_code.strip() == code:
                 return product
         return None
+
+    def _sale_date(self, sale: CashboxSale):
+        try:
+            return datetime.datetime.strptime(
+                sale["timestamp"], "%Y-%m-%d %H:%M:%S"
+            ).date()
+        except ValueError:
+            return None
+
+    def _payment_category(self, method: str) -> str:
+        label = method.lower() if method else ""
+        if "mixto" in label:
+            return "Pago Mixto"
+        if "tarjeta" in label:
+            return "Tarjeta"
+        if "qr" in label or "billetera" in label or "yape" in label or "plin" in label:
+            return "Pago QR / Billetera"
+        if "efectivo" in label:
+            return "Efectivo"
+        return "Otros"
 
     def _fill_entry_item_from_product(self, product: Product):
         self.new_entry_item["description"] = product["description"]
@@ -553,6 +673,33 @@ class State(AuthState):
         }
         self.autocomplete_suggestions = []
 
+    def _fill_inventory_adjustment_from_product(self, product: Product):
+        self.inventory_adjustment_item = {
+            "temp_id": "",
+            "barcode": product.get("barcode", ""),
+            "description": product["description"],
+            "category": product.get(
+                "category", self.categories[0] if self.categories else ""
+            ),
+            "unit": product.get("unit", "Unidad"),
+            "current_stock": product.get("stock", 0),
+            "adjust_quantity": 0,
+            "reason": "",
+        }
+
+    def _reset_inventory_adjustment_form(self):
+        self.inventory_adjustment_item = {
+            "temp_id": "",
+            "barcode": "",
+            "description": "",
+            "category": "",
+            "unit": "",
+            "current_stock": 0,
+            "adjust_quantity": 0,
+            "reason": "",
+        }
+        self.inventory_adjustment_suggestions = []
+
     @rx.event
     def handle_sale_change(self, field: str, value: Union[str, float]):
         try:
@@ -581,6 +728,30 @@ class State(AuthState):
             logging.exception(f"Error parsing sale value: {e}")
 
     @rx.event
+    def handle_inventory_adjustment_change(self, field: str, value: Union[str, float]):
+        try:
+            if field == "adjust_quantity":
+                amount = float(value) if value else 0
+                if amount < 0:
+                    amount = 0
+                self.inventory_adjustment_item["adjust_quantity"] = amount
+            elif field == "reason":
+                self.inventory_adjustment_item["reason"] = value
+            elif field == "description":
+                self.inventory_adjustment_item["description"] = value
+                if value:
+                    search = str(value).lower()
+                    self.inventory_adjustment_suggestions = [
+                        p["description"]
+                        for p in self.inventory.values()
+                        if search in p["description"].lower()
+                    ][:5]
+                else:
+                    self.inventory_adjustment_suggestions = []
+        except ValueError as e:
+            logging.exception(f"Error parsing inventory adjustment value: {e}")
+
+    @rx.event
     def select_product_for_sale(self, description: str):
         if isinstance(description, dict):
             description = (
@@ -594,6 +765,49 @@ class State(AuthState):
             product = self.inventory[product_id]
             self._fill_sale_item_from_product(product)
         self.autocomplete_suggestions = []
+
+    @rx.event
+    def select_inventory_adjustment_product(self, description: str):
+        if isinstance(description, dict):
+            description = (
+                description.get("value")
+                or description.get("description")
+                or description.get("label")
+                or ""
+            )
+        product_id = description.lower().strip()
+        if product_id in self.inventory:
+            self._fill_inventory_adjustment_from_product(self.inventory[product_id])
+        self.inventory_adjustment_suggestions = []
+
+    @rx.event
+    def add_inventory_adjustment_item(self):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return rx.toast("No tiene permisos para ajustar inventario.", duration=3000)
+        description = self.inventory_adjustment_item["description"].strip()
+        if not description:
+            return rx.toast("Seleccione un producto para ajustar.", duration=3000)
+        product_id = description.lower()
+        if product_id not in self.inventory:
+            return rx.toast("Producto no encontrado en el inventario.", duration=3000)
+        quantity = self.inventory_adjustment_item["adjust_quantity"]
+        if quantity <= 0:
+            return rx.toast("Ingrese la cantidad a ajustar.", duration=3000)
+        available = self.inventory[product_id]["stock"]
+        if quantity > available:
+            return rx.toast(
+                "La cantidad supera el stock disponible.", duration=3000
+            )
+        item_copy = self.inventory_adjustment_item.copy()
+        item_copy["temp_id"] = str(uuid.uuid4())
+        self.inventory_adjustment_items.append(item_copy)
+        self._reset_inventory_adjustment_form()
+
+    @rx.event
+    def remove_inventory_adjustment_item(self, temp_id: str):
+        self.inventory_adjustment_items = [
+            item for item in self.inventory_adjustment_items if item["temp_id"] != temp_id
+        ]
 
     @rx.event
     def add_item_to_sale(self):
@@ -647,6 +861,7 @@ class State(AuthState):
         sale_snapshot = [item.copy() for item in self.new_sale_items]
         sale_total = sum(item["subtotal"] for item in sale_snapshot)
         payment_summary = self._generate_payment_summary()
+        sale_id = str(uuid.uuid4())
         for item in self.new_sale_items:
             product_id = item["description"].lower().strip()
             if self.inventory[product_id]["stock"] >= item["quantity"]:
@@ -662,12 +877,27 @@ class State(AuthState):
                             "total": item["subtotal"],
                             "payment_method": self.payment_method,
                             "payment_details": payment_summary,
+                            "user": self.current_user["username"],
+                            "sale_id": sale_id,
                         }
                     )
             else:
                 return rx.toast(
                     f"Stock insuficiente para {item['description']}.", duration=3000
                 )
+        self.cashbox_sales.append(
+            {
+                "sale_id": sale_id,
+                "timestamp": timestamp,
+                "user": self.current_user["username"],
+                "payment_method": self.payment_method,
+                "payment_details": payment_summary,
+                "total": sale_total,
+                "items": [item.copy() for item in sale_snapshot],
+                "is_deleted": False,
+                "delete_reason": "",
+            }
+        )
         self.last_sale_receipt = sale_snapshot
         self.last_sale_total = sale_total
         self.last_sale_timestamp = timestamp
@@ -770,6 +1000,48 @@ class State(AuthState):
         self.apply_history_filters()
 
     @rx.event
+    def set_cashbox_staged_start_date(self, value: str):
+        self.cashbox_staged_start_date = value or ""
+
+    @rx.event
+    def set_cashbox_staged_end_date(self, value: str):
+        self.cashbox_staged_end_date = value or ""
+
+    @rx.event
+    def apply_cashbox_filters(self):
+        self.cashbox_filter_start_date = self.cashbox_staged_start_date
+        self.cashbox_filter_end_date = self.cashbox_staged_end_date
+        self.cashbox_current_page = 1
+
+    @rx.event
+    def reset_cashbox_filters(self):
+        self.cashbox_filter_start_date = ""
+        self.cashbox_filter_end_date = ""
+        self.cashbox_staged_start_date = ""
+        self.cashbox_staged_end_date = ""
+        self.cashbox_current_page = 1
+
+    @rx.event
+    def set_cashbox_page(self, page: int):
+        if 1 <= page <= self.cashbox_total_pages:
+            self.cashbox_current_page = page
+
+    @rx.event
+    def prev_cashbox_page(self):
+        if self.cashbox_current_page > 1:
+            self.cashbox_current_page -= 1
+
+    @rx.event
+    def next_cashbox_page(self):
+        total_pages = (
+            (len(self.filtered_cashbox_sales) + self.cashbox_items_per_page - 1)
+            // self.cashbox_items_per_page
+        )
+        total_pages = total_pages or 1
+        if self.cashbox_current_page < total_pages:
+            self.cashbox_current_page += 1
+
+    @rx.event
     def export_to_excel(self):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
@@ -809,6 +1081,371 @@ class State(AuthState):
         return rx.download(
             data=file_stream.read(), filename="historial_movimientos.xlsx"
         )
+
+    @rx.event
+    def export_inventory_to_excel(self):
+        if not self.current_user["privileges"]["export_data"]:
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        import openpyxl
+        from io import BytesIO
+
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Inventario Actual"
+        headers = [
+            "Codigo de Barra",
+            "Descripcion",
+            "Categoria",
+            "Unidad",
+            "Stock Sistema",
+            "Precio Compra",
+            "Precio Venta",
+            "Valor Total",
+            "Conteo Fisico",
+            "Diferencia",
+            "Notas Adicionales",
+        ]
+        sheet.append(headers)
+        products = sorted(
+            self.inventory.values(), key=lambda p: p.get("description", "").lower()
+        )
+        for product in products:
+            barcode = product.get("barcode", "")
+            description = product.get("description", "")
+            category = product.get(
+                "category", self.categories[0] if self.categories else ""
+            )
+            unit = product.get("unit", "Unidad")
+            stock = product.get("stock", 0)
+            purchase_price = product.get("purchase_price", 0)
+            sale_price = product.get("sale_price", 0)
+            total_value = stock * purchase_price
+            sheet.append(
+                [
+                    barcode,
+                    description,
+                    category,
+                    unit,
+                    stock,
+                    purchase_price,
+                    sale_price,
+                    total_value,
+                    "",
+                    "",
+                    "",
+                ]
+            )
+            current_row = sheet.max_row
+            sheet.cell(row=current_row, column=10).value = f"=I{current_row}-E{current_row}"
+        file_stream = BytesIO()
+        workbook.save(file_stream)
+        file_stream.seek(0)
+        return rx.download(data=file_stream.read(), filename="inventario_actual.xlsx")
+
+    @rx.event
+    def export_cashbox_report(self):
+        if not self.current_user["privileges"]["export_data"]:
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        if not self.cashbox_sales:
+            return rx.toast("No hay ventas para exportar.", duration=3000)
+        import openpyxl
+        from io import BytesIO
+
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Gestion de Caja"
+        headers = [
+            "Fecha y Hora",
+            "Usuario",
+            "Metodo de Pago",
+            "Detalle Pago",
+            "Total",
+            "Productos",
+        ]
+        sheet.append(headers)
+        for sale in self.filtered_cashbox_sales:
+            if sale.get("is_deleted"):
+                continue
+            details = ", ".join(
+                f"{item['description']} (x{item['quantity']})" for item in sale["items"]
+            )
+            sheet.append(
+                [
+                    sale["timestamp"],
+                    sale["user"],
+                    sale["payment_method"],
+                    sale["payment_details"],
+                    sale["total"],
+                    details,
+                ]
+            )
+        file_stream = BytesIO()
+        workbook.save(file_stream)
+        file_stream.seek(0)
+        return rx.download(data=file_stream.read(), filename="gestion_caja.xlsx")
+
+    @rx.event
+    def open_sale_delete_modal(self, sale_id: str):
+        self.sale_to_delete = sale_id
+        self.sale_delete_reason = ""
+        self.sale_delete_modal_open = True
+
+    @rx.event
+    def close_sale_delete_modal(self):
+        self.sale_delete_modal_open = False
+        self.sale_to_delete = ""
+        self.sale_delete_reason = ""
+
+    @rx.event
+    def set_sale_delete_reason(self, value: str):
+        self.sale_delete_reason = value
+
+    @rx.event
+    def delete_sale(self):
+        if not self.current_user["privileges"]["create_ventas"]:
+            return rx.toast("No tiene permisos para eliminar ventas.", duration=3000)
+        sale_id = self.sale_to_delete
+        reason = self.sale_delete_reason.strip()
+        if not sale_id:
+            return rx.toast("Seleccione una venta a eliminar.", duration=3000)
+        if not reason:
+            return rx.toast(
+                "Ingrese el motivo de la eliminación de la venta.", duration=3000
+            )
+        sale = next((s for s in self.cashbox_sales if s["sale_id"] == sale_id), None)
+        if not sale:
+            return rx.toast("Venta no encontrada.", duration=3000)
+        if sale.get("is_deleted"):
+            return rx.toast("Esta venta ya fue eliminada.", duration=3000)
+        for item in sale["items"]:
+            product_id = item["description"].lower().strip()
+            if product_id in self.inventory:
+                self.inventory[product_id]["stock"] += item["quantity"]
+        self.history = [m for m in self.history if m.get("sale_id") != sale_id]
+        self.history.append(
+            {
+                "id": str(uuid.uuid4()),
+                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "type": "Venta Eliminada",
+                "product_description": f"Venta anulada ({sale_id})",
+                "quantity": 0,
+                "unit": "-",
+                "total": -sale["total"],
+                "payment_method": "Anulado",
+                "payment_details": reason,
+                "user": self.current_user["username"],
+                "sale_id": sale_id,
+            }
+        )
+        sale["is_deleted"] = True
+        sale["delete_reason"] = reason
+        self.close_sale_delete_modal()
+        return rx.toast("Venta eliminada correctamente.", duration=3000)
+
+    @rx.event
+    def close_cashbox_day(self):
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        day_sales = [
+            sale
+            for sale in self.cashbox_sales
+            if sale["timestamp"].startswith(today) and not sale.get("is_deleted")
+        ]
+        if not day_sales:
+            return rx.toast("No hay ventas registradas hoy.", duration=3000)
+        summary = {
+            "Efectivo": 0.0,
+            "Tarjeta": 0.0,
+            "Pago QR / Billetera": 0.0,
+            "Pago Mixto": 0.0,
+            "Otros": 0.0,
+        }
+        for sale in day_sales:
+            category = self._payment_category(sale["payment_method"])
+            if category not in summary:
+                summary[category] = 0.0
+            summary[category] += sale["total"]
+        summary_rows = "".join(
+            f"<tr><td>{method}</td><td>${amount:.2f}</td></tr>"
+            for method, amount in summary.items()
+            if amount > 0
+        )
+        detail_rows = "".join(
+            f"<tr><td>{sale['timestamp']}</td><td>{sale['user']}</td><td>{sale['payment_method']}</td><td>${sale['total']:.2f}</td></tr>"
+            for sale in day_sales
+        )
+        html_content = f"""
+        <html>
+            <head>
+                <meta charset='utf-8' />
+                <title>Resumen de Caja</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; padding: 24px; }}
+                    h1 {{ text-align: center; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                    th {{ background-color: #f3f4f6; }}
+                </style>
+            </head>
+            <body>
+                <h1>Resumen Diario de Caja</h1>
+                <p><strong>Fecha:</strong> {today}</p>
+                <p><strong>Responsable:</strong> {self.current_user['username']}</p>
+                <h2>Totales por método</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Método</th>
+                            <th>Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {summary_rows}
+                    </tbody>
+                </table>
+                <h2>Detalle de ventas</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha y Hora</th>
+                            <th>Usuario</th>
+                            <th>Método</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {detail_rows}
+                    </tbody>
+                </table>
+            </body>
+        </html>
+        """
+        script = f"""
+        const cashboxWindow = window.open('', '_blank');
+        cashboxWindow.document.write({json.dumps(html_content)});
+        cashboxWindow.document.close();
+        cashboxWindow.focus();
+        cashboxWindow.print();
+        """
+        return rx.call_script(script)
+
+    @rx.event
+    def open_inventory_check_modal(self):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return rx.toast(
+                "No tiene permisos para registrar inventario.", duration=3000
+            )
+        self.inventory_check_modal_open = True
+        self.inventory_check_status = "perfecto"
+        self.inventory_adjustment_notes = ""
+        self.inventory_adjustment_items = []
+        self._reset_inventory_adjustment_form()
+
+    @rx.event
+    def close_inventory_check_modal(self):
+        self.inventory_check_modal_open = False
+        self.inventory_check_status = "perfecto"
+        self.inventory_adjustment_notes = ""
+        self.inventory_adjustment_items = []
+        self._reset_inventory_adjustment_form()
+
+    @rx.event
+    def set_inventory_check_status(self, status: str):
+        if status not in ["perfecto", "ajuste"]:
+            return
+        self.inventory_check_status = status
+        if status == "perfecto":
+            self.inventory_adjustment_items = []
+            self._reset_inventory_adjustment_form()
+
+    @rx.event
+    def set_inventory_adjustment_notes(self, notes: str):
+        self.inventory_adjustment_notes = notes
+
+    @rx.event
+    def submit_inventory_check(self):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return rx.toast(
+                "No tiene permisos para registrar inventario.", duration=3000
+            )
+        status = (
+            self.inventory_check_status
+            if self.inventory_check_status in ["perfecto", "ajuste"]
+            else "perfecto"
+        )
+        notes = self.inventory_adjustment_notes.strip()
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if status == "perfecto":
+            self.history.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "timestamp": timestamp,
+                    "type": "Inventario Perfecto",
+                    "product_description": "Inventario fisico verificado sin diferencias.",
+                    "quantity": 0,
+                    "unit": "-",
+                    "total": 0,
+                    "payment_method": "Inventario Perfecto",
+                    "payment_details": "Sin diferencias",
+                    "user": self.current_user["username"],
+                    "sale_id": "",
+                }
+            )
+        else:
+            if not self.inventory_adjustment_items:
+                return rx.toast(
+                    "Agregue los productos que requieren re ajuste.", duration=3000
+                )
+            recorded = False
+            for item in self.inventory_adjustment_items:
+                description = item["description"].strip()
+                if not description:
+                    continue
+                product_id = description.lower()
+                if product_id not in self.inventory:
+                    continue
+                quantity = item.get("adjust_quantity", 0) or 0
+                if quantity <= 0:
+                    continue
+                available = self.inventory[product_id]["stock"]
+                qty = min(quantity, available)
+                self.inventory[product_id]["stock"] = max(available - qty, 0)
+                detail_parts = []
+                if item.get("reason"):
+                    detail_parts.append(item["reason"])
+                if notes:
+                    detail_parts.append(notes)
+                details = (
+                    " | ".join(part for part in detail_parts if part)
+                    if detail_parts
+                    else "Ajuste inventario"
+                )
+                self.history.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "timestamp": timestamp,
+                        "type": "Re Ajuste Inventario",
+                        "product_description": description,
+                        "quantity": -qty,
+                        "unit": item.get("unit") or "-",
+                        "total": 0,
+                        "payment_method": "Re Ajuste Inventario",
+                        "payment_details": details,
+                        "user": self.current_user["username"],
+                        "sale_id": "",
+                    }
+                )
+                recorded = True
+            if not recorded:
+                return rx.toast(
+                    "No se pudo registrar el re ajuste. Verifique los productos.",
+                    duration=3000,
+                )
+        self.inventory_check_modal_open = False
+        self.inventory_check_status = "perfecto"
+        self.inventory_adjustment_notes = ""
+        self.inventory_adjustment_items = []
+        self._reset_inventory_adjustment_form()
+        return rx.toast("Registro de inventario guardado.", duration=3000)
 
     def _reset_new_user_form(self):
         self.new_user_data = {

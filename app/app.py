@@ -5,6 +5,7 @@ from app.components.sidebar import sidebar
 from app.pages.ingreso import ingreso_page
 from app.pages.venta import venta_page
 from app.pages.inventario import inventario_page
+from app.pages.caja import cashbox_page
 from app.pages.historial import historial_page
 from app.pages.configuracion import configuracion_page
 from app.pages.login import login_page
@@ -21,6 +22,7 @@ def index() -> rx.Component:
                         State.current_page,
                         ("Ingreso", ingreso_page()),
                         ("Venta", venta_page()),
+                        ("Gestion de Caja", cashbox_page()),
                         ("Inventario", inventario_page()),
                         ("Historial", historial_page()),
                         ("Configuracion", configuracion_page()),

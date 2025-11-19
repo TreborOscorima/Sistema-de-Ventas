@@ -45,6 +45,7 @@ def sidebar() -> rx.Component:
             rx.el.nav(
                 nav_item("Ingreso", "arrow-down-to-line", "Ingreso"),
                 nav_item("Venta", "arrow-up-from-line", "Venta"),
+                nav_item("Gestion de Caja", "wallet", "Gestion de Caja"),
                 nav_item("Inventario", "boxes", "Inventario"),
                 nav_item("Historial", "history", "Historial"),
                 nav_item("Configuracion", "settings", "Configuracion"),
