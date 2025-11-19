@@ -5,6 +5,7 @@ import uuid
 import logging
 import bcrypt
 import json
+from decimal import Decimal, ROUND_HALF_UP
 from app.states.auth_state import AuthState, User, Privileges
 
 
@@ -55,6 +56,8 @@ class CashboxSale(TypedDict):
     items: list[TransactionItem]
     is_deleted: bool
     delete_reason: str
+    is_deleted: bool
+    delete_reason: str
 
 
 class InventoryAdjustment(TypedDict):
@@ -80,6 +83,20 @@ class State(AuthState):
     sidebar_open: bool = True
     current_page: str = "Ingreso"
     units: list[str] = ["Unidad", "Kg", "Litro", "Metro", "Caja"]
+    decimal_units: set[str] = {
+        "kg",
+        "kilogramo",
+        "kilogramos",
+        "g",
+        "gramo",
+        "gramos",
+        "l",
+        "litro",
+        "litros",
+        "ml",
+        "metro",
+        "metros",
+    }
     inventory: dict[str, Product] = {}
     history: list[Movement] = []
     inventory_search_term: str = ""
@@ -165,6 +182,10 @@ class State(AuthState):
     sale_delete_modal_open: bool = False
     sale_to_delete: str = ""
     sale_delete_reason: str = ""
+    cashbox_close_modal_open: bool = False
+    cashbox_close_summary_totals: dict[str, float] = {}
+    cashbox_close_summary_sales: list[CashboxSale] = []
+    cashbox_close_summary_date: str = ""
     show_user_form: bool = False
     editing_user: User | None = None
     new_user_data: NewUser = {
@@ -185,6 +206,37 @@ class State(AuthState):
         },
     }
 
+    def _round_currency(self, value: float) -> float:
+        return float(
+            Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        )
+
+    def _unit_allows_decimal(self, unit: str) -> bool:
+        return unit and unit.lower() in self.decimal_units
+
+    def _normalize_quantity_value(self, value: float, unit: str) -> float:
+        if self._unit_allows_decimal(unit):
+            return float(
+                Decimal(str(value or 0)).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+            )
+        return int(
+            Decimal(str(value or 0)).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
+
+    def _apply_item_rounding(self, item: TransactionItem):
+        unit = item.get("unit", "")
+        item["quantity"] = self._normalize_quantity_value(
+            item.get("quantity", 0), unit
+        )
+        item["price"] = self._round_currency(item.get("price", 0))
+        if "sale_price" in item:
+            item["sale_price"] = self._round_currency(item.get("sale_price", 0))
+        item["subtotal"] = self._round_currency(item["quantity"] * item["price"])
+
     @rx.var
     def current_user(self) -> User:
         if not self.token:
@@ -196,19 +248,23 @@ class State(AuthState):
 
     @rx.var
     def entry_subtotal(self) -> float:
-        return self.new_entry_item["quantity"] * self.new_entry_item["price"]
+        return self.new_entry_item["subtotal"]
 
     @rx.var
     def entry_total(self) -> float:
-        return sum((item["subtotal"] for item in self.new_entry_items))
+        return self._round_currency(
+            sum((item["subtotal"] for item in self.new_entry_items))
+        )
 
     @rx.var
     def sale_subtotal(self) -> float:
-        return self.new_sale_item["quantity"] * self.new_sale_item["price"]
+        return self.new_sale_item["subtotal"]
 
     @rx.var
     def sale_total(self) -> float:
-        return sum((item["subtotal"] for item in self.new_sale_items))
+        return self._round_currency(
+            sum((item["subtotal"] for item in self.new_sale_items))
+        )
 
     @rx.var
     def payment_summary(self) -> str:
@@ -339,16 +395,32 @@ class State(AuthState):
         return (total + self.cashbox_items_per_page - 1) // self.cashbox_items_per_page
 
     @rx.var
+    def cashbox_close_totals(self) -> list[dict[str, str]]:
+        return [
+            {"method": method, "amount": f"${amount:.2f}"}
+            for method, amount in self.cashbox_close_summary_totals.items()
+            if amount > 0
+        ]
+
+    @rx.var
+    def cashbox_close_sales(self) -> list[CashboxSale]:
+        return self.cashbox_close_summary_sales
+
+    @rx.var
     def total_ingresos(self) -> float:
-        return sum((m["total"] for m in self.history if m["type"] == "Ingreso"))
+        return self._round_currency(
+            sum((m["total"] for m in self.history if m["type"] == "Ingreso"))
+        )
 
     @rx.var
     def total_ventas(self) -> float:
-        return sum((m["total"] for m in self.history if m["type"] == "Venta"))
+        return self._round_currency(
+            sum((m["total"] for m in self.history if m["type"] == "Venta"))
+        )
 
     @rx.var
     def ganancia_bruta(self) -> float:
-        return self.total_ventas - self.total_ingresos
+        return self._round_currency(self.total_ventas - self.total_ingresos)
 
     @rx.var
     def total_movimientos(self) -> int:
@@ -450,10 +522,20 @@ class State(AuthState):
     def handle_entry_change(self, field: str, value: str):
         try:
             if field in ["quantity", "price", "sale_price"]:
-                self.new_entry_item[field] = float(value) if value else 0
+                numeric = float(value) if value else 0
+                if field == "quantity":
+                    self.new_entry_item[field] = self._normalize_quantity_value(
+                        numeric, self.new_entry_item.get("unit", "")
+                    )
+                else:
+                    self.new_entry_item[field] = self._round_currency(numeric)
             else:
                 self.new_entry_item[field] = value
-            self.new_entry_item["subtotal"] = (
+                if field == "unit":
+                    self.new_entry_item["quantity"] = self._normalize_quantity_value(
+                        self.new_entry_item["quantity"], value
+                    )
+            self.new_entry_item["subtotal"] = self._round_currency(
                 self.new_entry_item["quantity"] * self.new_entry_item["price"]
             )
             if field == "description":
@@ -490,6 +572,7 @@ class State(AuthState):
             )
         item_copy = self.new_entry_item.copy()
         item_copy["temp_id"] = str(uuid.uuid4())
+        self._apply_item_rounding(item_copy)
         self.new_entry_items.append(item_copy)
         self._reset_entry_form()
 
@@ -528,17 +611,25 @@ class State(AuthState):
             product_id = item["description"].lower().strip()
             barcode = item.get("barcode", "").strip()
             sale_price = item.get("sale_price", 0)
+            purchase_price = item["price"]
             if product_id in self.inventory:
                 if "barcode" not in self.inventory[product_id]:
                     self.inventory[product_id]["barcode"] = ""
                 self.inventory[product_id]["stock"] += item["quantity"]
-                self.inventory[product_id]["purchase_price"] = item["price"]
+                self.inventory[product_id]["stock"] = self._normalize_quantity_value(
+                    self.inventory[product_id]["stock"],
+                    self.inventory[product_id]["unit"],
+                )
+                self.inventory[product_id]["purchase_price"] = purchase_price
                 if barcode:
                     self.inventory[product_id]["barcode"] = barcode
                 if sale_price > 0:
                     self.inventory[product_id]["sale_price"] = sale_price
                 self.inventory[product_id]["category"] = item["category"]
             else:
+                default_sale_price = (
+                    sale_price if sale_price > 0 else purchase_price * 1.25
+                )
                 self.inventory[product_id] = {
                     "id": product_id,
                     "barcode": barcode,
@@ -546,8 +637,8 @@ class State(AuthState):
                     "category": item["category"],
                     "stock": item["quantity"],
                     "unit": item["unit"],
-                    "purchase_price": item["price"],
-                    "sale_price": sale_price if sale_price > 0 else item["price"] * 1.25,
+                    "purchase_price": purchase_price,
+                    "sale_price": self._round_currency(default_sale_price),
                 }
             self.history.append(
                 {
@@ -612,14 +703,45 @@ class State(AuthState):
             return "Efectivo"
         return "Otros"
 
+    def _get_day_sales(self, date: str) -> list[CashboxSale]:
+        return [
+            sale
+            for sale in self.cashbox_sales
+            if sale["timestamp"].startswith(date) and not sale.get("is_deleted")
+        ]
+
+    def _build_cashbox_summary(self, sales: list[CashboxSale]) -> dict[str, float]:
+        summary = {
+            "Efectivo": 0.0,
+            "Tarjeta": 0.0,
+            "Pago QR / Billetera": 0.0,
+            "Pago Mixto": 0.0,
+            "Otros": 0.0,
+        }
+        for sale in sales:
+            category = self._payment_category(sale["payment_method"])
+            if category not in summary:
+                summary[category] = 0.0
+            summary[category] = self._round_currency(summary[category] + sale["total"])
+        return summary
+
+    def _reset_cashbox_close_summary(self):
+        self.cashbox_close_modal_open = False
+        self.cashbox_close_summary_totals = {}
+        self.cashbox_close_summary_sales = []
+        self.cashbox_close_summary_date = ""
+
     def _fill_entry_item_from_product(self, product: Product):
         self.new_entry_item["description"] = product["description"]
         self.new_entry_item["unit"] = product["unit"]
-        self.new_entry_item["price"] = product["purchase_price"]
-        self.new_entry_item["sale_price"] = product["sale_price"]
+        self.new_entry_item["price"] = self._round_currency(product["purchase_price"])
+        self.new_entry_item["sale_price"] = self._round_currency(product["sale_price"])
         self.new_entry_item["category"] = product.get("category", self.categories[0] if self.categories else "")
         self.new_entry_item["barcode"] = product.get("barcode", "")
-        self.new_entry_item["subtotal"] = (
+        self.new_entry_item["quantity"] = self._normalize_quantity_value(
+            self.new_entry_item["quantity"], product["unit"]
+        )
+        self.new_entry_item["subtotal"] = self._round_currency(
             self.new_entry_item["quantity"] * self.new_entry_item["price"]
         )
 
@@ -645,16 +767,18 @@ class State(AuthState):
             if keep_quantity and self.new_sale_item["quantity"] > 0
             else 1
         )
+        normalized_quantity = self._normalize_quantity_value(quantity, product["unit"])
+        price = self._round_currency(product["sale_price"])
         self.new_sale_item = {
             "temp_id": "",
             "barcode": product.get("barcode", ""),
             "description": product["description"],
             "category": product.get("category", self.categories[0] if self.categories else ""),
-            "quantity": quantity,
+            "quantity": normalized_quantity,
             "unit": product["unit"],
-            "price": product["sale_price"],
-            "sale_price": product["sale_price"],
-            "subtotal": quantity * product["sale_price"],
+            "price": price,
+            "sale_price": price,
+            "subtotal": self._round_currency(normalized_quantity * price),
         }
         if not keep_quantity:
             self.autocomplete_suggestions = []
@@ -674,6 +798,9 @@ class State(AuthState):
         self.autocomplete_suggestions = []
 
     def _fill_inventory_adjustment_from_product(self, product: Product):
+        stock = self._normalize_quantity_value(
+            product.get("stock", 0), product.get("unit", "")
+        )
         self.inventory_adjustment_item = {
             "temp_id": "",
             "barcode": product.get("barcode", ""),
@@ -682,7 +809,7 @@ class State(AuthState):
                 "category", self.categories[0] if self.categories else ""
             ),
             "unit": product.get("unit", "Unidad"),
-            "current_stock": product.get("stock", 0),
+            "current_stock": stock,
             "adjust_quantity": 0,
             "reason": "",
         }
@@ -704,10 +831,20 @@ class State(AuthState):
     def handle_sale_change(self, field: str, value: Union[str, float]):
         try:
             if field in ["quantity", "price"]:
-                self.new_sale_item[field] = float(value) if value else 0
+                numeric = float(value) if value else 0
+                if field == "quantity":
+                    self.new_sale_item[field] = self._normalize_quantity_value(
+                        numeric, self.new_sale_item.get("unit", "")
+                    )
+                else:
+                    self.new_sale_item[field] = self._round_currency(numeric)
             else:
                 self.new_sale_item[field] = value
-            self.new_sale_item["subtotal"] = (
+                if field == "unit":
+                    self.new_sale_item["quantity"] = self._normalize_quantity_value(
+                        self.new_sale_item["quantity"], value
+                    )
+            self.new_sale_item["subtotal"] = self._round_currency(
                 self.new_sale_item["quantity"] * self.new_sale_item["price"]
             )
             if field == "description":
@@ -734,7 +871,11 @@ class State(AuthState):
                 amount = float(value) if value else 0
                 if amount < 0:
                     amount = 0
-                self.inventory_adjustment_item["adjust_quantity"] = amount
+                self.inventory_adjustment_item["adjust_quantity"] = (
+                    self._normalize_quantity_value(
+                        amount, self.inventory_adjustment_item.get("unit", "")
+                    )
+                )
             elif field == "reason":
                 self.inventory_adjustment_item["reason"] = value
             elif field == "description":
@@ -800,6 +941,9 @@ class State(AuthState):
             )
         item_copy = self.inventory_adjustment_item.copy()
         item_copy["temp_id"] = str(uuid.uuid4())
+        item_copy["adjust_quantity"] = self._normalize_quantity_value(
+            item_copy.get("adjust_quantity", 0), item_copy.get("unit", "")
+        )
         self.inventory_adjustment_items.append(item_copy)
         self._reset_inventory_adjustment_form()
 
@@ -829,6 +973,7 @@ class State(AuthState):
             return rx.toast("Stock insuficiente para realizar la venta.", duration=3000)
         item_copy = self.new_sale_item.copy()
         item_copy["temp_id"] = str(uuid.uuid4())
+        self._apply_item_rounding(item_copy)
         self.new_sale_items.append(item_copy)
         self._reset_sale_form()
         self._refresh_payment_feedback()
@@ -857,15 +1002,36 @@ class State(AuthState):
             return rx.toast("No hay productos en la venta.", duration=3000)
         if not self.payment_method:
             return rx.toast("Seleccione un método de pago.", duration=3000)
+        self._refresh_payment_feedback()
+        if self.payment_method == "Efectivo":
+            if self.payment_cash_status not in ["exact", "change"]:
+                message = (
+                    self.payment_cash_message or "Ingrese un monto válido en efectivo."
+                )
+                return rx.toast(message, duration=3000)
+        if self.payment_method == "Pagos Mixtos":
+            if self.payment_mixed_status not in ["exact", "change"]:
+                message = (
+                    self.payment_mixed_message
+                    or "Complete los montos del pago mixto."
+                )
+                return rx.toast(message, duration=3000)
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sale_snapshot = [item.copy() for item in self.new_sale_items]
-        sale_total = sum(item["subtotal"] for item in sale_snapshot)
+        for snapshot_item in sale_snapshot:
+            self._apply_item_rounding(snapshot_item)
+        sale_total = self._round_currency(sum(item["subtotal"] for item in sale_snapshot))
         payment_summary = self._generate_payment_summary()
         sale_id = str(uuid.uuid4())
         for item in self.new_sale_items:
             product_id = item["description"].lower().strip()
             if self.inventory[product_id]["stock"] >= item["quantity"]:
-                self.inventory[product_id]["stock"] -= item["quantity"]
+                new_stock = self.inventory[product_id]["stock"] - item["quantity"]
+                if new_stock < 0:
+                    new_stock = 0
+                self.inventory[product_id]["stock"] = self._normalize_quantity_value(
+                    new_stock, self.inventory[product_id]["unit"]
+                )
                 self.history.append(
                         {
                             "id": str(uuid.uuid4()),
@@ -1000,6 +1166,22 @@ class State(AuthState):
         self.apply_history_filters()
 
     @rx.event
+    def set_staged_history_filter_type(self, value: str):
+        self.staged_history_filter_type = value or "Todos"
+
+    @rx.event
+    def set_staged_history_filter_product(self, value: str):
+        self.staged_history_filter_product = value or ""
+
+    @rx.event
+    def set_staged_history_filter_start_date(self, value: str):
+        self.staged_history_filter_start_date = value or ""
+
+    @rx.event
+    def set_staged_history_filter_end_date(self, value: str):
+        self.staged_history_filter_end_date = value or ""
+
+    @rx.event
     def set_cashbox_staged_start_date(self, value: str):
         self.cashbox_staged_start_date = value or ""
 
@@ -1040,6 +1222,21 @@ class State(AuthState):
         total_pages = total_pages or 1
         if self.cashbox_current_page < total_pages:
             self.cashbox_current_page += 1
+
+    @rx.event
+    def open_cashbox_close_modal(self):
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        day_sales = self._get_day_sales(today)
+        if not day_sales:
+            return rx.toast("No hay ventas registradas hoy.", duration=3000)
+        self.cashbox_close_summary_totals = self._build_cashbox_summary(day_sales)
+        self.cashbox_close_summary_sales = day_sales
+        self.cashbox_close_summary_date = today
+        self.cashbox_close_modal_open = True
+
+    @rx.event
+    def close_cashbox_close_modal(self):
+        self._reset_cashbox_close_summary()
 
     @rx.event
     def export_to_excel(self):
@@ -1243,27 +1440,89 @@ class State(AuthState):
         return rx.toast("Venta eliminada correctamente.", duration=3000)
 
     @rx.event
+    def reprint_sale_receipt(self, sale_id: str):
+        sale = next((s for s in self.cashbox_sales if s["sale_id"] == sale_id), None)
+        if not sale:
+            return rx.toast("Venta no encontrada.", duration=3000)
+        items = sale.get("items", [])
+        rows = "".join(
+            f"<tr><td>{item.get('barcode', '')}</td>"
+            f"<td>{item.get('description', '')}</td>"
+            f"<td>{item.get('quantity', 0)}</td>"
+            f"<td>{item.get('unit', '')}</td>"
+            f"<td>${item.get('price', 0):.2f}</td>"
+            f"<td>${item.get('subtotal', 0):.2f}</td></tr>"
+            for item in items
+        )
+        payment_summary = sale.get("payment_details") or sale.get(
+            "payment_method", ""
+        )
+        html_content = f"""
+        <html>
+            <head>
+                <meta charset='utf-8' />
+                <title>Comprobante de Venta</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; padding: 24px; }}
+                    h1 {{ text-align: center; }}
+                    table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                    th {{ background-color: #f3f4f6; }}
+                    tfoot td {{ font-weight: bold; }}
+                </style>
+            </head>
+            <body>
+                <h1>Comprobante de Venta</h1>
+                <p><strong>Fecha:</strong> {sale.get('timestamp', '')}</p>
+                <p><strong>Usuario:</strong> {sale.get('user', '')}</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Cantidad</th>
+                            <th>Unidad</th>
+                            <th>P. Venta</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="5">Total</td>
+                            <td>${sale.get('total', 0):.2f}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="5">Metodo de Pago</td>
+                            <td>{payment_summary}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </body>
+        </html>
+        """
+        script = f"""
+        const receiptWindow = window.open('', '_blank');
+        receiptWindow.document.write({json.dumps(html_content)});
+        receiptWindow.document.close();
+        receiptWindow.focus();
+        receiptWindow.print();
+        """
+        return rx.call_script(script)
+
+    @rx.event
     def close_cashbox_day(self):
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
-        day_sales = [
-            sale
-            for sale in self.cashbox_sales
-            if sale["timestamp"].startswith(today) and not sale.get("is_deleted")
-        ]
+        date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
+            "%Y-%m-%d"
+        )
+        day_sales = self.cashbox_close_summary_sales or self._get_day_sales(date)
         if not day_sales:
             return rx.toast("No hay ventas registradas hoy.", duration=3000)
-        summary = {
-            "Efectivo": 0.0,
-            "Tarjeta": 0.0,
-            "Pago QR / Billetera": 0.0,
-            "Pago Mixto": 0.0,
-            "Otros": 0.0,
-        }
-        for sale in day_sales:
-            category = self._payment_category(sale["payment_method"])
-            if category not in summary:
-                summary[category] = 0.0
-            summary[category] += sale["total"]
+        summary = self.cashbox_close_summary_totals or self._build_cashbox_summary(
+            day_sales
+        )
         summary_rows = "".join(
             f"<tr><td>{method}</td><td>${amount:.2f}</td></tr>"
             for method, amount in summary.items()
@@ -1288,7 +1547,7 @@ class State(AuthState):
             </head>
             <body>
                 <h1>Resumen Diario de Caja</h1>
-                <p><strong>Fecha:</strong> {today}</p>
+                <p><strong>Fecha:</strong> {date}</p>
                 <p><strong>Responsable:</strong> {self.current_user['username']}</p>
                 <h2>Totales por método</h2>
                 <table>
@@ -1326,6 +1585,7 @@ class State(AuthState):
         cashboxWindow.focus();
         cashboxWindow.print();
         """
+        self._reset_cashbox_close_summary()
         return rx.call_script(script)
 
     @rx.event
@@ -1408,7 +1668,13 @@ class State(AuthState):
                     continue
                 available = self.inventory[product_id]["stock"]
                 qty = min(quantity, available)
-                self.inventory[product_id]["stock"] = max(available - qty, 0)
+                qty = self._normalize_quantity_value(
+                    qty, item.get("unit") or self.inventory[product_id]["unit"]
+                )
+                new_stock = max(available - qty, 0)
+                self.inventory[product_id]["stock"] = self._normalize_quantity_value(
+                    new_stock, self.inventory[product_id]["unit"]
+                )
                 detail_parts = []
                 if item.get("reason"):
                     detail_parts.append(item["reason"])
@@ -1597,9 +1863,10 @@ class State(AuthState):
 
     def _safe_amount(self, value: str) -> float:
         try:
-            return float(value) if value else 0
+            amount = float(value) if value else 0
         except ValueError:
-            return 0
+            amount = 0
+        return self._round_currency(amount)
 
     def _update_cash_feedback(self):
         amount = self.payment_cash_amount
@@ -1674,7 +1941,7 @@ class State(AuthState):
             amount = float(value) if value else 0
         except ValueError:
             amount = 0
-        self.payment_cash_amount = amount
+        self.payment_cash_amount = self._round_currency(amount)
         self._update_cash_feedback()
 
     @rx.event

@@ -47,7 +47,7 @@ def cashbox_filters() -> rx.Component:
             rx.el.button(
                 rx.icon("lock", class_name="h-4 w-4"),
                 "Cerrar Caja",
-                on_click=State.close_cashbox_day,
+                on_click=State.open_cashbox_close_modal,
                 class_name="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
             ),
             class_name="flex flex-col gap-2",
@@ -110,24 +110,44 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
         ),
         rx.el.td(sale_items_list(sale["items"]), class_name="py-3 px-4"),
         rx.el.td(
-            rx.cond(
-                sale["is_deleted"],
-                rx.el.button(
-                    rx.icon("trash-2", class_name="h-4 w-4"),
-                    "Eliminada",
-                    disabled=True,
-                    class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-gray-400 cursor-not-allowed",
-                ),
-                rx.el.button(
-                    rx.icon("trash-2", class_name="h-4 w-4"),
-                    "Eliminar",
-                    on_click=lambda _, sale_id=sale["sale_id"]: State.open_sale_delete_modal(
-                        sale_id
+            rx.el.div(
+                rx.cond(
+                    sale["is_deleted"],
+                    rx.el.button(
+                        rx.icon("printer", class_name="h-4 w-4"),
+                        "Reimprimir",
+                        disabled=True,
+                        class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-gray-400 cursor-not-allowed",
                     ),
-                    class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-red-600 hover:bg-red-50",
+                    rx.el.button(
+                        rx.icon("printer", class_name="h-4 w-4"),
+                        "Reimprimir",
+                        on_click=lambda _,
+                        sale_id=sale["sale_id"]: State.reprint_sale_receipt(sale_id),
+                        class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-blue-600 hover:bg-blue-50",
+                    ),
                 ),
+                rx.cond(
+                    sale["is_deleted"],
+                    rx.el.button(
+                        rx.icon("trash-2", class_name="h-4 w-4"),
+                        "Eliminada",
+                        disabled=True,
+                        class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-gray-400 cursor-not-allowed",
+                    ),
+                    rx.el.button(
+                        rx.icon("trash-2", class_name="h-4 w-4"),
+                        "Eliminar",
+                        on_click=lambda _,
+                        sale_id=sale["sale_id"]: State.open_sale_delete_modal(
+                            sale_id
+                        ),
+                        class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-red-600 hover:bg-red-50",
+                    ),
+                ),
+                class_name="flex flex-col gap-2 md:flex-row md:justify-center",
             ),
-            class_name="py-3 px-4 text-center",
+            class_name="py-3 px-4",
         ),
         class_name="border-b",
     )
@@ -215,6 +235,142 @@ def delete_sale_modal() -> rx.Component:
     )
 
 
+def close_cashbox_modal() -> rx.Component:
+    return rx.cond(
+        State.cashbox_close_modal_open,
+        rx.el.div(
+            rx.el.div(
+                on_click=State.close_cashbox_close_modal,
+                class_name="fixed inset-0 bg-black/40",
+            ),
+            rx.el.div(
+                rx.el.h3(
+                    "Resumen de Caja",
+                    class_name="text-xl font-semibold text-gray-800",
+                ),
+                rx.el.p(
+                    rx.el.span("Fecha: "),
+                    rx.cond(
+                        State.cashbox_close_summary_date == "",
+                        "Hoy",
+                        State.cashbox_close_summary_date,
+                    ),
+                    class_name="text-sm text-gray-600",
+                ),
+                rx.el.p(
+                    rx.el.span("Responsable: "),
+                    State.current_user["username"],
+                    class_name="text-sm text-gray-600 mb-4",
+                ),
+                rx.el.div(
+                    rx.el.h4(
+                        "Totales por método",
+                        class_name="text-sm font-semibold text-gray-700 mb-2",
+                    ),
+                    rx.el.table(
+                        rx.el.thead(
+                            rx.el.tr(
+                                rx.el.th("Método", class_name="py-2 px-3 text-left"),
+                                rx.el.th("Monto", class_name="py-2 px-3 text-right"),
+                                class_name="bg-gray-100 text-sm",
+                            )
+                        ),
+                        rx.el.tbody(
+                            rx.foreach(
+                                State.cashbox_close_totals,
+                                lambda item: rx.el.tr(
+                                    rx.el.td(
+                                        item["method"],
+                                        class_name="py-2 px-3 text-left text-sm",
+                                    ),
+                                    rx.el.td(
+                                        item["amount"],
+                                        class_name="py-2 px-3 text-right text-sm font-semibold",
+                                    ),
+                                    class_name="border-b",
+                                ),
+                            )
+                        ),
+                        class_name="w-full text-sm",
+                    ),
+                    class_name="mb-6",
+                ),
+                rx.el.div(
+                    rx.el.h4(
+                        "Detalle de ventas",
+                        class_name="text-sm font-semibold text-gray-700 mb-2",
+                    ),
+                    rx.el.div(
+                        rx.el.table(
+                            rx.el.thead(
+                                rx.el.tr(
+                                    rx.el.th(
+                                        "Fecha y Hora", class_name="py-2 px-3 text-left"
+                                    ),
+                                    rx.el.th(
+                                        "Usuario", class_name="py-2 px-3 text-left"
+                                    ),
+                                    rx.el.th(
+                                        "Método", class_name="py-2 px-3 text-left"
+                                    ),
+                                    rx.el.th(
+                                        "Total", class_name="py-2 px-3 text-right"
+                                    ),
+                                    class_name="bg-gray-100 text-sm",
+                                )
+                            ),
+                            rx.el.tbody(
+                                rx.foreach(
+                                    State.cashbox_close_sales,
+                                    lambda sale: rx.el.tr(
+                                        rx.el.td(
+                                            sale["timestamp"],
+                                            class_name="py-2 px-3 text-sm",
+                                        ),
+                                        rx.el.td(
+                                            sale["user"],
+                                            class_name="py-2 px-3 text-sm",
+                                        ),
+                                        rx.el.td(
+                                            sale["payment_method"],
+                                            class_name="py-2 px-3 text-sm",
+                                        ),
+                                        rx.el.td(
+                                            rx.el.span("$"),
+                                            sale["total"].to_string(),
+                                            class_name="py-2 px-3 text-right text-sm font-semibold",
+                                        ),
+                                        class_name="border-b",
+                                    ),
+                                )
+                            ),
+                            class_name="min-w-full text-sm",
+                        ),
+                        class_name="max-h-64 overflow-y-auto",
+                    ),
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        "Cancelar",
+                        on_click=State.close_cashbox_close_modal,
+                        class_name="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50",
+                    ),
+                    rx.el.button(
+                        rx.icon("lock", class_name="h-4 w-4"),
+                        "Confirmar Cierre",
+                        on_click=State.close_cashbox_day,
+                        class_name="flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+                    ),
+                    class_name="flex justify-end gap-3 mt-6",
+                ),
+                class_name="relative z-10 w-full max-w-4xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
+            ),
+            class_name="fixed inset-0 z-50 flex items-center justify-center px-4",
+        ),
+        rx.fragment(),
+    )
+
+
 def cashbox_page() -> rx.Component:
     return rx.el.div(
         rx.el.h1(
@@ -254,5 +410,6 @@ def cashbox_page() -> rx.Component:
             class_name="bg-white p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
         ),
         delete_sale_modal(),
+        close_cashbox_modal(),
         class_name="p-6 flex flex-col gap-6",
     )

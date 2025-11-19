@@ -11,10 +11,32 @@ from app.pages.configuracion import configuracion_page
 from app.pages.login import login_page
 
 
+def _toast_provider() -> rx.Component:
+    return rx.toast.provider(
+        position="bottom-center",
+        close_button=True,
+        rich_colors=True,
+        toast_options=rx.toast.options(
+            duration=4000,
+            style={
+                "background": "#111827",
+                "color": "white",
+                "fontSize": "18px",
+                "padding": "18px 28px",
+                "borderRadius": "14px",
+                "boxShadow": "0 25px 60px rgba(15,23,42,0.35)",
+                "border": "1px solid rgba(255,255,255,0.15)",
+                "textAlign": "center",
+            },
+        ),
+    )
+
+
 def index() -> rx.Component:
     return rx.cond(
         AuthState.is_authenticated,
         rx.el.main(
+            _toast_provider(),
             rx.el.div(
                 sidebar(),
                 rx.el.div(
@@ -46,6 +68,13 @@ app = rx.App(
         rx.el.link(
             href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
             rel="stylesheet",
+        ),
+        rx.el.style(
+            """
+            [data-sonner-toaster][data-x-position='right'][data-y-position='bottom'] {
+                display: none !important;
+            }
+            """
         ),
     ],
 )
