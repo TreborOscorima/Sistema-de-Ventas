@@ -194,6 +194,7 @@ def venta_page() -> rx.Component:
                 ),
                 rx.el.div(
                     rx.el.button(
+                        rx.icon("banknote", class_name="h-4 w-4"),
                         "Efectivo",
                         on_click=lambda: State.select_payment_method(
                             "Efectivo", "Billetes, Monedas"
@@ -205,6 +206,7 @@ def venta_page() -> rx.Component:
                         ),
                     ),
                     rx.el.button(
+                        rx.icon("credit-card", class_name="h-4 w-4"),
                         "Tarjeta",
                         on_click=lambda: State.select_payment_method(
                             "Tarjeta", "Credito, Debito"
@@ -216,10 +218,11 @@ def venta_page() -> rx.Component:
                         ),
                     ),
                     rx.el.button(
+                        rx.icon("qr-code", class_name="h-4 w-4"),
                         "Pago QR / Billetera",
                         on_click=lambda: State.select_payment_method(
                             "Pago QR / Billetera Digital",
-                            "Mercado Pago, Yape, Plin, Billeteras Bancarias",
+                            "Yape, Plin, Billeteras Bancarias",
                         ),
                         class_name=rx.cond(
                             State.payment_method == "Pago QR / Billetera Digital",
@@ -228,6 +231,7 @@ def venta_page() -> rx.Component:
                         ),
                     ),
                     rx.el.button(
+                        rx.icon("wallet", class_name="h-4 w-4"),
                         "Pago Mixto",
                         on_click=lambda: State.select_payment_method(
                             "Pagos Mixtos", "Combinacion de metodos"
@@ -296,6 +300,7 @@ def venta_page() -> rx.Component:
                         ),
                         rx.el.div(
                             rx.el.button(
+                                rx.icon("credit-card", class_name="h-4 w-4"),
                                 "Credito",
                                 on_click=lambda: State.set_card_type("Credito"),
                                 class_name=rx.cond(
@@ -305,6 +310,7 @@ def venta_page() -> rx.Component:
                                 ),
                             ),
                             rx.el.button(
+                                rx.icon("credit-card", class_name="h-4 w-4"),
                                 "Debito",
                                 on_click=lambda: State.set_card_type("Debito"),
                                 class_name=rx.cond(
@@ -328,6 +334,7 @@ def venta_page() -> rx.Component:
                         ),
                         rx.el.div(
                             rx.el.button(
+                                rx.icon("smartphone", class_name="h-4 w-4"),
                                 "Yape",
                                 on_click=lambda: State.choose_wallet_provider("Yape"),
                                 class_name=rx.cond(
@@ -337,6 +344,7 @@ def venta_page() -> rx.Component:
                                 ),
                             ),
                             rx.el.button(
+                                rx.icon("qr-code", class_name="h-4 w-4"),
                                 "Plin",
                                 on_click=lambda: State.choose_wallet_provider("Plin"),
                                 class_name=rx.cond(
@@ -345,17 +353,7 @@ def venta_page() -> rx.Component:
                                     "px-4 py-2 rounded-md border",
                                 ),
                             ),
-                            rx.el.button(
-                                "Mercado Pago",
-                                on_click=lambda: State.choose_wallet_provider(
-                                    "Mercado Pago"
-                                ),
-                                class_name=rx.cond(
-                                    State.payment_wallet_choice == "Mercado Pago",
-                                    "px-4 py-2 rounded-md bg-indigo-500 text-white",
-                                    "px-4 py-2 rounded-md border",
-                                ),
-                            ),
+                            
                             rx.el.button(
                                 "Otro",
                                 on_click=lambda: State.choose_wallet_provider("Otro"),
@@ -414,6 +412,7 @@ def venta_page() -> rx.Component:
                             ),
                             rx.el.div(
                                 rx.el.button(
+                                    rx.icon("credit-card", class_name="h-4 w-4"),
                                     "Credito",
                                     on_click=lambda: State.set_card_type("Credito"),
                                     class_name=rx.cond(
@@ -423,6 +422,7 @@ def venta_page() -> rx.Component:
                                     ),
                                 ),
                                 rx.el.button(
+                                    rx.icon("credit-card", class_name="h-4 w-4"),
                                     "Debito",
                                     on_click=lambda: State.set_card_type("Debito"),
                                     class_name=rx.cond(
@@ -449,6 +449,7 @@ def venta_page() -> rx.Component:
                             ),
                             rx.el.div(
                                 rx.el.button(
+                                    rx.icon("smartphone", class_name="h-4 w-4"),
                                     "Yape",
                                     on_click=lambda: State.choose_wallet_provider("Yape"),
                                     class_name=rx.cond(
@@ -458,19 +459,11 @@ def venta_page() -> rx.Component:
                                     ),
                                 ),
                                 rx.el.button(
+                                    rx.icon("qr-code", class_name="h-4 w-4"),
                                     "Plin",
                                     on_click=lambda: State.choose_wallet_provider("Plin"),
                                     class_name=rx.cond(
                                         State.payment_wallet_choice == "Plin",
-                                        "px-3 py-1 rounded-md bg-indigo-500 text-white text-sm",
-                                        "px-3 py-1 rounded-md border text-sm",
-                                    ),
-                                ),
-                                rx.el.button(
-                                    "Mercado Pago",
-                                    on_click=lambda: State.choose_wallet_provider("Mercado Pago"),
-                                    class_name=rx.cond(
-                                        State.payment_wallet_choice == "Mercado Pago",
                                         "px-3 py-1 rounded-md bg-indigo-500 text-white text-sm",
                                         "px-3 py-1 rounded-md border text-sm",
                                     ),

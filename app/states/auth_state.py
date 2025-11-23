@@ -12,6 +12,7 @@ class Privileges(TypedDict):
     edit_inventario: bool
     view_historial: bool
     export_data: bool
+    view_cashbox: bool
     manage_users: bool
 
 
@@ -21,18 +22,21 @@ class User(TypedDict):
     role: str
     privileges: Privileges
 
-
-SUPERADMIN_PRIVILEGES: Privileges = {
-    "view_ingresos": True,
-    "create_ingresos": True,
-    "view_ventas": True,
-    "create_ventas": True,
-    "view_inventario": True,
-    "edit_inventario": True,
-    "view_historial": True,
-    "export_data": True,
-    "manage_users": True,
+EMPTY_PRIVILEGES: Privileges = {
+    "view_ingresos": False,
+    "create_ingresos": False,
+    "view_ventas": False,
+    "create_ventas": False,
+    "view_inventario": False,
+    "edit_inventario": False,
+    "view_historial": False,
+    "export_data": False,
+    "view_cashbox": False,
+    "manage_users": False,
 }
+
+
+SUPERADMIN_PRIVILEGES: Privileges = {key: True for key in EMPTY_PRIVILEGES}
 
 
 class AuthState(rx.State):
@@ -65,17 +69,7 @@ class AuthState(rx.State):
             "username": "Invitado",
             "password_hash": "",
             "role": "Invitado",
-            "privileges": {
-                "view_ingresos": False,
-                "create_ingresos": False,
-                "view_ventas": False,
-                "create_ventas": False,
-                "view_inventario": False,
-                "edit_inventario": False,
-                "view_historial": False,
-                "export_data": False,
-                "manage_users": False,
-            },
+            "privileges": EMPTY_PRIVILEGES.copy(),
         }
 
     @rx.event

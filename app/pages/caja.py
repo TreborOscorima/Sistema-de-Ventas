@@ -56,6 +56,100 @@ def cashbox_filters() -> rx.Component:
     )
 
 
+def cashbox_opening_card() -> rx.Component:
+    return rx.el.div(
+        rx.cond(
+            State.cashbox_is_open,
+            rx.el.div(
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("wallet-cards", class_name="h-10 w-10 text-emerald-600"),
+                        rx.el.div(
+                            rx.el.p("Caja abierta", class_name="text-lg font-semibold text-gray-900"),
+                            rx.el.p(
+                                "La caja seguirá abierta hasta que realices el cierre.",
+                                class_name="text-sm text-gray-600",
+                            ),
+                            class_name="flex flex-col gap-1",
+                        ),
+                        class_name="flex items-center gap-3",
+                    ),
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.span("Monto inicial", class_name="text-xs uppercase tracking-wide text-gray-500"),
+                            rx.el.span(
+                                rx.el.span("$"),
+                                State.cashbox_opening_amount.to_string(),
+                                class_name="text-xl font-semibold text-gray-900",
+                            ),
+                            class_name="flex flex-col gap-1 bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3",
+                        ),
+                        rx.el.div(
+                            rx.el.span("Apertura", class_name="text-xs uppercase tracking-wide text-gray-500"),
+                            rx.el.span(
+                                rx.cond(
+                                    State.cashbox_opening_time == "",
+                                    "Sin registro",
+                                    State.cashbox_opening_time,
+                                ),
+                                class_name="text-sm font-medium text-gray-800",
+                            ),
+                            class_name="flex flex-col gap-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3",
+                        ),
+                        class_name="flex flex-col sm:flex-row gap-3",
+                    ),
+                    class_name="flex flex-col gap-4",
+                ),
+                class_name="flex flex-col gap-4",
+            ),
+            rx.el.div(
+                rx.el.div(
+                    rx.icon("alarm-clock", class_name="h-10 w-10 text-indigo-600"),
+                    rx.el.div(
+                        rx.el.p(
+                            "Apertura de caja requerida",
+                            class_name="text-lg font-semibold text-gray-900",
+                        ),
+                        rx.el.p(
+                            "Ingresa el monto inicial para comenzar la jornada. Sin apertura no podrás vender ni gestionar la caja.",
+                            class_name="text-sm text-gray-600",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
+                    class_name="flex items-start gap-3",
+                ),
+                rx.el.div(
+                    rx.el.label("Caja inicial", class_name="font-medium text-gray-800"),
+                    rx.el.div(
+                        rx.el.input(
+                            type="number",
+                            step="0.01",
+                            value=State.cashbox_open_amount_input,
+                            on_change=State.set_cashbox_open_amount_input,
+                            placeholder="Ej: 150.00",
+                            class_name="flex-1 p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400",
+                        ),
+                        rx.el.button(
+                            rx.icon("play", class_name="h-4 w-4"),
+                            "Aperturar caja",
+                            on_click=State.open_cashbox_session,
+                            class_name="flex items-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow",
+                        ),
+                        class_name="flex flex-col md:flex-row md:items-center gap-3 mt-2",
+                    ),
+                    rx.el.p(
+                        "Consejo: registra el efectivo inicial real para un cuadre correcto al cierre.",
+                        class_name="text-xs text-gray-500 mt-1",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                class_name="flex flex-col gap-3",
+            ),
+        ),
+        class_name="bg-white p-5 rounded-xl shadow-md mb-4 border border-gray-100",
+    )
+
+
 def sale_items_list(items: rx.Var[list[dict]]) -> rx.Component:
     return rx.el.div(
         rx.foreach(
@@ -372,44 +466,56 @@ def close_cashbox_modal() -> rx.Component:
 
 
 def cashbox_page() -> rx.Component:
-    return rx.el.div(
-        rx.el.h1(
-            "Gestión de Caja",
-            class_name="text-2xl font-bold text-gray-800 mb-6",
+    return rx.cond(
+        State.current_user["privileges"]["view_cashbox"],
+        rx.el.div(
+            rx.el.h1(
+                "Gestion de Caja",
+                class_name="text-2xl font-bold text-gray-800 mb-6",
+            ),
+            cashbox_opening_card(),
+            rx.el.div(
+                cashbox_filters(),
+                class_name="bg-white p-6 rounded-lg shadow-md mb-6",
+            ),
+            rx.el.div(
+                rx.el.table(
+                    rx.el.thead(
+                        rx.el.tr(
+                            rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Usuario", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Pago", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Total", class_name="py-3 px-4 text-right"),
+                            rx.el.th("Detalle", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Acciones", class_name="py-3 px-4 text-center"),
+                            class_name="bg-gray-100",
+                        )
+                    ),
+                    rx.el.tbody(
+                        rx.foreach(State.paginated_cashbox_sales, sale_row),
+                    ),
+                    class_name="min-w-full",
+                ),
+                rx.cond(
+                    State.filtered_cashbox_sales.length() == 0,
+                    rx.el.p(
+                        "Aun no hay ventas registradas.",
+                        class_name="text-center text-gray-500 py-8",
+                    ),
+                    pagination_controls(),
+                ),
+                class_name="bg-white p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
+            ),
+            delete_sale_modal(),
+            close_cashbox_modal(),
+            class_name="p-6 flex flex-col gap-6",
         ),
         rx.el.div(
-            cashbox_filters(),
-            class_name="bg-white p-6 rounded-lg shadow-md mb-6",
-        ),
-        rx.el.div(
-            rx.el.table(
-                rx.el.thead(
-                    rx.el.tr(
-                        rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Usuario", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Pago", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Total", class_name="py-3 px-4 text-right"),
-                        rx.el.th("Detalle", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Acciones", class_name="py-3 px-4 text-center"),
-                        class_name="bg-gray-100",
-                    )
-                ),
-                rx.el.tbody(
-                    rx.foreach(State.paginated_cashbox_sales, sale_row),
-                ),
-                class_name="min-w-full",
+            rx.el.h1("Acceso Denegado", class_name="text-2xl font-bold text-red-600"),
+            rx.el.p(
+                "No tienes privilegios para ver la gestion de caja.",
+                class_name="text-gray-600 mt-2",
             ),
-            rx.cond(
-                State.filtered_cashbox_sales.length() == 0,
-                rx.el.p(
-                    "Aún no hay ventas registradas.",
-                    class_name="text-center text-gray-500 py-8",
-                ),
-                pagination_controls(),
-            ),
-            class_name="bg-white p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
+            class_name="flex flex-col items-center justify-center h-full p-6",
         ),
-        delete_sale_modal(),
-        close_cashbox_modal(),
-        class_name="p-6 flex flex-col gap-6",
     )

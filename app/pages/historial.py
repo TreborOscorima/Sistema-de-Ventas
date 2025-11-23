@@ -25,122 +25,30 @@ def historial_page() -> rx.Component:
         ),
         rx.el.div(
             stat_card(
-                "arrow-down-to-line",
-                "Total Ingresos",
-                f"${State.total_ingresos.to_string()}",
+                "banknote",
+                "Ventas con Efectivo",
+                f"${State.total_ventas_efectivo.to_string()}",
                 "text-green-600",
             ),
             stat_card(
-                "arrow-up-from-line",
-                "Total Ventas",
-                f"${State.total_ventas.to_string()}",
+                "smartphone",
+                "Ventas con Yape",
+                f"${State.total_ventas_yape.to_string()}",
                 "text-red-600",
             ),
             stat_card(
-                "dollar-sign",
-                "Ganancia Bruta",
-                f"${State.ganancia_bruta.to_string()}",
+                "qr-code",
+                "Ventas con Plin",
+                f"${State.total_ventas_plin.to_string()}",
                 "text-indigo-600",
             ),
             stat_card(
-                "activity",
-                "Total Movimientos",
-                State.total_movimientos.to_string(),
+                "wallet",
+                "Ventas Mixtas",
+                f"${State.total_ventas_mixtas.to_string()}",
                 "text-blue-600",
             ),
             class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6",
-        ),
-        rx.el.div(
-            rx.el.div(
-                rx.el.h2(
-                    "Ingresos vs Ventas",
-                    class_name="text-lg font-semibold text-gray-700 mb-4",
-                ),
-                rx.recharts.bar_chart(
-                    rx.recharts.cartesian_grid(stroke_dasharray="3 3"),
-                    rx.recharts.graphing_tooltip(),
-                    rx.recharts.x_axis(data_key="date"),
-                    rx.recharts.y_axis(),
-                    rx.recharts.bar(
-                        data_key="ingresos", fill="#4ade80", name="Ingresos"
-                    ),
-                    rx.recharts.bar(data_key="ventas", fill="#f87171", name="Ventas"),
-                    data=State.sales_by_day,
-                    height=300,
-                ),
-                rx.el.div(
-                    rx.el.div(
-                        rx.el.div(class_name="h-3 w-3 rounded-full bg-green-400"),
-                        rx.el.span("Ingresos", class_name="text-sm text-gray-600"),
-                        class_name="flex items-center gap-2",
-                    ),
-                    rx.el.div(
-                        rx.el.div(class_name="h-3 w-3 rounded-full bg-red-400"),
-                        rx.el.span("Ventas", class_name="text-sm text-gray-600"),
-                        class_name="flex items-center gap-2",
-                    ),
-                    class_name="flex justify-center gap-6 mt-4",
-                ),
-                class_name="bg-white p-6 rounded-lg shadow-md",
-            ),
-            rx.el.div(
-                rx.el.div(
-                    rx.el.h2(
-                        "Productos Más Vendidos",
-                        class_name="text-lg font-semibold text-gray-700 mb-4",
-                    ),
-                    rx.foreach(
-                        State.productos_mas_vendidos,
-                        lambda p: rx.el.div(
-                            rx.el.p(p["description"], class_name="font-medium"),
-                            rx.el.p(
-                                f"{p['cantidad_vendida']} vendidos",
-                                class_name="text-sm text-gray-500",
-                            ),
-                            class_name="flex justify-between items-center py-2 border-b",
-                        ),
-                    ),
-                    rx.cond(
-                        State.productos_mas_vendidos.length() == 0,
-                        rx.el.p(
-                            "No hay ventas registradas.",
-                            class_name="text-center text-gray-500 py-4",
-                        ),
-                        rx.fragment(),
-                    ),
-                ),
-                rx.el.div(
-                    rx.el.h2(
-                        "Productos con Stock Bajo",
-                        class_name="text-lg font-semibold text-gray-700 mt-6 mb-4",
-                    ),
-                    rx.foreach(
-                        State.productos_stock_bajo,
-                        lambda p: rx.el.div(
-                            rx.el.p(p["description"], class_name="font-medium"),
-                            rx.el.p(
-                                f"{p['stock']} en stock",
-                                class_name=rx.cond(
-                                    p["stock"] <= 5,
-                                    "text-sm text-red-600 font-bold",
-                                    "text-sm text-yellow-600 font-bold",
-                                ),
-                            ),
-                            class_name="flex justify-between items-center py-2 border-b",
-                        ),
-                    ),
-                    rx.cond(
-                        State.productos_stock_bajo.length() == 0,
-                        rx.el.p(
-                            "No hay productos con stock bajo.",
-                            class_name="text-center text-gray-500 py-4",
-                        ),
-                        rx.fragment(),
-                    ),
-                ),
-                class_name="bg-white p-6 rounded-lg shadow-md",
-            ),
-            class_name="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6",
         ),
         rx.el.div(
             rx.el.div(

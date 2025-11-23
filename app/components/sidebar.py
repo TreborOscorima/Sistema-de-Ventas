@@ -11,7 +11,7 @@ def nav_item(text: str, icon: str, page: str) -> rx.Component:
                 text, class_name=rx.cond(State.sidebar_open, "opacity-100", "opacity-0")
             ),
             class_name=rx.cond(
-                State.current_page == page,
+                State.active_page == page,
                 "flex items-center gap-3 rounded-lg bg-indigo-100 px-3 py-2 text-indigo-700 transition-all hover:text-indigo-900 font-semibold",
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 font-medium",
             ),
@@ -43,12 +43,22 @@ def sidebar() -> rx.Component:
                 class_name="flex h-16 items-center justify-between border-b px-4",
             ),
             rx.el.nav(
-                nav_item("Ingreso", "arrow-down-to-line", "Ingreso"),
-                nav_item("Venta", "arrow-up-from-line", "Venta"),
-                nav_item("Gestion de Caja", "wallet", "Gestion de Caja"),
-                nav_item("Inventario", "boxes", "Inventario"),
-                nav_item("Historial", "history", "Historial"),
-                nav_item("Configuracion", "settings", "Configuracion"),
+                rx.cond(
+                    State.navigation_items.length() == 0,
+                    rx.el.div(
+                        rx.el.p(
+                            "Sin modulos disponibles",
+                            class_name="text-sm text-gray-500 px-3",
+                        ),
+                        class_name="py-2",
+                    ),
+                    rx.foreach(
+                        State.navigation_items,
+                        lambda item: nav_item(
+                            item["label"], item["icon"], item["page"]
+                        ),
+                    ),
+                ),
                 class_name="flex flex-col gap-2 p-4",
             ),
             class_name="flex-1 overflow-auto",

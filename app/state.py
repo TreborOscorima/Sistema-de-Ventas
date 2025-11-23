@@ -6,7 +6,13 @@ import logging
 import bcrypt
 import json
 from decimal import Decimal, ROUND_HALF_UP
-from app.states.auth_state import AuthState, User, Privileges
+from app.states.auth_state import (
+    AuthState,
+    User,
+    Privileges,
+    EMPTY_PRIVILEGES,
+    SUPERADMIN_PRIVILEGES,
+)
 
 
 class Product(TypedDict):
@@ -60,6 +66,14 @@ class CashboxSale(TypedDict):
     delete_reason: str
 
 
+class CashboxSession(TypedDict):
+    opening_amount: float
+    opening_time: str
+    closing_time: str
+    is_open: bool
+    opened_by: str
+
+
 class InventoryAdjustment(TypedDict):
     temp_id: str
     barcode: str
@@ -78,11 +92,61 @@ class NewUser(TypedDict):
     role: str
     privileges: Privileges
 
+DEFAULT_USER_PRIVILEGES: Privileges = {
+    "view_ingresos": True,
+    "create_ingresos": True,
+    "view_ventas": True,
+    "create_ventas": True,
+    "view_inventario": True,
+    "edit_inventario": True,
+    "view_historial": True,
+    "export_data": False,
+    "view_cashbox": True,
+    "manage_users": False,
+}
+
+ADMIN_PRIVILEGES: Privileges = {
+    "view_ingresos": True,
+    "create_ingresos": True,
+    "view_ventas": True,
+    "create_ventas": True,
+    "view_inventario": True,
+    "edit_inventario": True,
+    "view_historial": True,
+    "export_data": True,
+    "view_cashbox": True,
+    "manage_users": True,
+}
+
+CASHIER_PRIVILEGES: Privileges = {
+    "view_ingresos": False,
+    "create_ingresos": False,
+    "view_ventas": True,
+    "create_ventas": True,
+    "view_inventario": True,
+    "edit_inventario": False,
+    "view_historial": False,
+    "export_data": False,
+    "view_cashbox": True,
+    "manage_users": False,
+}
+
+DEFAULT_ROLE_TEMPLATES: dict[str, Privileges] = {
+    "Superadmin": SUPERADMIN_PRIVILEGES,
+    "Administrador": ADMIN_PRIVILEGES,
+    "Usuario": DEFAULT_USER_PRIVILEGES,
+    "Cajero": CASHIER_PRIVILEGES,
+}
+
 
 class State(AuthState):
     sidebar_open: bool = True
     current_page: str = "Ingreso"
     units: list[str] = ["Unidad", "Kg", "Litro", "Metro", "Caja"]
+    roles: list[str] = list(DEFAULT_ROLE_TEMPLATES.keys())
+    role_privileges: dict[str, Privileges] = {
+        name: template.copy() for name, template in DEFAULT_ROLE_TEMPLATES.items()
+    }
     decimal_units: set[str] = {
         "kg",
         "kilogramo",
@@ -186,25 +250,56 @@ class State(AuthState):
     cashbox_close_summary_totals: dict[str, float] = {}
     cashbox_close_summary_sales: list[CashboxSale] = []
     cashbox_close_summary_date: str = ""
+    cashbox_sessions: dict[str, CashboxSession] = {}
+    cashbox_open_amount_input: str = "0"
     show_user_form: bool = False
     editing_user: User | None = None
+    new_role_name: str = ""
     new_user_data: NewUser = {
         "username": "",
         "password": "",
         "confirm_password": "",
         "role": "Usuario",
-        "privileges": {
-            "view_ingresos": False,
-            "create_ingresos": False,
-            "view_ventas": False,
-            "create_ventas": False,
-            "view_inventario": False,
-            "edit_inventario": False,
-            "view_historial": False,
-            "export_data": False,
-            "manage_users": False,
-        },
+        "privileges": DEFAULT_USER_PRIVILEGES.copy(),
     }
+
+    def _normalize_privileges(self, privileges: dict | None) -> Privileges:
+        merged = EMPTY_PRIVILEGES.copy()
+        if privileges:
+            merged.update(privileges)
+        return merged
+
+    def _get_or_create_cashbox_session(self, username: str) -> CashboxSession:
+        key = (username or "").strip().lower()
+        if key not in self.cashbox_sessions:
+            self.cashbox_sessions[key] = {
+                "opening_amount": 0.0,
+                "opening_time": "",
+                "closing_time": "",
+                "is_open": False,
+                "opened_by": key,
+            }
+        return self.cashbox_sessions[key]
+
+    def _require_cashbox_open(self):
+        if not self.cashbox_is_open:
+            return rx.toast("Debe aperturar la caja para operar.", duration=3000)
+        return None
+    
+    def _find_role_key(self, role: str) -> str | None:
+        """Return the stored role name matching a role string (case-insensitive)."""
+        target = (role or "").strip().lower()
+        for name in self.role_privileges.keys():
+            if name.lower() == target:
+                return name
+        return None
+
+    def _role_privileges(self, role: str) -> Privileges:
+        key = self._find_role_key(role)
+        template = self.role_privileges.get(key or "")
+        if template:
+            return self._normalize_privileges(template)
+        return EMPTY_PRIVILEGES.copy()
 
     def _round_currency(self, value: float) -> float:
         return float(
@@ -243,8 +338,26 @@ class State(AuthState):
             return self._guest_user()
         user = self.users.get(self.token)
         if user:
+            merged_privileges = self._normalize_privileges(user.get("privileges", {}))
+            user["privileges"] = merged_privileges
             return user
         return self._guest_user()
+
+    @rx.var
+    def current_cashbox_session(self) -> CashboxSession:
+        return self._get_or_create_cashbox_session(self.current_user["username"])
+
+    @rx.var
+    def cashbox_is_open(self) -> bool:
+        return bool(self.current_cashbox_session.get("is_open"))
+
+    @rx.var
+    def cashbox_opening_amount(self) -> float:
+        return float(self.current_cashbox_session.get("opening_amount", 0))
+
+    @rx.var
+    def cashbox_opening_time(self) -> str:
+        return self.current_cashbox_session.get("opening_time", "")
 
     @rx.var
     def entry_subtotal(self) -> float:
@@ -352,6 +465,8 @@ class State(AuthState):
 
     @rx.var
     def filtered_cashbox_sales(self) -> list[CashboxSale]:
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return []
         sales = sorted(
             self.cashbox_sales, key=lambda s: s["timestamp"], reverse=True
         )
@@ -396,6 +511,8 @@ class State(AuthState):
 
     @rx.var
     def cashbox_close_totals(self) -> list[dict[str, str]]:
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return []
         return [
             {"method": method, "amount": f"${amount:.2f}"}
             for method, amount in self.cashbox_close_summary_totals.items()
@@ -404,6 +521,8 @@ class State(AuthState):
 
     @rx.var
     def cashbox_close_sales(self) -> list[CashboxSale]:
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return []
         return self.cashbox_close_summary_sales
 
     @rx.var
@@ -425,6 +544,45 @@ class State(AuthState):
     @rx.var
     def total_movimientos(self) -> int:
         return len(self.history)
+
+    def _ventas_by_payment(self, match_fn) -> float:
+        return self._round_currency(
+            sum(
+                (
+                    m["total"]
+                    for m in self.history
+                    if m["type"] == "Venta" and match_fn(m)
+                )
+            )
+        )
+
+    @rx.var
+    def total_ventas_efectivo(self) -> float:
+        return self._ventas_by_payment(
+            lambda m: m.get("payment_method", "").lower() == "efectivo"
+        )
+
+    @rx.var
+    def total_ventas_yape(self) -> float:
+        return self._ventas_by_payment(
+            lambda m: m.get("payment_method", "").lower()
+            == "pago qr / billetera digital"
+            and "yape" in m.get("payment_details", "").lower()
+        )
+
+    @rx.var
+    def total_ventas_plin(self) -> float:
+        return self._ventas_by_payment(
+            lambda m: m.get("payment_method", "").lower()
+            == "pago qr / billetera digital"
+            and "plin" in m.get("payment_details", "").lower()
+        )
+
+    @rx.var
+    def total_ventas_mixtas(self) -> float:
+        return self._ventas_by_payment(
+            lambda m: m.get("payment_method", "").lower() == "pagos mixtos"
+        )
 
     @rx.var
     def productos_mas_vendidos(self) -> list[dict]:
@@ -469,10 +627,68 @@ class State(AuthState):
     def user_list(self) -> list[User]:
         if not self.current_user["privileges"]["manage_users"]:
             return []
-        return sorted(list(self.users.values()), key=lambda u: u["username"])
+        normalized_users = []
+        for user in self.users.values():
+            merged_privileges = self._normalize_privileges(user.get("privileges", {}))
+            if merged_privileges != user.get("privileges"):
+                user["privileges"] = merged_privileges
+            normalized_users.append(user)
+        return sorted(normalized_users, key=lambda u: u["username"])
+
+    def _navigation_items_config(self) -> list[dict[str, str]]:
+        return [
+            {"label": "Ingreso", "icon": "arrow-down-to-line", "page": "Ingreso"},
+            {"label": "Venta", "icon": "arrow-up-from-line", "page": "Venta"},
+            {
+                "label": "Gestion de Caja",
+                "icon": "wallet",
+                "page": "Gestion de Caja",
+            },
+            {"label": "Inventario", "icon": "boxes", "page": "Inventario"},
+            {"label": "Historial", "icon": "history", "page": "Historial"},
+            {"label": "Configuracion", "icon": "settings", "page": "Configuracion"},
+        ]
+
+    def _page_permission_map(self) -> dict[str, str]:
+        return {
+            "Ingreso": "view_ingresos",
+            "Venta": "view_ventas",
+            "Gestion de Caja": "view_cashbox",
+            "Inventario": "view_inventario",
+            "Historial": "view_historial",
+            "Configuracion": "manage_users",
+        }
+
+    def _can_access_page(self, page: str) -> bool:
+        required = self._page_permission_map().get(page)
+        if not required:
+            return True
+        return bool(self.current_user["privileges"].get(required))
+
+    @rx.var
+    def navigation_items(self) -> list[dict[str, str]]:
+        return [
+            item
+            for item in self._navigation_items_config()
+            if self._can_access_page(item["page"])
+        ]
+
+    @rx.var
+    def allowed_pages(self) -> list[str]:
+        return [item["page"] for item in self.navigation_items]
+
+    @rx.var
+    def active_page(self) -> str:
+        if self._can_access_page(self.current_page):
+            return self.current_page
+        if self.allowed_pages:
+            return self.allowed_pages[0]
+        return self.current_page
 
     @rx.event
     def set_page(self, page: str):
+        if not self._can_access_page(page):
+            return rx.toast("No tiene permisos para acceder a este modulo.", duration=3000)
         previous_page = self.current_page
         self.current_page = page
         if page == "Venta" and previous_page != "Venta":
@@ -998,6 +1214,9 @@ class State(AuthState):
     def confirm_sale(self):
         if not self.current_user["privileges"]["create_ventas"]:
             return rx.toast("No tiene permisos para crear ventas.", duration=3000)
+        denial = self._require_cashbox_open()
+        if denial:
+            return denial
         if not self.new_sale_items:
             return rx.toast("No hay productos en la venta.", duration=3000)
         if not self.payment_method:
@@ -1181,22 +1400,90 @@ class State(AuthState):
     def set_staged_history_filter_end_date(self, value: str):
         self.staged_history_filter_end_date = value or ""
 
+    def _cashbox_guard(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        if not self.cashbox_is_open:
+            return rx.toast(
+                "Debe aperturar la caja para operar la gestion de caja.",
+                duration=3000,
+            )
+        return None
+
+    @rx.event
+    def set_cashbox_open_amount_input(self, value: str):
+        # Ensure we always store a string, even if the input sends int/float values.
+        self.cashbox_open_amount_input = str(value or "").strip()
+
+    @rx.event
+    def open_cashbox_session(self):
+        username = self.current_user["username"]
+        if self.current_user["role"].lower() == "cajero" and not self.token:
+            return rx.toast("Inicie sesión para abrir caja.", duration=3000)
+        amount = self._safe_amount(self.cashbox_open_amount_input or "0")
+        if amount <= 0:
+            return rx.toast("Ingrese un monto válido para la caja inicial.", duration=3000)
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        session = self._get_or_create_cashbox_session(username)
+        session["opening_amount"] = amount
+        session["opening_time"] = timestamp
+        session["closing_time"] = ""
+        session["is_open"] = True
+        session["opened_by"] = username
+        self.cashbox_sessions[username.lower()] = session
+        self.cashbox_open_amount_input = ""
+        self.history.append(
+            {
+                "id": str(uuid.uuid4()),
+                "timestamp": timestamp,
+                "type": "Apertura de Caja",
+                "product_description": "Caja inicial",
+                "quantity": 0,
+                "unit": "-",
+                "total": amount,
+                "payment_method": "Caja",
+                "payment_details": f"Caja inicial de {username}",
+                "user": username,
+                "sale_id": "",
+            }
+        )
+        return rx.toast("Caja abierta. Jornada iniciada.", duration=3000)
+
+    def _close_cashbox_session(self):
+        username = self.current_user["username"]
+        session = self._get_or_create_cashbox_session(username)
+        session["is_open"] = False
+        session["closing_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.cashbox_sessions[username.lower()] = session
+
     @rx.event
     def set_cashbox_staged_start_date(self, value: str):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         self.cashbox_staged_start_date = value or ""
 
     @rx.event
     def set_cashbox_staged_end_date(self, value: str):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         self.cashbox_staged_end_date = value or ""
 
     @rx.event
     def apply_cashbox_filters(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         self.cashbox_filter_start_date = self.cashbox_staged_start_date
         self.cashbox_filter_end_date = self.cashbox_staged_end_date
         self.cashbox_current_page = 1
 
     @rx.event
     def reset_cashbox_filters(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         self.cashbox_filter_start_date = ""
         self.cashbox_filter_end_date = ""
         self.cashbox_staged_start_date = ""
@@ -1205,16 +1492,25 @@ class State(AuthState):
 
     @rx.event
     def set_cashbox_page(self, page: int):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         if 1 <= page <= self.cashbox_total_pages:
             self.cashbox_current_page = page
 
     @rx.event
     def prev_cashbox_page(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         if self.cashbox_current_page > 1:
             self.cashbox_current_page -= 1
 
     @rx.event
     def next_cashbox_page(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         total_pages = (
             (len(self.filtered_cashbox_sales) + self.cashbox_items_per_page - 1)
             // self.cashbox_items_per_page
@@ -1225,6 +1521,9 @@ class State(AuthState):
 
     @rx.event
     def open_cashbox_close_modal(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         day_sales = self._get_day_sales(today)
         if not day_sales:
@@ -1236,6 +1535,9 @@ class State(AuthState):
 
     @rx.event
     def close_cashbox_close_modal(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         self._reset_cashbox_close_summary()
 
     @rx.event
@@ -1341,6 +1643,9 @@ class State(AuthState):
 
     @rx.event
     def export_cashbox_report(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
         if not self.cashbox_sales:
@@ -1383,22 +1688,34 @@ class State(AuthState):
 
     @rx.event
     def open_sale_delete_modal(self, sale_id: str):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         self.sale_to_delete = sale_id
         self.sale_delete_reason = ""
         self.sale_delete_modal_open = True
 
     @rx.event
     def close_sale_delete_modal(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         self.sale_delete_modal_open = False
         self.sale_to_delete = ""
         self.sale_delete_reason = ""
 
     @rx.event
     def set_sale_delete_reason(self, value: str):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         self.sale_delete_reason = value
 
     @rx.event
     def delete_sale(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         if not self.current_user["privileges"]["create_ventas"]:
             return rx.toast("No tiene permisos para eliminar ventas.", duration=3000)
         sale_id = self.sale_to_delete
@@ -1441,6 +1758,9 @@ class State(AuthState):
 
     @rx.event
     def reprint_sale_receipt(self, sale_id: str):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         sale = next((s for s in self.cashbox_sales if s["sale_id"] == sale_id), None)
         if not sale:
             return rx.toast("Venta no encontrada.", duration=3000)
@@ -1514,6 +1834,9 @@ class State(AuthState):
 
     @rx.event
     def close_cashbox_day(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
         date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
             "%Y-%m-%d"
         )
@@ -1585,6 +1908,7 @@ class State(AuthState):
         cashboxWindow.focus();
         cashboxWindow.print();
         """
+        self._close_cashbox_session()
         self._reset_cashbox_close_summary()
         return rx.call_script(script)
 
@@ -1719,17 +2043,7 @@ class State(AuthState):
             "password": "",
             "confirm_password": "",
             "role": "Usuario",
-            "privileges": {
-                "view_ingresos": False,
-                "create_ingresos": False,
-                "view_ventas": False,
-                "create_ventas": False,
-                "view_inventario": False,
-                "edit_inventario": False,
-                "view_historial": False,
-                "export_data": False,
-                "manage_users": False,
-            },
+            "privileges": self._role_privileges("Usuario"),
         }
         self.editing_user = None
 
@@ -1738,17 +2052,42 @@ class State(AuthState):
         self._reset_new_user_form()
         self.show_user_form = True
 
-    @rx.event
-    def show_edit_user_form(self, user: User):
+    def _open_user_editor(self, user: User):
+        merged_privileges = self._normalize_privileges(user.get("privileges", {}))
+        role_key = self._find_role_key(user["role"]) or user["role"]
+        if role_key not in self.role_privileges:
+            self.role_privileges[role_key] = merged_privileges.copy()
+            if role_key not in self.roles:
+                self.roles.append(role_key)
+        if user["username"] in self.users:
+            self.users[user["username"]]["privileges"] = merged_privileges
         self.new_user_data = {
             "username": user["username"],
             "password": "",
             "confirm_password": "",
-            "role": user["role"],
-            "privileges": user["privileges"].copy(),
+            "role": role_key,
+            "privileges": merged_privileges,
         }
-        self.editing_user = user
+        self.editing_user = self.users.get(user["username"], user)
         self.show_user_form = True
+
+    @rx.event
+    def show_edit_user_form(self, user: User):
+        self._open_user_editor(user)
+
+    @rx.event
+    def show_edit_user_form_by_username(self, username: str):
+        key = (username or "").strip().lower()
+        user = self.users.get(key)
+        if not user:
+            return rx.toast("Usuario a editar no encontrado.", duration=3000)
+        self._open_user_editor(user)
+
+    @rx.event
+    def set_user_form_open(self, is_open: bool):
+        self.show_user_form = bool(is_open)
+        if not is_open:
+            self._reset_new_user_form()
 
     @rx.event
     def hide_user_form(self):
@@ -1757,13 +2096,62 @@ class State(AuthState):
 
     @rx.event
     def handle_new_user_change(self, field: str, value: str):
+        if field == "role":
+            self.new_user_data["role"] = value
+            self.new_user_data["privileges"] = self._role_privileges(value)
+            return
+        if field == "username":
+            self.new_user_data["username"] = value.lower()
+            return
         self.new_user_data[field] = value
 
     @rx.event
     def toggle_privilege(self, privilege: str):
-        self.new_user_data["privileges"][privilege] = not self.new_user_data[
-            "privileges"
-        ][privilege]
+        privileges = self._normalize_privileges(self.new_user_data["privileges"])
+        privileges[privilege] = not privileges[privilege]
+        self.new_user_data["privileges"] = privileges
+
+    @rx.event
+    def apply_role_privileges(self):
+        role = self.new_user_data.get("role") or "Usuario"
+        self.new_user_data["privileges"] = self._role_privileges(role)
+
+    @rx.event
+    def update_new_role_name(self, value: str):
+        self.new_role_name = value.strip()
+
+    @rx.event
+    def create_role_from_current_privileges(self):
+        name = (self.new_role_name or "").strip()
+        if not name:
+            return rx.toast("Ingrese un nombre para el rol nuevo.", duration=3000)
+        if name.lower() == "superadmin":
+            return rx.toast("Superadmin ya existe como rol principal.", duration=3000)
+        existing = self._find_role_key(name)
+        if existing:
+            return rx.toast("Ese rol ya existe.", duration=3000)
+        privileges = self._normalize_privileges(self.new_user_data["privileges"])
+        self.role_privileges[name] = privileges.copy()
+        if name not in self.roles:
+            self.roles.append(name)
+        self.new_role_name = ""
+        self.new_user_data["role"] = name
+        self.new_user_data["privileges"] = privileges.copy()
+        return rx.toast(f"Rol {name} creado con los privilegios actuales.", duration=3000)
+
+    @rx.event
+    def save_role_template(self):
+        role = (self.new_user_data.get("role") or "").strip()
+        if not role:
+            return rx.toast("Seleccione un rol para guardar sus privilegios.", duration=3000)
+        if role.lower() == "superadmin":
+            return rx.toast("No se puede modificar los privilegios de Superadmin.", duration=3000)
+        privileges = self._normalize_privileges(self.new_user_data["privileges"])
+        role_key = self._find_role_key(role) or role
+        self.role_privileges[role_key] = privileges.copy()
+        if role_key not in self.roles:
+            self.roles.append(role_key)
+        return rx.toast(f"Plantilla de rol {role_key} actualizada.", duration=3000)
 
     @rx.event
     def save_user(self):
@@ -1772,6 +2160,9 @@ class State(AuthState):
         username = self.new_user_data["username"].lower().strip()
         if not username:
             return rx.toast("El nombre de usuario no puede estar vacío.", duration=3000)
+        self.new_user_data["privileges"] = self._normalize_privileges(
+            self.new_user_data["privileges"]
+        )
         if self.editing_user:
             user_to_update = self.users.get(self.editing_user["username"])
             if not user_to_update:
