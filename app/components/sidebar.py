@@ -9,6 +9,11 @@ CONFIG_SUBSECTIONS = [
     {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
 ]
 
+SERVICES_SUBSECTIONS = [
+    {"key": "campo", "label": "Alquiler de Campo", "icon": "trees"},
+    {"key": "piscina", "label": "Alquiler de Piscina", "icon": "waves"},
+]
+
 def nav_item(text: str, icon: str, page: str) -> rx.Component:
     return rx.el.a(
         rx.el.div(
@@ -61,46 +66,81 @@ def sidebar() -> rx.Component:
                     rx.el.div(
                         rx.foreach(
                             State.navigation_items,
-                            lambda item: nav_item(
-                                item["label"], item["icon"], item["page"]
-                            ),
-                        ),
-                        rx.cond(
-                            State.active_page == "Configuracion",
-                            rx.el.div(
-                                rx.foreach(
-                                    CONFIG_SUBSECTIONS,
-                                    lambda section: rx.el.button(
-                                        rx.el.div(
-                                            rx.icon(
-                                                section["icon"],
-                                                class_name="h-4 w-4 text-indigo-600",
+                            lambda item: rx.el.div(
+                                nav_item(item["label"], item["icon"], item["page"]),
+                                rx.cond(
+                                    (item["page"] == "Configuracion")
+                                    & (State.active_page == "Configuracion"),
+                                    rx.el.div(
+                                        rx.foreach(
+                                            CONFIG_SUBSECTIONS,
+                                            lambda section: rx.el.button(
+                                                rx.el.div(
+                                                    rx.icon(
+                                                        section["icon"],
+                                                        class_name="h-4 w-4 text-indigo-600",
+                                                    ),
+                                                    rx.el.span(
+                                                        section["label"],
+                                                        class_name="text-sm",
+                                                    ),
+                                                    class_name="flex items-center gap-2",
+                                                ),
+                                                on_click=lambda _,
+                                                key=section["key"]: State.go_to_config_tab(
+                                                    key
+                                                ),
+                                                class_name=rx.cond(
+                                                    State.config_active_tab
+                                                    == section["key"],
+                                                    "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
+                                                    "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",
+                                                ),
                                             ),
-                                            rx.el.span(
-                                                section["label"],
-                                                class_name="text-sm",
-                                            ),
-                                            class_name="flex items-center gap-2",
                                         ),
-                                        on_click=lambda _,
-                                        key=section["key"]: State.go_to_config_tab(
-                                            key
-                                        ),
-                                        class_name=rx.cond(
-                                            State.config_active_tab
-                                            == section["key"],
-                                            "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
-                                            "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",
-                                        ),
+                                        class_name="mt-2 ml-4 flex flex-col gap-1",
                                     ),
+                                    rx.fragment(),
                                 ),
-                                class_name="mt-2 ml-4 flex flex-col gap-1",
+                                rx.cond(
+                                    (item["page"] == "Servicios")
+                                    & (State.active_page == "Servicios"),
+                                    rx.el.div(
+                                        rx.foreach(
+                                            SERVICES_SUBSECTIONS,
+                                            lambda section: rx.el.button(
+                                                rx.el.div(
+                                                    rx.icon(
+                                                        section["icon"],
+                                                        class_name="h-4 w-4 text-indigo-600",
+                                                    ),
+                                                    rx.el.span(
+                                                        section["label"],
+                                                        class_name="text-sm",
+                                                    ),
+                                                    class_name="flex items-center gap-2",
+                                                ),
+                                                on_click=lambda _, key=section[
+                                                    "key"
+                                                ]: State.set_service_tab(key),
+                                                class_name=rx.cond(
+                                                    State.service_active_tab
+                                                    == section["key"],
+                                                    "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
+                                                    "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",
+                                                ),
+                                            ),
+                                        ),
+                                        class_name="mt-2 ml-4 flex flex-col gap-1",
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                class_name="flex flex-col gap-1",
                             ),
-                            rx.fragment(),
                         ),
+                        class_name="flex flex-col gap-2 p-4",
                     ),
                 ),
-                class_name="flex flex-col gap-2 p-4",
             ),
             class_name="flex-1 overflow-auto",
         ),

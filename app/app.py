@@ -9,6 +9,7 @@ from app.pages.caja import cashbox_page
 from app.pages.historial import historial_page
 from app.pages.configuracion import configuracion_page
 from app.pages.login import login_page
+from app.pages.servicios import servicios_page
 
 
 def cashbox_banner() -> rx.Component:
@@ -45,7 +46,7 @@ def cashbox_banner() -> rx.Component:
                         rx.icon("play", class_name="h-4 w-4"),
                         "Aperturar caja",
                         on_click=State.open_cashbox_session,
-                        class_name="flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 shadow",
+                        class_name="flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 shadow min-h-[42px]",
                     ),
                     class_name="flex flex-col md:flex-row items-stretch md:items-center gap-3",
                 ),
@@ -110,31 +111,34 @@ def index() -> rx.Component:
             rx.el.div(
                 sidebar(),
                 rx.el.div(
-                    cashbox_banner(),
-                    currency_selector(),
-                    rx.cond(
-                        State.navigation_items.length() == 0,
-                        rx.el.div(
-                            rx.el.h1(
-                                "Acceso restringido",
-                                class_name="text-2xl font-bold text-red-600",
+                    rx.el.div(
+                        cashbox_banner(),
+                        rx.cond(
+                            State.navigation_items.length() == 0,
+                            rx.el.div(
+                                rx.el.h1(
+                                    "Acceso restringido",
+                                    class_name="text-2xl font-bold text-red-600",
+                                ),
+                                rx.el.p(
+                                    "Tu usuario no tiene modulos habilitados. Solicita permisos al administrador.",
+                                    class_name="text-gray-600 mt-2 text-center",
+                                ),
+                                class_name="flex flex-col items-center justify-center h-full p-6",
                             ),
-                            rx.el.p(
-                                "Tu usuario no tiene modulos habilitados. Solicita permisos al administrador.",
-                                class_name="text-gray-600 mt-2 text-center",
-                            ),
-                            class_name="flex flex-col items-center justify-center h-full p-6",
-                        ),
-                        rx.match(
-                            State.active_page,
-                            ("Ingreso", ingreso_page()),
+                            rx.match(
+                                State.active_page,
+                                ("Ingreso", ingreso_page()),
                             ("Venta", venta_page()),
                             ("Gestion de Caja", cashbox_page()),
                             ("Inventario", inventario_page()),
                             ("Historial", historial_page()),
+                            ("Servicios", servicios_page()),
                             ("Configuracion", configuracion_page()),
-                            rx.el.div("Pagina no encontrada"),
+                                rx.el.div("Pagina no encontrada"),
+                            ),
                         ),
+                        class_name="w-full max-w-7xl mx-auto flex flex-col gap-4 p-4 sm:p-6",
                     ),
                     class_name="flex-1 h-screen overflow-y-auto",
                 ),

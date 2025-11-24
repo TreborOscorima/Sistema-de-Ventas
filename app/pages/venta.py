@@ -143,7 +143,7 @@ def venta_page() -> rx.Component:
                         rx.icon("plus", class_name="h-5 w-5"),
                         "Añadir",
                         on_click=State.add_item_to_sale,
-                        class_name="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 mt-6",
+                        class_name="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 mt-6 min-h-[44px]",
                     )
                 ),
                 class_name="flex flex-wrap items-start gap-4",
@@ -160,7 +160,7 @@ def venta_page() -> rx.Component:
                     rx.icon("trash-2", class_name="h-5 w-5"),
                     "Vaciar Lista",
                     on_click=State.clear_sale_items,
-                    class_name="w-full sm:w-auto flex items-center gap-2 bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600",
+                    class_name="w-full sm:w-auto flex items-center justify-center gap-2 bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 min-h-[44px]",
                 ),
                 class_name="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4",
             ),
@@ -190,7 +190,7 @@ def venta_page() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col gap-4",
         ),
 
         rx.el.div(
@@ -204,7 +204,23 @@ def venta_page() -> rx.Component:
                                 rx.foreach(
                                     State.enabled_payment_methods,
                                     lambda method: rx.el.button(
-                                        method["name"],
+                                        rx.el.div(
+                                            rx.cond(
+                                                method["kind"] == "cash",
+                                                rx.icon("banknote", class_name="h-4 w-4"),
+                                                rx.cond(
+                                                    method["kind"] == "card",
+                                                    rx.icon("credit-card", class_name="h-4 w-4"),
+                                                    rx.cond(
+                                                        method["kind"] == "wallet",
+                                                        rx.icon("qr-code", class_name="h-4 w-4"),
+                                                        rx.icon("layers", class_name="h-4 w-4"),
+                                                    ),
+                                                ),
+                                            ),
+                                            rx.el.span(method["name"], class_name="uppercase"),
+                                            class_name="flex items-center gap-2",
+                                        ),
                                         on_click=lambda _,
                                         mid=method["id"]: State.select_payment_method(mid),
                                         class_name=rx.cond(
@@ -521,9 +537,9 @@ def venta_page() -> rx.Component:
                                 ),
                                 rx.fragment(),
                             ),
-                            class_name="flex flex-col gap-3 mt-4",
+                            class_name="flex flex-col gap-3",
                         ),
-                        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
+                        class_name="flex flex-col gap-3",
                     ),
                     rx.el.div(
                         rx.el.span(
@@ -535,13 +551,13 @@ def venta_page() -> rx.Component:
                             State.sale_total.to_string(),
                             class_name="text-2xl font-bold text-indigo-700",
                         ),
-                        class_name="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3 mt-4",
+                        class_name="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3",
                     ),
                     rx.el.div(
                         rx.el.button(
                             "Confirmar Venta",
                             on_click=State.confirm_sale,
-                            class_name="w-full sm:w-auto bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold text-center",
+                            class_name="w-full sm:w-auto bg-green-600 text-white px-5 py-3 rounded-lg hover:bg-green-700 font-semibold text-center min-h-[44px]",
                         ),
                         rx.cond(
                             State.sale_receipt_ready,
@@ -549,18 +565,18 @@ def venta_page() -> rx.Component:
                                 rx.icon("printer", class_name="h-4 w-4"),
                                 "Imprimir Comprobante",
                                 on_click=State.print_sale_receipt,
-                                class_name="w-full sm:w-auto flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 px-4 py-3 rounded-lg hover:bg-indigo-50",
+                                class_name="w-full sm:w-auto flex items-center justify-center gap-2 border border-indigo-200 text-indigo-700 px-4 py-3 rounded-lg hover:bg-indigo-50 min-h-[44px]",
                             ),
                             rx.el.button(
                                 rx.icon("printer", class_name="h-4 w-4"),
                                 "Imprimir Comprobante",
                                 is_disabled=True,
-                                class_name="w-full sm:w-auto flex items-center justify-center gap-2 border border-indigo-200 text-indigo-300 px-4 py-3 rounded-lg cursor-not-allowed",
+                                class_name="w-full sm:w-auto flex items-center justify-center gap-2 border border-indigo-200 text-indigo-300 px-4 py-3 rounded-lg cursor-not-allowed min-h-[44px]",
                             ),
                         ),
-                        class_name="flex flex-wrap justify-end gap-3 mt-4",
+                        class_name="flex flex-col sm:flex-row sm:items-center justify-end gap-3",
                     ),
-                    class_name="flex flex-col mt-6 gap-3",
+                    class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col gap-4",
                 ),
         class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
     )

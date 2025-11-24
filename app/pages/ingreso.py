@@ -189,7 +189,7 @@ def ingreso_page() -> rx.Component:
                         rx.icon("plus", class_name="h-5 w-5"),
                         "Añadir",
                         on_click=State.add_item_to_entry,
-                        class_name="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 mt-6",
+                        class_name="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 mt-6 min-h-[44px]",
                     )
                 ),
                 class_name="flex flex-wrap items-start gap-4",
@@ -231,7 +231,7 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col gap-4",
         ),
         rx.el.div(
             rx.el.div(
@@ -246,9 +246,9 @@ def ingreso_page() -> rx.Component:
             rx.el.button(
                 "Confirmar Ingreso",
                 on_click=State.confirm_entry,
-                class_name="w-full sm:w-auto bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold",
+                class_name="w-full sm:w-auto bg-green-600 text-white px-5 py-3 rounded-lg hover:bg-green-700 font-semibold min-h-[44px]",
             ),
-            class_name="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-6",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4",
         ),
         class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
     )

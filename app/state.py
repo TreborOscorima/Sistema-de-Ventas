@@ -117,6 +117,7 @@ DEFAULT_USER_PRIVILEGES: Privileges = {
     "export_data": False,
     "view_cashbox": True,
     "manage_users": False,
+    "view_servicios": True,
 }
 
 ADMIN_PRIVILEGES: Privileges = {
@@ -130,6 +131,7 @@ ADMIN_PRIVILEGES: Privileges = {
     "export_data": True,
     "view_cashbox": True,
     "manage_users": True,
+    "view_servicios": True,
 }
 
 CASHIER_PRIVILEGES: Privileges = {
@@ -143,6 +145,7 @@ CASHIER_PRIVILEGES: Privileges = {
     "export_data": False,
     "view_cashbox": True,
     "manage_users": False,
+    "view_servicios": False,
 }
 
 DEFAULT_ROLE_TEMPLATES: dict[str, Privileges] = {
@@ -157,6 +160,7 @@ class State(AuthState):
     sidebar_open: bool = True
     current_page: str = "Ingreso"
     config_active_tab: str = "usuarios"
+    service_active_tab: str = "campo"
     units: list[str] = ["Unidad", "Kg", "Litro", "Metro", "Caja"]
     new_unit_name: str = ""
     new_unit_allows_decimal: bool = False
@@ -855,6 +859,7 @@ class State(AuthState):
             },
             {"label": "Inventario", "icon": "boxes", "page": "Inventario"},
             {"label": "Historial", "icon": "history", "page": "Historial"},
+            {"label": "Servicios", "icon": "briefcase", "page": "Servicios"},
             {"label": "Configuracion", "icon": "settings", "page": "Configuracion"},
         ]
 
@@ -865,6 +870,7 @@ class State(AuthState):
             "Gestion de Caja": "view_cashbox",
             "Inventario": "view_inventario",
             "Historial": "view_historial",
+            "Servicios": "view_servicios",
             "Configuracion": "manage_users",
         }
 
@@ -902,8 +908,14 @@ class State(AuthState):
         self.current_page = page
         if page == "Venta" and previous_page != "Venta":
             self._reset_sale_form()
+        if page != "Servicios":
+            self.service_active_tab = "campo"
         if self.sidebar_open:
             pass
+
+    @rx.event
+    def set_service_tab(self, tab: str):
+        self.service_active_tab = tab
 
     @rx.event
     def toggle_sidebar(self):
@@ -1529,9 +1541,8 @@ class State(AuthState):
                 duration=3000,
             )
         rows = "".join(
-            f"<tr><td>{item['barcode']}</td><td>{item['description']}</td>"
-            f"<td>{item['quantity']}</td><td>{item['unit']}</td>"
-            f"<td>{self._format_currency(item['price'])}</td><td>{self._format_currency(item['subtotal'])}</td></tr>"
+            f"<tr><td colspan='2'><strong>{item['description']}</strong></td></tr>"
+            f"<tr><td>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td><td style='text-align:right;'>{self._format_currency(item['subtotal'])}</td></tr>"
             for item in self.last_sale_receipt
         )
         html_content = f"""
@@ -1540,42 +1551,52 @@ class State(AuthState):
                 <meta charset='utf-8' />
                 <title>Comprobante de Venta</title>
                 <style>
-                    body {{ font-family: Arial, sans-serif; padding: 24px; }}
-                    h1 {{ text-align: center; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
-                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-                    th {{ background-color: #f3f4f6; }}
-                    tfoot td {{ font-weight: bold; }}
+                    @page {
+                        size: 58mm auto;
+                        margin: 2mm;
+                    }
+                    body {
+                        font-family: 'Courier New', monospace;
+                        width: 56mm;
+                        margin: 0 auto;
+                        font-size: 11px;
+                    }
+                    h1 {
+                        text-align: center;
+                        font-size: 14px;
+                        margin: 0 0 6px 0;
+                    }
+                    .section {
+                        margin-bottom: 6px;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                    }
+                    td {
+                        padding: 2px 0;
+                        text-align: left;
+                    }
+                    td:last-child {
+                        text-align: right;
+                    }
+                    hr {
+                        border: 0;
+                        border-top: 1px dashed #000;
+                        margin: 6px 0;
+                    }
                 </style>
             </head>
             <body>
                 <h1>Comprobante de Venta</h1>
-                <p><strong>Fecha:</strong> {self.last_sale_timestamp}</p>
+                <div class="section"><strong>Fecha:</strong> {self.last_sale_timestamp}</div>
+                <hr />
                 <table>
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Descripción</th>
-                            <th>Cantidad</th>
-                            <th>Unidad</th>
-                            <th>P. Venta</th>
-                            <th>Subtotal</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="5">Total</td>
-                            <td>{self._format_currency(self.last_sale_total)}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="5">Método de Pago</td>
-                            <td>{self.last_payment_summary}</td>
-                        </tr>
-                    </tfoot>
+                    {rows}
                 </table>
+                <hr />
+                <div class="section"><strong>Total:</strong> {self._format_currency(self.last_sale_total)}</div>
+                <div class="section"><strong>Metodo de Pago:</strong> {self.last_payment_summary}</div>
             </body>
         </html>
         """
@@ -1993,12 +2014,8 @@ class State(AuthState):
             return rx.toast("Venta no encontrada.", duration=3000)
         items = sale.get("items", [])
         rows = "".join(
-            f"<tr><td>{item.get('barcode', '')}</td>"
-            f"<td>{item.get('description', '')}</td>"
-            f"<td>{item.get('quantity', 0)}</td>"
-            f"<td>{item.get('unit', '')}</td>"
-            f"<td>{self._format_currency(item.get('price', 0))}</td>"
-            f"<td>{self._format_currency(item.get('subtotal', 0))}</td></tr>"
+            f"<tr><td colspan='2'><strong>{item.get('description', '')}</strong></td></tr>"
+            f"<tr><td>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</td><td style='text-align:right;'>{self._format_currency(item.get('subtotal', 0))}</td></tr>"
             for item in items
         )
         payment_summary = sale.get("payment_details") or sale.get(
@@ -2010,43 +2027,53 @@ class State(AuthState):
                 <meta charset='utf-8' />
                 <title>Comprobante de Venta</title>
                 <style>
-                    body {{ font-family: Arial, sans-serif; padding: 24px; }}
-                    h1 {{ text-align: center; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
-                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-                    th {{ background-color: #f3f4f6; }}
-                    tfoot td {{ font-weight: bold; }}
+                    @page {
+                        size: 58mm auto;
+                        margin: 2mm;
+                    }
+                    body {
+                        font-family: 'Courier New', monospace;
+                        width: 56mm;
+                        margin: 0 auto;
+                        font-size: 11px;
+                    }
+                    h1 {
+                        text-align: center;
+                        font-size: 14px;
+                        margin: 0 0 6px 0;
+                    }
+                    .section {
+                        margin-bottom: 6px;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                    }
+                    td {
+                        padding: 2px 0;
+                        text-align: left;
+                    }
+                    td:last-child {
+                        text-align: right;
+                    }
+                    hr {
+                        border: 0;
+                        border-top: 1px dashed #000;
+                        margin: 6px 0;
+                    }
                 </style>
             </head>
             <body>
                 <h1>Comprobante de Venta</h1>
-                <p><strong>Fecha:</strong> {sale.get('timestamp', '')}</p>
-                <p><strong>Usuario:</strong> {sale.get('user', '')}</p>
+                <div class="section"><strong>Fecha:</strong> {sale.get('timestamp', '')}</div>
+                <div class="section"><strong>Usuario:</strong> {sale.get('user', '')}</div>
+                <hr />
                 <table>
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Descripción</th>
-                            <th>Cantidad</th>
-                            <th>Unidad</th>
-                            <th>P. Venta</th>
-                            <th>Subtotal</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows}
-                    </tbody>
-                    <tfoot>
-                        <tr>
-                            <td colspan="5">Total</td>
-                            <td>{self._format_currency(sale.get('total', 0))}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="5">Método de Pago</td>
-                            <td>{payment_summary}</td>
-                        </tr>
-                    </tfoot>
+                    {rows}
                 </table>
+                <hr />
+                <div class="section"><strong>Total:</strong> {self._format_currency(sale.get('total', 0))}</div>
+                <div class="section"><strong>Metodo de Pago:</strong> {payment_summary}</div>
             </body>
         </html>
         """

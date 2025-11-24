@@ -66,6 +66,12 @@ PRIVILEGE_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
             ("Exportar Datos", "export_data"),
         ],
     ),
+    (
+        "Servicios",
+        [
+            ("Ver Servicios", "view_servicios"),
+        ],
+    ),
     ("Administracion", [("Gestionar Usuarios", "manage_users")]),
 ]
 
@@ -170,7 +176,7 @@ def user_form() -> rx.Component:
             rx.el.button(
                 "Crear Nuevo Usuario",
                 on_click=State.show_create_user_form,
-                class_name="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 font-semibold mb-6 text-center",
+                class_name="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 font-semibold mb-6 text-center min-h-[44px]",
             )
         ),
         rx.radix.primitives.dialog.portal(
@@ -273,12 +279,12 @@ def user_form() -> rx.Component:
                             rx.el.button(
                                 "Restaurar privilegios del rol",
                                 on_click=State.apply_role_privileges,
-                                class_name="text-sm text-indigo-700 border border-indigo-200 px-3 py-1 rounded-md hover:bg-indigo-50",
+                                class_name="text-sm text-indigo-700 border border-indigo-200 px-3 py-1 rounded-md hover:bg-indigo-50 min-h-[38px]",
                             ),
                             rx.el.button(
                                 "Guardar como plantilla de rol",
                                 on_click=State.save_role_template,
-                                class_name="text-sm text-green-700 border border-green-200 px-3 py-1 rounded-md hover:bg-green-50",
+                                class_name="text-sm text-green-700 border border-green-200 px-3 py-1 rounded-md hover:bg-green-50 min-h-[38px]",
                             ),
                             class_name="flex items-center gap-2",
                         ),
@@ -297,12 +303,12 @@ def user_form() -> rx.Component:
                     rx.el.button(
                         "Cancelar",
                         on_click=State.hide_user_form,
-                        class_name="w-full sm:w-auto bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300",
+                        class_name="w-full sm:w-auto bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 min-h-[44px]",
                     ),
                     rx.el.button(
                         "Guardar",
                         on_click=State.save_user,
-                        class_name="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700",
+                        class_name="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 min-h-[44px]",
                     ),
                     class_name="flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 sm:gap-4 mt-6",
                 ),
@@ -428,7 +434,7 @@ def currency_section() -> rx.Component:
                 ),
                 class_name="flex flex-col gap-1",
             ),
-            class_name="grid grid-cols-1 md:grid-cols-3 gap-3",
+            class_name="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white p-4 rounded-lg shadow-sm border",
         ),
         rx.el.div(
             rx.el.div(
@@ -436,7 +442,7 @@ def currency_section() -> rx.Component:
                     rx.icon("plus", class_name="h-4 w-4"),
                     "Agregar moneda",
                     on_click=State.add_currency,
-                    class_name="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center gap-2",
+                    class_name="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center gap-2 min-h-[44px]",
                 ),
                 class_name="flex items-center gap-3",
             ),
@@ -539,7 +545,7 @@ def unit_section() -> rx.Component:
                 rx.icon("plus", class_name="h-4 w-4"),
                 "Agregar unidad",
                 on_click=State.add_unit,
-                class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center gap-2",
+                class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
             ),
             class_name="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white p-4 rounded-lg shadow-sm border items-end",
         ),
@@ -664,7 +670,7 @@ def payment_methods_section() -> rx.Component:
                 rx.icon("plus", class_name="h-4 w-4"),
                 "Agregar metodo",
                 on_click=State.add_payment_method,
-                class_name="w-full md:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center gap-2",
+                class_name="w-full md:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center gap-2 min-h-[44px]",
             ),
             class_name="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-4 rounded-lg shadow-sm border items-end",
         ),

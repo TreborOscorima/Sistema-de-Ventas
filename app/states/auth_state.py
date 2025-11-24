@@ -14,6 +14,7 @@ class Privileges(TypedDict):
     export_data: bool
     view_cashbox: bool
     manage_users: bool
+    view_servicios: bool
 
 
 class User(TypedDict):
@@ -33,6 +34,7 @@ EMPTY_PRIVILEGES: Privileges = {
     "export_data": False,
     "view_cashbox": False,
     "manage_users": False,
+    "view_servicios": False,
 }
 
 
