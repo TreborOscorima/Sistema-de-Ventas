@@ -27,25 +27,25 @@ def historial_page() -> rx.Component:
             stat_card(
                 "banknote",
                 "Ventas con Efectivo",
-                f"${State.total_ventas_efectivo.to_string()}",
+                rx.el.span(State.currency_symbol, State.total_ventas_efectivo.to_string()),
                 "text-green-600",
             ),
             stat_card(
                 "smartphone",
                 "Ventas con Yape",
-                f"${State.total_ventas_yape.to_string()}",
+                rx.el.span(State.currency_symbol, State.total_ventas_yape.to_string()),
                 "text-red-600",
             ),
             stat_card(
                 "qr-code",
                 "Ventas con Plin",
-                f"${State.total_ventas_plin.to_string()}",
+                rx.el.span(State.currency_symbol, State.total_ventas_plin.to_string()),
                 "text-indigo-600",
             ),
             stat_card(
                 "wallet",
                 "Ventas Mixtas",
-                f"${State.total_ventas_mixtas.to_string()}",
+                rx.el.span(State.currency_symbol, State.total_ventas_mixtas.to_string()),
                 "text-blue-600",
             ),
             class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6",
@@ -102,24 +102,27 @@ def historial_page() -> rx.Component:
                         class_name="w-full p-2 border rounded-md",
                     ),
                 ),
-                rx.el.button(
-                    "Buscar",
-                    on_click=State.apply_history_filters,
-                    class_name="mt-6 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700",
+                rx.el.div(
+                    rx.el.button(
+                        "Buscar",
+                        on_click=State.apply_history_filters,
+                        class_name="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700",
+                    ),
+                    rx.el.button(
+                        "Limpiar",
+                        on_click=State.reset_history_filters,
+                        class_name="w-full sm:w-auto bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300",
+                    ),
+                    rx.el.button(
+                        "Exportar a Excel",
+                        on_click=State.export_to_excel,
+                        class_name="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700",
+                    ),
+                    class_name="flex flex-col sm:flex-row gap-3 sm:col-span-2 xl:col-span-1",
                 ),
-                rx.el.button(
-                    "Limpiar",
-                    on_click=State.reset_history_filters,
-                    class_name="mt-6 bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300",
-                ),
-                rx.el.button(
-                    "Exportar a Excel",
-                    on_click=State.export_to_excel,
-                    class_name="mt-6 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700",
-                ),
-                class_name="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 items-end",
+                class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 items-end",
             ),
-            class_name="bg-white p-6 rounded-lg shadow-md mb-6",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
         ),
         rx.el.div(
             rx.el.table(
@@ -162,7 +165,8 @@ def historial_page() -> rx.Component:
                                 movement["unit"], class_name="py-3 px-4 text-center"
                             ),
                             rx.el.td(
-                                f"${movement['total'].to_string()}",
+                                State.currency_symbol,
+                                movement["total"].to_string(),
                                 class_name="py-3 px-4 text-right font-medium",
                             ),
                             rx.el.td(
@@ -193,7 +197,7 @@ def historial_page() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            class_name="bg-white p-6 rounded-lg shadow-md overflow-x-auto",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto",
         ),
         rx.el.div(
             rx.el.button(
@@ -209,7 +213,7 @@ def historial_page() -> rx.Component:
                 is_disabled=State.current_page_history >= State.total_pages,
                 class_name="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50",
             ),
-            class_name="flex justify-center items-center gap-4 mt-6",
+            class_name="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 mt-6",
         ),
-        class_name="p-6",
+        class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
     )

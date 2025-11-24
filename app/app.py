@@ -18,7 +18,7 @@ def cashbox_banner() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.div(
-                    rx.icon("alert-circle", class_name="h-5 w-5 text-amber-600"),
+                    rx.icon("alert-triangle", class_name="h-5 w-5 text-amber-600"),
                     rx.el.div(
                         rx.el.p(
                             "Apertura de caja requerida",
@@ -56,6 +56,31 @@ def cashbox_banner() -> rx.Component:
     )
 
 
+def currency_selector() -> rx.Component:
+    return rx.el.div(
+        rx.el.div(
+            rx.icon("coins", class_name="h-5 w-5 text-amber-600"),
+            rx.el.span("Moneda de trabajo", class_name="text-sm font-semibold text-gray-800"),
+            class_name="flex items-center gap-2",
+        ),
+        rx.el.select(
+            rx.foreach(
+                State.available_currencies,
+                lambda currency: rx.el.option(currency["name"], value=currency["code"]),
+            ),
+            value=State.selected_currency_code,
+            on_change=State.set_currency,
+            class_name="w-full sm:w-auto p-2 border rounded-md bg-white",
+        ),
+        rx.el.span(
+            "Mostrando importes en ",
+            rx.el.span(State.currency_name, class_name="font-semibold"),
+            class_name="text-sm text-gray-600",
+        ),
+        class_name="flex flex-col sm:flex-row sm:items-center gap-3 bg-white border rounded-lg shadow-sm p-4",
+    )
+
+
 def _toast_provider() -> rx.Component:
     return rx.toast.provider(
         position="bottom-center",
@@ -86,6 +111,7 @@ def index() -> rx.Component:
                 sidebar(),
                 rx.el.div(
                     cashbox_banner(),
+                    currency_selector(),
                     rx.cond(
                         State.navigation_items.length() == 0,
                         rx.el.div(

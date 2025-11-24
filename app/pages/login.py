@@ -50,7 +50,7 @@ def login_page() -> rx.Component:
                     class_name="flex items-center gap-2 mt-4 bg-red-100 p-3 rounded-md border border-red-200",
                 ),
             ),
-            class_name="w-full max-w-md p-8 bg-white rounded-2xl shadow-lg border",
+            class_name="w-full max-w-md p-6 sm:p-8 bg-white rounded-2xl shadow-lg border",
         ),
-        class_name="flex items-center justify-center min-h-screen bg-gray-100",
+        class_name="flex items-center justify-center min-h-screen bg-gray-100 px-4",
     )

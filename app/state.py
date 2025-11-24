@@ -52,6 +52,20 @@ class Movement(TypedDict):
     sale_id: str
 
 
+class CurrencyOption(TypedDict):
+    code: str
+    name: str
+    symbol: str
+
+
+class PaymentMethodConfig(TypedDict):
+    id: str
+    name: str
+    description: str
+    kind: str
+    enabled: bool
+
+
 class CashboxSale(TypedDict):
     sale_id: str
     timestamp: str
@@ -142,11 +156,23 @@ DEFAULT_ROLE_TEMPLATES: dict[str, Privileges] = {
 class State(AuthState):
     sidebar_open: bool = True
     current_page: str = "Ingreso"
+    config_active_tab: str = "usuarios"
     units: list[str] = ["Unidad", "Kg", "Litro", "Metro", "Caja"]
+    new_unit_name: str = ""
+    new_unit_allows_decimal: bool = False
     roles: list[str] = list(DEFAULT_ROLE_TEMPLATES.keys())
     role_privileges: dict[str, Privileges] = {
         name: template.copy() for name, template in DEFAULT_ROLE_TEMPLATES.items()
     }
+    available_currencies: list[CurrencyOption] = [
+        {"code": "PEN", "name": "Sol peruano (PEN)", "symbol": "S/"},
+        {"code": "ARS", "name": "Peso argentino (ARS)", "symbol": "$"},
+        {"code": "USD", "name": "Dolar estadounidense (USD)", "symbol": "US$"},
+    ]
+    selected_currency_code: str = "PEN"
+    new_currency_name: str = ""
+    new_currency_code: str = ""
+    new_currency_symbol: str = ""
     decimal_units: set[str] = {
         "kg",
         "kilogramo",
@@ -206,8 +232,39 @@ class State(AuthState):
     last_sale_total: float = 0
     last_sale_timestamp: str = ""
     sale_receipt_ready: bool = False
+    payment_methods: list[PaymentMethodConfig] = [
+        {
+            "id": "cash",
+            "name": "Efectivo",
+            "description": "Billetes, Monedas",
+            "kind": "cash",
+            "enabled": True,
+        },
+        {
+            "id": "card",
+            "name": "Tarjeta",
+            "description": "Credito, Debito",
+            "kind": "card",
+            "enabled": True,
+        },
+        {
+            "id": "wallet",
+            "name": "Pago QR / Billetera Digital",
+            "description": "Yape, Plin, Billeteras Bancarias",
+            "kind": "wallet",
+            "enabled": True,
+        },
+        {
+            "id": "mixed",
+            "name": "Pagos Mixtos",
+            "description": "Combinacion de metodos",
+            "kind": "mixed",
+            "enabled": True,
+        },
+    ]
     payment_method: str = "Efectivo"
     payment_method_description: str = "Billetes, Monedas"
+    payment_method_kind: str = "cash"
     payment_cash_amount: float = 0
     payment_cash_message: str = ""
     payment_cash_status: str = "neutral"
@@ -221,6 +278,9 @@ class State(AuthState):
     payment_mixed_status: str = "neutral"
     payment_mixed_notes: str = ""
     last_payment_summary: str = ""
+    new_payment_method_name: str = ""
+    new_payment_method_description: str = ""
+    new_payment_method_kind: str = "other"
     inventory_check_modal_open: bool = False
     inventory_check_status: str = "perfecto"
     inventory_adjustment_notes: str = ""
@@ -306,6 +366,79 @@ class State(AuthState):
             Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         )
 
+    @rx.var
+    def currency_symbol(self) -> str:
+        match = next(
+            (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
+            None,
+        )
+        return f"{match['symbol']} " if match else "S/ "
+
+    @rx.var
+    def currency_name(self) -> str:
+        match = next(
+            (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
+            None,
+        )
+        return match["name"] if match else "Sol peruano (PEN)"
+
+    def _format_currency(self, value: float) -> str:
+        return f"{self.currency_symbol}{self._round_currency(value):.2f}"
+
+    @rx.event
+    def set_currency(self, code: str):
+        code = (code or "").upper()
+        match = next((c for c in self.available_currencies if c["code"] == code), None)
+        if not match:
+            return rx.toast("Moneda no soportada.", duration=3000)
+        self.selected_currency_code = code
+        self._refresh_payment_feedback()
+        return rx.toast(f"Moneda cambiada a {match['name']}.", duration=2500)
+
+    @rx.event
+    def set_new_currency_code(self, value: str):
+        self.new_currency_code = (value or "").upper()
+
+    @rx.event
+    def set_new_currency_name(self, value: str):
+        self.new_currency_name = value
+
+    @rx.event
+    def set_new_currency_symbol(self, value: str):
+        self.new_currency_symbol = value
+
+    @rx.event
+    def add_currency(self):
+        code = (self.new_currency_code or "").strip().upper()
+        name = (self.new_currency_name or "").strip()
+        symbol = (self.new_currency_symbol or "").strip()
+        if not code or not name or not symbol:
+            return rx.toast("Complete codigo, nombre y simbolo.", duration=3000)
+        if any(c["code"] == code for c in self.available_currencies):
+            return rx.toast("La moneda ya existe.", duration=3000)
+        self.available_currencies.append({"code": code, "name": name, "symbol": symbol})
+        self.selected_currency_code = code
+        self.new_currency_code = ""
+        self.new_currency_name = ""
+        self.new_currency_symbol = ""
+        self._refresh_payment_feedback()
+        return rx.toast(f"Moneda {name} agregada.", duration=2500)
+
+    @rx.event
+    def remove_currency(self, code: str):
+        code = (code or "").upper()
+        if len(self.available_currencies) <= 1:
+            return rx.toast("Debe quedar al menos una moneda.", duration=3000)
+        if not any(c["code"] == code for c in self.available_currencies):
+            return
+        self.available_currencies = [
+            currency for currency in self.available_currencies if currency["code"] != code
+        ]
+        if self.selected_currency_code == code and self.available_currencies:
+            self.selected_currency_code = self.available_currencies[0]["code"]
+        self._refresh_payment_feedback()
+        return rx.toast("Moneda eliminada.", duration=2500)
+
     def _unit_allows_decimal(self, unit: str) -> bool:
         return unit and unit.lower() in self.decimal_units
 
@@ -321,6 +454,61 @@ class State(AuthState):
                 Decimal("1"), rounding=ROUND_HALF_UP
             )
         )
+
+    @rx.event
+    def set_new_unit_name(self, value: str):
+        self.new_unit_name = value
+
+    @rx.event
+    def set_new_unit_allows_decimal(self, value: bool | str):
+        if isinstance(value, str):
+            value = value.lower() in ["true", "1", "on", "yes"]
+        self.new_unit_allows_decimal = bool(value)
+
+    @rx.event
+    def add_unit(self):
+        name = (self.new_unit_name or "").strip()
+        if not name:
+            return rx.toast("Ingrese un nombre de unidad.", duration=3000)
+        unit_lower = name.lower()
+        if any(u.lower() == unit_lower for u in self.units):
+            return rx.toast("La unidad ya existe.", duration=3000)
+        self.units.append(name)
+        if self.new_unit_allows_decimal:
+            self.decimal_units.add(unit_lower)
+        self.new_unit_name = ""
+        self.new_unit_allows_decimal = False
+        return rx.toast(f"Unidad {name} agregada.", duration=2500)
+
+    @rx.event
+    def remove_unit(self, unit: str):
+        value = (unit or "").strip()
+        unit_lower = value.lower()
+        if not value:
+            return
+        if unit_lower == "unidad":
+            return rx.toast("No puedes eliminar la unidad base.", duration=3000)
+        if unit_lower not in [u.lower() for u in self.units]:
+            return
+        if any(p.get("unit", "").lower() == unit_lower for p in self.inventory.values()):
+            return rx.toast("No puedes eliminar unidades usadas en inventario.", duration=3000)
+        self.units = [u for u in self.units if u.lower() != unit_lower]
+        self.decimal_units.discard(unit_lower)
+        if self.new_entry_item["unit"].lower() == unit_lower:
+            self.new_entry_item["unit"] = "Unidad"
+        if self.new_sale_item["unit"].lower() == unit_lower:
+            self.new_sale_item["unit"] = "Unidad"
+        return rx.toast(f"Unidad {value} eliminada.", duration=2500)
+
+    @rx.event
+    def set_unit_decimal(self, unit: str, allows_decimal: bool | str):
+        unit_lower = (unit or "").lower()
+        if isinstance(allows_decimal, str):
+            allows_decimal = allows_decimal.lower() in ["true", "1", "on", "yes"]
+        if allows_decimal:
+            self.decimal_units.add(unit_lower)
+        else:
+            self.decimal_units.discard(unit_lower)
 
     def _apply_item_rounding(self, item: TransactionItem):
         unit = item.get("unit", "")
@@ -378,6 +566,17 @@ class State(AuthState):
         return self._round_currency(
             sum((item["subtotal"] for item in self.new_sale_items))
         )
+
+    @rx.var
+    def enabled_payment_methods(self) -> list[PaymentMethodConfig]:
+        return [m for m in self.payment_methods if m.get("enabled", True)]
+
+    @rx.var
+    def unit_rows(self) -> list[dict[str, Union[str, bool]]]:
+        return [
+            {"name": unit, "allows_decimal": unit.lower() in self.decimal_units}
+            for unit in self.units
+        ]
 
     @rx.var
     def payment_summary(self) -> str:
@@ -514,7 +713,7 @@ class State(AuthState):
         if not self.current_user["privileges"]["view_cashbox"]:
             return []
         return [
-            {"method": method, "amount": f"${amount:.2f}"}
+            {"method": method, "amount": self._format_currency(amount)}
             for method, amount in self.cashbox_close_summary_totals.items()
             if amount > 0
         ]
@@ -559,7 +758,8 @@ class State(AuthState):
     @rx.var
     def total_ventas_efectivo(self) -> float:
         return self._ventas_by_payment(
-            lambda m: m.get("payment_method", "").lower() == "efectivo"
+            lambda m: m.get("payment_kind") == "cash"
+            or m.get("payment_method", "").lower() == "efectivo"
         )
 
     @rx.var
@@ -568,6 +768,10 @@ class State(AuthState):
             lambda m: m.get("payment_method", "").lower()
             == "pago qr / billetera digital"
             and "yape" in m.get("payment_details", "").lower()
+            or (
+                m.get("payment_kind") == "wallet"
+                and "yape" in m.get("payment_details", "").lower()
+            )
         )
 
     @rx.var
@@ -576,12 +780,17 @@ class State(AuthState):
             lambda m: m.get("payment_method", "").lower()
             == "pago qr / billetera digital"
             and "plin" in m.get("payment_details", "").lower()
+            or (
+                m.get("payment_kind") == "wallet"
+                and "plin" in m.get("payment_details", "").lower()
+            )
         )
 
     @rx.var
     def total_ventas_mixtas(self) -> float:
         return self._ventas_by_payment(
-            lambda m: m.get("payment_method", "").lower() == "pagos mixtos"
+            lambda m: m.get("payment_kind") == "mixed"
+            or m.get("payment_method", "").lower() == "pagos mixtos"
         )
 
     @rx.var
@@ -699,6 +908,19 @@ class State(AuthState):
     @rx.event
     def toggle_sidebar(self):
         self.sidebar_open = not self.sidebar_open
+
+    @rx.event
+    def set_config_tab(self, tab: str | dict):
+        if isinstance(tab, dict):
+            return
+        self.config_active_tab = tab
+
+    @rx.event
+    def go_to_config_tab(self, tab: str):
+        if not self._can_access_page("Configuracion"):
+            return rx.toast("No tiene permisos para acceder a configuracion.", duration=3000)
+        self.set_page("Configuracion")
+        self.set_config_tab(tab)
 
     @rx.event
     def update_new_category_name(self, value: str):
@@ -907,15 +1129,16 @@ class State(AuthState):
         except ValueError:
             return None
 
-    def _payment_category(self, method: str) -> str:
+    def _payment_category(self, method: str, kind: str = "") -> str:
+        normalized_kind = (kind or "").lower()
         label = method.lower() if method else ""
-        if "mixto" in label:
+        if normalized_kind == "mixed" or "mixto" in label:
             return "Pago Mixto"
-        if "tarjeta" in label:
+        if normalized_kind == "card" or "tarjeta" in label:
             return "Tarjeta"
-        if "qr" in label or "billetera" in label or "yape" in label or "plin" in label:
+        if normalized_kind == "wallet" or "qr" in label or "billetera" in label or "yape" in label or "plin" in label:
             return "Pago QR / Billetera"
-        if "efectivo" in label:
+        if normalized_kind == "cash" or "efectivo" in label:
             return "Efectivo"
         return "Otros"
 
@@ -935,7 +1158,9 @@ class State(AuthState):
             "Otros": 0.0,
         }
         for sale in sales:
-            category = self._payment_category(sale["payment_method"])
+            category = self._payment_category(
+                sale.get("payment_method", ""), sale.get("payment_kind", "")
+            )
             if category not in summary:
                 summary[category] = 0.0
             summary[category] = self._round_currency(summary[category] + sale["total"])
@@ -1220,15 +1445,15 @@ class State(AuthState):
         if not self.new_sale_items:
             return rx.toast("No hay productos en la venta.", duration=3000)
         if not self.payment_method:
-            return rx.toast("Seleccione un método de pago.", duration=3000)
+            return rx.toast("Seleccione un metodo de pago.", duration=3000)
         self._refresh_payment_feedback()
-        if self.payment_method == "Efectivo":
+        if self.payment_method_kind == "cash":
             if self.payment_cash_status not in ["exact", "change"]:
                 message = (
-                    self.payment_cash_message or "Ingrese un monto válido en efectivo."
+                    self.payment_cash_message or "Ingrese un monto valido en efectivo."
                 )
                 return rx.toast(message, duration=3000)
-        if self.payment_method == "Pagos Mixtos":
+        if self.payment_method_kind == "mixed":
             if self.payment_mixed_status not in ["exact", "change"]:
                 message = (
                     self.payment_mixed_message
@@ -1261,6 +1486,7 @@ class State(AuthState):
                             "unit": item["unit"],
                             "total": item["subtotal"],
                             "payment_method": self.payment_method,
+                            "payment_kind": self.payment_method_kind,
                             "payment_details": payment_summary,
                             "user": self.current_user["username"],
                             "sale_id": sale_id,
@@ -1276,6 +1502,7 @@ class State(AuthState):
                 "timestamp": timestamp,
                 "user": self.current_user["username"],
                 "payment_method": self.payment_method,
+                "payment_kind": self.payment_method_kind,
                 "payment_details": payment_summary,
                 "total": sale_total,
                 "items": [item.copy() for item in sale_snapshot],
@@ -1304,7 +1531,7 @@ class State(AuthState):
         rows = "".join(
             f"<tr><td>{item['barcode']}</td><td>{item['description']}</td>"
             f"<td>{item['quantity']}</td><td>{item['unit']}</td>"
-            f"<td>${item['price']:.2f}</td><td>${item['subtotal']:.2f}</td></tr>"
+            f"<td>{self._format_currency(item['price'])}</td><td>{self._format_currency(item['subtotal'])}</td></tr>"
             for item in self.last_sale_receipt
         )
         html_content = f"""
@@ -1341,10 +1568,10 @@ class State(AuthState):
                     <tfoot>
                         <tr>
                             <td colspan="5">Total</td>
-                            <td>${self.last_sale_total:.2f}</td>
+                            <td>{self._format_currency(self.last_sale_total)}</td>
                         </tr>
                         <tr>
-                            <td colspan="5">Metodo de Pago</td>
+                            <td colspan="5">Método de Pago</td>
                             <td>{self.last_payment_summary}</td>
                         </tr>
                     </tfoot>
@@ -1411,8 +1638,8 @@ class State(AuthState):
         return None
 
     @rx.event
-    def set_cashbox_open_amount_input(self, value: str):
-        # Ensure we always store a string, even if the input sends int/float values.
+    def set_cashbox_open_amount_input(self, value: float | str):
+        """Store the cashbox opening input as string regardless of input type."""
         self.cashbox_open_amount_input = str(value or "").strip()
 
     @rx.event
@@ -1770,8 +1997,8 @@ class State(AuthState):
             f"<td>{item.get('description', '')}</td>"
             f"<td>{item.get('quantity', 0)}</td>"
             f"<td>{item.get('unit', '')}</td>"
-            f"<td>${item.get('price', 0):.2f}</td>"
-            f"<td>${item.get('subtotal', 0):.2f}</td></tr>"
+            f"<td>{self._format_currency(item.get('price', 0))}</td>"
+            f"<td>{self._format_currency(item.get('subtotal', 0))}</td></tr>"
             for item in items
         )
         payment_summary = sale.get("payment_details") or sale.get(
@@ -1812,10 +2039,10 @@ class State(AuthState):
                     <tfoot>
                         <tr>
                             <td colspan="5">Total</td>
-                            <td>${sale.get('total', 0):.2f}</td>
+                            <td>{self._format_currency(sale.get('total', 0))}</td>
                         </tr>
                         <tr>
-                            <td colspan="5">Metodo de Pago</td>
+                            <td colspan="5">Método de Pago</td>
                             <td>{payment_summary}</td>
                         </tr>
                     </tfoot>
@@ -1847,12 +2074,12 @@ class State(AuthState):
             day_sales
         )
         summary_rows = "".join(
-            f"<tr><td>{method}</td><td>${amount:.2f}</td></tr>"
+            f"<tr><td>{method}</td><td>{self._format_currency(amount)}</td></tr>"
             for method, amount in summary.items()
             if amount > 0
         )
         detail_rows = "".join(
-            f"<tr><td>{sale['timestamp']}</td><td>{sale['user']}</td><td>{sale['payment_method']}</td><td>${sale['total']:.2f}</td></tr>"
+            f"<tr><td>{sale['timestamp']}</td><td>{sale['user']}</td><td>{sale['payment_method']}</td><td>{self._format_currency(sale['total'])}</td></tr>"
             for sale in day_sales
         )
         html_content = f"""
@@ -2212,29 +2439,122 @@ class State(AuthState):
             return rx.toast(f"Usuario {username} eliminado.", duration=3000)
         return rx.toast(f"Usuario {username} no encontrado.", duration=3000)
 
+    def _payment_method_by_identifier(self, identifier: str) -> PaymentMethodConfig | None:
+        target = (identifier or "").strip().lower()
+        if not target:
+            return None
+        for method in self.payment_methods:
+            if method["id"].lower() == target or method["name"].lower() == target:
+                return method
+        return None
+
+    def _enabled_payment_methods_list(self) -> list[PaymentMethodConfig]:
+        return [m for m in self.payment_methods if m.get("enabled", True)]
+
+    def _default_payment_method(self) -> PaymentMethodConfig | None:
+        enabled = self._enabled_payment_methods_list()
+        if enabled:
+            return enabled[0]
+        return None
+
+    def _ensure_payment_method_selected(self):
+        available = self._enabled_payment_methods_list()
+        if not available:
+            self.payment_method = ""
+            self.payment_method_description = ""
+            self.payment_method_kind = "other"
+            return
+        if not any(m["name"] == self.payment_method for m in available):
+            self._set_payment_method(available[0])
+
+    @rx.event
+    def set_new_payment_method_name(self, value: str):
+        self.new_payment_method_name = value
+
+    @rx.event
+    def set_new_payment_method_description(self, value: str):
+        self.new_payment_method_description = value
+
+    @rx.event
+    def set_new_payment_method_kind(self, value: str):
+        self.new_payment_method_kind = (value or "").strip().lower() or "other"
+
+    @rx.event
+    def add_payment_method(self):
+        name = (self.new_payment_method_name or "").strip()
+        description = (self.new_payment_method_description or "").strip()
+        kind = (self.new_payment_method_kind or "other").strip().lower()
+        if not name:
+            return rx.toast("Asigne un nombre al metodo de pago.", duration=3000)
+        if kind not in ["cash", "card", "wallet", "mixed", "other"]:
+            kind = "other"
+        if any(m["name"].lower() == name.lower() for m in self.payment_methods):
+            return rx.toast("Ya existe un metodo con ese nombre.", duration=3000)
+        method: PaymentMethodConfig = {
+            "id": str(uuid.uuid4()),
+            "name": name,
+            "description": description or "Sin descripcion",
+            "kind": kind,
+            "enabled": True,
+        }
+        self.payment_methods.append(method)
+        self.new_payment_method_name = ""
+        self.new_payment_method_description = ""
+        self.new_payment_method_kind = "other"
+        self._set_payment_method(method)
+        return rx.toast(f"Metodo {name} agregado.", duration=2500)
+
+    @rx.event
+    def toggle_payment_method_enabled(self, method_id: str, enabled: bool | str):
+        if isinstance(enabled, str):
+            enabled = enabled.lower() in ["true", "1", "on", "yes"]
+        active_methods = self._enabled_payment_methods_list()
+        for method in self.payment_methods:
+            if method["id"] == method_id:
+                if not enabled and method.get("enabled", True) and len(active_methods) <= 1:
+                    return rx.toast("Debe haber al menos un metodo activo.", duration=3000)
+                method["enabled"] = enabled
+                break
+        self._ensure_payment_method_selected()
+
+    @rx.event
+    def remove_payment_method(self, method_id: str):
+        method = self._payment_method_by_identifier(method_id)
+        if not method:
+            return
+        remaining_enabled = [
+            m for m in self._enabled_payment_methods_list() if m["id"] != method_id
+        ]
+        if not remaining_enabled:
+            return rx.toast("No puedes eliminar el unico metodo activo.", duration=3000)
+        self.payment_methods = [m for m in self.payment_methods if m["id"] != method_id]
+        self._ensure_payment_method_selected()
+        return rx.toast(f"Metodo {method['name']} eliminado.", duration=2500)
+
     def _generate_payment_summary(self) -> str:
         method = self.payment_method or "No especificado"
-        if method == "Efectivo":
-            detail = f"Monto ${self.payment_cash_amount:.2f}"
+        kind = (self.payment_method_kind or "other").lower()
+        if kind == "cash":
+            detail = f"Monto {self._format_currency(self.payment_cash_amount)}"
             if self.payment_cash_message:
                 detail += f" ({self.payment_cash_message})"
             return f"{method} - {detail}"
-        if method == "Tarjeta":
+        if kind == "card":
             return f"{method} - {self.payment_card_type}"
-        if method == "Pago QR / Billetera Digital":
+        if kind == "wallet":
             provider = (
                 self.payment_wallet_provider
                 or self.payment_wallet_choice
                 or "Proveedor no especificado"
             )
             return f"{method} - {provider}"
-        if method == "Pagos Mixtos":
+        if kind == "mixed":
             parts = []
             if self.payment_mixed_cash > 0:
-                parts.append(f"Efectivo ${self.payment_mixed_cash:.2f}")
+                parts.append(f"Efectivo {self._format_currency(self.payment_mixed_cash)}")
             if self.payment_mixed_card > 0:
                 parts.append(
-                    f"Tarjeta ({self.payment_card_type}) ${self.payment_mixed_card:.2f}"
+                    f"Tarjeta ({self.payment_card_type}) {self._format_currency(self.payment_mixed_card)}"
                 )
             if self.payment_mixed_wallet > 0:
                 provider = (
@@ -2242,7 +2562,7 @@ class State(AuthState):
                     or self.payment_wallet_choice
                     or "Billetera"
                 )
-                parts.append(f"{provider} ${self.payment_mixed_wallet:.2f}")
+                parts.append(f"{provider} {self._format_currency(self.payment_mixed_wallet)}")
             if self.payment_mixed_notes:
                 parts.append(self.payment_mixed_notes)
             if not parts:
@@ -2266,10 +2586,10 @@ class State(AuthState):
             self.payment_cash_message = "Ingrese un monto valido."
             self.payment_cash_status = "warning"
         elif diff > 0:
-            self.payment_cash_message = f"Vuelto ${diff:.2f}"
+            self.payment_cash_message = f"Vuelto {self._format_currency(diff)}"
             self.payment_cash_status = "change"
         elif diff < 0:
-            self.payment_cash_message = f"Faltan ${abs(diff):.2f}"
+            self.payment_cash_message = f"Faltan {self._format_currency(abs(diff))}"
             self.payment_cash_status = "due"
         else:
             self.payment_cash_message = "Monto exacto."
@@ -2288,24 +2608,33 @@ class State(AuthState):
         else:
             diff = paid - total
             if diff > 0:
-                self.payment_mixed_message = f"Vuelto ${diff:.2f}"
+                self.payment_mixed_message = f"Vuelto {self._format_currency(diff)}"
                 self.payment_mixed_status = "change"
             elif diff < 0:
-                self.payment_mixed_message = f"Restan ${abs(diff):.2f}"
+                self.payment_mixed_message = f"Restan {self._format_currency(abs(diff))}"
                 self.payment_mixed_status = "due"
             else:
                 self.payment_mixed_message = "Montos completos."
                 self.payment_mixed_status = "exact"
 
     def _refresh_payment_feedback(self):
-        if self.payment_method == "Efectivo":
+        if self.payment_method_kind == "cash":
             self._update_cash_feedback()
-        if self.payment_method == "Pagos Mixtos":
+        elif self.payment_method_kind == "mixed":
             self._update_mixed_message()
+        else:
+            self.payment_cash_message = ""
+            self.payment_mixed_message = ""
 
-    def _set_payment_method(self, method: str, description: str):
-        self.payment_method = method
-        self.payment_method_description = description
+    def _set_payment_method(self, method: PaymentMethodConfig | None):
+        if method:
+            self.payment_method = method.get("name", "")
+            self.payment_method_description = method.get("description", "")
+            self.payment_method_kind = (method.get("kind", "other") or "other").lower()
+        else:
+            self.payment_method = ""
+            self.payment_method_description = ""
+            self.payment_method_kind = "other"
         self.payment_cash_amount = 0
         self.payment_cash_message = ""
         self.payment_cash_status = "neutral"
@@ -2318,13 +2647,20 @@ class State(AuthState):
         self.payment_mixed_message = ""
         self.payment_mixed_status = "neutral"
         self.payment_mixed_notes = ""
+        self._refresh_payment_feedback()
 
     def _reset_payment_fields(self):
-        self._set_payment_method("Efectivo", "Billetes, Monedas")
+        default_method = self._default_payment_method()
+        self._set_payment_method(default_method)
 
     @rx.event
-    def select_payment_method(self, method: str, description: str):
-        self._set_payment_method(method, description)
+    def select_payment_method(self, method: str, description: str = ""):
+        match = self._payment_method_by_identifier(method)
+        if not match:
+            return rx.toast("Metodo de pago no disponible.", duration=3000)
+        if not match.get("enabled", True):
+            return rx.toast("Este metodo esta inactivo.", duration=3000)
+        self._set_payment_method(match)
 
     @rx.event
     def set_cash_amount(self, value: str):

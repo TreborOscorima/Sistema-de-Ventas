@@ -9,13 +9,19 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
         rx.el.td(item.get("category", "General"), class_name="py-3 px-4"),
         rx.el.td(item["quantity"].to_string(), class_name="py-3 px-4 text-center"),
         rx.el.td(item["unit"], class_name="py-3 px-4 text-center"),
-        rx.el.td(f"${item['price'].to_string()}", class_name="py-3 px-4 text-right"),
         rx.el.td(
-            f"${item['sale_price'].to_string()}",
+            State.currency_symbol,
+            item["price"].to_string(),
+            class_name="py-3 px-4 text-right",
+        ),
+        rx.el.td(
+            State.currency_symbol,
+            item["sale_price"].to_string(),
             class_name="py-3 px-4 text-right text-green-600",
         ),
         rx.el.td(
-            f"${item['subtotal'].to_string()}",
+            State.currency_symbol,
+            item["subtotal"].to_string(),
             class_name="py-3 px-4 text-right font-semibold",
         ),
         rx.el.td(
@@ -172,7 +178,8 @@ def ingreso_page() -> rx.Component:
                         class_name="block text-sm font-medium text-gray-600 mb-1",
                     ),
                     rx.el.div(
-                        f"${State.entry_subtotal.to_string()}",
+                        State.currency_symbol,
+                        State.entry_subtotal.to_string(),
                         class_name="w-full p-2 font-semibold text-right",
                     ),
                     class_name="w-32",
@@ -187,7 +194,7 @@ def ingreso_page() -> rx.Component:
                 ),
                 class_name="flex flex-wrap items-start gap-4",
             ),
-            class_name="bg-white p-6 rounded-lg shadow-md mb-6",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
         ),
         rx.el.div(
             rx.el.h2(
@@ -224,23 +231,24 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            class_name="bg-white p-6 rounded-lg shadow-md",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
         ),
         rx.el.div(
             rx.el.div(
                 rx.el.span("Total General:", class_name="text-xl font-bold"),
                 rx.el.span(
-                    f"${State.entry_total.to_string()}",
+                    State.currency_symbol,
+                    State.entry_total.to_string(),
                     class_name="text-xl font-bold text-indigo-700",
                 ),
-                class_name="flex items-center gap-4",
+                class_name="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4",
             ),
             rx.el.button(
                 "Confirmar Ingreso",
                 on_click=State.confirm_entry,
-                class_name="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold",
+                class_name="w-full sm:w-auto bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 font-semibold",
             ),
-            class_name="flex justify-between items-center mt-6",
+            class_name="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-6",
         ),
-        class_name="p-6",
+        class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
     )

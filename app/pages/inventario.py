@@ -362,7 +362,7 @@ def inventario_page() -> rx.Component:
                 ),
                 class_name="flex flex-wrap gap-2",
             ),
-            class_name="bg-white p-6 rounded-lg shadow-md mb-6",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
         ),
         rx.el.div(
             rx.el.input(
@@ -385,7 +385,7 @@ def inventario_page() -> rx.Component:
                 ),
                 class_name="flex flex-col gap-2 w-full md:w-auto md:flex-row",
             ),
-            class_name="bg-white p-6 rounded-lg shadow-md mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between",
         ),
         rx.el.div(
             rx.el.table(
@@ -451,15 +451,18 @@ def inventario_page() -> rx.Component:
                                 product["unit"], class_name="py-3 px-4 text-center"
                             ),
                             rx.el.td(
-                                f"${product['purchase_price'].to_string()}",
+                                State.currency_symbol,
+                                product["purchase_price"].to_string(),
                                 class_name="py-3 px-4 text-right",
                             ),
                             rx.el.td(
-                                f"${product['sale_price'].to_string()}",
+                                State.currency_symbol,
+                                product["sale_price"].to_string(),
                                 class_name="py-3 px-4 text-right text-green-600",
                             ),
                             rx.el.td(
-                                f"${product['stock'] * product['purchase_price']:.2f}",
+                                State.currency_symbol,
+                                f"{product['stock'] * product['purchase_price']:.2f}",
                                 class_name="py-3 px-4 text-right font-bold",
                             ),
                             class_name="border-b",
@@ -475,8 +478,8 @@ def inventario_page() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            class_name="bg-white p-6 rounded-lg shadow-md overflow-x-auto",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto",
         ),
         inventory_adjustment_modal(),
-        class_name="p-6",
+        class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
     )

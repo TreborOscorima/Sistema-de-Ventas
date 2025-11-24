@@ -2,6 +2,12 @@ import reflex as rx
 from app.state import State
 from app.states.auth_state import AuthState
 
+CONFIG_SUBSECTIONS = [
+    {"key": "usuarios", "label": "Gestion de Usuarios", "icon": "users"},
+    {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
+    {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
+    {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
+]
 
 def nav_item(text: str, icon: str, page: str) -> rx.Component:
     return rx.el.a(
@@ -52,10 +58,45 @@ def sidebar() -> rx.Component:
                         ),
                         class_name="py-2",
                     ),
-                    rx.foreach(
-                        State.navigation_items,
-                        lambda item: nav_item(
-                            item["label"], item["icon"], item["page"]
+                    rx.el.div(
+                        rx.foreach(
+                            State.navigation_items,
+                            lambda item: nav_item(
+                                item["label"], item["icon"], item["page"]
+                            ),
+                        ),
+                        rx.cond(
+                            State.active_page == "Configuracion",
+                            rx.el.div(
+                                rx.foreach(
+                                    CONFIG_SUBSECTIONS,
+                                    lambda section: rx.el.button(
+                                        rx.el.div(
+                                            rx.icon(
+                                                section["icon"],
+                                                class_name="h-4 w-4 text-indigo-600",
+                                            ),
+                                            rx.el.span(
+                                                section["label"],
+                                                class_name="text-sm",
+                                            ),
+                                            class_name="flex items-center gap-2",
+                                        ),
+                                        on_click=lambda _,
+                                        key=section["key"]: State.go_to_config_tab(
+                                            key
+                                        ),
+                                        class_name=rx.cond(
+                                            State.config_active_tab
+                                            == section["key"],
+                                            "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
+                                            "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",
+                                        ),
+                                    ),
+                                ),
+                                class_name="mt-2 ml-4 flex flex-col gap-1",
+                            ),
+                            rx.fragment(),
                         ),
                     ),
                 ),

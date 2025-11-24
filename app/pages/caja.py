@@ -50,9 +50,9 @@ def cashbox_filters() -> rx.Component:
                 on_click=State.open_cashbox_close_modal,
                 class_name="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
             ),
-            class_name="flex flex-col gap-2",
+            class_name="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:flex-col",
         ),
-        class_name="grid grid-cols-1 md:grid-cols-3 gap-4",
+        class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4",
     )
 
 
@@ -78,7 +78,7 @@ def cashbox_opening_card() -> rx.Component:
                         rx.el.div(
                             rx.el.span("Monto inicial", class_name="text-xs uppercase tracking-wide text-gray-500"),
                             rx.el.span(
-                                rx.el.span("$"),
+                                State.currency_symbol,
                                 State.cashbox_opening_amount.to_string(),
                                 class_name="text-xl font-semibold text-gray-900",
                             ),
@@ -146,7 +146,7 @@ def cashbox_opening_card() -> rx.Component:
                 class_name="flex flex-col gap-3",
             ),
         ),
-        class_name="bg-white p-5 rounded-xl shadow-md mb-4 border border-gray-100",
+        class_name="bg-white p-4 sm:p-5 rounded-xl shadow-md mb-4 border border-gray-100",
     )
 
 
@@ -196,7 +196,7 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
         ),
         rx.el.td(
             rx.el.span(
-                rx.el.span("$"),
+                State.currency_symbol,
                 sale["total"].to_string(),
                 class_name="font-semibold",
             ),
@@ -430,7 +430,7 @@ def close_cashbox_modal() -> rx.Component:
                                             class_name="py-2 px-3 text-sm",
                                         ),
                                         rx.el.td(
-                                            rx.el.span("$"),
+                                            State.currency_symbol,
                                             sale["total"].to_string(),
                                             class_name="py-2 px-3 text-right text-sm font-semibold",
                                         ),
@@ -476,7 +476,7 @@ def cashbox_page() -> rx.Component:
             cashbox_opening_card(),
             rx.el.div(
                 cashbox_filters(),
-                class_name="bg-white p-6 rounded-lg shadow-md mb-6",
+                class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
             ),
             rx.el.div(
                 rx.el.table(
@@ -504,11 +504,11 @@ def cashbox_page() -> rx.Component:
                     ),
                     pagination_controls(),
                 ),
-                class_name="bg-white p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
+                class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
             ),
             delete_sale_modal(),
             close_cashbox_modal(),
-            class_name="p-6 flex flex-col gap-6",
+            class_name="p-4 sm:p-6 flex flex-col gap-6 w-full max-w-7xl mx-auto",
         ),
         rx.el.div(
             rx.el.h1("Acceso Denegado", class_name="text-2xl font-bold text-red-600"),
