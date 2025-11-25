@@ -31,7 +31,7 @@ CONFIG_SECTIONS: list[dict[str, str]] = [
 PAYMENT_KIND_LABELS: dict[str, str] = {
     "cash": "Efectivo",
     "card": "Tarjeta",
-    "wallet": "Pago QR / Billetera",
+    "wallet": "Billetera Digital / QR",
     "mixed": "Pago Mixto",
     "other": "Otro",
 }

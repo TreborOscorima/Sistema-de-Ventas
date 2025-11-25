@@ -66,11 +66,18 @@ class PaymentMethodConfig(TypedDict):
     enabled: bool
 
 
+class PaymentBreakdownItem(TypedDict):
+    label: str
+    amount: float
+
+
 class CashboxSale(TypedDict):
     sale_id: str
     timestamp: str
     user: str
     payment_method: str
+    payment_label: str
+    payment_breakdown: list[PaymentBreakdownItem]
     payment_details: str
     total: float
     items: list[TransactionItem]
@@ -86,6 +93,17 @@ class CashboxSession(TypedDict):
     closing_time: str
     is_open: bool
     opened_by: str
+
+
+class CashboxLogEntry(TypedDict):
+    id: str
+    action: str
+    timestamp: str
+    user: str
+    opening_amount: float
+    closing_total: float
+    totals_by_method: list[dict[str, float]]
+    notes: str
 
 
 class InventoryAdjustment(TypedDict):
@@ -253,7 +271,7 @@ class State(AuthState):
         },
         {
             "id": "wallet",
-            "name": "Pago QR / Billetera Digital",
+            "name": "Billetera Digital / QR",
             "description": "Yape, Plin, Billeteras Bancarias",
             "kind": "wallet",
             "enabled": True,
@@ -316,6 +334,13 @@ class State(AuthState):
     cashbox_close_summary_date: str = ""
     cashbox_sessions: dict[str, CashboxSession] = {}
     cashbox_open_amount_input: str = "0"
+    cashbox_logs: list[CashboxLogEntry] = []
+    cashbox_log_filter_start_date: str = ""
+    cashbox_log_filter_end_date: str = ""
+    cashbox_log_staged_start_date: str = ""
+    cashbox_log_staged_end_date: str = ""
+    cashbox_log_modal_open: bool = False
+    cashbox_log_selected: CashboxLogEntry | None = None
     show_user_form: bool = False
     editing_user: User | None = None
     new_role_name: str = ""
@@ -552,6 +577,45 @@ class State(AuthState):
         return self.current_cashbox_session.get("opening_time", "")
 
     @rx.var
+    def filtered_cashbox_logs(self) -> list[CashboxLogEntry]:
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return []
+        logs = sorted(
+            self.cashbox_logs, key=lambda entry: entry.get("timestamp", ""), reverse=True
+        )
+        start_date = None
+        end_date = None
+        if self.cashbox_log_filter_start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                    self.cashbox_log_filter_start_date, "%Y-%m-%d"
+                ).date()
+            except Exception as e:
+                logging.exception(f"Error parsing cashbox log start date: {e}")
+        if self.cashbox_log_filter_end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    self.cashbox_log_filter_end_date, "%Y-%m-%d"
+                ).date()
+            except Exception as e:
+                logging.exception(f"Error parsing cashbox log end date: {e}")
+        filtered: list[CashboxLogEntry] = []
+        for log in logs:
+            timestamp = log.get("timestamp", "")
+            try:
+                log_date = datetime.datetime.strptime(
+                    timestamp.split(" ")[0], "%Y-%m-%d"
+                ).date()
+            except Exception:
+                continue
+            if start_date and log_date < start_date:
+                continue
+            if end_date and log_date > end_date:
+                continue
+            filtered.append(log)
+        return filtered
+
+    @rx.var
     def entry_subtotal(self) -> float:
         return self.new_entry_item["subtotal"]
 
@@ -697,6 +761,8 @@ class State(AuthState):
                 ]
             except ValueError as e:
                 logging.exception(f"Error parsing cashbox end date: {e}")
+        for sale in sales:
+            self._ensure_sale_payment_fields(sale)
         return sales
 
     @rx.var
@@ -721,6 +787,11 @@ class State(AuthState):
             for method, amount in self.cashbox_close_summary_totals.items()
             if amount > 0
         ]
+
+    @rx.var
+    def cashbox_close_total_amount(self) -> str:
+        total_value = sum(self.cashbox_close_summary_totals.values())
+        return self._format_currency(total_value)
 
     @rx.var
     def cashbox_close_sales(self) -> list[CashboxSale]:
@@ -1141,6 +1212,72 @@ class State(AuthState):
         except ValueError:
             return None
 
+    def _payment_label_and_breakdown(self, sale_total: float) -> tuple[str, list[PaymentBreakdownItem]]:
+        kind = (self.payment_method_kind or "other").lower()
+        method_name = self._normalize_wallet_label(self.payment_method or "Metodo")
+        breakdown: list[PaymentBreakdownItem] = []
+        label = method_name
+        if kind == "cash":
+            label = "Efectivo"
+            breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
+        elif kind == "card":
+            card_type = self.payment_card_type or "Tarjeta"
+            label = f"{method_name} ({card_type})"
+            breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
+        elif kind == "wallet":
+            provider = self.payment_wallet_provider or self.payment_wallet_choice or "Billetera"
+            label = f"{method_name} ({provider})"
+            breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
+        elif kind == "mixed":
+            parts: list[PaymentBreakdownItem] = []
+            if self.payment_mixed_cash > 0:
+                parts.append(
+                    {
+                        "label": "Efectivo",
+                        "amount": self._round_currency(self.payment_mixed_cash),
+                    }
+                )
+            if self.payment_mixed_card > 0:
+                parts.append(
+                    {
+                        "label": f"Tarjeta ({self.payment_card_type})",
+                        "amount": self._round_currency(self.payment_mixed_card),
+                    }
+                )
+            if self.payment_mixed_wallet > 0:
+                provider = self.payment_wallet_provider or self.payment_wallet_choice or "Billetera"
+                parts.append(
+                    {
+                        "label": provider,
+                        "amount": self._round_currency(self.payment_mixed_wallet),
+                    }
+                )
+            breakdown = parts or [{"label": method_name, "amount": self._round_currency(sale_total)}]
+            labels = [p["label"] for p in breakdown]
+            detail = ", ".join(labels) if labels else method_name
+            label = f"{method_name} ({detail})"
+        else:
+            label = method_name or "Otros"
+            breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
+        return label, breakdown
+
+    def _normalize_wallet_label(self, label: str) -> str:
+        value = (label or "").strip()
+        if not value:
+            return value
+        lower = value.lower()
+        if "pago qr" in lower or "billetera" in lower:
+            patterns = [
+                "Pago QR / Billetera Digital",
+                "Pago QR / Billetera",
+                "Pago QR/Billetera Digital",
+                "Pago QR/Billetera",
+            ]
+            for old in patterns:
+                value = value.replace(old, "Billetera Digital / QR")
+            return value
+        return value
+
     def _payment_category(self, method: str, kind: str = "") -> str:
         normalized_kind = (kind or "").lower()
         label = method.lower() if method else ""
@@ -1149,33 +1286,69 @@ class State(AuthState):
         if normalized_kind == "card" or "tarjeta" in label:
             return "Tarjeta"
         if normalized_kind == "wallet" or "qr" in label or "billetera" in label or "yape" in label or "plin" in label:
-            return "Pago QR / Billetera"
+            return "Billetera Digital / QR"
         if normalized_kind == "cash" or "efectivo" in label:
             return "Efectivo"
         return "Otros"
 
     def _get_day_sales(self, date: str) -> list[CashboxSale]:
-        return [
+        day_sales = [
             sale
             for sale in self.cashbox_sales
             if sale["timestamp"].startswith(date) and not sale.get("is_deleted")
         ]
+        for sale in day_sales:
+            self._ensure_sale_payment_fields(sale)
+        return day_sales
+
+    def _ensure_sale_payment_fields(self, sale: CashboxSale):
+        if "payment_label" not in sale or not sale.get("payment_label"):
+            sale["payment_label"] = sale.get("payment_method", "Metodo")
+        sale["payment_label"] = self._normalize_wallet_label(sale.get("payment_label", ""))
+        if (
+            "payment_breakdown" not in sale
+            or not isinstance(sale.get("payment_breakdown"), list)
+            or len(sale.get("payment_breakdown") or []) == 0
+        ):
+            fallback_label = sale.get("payment_label", sale.get("payment_method", "Metodo"))
+            sale["payment_breakdown"] = [
+                {
+                    "label": self._normalize_wallet_label(fallback_label),
+                    "amount": self._round_currency(sale.get("total", 0)),
+                }
+            ]
+        else:
+            normalized_items: list[PaymentBreakdownItem] = []
+            for item in sale.get("payment_breakdown", []):
+                normalized_items.append(
+                    {
+                        "label": self._normalize_wallet_label(item.get("label", "")),
+                        "amount": self._round_currency(item.get("amount", 0)),
+                    }
+                )
+            sale["payment_breakdown"] = normalized_items
 
     def _build_cashbox_summary(self, sales: list[CashboxSale]) -> dict[str, float]:
-        summary = {
-            "Efectivo": 0.0,
-            "Tarjeta": 0.0,
-            "Pago QR / Billetera": 0.0,
-            "Pago Mixto": 0.0,
-            "Otros": 0.0,
-        }
+        summary: dict[str, float] = {}
         for sale in sales:
-            category = self._payment_category(
-                sale.get("payment_method", ""), sale.get("payment_kind", "")
-            )
-            if category not in summary:
-                summary[category] = 0.0
-            summary[category] = self._round_currency(summary[category] + sale["total"])
+            breakdown = sale.get("payment_breakdown") if isinstance(sale, dict) else []
+            if breakdown:
+                for item in breakdown:
+                    method_label = self._normalize_wallet_label(
+                        item.get("label") or sale.get("payment_label") or sale.get("payment_method", "Otros")
+                    )
+                    amount = self._round_currency(item.get("amount", 0))
+                    summary[method_label] = self._round_currency(
+                        summary.get(method_label, 0) + amount
+                    )
+            else:
+                category = self._payment_category(
+                    self._normalize_wallet_label(sale.get("payment_method", "")),
+                    sale.get("payment_kind", ""),
+                )
+                if category not in summary:
+                    summary[category] = 0.0
+                summary[category] = self._round_currency(summary[category] + sale["total"])
         return summary
 
     def _reset_cashbox_close_summary(self):
@@ -1478,6 +1651,7 @@ class State(AuthState):
             self._apply_item_rounding(snapshot_item)
         sale_total = self._round_currency(sum(item["subtotal"] for item in sale_snapshot))
         payment_summary = self._generate_payment_summary()
+        payment_label, payment_breakdown = self._payment_label_and_breakdown(sale_total)
         sale_id = str(uuid.uuid4())
         for item in self.new_sale_items:
             product_id = item["description"].lower().strip()
@@ -1499,6 +1673,8 @@ class State(AuthState):
                             "total": item["subtotal"],
                             "payment_method": self.payment_method,
                             "payment_kind": self.payment_method_kind,
+                            "payment_label": payment_label,
+                            "payment_breakdown": [p.copy() for p in payment_breakdown],
                             "payment_details": payment_summary,
                             "user": self.current_user["username"],
                             "sale_id": sale_id,
@@ -1515,6 +1691,8 @@ class State(AuthState):
                 "user": self.current_user["username"],
                 "payment_method": self.payment_method,
                 "payment_kind": self.payment_method_kind,
+                "payment_label": payment_label,
+                "payment_breakdown": [p.copy() for p in payment_breakdown],
                 "payment_details": payment_summary,
                 "total": sale_total,
                 "items": [item.copy() for item in sale_snapshot],
@@ -1551,40 +1729,40 @@ class State(AuthState):
                 <meta charset='utf-8' />
                 <title>Comprobante de Venta</title>
                 <style>
-                    @page {
+                    @page {{
                         size: 58mm auto;
                         margin: 2mm;
-                    }
-                    body {
+                    }}
+                    body {{
                         font-family: 'Courier New', monospace;
                         width: 56mm;
                         margin: 0 auto;
                         font-size: 11px;
-                    }
-                    h1 {
+                    }}
+                    h1 {{
                         text-align: center;
                         font-size: 14px;
                         margin: 0 0 6px 0;
-                    }
-                    .section {
+                    }}
+                    .section {{
                         margin-bottom: 6px;
-                    }
-                    table {
+                    }}
+                    table {{
                         width: 100%;
                         border-collapse: collapse;
-                    }
-                    td {
+                    }}
+                    td {{
                         padding: 2px 0;
                         text-align: left;
-                    }
-                    td:last-child {
+                    }}
+                    td:last-child {{
                         text-align: right;
-                    }
-                    hr {
+                    }}
+                    hr {{
                         border: 0;
                         border-top: 1px dashed #000;
                         margin: 6px 0;
-                    }
+                    }}
                 </style>
             </head>
             <body>
@@ -1680,6 +1858,18 @@ class State(AuthState):
         session["opened_by"] = username
         self.cashbox_sessions[username.lower()] = session
         self.cashbox_open_amount_input = ""
+        self.cashbox_logs.append(
+            {
+                "id": str(uuid.uuid4()),
+                "action": "apertura",
+                "timestamp": timestamp,
+                "user": username,
+                "opening_amount": amount,
+                "closing_total": 0.0,
+                "totals_by_method": [],
+                "notes": "Apertura de caja",
+            }
+        )
         self.history.append(
             {
                 "id": str(uuid.uuid4()),
@@ -1737,6 +1927,34 @@ class State(AuthState):
         self.cashbox_staged_start_date = ""
         self.cashbox_staged_end_date = ""
         self.cashbox_current_page = 1
+
+    @rx.event
+    def set_cashbox_log_staged_start_date(self, value: str):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        self.cashbox_log_staged_start_date = value or ""
+
+    @rx.event
+    def set_cashbox_log_staged_end_date(self, value: str):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        self.cashbox_log_staged_end_date = value or ""
+
+    @rx.event
+    def apply_cashbox_log_filters(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        self.cashbox_log_filter_start_date = self.cashbox_log_staged_start_date
+        self.cashbox_log_filter_end_date = self.cashbox_log_staged_end_date
+
+    @rx.event
+    def reset_cashbox_log_filters(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        self.cashbox_log_filter_start_date = ""
+        self.cashbox_log_filter_end_date = ""
+        self.cashbox_log_staged_start_date = ""
+        self.cashbox_log_staged_end_date = ""
 
     @rx.event
     def set_cashbox_page(self, page: int):
@@ -1810,6 +2028,9 @@ class State(AuthState):
         ]
         sheet.append(headers)
         for movement in self.filtered_history:
+            method_display = self._normalize_wallet_label(
+                movement.get("payment_method", "")
+            )
             sheet.append(
                 [
                     movement["timestamp"],
@@ -1818,7 +2039,7 @@ class State(AuthState):
                     movement["quantity"],
                     movement["unit"],
                     movement["total"],
-                    movement.get("payment_method", ""),
+                    method_display,
                     movement.get("payment_details", ""),
                 ]
             )
@@ -1907,7 +2128,8 @@ class State(AuthState):
         headers = [
             "Fecha y Hora",
             "Usuario",
-            "Metodo de Pago",
+            "Metodo",
+            "Metodo Detallado",
             "Detalle Pago",
             "Total",
             "Productos",
@@ -1916,6 +2138,10 @@ class State(AuthState):
         for sale in self.filtered_cashbox_sales:
             if sale.get("is_deleted"):
                 continue
+            method_raw = self._normalize_wallet_label(sale.get("payment_method", ""))
+            method_label = self._normalize_wallet_label(
+                sale.get("payment_label", sale.get("payment_method", ""))
+            )
             details = ", ".join(
                 f"{item['description']} (x{item['quantity']})" for item in sale["items"]
             )
@@ -1923,7 +2149,8 @@ class State(AuthState):
                 [
                     sale["timestamp"],
                     sale["user"],
-                    sale["payment_method"],
+                    method_raw,
+                    method_label,
                     sale["payment_details"],
                     sale["total"],
                     details,
@@ -1933,6 +2160,70 @@ class State(AuthState):
         workbook.save(file_stream)
         file_stream.seek(0)
         return rx.download(data=file_stream.read(), filename="gestion_caja.xlsx")
+
+    @rx.event
+    def export_cashbox_sessions(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        if not self.current_user["privileges"]["export_data"]:
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        logs = self.filtered_cashbox_logs
+        if not logs:
+            return rx.toast("No hay aperturas o cierres para exportar.", duration=3000)
+        import openpyxl
+        from io import BytesIO
+
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Aperturas y Cierres"
+        headers = [
+            "Fecha y Hora",
+            "Accion",
+            "Usuario",
+            "Monto Apertura",
+            "Monto Cierre",
+            "Totales por Metodo",
+            "Notas",
+        ]
+        sheet.append(headers)
+        for log in logs:
+            totals_detail = ", ".join(
+                f"{item.get('method', '')}: {self._round_currency(item.get('amount', 0))}"
+                for item in log.get("totals_by_method", [])
+                if item.get("amount", 0)
+            )
+            sheet.append(
+                [
+                    log.get("timestamp", ""),
+                    (log.get("action") or "").capitalize(),
+                    log.get("user", ""),
+                    self._round_currency(log.get("opening_amount", 0)),
+                    self._round_currency(log.get("closing_total", 0)),
+                    totals_detail or "",
+                    log.get("notes", ""),
+                ]
+            )
+        file_stream = BytesIO()
+        workbook.save(file_stream)
+        file_stream.seek(0)
+        return rx.download(
+            data=file_stream.read(), filename="aperturas_cierres_caja.xlsx"
+        )
+
+    @rx.event
+    def show_cashbox_log(self, log_id: str):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        entry = next((log for log in self.cashbox_logs if log["id"] == log_id), None)
+        if not entry:
+            return rx.toast("Registro de caja no encontrado.", duration=3000)
+        self.cashbox_log_selected = entry
+        self.cashbox_log_modal_open = True
+
+    @rx.event
+    def close_cashbox_log_modal(self):
+        self.cashbox_log_modal_open = False
+        self.cashbox_log_selected = None
 
     @rx.event
     def open_sale_delete_modal(self, sale_id: str):
@@ -2027,40 +2318,40 @@ class State(AuthState):
                 <meta charset='utf-8' />
                 <title>Comprobante de Venta</title>
                 <style>
-                    @page {
+                    @page {{
                         size: 58mm auto;
                         margin: 2mm;
-                    }
-                    body {
+                    }}
+                    body {{
                         font-family: 'Courier New', monospace;
                         width: 56mm;
                         margin: 0 auto;
                         font-size: 11px;
-                    }
-                    h1 {
+                    }}
+                    h1 {{
                         text-align: center;
                         font-size: 14px;
                         margin: 0 0 6px 0;
-                    }
-                    .section {
+                    }}
+                    .section {{
                         margin-bottom: 6px;
-                    }
-                    table {
+                    }}
+                    table {{
                         width: 100%;
                         border-collapse: collapse;
-                    }
-                    td {
+                    }}
+                    td {{
                         padding: 2px 0;
                         text-align: left;
-                    }
-                    td:last-child {
+                    }}
+                    td:last-child {{
                         text-align: right;
-                    }
-                    hr {
+                    }}
+                    hr {{
                         border: 0;
                         border-top: 1px dashed #000;
                         margin: 6px 0;
-                    }
+                    }}
                 </style>
             </head>
             <body>
@@ -2100,13 +2391,42 @@ class State(AuthState):
         summary = self.cashbox_close_summary_totals or self._build_cashbox_summary(
             day_sales
         )
+        closing_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        totals_list = [
+            {"method": method, "amount": self._round_currency(amount)}
+            for method, amount in summary.items()
+            if amount > 0
+        ]
+        closing_total = self._round_currency(sum(summary.values()))
+        self.cashbox_logs.append(
+            {
+                "id": str(uuid.uuid4()),
+                "action": "cierre",
+                "timestamp": closing_timestamp,
+                "user": self.current_user["username"],
+                "opening_amount": self.cashbox_opening_amount,
+                "closing_total": closing_total,
+                "totals_by_method": totals_list,
+                "notes": f"Cierre de caja {date}",
+            }
+        )
         summary_rows = "".join(
             f"<tr><td>{method}</td><td>{self._format_currency(amount)}</td></tr>"
             for method, amount in summary.items()
             if amount > 0
         )
+        grand_total_row = f"<tr><td><strong>Total cierre</strong></td><td><strong>{self._format_currency(closing_total)}</strong></td></tr>"
         detail_rows = "".join(
-            f"<tr><td>{sale['timestamp']}</td><td>{sale['user']}</td><td>{sale['payment_method']}</td><td>{self._format_currency(sale['total'])}</td></tr>"
+            (
+                lambda method_label, breakdown_text: f"<tr><td>{sale['timestamp']}</td><td>{sale['user']}</td><td>{method_label}{('<br><small>' + breakdown_text + '</small>') if breakdown_text else ''}</td><td>{self._format_currency(sale['total'])}</td></tr>"
+            )(
+                sale.get("payment_label", sale.get("payment_method", "")),
+                " / ".join(
+                    f"{item.get('label', '')}: {self._format_currency(item.get('amount', 0))}"
+                    for item in sale.get("payment_breakdown", [])
+                    if item.get("amount", 0)
+                ),
+            )
             for sale in day_sales
         )
         html_content = f"""
@@ -2136,6 +2456,7 @@ class State(AuthState):
                     </thead>
                     <tbody>
                         {summary_rows}
+                        {grand_total_row}
                     </tbody>
                 </table>
                 <h2>Detalle de ventas</h2>

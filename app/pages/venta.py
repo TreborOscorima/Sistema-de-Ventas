@@ -432,15 +432,15 @@ def venta_page() -> rx.Component:
                                             class_name="flex gap-2",
                                         ),
                                         class_name="flex flex-col gap-2",
-                                    ),
-                                    rx.el.div(
-                                        rx.el.span(
-                                            "Pago QR / Billetera",
-                                            class_name="text-sm font-semibold text-gray-700",
                                         ),
-                                        rx.el.input(
-                                            type="number",
-                                            step="0.01",
+                                        rx.el.div(
+                                            rx.el.span(
+                                                "Billetera Digital / QR",
+                                                class_name="text-sm font-semibold text-gray-700",
+                                            ),
+                                            rx.el.input(
+                                                type="number",
+                                                step="0.01",
                                             value=State.payment_mixed_wallet,
                                             on_change=lambda value: State.set_mixed_wallet_amount(value),
                                             class_name="w-full md:w-56 p-2 border rounded-md",
