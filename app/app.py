@@ -19,7 +19,7 @@ def cashbox_banner() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.div(
-                    rx.icon("alert-triangle", class_name="h-5 w-5 text-amber-600"),
+                    rx.icon("triangle-alert", class_name="h-5 w-5 text-amber-600"),
                     rx.el.div(
                         rx.el.p(
                             "Apertura de caja requerida",

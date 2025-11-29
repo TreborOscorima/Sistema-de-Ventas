@@ -759,32 +759,149 @@ def payment_methods_section() -> rx.Component:
     )
 
 
+def field_prices_section() -> rx.Component:
+    return rx.el.div(
+        rx.el.div(
+            rx.el.h2(
+                "Precios de Campo", class_name="text-xl font-semibold text-gray-700"
+            ),
+            rx.el.p(
+                "Configura los precios por deporte y modalidad (Futbol 5, Futbol 6, Voley, etc.).",
+                class_name="text-sm text-gray-500",
+            ),
+            class_name="space-y-1",
+        ),
+        rx.el.div(
+            rx.el.input(
+                placeholder="Deporte (ej: Futbol, Voley)",
+                value=State.new_field_price_sport,
+                on_change=State.set_new_field_price_sport,
+                class_name="p-2 border rounded-md",
+            ),
+            rx.el.input(
+                placeholder="Nombre del campo (ej: Futbol 5)",
+                value=State.new_field_price_name,
+                on_change=State.set_new_field_price_name,
+                class_name="p-2 border rounded-md",
+            ),
+            rx.el.input(
+                type="number",
+                step="0.01",
+                placeholder="Precio por hora",
+                value=State.new_field_price_amount,
+                on_change=State.set_new_field_price_amount,
+                class_name="p-2 border rounded-md",
+            ),
+            rx.el.button(
+                rx.icon("plus", class_name="h-4 w-4"),
+                "Agregar",
+                on_click=State.add_field_price,
+                class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[44px]",
+            ),
+            rx.el.button(
+                rx.icon("refresh-ccw", class_name="h-4 w-4"),
+                "Actualizar",
+                on_click=State.update_field_price,
+                is_disabled=rx.cond(State.editing_field_price_id == "", True, False),
+                class_name=rx.cond(
+                    State.editing_field_price_id == "",
+                    "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[44px]",
+                    "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-amber-500 text-white hover:bg-amber-600 min-h-[44px]",
+                ),
+            ),
+            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr,2fr,1fr,auto,auto] gap-3 items-center bg-white p-4 rounded-lg shadow-sm border",
+        ),
+        rx.cond(
+            State.editing_field_price_id != "",
+            rx.el.div(
+                "Editando un precio existente. Ajusta los campos y presiona Actualizar.",
+                class_name="text-sm text-amber-700 bg-amber-50 border border-amber-100 px-3 py-2 rounded-md",
+            ),
+            rx.fragment(),
+        ),
+        rx.el.table(
+            rx.el.thead(
+                rx.el.tr(
+                    rx.el.th("Deporte", class_name="py-2 px-3 text-left"),
+                    rx.el.th("Campo", class_name="py-2 px-3 text-left"),
+                    rx.el.th("Precio (por hora)", class_name="py-2 px-3 text-left"),
+                    rx.el.th("Acciones", class_name="py-2 px-3 text-center"),
+                    class_name="bg-gray-100",
+                )
+            ),
+            rx.el.tbody(
+                rx.foreach(
+                    State.field_prices,
+                    lambda price: rx.el.tr(
+                        rx.el.td(
+                            price["sport"],
+                            class_name="py-2 px-3",
+                        ),
+                    rx.el.td(price["name"], class_name="py-2 px-3"),
+                    rx.el.td(
+                            rx.el.input(
+                                type="number",
+                                step="0.01",
+                                value=price["price"].to_string(),
+                                on_change=lambda value, pid=price["id"]: State.update_field_price_amount(
+                                    pid, value
+                                ),
+                                class_name="w-32 p-2 border rounded-md",
+                            ),
+                            class_name="py-2 px-3",
+                        ),
+                        rx.el.td(
+                            rx.el.button(
+                                rx.icon("pencil", class_name="h-4 w-4"),
+                                on_click=lambda _, pid=price["id"]: State.edit_field_price(pid),
+                                class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
+                            ),
+                            rx.el.button(
+                                rx.icon("trash-2", class_name="h-4 w-4"),
+                                on_click=lambda _, pid=price["id"]: State.remove_field_price(
+                                    pid
+                                ),
+                                class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                            ),
+                            class_name="py-2 px-3 text-center flex items-center justify-center gap-2",
+                        ),
+                        class_name="border-b",
+                    ),
+                )
+            ),
+            class_name="min-w-full",
+        ),
+        class_name="space-y-4",
+    )
+
+
 def configuracion_page() -> rx.Component:
     return rx.cond(
         State.current_user["privileges"]["manage_users"],
         rx.el.div(
             rx.el.div(
-                rx.el.h1(
-                    "Configuracion del Sistema",
-                    class_name="text-2xl font-bold text-gray-800",
+                    rx.el.h1(
+                        "Configuracion del Sistema",
+                        class_name="text-2xl font-bold text-gray-800",
+                    ),
+                    rx.el.p(
+                        "Gestiona usuarios, monedas, unidades, metodos de pago y precios de campo desde un solo lugar.",
+                        class_name="text-sm text-gray-500",
+                    ),
+                    class_name="space-y-1",
                 ),
-                rx.el.p(
-                    "Gestiona usuarios, monedas, unidades y metodos de pago desde un solo lugar.",
-                    class_name="text-sm text-gray-500",
+                rx.el.div(
+                    rx.match(
+                        State.config_active_tab,
+                        ("usuarios", user_section()),
+                        ("monedas", currency_section()),
+                        ("unidades", unit_section()),
+                        ("pagos", payment_methods_section()),
+                        ("precios_campo", field_prices_section()),
+                        user_section(),
+                    ),
+                    class_name="space-y-4",
                 ),
-                class_name="space-y-1",
-            ),
-            rx.el.div(
-                rx.match(
-                    State.config_active_tab,
-                    ("usuarios", user_section()),
-                    ("monedas", currency_section()),
-                    ("unidades", unit_section()),
-                    ("pagos", payment_methods_section()),
-                    user_section(),
-                ),
-                class_name="space-y-4",
-            ),
             class_name="p-4 sm:p-6 w-full max-w-6xl mx-auto flex flex-col gap-6",
         ),
         rx.el.div(

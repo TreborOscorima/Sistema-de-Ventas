@@ -1,6 +1,7 @@
 import reflex as rx
 from typing import TypedDict, Union
 import datetime
+import calendar
 import uuid
 import logging
 import bcrypt
@@ -12,7 +13,11 @@ from app.states.auth_state import (
     Privileges,
     EMPTY_PRIVILEGES,
     SUPERADMIN_PRIVILEGES,
-)
+    )
+
+TODAY_STR = datetime.date.today().strftime("%Y-%m-%d")
+CURRENT_MONTH_STR = datetime.date.today().strftime("%Y-%m")
+CURRENT_WEEK_STR = datetime.date.today().strftime("%G-W%V")
 
 
 class Product(TypedDict):
@@ -69,6 +74,56 @@ class PaymentMethodConfig(TypedDict):
 class PaymentBreakdownItem(TypedDict):
     label: str
     amount: float
+
+
+class FieldPrice(TypedDict):
+    id: str
+    sport: str
+    name: str
+    price: float
+
+
+class FieldReservation(TypedDict):
+    id: str
+    client_name: str
+    dni: str
+    phone: str
+    sport: str
+    sport_label: str
+    field_name: str
+    start_datetime: str
+    end_datetime: str
+    advance_amount: float
+    total_amount: float
+    paid_amount: float
+    status: str
+    created_at: str
+    cancellation_reason: str
+    delete_reason: str
+
+
+class ServiceLogEntry(TypedDict):
+    id: str
+    timestamp: str
+    type: str
+    sport: str
+    client_name: str
+    field_name: str
+    amount: float
+    status: str
+    notes: str
+    reservation_id: str
+
+
+class ReservationReceipt(TypedDict):
+    cliente: str
+    deporte: str
+    campo: str
+    horario: str
+    monto_adelanto: str
+    monto_total: str
+    saldo: str
+    estado: str
 
 
 class CashboxSale(TypedDict):
@@ -179,6 +234,50 @@ class State(AuthState):
     current_page: str = "Ingreso"
     config_active_tab: str = "usuarios"
     service_active_tab: str = "campo"
+    field_rental_sport: str = "futbol"
+    schedule_view_mode: str = "dia"
+    schedule_selected_date: str = TODAY_STR
+    schedule_selected_week: str = CURRENT_WEEK_STR
+    schedule_selected_month: str = CURRENT_MONTH_STR
+    reservation_form: dict[str, str] = {
+        "client_name": "",
+        "dni": "",
+        "phone": "",
+        "field_name": "",
+        "sport_label": "",
+        "selected_price_id": "",
+        "date": TODAY_STR,
+        "start_time": "00:00",
+        "end_time": "01:00",
+        "advance_amount": "0",
+        "total_amount": "0",
+        "status": "pendiente",
+    }
+    service_reservations: list[FieldReservation] = []
+    service_admin_log: list[ServiceLogEntry] = []
+    reservation_payment_id: str = ""
+    reservation_payment_amount: str = ""
+    reservation_cancel_selection: str = ""
+    reservation_cancel_reason: str = ""
+    reservation_modal_open: bool = False
+    reservation_modal_mode: str = "new"
+    reservation_modal_reservation_id: str = ""
+    reservation_search: str = ""
+    reservation_filter_status: str = "todos"
+    reservation_filter_date: str = ""
+    last_reservation_receipt: ReservationReceipt | None = None
+    reservation_delete_selection: str = ""
+    reservation_delete_reason: str = ""
+    reservation_delete_modal_open: bool = False
+    field_prices: list[FieldPrice] = []
+    new_field_price_sport: str = ""
+    new_field_price_name: str = ""
+    new_field_price_amount: str = ""
+    editing_field_price_id: str = ""
+    service_log_filter_start_date: str = ""
+    service_log_filter_end_date: str = ""
+    service_log_filter_sport: str = "todos"
+    service_log_filter_status: str = "todos"
     units: list[str] = ["Unidad", "Kg", "Litro", "Metro", "Caja"]
     new_unit_name: str = ""
     new_unit_allows_decimal: bool = False
@@ -987,6 +1086,830 @@ class State(AuthState):
     @rx.event
     def set_service_tab(self, tab: str):
         self.service_active_tab = tab
+
+    def _sport_label(self, sport: str) -> str:
+        mapping = {"futbol": "Futbol", "voley": "Voley"}
+        normalized = (sport or "").lower()
+        return mapping.get(normalized, sport or "Campo")
+
+    def _reservation_default_form(self) -> dict[str, str]:
+        base_date = self.schedule_selected_date or TODAY_STR
+        return {
+            "client_name": "",
+            "dni": "",
+            "phone": "",
+            "field_name": "",
+            "sport_label": self._sport_label(self.field_rental_sport),
+            "selected_price_id": "",
+            "date": base_date,
+            "start_time": "00:00",
+            "end_time": "01:00",
+            "advance_amount": "0",
+            "total_amount": "0",
+            "status": "pendiente",
+        }
+
+    def _find_reservation_by_id(self, reservation_id: str) -> FieldReservation | None:
+        for reservation in self.service_reservations:
+            if reservation["id"] == reservation_id:
+                return reservation
+        return None
+
+    def _update_reservation_status(self, reservation: FieldReservation):
+        if reservation["status"] in ["cancelado", "eliminado"]:
+            return
+        if reservation["paid_amount"] >= reservation["total_amount"]:
+            reservation["status"] = "pagado"
+        else:
+            reservation["status"] = "pendiente"
+
+    def _log_service_action(
+        self,
+        reservation: FieldReservation,
+        entry_type: str,
+        amount: float = 0.0,
+        notes: str = "",
+        status: str | None = None,
+    ):
+        self.service_admin_log.insert(
+            0,
+            {
+                "id": str(uuid.uuid4()),
+                "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "type": entry_type,
+                "sport": reservation["sport"],
+                "client_name": reservation["client_name"],
+                "field_name": reservation["field_name"],
+                "amount": self._round_currency(amount),
+                "status": status or reservation["status"],
+                "notes": notes,
+                "reservation_id": reservation["id"],
+            },
+        )
+
+    def _set_last_reservation_receipt(self, reservation: FieldReservation | None):
+        if not reservation:
+            self.last_reservation_receipt = None
+            return
+        balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+        self.last_reservation_receipt = {
+            "cliente": reservation["client_name"],
+            "deporte": reservation.get("sport_label", self._sport_label(reservation["sport"])),
+            "campo": reservation["field_name"],
+            "horario": f"{reservation['start_datetime']} - {reservation['end_datetime']}",
+            "monto_adelanto": self._format_currency(reservation["advance_amount"]),
+            "monto_total": self._format_currency(reservation["total_amount"]),
+            "saldo": self._format_currency(balance),
+            "estado": reservation["status"],
+        }
+
+    @rx.var
+    def service_reservations_for_sport(self) -> list[dict]:
+        reservations = []
+        search = (self.reservation_search or "").lower()
+        filter_status = (self.reservation_filter_status or "todos").lower()
+        filter_date = (self.reservation_filter_date or "").strip()
+        for reservation in self.service_reservations:
+            if reservation["sport"] != self.field_rental_sport:
+                continue
+            if filter_status != "todos" and reservation["status"] != filter_status:
+                continue
+            if filter_date and not reservation["start_datetime"].startswith(filter_date):
+                continue
+            if search:
+                text = " ".join(
+                    [
+                        reservation.get("client_name", ""),
+                        reservation.get("field_name", ""),
+                        reservation.get("start_datetime", ""),
+                        reservation.get("end_datetime", ""),
+                        reservation.get("status", ""),
+                    ]
+                ).lower()
+                if search not in text:
+                    continue
+            record = reservation.copy()
+            record["balance"] = self._round_currency(
+                max(reservation["total_amount"] - reservation["paid_amount"], 0)
+            )
+            reservations.append(record)
+        return reservations
+
+    @rx.var
+    def field_prices_for_current_sport(self) -> list[FieldPrice]:
+        sport_cmp = (self.field_rental_sport or "").lower()
+        return [
+            price
+            for price in self.field_prices
+            if (price.get("sport", "") or "").lower() == sport_cmp
+        ]
+
+    def _fill_form_from_price(self, price: FieldPrice):
+        self.reservation_form["field_name"] = price.get("name", "")
+        self.reservation_form["sport_label"] = price.get("sport", "")
+        self.reservation_form["total_amount"] = str(int(price.get("price", 0)))
+
+    @rx.var
+    def active_reservation_options(self) -> list[dict[str, str]]:
+        options = []
+        for reservation in self.service_reservations_for_sport:
+            if reservation["status"] not in ["cancelado", "eliminado"]:
+                label = f"{reservation['client_name']} - {reservation['start_datetime']}"
+                options.append({"id": reservation["id"], "label": label})
+        return options
+
+    @rx.var
+    def selected_reservation_balance(self) -> float:
+        reservation = self._find_reservation_by_id(self.reservation_payment_id)
+        if not reservation:
+            return 0
+        return self._round_currency(
+            max(reservation["total_amount"] - reservation["paid_amount"], 0)
+        )
+
+    @rx.var
+    def reservation_selected_for_payment(self) -> FieldReservation | None:
+        return self._find_reservation_by_id(self.reservation_payment_id)
+
+    @rx.var
+    def reservation_selected_for_cancel(self) -> FieldReservation | None:
+        return self._find_reservation_by_id(self.reservation_cancel_selection)
+
+    @rx.var
+    def reservation_selected_for_delete(self) -> FieldReservation | None:
+        return self._find_reservation_by_id(self.reservation_delete_selection)
+
+    @rx.var
+    def modal_reservation(self) -> FieldReservation | None:
+        if not self.reservation_modal_reservation_id:
+            return None
+        return self._find_reservation_by_id(self.reservation_modal_reservation_id)
+
+    @rx.var
+    def filtered_service_admin_log(self) -> list[ServiceLogEntry]:
+        entries = list(self.service_admin_log)
+        if self.service_log_filter_sport != "todos":
+            entries = [
+                entry
+                for entry in entries
+                if entry["sport"] == self.service_log_filter_sport
+            ]
+        if self.service_log_filter_status != "todos":
+            entries = [
+                entry
+                for entry in entries
+                if entry["status"] == self.service_log_filter_status
+            ]
+        try:
+            if self.service_log_filter_start_date:
+                start = datetime.datetime.strptime(
+                    self.service_log_filter_start_date, "%Y-%m-%d"
+                )
+                entries = [
+                    entry
+                    for entry in entries
+                    if datetime.datetime.strptime(
+                        entry["timestamp"].split(" ")[0], "%Y-%m-%d"
+                    )
+                    >= start
+                ]
+            if self.service_log_filter_end_date:
+                end = datetime.datetime.strptime(
+                    self.service_log_filter_end_date, "%Y-%m-%d"
+                )
+                entries = [
+                    entry
+                    for entry in entries
+                    if datetime.datetime.strptime(
+                        entry["timestamp"].split(" ")[0], "%Y-%m-%d"
+                    )
+                    <= end
+                ]
+        except ValueError:
+            pass
+        return entries
+
+    def _slot_has_conflict(
+        self, date_str: str, start_time: str, end_time: str, sport: str
+    ) -> bool:
+        try:
+            slot_start = datetime.datetime.strptime(
+                f"{date_str} {start_time}", "%Y-%m-%d %H:%M"
+            )
+            slot_end = datetime.datetime.strptime(
+                f"{date_str} {end_time}", "%Y-%m-%d %H:%M"
+            )
+        except ValueError:
+            return False
+        for reservation in self.service_reservations:
+            if reservation.get("status") in ["cancelado", "eliminado"]:
+                continue
+            if reservation.get("sport") != sport:
+                continue
+            if not reservation.get("start_datetime") or not reservation.get("end_datetime"):
+                continue
+            try:
+                res_start = datetime.datetime.strptime(
+                    reservation["start_datetime"], "%Y-%m-%d %H:%M"
+                )
+                res_end = datetime.datetime.strptime(
+                    reservation["end_datetime"], "%Y-%m-%d %H:%M"
+                )
+            except ValueError:
+                continue
+            if res_start.date().strftime("%Y-%m-%d") != date_str:
+                continue
+            if slot_start < res_end and slot_end > res_start:
+                return True
+        return False
+
+    @rx.var
+    def schedule_week_days(self) -> list[dict[str, str]]:
+        if not self.schedule_selected_week:
+            return []
+        try:
+            year_str, week_str = self.schedule_selected_week.split("-W")
+            base_date = datetime.datetime.strptime(
+                f"{year_str}-W{week_str}-1", "%G-W%V-%u"
+            )
+            day_names = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+            days = []
+            for offset in range(7):
+                day = base_date + datetime.timedelta(days=offset)
+                days.append(
+                    {
+                        "label": f"{day_names[offset]} {day.strftime('%d/%m')}",
+                        "date": day.strftime("%Y-%m-%d"),
+                    }
+                )
+            return days
+        except ValueError:
+            return []
+
+    @rx.var
+    def schedule_month_days(self) -> list[dict[str, str]]:
+        if not self.schedule_selected_month:
+            return []
+        try:
+            year, month = self.schedule_selected_month.split("-")
+            year_int = int(year)
+            month_int = int(month)
+            _, days_in_month = calendar.monthrange(year_int, month_int)
+            return [
+                {
+                    "label": f"{day:02d}",
+                    "date": f"{year_int:04d}-{month_int:02d}-{day:02d}",
+                }
+                for day in range(1, days_in_month + 1)
+            ]
+        except (ValueError, IndexError):
+            return []
+
+    @rx.var
+    def schedule_slots(self) -> list[dict]:
+        date_str = (
+            self.schedule_selected_date
+            or self.reservation_form.get("date", "")
+            or TODAY_STR
+        )
+        slots: list[dict] = []
+        for hour in range(24):
+            start = f"{hour:02d}:00"
+            end = "23:59" if hour == 23 else f"{hour + 1:02d}:00"
+            reserved = self._slot_has_conflict(
+                date_str, start, end, self.field_rental_sport
+            )
+            slots.append({"start": start, "end": end, "reserved": reserved})
+        return slots
+
+    @rx.event
+    def set_field_rental_sport(self, sport: str):
+        normalized = (sport or "").lower()
+        if normalized not in ["futbol", "voley"]:
+            return
+        self.field_rental_sport = normalized
+        self.reservation_payment_id = ""
+        self.reservation_payment_amount = ""
+        self.reservation_cancel_selection = ""
+        self.reservation_modal_open = False
+        self.reservation_modal_mode = "new"
+        self.reservation_modal_reservation_id = ""
+        self.schedule_selected_date = TODAY_STR
+        self.schedule_selected_week = CURRENT_WEEK_STR
+        self.schedule_selected_month = CURRENT_MONTH_STR
+        self.reservation_form = self._reservation_default_form()
+
+    @rx.event
+    def set_schedule_view(self, view: str):
+        normalized = (view or "").lower()
+        if normalized in ["dia", "semana", "mes"]:
+            self.schedule_view_mode = normalized
+
+    @rx.event
+    def set_schedule_date(self, date: str):
+        self.schedule_selected_date = date or ""
+        self.update_reservation_form("date", date)
+
+    @rx.event
+    def set_schedule_week(self, week: str):
+        self.schedule_selected_week = week or ""
+
+    @rx.event
+    def set_schedule_month(self, month: str):
+        self.schedule_selected_month = month or ""
+
+    @rx.event
+    def select_week_day(self, offset: int):
+        if not self.schedule_selected_week:
+            return rx.toast("Seleccione una semana primero.", duration=2500)
+        try:
+            year_str, week_str = self.schedule_selected_week.split("-W")
+            base_date = datetime.datetime.strptime(
+                f"{year_str}-W{week_str}-1", "%G-W%V-%u"
+            )
+            target = base_date + datetime.timedelta(days=int(offset))
+            date_str = target.strftime("%Y-%m-%d")
+            self.schedule_selected_date = date_str
+            self.update_reservation_form("date", date_str)
+        except ValueError:
+            return rx.toast("Semana invalida.", duration=2500)
+
+    @rx.event
+    def select_month_day(self, date: str):
+        if not date:
+            return
+        try:
+            parsed = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+            self.schedule_selected_month = parsed.strftime("%Y-%m")
+            self.schedule_selected_date = parsed.strftime("%Y-%m-%d")
+            self.update_reservation_form("date", self.schedule_selected_date)
+        except ValueError:
+            return rx.toast("Dia invalido para el mes seleccionado.", duration=2500)
+
+    @rx.event
+    def select_time_slot(self, start_time: str):
+        if not start_time:
+            return
+        try:
+            hour_int = int(str(start_time).split(":")[0])
+        except ValueError:
+            return
+        if hour_int < 0 or hour_int > 23:
+            return
+        start = f"{hour_int:02d}:00"
+        end = "23:59" if hour_int == 23 else f"{hour_int + 1:02d}:00"
+        date_str = self.schedule_selected_date or self.reservation_form.get("date", "")
+        if not date_str:
+            date_str = TODAY_STR
+        if self._slot_has_conflict(date_str, start, end, self.field_rental_sport):
+            return rx.toast("Este horario ya esta reservado. Elige otro.", duration=3000)
+        self.reservation_form["start_time"] = start
+        self.reservation_form["end_time"] = end
+        self.reservation_form["date"] = date_str
+        self.schedule_selected_date = date_str
+        self.reservation_modal_open = True
+        self.reservation_modal_mode = "new"
+        self.reservation_modal_reservation_id = ""
+
+    @rx.event
+    def open_reservation_modal(self, start_time: str, end_time: str):
+        date_str = self.schedule_selected_date or self.reservation_form.get("date", "") or TODAY_STR
+        self.schedule_selected_date = date_str
+        self.reservation_form["date"] = date_str
+        self.reservation_form["start_time"] = start_time
+        self.reservation_form["end_time"] = end_time
+        self.reservation_form["sport_label"] = self._sport_label(self.field_rental_sport)
+        self.reservation_form["selected_price_id"] = ""
+        existing = None
+        for reservation in self.service_reservations:
+            if reservation.get("status") in ["cancelado", "eliminado"]:
+                continue
+            if reservation.get("sport") != self.field_rental_sport:
+                continue
+            if reservation.get("start_datetime", "").endswith(start_time) and reservation.get("start_datetime", "").startswith(date_str):
+                existing = reservation
+                break
+        if existing:
+            self.reservation_modal_mode = "view"
+            self.reservation_modal_reservation_id = existing["id"]
+            self.reservation_payment_id = existing["id"]
+            self.reservation_cancel_selection = existing["id"]
+            self.reservation_cancel_reason = ""
+        else:
+            self.reservation_modal_mode = "new"
+            self.reservation_modal_reservation_id = ""
+        self.reservation_modal_open = True
+
+    @rx.event
+    def close_reservation_modal(self):
+        self.reservation_modal_open = False
+
+    @rx.event
+    def cancel_reservation_from_modal(self):
+        if not self.reservation_modal_reservation_id:
+            return rx.toast("No hay reserva seleccionada.", duration=2500)
+        self.reservation_cancel_selection = self.reservation_modal_reservation_id
+        if not self.reservation_cancel_reason:
+            self.reservation_cancel_reason = "Cancelado desde planificador."
+        return self.cancel_reservation()
+
+    @rx.event
+    def pay_reservation_from_modal(self):
+        if not self.reservation_modal_reservation_id:
+            return rx.toast("Selecciona una reserva primero.", duration=2500)
+        self.select_reservation_for_payment(self.reservation_modal_reservation_id)
+        return self.pay_reservation_balance()
+
+    @rx.event
+    def print_reservation_receipt(self):
+        reservation = self.modal_reservation
+        if not reservation:
+            return rx.toast("No hay reserva seleccionada.", duration=2500)
+        if reservation["status"] != "pagado":
+            return rx.toast("Solo puedes imprimir cuando la reserva esta pagada.", duration=3000)
+        self._set_last_reservation_receipt(reservation)
+        return rx.toast("Comprobante generado para impresion.", duration=2500)
+
+    @rx.event
+    def update_reservation_form(self, field: str, value: str):
+        if field not in self.reservation_form:
+            return
+        self.reservation_form[field] = value or ""
+
+    @rx.event
+    def create_field_reservation(self):
+        form = self.reservation_form
+        name = form.get("client_name", "").strip()
+        dni = form.get("dni", "").strip()
+        phone = form.get("phone", "").strip()
+        field_name = form.get("field_name", "").strip() or f"Campo {self._sport_label(self.field_rental_sport)}"
+        date = form.get("date", "").strip()
+        start_time = form.get("start_time", "").strip()
+        end_time = form.get("end_time", "").strip()
+        total_amount = self._safe_amount(form.get("total_amount", "0"))
+        advance_amount = self._safe_amount(form.get("advance_amount", "0"))
+        status = (form.get("status", "pendiente") or "pendiente").lower()
+        if not name or not date or not start_time or not end_time:
+            return rx.toast("Complete los datos obligatorios de la reserva.", duration=3000)
+        if total_amount <= 0:
+            return rx.toast("Ingrese el monto total de la reserva.", duration=3000)
+        try:
+            start_dt = datetime.datetime.strptime(f"{date} {start_time}", "%Y-%m-%d %H:%M")
+            end_dt = datetime.datetime.strptime(f"{date} {end_time}", "%Y-%m-%d %H:%M")
+            if end_dt <= start_dt:
+                return rx.toast("La hora fin debe ser mayor a la hora inicio.", duration=3000)
+        except ValueError:
+            return rx.toast("Formato de fecha u hora invalido.", duration=3000)
+        if self._slot_has_conflict(date, start_time, end_time, self.field_rental_sport):
+            return rx.toast("El horario seleccionado ya esta reservado.", duration=3000)
+        paid_amount = min(advance_amount, total_amount)
+        if status not in ["pendiente", "pagado"]:
+            status = "pendiente"
+        if paid_amount >= total_amount:
+            status = "pagado"
+        elif status == "pagado":
+            paid_amount = total_amount
+        reservation: FieldReservation = {
+            "id": str(uuid.uuid4()),
+            "client_name": name,
+            "dni": dni,
+            "phone": phone,
+            "sport": self.field_rental_sport,
+            "sport_label": form.get("sport_label", self._sport_label(self.field_rental_sport)),
+            "field_name": field_name,
+            "start_datetime": start_dt.strftime("%Y-%m-%d %H:%M"),
+            "end_datetime": end_dt.strftime("%Y-%m-%d %H:%M"),
+            "advance_amount": self._round_currency(advance_amount),
+            "total_amount": self._round_currency(total_amount),
+            "paid_amount": self._round_currency(paid_amount),
+            "status": status,
+            "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "cancellation_reason": "",
+            "delete_reason": "",
+        }
+        self.service_reservations.insert(0, reservation)
+        self._log_service_action(reservation, "reserva", 0, notes="Reserva creada", status=reservation["status"])
+        if advance_amount > 0:
+            self._log_service_action(
+                reservation,
+                "adelanto",
+                advance_amount,
+                notes="Adelanto registrado al crear la reserva",
+                status=reservation["status"],
+            )
+        self.reservation_payment_id = reservation["id"]
+        self.reservation_payment_amount = ""
+        self.reservation_cancel_selection = ""
+        self._set_last_reservation_receipt(reservation)
+        self.reservation_form = self._reservation_default_form()
+        self.reservation_modal_open = False
+        return rx.toast("Reserva registrada.", duration=3000)
+
+    @rx.event
+    def select_reservation_for_payment(self, reservation_id: str):
+        self.reservation_payment_id = reservation_id or ""
+        reservation = self._find_reservation_by_id(self.reservation_payment_id)
+        if reservation:
+            balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+            self.reservation_payment_amount = f"{balance:.2f}" if balance > 0 else ""
+
+    @rx.event
+    def set_reservation_payment_amount(self, value: str):
+        self.reservation_payment_amount = value or ""
+
+    @rx.event
+    def apply_reservation_payment(self):
+        reservation = self._find_reservation_by_id(self.reservation_payment_id)
+        if not reservation:
+            return rx.toast("Seleccione una reserva para registrar el pago.", duration=3000)
+        if reservation["status"] in ["cancelado", "eliminado"]:
+            return rx.toast("No se pueden registrar pagos en una reserva cancelada o eliminada.", duration=3000)
+        amount = self._safe_amount(self.reservation_payment_amount)
+        if amount <= 0:
+            return rx.toast("Ingrese un monto valido.", duration=3000)
+        balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+        if balance <= 0:
+            self.reservation_payment_amount = ""
+            return rx.toast("La reserva ya esta pagada.", duration=3000)
+        applied_amount = min(amount, balance)
+        reservation["paid_amount"] = self._round_currency(
+            reservation["paid_amount"] + applied_amount
+        )
+        self._update_reservation_status(reservation)
+        entry_type = "pago" if reservation["paid_amount"] >= reservation["total_amount"] else "adelanto"
+        notes = "Pago completado" if entry_type == "pago" else "Pago parcial registrado"
+        self._log_service_action(
+            reservation,
+            entry_type,
+            applied_amount,
+            notes=notes,
+            status=reservation["status"],
+        )
+        self.reservation_payment_amount = ""
+        self._set_last_reservation_receipt(reservation)
+        return rx.toast("Pago registrado correctamente.", duration=3000)
+
+    @rx.event
+    def pay_reservation_balance(self):
+        reservation = self._find_reservation_by_id(self.reservation_payment_id)
+        if not reservation:
+            return rx.toast("Seleccione una reserva para pagar el saldo.", duration=3000)
+        if reservation["status"] in ["cancelado", "eliminado"]:
+            return rx.toast("No se pueden registrar pagos en una reserva cancelada o eliminada.", duration=3000)
+        balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+        if balance <= 0:
+            return rx.toast("La reserva ya esta pagada.", duration=3000)
+        self.reservation_payment_amount = f"{balance:.2f}"
+        return self.apply_reservation_payment()
+
+    @rx.event
+    def select_reservation_to_cancel(self, reservation_id: str):
+        self.reservation_cancel_selection = reservation_id or ""
+
+    @rx.event
+    def set_reservation_cancel_reason(self, reason: str):
+        self.reservation_cancel_reason = reason or ""
+
+    @rx.event
+    def start_reservation_delete(self, reservation_id: str):
+        reservation = self._find_reservation_by_id(reservation_id)
+        if not reservation:
+            return rx.toast("Reserva no encontrada.", duration=3000)
+        if reservation["status"] == "eliminado":
+            return rx.toast("La reserva ya esta eliminada.", duration=3000)
+        self.reservation_delete_selection = reservation_id
+        self.reservation_delete_reason = ""
+        self.reservation_delete_modal_open = True
+
+    @rx.event
+    def set_reservation_delete_reason(self, reason: str):
+        self.reservation_delete_reason = reason or ""
+
+    @rx.event
+    def close_reservation_delete_modal(self):
+        self.reservation_delete_modal_open = False
+        self.reservation_delete_selection = ""
+        self.reservation_delete_reason = ""
+
+    @rx.event
+    def confirm_reservation_delete(self):
+        reservation = self._find_reservation_by_id(self.reservation_delete_selection)
+        if not reservation:
+            self.close_reservation_delete_modal()
+            return rx.toast("Reserva no encontrada.", duration=3000)
+        reason = (self.reservation_delete_reason or "").strip()
+        if not reason:
+            return rx.toast("Ingresa un sustento para eliminar la reserva.", duration=3000)
+        if reservation["status"] == "eliminado":
+            self.close_reservation_delete_modal()
+            return rx.toast("La reserva ya esta eliminada.", duration=3000)
+        reservation["status"] = "eliminado"
+        reservation["delete_reason"] = reason
+        reservation["cancellation_reason"] = reservation.get("cancellation_reason", "") or reason
+        self._log_service_action(
+            reservation,
+            "eliminacion",
+            0,
+            notes=reason,
+            status="eliminado",
+        )
+        self.reservation_payment_id = ""
+        self.reservation_payment_amount = ""
+        self.reservation_cancel_selection = ""
+        self.reservation_cancel_reason = ""
+        self._set_last_reservation_receipt(reservation)
+        self.close_reservation_delete_modal()
+        return rx.toast("Reserva eliminada y marcada en el historial.", duration=3000)
+
+    @rx.event
+    def cancel_reservation(self):
+        reservation = self._find_reservation_by_id(self.reservation_cancel_selection)
+        if not reservation:
+            return rx.toast("Seleccione una reserva a cancelar.", duration=3000)
+        if reservation["status"] == "cancelado":
+            return rx.toast("La reserva ya esta cancelada.", duration=3000)
+        if reservation["status"] == "eliminado":
+            return rx.toast("La reserva ya fue eliminada.", duration=3000)
+        reservation["status"] = "cancelado"
+        reservation["cancellation_reason"] = (
+            self.reservation_cancel_reason.strip() or "Sin motivo especificado"
+        )
+        self._log_service_action(
+            reservation,
+            "cancelacion",
+            0,
+            notes=reservation["cancellation_reason"],
+            status="cancelado",
+        )
+        self.reservation_cancel_selection = ""
+        self.reservation_cancel_reason = ""
+        self.reservation_payment_id = ""
+        self.reservation_payment_amount = ""
+        self._set_last_reservation_receipt(reservation)
+        return rx.toast("Reserva cancelada y registrada en el historial.", duration=3000)
+
+    @rx.event
+    def set_service_log_filter_start_date(self, value: str):
+        self.service_log_filter_start_date = value or ""
+
+    @rx.event
+    def set_service_log_filter_end_date(self, value: str):
+        self.service_log_filter_end_date = value or ""
+
+    @rx.event
+    def set_service_log_filter_sport(self, value: str):
+        self.service_log_filter_sport = (value or "todos").lower()
+
+    @rx.event
+    def set_service_log_filter_status(self, value: str):
+        self.service_log_filter_status = (value or "todos").lower()
+
+    @rx.event
+    def reset_service_log_filters(self):
+        self.service_log_filter_start_date = ""
+        self.service_log_filter_end_date = ""
+        self.service_log_filter_sport = "todos"
+        self.service_log_filter_status = "todos"
+
+    @rx.event
+    def set_reservation_search(self, value: str):
+        self.reservation_search = value or ""
+
+    @rx.event
+    def set_reservation_filter_status(self, value: str):
+        self.reservation_filter_status = (value or "todos").lower()
+
+    @rx.event
+    def set_reservation_filter_date(self, value: str):
+        self.reservation_filter_date = value or ""
+
+    @rx.event
+    def export_reservations_excel(self):
+        return rx.toast("Exportar a Excel aún no implementado.", duration=3000)
+
+    @rx.event
+    def set_new_field_price_sport(self, value: str):
+        self.new_field_price_sport = value or ""
+
+    @rx.event
+    def set_new_field_price_name(self, value: str):
+        self.new_field_price_name = value or ""
+
+    @rx.event
+    def set_new_field_price_amount(self, value: Union[str, float, int]):
+        try:
+            self.new_field_price_amount = str(value) if value is not None else "0"
+        except Exception:
+            self.new_field_price_amount = "0"
+
+    @rx.event
+    def add_field_price(self):
+        name = self.new_field_price_name.strip()
+        sport_raw = (self.new_field_price_sport or "").strip()
+        sport_cmp = sport_raw.lower()
+        amount = int(self._safe_amount(self.new_field_price_amount))
+        if not name:
+            return rx.toast("Ingrese un nombre para la modalidad.", duration=2500)
+        for price in self.field_prices:
+            if price["name"].lower() == name.lower() and price["sport"].lower() == sport_cmp:
+                return rx.toast("Ya existe un precio para esta modalidad.", duration=2500)
+        self.field_prices.append(
+            {
+                "id": str(uuid.uuid4()),
+                "sport": sport_raw,
+                "name": name,
+                "price": amount,
+            }
+        )
+        self.new_field_price_name = ""
+        self.new_field_price_amount = ""
+        self.new_field_price_sport = ""
+        self.editing_field_price_id = ""
+        return rx.toast("Precio de campo agregado.", duration=2500)
+
+    @rx.event
+    def remove_field_price(self, price_id: str):
+        self.field_prices = [p for p in self.field_prices if p["id"] != price_id]
+
+    @rx.event
+    def update_field_price_amount(self, price_id: str, value: str):
+        amount = int(self._safe_amount(value))
+        for price in self.field_prices:
+            if price["id"] == price_id:
+                price["price"] = amount
+                break
+
+    @rx.event
+    def update_field_price(self):
+        if not self.editing_field_price_id:
+            return rx.toast("Seleccione un precio para editar primero.", duration=2500)
+
+        name = self.new_field_price_name.strip()
+        sport_raw = (self.new_field_price_sport or "").strip()
+        sport_cmp = sport_raw.lower()
+        amount = int(self._safe_amount(self.new_field_price_amount))
+
+        if not name:
+            return rx.toast("Ingrese un nombre para la modalidad.", duration=2500)
+
+        target = next(
+            (p for p in self.field_prices if p["id"] == self.editing_field_price_id),
+            None,
+        )
+        if not target:
+            self.editing_field_price_id = ""
+            return rx.toast(
+                "No se encontro el precio seleccionado.", duration=2500
+            )
+
+        for price in self.field_prices:
+            if (
+                price["id"] != self.editing_field_price_id
+                and price["name"].lower() == name.lower()
+                and price["sport"].lower() == sport_cmp
+            ):
+                return rx.toast(
+                    "Ya existe un precio para esta modalidad.", duration=2500
+                )
+
+        target["name"] = name
+        target["sport"] = sport_raw
+        target["price"] = amount
+
+        self.editing_field_price_id = ""
+        self.new_field_price_name = ""
+        self.new_field_price_amount = ""
+        self.new_field_price_sport = ""
+
+        return rx.toast("Precio de campo actualizado.", duration=2500)
+
+    @rx.event
+    def edit_field_price(self, price_id: str):
+        target = next((p for p in self.field_prices if p["id"] == price_id), None)
+        if not target:
+            return
+        self.editing_field_price_id = price_id
+        self.new_field_price_sport = target.get("sport", "")
+        self.new_field_price_name = target.get("name", "")
+        self.new_field_price_amount = str(target.get("price", "0"))
+
+    @rx.event
+    def select_reservation_field_price(self, price_id: str):
+        target = next((p for p in self.field_prices if p["id"] == price_id), None)
+        if not target:
+            return
+        self._fill_form_from_price(target)
+        self.reservation_form["selected_price_id"] = price_id
+
+    @rx.event
+    def set_reservation_sport_from_price(self, price_id: str):
+        target = next((p for p in self.field_prices if p["id"] == price_id), None)
+        if not target:
+            self.reservation_form["sport_label"] = ""
+            self.reservation_form["selected_price_id"] = ""
+            return
+        self.reservation_form["sport_label"] = target.get("sport", "")
+        self.reservation_form["selected_price_id"] = price_id
 
     @rx.event
     def toggle_sidebar(self):

@@ -7,6 +7,7 @@ CONFIG_SUBSECTIONS = [
     {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
     {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
     {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
+    {"key": "precios_campo", "label": "Precios de Campo", "icon": "tags"},
 ]
 
 SERVICES_SUBSECTIONS = [
