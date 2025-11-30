@@ -1,6 +1,7 @@
 import reflex as rx
 from typing import TypedDict, Union
 import datetime
+import math
 import calendar
 import uuid
 import logging
@@ -135,6 +136,7 @@ class CashboxSale(TypedDict):
     payment_breakdown: list[PaymentBreakdownItem]
     payment_details: str
     total: float
+    service_total: float
     items: list[TransactionItem]
     is_deleted: bool
     delete_reason: str
@@ -239,6 +241,7 @@ class State(AuthState):
     schedule_selected_date: str = TODAY_STR
     schedule_selected_week: str = CURRENT_WEEK_STR
     schedule_selected_month: str = CURRENT_MONTH_STR
+    schedule_selected_slots: list[dict[str, str]] = []
     reservation_form: dict[str, str] = {
         "client_name": "",
         "dni": "",
@@ -264,7 +267,14 @@ class State(AuthState):
     reservation_modal_reservation_id: str = ""
     reservation_search: str = ""
     reservation_filter_status: str = "todos"
-    reservation_filter_date: str = ""
+    reservation_filter_start_date: str = ""
+    reservation_filter_end_date: str = ""
+    reservation_staged_search: str = ""
+    reservation_staged_status: str = "todos"
+    reservation_staged_start_date: str = ""
+    reservation_staged_end_date: str = ""
+    reservation_payment_routed: bool = False
+    reservation_payment_routed: bool = False
     last_reservation_receipt: ReservationReceipt | None = None
     reservation_delete_selection: str = ""
     reservation_delete_reason: str = ""
@@ -353,6 +363,7 @@ class State(AuthState):
     last_sale_total: float = 0
     last_sale_timestamp: str = ""
     sale_receipt_ready: bool = False
+    last_sale_reservation_context: dict | None = None
     payment_methods: list[PaymentMethodConfig] = [
         {
             "id": "cash",
@@ -424,6 +435,7 @@ class State(AuthState):
     cashbox_staged_end_date: str = ""
     cashbox_current_page: int = 1
     cashbox_items_per_page: int = 10
+    show_cashbox_advances: bool = True
     sale_delete_modal_open: bool = False
     sale_to_delete: str = ""
     sale_delete_reason: str = ""
@@ -730,6 +742,14 @@ class State(AuthState):
 
     @rx.var
     def sale_total(self) -> float:
+        reservation = (
+            self._find_reservation_by_id(self.reservation_payment_id)
+            if self.reservation_payment_id
+            else None
+        )
+        if reservation and len(self.new_sale_items) == 0:
+            balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+            return self._round_currency(balance)
         return self._round_currency(
             sum((item["subtotal"] for item in self.new_sale_items))
         )
@@ -836,6 +856,8 @@ class State(AuthState):
         sales = sorted(
             self.cashbox_sales, key=lambda s: s["timestamp"], reverse=True
         )
+        if not self.show_cashbox_advances:
+            sales = [sale for sale in sales if not self._is_advance_sale(sale)]
         if self.cashbox_filter_start_date:
             try:
                 start_date = datetime.datetime.strptime(
@@ -1078,10 +1100,15 @@ class State(AuthState):
         self.current_page = page
         if page == "Venta" and previous_page != "Venta":
             self._reset_sale_form()
+            if not self.reservation_payment_routed:
+                self.reservation_payment_id = ""
+                self.reservation_payment_amount = ""
         if page != "Servicios":
             self.service_active_tab = "campo"
         if self.sidebar_open:
             pass
+        # Siempre limpiar el flag de ruta hacia Venta
+        self.reservation_payment_routed = False
 
     @rx.event
     def set_service_tab(self, tab: str):
@@ -1168,14 +1195,41 @@ class State(AuthState):
         reservations = []
         search = (self.reservation_search or "").lower()
         filter_status = (self.reservation_filter_status or "todos").lower()
-        filter_date = (self.reservation_filter_date or "").strip()
+        start_date = (self.reservation_filter_start_date or "").strip()
+        end_date = (self.reservation_filter_end_date or "").strip()
+        # Compat: if old single-date filter exists, treat as start=end.
+        legacy_date = getattr(self, "reservation_filter_date", "")
+        if legacy_date and not start_date and not end_date:
+            start_date = legacy_date
+            end_date = legacy_date
+        start_dt = None
+        end_dt = None
+        try:
+            if start_date:
+                start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+        except Exception:
+            start_dt = None
+        try:
+            if end_date:
+                end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+        except Exception:
+            end_dt = None
         for reservation in self.service_reservations:
             if reservation["sport"] != self.field_rental_sport:
                 continue
             if filter_status != "todos" and reservation["status"] != filter_status:
                 continue
-            if filter_date and not reservation["start_datetime"].startswith(filter_date):
-                continue
+            if start_dt or end_dt:
+                try:
+                    res_date = datetime.datetime.strptime(
+                        reservation.get("start_datetime", "").split(" ")[0], "%Y-%m-%d"
+                    ).date()
+                except Exception:
+                    continue
+                if start_dt and res_date < start_dt:
+                    continue
+                if end_dt and res_date > end_dt:
+                    continue
             if search:
                 text = " ".join(
                     [
@@ -1203,11 +1257,12 @@ class State(AuthState):
             for price in self.field_prices
             if (price.get("sport", "") or "").lower() == sport_cmp
         ]
+        # Si no hay precios definidos para el deporte actual, retorna lista vacía.
 
     def _fill_form_from_price(self, price: FieldPrice):
         self.reservation_form["field_name"] = price.get("name", "")
         self.reservation_form["sport_label"] = price.get("sport", "")
-        self.reservation_form["total_amount"] = str(int(price.get("price", 0)))
+        self._apply_price_total(price)
 
     @rx.var
     def active_reservation_options(self) -> list[dict[str, str]]:
@@ -1238,6 +1293,14 @@ class State(AuthState):
     @rx.var
     def reservation_selected_for_delete(self) -> FieldReservation | None:
         return self._find_reservation_by_id(self.reservation_delete_selection)
+
+    @rx.var
+    def reservation_delete_reason_filled(self) -> bool:
+        return bool((self.reservation_delete_reason or "").strip())
+
+    @rx.var
+    def reservation_delete_button_disabled(self) -> bool:
+        return not self.reservation_delete_reason_filled
 
     @rx.var
     def modal_reservation(self) -> FieldReservation | None:
@@ -1365,6 +1428,75 @@ class State(AuthState):
         except (ValueError, IndexError):
             return []
 
+    def _sorted_selected_slots(self) -> list[dict[str, str]]:
+        return sorted(
+            self.schedule_selected_slots, key=lambda slot: slot.get("start", "")
+        )
+
+    def _hours_for_current_selection(self) -> int:
+        selection = self._selection_range()
+        if self.schedule_selected_slots and selection:
+            return max(len(self.schedule_selected_slots), 1)
+        start = self.reservation_form.get("start_time", "00:00")
+        end = self.reservation_form.get("end_time", "00:00")
+        try:
+            start_dt = datetime.datetime.strptime(start, "%H:%M")
+            end_dt = datetime.datetime.strptime(end, "%H:%M")
+        except ValueError:
+            return 1
+        minutes = int((end_dt - start_dt).total_seconds() / 60)
+        if minutes <= 0:
+            return 1
+        return max(1, math.ceil(minutes / 60))
+
+    def _selection_range(self) -> tuple[str, str] | None:
+        slots = self._sorted_selected_slots()
+        if not slots:
+            return None
+        start = slots[0]["start"]
+        end = slots[0]["end"]
+        for slot in slots[1:]:
+            if slot.get("start") != end:
+                return None
+            end = slot.get("end", end)
+        return start, end
+
+    def _clear_schedule_selection(self):
+        self.schedule_selected_slots = []
+
+    def _apply_price_total(self, price: FieldPrice):
+        hours = self._hours_for_current_selection()
+        total = self._round_currency((price.get("price") or 0) * hours)
+        self.reservation_form["total_amount"] = f"{total:.2f}"
+
+    def _apply_selected_price_total(self):
+        price_id = self.reservation_form.get("selected_price_id", "")
+        target = next((p for p in self.field_prices if p["id"] == price_id), None)
+        if not target:
+            return
+        self._apply_price_total(target)
+
+    @rx.var
+    def schedule_selected_slots_count(self) -> int:
+        return len(self.schedule_selected_slots)
+
+    @rx.var
+    def schedule_selection_valid(self) -> bool:
+        return self._selection_range() is not None
+
+    @rx.var
+    def schedule_selection_label(self) -> str:
+        if not self.schedule_selected_slots:
+            return "Sin horarios seleccionados"
+        slots = self._sorted_selected_slots()
+        start = slots[0]["start"]
+        end = slots[-1]["end"]
+        hours = len(slots)
+        if not self._selection_range():
+            return f"{start} - {end} (seleccion no consecutiva)"
+        suffix = "hora" if hours == 1 else "horas"
+        return f"{start} - {end} ({hours} {suffix})"
+
     @rx.var
     def schedule_slots(self) -> list[dict]:
         date_str = (
@@ -1379,7 +1511,17 @@ class State(AuthState):
             reserved = self._slot_has_conflict(
                 date_str, start, end, self.field_rental_sport
             )
-            slots.append({"start": start, "end": end, "reserved": reserved})
+            is_selected = any(
+                selected.get("start") == start for selected in self.schedule_selected_slots
+            )
+            slots.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "reserved": reserved,
+                    "selected": is_selected,
+                }
+            )
         return slots
 
     @rx.event
@@ -1397,6 +1539,7 @@ class State(AuthState):
         self.schedule_selected_date = TODAY_STR
         self.schedule_selected_week = CURRENT_WEEK_STR
         self.schedule_selected_month = CURRENT_MONTH_STR
+        self._clear_schedule_selection()
         self.reservation_form = self._reservation_default_form()
 
     @rx.event
@@ -1409,14 +1552,17 @@ class State(AuthState):
     def set_schedule_date(self, date: str):
         self.schedule_selected_date = date or ""
         self.update_reservation_form("date", date)
+        self._clear_schedule_selection()
 
     @rx.event
     def set_schedule_week(self, week: str):
         self.schedule_selected_week = week or ""
+        self._clear_schedule_selection()
 
     @rx.event
     def set_schedule_month(self, month: str):
         self.schedule_selected_month = month or ""
+        self._clear_schedule_selection()
 
     @rx.event
     def select_week_day(self, offset: int):
@@ -1431,6 +1577,7 @@ class State(AuthState):
             date_str = target.strftime("%Y-%m-%d")
             self.schedule_selected_date = date_str
             self.update_reservation_form("date", date_str)
+            self._clear_schedule_selection()
         except ValueError:
             return rx.toast("Semana invalida.", duration=2500)
 
@@ -1443,6 +1590,7 @@ class State(AuthState):
             self.schedule_selected_month = parsed.strftime("%Y-%m")
             self.schedule_selected_date = parsed.strftime("%Y-%m-%d")
             self.update_reservation_form("date", self.schedule_selected_date)
+            self._clear_schedule_selection()
         except ValueError:
             return rx.toast("Dia invalido para el mes seleccionado.", duration=2500)
 
@@ -1472,8 +1620,65 @@ class State(AuthState):
         self.reservation_modal_reservation_id = ""
 
     @rx.event
+    def toggle_schedule_slot(self, start_time: str, end_time: str):
+        if not start_time or not end_time:
+            return
+        date_str = (
+            self.schedule_selected_date or self.reservation_form.get("date", "") or TODAY_STR
+        )
+        if self._slot_has_conflict(date_str, start_time, end_time, self.field_rental_sport):
+            return rx.toast("Este horario ya esta reservado. Elige otro.", duration=3000)
+        exists = any(slot.get("start") == start_time for slot in self.schedule_selected_slots)
+        if exists:
+            self.schedule_selected_slots = [
+                slot for slot in self.schedule_selected_slots if slot.get("start") != start_time
+            ]
+        else:
+            self.schedule_selected_slots.append({"start": start_time, "end": end_time})
+            self.schedule_selected_slots = self._sorted_selected_slots()
+        self.schedule_selected_date = date_str
+        self.reservation_form["date"] = date_str
+        if self.schedule_selected_slots:
+            sorted_slots = self._sorted_selected_slots()
+            self.reservation_form["start_time"] = sorted_slots[0]["start"]
+            self.reservation_form["end_time"] = sorted_slots[-1]["end"]
+            contiguous = self._selection_range()
+            if contiguous:
+                self.reservation_form["start_time"], self.reservation_form["end_time"] = contiguous
+        self._apply_selected_price_total()
+
+    @rx.event
+    def clear_schedule_selection(self):
+        self._clear_schedule_selection()
+
+    @rx.event
+    def open_selected_slots_modal(self):
+        date_str = self.schedule_selected_date or TODAY_STR
+        selection = self._selection_range()
+        if not self.schedule_selected_slots:
+            return rx.toast("Selecciona al menos un horario.", duration=2500)
+        if not selection:
+            return rx.toast("Selecciona horarios consecutivos para la misma reserva.", duration=3000)
+        start_time, end_time = selection
+        if self._slot_has_conflict(date_str, start_time, end_time, self.field_rental_sport):
+            return rx.toast("El rango seleccionado tiene un cruce con otra reserva.", duration=3000)
+        # Limpia el formulario antes de preparar una nueva reserva
+        self.reservation_form = self._reservation_default_form()
+        self.schedule_selected_date = date_str
+        self.reservation_form["date"] = date_str
+        self.reservation_form["start_time"] = start_time
+        self.reservation_form["end_time"] = end_time
+        self.reservation_form["sport_label"] = self._sport_label(self.field_rental_sport)
+        self.reservation_form["selected_price_id"] = ""
+        self.reservation_modal_mode = "new"
+        self.reservation_modal_reservation_id = ""
+        self.reservation_modal_open = True
+
+    @rx.event
     def open_reservation_modal(self, start_time: str, end_time: str):
         date_str = self.schedule_selected_date or self.reservation_form.get("date", "") or TODAY_STR
+        # Prepara un formulario limpio antes de decidir modo
+        self.reservation_form = self._reservation_default_form()
         self.schedule_selected_date = date_str
         self.reservation_form["date"] = date_str
         self.reservation_form["start_time"] = start_time
@@ -1492,17 +1697,25 @@ class State(AuthState):
         if existing:
             self.reservation_modal_mode = "view"
             self.reservation_modal_reservation_id = existing["id"]
-            self.reservation_payment_id = existing["id"]
             self.reservation_cancel_selection = existing["id"]
             self.reservation_cancel_reason = ""
         else:
             self.reservation_modal_mode = "new"
             self.reservation_modal_reservation_id = ""
+        # Preselecciona el deporte actual en el selector si existe precio
+        current_prices = self.field_prices_for_current_sport
+        if current_prices:
+            self.reservation_form["selected_price_id"] = current_prices[0]["id"]
+            self.reservation_form["sport_label"] = current_prices[0].get("sport", self._sport_label(self.field_rental_sport))
         self.reservation_modal_open = True
 
     @rx.event
     def close_reservation_modal(self):
         self.reservation_modal_open = False
+        # Limpia modo y formulario para evitar que datos de vista anterior se mantengan
+        self.reservation_modal_mode = "new"
+        self.reservation_modal_reservation_id = ""
+        self.reservation_form = self._reservation_default_form()
 
     @rx.event
     def cancel_reservation_from_modal(self):
@@ -1535,6 +1748,8 @@ class State(AuthState):
         if field not in self.reservation_form:
             return
         self.reservation_form[field] = value or ""
+        if field in ["start_time", "end_time"]:
+            self._apply_selected_price_total()
 
     @rx.event
     def create_field_reservation(self):
@@ -1597,10 +1812,13 @@ class State(AuthState):
                 notes="Adelanto registrado al crear la reserva",
                 status=reservation["status"],
             )
-        self.reservation_payment_id = reservation["id"]
+            self._register_reservation_advance_in_cashbox(reservation, advance_amount)
+        # No preseleccionar pago en Venta hasta que el usuario lo solicite
+        self.reservation_payment_id = ""
         self.reservation_payment_amount = ""
         self.reservation_cancel_selection = ""
         self._set_last_reservation_receipt(reservation)
+        self._clear_schedule_selection()
         self.reservation_form = self._reservation_default_form()
         self.reservation_modal_open = False
         return rx.toast("Reserva registrada.", duration=3000)
@@ -1614,8 +1832,52 @@ class State(AuthState):
             self.reservation_payment_amount = f"{balance:.2f}" if balance > 0 else ""
 
     @rx.event
+    def go_to_sale_for_reservation(self, reservation_id: str):
+        reservation = self._find_reservation_by_id(reservation_id)
+        if not reservation:
+            return rx.toast("Reserva no encontrada.", duration=3000)
+        if reservation["status"] in ["cancelado", "eliminado"]:
+            return rx.toast("No se puede cobrar una reserva cancelada o eliminada.", duration=3000)
+        self.select_reservation_for_payment(reservation_id)
+        self.reservation_payment_routed = True
+        return self.set_page("Venta")
+
+    @rx.event
     def set_reservation_payment_amount(self, value: str):
         self.reservation_payment_amount = value or ""
+
+    @rx.event
+    def view_reservation_details(self, reservation_id: str):
+        reservation = self._find_reservation_by_id(reservation_id)
+        if not reservation:
+            return rx.toast("Reserva no encontrada.", duration=3000)
+        # Llena el formulario con los datos de la reserva para mostrar en el modal.
+        try:
+            date_part, start_time = reservation.get("start_datetime", "").split(" ")
+            _, end_time = reservation.get("end_datetime", "").split(" ")
+        except ValueError:
+            date_part = reservation.get("start_datetime", "").split(" ")[0] if reservation.get("start_datetime") else TODAY_STR
+            start_time = reservation.get("start_datetime", "").split(" ")[1] if " " in reservation.get("start_datetime", "") else ""
+            end_time = reservation.get("end_datetime", "").split(" ")[1] if " " in reservation.get("end_datetime", "") else ""
+        self.reservation_form = {
+            "client_name": reservation.get("client_name", ""),
+            "dni": reservation.get("dni", ""),
+            "phone": reservation.get("phone", ""),
+            "field_name": reservation.get("field_name", ""),
+            "sport_label": reservation.get("sport_label", self._sport_label(reservation.get("sport", ""))),
+            "selected_price_id": reservation.get("selected_price_id", ""),
+            "date": date_part or self.schedule_selected_date or TODAY_STR,
+            "start_time": start_time,
+            "end_time": end_time,
+            "advance_amount": str(reservation.get("advance_amount", 0)),
+            "total_amount": str(reservation.get("total_amount", 0)),
+            "status": reservation.get("status", "pendiente"),
+        }
+        self.reservation_modal_reservation_id = reservation_id
+        self.reservation_modal_mode = "view"
+        self.reservation_cancel_selection = reservation_id
+        self.reservation_cancel_reason = ""
+        self.reservation_modal_open = True
 
     @rx.event
     def apply_reservation_payment(self):
@@ -1648,6 +1910,56 @@ class State(AuthState):
         self.reservation_payment_amount = ""
         self._set_last_reservation_receipt(reservation)
         return rx.toast("Pago registrado correctamente.", duration=3000)
+
+    @rx.event
+    def pay_reservation_with_payment_method(self):
+        reservation = self._find_reservation_by_id(self.reservation_payment_id)
+        if not reservation:
+            return rx.toast("Seleccione una reserva desde Servicios -> Pagar.", duration=3000)
+        if reservation["status"] in ["cancelado", "eliminado"]:
+            return rx.toast("No se puede cobrar una reserva cancelada o eliminada.", duration=3000)
+        balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+        if balance <= 0:
+            return rx.toast("La reserva ya esta pagada.", duration=3000)
+        if not self.payment_method:
+            return rx.toast("Seleccione un metodo de pago.", duration=3000)
+
+        # Validaciones segun metodo elegido, usando el saldo como total objetivo.
+        if self.payment_method_kind == "cash":
+            self._update_cash_feedback(total_override=balance)
+            if self.payment_cash_status not in ["exact", "change"]:
+                message = self.payment_cash_message or "Ingrese un monto valido en efectivo."
+                return rx.toast(message, duration=3000)
+        if self.payment_method_kind == "mixed":
+            self._update_mixed_message(total_override=balance)
+            if self.payment_mixed_status not in ["exact", "change"]:
+                message = self.payment_mixed_message or "Complete los montos del pago mixto."
+                return rx.toast(message, duration=3000)
+
+        applied_amount = balance
+        reservation["paid_amount"] = self._round_currency(reservation["paid_amount"] + applied_amount)
+        self._update_reservation_status(reservation)
+        entry_type = "pago" if reservation["paid_amount"] >= reservation["total_amount"] else "adelanto"
+        payment_summary = self._generate_payment_summary()
+        self._log_service_action(
+            reservation,
+            entry_type,
+            applied_amount,
+            notes=payment_summary,
+            status=reservation["status"],
+        )
+        self.reservation_payment_amount = ""
+        self._set_last_reservation_receipt(reservation)
+        # Limpia montos de la UI de metodo de pago.
+        self.payment_cash_amount = 0
+        self.payment_cash_message = ""
+        self.payment_cash_status = "neutral"
+        self.payment_mixed_cash = 0
+        self.payment_mixed_card = 0
+        self.payment_mixed_wallet = 0
+        self.payment_mixed_message = ""
+        self.payment_mixed_status = "neutral"
+        return rx.toast("Pago registrado con metodo de pago.", duration=3000)
 
     @rx.event
     def pay_reservation_balance(self):
@@ -1692,6 +2004,14 @@ class State(AuthState):
         self.reservation_delete_reason = ""
 
     @rx.event
+    def set_reservation_delete_modal_open(self, open_state: bool):
+        """Control the delete modal open state (Radix on_open_change compatibility)."""
+        if open_state:
+            self.reservation_delete_modal_open = True
+        else:
+            self.close_reservation_delete_modal()
+
+    @rx.event
     def confirm_reservation_delete(self):
         reservation = self._find_reservation_by_id(self.reservation_delete_selection)
         if not reservation:
@@ -1706,6 +2026,8 @@ class State(AuthState):
         reservation["status"] = "eliminado"
         reservation["delete_reason"] = reason
         reservation["cancellation_reason"] = reservation.get("cancellation_reason", "") or reason
+        # Reassign list to trigger UI refresh and slot availability
+        self.service_reservations = [res for res in self.service_reservations]
         self._log_service_action(
             reservation,
             "eliminacion",
@@ -1773,19 +2095,100 @@ class State(AuthState):
 
     @rx.event
     def set_reservation_search(self, value: str):
-        self.reservation_search = value or ""
+        self.reservation_staged_search = value or ""
 
     @rx.event
     def set_reservation_filter_status(self, value: str):
-        self.reservation_filter_status = (value or "todos").lower()
+        self.reservation_staged_status = (value or "todos").lower()
 
     @rx.event
     def set_reservation_filter_date(self, value: str):
-        self.reservation_filter_date = value or ""
+        self.reservation_filter_start_date = value or ""
+        self.reservation_filter_end_date = value or ""
+
+    @rx.event
+    def set_reservation_filter_start_date(self, value: str):
+        self.reservation_staged_start_date = value or ""
+
+    @rx.event
+    def set_reservation_filter_end_date(self, value: str):
+        self.reservation_staged_end_date = value or ""
+
+    @rx.event
+    def apply_reservation_filters(self):
+        self.reservation_search = self.reservation_staged_search
+        self.reservation_filter_status = self.reservation_staged_status
+        self.reservation_filter_start_date = self.reservation_staged_start_date
+        self.reservation_filter_end_date = self.reservation_staged_end_date
+
+    @rx.event
+    def reset_reservation_filters(self):
+        self.reservation_search = ""
+        self.reservation_filter_status = "todos"
+        self.reservation_filter_start_date = ""
+        self.reservation_filter_end_date = ""
+        self.reservation_staged_search = ""
+        self.reservation_staged_status = "todos"
+        self.reservation_staged_start_date = ""
+        self.reservation_staged_end_date = ""
 
     @rx.event
     def export_reservations_excel(self):
-        return rx.toast("Exportar a Excel aún no implementado.", duration=3000)
+        try:
+            reservations = self.service_reservations_for_sport
+            if not reservations:
+                return rx.toast("No hay reservas para exportar con los filtros actuales.", duration=3000)
+            import openpyxl
+            from io import BytesIO
+
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            sheet.title = "Reservas"
+            sheet.append(
+                [
+                    "Cliente",
+                    "DNI",
+                    "Telefono",
+                    "Campo",
+                    "Deporte",
+                    "Inicio",
+                    "Fin",
+                    "Estado",
+                    "Adelanto",
+                    "Pagado",
+                    "Total",
+                    "Saldo",
+                    "Creado",
+                    "Motivo cancelacion/eliminacion",
+                ]
+            )
+            for r in reservations:
+                balance = self._round_currency(r["total_amount"] - r["paid_amount"])
+                sheet.append(
+                    [
+                        r.get("client_name", ""),
+                        r.get("dni", ""),
+                        r.get("phone", ""),
+                        r.get("field_name", ""),
+                        r.get("sport_label", r.get("sport", "")),
+                        r.get("start_datetime", ""),
+                        r.get("end_datetime", ""),
+                        r.get("status", ""),
+                        self._round_currency(r.get("advance_amount", 0)),
+                        self._round_currency(r.get("paid_amount", 0)),
+                        self._round_currency(r.get("total_amount", 0)),
+                        balance,
+                        r.get("created_at", ""),
+                        r.get("cancellation_reason", "") or r.get("delete_reason", ""),
+                    ]
+                )
+            file_stream = BytesIO()
+            workbook.save(file_stream)
+            file_stream.seek(0)
+            return rx.download(data=file_stream.read(), filename="reservas.xlsx")
+        except Exception as e:
+            logging.exception(f"Error exportando reservas: {e}")
+            return rx.toast("No se pudo exportar las reservas.", duration=3000)
 
     @rx.event
     def set_new_field_price_sport(self, value: str):
@@ -1898,8 +2301,8 @@ class State(AuthState):
         target = next((p for p in self.field_prices if p["id"] == price_id), None)
         if not target:
             return
-        self._fill_form_from_price(target)
         self.reservation_form["selected_price_id"] = price_id
+        self._fill_form_from_price(target)
 
     @rx.event
     def set_reservation_sport_from_price(self, price_id: str):
@@ -2135,6 +2538,20 @@ class State(AuthState):
         except ValueError:
             return None
 
+    def _is_advance_sale(self, sale: CashboxSale) -> bool:
+        if sale.get("is_deleted"):
+            return False
+        if sale.get("is_advance"):
+            return True
+        label = (sale.get("payment_label") or "").lower()
+        details = (sale.get("payment_details") or "").lower()
+        description = " ".join(item.get("description", "") for item in sale.get("items", []))
+        return (
+            "adelanto" in label
+            or "adelanto" in details
+            or "adelanto" in description.lower()
+        )
+
     def _payment_label_and_breakdown(self, sale_total: float) -> tuple[str, list[PaymentBreakdownItem]]:
         kind = (self.payment_method_kind or "other").lower()
         method_name = self._normalize_wallet_label(self.payment_method or "Metodo")
@@ -2152,30 +2569,38 @@ class State(AuthState):
             label = f"{method_name} ({provider})"
             breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
         elif kind == "mixed":
+            paid_cash = self._round_currency(self.payment_mixed_cash)
+            paid_card = self._round_currency(self.payment_mixed_card)
+            paid_wallet = self._round_currency(self.payment_mixed_wallet)
+            provider = self.payment_wallet_provider or self.payment_wallet_choice or "Billetera"
+            remaining = self._round_currency(sale_total)
             parts: list[PaymentBreakdownItem] = []
-            if self.payment_mixed_cash > 0:
-                parts.append(
-                    {
-                        "label": "Efectivo",
-                        "amount": self._round_currency(self.payment_mixed_cash),
-                    }
-                )
-            if self.payment_mixed_card > 0:
-                parts.append(
-                    {
-                        "label": f"Tarjeta ({self.payment_card_type})",
-                        "amount": self._round_currency(self.payment_mixed_card),
-                    }
-                )
-            if self.payment_mixed_wallet > 0:
-                provider = self.payment_wallet_provider or self.payment_wallet_choice or "Billetera"
-                parts.append(
-                    {
-                        "label": provider,
-                        "amount": self._round_currency(self.payment_mixed_wallet),
-                    }
-                )
-            breakdown = parts or [{"label": method_name, "amount": self._round_currency(sale_total)}]
+            if paid_card > 0:
+                applied_card = min(paid_card, remaining)
+                if applied_card > 0:
+                    parts.append(
+                        {
+                            "label": f"Tarjeta ({self.payment_card_type})",
+                            "amount": self._round_currency(applied_card),
+                        }
+                    )
+                    remaining = self._round_currency(remaining - applied_card)
+            if paid_wallet > 0 and remaining > 0:
+                applied_wallet = min(paid_wallet, remaining)
+                if applied_wallet > 0:
+                    parts.append({"label": provider, "amount": self._round_currency(applied_wallet)})
+                    remaining = self._round_currency(remaining - applied_wallet)
+            if paid_cash > 0 and remaining > 0:
+                applied_cash = min(paid_cash, remaining)
+                if applied_cash > 0:
+                    parts.append({"label": "Efectivo", "amount": self._round_currency(applied_cash)})
+                    remaining = self._round_currency(remaining - applied_cash)
+            if not parts:
+                breakdown = [{"label": method_name, "amount": self._round_currency(sale_total)}]
+            else:
+                if remaining > 0:
+                    parts[0]["amount"] = self._round_currency(parts[0]["amount"] + remaining)
+                breakdown = parts
             labels = [p["label"] for p in breakdown]
             detail = ", ".join(labels) if labels else method_name
             label = f"{method_name} ({detail})"
@@ -2224,6 +2649,52 @@ class State(AuthState):
             self._ensure_sale_payment_fields(sale)
         return day_sales
 
+    def _register_reservation_advance_in_cashbox(
+        self, reservation: FieldReservation, advance_amount: float
+    ):
+        """Registra en caja un adelanto si la caja esta abierta."""
+        amount = self._round_currency(advance_amount)
+        if amount <= 0:
+            return
+        if not self.cashbox_is_open:
+            return
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sale_id = str(uuid.uuid4())
+        description = (
+            f"Adelanto {reservation['field_name']} "
+            f"({reservation['start_datetime']} - {reservation['end_datetime']})"
+        )
+        self.cashbox_sales.append(
+            {
+                "sale_id": sale_id,
+                "timestamp": timestamp,
+                "user": self.current_user["username"],
+                "payment_method": "Efectivo",
+                "payment_kind": "cash",
+                "payment_label": "Efectivo (Adelanto)",
+                "payment_breakdown": [{"label": "Efectivo", "amount": amount}],
+                "payment_details": f"Adelanto registrado al crear la reserva. Monto {self._format_currency(amount)}",
+                "total": amount,
+                "service_total": amount,
+                "items": [
+                    {
+                        "temp_id": reservation["id"],
+                        "barcode": reservation["id"],
+                        "description": description,
+                        "category": "Servicios",
+                        "quantity": 1,
+                        "unit": "Servicio",
+                        "price": amount,
+                        "sale_price": amount,
+                        "subtotal": amount,
+                    }
+                ],
+                "is_deleted": False,
+                "delete_reason": "",
+                "is_advance": True,
+            }
+        )
+
     def _ensure_sale_payment_fields(self, sale: CashboxSale):
         if "payment_label" not in sale or not sale.get("payment_label"):
             sale["payment_label"] = sale.get("payment_method", "Metodo")
@@ -2249,7 +2720,29 @@ class State(AuthState):
                         "amount": self._round_currency(item.get("amount", 0)),
                     }
                 )
+            target_total = self._round_currency(sale.get("total", 0))
+            total_applied = sum(item["amount"] for item in normalized_items)
+            if target_total > 0 and total_applied > target_total:
+                factor = target_total / total_applied if total_applied else 0
+                normalized_items = [
+                    {
+                        "label": item["label"],
+                        "amount": self._round_currency(item["amount"] * factor),
+                    }
+                    for item in normalized_items
+                ]
+                total_applied = sum(item["amount"] for item in normalized_items)
+            if target_total > 0 and normalized_items:
+                diff = self._round_currency(target_total - total_applied)
+                if diff != 0:
+                    normalized_items[0]["amount"] = self._round_currency(
+                        normalized_items[0]["amount"] + diff
+                    )
             sale["payment_breakdown"] = normalized_items
+        # Asegura campo de total de servicio para mostrar en caja
+        service_total = sale.get("service_total")
+        if service_total is None:
+            sale["service_total"] = self._round_currency(sale.get("total", 0))
 
     def _build_cashbox_summary(self, sales: list[CashboxSale]) -> dict[str, float]:
         summary: dict[str, float] = {}
@@ -2550,11 +3043,46 @@ class State(AuthState):
         denial = self._require_cashbox_open()
         if denial:
             return denial
-        if not self.new_sale_items:
+        reservation = (
+            self._find_reservation_by_id(self.reservation_payment_id)
+            if self.reservation_payment_id
+            else None
+        )
+        is_reservation_checkout = reservation is not None and len(self.new_sale_items) == 0
+        if not self.new_sale_items and not is_reservation_checkout:
             return rx.toast("No hay productos en la venta.", duration=3000)
         if not self.payment_method:
             return rx.toast("Seleccione un metodo de pago.", duration=3000)
-        self._refresh_payment_feedback()
+
+        # Prepara el total objetivo y los items segun sea una venta normal o un cobro de reserva.
+        if is_reservation_checkout:
+            balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+            if balance <= 0:
+                return rx.toast("La reserva ya esta pagada.", duration=3000)
+            sale_total = self._round_currency(balance)
+            sale_snapshot = [
+                {
+                    "temp_id": reservation["id"],
+                    "barcode": reservation["id"],
+                    "description": (
+                        f"Alquiler {reservation['field_name']} "
+                        f"({reservation['start_datetime']} - {reservation['end_datetime']})"
+                    ),
+                    "category": "Servicios",
+                    "quantity": 1,
+                    "unit": "Servicio",
+                    "price": sale_total,
+                    "sale_price": sale_total,
+                    "subtotal": sale_total,
+                }
+            ]
+        else:
+            sale_snapshot = [item.copy() for item in self.new_sale_items]
+            for snapshot_item in sale_snapshot:
+                self._apply_item_rounding(snapshot_item)
+            sale_total = self._round_currency(sum(item["subtotal"] for item in sale_snapshot))
+
+        self._refresh_payment_feedback(total_override=sale_total if is_reservation_checkout else None)
         if self.payment_method_kind == "cash":
             if self.payment_cash_status not in ["exact", "change"]:
                 message = (
@@ -2569,44 +3097,41 @@ class State(AuthState):
                 )
                 return rx.toast(message, duration=3000)
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        sale_snapshot = [item.copy() for item in self.new_sale_items]
-        for snapshot_item in sale_snapshot:
-            self._apply_item_rounding(snapshot_item)
-        sale_total = self._round_currency(sum(item["subtotal"] for item in sale_snapshot))
         payment_summary = self._generate_payment_summary()
         payment_label, payment_breakdown = self._payment_label_and_breakdown(sale_total)
         sale_id = str(uuid.uuid4())
-        for item in self.new_sale_items:
-            product_id = item["description"].lower().strip()
-            if self.inventory[product_id]["stock"] >= item["quantity"]:
-                new_stock = self.inventory[product_id]["stock"] - item["quantity"]
-                if new_stock < 0:
-                    new_stock = 0
-                self.inventory[product_id]["stock"] = self._normalize_quantity_value(
-                    new_stock, self.inventory[product_id]["unit"]
-                )
-                self.history.append(
-                        {
-                            "id": str(uuid.uuid4()),
-                            "timestamp": timestamp,
-                            "type": "Venta",
-                            "product_description": item["description"],
-                            "quantity": item["quantity"],
-                            "unit": item["unit"],
-                            "total": item["subtotal"],
-                            "payment_method": self.payment_method,
-                            "payment_kind": self.payment_method_kind,
-                            "payment_label": payment_label,
-                            "payment_breakdown": [p.copy() for p in payment_breakdown],
-                            "payment_details": payment_summary,
-                            "user": self.current_user["username"],
-                            "sale_id": sale_id,
-                        }
+        if not is_reservation_checkout:
+            for item in self.new_sale_items:
+                product_id = item["description"].lower().strip()
+                if self.inventory[product_id]["stock"] >= item["quantity"]:
+                    new_stock = self.inventory[product_id]["stock"] - item["quantity"]
+                    if new_stock < 0:
+                        new_stock = 0
+                    self.inventory[product_id]["stock"] = self._normalize_quantity_value(
+                        new_stock, self.inventory[product_id]["unit"]
                     )
-            else:
-                return rx.toast(
-                    f"Stock insuficiente para {item['description']}.", duration=3000
-                )
+                    self.history.append(
+                            {
+                                "id": str(uuid.uuid4()),
+                                "timestamp": timestamp,
+                                "type": "Venta",
+                                "product_description": item["description"],
+                                "quantity": item["quantity"],
+                                "unit": item["unit"],
+                                "total": item["subtotal"],
+                                "payment_method": self.payment_method,
+                                "payment_kind": self.payment_method_kind,
+                                "payment_label": payment_label,
+                                "payment_breakdown": [p.copy() for p in payment_breakdown],
+                                "payment_details": payment_summary,
+                                "user": self.current_user["username"],
+                                "sale_id": sale_id,
+                            }
+                        )
+                else:
+                    return rx.toast(
+                        f"Stock insuficiente para {item['description']}.", duration=3000
+                    )
         self.cashbox_sales.append(
             {
                 "sale_id": sale_id,
@@ -2618,18 +3143,53 @@ class State(AuthState):
                 "payment_breakdown": [p.copy() for p in payment_breakdown],
                 "payment_details": payment_summary,
                 "total": sale_total,
+                "service_total": reservation["total_amount"] if is_reservation_checkout else sale_total,
                 "items": [item.copy() for item in sale_snapshot],
                 "is_deleted": False,
                 "delete_reason": "",
             }
         )
+        if is_reservation_checkout:
+            applied_amount = sale_total
+            paid_before = reservation["paid_amount"]
+            reservation["paid_amount"] = self._round_currency(reservation["paid_amount"] + applied_amount)
+            self._update_reservation_status(reservation)
+            entry_type = "pago" if reservation["paid_amount"] >= reservation["total_amount"] else "adelanto"
+            balance_after = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+            reservation_note = (
+                f"{payment_summary} | Total: {self._format_currency(reservation['total_amount'])} "
+                f"| Adelanto: {self._format_currency(paid_before)} "
+                f"| Pago: {self._format_currency(applied_amount)} "
+                f"| Saldo: {self._format_currency(balance_after)}"
+            )
+            payment_summary = reservation_note
+            self._log_service_action(
+                reservation,
+                entry_type,
+                applied_amount,
+                notes=reservation_note,
+                status=reservation["status"],
+            )
+            self.reservation_payment_amount = ""
+            self._set_last_reservation_receipt(reservation)
+            self.last_sale_reservation_context = {
+                "total": reservation["total_amount"],
+                "paid_before": paid_before,
+                "paid_now": applied_amount,
+                "paid_after": reservation["paid_amount"],
+                "balance_after": balance_after,
+                "header": f"Alquiler {reservation['field_name']} ({reservation['start_datetime']} - {reservation['end_datetime']})",
+            }
+        else:
+            self.last_sale_reservation_context = None
         self.last_sale_receipt = sale_snapshot
         self.last_sale_total = sale_total
         self.last_sale_timestamp = timestamp
         self.last_payment_summary = payment_summary
         self.sale_receipt_ready = True
-        self.new_sale_items = []
-        self._reset_sale_form()
+        if not is_reservation_checkout:
+            self.new_sale_items = []
+            self._reset_sale_form()
         self._reset_payment_fields()
         self._refresh_payment_feedback()
         return rx.toast("Venta confirmada.", duration=3000)
@@ -2642,15 +3202,39 @@ class State(AuthState):
                 duration=3000,
             )
         rows = "".join(
-            f"<tr><td colspan='2'><strong>{item['description']}</strong></td></tr>"
+            f"<tr><td colspan='2' style='font-weight:bold;text-align:center;font-size:13px;'>{item['description']}</td></tr>"
             f"<tr><td>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td><td style='text-align:right;'>{self._format_currency(item['subtotal'])}</td></tr>"
             for item in self.last_sale_receipt
+        )
+        display_rows = rows
+        if self.last_sale_reservation_context:
+            ctx = self.last_sale_reservation_context
+            header = ctx.get("header", "")
+            header_row = ""
+            if header:
+                header_row = (
+                    f"<tr><td colspan='2' style='text-align:center;font-weight:bold;font-size:13px;'>"
+                    f"{header}"
+                    f"</td></tr>"
+                )
+            display_rows = (
+                header_row
+                + f"<tr><td colspan='2' style='height:4px;'></td></tr>"
+                + f"<tr><td>1 Servicio x S/</td><td style='text-align:right;'>{self._format_currency(ctx['total'])}</td></tr>"
+                + f"<tr><td colspan='2' style='height:4px;'></td></tr>"
+                + f"<tr><td>Adelanto previo</td><td style='text-align:right;'>{self._format_currency(ctx['paid_before'])}</td></tr>"
+                + f"<tr><td style='font-weight:bold;'>Pago actual</td><td style='text-align:right;font-weight:bold;'>{self._format_currency(ctx['paid_now'])}</td></tr>"
+            )
+        display_total = (
+            self.last_sale_reservation_context["total"]
+            if self.last_sale_reservation_context
+            else self.last_sale_total
         )
         html_content = f"""
         <html>
             <head>
                 <meta charset='utf-8' />
-                <title>Comprobante de Venta</title>
+                <title>Comprobante de Pago</title>
                 <style>
                     @page {{
                         size: 58mm auto;
@@ -2689,14 +3273,14 @@ class State(AuthState):
                 </style>
             </head>
             <body>
-                <h1>Comprobante de Venta</h1>
+                <h1>Comprobante de Pago</h1>
                 <div class="section"><strong>Fecha:</strong> {self.last_sale_timestamp}</div>
                 <hr />
                 <table>
-                    {rows}
+                    {display_rows}
                 </table>
                 <hr />
-                <div class="section"><strong>Total:</strong> {self._format_currency(self.last_sale_total)}</div>
+                <div class="section"><strong>Total General:</strong> <strong>{self._format_currency(display_total)}</strong></div>
                 <div class="section"><strong>Metodo de Pago:</strong> {self.last_payment_summary}</div>
             </body>
         </html>
@@ -2708,6 +3292,11 @@ class State(AuthState):
         receiptWindow.focus();
         receiptWindow.print();
         """
+        # Para cobros de reserva, libera seleccion despues de imprimir
+        if self.last_sale_reservation_context:
+            self.reservation_payment_id = ""
+            self.reservation_payment_amount = ""
+            self.last_sale_reservation_context = None
         self._reset_payment_fields()
         self._refresh_payment_feedback()
         return rx.call_script(script)
@@ -2886,6 +3475,15 @@ class State(AuthState):
             return denial
         if 1 <= page <= self.cashbox_total_pages:
             self.cashbox_current_page = page
+
+    @rx.event
+    def set_show_cashbox_advances(self, value: bool | str):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
+        if isinstance(value, str):
+            value = value.lower() in ["true", "1", "on", "yes"]
+        self.show_cashbox_advances = bool(value)
 
     @rx.event
     def prev_cashbox_page(self):
@@ -3239,7 +3837,7 @@ class State(AuthState):
         <html>
             <head>
                 <meta charset='utf-8' />
-                <title>Comprobante de Venta</title>
+                <title>Comprobante de Pago</title>
                 <style>
                     @page {{
                         size: 58mm auto;
@@ -3278,7 +3876,7 @@ class State(AuthState):
                 </style>
             </head>
             <body>
-                <h1>Comprobante de Venta</h1>
+                <h1>Comprobante de Pago</h1>
                 <div class="section"><strong>Fecha:</strong> {sale.get('timestamp', '')}</div>
                 <div class="section"><strong>Usuario:</strong> {sale.get('user', '')}</div>
                 <hr />
@@ -3286,7 +3884,7 @@ class State(AuthState):
                     {rows}
                 </table>
                 <hr />
-                <div class="section"><strong>Total:</strong> {self._format_currency(sale.get('total', 0))}</div>
+                <div class="section"><strong>Total General:</strong> {self._format_currency(sale.get('service_total', sale.get('total', 0)))} </div>
                 <div class="section"><strong>Metodo de Pago:</strong> {payment_summary}</div>
             </body>
         </html>
@@ -3850,9 +4448,14 @@ class State(AuthState):
             amount = 0
         return self._round_currency(amount)
 
-    def _update_cash_feedback(self):
+    def _update_cash_feedback(self, total_override: float | None = None):
+        effective_total = (
+            total_override
+            if total_override is not None
+            else (self.sale_total if self.sale_total > 0 else self.selected_reservation_balance)
+        )
         amount = self.payment_cash_amount
-        diff = amount - self.sale_total
+        diff = amount - effective_total
         if amount <= 0:
             self.payment_cash_message = "Ingrese un monto valido."
             self.payment_cash_status = "warning"
@@ -3866,33 +4469,40 @@ class State(AuthState):
             self.payment_cash_message = "Monto exacto."
             self.payment_cash_status = "exact"
 
-    def _update_mixed_message(self):
-        paid = (
-            self.payment_mixed_cash
-            + self.payment_mixed_card
-            + self.payment_mixed_wallet
+    def _update_mixed_message(self, total_override: float | None = None):
+        total = (
+            total_override
+            if total_override is not None
+            else (self.sale_total if self.sale_total > 0 else self.selected_reservation_balance)
         )
-        total = self.sale_total
-        if paid <= 0:
+        paid_cash = self._round_currency(self.payment_mixed_cash)
+        paid_card = self._round_currency(self.payment_mixed_card)
+        paid_wallet = self._round_currency(self.payment_mixed_wallet)
+        paid_non_cash = self._round_currency(paid_card + paid_wallet)
+        if paid_cash + paid_non_cash <= 0:
             self.payment_mixed_message = "Ingrese montos para los metodos seleccionados."
             self.payment_mixed_status = "warning"
+            return
+        applied_non_cash = min(paid_non_cash, total)
+        remaining_after_non_cash = max(total - applied_non_cash, 0)
+        due_after_cash = remaining_after_non_cash - paid_cash
+        if due_after_cash > 0:
+            self.payment_mixed_message = f"Restan {self._format_currency(abs(due_after_cash))}"
+            self.payment_mixed_status = "due"
+            return
+        change = max(paid_cash - remaining_after_non_cash, 0)
+        if change > 0:
+            self.payment_mixed_message = f"Vuelto {self._format_currency(change)}"
+            self.payment_mixed_status = "change"
         else:
-            diff = paid - total
-            if diff > 0:
-                self.payment_mixed_message = f"Vuelto {self._format_currency(diff)}"
-                self.payment_mixed_status = "change"
-            elif diff < 0:
-                self.payment_mixed_message = f"Restan {self._format_currency(abs(diff))}"
-                self.payment_mixed_status = "due"
-            else:
-                self.payment_mixed_message = "Montos completos."
-                self.payment_mixed_status = "exact"
+            self.payment_mixed_message = "Montos completos."
+            self.payment_mixed_status = "exact"
 
-    def _refresh_payment_feedback(self):
+    def _refresh_payment_feedback(self, total_override: float | None = None):
         if self.payment_method_kind == "cash":
-            self._update_cash_feedback()
+            self._update_cash_feedback(total_override=total_override)
         elif self.payment_method_kind == "mixed":
-            self._update_mixed_message()
+            self._update_mixed_message(total_override=total_override)
         else:
             self.payment_cash_message = ""
             self.payment_mixed_message = ""

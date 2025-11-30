@@ -27,6 +27,23 @@ def cashbox_filters() -> rx.Component:
             class_name="flex flex-col gap-2",
         ),
         rx.el.div(
+            rx.el.label("Mostrar adelantos", class_name="text-sm font-medium text-gray-600"),
+            rx.el.div(
+                rx.el.input(
+                    type="checkbox",
+                    checked=State.show_cashbox_advances,
+                    on_change=lambda val: State.set_show_cashbox_advances(val),
+                    class_name="h-4 w-4 text-indigo-600 border-gray-300 rounded",
+                ),
+                rx.el.span(
+                    "Incluir adelantos en el listado",
+                    class_name="text-sm text-gray-600",
+                ),
+                class_name="flex items-center gap-2",
+            ),
+            class_name="flex flex-col gap-2",
+        ),
+        rx.el.div(
             rx.el.button(
                 rx.icon("search", class_name="h-4 w-4"),
                 "Buscar",
@@ -262,7 +279,7 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
         rx.el.td(
             rx.el.span(
                 State.currency_symbol,
-                sale["total"].to_string(),
+                sale["service_total"].to_string(),
                 class_name="font-semibold",
             ),
             class_name="py-3 px-4 text-right",
@@ -848,7 +865,7 @@ def cashbox_page() -> rx.Component:
                 rx.el.div(
                     rx.el.div(
                         rx.el.h2(
-                            "Listado de ventas",
+                            "Listado de Pagos",
                             class_name="text-lg font-semibold text-gray-800",
                         ),
                         rx.el.div(

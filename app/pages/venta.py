@@ -30,12 +30,141 @@ def sale_item_row(item: rx.Var[dict]) -> rx.Component:
     )
 
 
+def field_rental_sale_section() -> rx.Component:
+    return rx.el.div(
+        rx.el.div(
+            rx.el.h2(
+                "Alquiler de Campo",
+                class_name="text-lg font-semibold text-gray-700",
+            ),
+            rx.el.p(
+                "Revisa los datos de la reserva enviada desde Servicios y completa el cobro con los metodos de pago de Venta.",
+                class_name="text-sm text-gray-600",
+            ),
+            class_name="flex flex-col gap-1",
+        ),
+        rx.cond(
+            State.reservation_selected_for_payment == None,
+            rx.el.div(
+                rx.icon("info", class_name="h-4 w-4 text-gray-500"),
+                rx.el.div(
+                    rx.el.span("Sin reserva seleccionada", class_name="text-sm font-semibold text-gray-800"),
+                    rx.el.span(
+                        "Usa el boton Pagar en Reservas registradas para cargar los datos aqui.",
+                        class_name="text-sm text-gray-600",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                class_name="flex items-start gap-2 rounded-md border border-dashed border-gray-300 bg-gray-50 p-3",
+            ),
+            rx.el.div(
+                rx.el.div(
+                    rx.el.label("Cliente", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.input(
+                        value=State.reservation_selected_for_payment["client_name"],
+                        is_disabled=True,
+                        class_name="w-full p-2 border rounded-md bg-gray-100",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Telefono", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.input(
+                        value=State.reservation_selected_for_payment["phone"],
+                        is_disabled=True,
+                        class_name="w-full p-2 border rounded-md bg-gray-100",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Campo", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.input(
+                        value=State.reservation_selected_for_payment["field_name"],
+                        is_disabled=True,
+                        class_name="w-full p-2 border rounded-md bg-gray-100",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Deporte", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.input(
+                        value=State.reservation_selected_for_payment.get(
+                            "sport_label", State.reservation_selected_for_payment["sport"]
+                        ),
+                        is_disabled=True,
+                        class_name="w-full p-2 border rounded-md bg-gray-100",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Horario", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.div(
+                        State.reservation_selected_for_payment["start_datetime"],
+                        " - ",
+                        State.reservation_selected_for_payment["end_datetime"],
+                        class_name="w-full p-2 border rounded-md bg-gray-100 text-sm font-semibold",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Estado", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.input(
+                        value=State.reservation_selected_for_payment["status"],
+                        is_disabled=True,
+                        class_name="w-full p-2 border rounded-md bg-gray-100",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Monto total", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.div(
+                        rx.el.span(State.currency_symbol, class_name="text-gray-500"),
+                        rx.el.span(
+                            State.reservation_selected_for_payment["total_amount"].to_string(),
+                            class_name="font-semibold",
+                        ),
+                        class_name="w-full p-2 border rounded-md bg-gray-100 flex items-center gap-1",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Adelanto", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.div(
+                        rx.el.span(State.currency_symbol, class_name="text-gray-500"),
+                        rx.el.span(
+                            State.reservation_selected_for_payment["advance_amount"].to_string(),
+                            class_name="font-semibold",
+                        ),
+                        class_name="w-full p-2 border rounded-md bg-gray-100 flex items-center gap-1",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Saldo pendiente", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.div(
+                        rx.el.span(State.currency_symbol, class_name="text-gray-500"),
+                        rx.el.span(
+                            State.selected_reservation_balance.to_string(),
+                            class_name="font-semibold",
+                        ),
+                        class_name="w-full p-2 border rounded-md bg-gray-100 flex items-center gap-1",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                class_name="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4",
+            ),
+        ),
+        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6 flex flex-col gap-4",
+    )
+
+
 def venta_page() -> rx.Component:
     return rx.el.div(
         rx.el.h1(
-            "Control de Movimiento: Venta de Productos",
+            "Control de Ventas y Pagos",
             class_name="text-2xl font-bold text-gray-800 mb-6",
         ),
+        field_rental_sale_section(),
         rx.el.div(
             rx.el.h2(
                 "Añadir Producto a la Venta",
@@ -555,7 +684,7 @@ def venta_page() -> rx.Component:
                     ),
                     rx.el.div(
                         rx.el.button(
-                            "Confirmar Venta",
+                            "Confirmar Pago",
                             on_click=State.confirm_sale,
                             class_name="w-full sm:w-auto bg-green-600 text-white px-5 py-3 rounded-lg hover:bg-green-700 font-semibold text-center min-h-[44px]",
                         ),

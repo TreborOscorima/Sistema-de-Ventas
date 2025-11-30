@@ -2,6 +2,32 @@ import reflex as rx
 from app.state import State
 
 
+def soccer_ball_icon(class_name: str = "h-5 w-5") -> rx.Component:
+    """SVG simple de balón de fútbol para evitar iconos desconocidos."""
+    return rx.el.svg(
+        rx.el.circle(cx="12", cy="12", r="9", fill="none", stroke="currentColor", stroke_width="2"),
+        rx.el.polygon(
+            points="12 7 15 9 14 13 10 13 9 9",
+            fill="none",
+            stroke="currentColor",
+            stroke_width="2",
+        ),
+        rx.el.line(x1="12", y1="7", x2="10", y2="4", stroke="currentColor", stroke_width="2"),
+        rx.el.line(x1="12", y1="7", x2="14", y2="4", stroke="currentColor", stroke_width="2"),
+        rx.el.line(x1="10", y1="13", x2="8", y2="16", stroke="currentColor", stroke_width="2"),
+        rx.el.line(x1="14", y1="13", x2="16", y2="16", stroke="currentColor", stroke_width="2"),
+        rx.el.line(x1="9", y1="9", x2="6", y2="9", stroke="currentColor", stroke_width="2"),
+        rx.el.line(x1="15", y1="9", x2="18", y2="9", stroke="currentColor", stroke_width="2"),
+        rx.el.line(x1="12", y1="7", x2="12", y2="11", stroke="currentColor", stroke_width="2"),
+        viewBox="0 0 24 24",
+        class_name=class_name,
+        stroke="currentColor",
+        fill="none",
+        stroke_linecap="round",
+        stroke_linejoin="round",
+    )
+
+
 def sport_selector() -> rx.Component:
     return rx.el.div(
         rx.el.div(
@@ -14,7 +40,7 @@ def sport_selector() -> rx.Component:
         ),
         rx.el.div(
             rx.el.button(
-                rx.icon("goal", class_name="h-5 w-5"),
+                soccer_ball_icon(),
                 rx.el.span("Campos de Futbol", class_name="font-semibold"),
                 rx.el.span("Reservas, pagos y comprobantes para futbol.", class_name="text-sm opacity-80"),
                 on_click=lambda: State.set_field_rental_sport("futbol"),
@@ -54,18 +80,22 @@ def time_slot_button(slot: rx.Var[dict]) -> rx.Component:
                 rx.cond(
                     slot["reserved"],
                     "Reservado",
-                    "Seleccionar",
+                    rx.cond(
+                        slot["selected"],
+                        "Seleccionado",
+                        "Seleccionar",
+                    ),
                 ),
                 class_name="text-xs opacity-70",
             ),
             class_name="flex flex-col items-start",
         ),
-        on_click=lambda _, start=slot["start"], end=slot["end"]: State.open_reservation_modal(start, end),
+        on_click=lambda _, start=slot["start"], end=slot["end"]: State.toggle_schedule_slot(start, end),
         class_name=rx.cond(
             slot["reserved"],
             "w-full text-left rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2 cursor-not-allowed",
             rx.cond(
-                State.reservation_form["start_time"] == slot["start"],
+                slot["selected"],
                 "w-full text-left rounded-lg bg-indigo-600 text-white px-3 py-2 shadow",
                 "w-full text-left rounded-lg border px-3 py-2 hover:bg-gray-50",
             ),
@@ -210,16 +240,54 @@ def schedule_planner() -> rx.Component:
             class_name="flex flex-col gap-2",
         ),
         rx.el.div(
-            rx.el.span("Seleccion actual", class_name="text-xs uppercase text-gray-500"),
-            rx.el.span(
-                State.schedule_selected_date,
-                " ",
-                State.reservation_form["start_time"],
-                " - ",
-                State.reservation_form["end_time"],
-                class_name="text-sm font-semibold text-gray-900",
+            rx.el.div(
+                rx.el.span("Seleccion actual", class_name="text-xs uppercase text-gray-500"),
+                rx.el.span(
+                    State.schedule_selected_date,
+                    " ",
+                    State.schedule_selection_label,
+                    class_name="text-sm font-semibold text-gray-900",
+                ),
+                rx.el.span(
+                    rx.cond(
+                        State.schedule_selection_valid,
+                        "Listo para registrar la reserva en bloque.",
+                        rx.cond(
+                            State.schedule_selected_slots_count == 0,
+                            "Selecciona uno o varios horarios disponibles.",
+                            "Elige horarios consecutivos para reservar en un solo bloque.",
+                        ),
+                    ),
+                    class_name="text-xs text-gray-600",
+                ),
+                class_name="flex flex-col gap-1",
             ),
-            class_name="rounded-md border border-dashed border-gray-200 p-3 bg-gray-50 flex flex-col gap-1",
+            rx.el.div(
+                rx.el.button(
+                    rx.icon("rotate-ccw", class_name="h-4 w-4"),
+                    "Limpiar seleccion",
+                    on_click=State.clear_schedule_selection,
+                    disabled=rx.cond(State.schedule_selected_slots_count == 0, True, False),
+                    class_name=rx.cond(
+                        State.schedule_selected_slots_count == 0,
+                        "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[38px]",
+                        "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[38px]",
+                    ),
+                ),
+                rx.el.button(
+                    rx.icon("calendar-plus", class_name="h-4 w-4"),
+                    "Reservar seleccion",
+                    on_click=State.open_selected_slots_modal,
+                    disabled=rx.cond(State.schedule_selection_valid, False, True),
+                    class_name=rx.cond(
+                        State.schedule_selection_valid,
+                        "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[38px]",
+                        "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[38px]",
+                    ),
+                ),
+                class_name="flex flex-col sm:flex-row gap-2 sm:items-center",
+            ),
+            class_name="rounded-md border border-dashed border-gray-200 p-3 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3",
         ),
         class_name="bg-white border border-gray-200 rounded-lg p-4 sm:p-5 shadow-sm flex flex-col gap-4",
     )
@@ -342,29 +410,7 @@ def reservation_modal() -> rx.Component:
                                 class_name="grid grid-cols-1 sm:grid-cols-3 gap-3",
                             ),
                             rx.el.div(
-                                rx.el.button(
-                                    rx.icon("wallet", class_name="h-4 w-4"),
-                                    "Cobrar saldo",
-                                    on_click=State.pay_reservation_from_modal,
-                                    class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 min-h-[42px]",
-                                ),
-                                rx.el.button(
-                                    rx.icon("ban", class_name="h-4 w-4"),
-                                    "Anular reserva",
-                                    on_click=State.cancel_reservation_from_modal,
-                                    class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-red-600 hover:bg-red-50 min-h-[42px]",
-                                ),
-                                rx.el.button(
-                                    rx.icon("printer", class_name="h-4 w-4"),
-                                    "Imprimir comprobante",
-                                    on_click=State.print_reservation_receipt,
-                                    disabled=State.modal_reservation["status"] != "pagado",
-                                    class_name=rx.cond(
-                                        State.modal_reservation["status"] == "pagado",
-                                        "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[42px]",
-                                        "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[42px]",
-                                    ),
-                                ),
+                                rx.fragment(),
                                 class_name="grid grid-cols-1 sm:grid-cols-3 gap-2",
                             ),
                             class_name="flex flex-col gap-4",
@@ -396,7 +442,7 @@ def reservation_modal() -> rx.Component:
                 rx.el.select(
                     rx.el.option("Selecciona un deporte", value=""),
                     rx.foreach(
-                        State.field_prices,
+                        State.field_prices_for_current_sport,
                         lambda price: rx.el.option(
                             price["sport"],
                             value=price["id"],
@@ -631,11 +677,12 @@ def reservation_form_card() -> rx.Component:
 
 
 def reservation_delete_modal() -> rx.Component:
-    return rx.cond(
-        State.reservation_delete_modal_open,
-        rx.el.div(
-            rx.el.div(on_click=State.close_reservation_delete_modal, class_name="fixed inset-0 bg-black/40"),
-            rx.el.div(
+    return rx.radix.primitives.dialog.root(
+        rx.radix.primitives.dialog.portal(
+            rx.radix.primitives.dialog.overlay(
+                class_name="fixed inset-0 bg-black/40 z-40"
+            ),
+            rx.radix.primitives.dialog.content(
                 rx.el.div(
                     rx.el.h3("Eliminar reserva", class_name="text-lg font-semibold text-gray-800"),
                     rx.el.p(
@@ -675,6 +722,7 @@ def reservation_delete_modal() -> rx.Component:
                         placeholder="Ej: Registro duplicado o datos incorrectos",
                         value=State.reservation_delete_reason,
                         on_change=State.set_reservation_delete_reason,
+                        auto_focus=True,
                         class_name="w-full p-2 border rounded-md min-h-[100px]",
                     ),
                     class_name="flex flex-col gap-1",
@@ -682,27 +730,34 @@ def reservation_delete_modal() -> rx.Component:
                 rx.el.div(
                     rx.el.button(
                         "Cancelar",
-                        on_click=State.close_reservation_delete_modal,
+                        on_click=lambda _: State.close_reservation_delete_modal(),
                         class_name="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[40px]",
                     ),
                     rx.el.button(
                         rx.icon("trash-2", class_name="h-4 w-4"),
                         "Eliminar",
-                        on_click=State.confirm_reservation_delete,
-                        disabled=State.reservation_delete_reason == "",
+                        on_click=lambda _: State.confirm_reservation_delete(),
+                        disabled=State.reservation_delete_button_disabled,
                         class_name=rx.cond(
-                            State.reservation_delete_reason == "",
+                            State.reservation_delete_button_disabled,
                             "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[40px]",
                             "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 min-h-[40px]",
                         ),
                     ),
                     class_name="flex justify-end gap-3",
                 ),
-                class_name="bg-white rounded-lg shadow-lg p-5 w-full max-w-xl space-y-4",
+                class_name=(
+                    "bg-white rounded-lg shadow-lg p-5 w-full max-w-xl space-y-4 "
+                    "data-[state=open]:animate-in data-[state=closed]:animate-out "
+                    "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 "
+                    "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 "
+                    "data-[state=open]:slide-in-from-top-4 data-[state=closed]:slide-out-to-top-4 "
+                    "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 shadow-xl focus:outline-none"
+                ),
             ),
-            class_name="fixed inset-0 flex items-center justify-center z-50 px-4",
         ),
-        rx.fragment(),
+        open=State.reservation_delete_modal_open,
+        on_open_change=State.set_reservation_delete_modal_open,
     )
 
 
@@ -776,16 +831,52 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
             class_name="py-3 px-4",
         ),
         rx.el.td(
-            rx.el.button(
-                rx.icon("trash-2", class_name="h-4 w-4"),
-                "Eliminar",
-                on_click=lambda _, rid=reservation["id"]: State.start_reservation_delete(rid),
-                disabled=reservation["status"] == "eliminado",
-                class_name=rx.cond(
-                    reservation["status"] == "eliminado",
-                    "flex items-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed",
-                    "flex items-center gap-2 px-3 py-2 rounded-md border text-red-600 hover:bg-red-50",
+            rx.el.div(
+                rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda _, rid=reservation["id"]: State.start_reservation_delete(rid),
+                    disabled=reservation["status"] == "eliminado",
+                    aria_label="Eliminar reserva",
+                    class_name=rx.cond(
+                        reservation["status"] == "eliminado",
+                        "p-2 rounded-full bg-gray-200 text-gray-500 cursor-not-allowed",
+                        "p-2 rounded-full border text-red-600 hover:bg-red-50",
+                    ),
                 ),
+                rx.el.button(
+                    rx.icon("eye", class_name="h-4 w-4"),
+                    rx.el.span("Ver", class_name="text-sm font-semibold"),
+                    on_click=lambda _, rid=reservation["id"]: State.view_reservation_details(rid),
+                    class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-blue-600 hover:bg-blue-50",
+                ),
+                rx.el.button(
+                    rx.icon("credit-card", class_name="h-4 w-4"),
+                    rx.el.span("Pagar", class_name="text-sm font-semibold"),
+                    on_click=lambda _, rid=reservation["id"]: State.go_to_sale_for_reservation(rid),
+                    disabled=rx.cond(
+                        reservation["status"] == "eliminado",
+                        True,
+                        rx.cond(
+                            reservation["status"] == "cancelado",
+                            True,
+                            rx.cond(reservation["status"] == "pagado", True, False),
+                        ),
+                    ),
+                    class_name=rx.cond(
+                        reservation["status"] == "eliminado",
+                        "flex items-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed",
+                        rx.cond(
+                            reservation["status"] == "cancelado",
+                            "flex items-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed",
+                            rx.cond(
+                                reservation["status"] == "pagado",
+                                "flex items-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed",
+                                "flex items-center gap-2 px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700",
+                            ),
+                        ),
+                    ),
+                ),
+                class_name="flex items-center gap-2",
             ),
             class_name="py-3 px-4",
         ),
@@ -814,7 +905,7 @@ def reservations_table() -> rx.Component:
         rx.el.div(
             rx.el.input(
                 placeholder="Buscar por cliente, campo o horario...",
-                value=State.reservation_search,
+                value=State.reservation_staged_search,
                 on_change=State.set_reservation_search,
                 class_name="w-full p-2 border rounded-md",
             ),
@@ -824,15 +915,33 @@ def reservations_table() -> rx.Component:
                 rx.el.option("Pagado", value="pagado"),
                 rx.el.option("Cancelado", value="cancelado"),
                 rx.el.option("Eliminado", value="eliminado"),
-                value=State.reservation_filter_status,
+                value=State.reservation_staged_status,
                 on_change=State.set_reservation_filter_status,
                 class_name="p-2 border rounded-md bg-white",
             ),
             rx.el.input(
                 type="date",
-                value=State.reservation_filter_date,
-                on_change=State.set_reservation_filter_date,
+                value=State.reservation_staged_start_date,
+                on_change=State.set_reservation_filter_start_date,
                 class_name="p-2 border rounded-md",
+            ),
+            rx.el.input(
+                type="date",
+                value=State.reservation_staged_end_date,
+                on_change=State.set_reservation_filter_end_date,
+                class_name="p-2 border rounded-md",
+            ),
+            rx.el.button(
+                rx.icon("search", class_name="h-4 w-4"),
+                "Buscar",
+                on_click=State.apply_reservation_filters,
+                class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 min-h-[42px]",
+            ),
+            rx.el.button(
+                rx.icon("rotate-ccw", class_name="h-4 w-4"),
+                "Limpiar",
+                on_click=State.reset_reservation_filters,
+                class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[42px]",
             ),
             rx.el.button(
                 rx.icon("download", class_name="h-4 w-4"),
@@ -840,7 +949,7 @@ def reservations_table() -> rx.Component:
                 on_click=State.export_reservations_excel,
                 class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 min-h-[42px]",
             ),
-            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,auto] gap-2 items-center",
+            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,1fr,auto,auto,auto] gap-2 items-center",
         ),
         rx.el.table(
             rx.el.thead(
