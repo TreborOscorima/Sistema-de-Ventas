@@ -747,12 +747,11 @@ class State(AuthState):
             if self.reservation_payment_id
             else None
         )
-        if reservation and len(self.new_sale_items) == 0:
+        balance = 0.0
+        if reservation:
             balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
-            return self._round_currency(balance)
-        return self._round_currency(
-            sum((item["subtotal"] for item in self.new_sale_items))
-        )
+        products_total = sum((item["subtotal"] for item in self.new_sale_items))
+        return self._round_currency(products_total + balance)
 
     @rx.var
     def enabled_payment_methods(self) -> list[PaymentMethodConfig]:
@@ -3048,19 +3047,31 @@ class State(AuthState):
             if self.reservation_payment_id
             else None
         )
-        is_reservation_checkout = reservation is not None and len(self.new_sale_items) == 0
-        if not self.new_sale_items and not is_reservation_checkout:
+        if reservation and reservation["status"] in ["cancelado", "eliminado"]:
+            return rx.toast("No se puede cobrar una reserva cancelada o eliminada.", duration=3000)
+        reservation_balance = (
+            self._round_currency(
+                max(reservation["total_amount"] - reservation["paid_amount"], 0)
+            )
+            if reservation
+            else 0
+        )
+        if not self.new_sale_items and reservation_balance <= 0:
+            if reservation:
+                return rx.toast("La reserva ya esta pagada.", duration=3000)
             return rx.toast("No hay productos en la venta.", duration=3000)
         if not self.payment_method:
             return rx.toast("Seleccione un metodo de pago.", duration=3000)
 
-        # Prepara el total objetivo y los items segun sea una venta normal o un cobro de reserva.
-        if is_reservation_checkout:
-            balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
-            if balance <= 0:
-                return rx.toast("La reserva ya esta pagada.", duration=3000)
-            sale_total = self._round_currency(balance)
-            sale_snapshot = [
+        product_snapshot: list[TransactionItem] = []
+        for item in self.new_sale_items:
+            snapshot_item = item.copy()
+            self._apply_item_rounding(snapshot_item)
+            product_snapshot.append(snapshot_item)
+        sale_snapshot: list[TransactionItem] = list(product_snapshot)
+        if reservation_balance > 0:
+            sale_snapshot.insert(
+                0,
                 {
                     "temp_id": reservation["id"],
                     "barcode": reservation["id"],
@@ -3071,18 +3082,16 @@ class State(AuthState):
                     "category": "Servicios",
                     "quantity": 1,
                     "unit": "Servicio",
-                    "price": sale_total,
-                    "sale_price": sale_total,
-                    "subtotal": sale_total,
-                }
-            ]
-        else:
-            sale_snapshot = [item.copy() for item in self.new_sale_items]
-            for snapshot_item in sale_snapshot:
-                self._apply_item_rounding(snapshot_item)
-            sale_total = self._round_currency(sum(item["subtotal"] for item in sale_snapshot))
+                    "price": reservation_balance,
+                    "sale_price": reservation_balance,
+                    "subtotal": reservation_balance,
+                },
+            )
+        sale_total = self._round_currency(sum(item["subtotal"] for item in sale_snapshot))
+        if sale_total <= 0:
+            return rx.toast("No hay importe para cobrar.", duration=3000)
 
-        self._refresh_payment_feedback(total_override=sale_total if is_reservation_checkout else None)
+        self._refresh_payment_feedback(total_override=sale_total)
         if self.payment_method_kind == "cash":
             if self.payment_cash_status not in ["exact", "change"]:
                 message = (
@@ -3096,61 +3105,48 @@ class State(AuthState):
                     or "Complete los montos del pago mixto."
                 )
                 return rx.toast(message, duration=3000)
+        # Verifica stock antes de aplicar descuentos.
+        for item in product_snapshot:
+            product_id = item["description"].lower().strip()
+            if product_id not in self.inventory:
+                return rx.toast(f"Producto {item['description']} no encontrado en inventario.", duration=3000)
+            if self.inventory[product_id]["stock"] < item["quantity"]:
+                return rx.toast(f"Stock insuficiente para {item['description']}.", duration=3000)
+
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         payment_summary = self._generate_payment_summary()
         payment_label, payment_breakdown = self._payment_label_and_breakdown(sale_total)
         sale_id = str(uuid.uuid4())
-        if not is_reservation_checkout:
-            for item in self.new_sale_items:
-                product_id = item["description"].lower().strip()
-                if self.inventory[product_id]["stock"] >= item["quantity"]:
-                    new_stock = self.inventory[product_id]["stock"] - item["quantity"]
-                    if new_stock < 0:
-                        new_stock = 0
-                    self.inventory[product_id]["stock"] = self._normalize_quantity_value(
-                        new_stock, self.inventory[product_id]["unit"]
-                    )
-                    self.history.append(
-                            {
-                                "id": str(uuid.uuid4()),
-                                "timestamp": timestamp,
-                                "type": "Venta",
-                                "product_description": item["description"],
-                                "quantity": item["quantity"],
-                                "unit": item["unit"],
-                                "total": item["subtotal"],
-                                "payment_method": self.payment_method,
-                                "payment_kind": self.payment_method_kind,
-                                "payment_label": payment_label,
-                                "payment_breakdown": [p.copy() for p in payment_breakdown],
-                                "payment_details": payment_summary,
-                                "user": self.current_user["username"],
-                                "sale_id": sale_id,
-                            }
-                        )
-                else:
-                    return rx.toast(
-                        f"Stock insuficiente para {item['description']}.", duration=3000
-                    )
-        self.cashbox_sales.append(
-            {
-                "sale_id": sale_id,
+        history_entries: list[Movement] = []
+        for item in product_snapshot:
+            product_id = item["description"].lower().strip()
+            new_stock = self.inventory[product_id]["stock"] - item["quantity"]
+            if new_stock < 0:
+                new_stock = 0
+            self.inventory[product_id]["stock"] = self._normalize_quantity_value(
+                new_stock, self.inventory[product_id]["unit"]
+            )
+            history_entry = {
+                "id": str(uuid.uuid4()),
                 "timestamp": timestamp,
-                "user": self.current_user["username"],
+                "type": "Venta",
+                "product_description": item["description"],
+                "quantity": item["quantity"],
+                "unit": item["unit"],
+                "total": item["subtotal"],
                 "payment_method": self.payment_method,
                 "payment_kind": self.payment_method_kind,
                 "payment_label": payment_label,
                 "payment_breakdown": [p.copy() for p in payment_breakdown],
                 "payment_details": payment_summary,
-                "total": sale_total,
-                "service_total": reservation["total_amount"] if is_reservation_checkout else sale_total,
-                "items": [item.copy() for item in sale_snapshot],
-                "is_deleted": False,
-                "delete_reason": "",
+                "user": self.current_user["username"],
+                "sale_id": sale_id,
             }
-        )
-        if is_reservation_checkout:
-            applied_amount = sale_total
+            history_entries.append(history_entry)
+
+        applied_amount = 0.0
+        if reservation_balance > 0:
+            applied_amount = reservation_balance
             paid_before = reservation["paid_amount"]
             reservation["paid_amount"] = self._round_currency(reservation["paid_amount"] + applied_amount)
             self._update_reservation_status(reservation)
@@ -3179,17 +3175,38 @@ class State(AuthState):
                 "paid_after": reservation["paid_amount"],
                 "balance_after": balance_after,
                 "header": f"Alquiler {reservation['field_name']} ({reservation['start_datetime']} - {reservation['end_datetime']})",
+                "products_total": self._round_currency(sum(item["subtotal"] for item in product_snapshot)),
+                "charged_total": sale_total,
             }
         else:
             self.last_sale_reservation_context = None
+        for entry in history_entries:
+            entry["payment_details"] = payment_summary
+        self.history.extend(history_entries)
+        self.cashbox_sales.append(
+            {
+                "sale_id": sale_id,
+                "timestamp": timestamp,
+                "user": self.current_user["username"],
+                "payment_method": self.payment_method,
+                "payment_kind": self.payment_method_kind,
+                "payment_label": payment_label,
+                "payment_breakdown": [p.copy() for p in payment_breakdown],
+                "payment_details": payment_summary,
+                "total": sale_total,
+                "service_total": sale_total,
+                "items": [item.copy() for item in sale_snapshot],
+                "is_deleted": False,
+                "delete_reason": "",
+            }
+        )
         self.last_sale_receipt = sale_snapshot
         self.last_sale_total = sale_total
         self.last_sale_timestamp = timestamp
         self.last_payment_summary = payment_summary
         self.sale_receipt_ready = True
-        if not is_reservation_checkout:
-            self.new_sale_items = []
-            self._reset_sale_form()
+        self.new_sale_items = []
+        self._reset_sale_form()
         self._reset_payment_fields()
         self._refresh_payment_feedback()
         return rx.toast("Venta confirmada.", duration=3000)
@@ -3206,7 +3223,7 @@ class State(AuthState):
             f"<tr><td>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td><td style='text-align:right;'>{self._format_currency(item['subtotal'])}</td></tr>"
             for item in self.last_sale_receipt
         )
-        display_rows = rows
+        summary_rows = ""
         if self.last_sale_reservation_context:
             ctx = self.last_sale_reservation_context
             header = ctx.get("header", "")
@@ -3217,16 +3234,25 @@ class State(AuthState):
                     f"{header}"
                     f"</td></tr>"
                 )
-            display_rows = (
+            products_total = ctx.get("products_total", 0)
+            summary_rows = (
                 header_row
                 + f"<tr><td colspan='2' style='height:4px;'></td></tr>"
-                + f"<tr><td>1 Servicio x S/</td><td style='text-align:right;'>{self._format_currency(ctx['total'])}</td></tr>"
+                + f"<tr><td>Total reserva</td><td style='text-align:right;'>{self._format_currency(ctx['total'])}</td></tr>"
                 + f"<tr><td colspan='2' style='height:4px;'></td></tr>"
                 + f"<tr><td>Adelanto previo</td><td style='text-align:right;'>{self._format_currency(ctx['paid_before'])}</td></tr>"
                 + f"<tr><td style='font-weight:bold;'>Pago actual</td><td style='text-align:right;font-weight:bold;'>{self._format_currency(ctx['paid_now'])}</td></tr>"
+                + (
+                    f"<tr><td>Productos adicionales</td><td style='text-align:right;'>{self._format_currency(products_total)}</td></tr>"
+                    if products_total > 0
+                    else ""
+                )
+                + f"<tr><td>Saldo pendiente</td><td style='text-align:right;'>{self._format_currency(ctx.get('balance_after', 0))}</td></tr>"
+                + f"<tr><td colspan='2' style='height:6px;'></td></tr>"
             )
+        display_rows = summary_rows + rows
         display_total = (
-            self.last_sale_reservation_context["total"]
+            self.last_sale_reservation_context.get("charged_total", self.last_sale_total)
             if self.last_sale_reservation_context
             else self.last_sale_total
         )
