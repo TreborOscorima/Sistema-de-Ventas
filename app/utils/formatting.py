@@ -62,7 +62,8 @@ def normalize_quantity_value(value: float, unit: str, decimal_units: set) -> flo
     Args:
         value: The quantity value
         unit: The unit of measurement
-        decimal_units: Set of units that allow decimal values (lowercase)
+        decimal_units: Set of unit names in lowercase that allow decimal values
+                      (e.g., {'kg', 'litro', 'gramo'})
         
     Returns:
         Normalized quantity value

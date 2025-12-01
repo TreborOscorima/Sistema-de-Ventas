@@ -46,6 +46,9 @@ CARD_STYLES = {
 TABLE_HEADER_STYLE = "bg-gray-100"
 TABLE_ROW_STYLE = "border-b"
 
+# Textarea row height (in pixels) for calculating min-height
+TEXTAREA_ROW_HEIGHT = 24
+
 
 def action_button(
     text: str | rx.Component,
@@ -765,13 +768,14 @@ def form_textarea(
     Returns:
         A labeled textarea component
     """
+    min_height = rows * TEXTAREA_ROW_HEIGHT
     return rx.el.div(
         rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
         rx.el.textarea(
             placeholder=placeholder,
             value=value,
             on_change=on_change,
-            class_name=f"w-full p-2 border rounded-md min-h-[{rows * 24}px]",
+            class_name=f"w-full p-2 border rounded-md min-h-[{min_height}px]",
         ),
         class_name="flex flex-col gap-1",
     )
