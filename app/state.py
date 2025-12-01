@@ -16,10 +16,18 @@ from app.states.auth_state import (
     SUPERADMIN_PRIVILEGES,
     )
 
-TODAY_STR = datetime.date.today().strftime("%Y-%m-%d")
-CURRENT_MONTH_STR = datetime.date.today().strftime("%Y-%m")
-CURRENT_WEEK_STR = datetime.date.today().strftime("%G-W%V")
+# Import utility functions for reuse
+from app.utils.formatting import round_currency as _round_currency_util
+from app.utils.dates import get_today_str, get_current_month_str, get_current_week_str
 
+TODAY_STR = get_today_str()
+CURRENT_MONTH_STR = get_current_month_str()
+CURRENT_WEEK_STR = get_current_week_str()
+
+
+# ========================================
+# region: TypedDict Definitions
+# ========================================
 
 class Product(TypedDict):
     id: str
@@ -179,6 +187,12 @@ class NewUser(TypedDict):
     role: str
     privileges: Privileges
 
+# endregion
+
+# ========================================
+# region: Constants & Default Values
+# ========================================
+
 DEFAULT_USER_PRIVILEGES: Privileges = {
     "view_ingresos": True,
     "create_ingresos": True,
@@ -228,11 +242,40 @@ DEFAULT_ROLE_TEMPLATES: dict[str, Privileges] = {
     "Cajero": CASHIER_PRIVILEGES,
 }
 
+# endregion
+
+# ========================================
+# region: State Class Definition
+# ========================================
+
 
 class State(AuthState):
+    """
+    Main application state class managing all business logic and data.
+    
+    Organized into logical sections:
+    - Core & Navigation
+    - Currency Management
+    - Services & Reservations
+    - Inventory Management
+    - Entry (Ingreso)
+    - Sales (Venta)
+    - Payment Methods
+    - Cashbox (Caja)
+    - History & Reports
+    - User Management
+    """
+    
+    # ----------------------------------------
+    # Core & Navigation Attributes
+    # ----------------------------------------
     sidebar_open: bool = True
     current_page: str = "Ingreso"
     config_active_tab: str = "usuarios"
+    
+    # ----------------------------------------
+    # Services & Reservations Attributes
+    # ----------------------------------------
     service_active_tab: str = "campo"
     field_rental_sport: str = "futbol"
     schedule_view_mode: str = "dia"
@@ -285,6 +328,10 @@ class State(AuthState):
     service_log_filter_end_date: str = ""
     service_log_filter_sport: str = "todos"
     service_log_filter_status: str = "todos"
+    
+    # ----------------------------------------
+    # Configuration & Units Attributes
+    # ----------------------------------------
     units: list[str] = ["Unidad", "Kg", "Litro", "Metro", "Caja"]
     new_unit_name: str = ""
     new_unit_allows_decimal: bool = False
@@ -292,6 +339,10 @@ class State(AuthState):
     role_privileges: dict[str, Privileges] = {
         name: template.copy() for name, template in DEFAULT_ROLE_TEMPLATES.items()
     }
+    
+    # ----------------------------------------
+    # Currency Attributes
+    # ----------------------------------------
     available_currencies: list[CurrencyOption] = [
         {"code": "PEN", "name": "Sol peruano (PEN)", "symbol": "S/"},
         {"code": "ARS", "name": "Peso argentino (ARS)", "symbol": "$"},
@@ -315,9 +366,19 @@ class State(AuthState):
         "metro",
         "metros",
     }
+    
+    # ----------------------------------------
+    # Inventory Management Attributes
+    # ----------------------------------------
     inventory: dict[str, Product] = {}
     history: list[Movement] = []
     inventory_search_term: str = ""
+    categories: list[str] = ["General"]
+    new_category_name: str = ""
+    
+    # ----------------------------------------
+    # History & Filters Attributes
+    # ----------------------------------------
     history_filter_type: str = "Todos"
     history_filter_product: str = ""
     history_filter_start_date: str = ""
@@ -328,8 +389,10 @@ class State(AuthState):
     staged_history_filter_end_date: str = ""
     current_page_history: int = 1
     items_per_page: int = 10
-    categories: list[str] = ["General"]
-    new_category_name: str = ""
+    
+    # ----------------------------------------
+    # Entry (Ingreso) Attributes
+    # ----------------------------------------
     new_entry_item: TransactionItem = {
         "temp_id": "",
         "barcode": "",
@@ -342,6 +405,11 @@ class State(AuthState):
         "subtotal": 0,
     }
     new_entry_items: list[TransactionItem] = []
+    entry_autocomplete_suggestions: list[str] = []
+    
+    # ----------------------------------------
+    # Sales (Venta) Attributes
+    # ----------------------------------------
     new_sale_item: TransactionItem = {
         "temp_id": "",
         "barcode": "",
@@ -354,13 +422,16 @@ class State(AuthState):
         "subtotal": 0,
     }
     new_sale_items: list[TransactionItem] = []
-    entry_autocomplete_suggestions: list[str] = []
     autocomplete_suggestions: list[str] = []
     last_sale_receipt: list[TransactionItem] = []
     last_sale_total: float = 0
     last_sale_timestamp: str = ""
     sale_receipt_ready: bool = False
     last_sale_reservation_context: dict | None = None
+    
+    # ----------------------------------------
+    # Payment Methods Attributes
+    # ----------------------------------------
     payment_methods: list[PaymentMethodConfig] = [
         {
             "id": "cash",
@@ -410,6 +481,10 @@ class State(AuthState):
     new_payment_method_name: str = ""
     new_payment_method_description: str = ""
     new_payment_method_kind: str = "other"
+    
+    # ----------------------------------------
+    # Inventory Adjustment Attributes
+    # ----------------------------------------
     inventory_check_modal_open: bool = False
     inventory_check_status: str = "perfecto"
     inventory_adjustment_notes: str = ""
@@ -425,6 +500,10 @@ class State(AuthState):
     }
     inventory_adjustment_items: list[InventoryAdjustment] = []
     inventory_adjustment_suggestions: list[str] = []
+    
+    # ----------------------------------------
+    # Cashbox (Caja) Attributes
+    # ----------------------------------------
     cashbox_sales: list[CashboxSale] = []
     cashbox_filter_start_date: str = ""
     cashbox_filter_end_date: str = ""
@@ -449,6 +528,10 @@ class State(AuthState):
     cashbox_log_staged_end_date: str = ""
     cashbox_log_modal_open: bool = False
     cashbox_log_selected: CashboxLogEntry | None = None
+    
+    # ----------------------------------------
+    # User Management Attributes
+    # ----------------------------------------
     show_user_form: bool = False
     editing_user: User | None = None
     new_role_name: str = ""
@@ -459,6 +542,10 @@ class State(AuthState):
         "role": "Usuario",
         "privileges": DEFAULT_USER_PRIVILEGES.copy(),
     }
+
+    # ========================================
+    # region: Private Helper Methods
+    # ========================================
 
     def _normalize_privileges(self, privileges: dict | None) -> Privileges:
         merged = EMPTY_PRIVILEGES.copy()

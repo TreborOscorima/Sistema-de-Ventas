@@ -556,3 +556,309 @@ def data_table(
         empty_state_section,
         class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
     )
+
+
+def card_container(
+    *children: rx.Component,
+    title: str | None = None,
+    description: str | None = None,
+    style: str = "bordered",
+) -> rx.Component:
+    """
+    Creates a styled card container with optional header.
+    
+    Args:
+        *children: Child components to render inside the card
+        title: Optional card title
+        description: Optional card description
+        style: Card style key from CARD_STYLES
+    
+    Returns:
+        A styled card component
+    """
+    content_parts = []
+    
+    if title or description:
+        header_parts = []
+        if title:
+            header_parts.append(
+                rx.el.h3(title, class_name="text-lg font-semibold text-gray-800")
+            )
+        if description:
+            header_parts.append(
+                rx.el.p(description, class_name="text-sm text-gray-600")
+            )
+        content_parts.append(
+            rx.el.div(*header_parts, class_name="flex flex-col gap-1")
+        )
+    
+    content_parts.extend(children)
+    
+    return rx.el.div(
+        *content_parts,
+        class_name=f"{CARD_STYLES.get(style, CARD_STYLES['bordered'])} flex flex-col gap-4",
+    )
+
+
+def section_header(title: str, description: str = "") -> rx.Component:
+    """
+    Creates a section header with title and optional description.
+    
+    Args:
+        title: Section title
+        description: Optional description text
+    
+    Returns:
+        A header component
+    """
+    parts = [rx.el.h2(title, class_name="text-lg font-semibold text-gray-800")]
+    if description:
+        parts.append(rx.el.p(description, class_name="text-sm text-gray-600"))
+    
+    return rx.el.div(*parts, class_name="flex flex-col gap-1")
+
+
+def info_badge(
+    text: str | rx.Var,
+    variant: str = "default",
+) -> rx.Component:
+    """
+    Creates an info badge/tag.
+    
+    Args:
+        text: Badge text
+        variant: Color variant (default, success, warning, danger, info)
+    
+    Returns:
+        A styled badge component
+    """
+    variant_styles = {
+        "default": "bg-gray-100 text-gray-700",
+        "success": "bg-emerald-100 text-emerald-700",
+        "warning": "bg-amber-100 text-amber-700",
+        "danger": "bg-red-100 text-red-700",
+        "info": "bg-blue-100 text-blue-700",
+    }
+    style_class = variant_styles.get(variant, variant_styles["default"])
+    
+    return rx.el.span(
+        text,
+        class_name=f"px-2 py-1 text-xs font-semibold rounded-full {style_class}",
+    )
+
+
+def form_input(
+    label: str,
+    value: rx.Var | str,
+    on_change: Callable,
+    input_type: str = "text",
+    placeholder: str = "",
+    disabled: bool = False,
+    step: str | None = None,
+) -> rx.Component:
+    """
+    Creates a labeled form input field.
+    
+    Args:
+        label: Input label text
+        value: Input value (can be reactive)
+        on_change: Change handler
+        input_type: HTML input type (text, number, date, etc.)
+        placeholder: Placeholder text
+        disabled: Whether input is disabled
+        step: Step value for number inputs
+    
+    Returns:
+        A labeled input component
+    """
+    input_props = {
+        "type": input_type,
+        "placeholder": placeholder,
+        "value": value,
+        "on_change": on_change,
+        "disabled": disabled,
+        "class_name": INPUT_STYLES["disabled"] if disabled else INPUT_STYLES["default"],
+    }
+    if step:
+        input_props["step"] = step
+    
+    return rx.el.div(
+        rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
+        rx.el.input(**input_props),
+        class_name="flex flex-col gap-1",
+    )
+
+
+def form_select(
+    label: str,
+    options: list[tuple[str, str]] | rx.Var,
+    value: rx.Var | str,
+    on_change: Callable,
+    placeholder: str | None = None,
+) -> rx.Component:
+    """
+    Creates a labeled select dropdown.
+    
+    Args:
+        label: Select label text
+        options: List of (display_text, value) tuples or reactive var
+        value: Currently selected value
+        on_change: Change handler
+        placeholder: Optional placeholder option
+    
+    Returns:
+        A labeled select component
+    """
+    option_elements = []
+    if placeholder:
+        option_elements.append(rx.el.option(placeholder, value=""))
+    
+    # Handle both static list and reactive var for options
+    if isinstance(options, rx.Var):
+        return rx.el.div(
+            rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
+            rx.el.select(
+                rx.el.option(placeholder, value="") if placeholder else rx.fragment(),
+                rx.foreach(
+                    options,
+                    lambda opt: rx.el.option(opt[0], value=opt[1]),
+                ),
+                value=value,
+                on_change=on_change,
+                class_name="w-full p-2 border rounded-md bg-white",
+            ),
+            class_name="flex flex-col gap-1",
+        )
+    
+    for display_text, opt_value in options:
+        option_elements.append(rx.el.option(display_text, value=opt_value))
+    
+    return rx.el.div(
+        rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
+        rx.el.select(
+            *option_elements,
+            value=value,
+            on_change=on_change,
+            class_name="w-full p-2 border rounded-md bg-white",
+        ),
+        class_name="flex flex-col gap-1",
+    )
+
+
+def form_textarea(
+    label: str,
+    value: rx.Var | str,
+    on_change: Callable,
+    placeholder: str = "",
+    rows: int = 4,
+) -> rx.Component:
+    """
+    Creates a labeled textarea.
+    
+    Args:
+        label: Textarea label text
+        value: Textarea value
+        on_change: Change handler
+        placeholder: Placeholder text
+        rows: Number of visible rows
+    
+    Returns:
+        A labeled textarea component
+    """
+    return rx.el.div(
+        rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
+        rx.el.textarea(
+            placeholder=placeholder,
+            value=value,
+            on_change=on_change,
+            class_name=f"w-full p-2 border rounded-md min-h-[{rows * 24}px]",
+        ),
+        class_name="flex flex-col gap-1",
+    )
+
+
+def filter_action_buttons(
+    on_search: Callable,
+    on_clear: Callable,
+    on_export: Callable | None = None,
+    search_text: str = "Buscar",
+    clear_text: str = "Limpiar",
+    export_text: str = "Exportar",
+) -> rx.Component:
+    """
+    Creates a group of filter action buttons.
+    
+    Args:
+        on_search: Handler for search button
+        on_clear: Handler for clear/reset button
+        on_export: Optional handler for export button
+        search_text: Text for search button
+        clear_text: Text for clear button
+        export_text: Text for export button
+    
+    Returns:
+        A button group component
+    """
+    buttons = [
+        rx.el.button(
+            rx.icon("search", class_name="h-4 w-4"),
+            search_text,
+            on_click=on_search,
+            class_name=BUTTON_STYLES["primary"],
+        ),
+        rx.el.button(
+            clear_text,
+            on_click=on_clear,
+            class_name=BUTTON_STYLES["secondary"],
+        ),
+    ]
+    
+    if on_export:
+        buttons.append(
+            rx.el.button(
+                rx.icon("download", class_name="h-4 w-4"),
+                export_text,
+                on_click=on_export,
+                class_name=BUTTON_STYLES["success"],
+            )
+        )
+    
+    return rx.el.div(
+        *buttons,
+        class_name="flex flex-col gap-2 sm:flex-row sm:flex-wrap",
+    )
+
+
+def select_filter(
+    label: str,
+    options: list[tuple[str, str]],
+    value: rx.Var | str,
+    on_change: Callable,
+) -> rx.Component:
+    """
+    Creates a filter select dropdown with label.
+    
+    Args:
+        label: Filter label
+        options: List of (display_text, value) tuples
+        value: Currently selected value
+        on_change: Change handler
+    
+    Returns:
+        A labeled select filter component
+    """
+    option_elements = [
+        rx.el.option(display_text, value=opt_value)
+        for display_text, opt_value in options
+    ]
+    
+    return rx.el.div(
+        rx.el.label(label, class_name="text-sm font-medium text-gray-600"),
+        rx.el.select(
+            *option_elements,
+            value=value,
+            on_change=on_change,
+            class_name="w-full p-2 border rounded-md",
+        ),
+        class_name="flex flex-col gap-1",
+    )
