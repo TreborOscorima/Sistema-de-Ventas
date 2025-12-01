@@ -1,31 +1,25 @@
 import reflex as rx
 from app.state import State
+from app.components.ui import (
+    date_range_filter,
+    filter_action_buttons,
+    section_header,
+    BUTTON_STYLES,
+)
 
 
 def cashbox_filters() -> rx.Component:
+    """Filter section for cashbox sales."""
+    start_filter, end_filter = date_range_filter(
+        start_value=State.cashbox_staged_start_date,
+        end_value=State.cashbox_staged_end_date,
+        on_start_change=State.set_cashbox_staged_start_date,
+        on_end_change=State.set_cashbox_staged_end_date,
+    )
+    
     return rx.el.div(
-        rx.el.div(
-            rx.el.label(
-                "Fecha Inicio", class_name="text-sm font-medium text-gray-600"
-            ),
-            rx.el.input(
-                type="date",
-                value=State.cashbox_staged_start_date,
-                on_change=State.set_cashbox_staged_start_date,
-                class_name="w-full p-2 border rounded-md",
-            ),
-            class_name="flex flex-col gap-2",
-        ),
-        rx.el.div(
-            rx.el.label("Fecha Fin", class_name="text-sm font-medium text-gray-600"),
-            rx.el.input(
-                type="date",
-                value=State.cashbox_staged_end_date,
-                on_change=State.set_cashbox_staged_end_date,
-                class_name="w-full p-2 border rounded-md",
-            ),
-            class_name="flex flex-col gap-2",
-        ),
+        start_filter,
+        end_filter,
         rx.el.div(
             rx.el.label("Mostrar adelantos", class_name="text-sm font-medium text-gray-600"),
             rx.el.div(
@@ -43,77 +37,35 @@ def cashbox_filters() -> rx.Component:
             ),
             class_name="flex flex-col gap-2",
         ),
-        rx.el.div(
-            rx.el.button(
-                rx.icon("search", class_name="h-4 w-4"),
-                "Buscar",
-                on_click=State.apply_cashbox_filters,
-                class_name="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 min-h-[42px]",
-            ),
-            rx.el.button(
-                "Limpiar",
-                on_click=State.reset_cashbox_filters,
-                class_name="w-full px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[42px]",
-            ),
-            rx.el.button(
-                rx.icon("download", class_name="h-4 w-4"),
-                "Exportar",
-                on_click=State.export_cashbox_report,
-                class_name="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 min-h-[42px]",
-            ),
-            class_name="flex flex-col gap-2 sm:flex-row sm:flex-wrap",
+        filter_action_buttons(
+            on_search=State.apply_cashbox_filters,
+            on_clear=State.reset_cashbox_filters,
+            on_export=State.export_cashbox_report,
         ),
         class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(3,minmax(0,1fr))] gap-3 sm:gap-4 items-end",
     )
 
 
 def cashbox_log_filters() -> rx.Component:
+    """Filter section for cashbox logs."""
+    start_filter, end_filter = date_range_filter(
+        start_value=State.cashbox_log_staged_start_date,
+        end_value=State.cashbox_log_staged_end_date,
+        on_start_change=State.set_cashbox_log_staged_start_date,
+        on_end_change=State.set_cashbox_log_staged_end_date,
+    )
+    
     return rx.el.div(
-        rx.el.div(
-            rx.el.label(
-                "Fecha Inicio", class_name="text-sm font-medium text-gray-600"
-            ),
-            rx.el.input(
-                type="date",
-                value=State.cashbox_log_staged_start_date,
-                on_change=State.set_cashbox_log_staged_start_date,
-                class_name="w-full p-2 border rounded-md",
-            ),
-            class_name="flex flex-col gap-2",
-        ),
-        rx.el.div(
-            rx.el.label("Fecha Fin", class_name="text-sm font-medium text-gray-600"),
-            rx.el.input(
-                type="date",
-                value=State.cashbox_log_staged_end_date,
-                on_change=State.set_cashbox_log_staged_end_date,
-                class_name="w-full p-2 border rounded-md",
-            ),
-            class_name="flex flex-col gap-2",
-        ),
-        rx.el.div(
-            rx.el.button(
-                rx.icon("search", class_name="h-4 w-4"),
-                "Buscar",
-                on_click=State.apply_cashbox_log_filters,
-                class_name="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 min-h-[42px]",
-            ),
-            rx.el.button(
-                "Limpiar",
-                on_click=State.reset_cashbox_log_filters,
-                class_name="w-full px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[42px]",
-            ),
-            rx.el.button(
-                rx.icon("download", class_name="h-4 w-4"),
-                "Exportar Excel",
-                on_click=State.export_cashbox_sessions,
-                class_name="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 min-h-[42px]",
-            ),
-            class_name="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:flex-col",
+        start_filter,
+        end_filter,
+        filter_action_buttons(
+            on_search=State.apply_cashbox_log_filters,
+            on_clear=State.reset_cashbox_log_filters,
+            on_export=State.export_cashbox_sessions,
+            export_text="Exportar Excel",
         ),
         class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4",
     )
-
 
 
 def cashbox_opening_card() -> rx.Component:
@@ -409,17 +361,11 @@ def cashbox_pagination_controls() -> rx.Component:
 
 
 def cashbox_logs_section() -> rx.Component:
+    """Section for displaying cashbox open/close logs."""
     return rx.el.div(
-        rx.el.div(
-            rx.el.h2(
-                "Aperturas y cierres de caja",
-                class_name="text-xl font-semibold text-gray-800",
-            ),
-            rx.el.p(
-                "Consulta quien abrio o cerro la caja y cuando lo hizo.",
-                class_name="text-sm text-gray-600",
-            ),
-            class_name="flex flex-col gap-1",
+        section_header(
+            "Aperturas y cierres de caja",
+            "Consulta quien abrio o cerro la caja y cuando lo hizo.",
         ),
         cashbox_log_filters(),
         rx.el.table(

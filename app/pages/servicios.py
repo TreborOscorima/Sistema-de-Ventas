@@ -1,5 +1,12 @@
 import reflex as rx
 from app.state import State
+from app.components.ui import (
+    date_range_filter,
+    select_filter,
+    section_header,
+    card_container,
+    BUTTON_STYLES,
+)
 
 
 def soccer_ball_icon(class_name: str = "h-5 w-5") -> rx.Component:
@@ -1158,72 +1165,53 @@ def admin_log_row(entry: rx.Var[dict]) -> rx.Component:
 
 
 def admin_log_filters() -> rx.Component:
+    """Filter section for the admin log."""
+    start_filter, end_filter = date_range_filter(
+        start_value=State.service_log_filter_start_date,
+        end_value=State.service_log_filter_end_date,
+        on_start_change=State.set_service_log_filter_start_date,
+        on_end_change=State.set_service_log_filter_end_date,
+        start_label="Fecha inicio",
+        end_label="Fecha fin",
+    )
+    
     return rx.el.div(
-        rx.el.div(
-            rx.el.label("Fecha inicio", class_name="text-sm font-medium text-gray-700"),
-            rx.el.input(
-                type="date",
-                value=State.service_log_filter_start_date,
-                on_change=State.set_service_log_filter_start_date,
-                class_name="w-full p-2 border rounded-md",
-            ),
-            class_name="flex flex-col gap-1",
+        start_filter,
+        end_filter,
+        select_filter(
+            "Deporte",
+            [("Todos", "todos"), ("Futbol", "futbol"), ("Voley", "voley")],
+            State.service_log_filter_sport,
+            State.set_service_log_filter_sport,
         ),
-        rx.el.div(
-            rx.el.label("Fecha fin", class_name="text-sm font-medium text-gray-700"),
-            rx.el.input(
-                type="date",
-                value=State.service_log_filter_end_date,
-                on_change=State.set_service_log_filter_end_date,
-                class_name="w-full p-2 border rounded-md",
-            ),
-            class_name="flex flex-col gap-1",
-        ),
-        rx.el.div(
-            rx.el.label("Deporte", class_name="text-sm font-medium text-gray-700"),
-            rx.el.select(
-                rx.el.option("Todos", value="todos"),
-                rx.el.option("Futbol", value="futbol"),
-                rx.el.option("Voley", value="voley"),
-                value=State.service_log_filter_sport,
-                on_change=State.set_service_log_filter_sport,
-                class_name="w-full p-2 border rounded-md bg-white",
-            ),
-            class_name="flex flex-col gap-1",
-        ),
-        rx.el.div(
-            rx.el.label("Estado", class_name="text-sm font-medium text-gray-700"),
-            rx.el.select(
-                rx.el.option("Todos", value="todos"),
-                rx.el.option("Pendiente", value="pendiente"),
-                rx.el.option("Pagado", value="pagado"),
-                rx.el.option("Cancelado", value="cancelado"),
-                rx.el.option("Eliminado", value="eliminado"),
-                value=State.service_log_filter_status,
-                on_change=State.set_service_log_filter_status,
-                class_name="w-full p-2 border rounded-md bg-white",
-            ),
-            class_name="flex flex-col gap-1",
+        select_filter(
+            "Estado",
+            [
+                ("Todos", "todos"),
+                ("Pendiente", "pendiente"),
+                ("Pagado", "pagado"),
+                ("Cancelado", "cancelado"),
+                ("Eliminado", "eliminado"),
+            ],
+            State.service_log_filter_status,
+            State.set_service_log_filter_status,
         ),
         rx.el.button(
             rx.icon("eraser", class_name="h-4 w-4"),
             "Limpiar filtros",
             on_click=State.reset_service_log_filters,
-            class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[42px]",
+            class_name=BUTTON_STYLES["secondary"],
         ),
         class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end",
     )
 
 
 def admin_log_table() -> rx.Component:
+    """Table showing administrative log entries."""
     return rx.el.div(
-        rx.el.div(
-            rx.el.h3("Registro administrativo", class_name="text-lg font-semibold text-gray-800"),
-            rx.el.p(
-                "Movimientos de reservas, cancelaciones y pagos con filtros por fecha, deporte y estado.",
-                class_name="text-sm text-gray-600",
-            ),
-            class_name="flex flex-col gap-1",
+        section_header(
+            "Registro administrativo",
+            "Movimientos de reservas, cancelaciones y pagos con filtros por fecha, deporte y estado.",
         ),
         admin_log_filters(),
         rx.el.table(

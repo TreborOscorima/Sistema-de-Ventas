@@ -1,6 +1,97 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import stat_card, pagination_controls, empty_state
+from app.components.ui import (
+    stat_card,
+    pagination_controls,
+    empty_state,
+    select_filter,
+    date_range_filter,
+    filter_action_buttons,
+    card_container,
+    BUTTON_STYLES,
+)
+
+
+def history_filters() -> rx.Component:
+    """Filter section for the history page."""
+    start_filter, end_filter = date_range_filter(
+        start_value=State.staged_history_filter_start_date,
+        end_value=State.staged_history_filter_end_date,
+        on_start_change=State.set_staged_history_filter_start_date,
+        on_end_change=State.set_staged_history_filter_end_date,
+    )
+    
+    return rx.el.div(
+        select_filter(
+            "Filtrar por tipo",
+            [("Todos", "Todos"), ("Ingreso", "Ingreso"), ("Venta", "Venta")],
+            State.staged_history_filter_type,
+            State.set_staged_history_filter_type,
+        ),
+        rx.el.div(
+            rx.el.label(
+                "Buscar por producto",
+                class_name="text-sm font-medium text-gray-600",
+            ),
+            rx.el.input(
+                placeholder="Ej: Coca-Cola 600ml",
+                on_change=State.set_staged_history_filter_product,
+                class_name="w-full p-2 border rounded-md",
+                default_value=State.staged_history_filter_product,
+            ),
+            class_name="flex flex-col gap-1",
+        ),
+        start_filter,
+        end_filter,
+        rx.el.div(
+            filter_action_buttons(
+                on_search=State.apply_history_filters,
+                on_clear=State.reset_history_filters,
+                on_export=State.export_to_excel,
+                export_text="Exportar a Excel",
+            ),
+            class_name="sm:col-span-2 xl:col-span-1",
+        ),
+        class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 items-end",
+    )
+
+
+def history_table_row(movement: rx.Var[dict]) -> rx.Component:
+    """Render a single row in the history table."""
+    return rx.el.tr(
+        rx.el.td(movement["timestamp"], class_name="py-3 px-4"),
+        rx.el.td(
+            rx.el.span(
+                movement["type"],
+                class_name=rx.cond(
+                    movement["type"] == "Ingreso",
+                    "px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800",
+                    "px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800",
+                ),
+            )
+        ),
+        rx.el.td(movement["product_description"], class_name="py-3 px-4"),
+        rx.el.td(movement["quantity"].to_string(), class_name="py-3 px-4 text-center"),
+        rx.el.td(movement["unit"], class_name="py-3 px-4 text-center"),
+        rx.el.td(
+            State.currency_symbol,
+            movement["total"].to_string(),
+            class_name="py-3 px-4 text-right font-medium",
+        ),
+        rx.el.td(
+            rx.cond(
+                movement.get("payment_method"),
+                rx.el.span(movement.get("payment_method"), class_name="font-medium"),
+                rx.el.span("-", class_name="text-gray-400"),
+            ),
+            class_name="py-3 px-4",
+        ),
+        rx.el.td(
+            movement.get("payment_details", "-"),
+            class_name="py-3 px-4 text-sm text-gray-600",
+        ),
+        class_name="border-b",
+    )
 
 
 def historial_page() -> rx.Component:
@@ -37,77 +128,7 @@ def historial_page() -> rx.Component:
             class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6",
         ),
         rx.el.div(
-            rx.el.div(
-                rx.el.div(
-                    rx.el.label(
-                        "Filtrar por tipo",
-                        class_name="block text-sm font-medium text-gray-600 mb-1",
-                    ),
-                    rx.el.select(
-                        rx.el.option("Todos", value="Todos"),
-                        rx.el.option("Ingreso", value="Ingreso"),
-                        rx.el.option("Venta", value="Venta"),
-                        default_value=State.staged_history_filter_type,
-                        on_change=State.set_staged_history_filter_type,
-                        class_name="w-full p-2 border rounded-md",
-                    ),
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Buscar por producto",
-                        class_name="block text-sm font-medium text-gray-600 mb-1",
-                    ),
-                    rx.el.input(
-                        placeholder="Ej: Coca-Cola 600ml",
-                        on_change=State.set_staged_history_filter_product,
-                        class_name="w-full p-2 border rounded-md",
-                        default_value=State.staged_history_filter_product,
-                    ),
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Fecha Inicio",
-                        class_name="block text-sm font-medium text-gray-600 mb-1",
-                    ),
-                    rx.el.input(
-                        type="date",
-                        on_change=State.set_staged_history_filter_start_date,
-                        default_value=State.staged_history_filter_start_date,
-                        class_name="w-full p-2 border rounded-md",
-                    ),
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Fecha Fin",
-                        class_name="block text-sm font-medium text-gray-600 mb-1",
-                    ),
-                    rx.el.input(
-                        type="date",
-                        on_change=State.set_staged_history_filter_end_date,
-                        default_value=State.staged_history_filter_end_date,
-                        class_name="w-full p-2 border rounded-md",
-                    ),
-                ),
-                rx.el.div(
-                    rx.el.button(
-                        "Buscar",
-                        on_click=State.apply_history_filters,
-                        class_name="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[42px]",
-                    ),
-                    rx.el.button(
-                        "Limpiar",
-                        on_click=State.reset_history_filters,
-                        class_name="w-full sm:w-auto bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 min-h-[42px]",
-                    ),
-                    rx.el.button(
-                        "Exportar a Excel",
-                        on_click=State.export_to_excel,
-                        class_name="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 min-h-[42px]",
-                    ),
-                    class_name="flex flex-col sm:flex-row gap-3 sm:col-span-2 xl:col-span-2",
-                ),
-                class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 items-end",
-            ),
+            history_filters(),
             class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
         ),
         rx.el.div(
@@ -125,55 +146,7 @@ def historial_page() -> rx.Component:
                         class_name="bg-gray-100",
                     )
                 ),
-                rx.el.tbody(
-                    rx.foreach(
-                        State.paginated_history,
-                        lambda movement: rx.el.tr(
-                            rx.el.td(movement["timestamp"], class_name="py-3 px-4"),
-                            rx.el.td(
-                                rx.el.span(
-                                    movement["type"],
-                                    class_name=rx.cond(
-                                        movement["type"] == "Ingreso",
-                                        "px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800",
-                                        "px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800",
-                                    ),
-                                )
-                            ),
-                            rx.el.td(
-                                movement["product_description"], class_name="py-3 px-4"
-                            ),
-                            rx.el.td(
-                                movement["quantity"].to_string(),
-                                class_name="py-3 px-4 text-center",
-                            ),
-                            rx.el.td(
-                                movement["unit"], class_name="py-3 px-4 text-center"
-                            ),
-                            rx.el.td(
-                                State.currency_symbol,
-                                movement["total"].to_string(),
-                                class_name="py-3 px-4 text-right font-medium",
-                            ),
-                            rx.el.td(
-                                rx.cond(
-                                    movement.get("payment_method"),
-                                    rx.el.span(
-                                        movement.get("payment_method"),
-                                        class_name="font-medium",
-                                    ),
-                                    rx.el.span("-", class_name="text-gray-400"),
-                                ),
-                                class_name="py-3 px-4",
-                            ),
-                            rx.el.td(
-                                movement.get("payment_details", "-"),
-                                class_name="py-3 px-4 text-sm text-gray-600",
-                            ),
-                            class_name="border-b",
-                        ),
-                    )
-                ),
+                rx.el.tbody(rx.foreach(State.paginated_history, history_table_row)),
             ),
             rx.cond(
                 State.filtered_history.length() == 0,
