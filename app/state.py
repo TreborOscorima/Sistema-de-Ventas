@@ -140,8 +140,6 @@ class CashboxSale(TypedDict):
     items: list[TransactionItem]
     is_deleted: bool
     delete_reason: str
-    is_deleted: bool
-    delete_reason: str
 
 
 class CashboxSession(TypedDict):
@@ -273,7 +271,6 @@ class State(AuthState):
     reservation_staged_status: str = "todos"
     reservation_staged_start_date: str = ""
     reservation_staged_end_date: str = ""
-    reservation_payment_routed: bool = False
     reservation_payment_routed: bool = False
     last_reservation_receipt: ReservationReceipt | None = None
     reservation_delete_selection: str = ""

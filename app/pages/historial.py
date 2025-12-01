@@ -1,20 +1,6 @@
 import reflex as rx
 from app.state import State
-
-
-def stat_card(icon: str, title: str, value: rx.Var, color: str) -> rx.Component:
-    return rx.el.div(
-        rx.el.div(
-            rx.icon(icon, class_name=f"h-6 w-6 {color}"),
-            class_name="p-3 bg-gray-100 rounded-lg",
-        ),
-        rx.el.div(
-            rx.el.p(title, class_name="text-sm font-medium text-gray-500"),
-            rx.el.p(value, class_name="text-2xl font-bold text-gray-800"),
-            class_name="flex-grow",
-        ),
-        class_name="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border",
-    )
+from app.components.ui import stat_card, pagination_controls, empty_state
 
 
 def historial_page() -> rx.Component:
@@ -191,29 +177,16 @@ def historial_page() -> rx.Component:
             ),
             rx.cond(
                 State.filtered_history.length() == 0,
-                rx.el.p(
-                    "No hay movimientos que coincidan con los filtros.",
-                    class_name="text-gray-500 text-center py-8",
-                ),
+                empty_state("No hay movimientos que coincidan con los filtros."),
                 rx.fragment(),
             ),
             class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
         ),
-        rx.el.div(
-            rx.el.button(
-                "Anterior",
-                on_click=lambda: State.set_history_page(State.current_page_history - 1),
-                is_disabled=State.current_page_history <= 1,
-                class_name="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50 min-h-[40px]",
-            ),
-            rx.el.span(f"Página {State.current_page_history} de {State.total_pages}"),
-            rx.el.button(
-                "Siguiente",
-                on_click=lambda: State.set_history_page(State.current_page_history + 1),
-                is_disabled=State.current_page_history >= State.total_pages,
-                class_name="px-4 py-2 bg-gray-200 rounded-md disabled:opacity-50 min-h-[40px]",
-            ),
-            class_name="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 mt-6",
+        pagination_controls(
+            current_page=State.current_page_history,
+            total_pages=State.total_pages,
+            on_prev=lambda: State.set_history_page(State.current_page_history - 1),
+            on_next=lambda: State.set_history_page(State.current_page_history + 1),
         ),
         class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
     )
