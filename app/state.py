@@ -140,8 +140,6 @@ class CashboxSale(TypedDict):
     items: list[TransactionItem]
     is_deleted: bool
     delete_reason: str
-    is_deleted: bool
-    delete_reason: str
 
 
 class CashboxSession(TypedDict):
@@ -273,7 +271,6 @@ class State(AuthState):
     reservation_staged_status: str = "todos"
     reservation_staged_start_date: str = ""
     reservation_staged_end_date: str = ""
-    reservation_payment_routed: bool = False
     reservation_payment_routed: bool = False
     last_reservation_receipt: ReservationReceipt | None = None
     reservation_delete_selection: str = ""
@@ -3237,9 +3234,9 @@ class State(AuthState):
             products_total = ctx.get("products_total", 0)
             summary_rows = (
                 header_row
-                + f"<tr><td colspan='2' style='height:4px;'></td></tr>"
+                + "<tr><td colspan='2' style='height:4px;'></td></tr>"
                 + f"<tr><td>Total reserva</td><td style='text-align:right;'>{self._format_currency(ctx['total'])}</td></tr>"
-                + f"<tr><td colspan='2' style='height:4px;'></td></tr>"
+                + "<tr><td colspan='2' style='height:4px;'></td></tr>"
                 + f"<tr><td>Adelanto previo</td><td style='text-align:right;'>{self._format_currency(ctx['paid_before'])}</td></tr>"
                 + f"<tr><td style='font-weight:bold;'>Pago actual</td><td style='text-align:right;font-weight:bold;'>{self._format_currency(ctx['paid_now'])}</td></tr>"
                 + (
@@ -3248,7 +3245,7 @@ class State(AuthState):
                     else ""
                 )
                 + f"<tr><td>Saldo pendiente</td><td style='text-align:right;'>{self._format_currency(ctx.get('balance_after', 0))}</td></tr>"
-                + f"<tr><td colspan='2' style='height:6px;'></td></tr>"
+                + "<tr><td colspan='2' style='height:6px;'></td></tr>"
             )
         display_rows = summary_rows + rows
         display_total = (

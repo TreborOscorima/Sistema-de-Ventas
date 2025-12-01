@@ -1,6 +1,5 @@
 import reflex as rx
 from app.state import State
-from app.states.auth_state import AuthState
 
 CONFIG_SUBSECTIONS = [
     {"key": "usuarios", "label": "Gestion de Usuarios", "icon": "users"},

@@ -370,7 +370,8 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
     )
 
 
-def pagination_controls() -> rx.Component:
+def cashbox_pagination_controls() -> rx.Component:
+    """Local pagination controls for cashbox with specific handlers."""
     return rx.el.div(
         rx.cond(
             State.cashbox_current_page <= 1,
@@ -897,7 +898,7 @@ def cashbox_page() -> rx.Component:
                             "Aun no hay ventas registradas.",
                             class_name="text-center text-gray-500 py-8",
                         ),
-                        pagination_controls(),
+                        cashbox_pagination_controls(),
                     ),
                     class_name="flex flex-col gap-4",
                 ),
