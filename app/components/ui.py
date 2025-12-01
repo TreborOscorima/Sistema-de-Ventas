@@ -15,7 +15,7 @@ BUTTON_STYLES = {
     "secondary": "flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[44px]",
     "secondary_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[40px]",
     "success": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 min-h-[44px]",
-    "success_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 min-h-[40px]",
+    "success_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 min-h-[40px]",
     "danger": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 min-h-[44px]",
     "danger_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 min-h-[40px]",
     "warning": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-700 min-h-[44px]",
@@ -521,7 +521,7 @@ def data_table(
         headers: List of (header_text, alignment_class) tuples
         rows: The tbody content (usually rx.foreach result)
         empty_message: Message to show when table is empty
-        has_data: Whether there is data to display
+        has_data: Whether there is data to display (reactive var for dynamic checking)
     
     Returns:
         A styled table component
@@ -531,6 +531,21 @@ def data_table(
         for text, align in headers
     ]
     
+    # Build the empty state component
+    empty_component = rx.el.p(empty_message, class_name="text-gray-500 text-center py-8")
+    
+    # Handle both reactive and static has_data values
+    if isinstance(has_data, rx.Var):
+        # For reactive vars, use rx.cond
+        empty_state_section = rx.cond(
+            has_data,
+            rx.fragment(),
+            empty_component,
+        )
+    else:
+        # For static booleans, conditionally include the component
+        empty_state_section = rx.fragment() if has_data else empty_component
+    
     return rx.el.div(
         rx.el.table(
             rx.el.thead(
@@ -538,10 +553,6 @@ def data_table(
             ),
             rx.el.tbody(rows),
         ),
-        rx.cond(
-            has_data if isinstance(has_data, rx.Var) else rx.Var.create(has_data),
-            rx.fragment(),
-            rx.el.p(empty_message, class_name="text-gray-500 text-center py-8"),
-        ),
+        empty_state_section,
         class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
     )
