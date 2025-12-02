@@ -7,6 +7,7 @@ import uuid
 import logging
 import bcrypt
 import json
+import time
 from decimal import Decimal, ROUND_HALF_UP
 from app.states.auth_state import (
     AuthState,
@@ -19,6 +20,7 @@ from app.states.auth_state import (
 # Import utility functions for reuse
 from app.utils.formatting import round_currency as _round_currency_util
 from app.utils.dates import get_today_str, get_current_month_str, get_current_week_str
+from app.utils.barcode import clean_barcode, validate_barcode
 
 TODAY_STR = get_today_str()
 CURRENT_MONTH_STR = get_current_month_str()
@@ -393,6 +395,7 @@ class State(AuthState):
     # ----------------------------------------
     # Entry (Ingreso) Attributes
     # ----------------------------------------
+    entry_form_key: int = 0
     new_entry_item: TransactionItem = {
         "temp_id": "",
         "barcode": "",
@@ -410,6 +413,7 @@ class State(AuthState):
     # ----------------------------------------
     # Sales (Venta) Attributes
     # ----------------------------------------
+    sale_form_key: int = 0
     new_sale_item: TransactionItem = {
         "temp_id": "",
         "barcode": "",
@@ -965,9 +969,39 @@ class State(AuthState):
                 ]
             except ValueError as e:
                 logging.exception(f"Error parsing cashbox end date: {e}")
+        
         for sale in sales:
             self._ensure_sale_payment_fields(sale)
-        return sales
+
+        # Split mixed sales (Service + Products) for display
+        final_sales = []
+        for sale in sales:
+            service_items = [i for i in sale["items"] if i.get("category") == "Servicios"]
+            product_items = [i for i in sale["items"] if i.get("category") != "Servicios"]
+            
+            if service_items and product_items:
+                # Service Part
+                service_sale = sale.copy()
+                service_sale["items"] = service_items
+                service_total = self._round_currency(sum(i["subtotal"] for i in service_items))
+                service_sale["service_total"] = service_total
+                service_sale["total"] = service_total
+                final_sales.append(service_sale)
+                
+                # Product Part
+                product_sale = sale.copy()
+                product_sale["items"] = product_items
+                product_total = self._round_currency(sum(i["subtotal"] for i in product_items))
+                product_sale["service_total"] = product_total
+                product_sale["total"] = product_total
+                # Remove reservation specific details from product row
+                if " | Total:" in product_sale["payment_details"]:
+                    product_sale["payment_details"] = product_sale["payment_details"].split(" | Total:")[0]
+                final_sales.append(product_sale)
+            else:
+                final_sales.append(sale)
+                
+        return final_sales
 
     @rx.var
     def paginated_cashbox_sales(self) -> list[CashboxSale]:
@@ -2479,12 +2513,57 @@ class State(AuthState):
                 else:
                     self.entry_autocomplete_suggestions = []
             elif field == "barcode":
-                product = self._find_product_by_barcode(str(value))
-                if product:
-                    self._fill_entry_item_from_product(product)
+                # Si se borra el código de barras, limpiar todos los campos
+                if not value or not str(value).strip():
+                    self.new_entry_item["barcode"] = ""
+                    self.new_entry_item["description"] = ""
+                    self.new_entry_item["quantity"] = 0
+                    self.new_entry_item["price"] = 0
+                    self.new_entry_item["sale_price"] = 0
+                    self.new_entry_item["subtotal"] = 0
                     self.entry_autocomplete_suggestions = []
+                else:
+                    # Limpiar el código de barras usando la utilidad
+                    code = clean_barcode(str(value))
+                    # Solo buscar si el código es válido
+                    if validate_barcode(code):
+                        product = self._find_product_by_barcode(code)
+                        if product:
+                            self._fill_entry_item_from_product(product)
+                            self.entry_autocomplete_suggestions = []
+                            return rx.toast(f"Producto '{product['description']}' cargado", duration=2000)
         except ValueError as e:
             logging.exception(f"Error parsing entry value: {e}")
+
+    @rx.event
+    def process_entry_barcode_from_input(self, barcode_value):
+        """Procesa el barcode del input cuando pierde el foco"""
+        # Actualizar el estado con el valor del input
+        self.new_entry_item["barcode"] = str(barcode_value) if barcode_value else ""
+        
+        if not barcode_value or not str(barcode_value).strip():
+            self.new_entry_item["barcode"] = ""
+            self.new_entry_item["description"] = ""
+            self.new_entry_item["quantity"] = 0
+            self.new_entry_item["price"] = 0
+            self.new_entry_item["sale_price"] = 0
+            self.new_entry_item["subtotal"] = 0
+            self.entry_autocomplete_suggestions = []
+            return
+        
+        code = clean_barcode(str(barcode_value))
+        if validate_barcode(code):
+            product = self._find_product_by_barcode(code)
+            if product:
+                self._fill_entry_item_from_product(product)
+                self.entry_autocomplete_suggestions = []
+                return rx.toast(f"Producto '{product['description']}' cargado", duration=2000)
+
+    @rx.event
+    def handle_barcode_enter(self, key: str, input_id: str):
+        """Detecta la tecla Enter y fuerza el blur del input para procesar"""
+        if key == "Enter":
+            return rx.call_script(f"document.getElementById('{input_id}').blur()")
 
     @rx.event
     def add_item_to_entry(self):
@@ -2590,6 +2669,7 @@ class State(AuthState):
         return rx.toast("Ingreso de productos confirmado.", duration=3000)
 
     def _reset_entry_form(self):
+        self.entry_form_key += 1
         self.new_entry_item = {
             "temp_id": "",
             "barcode": "",
@@ -2604,13 +2684,23 @@ class State(AuthState):
         self.entry_autocomplete_suggestions = []
 
     def _find_product_by_barcode(self, barcode: str) -> Product | None:
-        code = barcode.strip()
-        if not code:
+        """Busca un producto por código de barras usando limpieza y validación"""
+        code = clean_barcode(barcode)
+        if not code or len(code) == 0:
             return None
+        
+        logging.info(f"[BUSCAR] Código limpio: '{code}' (long: {len(code)})")
+        
+        # Buscar coincidencia exacta
         for product in self.inventory.values():
             product_code = product.get("barcode", "")
-            if product_code and product_code.strip() == code:
-                return product
+            if product_code:
+                clean_product_code = clean_barcode(product_code)
+                if clean_product_code == code:
+                    logging.info(f"[BUSCAR] ✓ Exacta: '{clean_product_code}' = '{code}'")
+                    return product
+        
+        logging.warning(f"[BUSCAR] ✗ Sin coincidencia exacta para: '{code}'")
         return None
 
     def _sale_date(self, sale: CashboxSale):
@@ -2857,18 +2947,23 @@ class State(AuthState):
         self.cashbox_close_summary_date = ""
 
     def _fill_entry_item_from_product(self, product: Product):
+        # IMPORTANTE: Usar el código de barras completo del producto en el inventario
+        product_barcode = product.get("barcode", "")
+        
         self.new_entry_item["description"] = product["description"]
         self.new_entry_item["unit"] = product["unit"]
         self.new_entry_item["price"] = self._round_currency(product["purchase_price"])
         self.new_entry_item["sale_price"] = self._round_currency(product["sale_price"])
         self.new_entry_item["category"] = product.get("category", self.categories[0] if self.categories else "")
-        self.new_entry_item["barcode"] = product.get("barcode", "")
+        self.new_entry_item["barcode"] = product_barcode  # Código completo del inventario
         self.new_entry_item["quantity"] = self._normalize_quantity_value(
             self.new_entry_item["quantity"], product["unit"]
         )
         self.new_entry_item["subtotal"] = self._round_currency(
             self.new_entry_item["quantity"] * self.new_entry_item["price"]
         )
+        
+        logging.info(f"[FILL-ENTRY] Código restaurado a: '{product_barcode}' (del inventario)")
 
     @rx.event
     def select_product_for_entry(self, description: str):
@@ -2887,28 +2982,34 @@ class State(AuthState):
     def _fill_sale_item_from_product(
         self, product: Product, keep_quantity: bool = False
     ):
+        # Usar el código de barras COMPLETO del inventario (no el parcial escaneado)
+        product_barcode = product.get("barcode", "")
+        
         quantity = (
             self.new_sale_item["quantity"]
             if keep_quantity and self.new_sale_item["quantity"] > 0
             else 1
         )
-        normalized_quantity = self._normalize_quantity_value(quantity, product["unit"])
-        price = self._round_currency(product["sale_price"])
-        self.new_sale_item = {
-            "temp_id": "",
-            "barcode": product.get("barcode", ""),
-            "description": product["description"],
-            "category": product.get("category", self.categories[0] if self.categories else ""),
-            "quantity": normalized_quantity,
-            "unit": product["unit"],
-            "price": price,
-            "sale_price": price,
-            "subtotal": self._round_currency(normalized_quantity * price),
-        }
+        
+        # Reemplazar con el código completo del inventario
+        self.new_sale_item["barcode"] = product_barcode
+        self.new_sale_item["description"] = product["description"]
+        self.new_sale_item["category"] = product.get("category", self.categories[0] if self.categories else "")
+        self.new_sale_item["unit"] = product["unit"]
+        self.new_sale_item["quantity"] = self._normalize_quantity_value(quantity, product["unit"])
+        self.new_sale_item["price"] = self._round_currency(product["sale_price"])
+        self.new_sale_item["sale_price"] = self._round_currency(product["sale_price"])
+        self.new_sale_item["subtotal"] = self._round_currency(
+            self.new_sale_item["quantity"] * self.new_sale_item["price"]
+        )
+        
         if not keep_quantity:
             self.autocomplete_suggestions = []
+        
+        logging.info(f"[FILL-SALE] Código corregido: escaneado incompleto → '{product_barcode}' completo (producto: {product['description']})")
 
     def _reset_sale_form(self):
+        self.sale_form_key += 1
         self.new_sale_item = {
             "temp_id": "",
             "barcode": "",
@@ -2982,12 +3083,45 @@ class State(AuthState):
                 else:
                     self.autocomplete_suggestions = []
             elif field == "barcode":
-                product = self._find_product_by_barcode(str(value))
-                if product:
-                    self._fill_sale_item_from_product(product, keep_quantity=True)
+                if not value or not str(value).strip():
+                    self.new_sale_item["barcode"] = ""
+                    self.new_sale_item["description"] = ""
+                    self.new_sale_item["quantity"] = 0
+                    self.new_sale_item["price"] = 0
+                    self.new_sale_item["subtotal"] = 0
                     self.autocomplete_suggestions = []
+                else:
+                    code = clean_barcode(str(value))
+                    if validate_barcode(code):
+                        product = self._find_product_by_barcode(code)
+                        if product:
+                            self._fill_sale_item_from_product(product, keep_quantity=False)
+                            self.autocomplete_suggestions = []
+                            return rx.toast(f"Producto '{product['description']}' cargado", duration=2000)
         except ValueError as e:
             logging.exception(f"Error parsing sale value: {e}")
+
+    @rx.event
+    def process_sale_barcode_from_input(self, barcode_value):
+        """Procesa el barcode del input cuando pierde el foco"""
+        # Actualizar el estado con el valor del input
+        self.new_sale_item["barcode"] = str(barcode_value) if barcode_value else ""
+        
+        if not barcode_value or not str(barcode_value).strip():
+            self.new_sale_item["description"] = ""
+            self.new_sale_item["quantity"] = 0
+            self.new_sale_item["price"] = 0
+            self.new_sale_item["subtotal"] = 0
+            self.autocomplete_suggestions = []
+            return
+        
+        code = clean_barcode(str(barcode_value))
+        if validate_barcode(code):
+            product = self._find_product_by_barcode(code)
+            if product:
+                self._fill_sale_item_from_product(product, keep_quantity=False)
+                self.autocomplete_suggestions = []
+                return rx.toast(f"Producto '{product['description']}' cargado", duration=2000)
 
     @rx.event
     def handle_inventory_adjustment_change(self, field: str, value: Union[str, float]):
@@ -4585,22 +4719,30 @@ class State(AuthState):
             if total_override is not None
             else (self.sale_total if self.sale_total > 0 else self.selected_reservation_balance)
         )
+        total = self._round_currency(total)
+        
         paid_cash = self._round_currency(self.payment_mixed_cash)
         paid_card = self._round_currency(self.payment_mixed_card)
         paid_wallet = self._round_currency(self.payment_mixed_wallet)
-        paid_non_cash = self._round_currency(paid_card + paid_wallet)
-        if paid_cash + paid_non_cash <= 0:
+        
+        total_paid = self._round_currency(paid_cash + paid_card + paid_wallet)
+        
+        if total_paid <= 0:
             self.payment_mixed_message = "Ingrese montos para los metodos seleccionados."
             self.payment_mixed_status = "warning"
             return
-        applied_non_cash = min(paid_non_cash, total)
-        remaining_after_non_cash = max(total - applied_non_cash, 0)
-        due_after_cash = remaining_after_non_cash - paid_cash
-        if due_after_cash > 0:
-            self.payment_mixed_message = f"Restan {self._format_currency(abs(due_after_cash))}"
+            
+        # Calculate difference with rounding to avoid floating point issues
+        diff = self._round_currency(total - total_paid)
+        
+        if diff > 0:
+            self.payment_mixed_message = f"Restan {self._format_currency(diff)}"
             self.payment_mixed_status = "due"
             return
-        change = max(paid_cash - remaining_after_non_cash, 0)
+            
+        # If diff <= 0, it means we paid enough or too much
+        change = abs(diff)
+        
         if change > 0:
             self.payment_mixed_message = f"Vuelto {self._format_currency(change)}"
             self.payment_mixed_status = "change"

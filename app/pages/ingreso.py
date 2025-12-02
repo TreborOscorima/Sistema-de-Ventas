@@ -72,12 +72,15 @@ def ingreso_page() -> rx.Component:
                         class_name="block text-sm font-medium text-gray-600 mb-1",
                     ),
                     rx.el.input(
+                        id="barcode-input-entry",
+                        key=State.entry_form_key.to_string(),
+                        default_value=State.new_entry_item["barcode"],
                         placeholder="Ej: 7791234567890",
-                        on_change=lambda val: State.handle_entry_change(
-                            "barcode", val
-                        ),
-                        class_name="w-full p-2 border rounded-md",
-                        value=State.new_entry_item["barcode"],
+                        on_blur=lambda e: State.process_entry_barcode_from_input(e),
+                        on_key_down=lambda k: State.handle_barcode_enter(k, "barcode-input-entry"),
+                        class_name="w-full p-2 border rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                        type="text",
+                        auto_complete="off",
                     ),
                     class_name="w-48",
                 ),
