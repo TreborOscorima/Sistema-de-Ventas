@@ -13,8 +13,12 @@ class Privileges(TypedDict):
     view_historial: bool
     export_data: bool
     view_cashbox: bool
+    manage_cashbox: bool
+    delete_sales: bool
     manage_users: bool
     view_servicios: bool
+    manage_reservations: bool
+    manage_config: bool
 
 
 class User(TypedDict):
@@ -33,8 +37,12 @@ EMPTY_PRIVILEGES: Privileges = {
     "view_historial": False,
     "export_data": False,
     "view_cashbox": False,
+    "manage_cashbox": False,
+    "delete_sales": False,
     "manage_users": False,
     "view_servicios": False,
+    "manage_reservations": False,
+    "manage_config": False,
 }
 
 

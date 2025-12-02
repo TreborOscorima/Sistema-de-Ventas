@@ -842,10 +842,10 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
                 rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
                     on_click=lambda _, rid=reservation["id"]: State.start_reservation_delete(rid),
-                    disabled=reservation["status"] == "eliminado",
+                    disabled=reservation["status"] != "pendiente",
                     aria_label="Eliminar reserva",
                     class_name=rx.cond(
-                        reservation["status"] == "eliminado",
+                        reservation["status"] != "pendiente",
                         "p-2 rounded-full bg-gray-200 text-gray-500 cursor-not-allowed",
                         "p-2 rounded-full border text-red-600 hover:bg-red-50",
                     ),

@@ -50,6 +50,8 @@ PRIVILEGE_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
             ("Ver Ventas", "view_ventas"),
             ("Crear Ventas", "create_ventas"),
             ("Ver Gestion de Caja", "view_cashbox"),
+            ("Abrir/Cerrar Caja", "manage_cashbox"),
+            ("Eliminar Ventas", "delete_sales"),
         ],
     ),
     (
@@ -70,9 +72,16 @@ PRIVILEGE_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         "Servicios",
         [
             ("Ver Servicios", "view_servicios"),
+            ("Gestionar Reservas", "manage_reservations"),
         ],
     ),
-    ("Administracion", [("Gestionar Usuarios", "manage_users")]),
+    (
+        "Administracion",
+        [
+            ("Gestionar Usuarios", "manage_users"),
+            ("Configuracion Global", "manage_config"),
+        ],
+    ),
 ]
 
 PRIVILEGE_LABELS: list[tuple[str, str]] = [

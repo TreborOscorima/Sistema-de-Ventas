@@ -205,8 +205,12 @@ DEFAULT_USER_PRIVILEGES: Privileges = {
     "view_historial": True,
     "export_data": False,
     "view_cashbox": True,
+    "manage_cashbox": True,
+    "delete_sales": False,
     "manage_users": False,
     "view_servicios": True,
+    "manage_reservations": True,
+    "manage_config": False,
 }
 
 ADMIN_PRIVILEGES: Privileges = {
@@ -219,8 +223,12 @@ ADMIN_PRIVILEGES: Privileges = {
     "view_historial": True,
     "export_data": True,
     "view_cashbox": True,
+    "manage_cashbox": True,
+    "delete_sales": True,
     "manage_users": True,
     "view_servicios": True,
+    "manage_reservations": True,
+    "manage_config": True,
 }
 
 CASHIER_PRIVILEGES: Privileges = {
@@ -233,8 +241,12 @@ CASHIER_PRIVILEGES: Privileges = {
     "view_historial": False,
     "export_data": False,
     "view_cashbox": True,
+    "manage_cashbox": True,
+    "delete_sales": False,
     "manage_users": False,
     "view_servicios": False,
+    "manage_reservations": False,
+    "manage_config": False,
 }
 
 DEFAULT_ROLE_TEMPLATES: dict[str, Privileges] = {
@@ -502,6 +514,19 @@ class State(AuthState):
         "adjust_quantity": 0,
         "reason": "",
     }
+    
+    editing_product: Product = {
+        "id": "",
+        "barcode": "",
+        "description": "",
+        "category": "",
+        "stock": 0,
+        "unit": "",
+        "purchase_price": 0,
+        "sale_price": 0,
+    }
+    is_editing_product: bool = False
+    
     inventory_adjustment_items: list[InventoryAdjustment] = []
     inventory_adjustment_suggestions: list[str] = []
     
@@ -695,6 +720,8 @@ class State(AuthState):
 
     @rx.event
     def add_unit(self):
+        if not self.current_user["privileges"]["manage_config"]:
+            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
         name = (self.new_unit_name or "").strip()
         if not name:
             return rx.toast("Ingrese un nombre de unidad.", duration=3000)
@@ -988,16 +1015,19 @@ class State(AuthState):
                 service_sale["total"] = service_total
                 final_sales.append(service_sale)
                 
-                # Product Part
-                product_sale = sale.copy()
-                product_sale["items"] = product_items
-                product_total = self._round_currency(sum(i["subtotal"] for i in product_items))
-                product_sale["service_total"] = product_total
-                product_sale["total"] = product_total
-                # Remove reservation specific details from product row
-                if " | Total:" in product_sale["payment_details"]:
-                    product_sale["payment_details"] = product_sale["payment_details"].split(" | Total:")[0]
-                final_sales.append(product_sale)
+                # Product Part - Split individually
+                for item in product_items:
+                    product_sale = sale.copy()
+                    product_sale["items"] = [item]
+                    product_total = self._round_currency(item["subtotal"])
+                    product_sale["service_total"] = product_total
+                    product_sale["total"] = product_total
+                    
+                    # Remove reservation specific details from product row
+                    if " | Total:" in product_sale["payment_details"]:
+                        product_sale["payment_details"] = product_sale["payment_details"].split(" | Total:")[0]
+                    
+                    final_sales.append(product_sale)
             else:
                 final_sales.append(sale)
                 
@@ -1870,6 +1900,8 @@ class State(AuthState):
 
     @rx.event
     def create_field_reservation(self):
+        if not self.current_user["privileges"]["manage_reservations"]:
+            return rx.toast("No tiene permisos para gestionar reservas.", duration=3000)
         form = self.reservation_form
         name = form.get("client_name", "").strip()
         dni = form.get("dni", "").strip()
@@ -2101,6 +2133,8 @@ class State(AuthState):
 
     @rx.event
     def start_reservation_delete(self, reservation_id: str):
+        if not self.current_user["privileges"]["manage_reservations"]:
+            return rx.toast("No tiene permisos para eliminar reservas.", duration=3000)
         reservation = self._find_reservation_by_id(reservation_id)
         if not reservation:
             return rx.toast("Reserva no encontrada.", duration=3000)
@@ -2324,6 +2358,8 @@ class State(AuthState):
 
     @rx.event
     def add_field_price(self):
+        if not self.current_user["privileges"]["manage_config"]:
+            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
         name = self.new_field_price_name.strip()
         sport_raw = (self.new_field_price_sport or "").strip()
         sport_cmp = sport_raw.lower()
@@ -2361,6 +2397,8 @@ class State(AuthState):
 
     @rx.event
     def update_field_price(self):
+        if not self.current_user["privileges"]["manage_config"]:
+            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
         if not self.editing_field_price_id:
             return rx.toast("Seleccione un precio para editar primero.", duration=2500)
 
@@ -3599,6 +3637,8 @@ class State(AuthState):
 
     @rx.event
     def open_cashbox_session(self):
+        if not self.current_user["privileges"]["manage_cashbox"]:
+            return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
         username = self.current_user["username"]
         if self.current_user["role"].lower() == "cajero" and not self.token:
             return rx.toast("Inicie sesión para abrir caja.", duration=3000)
@@ -4020,7 +4060,7 @@ class State(AuthState):
         denial = self._cashbox_guard()
         if denial:
             return denial
-        if not self.current_user["privileges"]["create_ventas"]:
+        if not self.current_user["privileges"]["delete_sales"]:
             return rx.toast("No tiene permisos para eliminar ventas.", duration=3000)
         sale_id = self.sale_to_delete
         reason = self.sale_delete_reason.strip()
@@ -4144,6 +4184,8 @@ class State(AuthState):
 
     @rx.event
     def close_cashbox_day(self):
+        if not self.current_user["privileges"]["manage_cashbox"]:
+            return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
         denial = self._cashbox_guard()
         if denial:
             return denial
@@ -4263,6 +4305,71 @@ class State(AuthState):
         self.inventory_adjustment_notes = ""
         self.inventory_adjustment_items = []
         self._reset_inventory_adjustment_form()
+
+    @rx.event
+    def open_edit_product(self, product: Product):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return rx.toast("No tiene permisos para editar el inventario.", duration=3000)
+        self.editing_product = product.copy()
+        self.is_editing_product = True
+
+    @rx.event
+    def cancel_edit_product(self):
+        self.is_editing_product = False
+        self.editing_product = {
+            "id": "",
+            "barcode": "",
+            "description": "",
+            "category": "",
+            "stock": 0,
+            "unit": "",
+            "purchase_price": 0,
+            "sale_price": 0,
+        }
+
+    @rx.event
+    def handle_edit_product_change(self, field: str, value: str):
+        if field in ["stock", "purchase_price", "sale_price"]:
+            try:
+                if value == "":
+                    self.editing_product[field] = 0
+                else:
+                    self.editing_product[field] = float(value)
+            except ValueError:
+                pass 
+        else:
+            self.editing_product[field] = value
+
+    @rx.event
+    def save_edited_product(self):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return rx.toast("No tiene permisos para editar el inventario.", duration=3000)
+        
+        old_id = self.editing_product["id"]
+        new_description = self.editing_product["description"].strip()
+        new_id = new_description.lower()
+        
+        if not new_description:
+             return rx.toast("La descripción no puede estar vacía.", duration=3000)
+
+        if new_id != old_id:
+            if new_id in self.inventory:
+                 return rx.toast("Ya existe un producto con esa descripción.", duration=3000)
+            del self.inventory[old_id]
+            self.editing_product["id"] = new_id
+        
+        self.inventory[new_id] = self.editing_product
+        self.is_editing_product = False
+        return rx.toast("Producto actualizado correctamente.", duration=3000)
+
+    @rx.event
+    def delete_product(self, product_id: str):
+        if not self.current_user["privileges"]["edit_inventario"]:
+             return rx.toast("No tiene permisos para eliminar productos.", duration=3000)
+        
+        if product_id in self.inventory:
+            del self.inventory[product_id]
+            return rx.toast("Producto eliminado.", duration=3000)
 
     @rx.event
     def close_inventory_check_modal(self):
@@ -4594,6 +4701,8 @@ class State(AuthState):
 
     @rx.event
     def add_payment_method(self):
+        if not self.current_user["privileges"]["manage_config"]:
+            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
         name = (self.new_payment_method_name or "").strip()
         description = (self.new_payment_method_description or "").strip()
         kind = (self.new_payment_method_kind or "other").strip().lower()
@@ -4619,6 +4728,8 @@ class State(AuthState):
 
     @rx.event
     def toggle_payment_method_enabled(self, method_id: str, enabled: bool | str):
+        if not self.current_user["privileges"]["manage_config"]:
+            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
         if isinstance(enabled, str):
             enabled = enabled.lower() in ["true", "1", "on", "yes"]
         active_methods = self._enabled_payment_methods_list()

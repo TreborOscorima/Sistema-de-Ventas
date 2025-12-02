@@ -154,9 +154,9 @@ def cashbox_opening_card() -> rx.Component:
                     rx.icon("play", class_name="h-4 w-4"),
                     rx.cond(State.cashbox_is_open, "Caja abierta", "Aperturar caja"),
                     on_click=State.open_cashbox_session,
-                    disabled=State.cashbox_is_open,
+                    disabled=State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
                     class_name=rx.cond(
-                        State.cashbox_is_open,
+                        State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
                         "flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gray-200 text-gray-500 cursor-not-allowed min-h-[44px]",
                         "flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow min-h-[44px]",
                     ),
@@ -165,9 +165,9 @@ def cashbox_opening_card() -> rx.Component:
                     rx.icon("lock", class_name="h-4 w-4"),
                     "Cerrar Caja",
                     on_click=State.open_cashbox_close_modal,
-                    disabled=~State.cashbox_is_open,
+                    disabled=~State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
                     class_name=rx.cond(
-                        State.cashbox_is_open,
+                        State.cashbox_is_open & State.current_user["privileges"]["manage_cashbox"],
                         "flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 shadow min-h-[44px]",
                         "flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-indigo-100 text-indigo-400 cursor-not-allowed min-h-[44px]",
                     ),
@@ -270,7 +270,12 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
                         sale_id=sale["sale_id"]: State.open_sale_delete_modal(
                             sale_id
                         ),
-                        class_name="flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-red-600 hover:bg-red-50 min-h-[40px]",
+                        disabled=~State.current_user["privileges"]["delete_sales"],
+                        class_name=rx.cond(
+                            State.current_user["privileges"]["delete_sales"],
+                            "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-red-600 hover:bg-red-50 min-h-[40px]",
+                            "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-gray-400 cursor-not-allowed min-h-[40px]",
+                        ),
                     ),
                 ),
                 class_name="flex flex-col gap-2 md:flex-row md:justify-center",

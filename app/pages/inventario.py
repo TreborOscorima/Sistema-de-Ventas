@@ -2,6 +2,119 @@ import reflex as rx
 from app.state import State
 
 
+def edit_product_modal() -> rx.Component:
+    return rx.cond(
+        State.is_editing_product,
+        rx.el.div(
+            rx.el.div(
+                on_click=State.cancel_edit_product,
+                class_name="fixed inset-0 bg-black/40",
+            ),
+            rx.el.div(
+                rx.el.div(
+                    rx.el.h3(
+                        "Editar Producto",
+                        class_name="text-xl font-semibold text-gray-800",
+                    ),
+                    rx.el.button(
+                        rx.icon("x", class_name="h-4 w-4"),
+                        on_click=State.cancel_edit_product,
+                        class_name="p-2 rounded-full hover:bg-gray-100",
+                    ),
+                    class_name="flex items-start justify-between gap-4 mb-4",
+                ),
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.label("Código de Barra", class_name="block text-sm font-medium text-gray-700"),
+                        rx.el.input(
+                            value=State.editing_product["barcode"],
+                            on_change=lambda v: State.handle_edit_product_change("barcode", v),
+                            class_name="w-full p-2 border rounded-md",
+                        ),
+                    ),
+                    rx.el.div(
+                        rx.el.label("Descripción", class_name="block text-sm font-medium text-gray-700"),
+                        rx.el.input(
+                            value=State.editing_product["description"],
+                            on_change=lambda v: State.handle_edit_product_change("description", v),
+                            class_name="w-full p-2 border rounded-md",
+                        ),
+                    ),
+                    rx.el.div(
+                        rx.el.label("Categoría", class_name="block text-sm font-medium text-gray-700"),
+                        rx.el.select(
+                            rx.foreach(
+                                State.categories,
+                                lambda cat: rx.el.option(cat, value=cat)
+                            ),
+                            value=State.editing_product["category"],
+                            on_change=lambda v: State.handle_edit_product_change("category", v),
+                            class_name="w-full p-2 border rounded-md",
+                        ),
+                    ),
+                    rx.el.div(
+                        rx.el.label("Stock", class_name="block text-sm font-medium text-gray-700"),
+                        rx.el.input(
+                            type="number",
+                            value=State.editing_product["stock"].to_string(),
+                            on_change=lambda v: State.handle_edit_product_change("stock", v),
+                            class_name="w-full p-2 border rounded-md",
+                        ),
+                    ),
+                    rx.el.div(
+                        rx.el.label("Unidad", class_name="block text-sm font-medium text-gray-700"),
+                        rx.el.select(
+                            rx.el.option("Unidad", value="Unidad"),
+                            rx.el.option("Kg", value="Kg"),
+                            rx.el.option("Lt", value="Lt"),
+                            rx.el.option("Paquete", value="Paquete"),
+                            rx.el.option("Caja", value="Caja"),
+                            value=State.editing_product["unit"],
+                            on_change=lambda v: State.handle_edit_product_change("unit", v),
+                            class_name="w-full p-2 border rounded-md",
+                        ),
+                    ),
+                    rx.el.div(
+                        rx.el.label("Precio Compra", class_name="block text-sm font-medium text-gray-700"),
+                        rx.el.input(
+                            type="number",
+                            value=State.editing_product["purchase_price"].to_string(),
+                            on_change=lambda v: State.handle_edit_product_change("purchase_price", v),
+                            class_name="w-full p-2 border rounded-md",
+                        ),
+                    ),
+                    rx.el.div(
+                        rx.el.label("Precio Venta", class_name="block text-sm font-medium text-gray-700"),
+                        rx.el.input(
+                            type="number",
+                            value=State.editing_product["sale_price"].to_string(),
+                            on_change=lambda v: State.handle_edit_product_change("sale_price", v),
+                            class_name="w-full p-2 border rounded-md",
+                        ),
+                    ),
+                    class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        "Cancelar",
+                        on_click=State.cancel_edit_product,
+                        class_name="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50",
+                    ),
+                    rx.el.button(
+                        "Guardar Cambios",
+                        on_click=State.save_edited_product,
+                        class_name="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+                    ),
+                    class_name="flex justify-end gap-3 mt-6",
+                ),
+                class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
+            ),
+            class_name="fixed inset-0 z-50 flex items-center justify-center px-4",
+        ),
+        rx.fragment(),
+    )
+
+
 def inventory_adjustment_modal() -> rx.Component:
     return rx.cond(
         State.inventory_check_modal_open,
@@ -403,6 +516,7 @@ def inventario_page() -> rx.Component:
                         rx.el.th(
                             "Valor Total Stock", class_name="py-3 px-4 text-right"
                         ),
+                        rx.el.th("Acciones", class_name="py-3 px-4 text-center"),
                         class_name="bg-gray-100",
                     )
                 ),
@@ -465,6 +579,24 @@ def inventario_page() -> rx.Component:
                                 f"{product['stock'] * product['purchase_price']:.2f}",
                                 class_name="py-3 px-4 text-right font-bold",
                             ),
+                            rx.el.td(
+                                rx.el.div(
+                                    rx.el.button(
+                                        rx.icon("pencil", class_name="h-4 w-4"),
+                                        on_click=lambda: State.open_edit_product(product),
+                                        class_name="p-2 text-blue-600 hover:bg-blue-50 rounded-full",
+                                        title="Editar",
+                                    ),
+                                    rx.el.button(
+                                        rx.icon("trash-2", class_name="h-4 w-4"),
+                                        on_click=lambda: State.delete_product(product["id"]),
+                                        class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
+                                        title="Eliminar",
+                                    ),
+                                    class_name="flex items-center justify-center gap-2",
+                                ),
+                                class_name="py-3 px-4",
+                            ),
                             class_name="border-b",
                         ),
                     )
@@ -481,5 +613,6 @@ def inventario_page() -> rx.Component:
             class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
         ),
         inventory_adjustment_modal(),
+        edit_product_modal(),
         class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
     )
