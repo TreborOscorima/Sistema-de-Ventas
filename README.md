@@ -2,7 +2,7 @@
 
 **Versión:** 1.0.0
 **Tecnología:** Python / Reflex
-**Autor:** GitHub Copilot (Asistente Técnico)
+**Autor:** Trebor Oscorima
 
 ---
 
