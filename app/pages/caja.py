@@ -189,15 +189,28 @@ def sale_items_list(items: rx.Var[list[dict]]) -> rx.Component:
         rx.foreach(
             items,
             lambda item: rx.el.div(
-                rx.el.span(item["description"], class_name="font-medium"),
-                rx.el.span(
-                    item["quantity"].to_string(),
-                    class_name="text-sm text-gray-500",
+                rx.el.div(
+                    rx.el.span(item["description"], class_name="font-medium text-gray-900"),
+                    class_name="text-sm",
                 ),
-                class_name="flex items-center justify-between text-sm",
+                rx.el.div(
+                    rx.el.span(
+                        item["quantity"].to_string(),
+                        " x ",
+                        item["sale_price"].to_string(),
+                        class_name="text-xs text-gray-500",
+                    ),
+                    rx.el.span(
+                        State.currency_symbol,
+                        item["subtotal"].to_string(),
+                        class_name="text-xs font-medium text-gray-700",
+                    ),
+                    class_name="flex justify-between items-center",
+                ),
+                class_name="flex flex-col gap-0.5 border-b border-dashed border-gray-100 last:border-0 pb-1 last:pb-0",
             ),
         ),
-        class_name="flex flex-col gap-1",
+        class_name="flex flex-col gap-2",
     )
 
 

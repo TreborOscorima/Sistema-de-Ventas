@@ -1000,36 +1000,27 @@ class State(AuthState):
         for sale in sales:
             self._ensure_sale_payment_fields(sale)
 
-        # Split mixed sales (Service + Products) for display
+        # Split ALL sales by item for display so each item appears as an independent row
         final_sales = []
         for sale in sales:
-            service_items = [i for i in sale["items"] if i.get("category") == "Servicios"]
-            product_items = [i for i in sale["items"] if i.get("category") != "Servicios"]
-            
-            if service_items and product_items:
-                # Service Part
-                service_sale = sale.copy()
-                service_sale["items"] = service_items
-                service_total = self._round_currency(sum(i["subtotal"] for i in service_items))
-                service_sale["service_total"] = service_total
-                service_sale["total"] = service_total
-                final_sales.append(service_sale)
-                
-                # Product Part - Split individually
-                for item in product_items:
-                    product_sale = sale.copy()
-                    product_sale["items"] = [item]
-                    product_total = self._round_currency(item["subtotal"])
-                    product_sale["service_total"] = product_total
-                    product_sale["total"] = product_total
-                    
-                    # Remove reservation specific details from product row
-                    if " | Total:" in product_sale["payment_details"]:
-                        product_sale["payment_details"] = product_sale["payment_details"].split(" | Total:")[0]
-                    
-                    final_sales.append(product_sale)
-            else:
+            items = sale.get("items", [])
+            if not items:
                 final_sales.append(sale)
+                continue
+
+            for item in items:
+                item_sale = sale.copy()
+                item_sale["items"] = [item]
+                item_total = self._round_currency(item.get("subtotal", 0))
+                item_sale["service_total"] = item_total
+                item_sale["total"] = item_total
+                
+                # If it's a product sale with multiple items, we might want to clean up the payment details
+                # to avoid showing the total of the whole transaction in every row's detail text if possible,
+                # but keeping it is also fine as context.
+                # For now, we keep the original payment details as they describe the transaction.
+                
+                final_sales.append(item_sale)
                 
         return final_sales
 
@@ -1402,7 +1393,7 @@ class State(AuthState):
         return [
             price
             for price in self.field_prices
-            if (price.get("sport", "") or "").lower() == sport_cmp
+            if sport_cmp in (price.get("sport", "") or "").lower()
         ]
         # Si no hay precios definidos para el deporte actual, retorna lista vacía.
 
@@ -1990,6 +1981,23 @@ class State(AuthState):
         self.select_reservation_for_payment(reservation_id)
         self.reservation_payment_routed = True
         return self.set_page("Venta")
+
+    @rx.event
+    def print_reservation_receipt(self, reservation_id: str):
+        # Buscar venta asociada a la reserva
+        target_sale = None
+        for sale in self.cashbox_sales:
+            for item in sale.get("items", []):
+                if item.get("barcode") == reservation_id:
+                    target_sale = sale
+                    break
+            if target_sale:
+                break
+        
+        if target_sale:
+            return self.reprint_sale_receipt(target_sale["sale_id"])
+        else:
+            return rx.toast("No se encontró comprobante para esta reserva.", duration=3000)
 
     @rx.event
     def set_reservation_payment_amount(self, value: str):
@@ -4102,9 +4110,9 @@ class State(AuthState):
 
     @rx.event
     def reprint_sale_receipt(self, sale_id: str):
-        denial = self._cashbox_guard()
-        if denial:
-            return denial
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para ver comprobantes.", duration=3000)
+        
         sale = next((s for s in self.cashbox_sales if s["sale_id"] == sale_id), None)
         if not sale:
             return rx.toast("Venta no encontrada.", duration=3000)

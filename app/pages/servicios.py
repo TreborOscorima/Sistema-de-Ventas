@@ -508,6 +508,16 @@ def reservation_modal() -> rx.Component:
                     ),
                 ),
                 rx.el.div(
+                    rx.cond(
+                        State.reservation_modal_mode == "view",
+                        rx.el.button(
+                            rx.icon("printer", class_name="h-4 w-4"),
+                            "Imprimir Comprobante",
+                            on_click=lambda: State.print_reservation_receipt(State.reservation_modal_reservation_id),
+                            class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[42px]",
+                        ),
+                        rx.fragment(),
+                    ),
                     rx.el.button(
                         "Cerrar",
                         on_click=State.close_reservation_modal,
@@ -855,6 +865,12 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
                     rx.el.span("Ver", class_name="text-sm font-semibold"),
                     on_click=lambda _, rid=reservation["id"]: State.view_reservation_details(rid),
                     class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-blue-600 hover:bg-blue-50",
+                ),
+                rx.el.button(
+                    rx.icon("printer", class_name="h-4 w-4"),
+                    rx.el.span("Imprimir", class_name="text-sm font-semibold"),
+                    on_click=lambda _, rid=reservation["id"]: State.print_reservation_receipt(rid),
+                    class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-gray-600 hover:bg-gray-50",
                 ),
                 rx.el.button(
                     rx.icon("credit-card", class_name="h-4 w-4"),
