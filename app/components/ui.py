@@ -57,6 +57,8 @@ def action_button(
     icon: str | None = None,
     disabled: rx.Var | bool = False,
     disabled_variant: str = "disabled",
+    class_name: str = "",
+    **kwargs,
 ) -> rx.Component:
     """
     Creates a styled action button with consistent styling.
@@ -68,6 +70,8 @@ def action_button(
         icon: Optional lucide icon name
         disabled: Whether button is disabled (can be a reactive var)
         disabled_variant: Style to use when disabled
+        class_name: Additional CSS classes
+        **kwargs: Additional arguments passed to the button component
     
     Returns:
         A styled button component
@@ -80,18 +84,32 @@ def action_button(
     else:
         content.append(text)
     
+    if isinstance(variant, rx.Var):
+        base_style = variant
+    else:
+        base_style = BUTTON_STYLES.get(variant, BUTTON_STYLES["primary"])
+
+    style_classes = rx.cond(
+        disabled,
+        BUTTON_STYLES.get(disabled_variant, BUTTON_STYLES["disabled"]),
+        base_style,
+    ) if isinstance(disabled, rx.Var) else (
+        BUTTON_STYLES.get(disabled_variant, BUTTON_STYLES["disabled"]) if disabled 
+        else base_style
+    )
+
+    if class_name:
+        if isinstance(style_classes, str):
+            style_classes = f"{style_classes} {class_name}"
+        else:
+            style_classes = style_classes + f" {class_name}"
+
     return rx.el.button(
         *content,
         on_click=on_click,
         disabled=disabled,
-        class_name=rx.cond(
-            disabled,
-            BUTTON_STYLES.get(disabled_variant, BUTTON_STYLES["disabled"]),
-            BUTTON_STYLES.get(variant, BUTTON_STYLES["primary"]),
-        ) if isinstance(disabled, rx.Var) else (
-            BUTTON_STYLES.get(disabled_variant, BUTTON_STYLES["disabled"]) if disabled 
-            else BUTTON_STYLES.get(variant, BUTTON_STYLES["primary"])
-        ),
+        class_name=style_classes,
+        **kwargs,
     )
 
 
