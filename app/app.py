@@ -1,6 +1,5 @@
 import reflex as rx
 from app.state import State
-from app.states.auth_state import AuthState
 from app.components.sidebar import sidebar
 from app.pages.ingreso import ingreso_page
 from app.pages.venta import venta_page
@@ -105,7 +104,7 @@ def _toast_provider() -> rx.Component:
 
 def index() -> rx.Component:
     return rx.cond(
-        AuthState.is_authenticated,
+        State.is_authenticated,
         rx.el.main(
             _toast_provider(),
             rx.el.div(

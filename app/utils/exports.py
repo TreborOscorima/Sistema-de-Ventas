@@ -105,16 +105,16 @@ def auto_adjust_column_widths(ws: Worksheet, min_width: int = 10, max_width: int
     """
     for column in ws.columns:
         max_length = 0
-        column_letter = None
+        column_letter = column[0].column_letter
         for cell in column:
-            if column_letter is None:
-                column_letter = cell.column_letter
             try:
-                cell_length = len(str(cell.value or ""))
-                if cell_length > max_length:
-                    max_length = cell_length
-            except TypeError:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
                 pass
-        if column_letter:
-            adjusted_width = min(max(max_length + 2, min_width), max_width)
-            ws.column_dimensions[column_letter].width = adjusted_width
+        adjusted_width = (max_length + 2)
+        if adjusted_width < min_width:
+            adjusted_width = min_width
+        if adjusted_width > max_width:
+            adjusted_width = max_width
+        ws.column_dimensions[column_letter].width = adjusted_width

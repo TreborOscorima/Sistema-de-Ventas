@@ -451,7 +451,7 @@ def reservation_modal() -> rx.Component:
                     rx.foreach(
                         State.field_prices_for_current_sport,
                         lambda price: rx.el.option(
-                            price["sport"],
+                            price["sport"] + " - " + price["name"],
                             value=price["id"],
                         ),
                     ),
@@ -906,7 +906,7 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
         rx.el.td(
             rx.el.span(
                 State.currency_symbol,
-                reservation["balance"].to_string(),
+                (reservation["total_amount"] - reservation["advance_amount"]).to_string(),
                 class_name="font-semibold",
             ),
             class_name="py-3 px-4 text-right",

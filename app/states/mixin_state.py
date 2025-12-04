@@ -1,0 +1,130 @@
+import reflex as rx
+from decimal import Decimal, ROUND_HALF_UP
+from typing import List, Dict, Any
+from .types import CashboxSale, PaymentBreakdownItem
+
+class MixinState:
+    def _round_currency(self, value: float) -> float:
+        return float(
+            Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        )
+
+    @rx.var
+    def currency_symbol(self) -> str:
+        # Accessing available_currencies and selected_currency_code from RootState
+        if not hasattr(self, "available_currencies") or not hasattr(self, "selected_currency_code"):
+            return "S/ "
+        match = next(
+            (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
+            None,
+        )
+        return f"{match['symbol']} " if match else "S/ "
+
+    @rx.var
+    def currency_name(self) -> str:
+        if not hasattr(self, "available_currencies") or not hasattr(self, "selected_currency_code"):
+            return "Sol peruano (PEN)"
+        match = next(
+            (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
+            None,
+        )
+        return match["name"] if match else "Sol peruano (PEN)"
+
+    def _format_currency(self, value: float) -> str:
+        return f"{self.currency_symbol}{self._round_currency(value):.2f}"
+
+    def _unit_allows_decimal(self, unit: str) -> bool:
+        # Accessing decimal_units from RootState
+        if not hasattr(self, "decimal_units"):
+            return False
+        return unit and unit.lower() in self.decimal_units
+
+    def _normalize_quantity_value(self, value: float, unit: str) -> float:
+        if self._unit_allows_decimal(unit):
+            return float(
+                Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            )
+        return int(
+            Decimal(str(value or 0)).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            )
+        )
+
+    def _normalize_wallet_label(self, label: str) -> str:
+        value = (label or "").strip()
+        if not value:
+            return value
+        lower = value.lower()
+        if "pago qr" in lower or "billetera" in lower:
+            patterns = [
+                "Pago QR / Billetera Digital",
+                "Pago QR / Billetera",
+                "Pago QR/Billetera Digital",
+                "Pago QR/Billetera",
+            ]
+            for old in patterns:
+                value = value.replace(old, "Billetera Digital / QR")
+            return value
+        return value
+
+    def _payment_category(self, method: str, kind: str = "") -> str:
+        normalized_kind = (kind or "").lower()
+        label = method.lower() if method else ""
+        if normalized_kind == "mixed" or "mixto" in label:
+            return "Pago Mixto"
+        if normalized_kind == "card" or "tarjeta" in label:
+            return "Tarjeta"
+        if normalized_kind == "wallet" or "qr" in label or "billetera" in label or "yape" in label or "plin" in label:
+            return "Billetera Digital / QR"
+        if normalized_kind == "cash" or "efectivo" in label:
+            return "Efectivo"
+        return "Otros"
+
+    def _ensure_sale_payment_fields(self, sale: CashboxSale):
+        if "payment_label" not in sale or not sale.get("payment_label"):
+            sale["payment_label"] = sale.get("payment_method", "Metodo")
+        sale["payment_label"] = self._normalize_wallet_label(sale.get("payment_label", ""))
+        if (
+            "payment_breakdown" not in sale
+            or not isinstance(sale.get("payment_breakdown"), list)
+            or len(sale.get("payment_breakdown") or []) == 0
+        ):
+            fallback_label = sale.get("payment_label", sale.get("payment_method", "Metodo"))
+            sale["payment_breakdown"] = [
+                {
+                    "label": self._normalize_wallet_label(fallback_label),
+                    "amount": self._round_currency(sale.get("total", 0)),
+                }
+            ]
+        else:
+            normalized_items: List[PaymentBreakdownItem] = []
+            for item in sale.get("payment_breakdown", []):
+                normalized_items.append(
+                    {
+                        "label": self._normalize_wallet_label(item.get("label", "")),
+                        "amount": self._round_currency(item.get("amount", 0)),
+                    }
+                )
+            target_total = self._round_currency(sale.get("total", 0))
+            total_applied = sum(item["amount"] for item in normalized_items)
+            if target_total > 0 and total_applied > target_total:
+                factor = target_total / total_applied if total_applied else 0
+                normalized_items = [
+                    {
+                        "label": item["label"],
+                        "amount": self._round_currency(item["amount"] * factor),
+                    }
+                    for item in normalized_items
+                ]
+                total_applied = sum(item["amount"] for item in normalized_items)
+            if target_total > 0 and normalized_items:
+                diff = self._round_currency(target_total - total_applied)
+                if diff != 0:
+                    normalized_items[0]["amount"] = self._round_currency(
+                        normalized_items[0]["amount"] + diff
+                    )
+            sale["payment_breakdown"] = normalized_items
+        # Asegura campo de total de servicio para mostrar en caja
+        service_total = sale.get("service_total")
+        if service_total is None:
+            sale["service_total"] = self._round_currency(sale.get("total", 0))

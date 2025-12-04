@@ -169,6 +169,7 @@ def text_input(
     input_type: str = "text",
     disabled: bool = False,
     style: str = "default",
+    debounce_timeout: int = 300,
 ) -> rx.Component:
     """
     Creates a styled text input.
@@ -180,6 +181,7 @@ def text_input(
         input_type: HTML input type
         disabled: Whether input is disabled
         style: Style key from INPUT_STYLES
+        debounce_timeout: Debounce timeout in ms
     """
     return rx.el.input(
         type=input_type,
@@ -191,6 +193,7 @@ def text_input(
             "disabled" if disabled else style, 
             INPUT_STYLES["default"]
         ),
+        debounce_timeout=debounce_timeout,
     )
 
 

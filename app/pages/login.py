@@ -1,5 +1,5 @@
 import reflex as rx
-from app.states.auth_state import AuthState
+from app.state import State
 
 
 def login_page() -> rx.Component:
@@ -40,13 +40,13 @@ def login_page() -> rx.Component:
                     type="submit",
                     class_name="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 min-h-[44px]",
                 ),
-                on_submit=AuthState.login,
+                on_submit=State.login,
             ),
             rx.cond(
-                AuthState.error_message != "",
+                State.error_message != "",
                 rx.el.div(
                     rx.icon("flag_triangle_right", class_name="h-5 w-5 text-red-500"),
-                    rx.el.p(AuthState.error_message, class_name="text-sm text-red-700"),
+                    rx.el.p(State.error_message, class_name="text-sm text-red-700"),
                     class_name="flex items-center gap-2 mt-4 bg-red-100 p-3 rounded-md border border-red-200",
                 ),
             ),
