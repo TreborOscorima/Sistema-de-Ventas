@@ -3,12 +3,15 @@ from typing import List, Dict, Any
 import datetime
 import logging
 import io
-from .types import Movement, Product
+from sqlmodel import select, or_
+from sqlalchemy.orm import selectinload
+from app.models import Sale, SaleItem, StockMovement, Product, User as UserModel, CashboxLog
+from .types import Movement
 from .mixin_state import MixinState
 from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
 
 class HistorialState(MixinState):
-    history: List[Movement] = []
+    # history: List[Movement] = [] # Removed in favor of DB
     history_filter_type: str = "Todos"
     history_filter_product: str = ""
     history_filter_start_date: str = ""
@@ -24,40 +27,132 @@ class HistorialState(MixinState):
     def filtered_history(self) -> list[Movement]:
         if not self.current_user["privileges"]["view_historial"]:
             return []
-        movements = self.history
+        
+        movements = []
+        
+        with rx.session() as session:
+            # 1. Fetch Sales
+            sales_query = select(Sale, UserModel).join(UserModel, isouter=True).options(
+                selectinload(Sale.items).selectinload(SaleItem.product)
+            )
+            
+            if self.history_filter_start_date:
+                try:
+                    start_date = datetime.datetime.fromisoformat(self.history_filter_start_date)
+                    sales_query = sales_query.where(Sale.timestamp >= start_date)
+                except ValueError: pass
+            if self.history_filter_end_date:
+                try:
+                    end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
+                    # Add one day to include the end date fully if it's just a date
+                    # But input is usually date string.
+                    # Assuming format YYYY-MM-DD
+                    end_date = end_date.replace(hour=23, minute=59, second=59)
+                    sales_query = sales_query.where(Sale.timestamp <= end_date)
+                except ValueError: pass
+                
+            sales_results = session.exec(sales_query).all()
+            
+            for sale, user in sales_results:
+                # Eager load items if possible, or just access them (lazy load)
+                sale_items = sale.items
+                
+                # Filter by product
+                if self.history_filter_product:
+                    sale_items = [i for i in sale_items if self.history_filter_product.lower() in i.product_name_snapshot.lower()]
+                    if not sale_items:
+                        continue
+                
+                for item in sale_items:
+                    unit = "Global"
+                    if item.product:
+                        unit = item.product.unit
+                    
+                    movements.append({
+                        "id": f"{sale.id}-{item.id}",
+                        "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "type": "Venta",
+                        "product_description": item.product_name_snapshot,
+                        "quantity": item.quantity,
+                        "unit": unit,
+                        "total": item.subtotal,
+                        "payment_method": sale.payment_method,
+                        "payment_details": sale.payment_details,
+                        "user": user.username if user else "Desconocido",
+                        "sale_id": str(sale.id)
+                    })
+
+            # 2. Fetch Stock Movements
+            stock_query = select(StockMovement, Product, UserModel).join(Product).join(UserModel, isouter=True)
+            
+            if self.history_filter_start_date:
+                try:
+                    start_date = datetime.datetime.fromisoformat(self.history_filter_start_date)
+                    stock_query = stock_query.where(StockMovement.timestamp >= start_date)
+                except ValueError: pass
+            if self.history_filter_end_date:
+                try:
+                    end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
+                    end_date = end_date.replace(hour=23, minute=59, second=59)
+                    stock_query = stock_query.where(StockMovement.timestamp <= end_date)
+                except ValueError: pass
+            
+            if self.history_filter_product:
+                stock_query = stock_query.where(Product.description.ilike(f"%{self.history_filter_product}%"))
+                
+            stock_results = session.exec(stock_query).all()
+            
+            for mov, prod, user in stock_results:
+                movements.append({
+                    "id": str(mov.id),
+                    "timestamp": mov.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    "type": mov.type,
+                    "product_description": f"{prod.description} ({mov.description})",
+                    "quantity": mov.quantity,
+                    "unit": prod.unit,
+                    "total": 0,
+                    "payment_method": "-",
+                    "payment_details": mov.description,
+                    "user": user.username if user else "Desconocido",
+                    "sale_id": ""
+                })
+
+            # 3. Fetch Cashbox Logs
+            # Only if no product filter is active, as logs don't have products
+            if not self.history_filter_product:
+                log_query = select(CashboxLog, UserModel).join(UserModel, isouter=True)
+                if self.history_filter_start_date:
+                    try:
+                        start_date = datetime.datetime.fromisoformat(self.history_filter_start_date)
+                        log_query = log_query.where(CashboxLog.timestamp >= start_date)
+                    except ValueError: pass
+                if self.history_filter_end_date:
+                    try:
+                        end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
+                        end_date = end_date.replace(hour=23, minute=59, second=59)
+                        log_query = log_query.where(CashboxLog.timestamp <= end_date)
+                    except ValueError: pass
+                
+                log_results = session.exec(log_query).all()
+                for log, user in log_results:
+                    movements.append({
+                        "id": str(log.id),
+                        "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "type": log.action.capitalize(),
+                        "product_description": log.notes,
+                        "quantity": 0,
+                        "unit": "-",
+                        "total": log.amount,
+                        "payment_method": "Efectivo",
+                        "payment_details": log.notes,
+                        "user": user.username if user else "Desconocido",
+                        "sale_id": ""
+                    })
+
+        # Filter by type if needed
         if self.history_filter_type != "Todos":
             movements = [m for m in movements if m["type"] == self.history_filter_type]
-        if self.history_filter_product:
-            movements = [
-                m
-                for m in movements
-                if self.history_filter_product.lower()
-                in m["product_description"].lower()
-            ]
-        if self.history_filter_start_date:
-            try:
-                start_date = datetime.datetime.fromisoformat(
-                    self.history_filter_start_date
-                )
-                movements = [
-                    m
-                    for m in movements
-                    if datetime.datetime.fromisoformat(m["timestamp"].split()[0])
-                    >= start_date
-                ]
-            except ValueError as e:
-                logging.exception(f"Error parsing start date: {e}")
-        if self.history_filter_end_date:
-            try:
-                end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
-                movements = [
-                    m
-                    for m in movements
-                    if datetime.datetime.fromisoformat(m["timestamp"].split()[0])
-                    <= end_date
-                ]
-            except ValueError as e:
-                logging.exception(f"Error parsing end date: {e}")
+            
         return sorted(movements, key=lambda m: m["timestamp"], reverse=True)
 
     @rx.var
@@ -154,81 +249,153 @@ class HistorialState(MixinState):
         
         return rx.download(data=output.getvalue(), filename="historial_movimientos.xlsx")
 
-    def _ventas_by_payment(self, match_fn) -> float:
-        sales = [m for m in self.history if m["type"] == "Venta"]
-        total = 0.0
-        for m in sales:
-            if match_fn(m):
-                total += m["total"]
-        return self._round_currency(total)
+    def _parse_payment_amount(self, text: str, keyword: str) -> float:
+        """Extract amount for a keyword from a mixed payment string like 'Efectivo S/ 15.00'."""
+        import re
+        # Regex to find "Keyword S/ 123.45" or "Keyword (Type) S/ 123.45"
+        # We look for the keyword, optional text, "S/", then the number.
+        # Example: "Plin S/ 20.00" -> matches "Plin"
+        try:
+            # Case insensitive search for keyword followed by S/ and number
+            # We assume the format generated in venta_state.py: f"{label} {self._format_currency(amount)}"
+            # _format_currency uses "S/ {:,.2f}"
+            
+            # Simple approach: split by "/" or " - " and look for keyword
+            parts = re.split(r'[:/|]|\s-\s', text)
+            for part in parts:
+                if keyword.lower() in part.lower() and "S/" in part:
+                    # Extract number
+                    num_part = part.split("S/")[1].strip()
+                    # Remove commas if any (though format_currency might add them)
+                    num_part = num_part.replace(",", "")
+                    # Extract first valid float
+                    match = re.search(r"([0-9]+\.?[0-9]*)", num_part)
+                    if match:
+                        return float(match.group(1))
+        except Exception:
+            pass
+        return 0.0
+
+    @rx.var
+    def payment_stats(self) -> Dict[str, float]:
+        stats = {
+            "efectivo": 0.0,
+            "yape": 0.0,
+            "plin": 0.0,
+            "tarjeta": 0.0,
+            "mixto": 0.0
+        }
+        
+        with rx.session() as session:
+            # Apply same date filters as history list for consistency
+            query = select(Sale).where(Sale.is_deleted == False)
+            
+            if self.history_filter_start_date:
+                try:
+                    start_date = datetime.datetime.fromisoformat(self.history_filter_start_date)
+                    query = query.where(Sale.timestamp >= start_date)
+                except ValueError: pass
+            if self.history_filter_end_date:
+                try:
+                    end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
+                    end_date = end_date.replace(hour=23, minute=59, second=59)
+                    query = query.where(Sale.timestamp <= end_date)
+                except ValueError: pass
+                
+            sales = session.exec(query).all()
+            
+            for sale in sales:
+                method = (sale.payment_method or "").lower()
+                details = (sale.payment_details or "")
+                total = sale.total_amount
+                
+                # Check for Mixed Payment first
+                if "mixto" in method:
+                    stats["mixto"] += total
+                    # Parse breakdown
+                    stats["efectivo"] += self._parse_payment_amount(details, "Efectivo")
+                    stats["yape"] += self._parse_payment_amount(details, "Yape")
+                    stats["plin"] += self._parse_payment_amount(details, "Plin")
+                    stats["tarjeta"] += self._parse_payment_amount(details, "Tarjeta")
+                    # Note: We add to both "mixto" (total) and specific methods (parts).
+                    continue
+
+                # Single Payment Methods
+                if "efectivo" in method:
+                    stats["efectivo"] += total
+                elif "yape" in method or "yape" in details.lower():
+                    stats["yape"] += total
+                elif "plin" in method or "plin" in details.lower():
+                    stats["plin"] += total
+                elif "tarjeta" in method or "tarjeta" in details.lower():
+                    stats["tarjeta"] += total
+                else:
+                    # Fallback for generic "Billetera" if not caught above
+                    if "billetera" in method:
+                        # If details specify provider, we might have caught it. If not, where does it go?
+                        # For now, if it's not Yape/Plin, maybe it's another wallet.
+                        pass
+
+        return {k: self._round_currency(v) for k, v in stats.items()}
 
     @rx.var
     def total_ventas_efectivo(self) -> float:
-        return self._ventas_by_payment(
-            lambda m: m.get("payment_kind") == "cash"
-            or m.get("payment_method", "").lower() == "efectivo"
-        )
+        return self.payment_stats["efectivo"]
 
     @rx.var
     def total_ventas_yape(self) -> float:
-        return self._ventas_by_payment(
-            lambda m: m.get("payment_method", "").lower()
-            == "pago qr / billetera digital"
-            and "yape" in m.get("payment_details", "").lower()
-            or (
-                m.get("payment_kind") == "wallet"
-                and "yape" in m.get("payment_details", "").lower()
-            )
-        )
+        return self.payment_stats["yape"]
 
     @rx.var
     def total_ventas_plin(self) -> float:
-        return self._ventas_by_payment(
-            lambda m: m.get("payment_method", "").lower()
-            == "pago qr / billetera digital"
-            and "plin" in m.get("payment_details", "").lower()
-            or (
-                m.get("payment_kind") == "wallet"
-                and "plin" in m.get("payment_details", "").lower()
-            )
-        )
+        return self.payment_stats["plin"]
+
+    @rx.var
+    def total_ventas_tarjeta(self) -> float:
+        return self.payment_stats["tarjeta"]
 
     @rx.var
     def total_ventas_mixtas(self) -> float:
-        return self._ventas_by_payment(
-            lambda m: m.get("payment_kind") == "mixed"
-            or m.get("payment_method", "").lower() == "pagos mixtos"
-        )
+        return self.payment_stats["mixto"]
 
     @rx.var
     def productos_mas_vendidos(self) -> list[dict]:
-        from collections import Counter
-
-        sales = [m for m in self.history if m["type"] == "Venta"]
-        product_counts = Counter((m["product_description"] for m in sales))
-        top_products = product_counts.most_common(5)
-        return [
-            {"description": desc, "cantidad_vendida": qty} for desc, qty in top_products
-        ]
+        import sqlalchemy
+        from sqlmodel import desc
+        with rx.session() as session:
+            statement = select(
+                SaleItem.product_name_snapshot, 
+                sqlalchemy.func.sum(SaleItem.quantity).label("total_qty")
+            ).group_by(SaleItem.product_name_snapshot).order_by(desc("total_qty")).limit(5)
+            
+            results = session.exec(statement).all()
+            return [
+                {"description": name, "cantidad_vendida": qty} for name, qty in results
+            ]
 
     @rx.var
-    def productos_stock_bajo(self) -> list[Product]:
-        if hasattr(self, "inventory"):
-            return sorted(
-                [p for p in self.inventory.values() if p["stock"] <= 10],
-                key=lambda p: p["stock"],
-            )
-        return []
+    def productos_stock_bajo(self) -> list[Dict]:
+        with rx.session() as session:
+            products = session.exec(select(Product).where(Product.stock <= 10).order_by(Product.stock)).all()
+            return [
+                {
+                    "barcode": p.barcode,
+                    "description": p.description,
+                    "stock": p.stock,
+                    "unit": p.unit
+                }
+                for p in products
+            ]
 
     @rx.var
     def sales_by_day(self) -> list[dict]:
         from collections import defaultdict
-        
-        sales = [m for m in self.history if m["type"] == "Venta"]
-        daily_sales = defaultdict(float)
-        for m in sales:
-            date = m["timestamp"].split(" ")[0]
-            daily_sales[date] += m["total"]
-        
-        sorted_days = sorted(daily_sales.keys())[-7:]
-        return [{"date": day, "total": daily_sales[day]} for day in sorted_days]
+        with rx.session() as session:
+            sales = session.exec(select(Sale).where(Sale.is_deleted == False)).all()
+            daily_sales = defaultdict(float)
+            for sale in sales:
+                date_str = sale.timestamp.strftime("%Y-%m-%d")
+                daily_sales[date_str] += sale.total_amount
+            
+            sorted_days = sorted(daily_sales.keys())[-7:]
+            return [{"date": day, "total": daily_sales[day]} for day in sorted_days]

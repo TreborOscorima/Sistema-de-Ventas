@@ -2,117 +2,123 @@ import reflex as rx
 import uuid
 from typing import List, Dict, Any, Set
 from decimal import Decimal, ROUND_HALF_UP
+from sqlmodel import select
+from app.models import Unit, PaymentMethod, Currency
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
 
 class ConfigState(MixinState):
     # Currency
-    available_currencies: List[CurrencyOption] = [
-        {"code": "PEN", "name": "Sol peruano (PEN)", "symbol": "S/"},
-        {"code": "ARS", "name": "Peso argentino (ARS)", "symbol": "$"},
-        {"code": "USD", "name": "Dolar estadounidense (USD)", "symbol": "US$"},
-    ]
     selected_currency_code: str = "PEN"
     new_currency_name: str = ""
     new_currency_code: str = ""
     new_currency_symbol: str = ""
     
     # Units
-    units: List[str] = [
-        "unidad",
-        "pieza",
-        "kg",
-        "g",
-        "l",
-        "ml",
-        "m",
-        "cm",
-        "paquete",
-        "caja",
-        "docena",
-        "bolsa",
-        "botella",
-        "lata",
-    ]
-    decimal_units: Set[str] = {
-        "kg",
-        "kilogramo",
-        "kilogramos",
-        "g",
-        "gramo",
-        "gramos",
-        "l",
-        "litro",
-        "litros",
-        "ml",
-        "metro",
-        "metros",
-    }
     new_unit_name: str = ""
     new_unit_allows_decimal: bool = False
+    
+    available_currencies: List[CurrencyOption] = []
+    units: List[str] = []
+    decimal_units: Set[str] = set()
+    unit_rows: List[Dict[str, Any]] = []
+    payment_methods: List[PaymentMethodConfig] = []
+
+    def load_config_data(self):
+        with rx.session() as session:
+            # Load Currencies
+            currencies = session.exec(select(Currency)).all()
+            if not currencies:
+                self.available_currencies = [{"code": "PEN", "name": "Sol peruano (PEN)", "symbol": "S/"}]
+            else:
+                self.available_currencies = [{"code": c.code, "name": c.name, "symbol": c.symbol} for c in currencies]
+
+            # Load Units
+            units_db = session.exec(select(Unit)).all()
+            self.units = [u.name for u in units_db]
+            self.decimal_units = {u.name for u in units_db if u.allows_decimal}
+            self.unit_rows = [
+                {"name": u.name, "allows_decimal": u.allows_decimal}
+                for u in units_db
+            ]
+
+            # Load Payment Methods
+            methods = session.exec(select(PaymentMethod)).all()
+            self.payment_methods = [
+                {
+                    "id": m.method_id,
+                    "name": m.name,
+                    "description": m.description,
+                    "kind": m.kind,
+                    "enabled": m.enabled
+                }
+                for m in methods
+            ]
 
     @rx.event
     def go_to_config_tab(self, tab: str):
         self.config_active_tab = tab
 
     def add_unit(self):
-        if self.new_unit_name and self.new_unit_name not in self.units:
-            self.units.append(self.new_unit_name)
-            if self.new_unit_allows_decimal:
-                self.decimal_units.add(self.new_unit_name)
-            self.new_unit_name = ""
-            self.new_unit_allows_decimal = False
+        name = self.new_unit_name.strip()
+        if not name:
+            return
+            
+        with rx.session() as session:
+            existing = session.exec(select(Unit).where(Unit.name == name)).first()
+            if not existing:
+                session.add(Unit(name=name, allows_decimal=self.new_unit_allows_decimal))
+                session.commit()
+                self.new_unit_name = ""
+                self.new_unit_allows_decimal = False
+                self.load_config_data()
+                return rx.toast(f"Unidad '{name}' agregada.", duration=2000)
+            else:
+                return rx.toast("La unidad ya existe.", duration=2000)
 
-    @rx.var
-    def unit_rows(self) -> List[Dict[str, Any]]:
-        return [
-            {"name": unit, "allows_decimal": unit in self.decimal_units}
-            for unit in self.units
-        ]
+    def set_unit_decimal(self, unit_name: str, allows_decimal: bool):
+        with rx.session() as session:
+            unit = session.exec(select(Unit).where(Unit.name == unit_name)).first()
+            if unit:
+                unit.allows_decimal = allows_decimal
+                session.add(unit)
+                session.commit()
+        self.load_config_data()
 
-    def set_unit_decimal(self, unit: str, allows_decimal: bool):
-        if allows_decimal:
-            self.decimal_units.add(unit)
-        elif unit in self.decimal_units:
-            self.decimal_units.remove(unit)
+    def remove_unit(self, unit_name: str):
+        with rx.session() as session:
+            unit = session.exec(select(Unit).where(Unit.name == unit_name)).first()
+            if unit:
+                session.delete(unit)
+                session.commit()
+                self.load_config_data()
+                return rx.toast(f"Unidad '{unit_name}' eliminada.", duration=2000)
 
-    def remove_unit(self, unit: str):
-        if unit in self.units:
-            self.units.remove(unit)
-        if unit in self.decimal_units:
-            self.decimal_units.remove(unit)
+    def ensure_default_data(self):
+        with rx.session() as session:
+            # Units
+            if not session.exec(select(Unit)).first():
+                defaults = ["unidad", "pieza", "kg", "g", "l", "ml", "m", "cm", "paquete", "caja", "docena", "bolsa", "botella", "lata"]
+                decimals = {"kg", "g", "l", "ml", "m", "cm"}
+                for name in defaults:
+                    session.add(Unit(name=name, allows_decimal=name in decimals))
+            
+            # Currencies
+            if not session.exec(select(Currency)).first():
+                session.add(Currency(code="PEN", name="Sol peruano (PEN)", symbol="S/"))
+                session.add(Currency(code="ARS", name="Peso argentino (ARS)", symbol="$"))
+                session.add(Currency(code="USD", name="Dolar estadounidense (USD)", symbol="US$"))
 
-    # Payment Methods
-    payment_methods: List[PaymentMethodConfig] = [
-        {
-            "id": "cash",
-            "name": "Efectivo",
-            "description": "Billetes, Monedas",
-            "kind": "cash",
-            "enabled": True,
-        },
-        {
-            "id": "card",
-            "name": "Tarjeta",
-            "description": "Credito, Debito",
-            "kind": "card",
-            "enabled": True,
-        },
-        {
-            "id": "wallet",
-            "name": "Billetera Digital / QR",
-            "description": "Yape, Plin, Billeteras Bancarias",
-            "kind": "wallet",
-            "enabled": True,
-        },
-        {
-            "id": "mixed",
-            "name": "Pagos Mixtos",
-            "description": "Combinacion de metodos",
-            "kind": "mixed",
-            "enabled": True,
-        },
-    ]
+            # Payment Methods
+            if not session.exec(select(PaymentMethod)).first():
+                session.add(PaymentMethod(method_id="cash", name="Efectivo", description="Billetes, Monedas", kind="cash", enabled=True))
+                session.add(PaymentMethod(method_id="card", name="Tarjeta", description="Credito, Debito", kind="card", enabled=True))
+                session.add(PaymentMethod(method_id="wallet", name="Billetera Digital / QR", description="Yape, Plin", kind="wallet", enabled=True))
+                session.add(PaymentMethod(method_id="mixed", name="Pagos Mixtos", description="Combinacion", kind="mixed", enabled=True))
+            
+            session.commit()
+        self.load_config_data()
+
     new_payment_method_name: str = ""
     new_payment_method_description: str = ""
     new_payment_method_kind: str = "other"

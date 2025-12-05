@@ -1,9 +1,11 @@
 import reflex as rx
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import datetime
 import uuid
 import logging
-from .types import TransactionItem, Product
+from sqlmodel import select
+from app.models import Product, StockMovement, User as UserModel
+from .types import TransactionItem
 from .mixin_state import MixinState
 from app.utils.barcode import clean_barcode, validate_barcode
 
@@ -56,12 +58,13 @@ class IngresoState(MixinState):
             if field == "description":
                 if value:
                     search = str(value).lower()
-                    if hasattr(self, "inventory"):
-                        self.entry_autocomplete_suggestions = [
-                            p["description"]
-                            for p in self.inventory.values()
-                            if search in p["description"].lower()
-                        ][:5]
+                    with rx.session() as session:
+                        products = session.exec(
+                            select(Product)
+                            .where(Product.description.contains(search))
+                            .limit(5)
+                        ).all()
+                        self.entry_autocomplete_suggestions = [p.description for p in products]
                 else:
                     self.entry_autocomplete_suggestions = []
             elif field == "barcode":
@@ -169,56 +172,67 @@ class IngresoState(MixinState):
             return rx.toast("No hay productos para ingresar.", duration=3000)
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        if hasattr(self, "inventory"):
+        with rx.session() as session:
+            # Get current user ID
+            user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
+            user_id = user.id if user else None
+
             for item in self.new_entry_items:
-                product_id = item["description"].lower().strip()
-                barcode = item.get("barcode", "").strip()
-                sale_price = item.get("sale_price", 0)
-                purchase_price = item["price"]
-                if product_id in self.inventory:
-                    if "barcode" not in self.inventory[product_id]:
-                        self.inventory[product_id]["barcode"] = ""
-                    self.inventory[product_id]["stock"] += item["quantity"]
-                    self.inventory[product_id]["stock"] = self._normalize_quantity_value(
-                        self.inventory[product_id]["stock"],
-                        self.inventory[product_id]["unit"],
+                barcode = (item.get("barcode") or "").strip()
+                description = item["description"].strip()
+                
+                product = None
+                if barcode:
+                    product = session.exec(select(Product).where(Product.barcode == barcode)).first()
+                
+                if not product:
+                    # Try by description if no barcode
+                    product = session.exec(select(Product).where(Product.description == description)).first()
+
+                if product:
+                    # Update
+                    product.stock += item["quantity"]
+                    product.purchase_price = item["price"]
+                    if item["sale_price"] > 0:
+                        product.sale_price = item["sale_price"]
+                    product.category = item["category"]
+                    session.add(product)
+                    
+                    # Log Movement
+                    movement = StockMovement(
+                        type="Ingreso",
+                        product_id=product.id,
+                        quantity=item["quantity"],
+                        description=f"Ingreso: {description}",
+                        user_id=user_id
                     )
-                    self.inventory[product_id]["purchase_price"] = purchase_price
-                    if barcode:
-                        self.inventory[product_id]["barcode"] = barcode
-                    if sale_price > 0:
-                        self.inventory[product_id]["sale_price"] = sale_price
-                    self.inventory[product_id]["category"] = item["category"]
+                    session.add(movement)
                 else:
-                    default_sale_price = (
-                        sale_price if sale_price > 0 else purchase_price * 1.25
+                    # Create
+                    new_product = Product(
+                        barcode=barcode or str(uuid.uuid4()),
+                        description=description,
+                        category=item["category"],
+                        stock=item["quantity"],
+                        unit=item["unit"],
+                        purchase_price=item["price"],
+                        sale_price=item["sale_price"]
                     )
-                    self.inventory[product_id] = {
-                        "id": product_id,
-                        "barcode": barcode,
-                        "description": item["description"],
-                        "category": item["category"],
-                        "stock": item["quantity"],
-                        "unit": item["unit"],
-                        "purchase_price": purchase_price,
-                        "sale_price": self._round_currency(default_sale_price),
-                    }
-                if hasattr(self, "history"):
-                    self.history.append(
-                        {
-                            "id": str(uuid.uuid4()),
-                            "timestamp": timestamp,
-                            "type": "Ingreso",
-                            "product_description": item["description"],
-                            "quantity": item["quantity"],
-                            "unit": item["unit"],
-                            "total": item["subtotal"],
-                            "payment_method": "",
-                            "payment_details": "",
-                            "user": self.current_user["username"],
-                            "sale_id": "",
-                        }
+                    session.add(new_product)
+                    session.flush() # Get ID
+                    
+                    # Log Movement
+                    movement = StockMovement(
+                        type="Ingreso",
+                        product_id=new_product.id,
+                        quantity=item["quantity"],
+                        description=f"Ingreso (Nuevo): {description}",
+                        user_id=user_id
                     )
+                    session.add(movement)
+            
+            session.commit()
+            
         self.new_entry_items = []
         self._reset_entry_form()
         return rx.toast("Ingreso de productos confirmado.", duration=3000)
@@ -238,27 +252,25 @@ class IngresoState(MixinState):
         }
         self.entry_autocomplete_suggestions = []
 
-    def _find_product_by_barcode(self, barcode: str) -> Product | None:
+    def _find_product_by_barcode(self, barcode: str) -> Optional[Dict[str, Any]]:
         """Busca un producto por código de barras usando limpieza y validación"""
         code = clean_barcode(barcode)
         if not code or len(code) == 0:
             return None
         
-        if not hasattr(self, "inventory"):
-            return None
-
-        logging.info(f"[BUSCAR] Código limpio: '{code}' (long: {len(code)})")
-        
-        # Buscar coincidencia exacta
-        for product in self.inventory.values():
-            product_code = product.get("barcode", "")
-            if product_code:
-                clean_product_code = clean_barcode(product_code)
-                if clean_product_code == code:
-                    logging.info(f"[BUSCAR] ✓ Exacta: '{clean_product_code}' = '{code}'")
-                    return product
-        
-        logging.warning(f"[BUSCAR] ✗ Sin coincidencia exacta para: '{code}'")
+        with rx.session() as session:
+            p = session.exec(select(Product).where(Product.barcode == code)).first()
+            if p:
+                return {
+                    "id": str(p.id),
+                    "barcode": p.barcode,
+                    "description": p.description,
+                    "category": p.category,
+                    "stock": p.stock,
+                    "unit": p.unit,
+                    "purchase_price": p.purchase_price,
+                    "sale_price": p.sale_price,
+                }
         return None
 
     def _fill_entry_item_from_product(self, product: Product):
@@ -282,7 +294,20 @@ class IngresoState(MixinState):
                 or description.get("label")
                 or ""
             )
-        product_id = description.lower().strip()
-        if hasattr(self, "inventory") and product_id in self.inventory:
-            self._fill_entry_item_from_product(self.inventory[product_id])
+        
+        with rx.session() as session:
+            product = session.exec(
+                select(Product).where(Product.description == description)
+            ).first()
+            
+            if product:
+                self._fill_entry_item_from_product({
+                    "barcode": product.barcode,
+                    "description": product.description,
+                    "category": product.category,
+                    "stock": product.stock,
+                    "unit": product.unit,
+                    "purchase_price": product.purchase_price,
+                    "sale_price": product.sale_price,
+                })
         self.entry_autocomplete_suggestions = []

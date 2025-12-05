@@ -1,6 +1,9 @@
 import reflex as rx
 import bcrypt
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+from sqlmodel import select
+from sqlalchemy import func
+from app.models import User as UserModel
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
 
@@ -72,14 +75,7 @@ DEFAULT_ROLE_TEMPLATES: Dict[str, Privileges] = {
 
 class AuthState(MixinState):
     token: str = rx.LocalStorage("")
-    users: Dict[str, User] = {
-        "admin": {
-            "username": "admin",
-            "password_hash": bcrypt.hashpw(b"admin", bcrypt.gensalt()).decode(),
-            "role": "Superadmin",
-            "privileges": SUPERADMIN_PRIVILEGES.copy(),
-        }
-    }
+    # users: Dict[str, User] = {} # Removed in favor of DB
     roles: List[str] = ["Superadmin", "Administrador", "Usuario", "Cajero"]
     role_privileges: Dict[str, Privileges] = DEFAULT_ROLE_TEMPLATES.copy()
     
@@ -92,34 +88,49 @@ class AuthState(MixinState):
         "role": "Usuario",
         "privileges": DEFAULT_USER_PRIVILEGES.copy(),
     }
-    editing_user: Optional[User] = None
+    editing_user: Optional[Dict[str, Any]] = None
     new_role_name: str = ""
 
     @rx.var
     def is_authenticated(self) -> bool:
-        return self.token in self.users
+        return bool(self.token)
 
-    @rx.var
-    def user_list(self) -> List[User]:
-        return list(self.users.values())
 
     @rx.var
     def current_user(self) -> User:
         if not self.token:
             return self._guest_user()
-        user = self.users.get(self.token)
-        if user:
-            return user
+        
+        with rx.session() as session:
+            user = session.exec(
+                select(UserModel).where(UserModel.username == self.token)
+            ).first()
+            
+            if user:
+                return {
+                    "id": user.id,
+                    "username": user.username,
+                    "role": user.role,
+                    "privileges": self._normalize_privileges(user.privileges or {}),
+                    "password_hash": user.password_hash,
+                }
+        
         return self._guest_user()
     
-    @rx.var
-    def users_list(self) -> List[User]:
-        normalized_users = []
-        for user in self.users.values():
-            # Ensure privileges are complete
-            user["privileges"] = self._normalize_privileges(user.get("privileges", {}))
-            normalized_users.append(user)
-        return sorted(normalized_users, key=lambda u: u["username"])
+    users_list: List[User] = []
+
+    def load_users(self):
+        with rx.session() as session:
+            users = session.exec(select(UserModel)).all()
+            normalized_users = []
+            for user in users:
+                normalized_users.append({
+                    "username": user.username,
+                    "role": user.role,
+                    "privileges": self._normalize_privileges(user.privileges or {}),
+                    "password_hash": user.password_hash,
+                })
+            self.users_list = sorted(normalized_users, key=lambda u: u["username"])
 
     def _guest_user(self) -> User:
         return {
@@ -162,11 +173,43 @@ class AuthState(MixinState):
     def login(self, form_data: dict):
         username = form_data["username"].lower()
         password = form_data["password"].encode("utf-8")
-        user = self.users.get(username)
-        if user and bcrypt.checkpw(password, user["password_hash"].encode("utf-8")):
-            self.token = username
-            self.error_message = ""
-            return rx.redirect("/")
+        
+        with rx.session() as session:
+            # Check if any users exist (Bootstrap Admin)
+            user_count = session.exec(select(func.count(UserModel.id))).one()
+            
+            if user_count == 0:
+                if username == "admin" and form_data["password"] == "admin":
+                    # Create superadmin
+                    password_hash = bcrypt.hashpw(
+                        password, bcrypt.gensalt()
+                    ).decode()
+                    
+                    admin_user = UserModel(
+                        username="admin",
+                        password_hash=password_hash,
+                        role="Superadmin",
+                        privileges=self._role_privileges("Superadmin")
+                    )
+                    session.add(admin_user)
+                    session.commit()
+                    
+                    self.token = "admin"
+                    self.error_message = ""
+                    return rx.redirect("/")
+                else:
+                    self.error_message = "Sistema no inicializado. Ingrese como admin/admin."
+                    return
+
+            user = session.exec(
+                select(UserModel).where(UserModel.username == username)
+            ).first()
+            
+            if user and bcrypt.checkpw(password, user.password_hash.encode("utf-8")):
+                self.token = username
+                self.error_message = ""
+                return rx.redirect("/")
+            
         self.error_message = "Usuario o contraseña incorrectos."
 
     @rx.event
@@ -189,10 +232,6 @@ class AuthState(MixinState):
             if role_key not in self.roles:
                 self.roles.append(role_key)
                 
-        # Update user privileges in storage to match normalized structure
-        if user["username"] in self.users:
-            self.users[user["username"]]["privileges"] = merged_privileges
-
         self.new_user_data = {
             "username": user["username"],
             "password": "",
@@ -200,7 +239,7 @@ class AuthState(MixinState):
             "role": role_key,
             "privileges": merged_privileges,
         }
-        self.editing_user = self.users.get(user["username"], user)
+        self.editing_user = user
         self.show_user_form = True
 
     @rx.event
@@ -210,10 +249,23 @@ class AuthState(MixinState):
     @rx.event
     def show_edit_user_form_by_username(self, username: str):
         key = (username or "").strip().lower()
-        user = self.users.get(key)
-        if not user:
-            return rx.toast("Usuario a editar no encontrado.", duration=3000)
-        self._open_user_editor(user)
+        
+        with rx.session() as session:
+            user = session.exec(
+                select(UserModel).where(UserModel.username == key)
+            ).first()
+            
+            if not user:
+                return rx.toast("Usuario a editar no encontrado.", duration=3000)
+            
+            # Convert to dict
+            user_dict = {
+                "username": user.username,
+                "role": user.role,
+                "privileges": user.privileges or {},
+                "password_hash": user.password_hash,
+            }
+            self._open_user_editor(user_dict)
 
     @rx.event
     def set_user_form_open(self, is_open: bool):
@@ -303,50 +355,65 @@ class AuthState(MixinState):
             self.new_user_data["privileges"]
         )
 
-        if self.editing_user:
-            # Update existing user
-            user_to_update = self.users.get(self.editing_user["username"])
-            if not user_to_update:
-                return rx.toast("Usuario a editar no encontrado.", duration=3000)
+        with rx.session() as session:
+            if self.editing_user:
+                # Update existing user
+                user_to_update = session.exec(
+                    select(UserModel).where(UserModel.username == self.editing_user["username"])
+                ).first()
                 
-            if self.new_user_data["password"]:
-                if (
-                    self.new_user_data["password"]
-                    != self.new_user_data["confirm_password"]
-                ):
+                if not user_to_update:
+                    return rx.toast("Usuario a editar no encontrado.", duration=3000)
+                    
+                if self.new_user_data["password"]:
+                    if (
+                        self.new_user_data["password"]
+                        != self.new_user_data["confirm_password"]
+                    ):
+                        return rx.toast("Las contraseñas no coinciden.", duration=3000)
+                    password_hash = bcrypt.hashpw(
+                        self.new_user_data["password"].encode(), bcrypt.gensalt()
+                    ).decode()
+                    user_to_update.password_hash = password_hash
+                    
+                user_to_update.role = self.new_user_data["role"]
+                user_to_update.privileges = self.new_user_data["privileges"].copy()
+                
+                session.add(user_to_update)
+                session.commit()
+                
+                self.hide_user_form()
+                self.load_users()
+                return rx.toast(f"Usuario {username} actualizado.", duration=3000)
+            else:
+                # Create new user
+                existing_user = session.exec(
+                    select(UserModel).where(UserModel.username == username)
+                ).first()
+                
+                if existing_user:
+                    return rx.toast("El nombre de usuario ya existe.", duration=3000)
+                if not self.new_user_data["password"]:
+                    return rx.toast("La contraseña no puede estar vacía.", duration=3000)
+                if self.new_user_data["password"] != self.new_user_data["confirm_password"]:
                     return rx.toast("Las contraseñas no coinciden.", duration=3000)
+                    
                 password_hash = bcrypt.hashpw(
                     self.new_user_data["password"].encode(), bcrypt.gensalt()
                 ).decode()
-                user_to_update["password_hash"] = password_hash
                 
-            user_to_update["role"] = self.new_user_data["role"]
-            user_to_update["privileges"] = self.new_user_data["privileges"].copy()
-            
-            self.hide_user_form()
-            return rx.toast(f"Usuario {username} actualizado.", duration=3000)
-        else:
-            # Create new user
-            if username in self.users:
-                return rx.toast("El nombre de usuario ya existe.", duration=3000)
-            if not self.new_user_data["password"]:
-                return rx.toast("La contraseña no puede estar vacía.", duration=3000)
-            if self.new_user_data["password"] != self.new_user_data["confirm_password"]:
-                return rx.toast("Las contraseñas no coinciden.", duration=3000)
+                new_user = UserModel(
+                    username=username,
+                    password_hash=password_hash,
+                    role=self.new_user_data["role"],
+                    privileges=self.new_user_data["privileges"].copy(),
+                )
+                session.add(new_user)
+                session.commit()
                 
-            password_hash = bcrypt.hashpw(
-                self.new_user_data["password"].encode(), bcrypt.gensalt()
-            ).decode()
-            
-            self.users[username] = {
-                "username": username,
-                "password_hash": password_hash,
-                "role": self.new_user_data["role"],
-                "privileges": self.new_user_data["privileges"].copy(),
-            }
-            
-            self.hide_user_form()
-            return rx.toast(f"Usuario {username} creado.", duration=3000)
+                self.hide_user_form()
+                self.load_users()
+                return rx.toast(f"Usuario {username} creado.", duration=3000)
 
     @rx.event
     def delete_user(self, username: str):
@@ -357,6 +424,15 @@ class AuthState(MixinState):
         if username == self.current_user["username"]:
             return rx.toast("No puedes eliminar tu propio usuario.", duration=3000)
             
-        if self.users.pop(username, None):
-            return rx.toast(f"Usuario {username} eliminado.", duration=3000)
+        with rx.session() as session:
+            user = session.exec(
+                select(UserModel).where(UserModel.username == username)
+            ).first()
+            
+            if user:
+                session.delete(user)
+                session.commit()
+                self.load_users()
+                return rx.toast(f"Usuario {username} eliminado.", duration=3000)
+                
         return rx.toast(f"Usuario {username} no encontrado.", duration=3000)

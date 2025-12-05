@@ -359,7 +359,7 @@ def user_section() -> rx.Component:
                 ),
                 rx.el.tbody(
                     rx.foreach(
-                        State.user_list,
+                        State.users_list,
                         lambda user: rx.el.tr(
                             rx.el.td(user["username"], class_name="py-3 px-4"),
                             rx.el.td(user["role"], class_name="py-3 px-4"),

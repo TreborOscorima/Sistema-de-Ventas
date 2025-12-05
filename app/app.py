@@ -1,4 +1,5 @@
 import reflex as rx
+import app.models  # Importar modelos para que Reflex detecte las tablas
 from app.state import State
 from app.components.sidebar import sidebar
 from app.pages.ingreso import ingreso_page
@@ -167,4 +168,4 @@ app = rx.App(
         ),
     ],
 )
-app.add_page(index)
+app.add_page(index, on_load=[State.ensure_default_data, State.load_categories, State.load_field_prices, State.load_users, State.load_config_data, State.load_reservations])

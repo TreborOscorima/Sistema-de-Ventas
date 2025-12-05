@@ -125,7 +125,13 @@ def historial_page() -> rx.Component:
                 rx.el.span(State.currency_symbol, State.total_ventas_mixtas.to_string()),
                 "text-blue-600",
             ),
-            class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6",
+            stat_card(
+                "credit-card",
+                "Ventas con Tarjeta",
+                rx.el.span(State.currency_symbol, State.total_ventas_tarjeta.to_string()),
+                "text-purple-600",
+            ),
+            class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-6",
         ),
         rx.el.div(
             history_filters(),

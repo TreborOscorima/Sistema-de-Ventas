@@ -929,7 +929,7 @@ def reservations_table() -> rx.Component:
             rx.el.input(
                 placeholder="Buscar por cliente, campo o horario...",
                 value=State.reservation_staged_search,
-                on_change=State.set_reservation_search,
+                on_change=State.set_reservation_staged_search,
                 class_name="w-full p-2 border rounded-md",
             ),
             rx.el.select(
@@ -939,19 +939,19 @@ def reservations_table() -> rx.Component:
                 rx.el.option("Cancelado", value="cancelado"),
                 rx.el.option("Eliminado", value="eliminado"),
                 value=State.reservation_staged_status,
-                on_change=State.set_reservation_filter_status,
+                on_change=State.set_reservation_staged_status,
                 class_name="p-2 border rounded-md bg-white",
             ),
             rx.el.input(
                 type="date",
                 value=State.reservation_staged_start_date,
-                on_change=State.set_reservation_filter_start_date,
+                on_change=State.set_reservation_staged_start_date,
                 class_name="p-2 border rounded-md",
             ),
             rx.el.input(
                 type="date",
                 value=State.reservation_staged_end_date,
-                on_change=State.set_reservation_filter_end_date,
+                on_change=State.set_reservation_staged_end_date,
                 class_name="p-2 border rounded-md",
             ),
             rx.el.button(

@@ -6,6 +6,8 @@ import logging
 import math
 import calendar
 import io
+from sqlmodel import select
+from app.models import SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice
 from .mixin_state import MixinState
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
@@ -45,6 +47,31 @@ class ServicesState(MixinState):
     service_reservations: List[FieldReservation] = []
     service_admin_log: List[ServiceLogEntry] = []
     reservation_payment_id: str = ""
+
+    def load_reservations(self):
+        with rx.session() as session:
+            reservations = session.exec(select(FieldReservationModel).order_by(FieldReservationModel.start_datetime.desc())).all()
+            self.service_reservations = [
+                {
+                    "id": str(r.id),
+                    "client_name": r.client_name,
+                    "dni": r.client_dni or "",
+                    "phone": r.client_phone or "",
+                    "sport": r.sport,
+                    "sport_label": self._sport_label(r.sport),
+                    "field_name": r.field_name,
+                    "start_datetime": r.start_datetime.strftime("%Y-%m-%d %H:%M"),
+                    "end_datetime": r.end_datetime.strftime("%Y-%m-%d %H:%M"),
+                    "advance_amount": r.paid_amount, # In the model paid_amount tracks what has been paid
+                    "total_amount": r.total_amount,
+                    "paid_amount": r.paid_amount,
+                    "status": r.status,
+                    "created_at": r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
+                    "cancellation_reason": r.cancellation_reason or "",
+                    "delete_reason": r.delete_reason or "",
+                }
+                for r in reservations
+            ]
     
     @rx.var
     def reservation_selected_for_payment(self) -> FieldReservation | None:
@@ -78,6 +105,18 @@ class ServicesState(MixinState):
     reservation_payment_routed: bool = False
     last_reservation_receipt: ReservationReceipt | None = None
     
+    def set_reservation_staged_search(self, value: str):
+        self.reservation_staged_search = value
+
+    def set_reservation_staged_status(self, value: str):
+        self.reservation_staged_status = value
+
+    def set_reservation_staged_start_date(self, value: str):
+        self.reservation_staged_start_date = value
+
+    def set_reservation_staged_end_date(self, value: str):
+        self.reservation_staged_end_date = value
+
     reservation_delete_modal_open: bool = False
     reservation_delete_selection: str = ""
     reservation_delete_reason: str = ""
@@ -145,12 +184,21 @@ class ServicesState(MixinState):
             filename=f"reservas_{self.field_rental_sport}_{TODAY_STR}.xlsx"
         )
 
-    field_prices: List[FieldPrice] = [
-        {"id": "fp1", "sport": "Futbol Día", "name": "Cancha 1", "price": 50},
-        {"id": "fp2", "sport": "Futbol Noche", "name": "Cancha 2", "price": 80},
-        {"id": "fp3", "sport": "Voley Día", "name": "Cancha 1", "price": 30},
-        {"id": "fp4", "sport": "Voley Noche", "name": "Cancha 2", "price": 45},
-    ]
+    field_prices: List[FieldPrice] = []
+
+    def load_field_prices(self):
+        with rx.session() as session:
+            prices = session.exec(select(FieldPriceModel)).all()
+            self.field_prices = [
+                {
+                    "id": str(p.id),
+                    "sport": p.sport,
+                    "name": p.name,
+                    "price": p.price
+                }
+                for p in prices
+            ]
+
     new_field_price_sport: str = "Futbol"
     new_field_price_name: str = ""
     new_field_price_amount: str = ""
@@ -169,15 +217,18 @@ class ServicesState(MixinState):
         if self.new_field_price_name and self.new_field_price_amount:
             try:
                 price = float(self.new_field_price_amount)
-                new_price: FieldPrice = {
-                    "id": str(uuid.uuid4()),
-                    "sport": self.new_field_price_sport,
-                    "name": self.new_field_price_name,
-                    "price": price,
-                }
-                self.field_prices.append(new_price)
+                with rx.session() as session:
+                    new_price = FieldPriceModel(
+                        sport=self.new_field_price_sport,
+                        name=self.new_field_price_name,
+                        price=price
+                    )
+                    session.add(new_price)
+                    session.commit()
+                
                 self.new_field_price_name = ""
                 self.new_field_price_amount = ""
+                self.load_field_prices()
             except ValueError:
                 return rx.toast("El precio debe ser un número válido.", duration=3000)
 
@@ -185,42 +236,59 @@ class ServicesState(MixinState):
         if not self.editing_field_price_id:
             return
         
-        price = next((p for p in self.field_prices if p["id"] == self.editing_field_price_id), None)
-        if price:
-            try:
-                price["name"] = self.new_field_price_name
-                price["price"] = float(self.new_field_price_amount)
-                price["sport"] = self.new_field_price_sport
-                
-                # Reset editing state
-                self.editing_field_price_id = ""
-                self.new_field_price_name = ""
-                self.new_field_price_amount = ""
-            except ValueError:
-                return rx.toast("El precio debe ser un número válido.", duration=3000)
+        try:
+            price_val = float(self.new_field_price_amount)
+            with rx.session() as session:
+                price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(self.editing_field_price_id))).first()
+                if price:
+                    price.name = self.new_field_price_name
+                    price.price = price_val
+                    price.sport = self.new_field_price_sport
+                    session.add(price)
+                    session.commit()
+            
+            # Reset editing state
+            self.editing_field_price_id = ""
+            self.new_field_price_name = ""
+            self.new_field_price_amount = ""
+            self.load_field_prices()
+        except ValueError:
+            return rx.toast("El precio debe ser un número válido.", duration=3000)
 
     def update_field_price_amount(self, price_id: str, value: str):
-        price = next((p for p in self.field_prices if p["id"] == price_id), None)
-        if price:
-            try:
-                price["price"] = float(value)
-            except ValueError:
-                pass
+        try:
+            val = float(value)
+            with rx.session() as session:
+                price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(price_id))).first()
+                if price:
+                    price.price = val
+                    session.add(price)
+                    session.commit()
+            self.load_field_prices()
+        except ValueError:
+            pass
 
     def edit_field_price(self, price_id: str):
-        price = next((p for p in self.field_prices if p["id"] == price_id), None)
-        if price:
-            self.editing_field_price_id = price["id"]
-            self.new_field_price_name = price["name"]
-            self.new_field_price_amount = str(price["price"])
-            self.new_field_price_sport = price["sport"]
+        with rx.session() as session:
+            price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(price_id))).first()
+            if price:
+                self.editing_field_price_id = str(price.id)
+                self.new_field_price_name = price.name
+                self.new_field_price_amount = str(price.price)
+                self.new_field_price_sport = price.sport
 
     def remove_field_price(self, price_id: str):
-        self.field_prices = [p for p in self.field_prices if p["id"] != price_id]
+        with rx.session() as session:
+            price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(price_id))).first()
+            if price:
+                session.delete(price)
+                session.commit()
+        
         if self.editing_field_price_id == price_id:
             self.editing_field_price_id = ""
             self.new_field_price_name = ""
             self.new_field_price_amount = ""
+        self.load_field_prices()
 
     def select_reservation_field_price(self, price_id: str):
         self.reservation_form["selected_price_id"] = price_id
@@ -656,25 +724,45 @@ class ServicesState(MixinState):
             status = "pagado"
         elif status == "pagado":
             paid_amount = total_amount
-        reservation: FieldReservation = {
-            "id": str(uuid.uuid4()),
-            "client_name": name,
-            "dni": dni,
-            "phone": phone,
-            "sport": self.field_rental_sport,
-            "sport_label": form.get("sport_label", self._sport_label(self.field_rental_sport)),
-            "field_name": field_name,
-            "start_datetime": start_dt.strftime("%Y-%m-%d %H:%M"),
-            "end_datetime": end_dt.strftime("%Y-%m-%d %H:%M"),
-            "advance_amount": self._round_currency(advance_amount),
-            "total_amount": self._round_currency(total_amount),
-            "paid_amount": self._round_currency(paid_amount),
-            "status": status,
-            "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "cancellation_reason": "",
-            "delete_reason": "",
-        }
-        self.service_reservations.insert(0, reservation)
+        
+        with rx.session() as session:
+            new_reservation = FieldReservationModel(
+                client_name=name,
+                client_dni=dni,
+                client_phone=phone,
+                sport=self.field_rental_sport,
+                field_name=field_name,
+                start_datetime=start_dt,
+                end_datetime=end_dt,
+                total_amount=total_amount,
+                paid_amount=paid_amount,
+                status=status,
+                user_id=self.current_user["id"] if self.current_user and "id" in self.current_user else None
+            )
+            session.add(new_reservation)
+            session.commit()
+            session.refresh(new_reservation)
+            
+            reservation: FieldReservation = {
+                "id": str(new_reservation.id),
+                "client_name": new_reservation.client_name,
+                "dni": new_reservation.client_dni or "",
+                "phone": new_reservation.client_phone or "",
+                "sport": new_reservation.sport,
+                "sport_label": form.get("sport_label", self._sport_label(new_reservation.sport)),
+                "field_name": new_reservation.field_name,
+                "start_datetime": new_reservation.start_datetime.strftime("%Y-%m-%d %H:%M"),
+                "end_datetime": new_reservation.end_datetime.strftime("%Y-%m-%d %H:%M"),
+                "advance_amount": new_reservation.paid_amount,
+                "total_amount": new_reservation.total_amount,
+                "paid_amount": new_reservation.paid_amount,
+                "status": new_reservation.status,
+                "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "cancellation_reason": "",
+                "delete_reason": "",
+            }
+        
+        self.load_reservations()
         self._log_service_action(reservation, "reserva", 0, notes="Reserva creada", status=reservation["status"])
         
         # Usar paid_amount en lugar de advance_amount para asegurar que se registre si se marca como Pagado
@@ -698,10 +786,12 @@ class ServicesState(MixinState):
         self.reservation_form = self._reservation_default_form()
         self.reservation_modal_open = False
         
-        # Si hubo pago, intentar imprimir comprobante
+        # Si hubo pago, intentar imprimir comprobante de venta
         if paid_amount > 0:
             return self.print_reservation_receipt(reservation["id"])
-        return rx.toast("Reserva registrada.", duration=3000)
+        
+        # Si no hubo pago, imprimir constancia de reserva
+        return self.print_reservation_receipt(reservation["id"])
 
     @rx.event
     def select_reservation_for_payment(self, reservation_id: str):
@@ -726,21 +816,113 @@ class ServicesState(MixinState):
 
     @rx.event
     def print_reservation_receipt(self, reservation_id: str):
-        # Buscar venta asociada a la reserva
-        target_sale = None
-        if hasattr(self, "cashbox_sales"):
-            for sale in self.cashbox_sales:
-                for item in sale.get("items", []):
-                    if item.get("barcode") == reservation_id:
-                        target_sale = sale
-                        break
-                if target_sale:
-                    break
+        # Always use the Reservation Proof format for reservations
+        reservation = self._find_reservation_by_id(reservation_id)
         
-        if target_sale and hasattr(self, "reprint_sale_receipt"):
-            return self.reprint_sale_receipt(target_sale["sale_id"])
-        else:
-            return rx.toast("No se encontró comprobante para esta reserva.", duration=3000)
+        if not reservation:
+            # Fallback: Try fetching from DB if not in memory list
+            with rx.session() as session:
+                r = session.exec(select(FieldReservationModel).where(FieldReservationModel.id == reservation_id)).first()
+                if r:
+                    reservation = {
+                        "id": str(r.id),
+                        "client_name": r.client_name,
+                        "dni": r.client_dni or "",
+                        "phone": r.client_phone or "",
+                        "sport": r.sport,
+                        "field_name": r.field_name,
+                        "start_datetime": r.start_datetime.strftime("%Y-%m-%d %H:%M"),
+                        "end_datetime": r.end_datetime.strftime("%Y-%m-%d %H:%M"),
+                        "total_amount": r.total_amount,
+                        "paid_amount": r.paid_amount,
+                        "status": r.status,
+                    }
+
+        if reservation:
+            return self._print_reservation_proof(reservation)
+            
+        return rx.toast("Reserva no encontrada.", duration=3000)
+
+    def _print_reservation_proof(self, reservation: FieldReservation):
+        import json
+        
+        html_content = f"""
+        <html>
+            <head>
+                <meta charset='utf-8' />
+                <title>Constancia de Reserva</title>
+                <style>
+                    @page {{
+                        size: 58mm auto;
+                        margin: 2mm;
+                    }}
+                    body {{
+                        font-family: 'Courier New', monospace;
+                        width: 56mm;
+                        margin: 0 auto;
+                        font-size: 11px;
+                    }}
+                    h1 {{
+                        text-align: center;
+                        font-size: 14px;
+                        margin: 0 0 6px 0;
+                    }}
+                    .section {{
+                        margin-bottom: 6px;
+                    }}
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                    }}
+                    td {{
+                        padding: 2px 0;
+                        text-align: left;
+                    }}
+                    td:last-child {{
+                        text-align: right;
+                    }}
+                    hr {{
+                        border: 0;
+                        border-top: 1px dashed #000;
+                        margin: 6px 0;
+                    }}
+                    .status {{
+                        text-align: center;
+                        font-weight: bold;
+                        margin: 10px 0;
+                        font-size: 12px;
+                    }}
+                </style>
+            </head>
+            <body>
+                <h1>Constancia de Reserva</h1>
+                <div class="section"><strong>Fecha Emision:</strong> {datetime.datetime.now().strftime("%Y-%m-%d")} <br/> {datetime.datetime.now().strftime("%H:%M:%S")}</div>
+                <hr />
+                <div class="section"><strong>Cliente:</strong> {reservation['client_name']}</div>
+                <div class="section"><strong>DNI:</strong> {reservation.get('dni') or ''}</div>
+                <div class="section"><strong>Campo:</strong> {reservation['field_name']}</div>
+                <div class="section"><strong>Inicio:</strong> {reservation['start_datetime']}</div>
+                <div class="section"><strong>Fin:</strong> {reservation['end_datetime']}</div>
+                <hr />
+                <table>
+                    <tr><td>Total</td><td>S/ {float(reservation['total_amount']):.2f}</td></tr>
+                    <tr><td>A cuenta</td><td>S/ {float(reservation['paid_amount']):.2f}</td></tr>
+                    <tr><td style='font-weight:bold;'>Saldo</td><td style='font-weight:bold;'>S/ {max(float(reservation['total_amount']) - float(reservation['paid_amount']), 0):.2f}</td></tr>
+                </table>
+                <div class="status">Estado: {reservation['status'].upper()}</div>
+                <hr />
+                <div style="text-align:center; font-size:10px;">Gracias por su preferencia</div>
+            </body>
+        </html>
+        """
+        script = f"""
+        const receiptWindow = window.open('', '_blank');
+        receiptWindow.document.write({json.dumps(html_content)});
+        receiptWindow.document.close();
+        receiptWindow.focus();
+        receiptWindow.print();
+        """
+        return rx.call_script(script)
 
     @rx.event
     def set_reservation_payment_amount(self, value: str):
@@ -915,28 +1097,46 @@ class ServicesState(MixinState):
 
     @rx.event
     def confirm_reservation_delete(self):
-        reservation = self._find_reservation_by_id(self.reservation_delete_selection)
-        if not reservation:
-            self.close_reservation_delete_modal()
-            return rx.toast("Reserva no encontrada.", duration=3000)
-        reason = (self.reservation_delete_reason or "").strip()
-        if not reason:
-            return rx.toast("Ingresa un sustento para eliminar la reserva.", duration=3000)
-        if reservation["status"] == "eliminado":
-            self.close_reservation_delete_modal()
-            return rx.toast("La reserva ya esta eliminada.", duration=3000)
-        reservation["status"] = "eliminado"
-        reservation["delete_reason"] = reason
-        reservation["cancellation_reason"] = reservation.get("cancellation_reason", "") or reason
-        # Reassign list to trigger UI refresh and slot availability
-        self.service_reservations = [res for res in self.service_reservations]
-        self._log_service_action(
-            reservation,
-            "eliminacion",
-            0,
-            notes=reason,
-            status="eliminado",
-        )
+        with rx.session() as session:
+            reservation_model = session.exec(
+                select(FieldReservationModel).where(FieldReservationModel.id == self.reservation_delete_selection)
+            ).first()
+            
+            if not reservation_model:
+                self.close_reservation_delete_modal()
+                return rx.toast("Reserva no encontrada.", duration=3000)
+            
+            reason = (self.reservation_delete_reason or "").strip()
+            if not reason:
+                return rx.toast("Ingresa un sustento para eliminar la reserva.", duration=3000)
+            
+            if reservation_model.status == "eliminado":
+                self.close_reservation_delete_modal()
+                return rx.toast("La reserva ya esta eliminada.", duration=3000)
+            
+            reservation_model.status = "eliminado"
+            reservation_model.delete_reason = reason
+            reservation_model.cancellation_reason = reservation_model.cancellation_reason or reason
+            
+            session.add(reservation_model)
+            session.commit()
+            session.refresh(reservation_model)
+            
+            reservation_dict = {
+                "id": str(reservation_model.id),
+                "client_name": reservation_model.client_name,
+                "status": reservation_model.status
+            }
+            
+            self._log_service_action(
+                reservation_dict,
+                "eliminacion",
+                0,
+                notes=reason,
+                status="eliminado",
+            )
+
+        self.load_reservations()
         self.reservation_payment_id = ""
         self.reservation_payment_amount = ""
         self.reservation_cancel_selection = ""
@@ -948,23 +1148,44 @@ class ServicesState(MixinState):
     def cancel_reservation(self):
         if not self.current_user["privileges"]["manage_reservations"]:
             return rx.toast("No tiene permisos para cancelar reservas.", duration=3000)
-        reservation = self._find_reservation_by_id(self.reservation_cancel_selection)
-        if not reservation:
-            return rx.toast("Reserva no encontrada.", duration=3000)
-        if reservation["status"] in ["cancelado", "eliminado"]:
-            return rx.toast("La reserva ya esta cancelada o eliminada.", duration=3000)
-        reason = (self.reservation_cancel_reason or "").strip()
-        if not reason:
-            return rx.toast("Ingrese el motivo de la cancelacion.", duration=3000)
-        reservation["status"] = "cancelado"
-        reservation["cancellation_reason"] = reason
-        self._log_service_action(
-            reservation,
-            "cancelacion",
-            0,
-            notes=reason,
-            status="cancelado",
-        )
+        
+        with rx.session() as session:
+            reservation_model = session.exec(
+                select(FieldReservationModel).where(FieldReservationModel.id == self.reservation_cancel_selection)
+            ).first()
+            
+            if not reservation_model:
+                return rx.toast("Reserva no encontrada.", duration=3000)
+            
+            if reservation_model.status in ["cancelado", "eliminado"]:
+                return rx.toast("La reserva ya esta cancelada o eliminada.", duration=3000)
+            
+            reason = (self.reservation_cancel_reason or "").strip()
+            if not reason:
+                return rx.toast("Ingrese el motivo de la cancelacion.", duration=3000)
+            
+            reservation_model.status = "cancelado"
+            reservation_model.cancellation_reason = reason
+            session.add(reservation_model)
+            session.commit()
+            session.refresh(reservation_model)
+            
+            # Create a dict representation for logging
+            reservation_dict = {
+                "id": str(reservation_model.id),
+                "client_name": reservation_model.client_name,
+                "status": reservation_model.status
+            }
+            
+            self._log_service_action(
+                reservation_dict,
+                "cancelacion",
+                0,
+                notes=reason,
+                status="cancelado",
+            )
+
+        self.load_reservations()
         self.reservation_payment_id = ""
         self.reservation_payment_amount = ""
         self.reservation_cancel_selection = ""
