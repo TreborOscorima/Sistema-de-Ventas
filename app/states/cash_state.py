@@ -37,9 +37,13 @@ class CashState(MixinState):
     cashbox_log_staged_end_date: str = ""
     cashbox_log_modal_open: bool = False
     cashbox_log_selected: CashboxLogEntry | None = None
+    _cashbox_update_trigger: int = 0
 
     @rx.var
     def current_cashbox_session(self) -> CashboxSession:
+        # Dependency to force update
+        _ = self._cashbox_update_trigger
+        
         username = "guest"
         if hasattr(self, "current_user") and self.current_user:
              username = self.current_user["username"]
@@ -161,6 +165,7 @@ class CashState(MixinState):
             session.commit()
             
         self.cashbox_open_amount_input = ""
+        self._cashbox_update_trigger += 1
         return rx.toast("Caja abierta. Jornada iniciada.", duration=3000)
 
     def _close_cashbox_session(self):
@@ -182,6 +187,8 @@ class CashState(MixinState):
                 cashbox_session.closing_time = datetime.datetime.now()
                 session.add(cashbox_session)
                 session.commit()
+        
+        self._cashbox_update_trigger += 1
 
     @rx.var
     def filtered_cashbox_logs(self) -> list[CashboxLogEntry]:
