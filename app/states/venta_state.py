@@ -828,6 +828,12 @@ class VentaState(MixinState):
             self._reset_payment_fields()
             self._refresh_payment_feedback()
             
+            # Trigger updates in other states
+            if hasattr(self, "reload_history"):
+                self.reload_history()
+            if hasattr(self, "_cashbox_update_trigger"):
+                self._cashbox_update_trigger += 1
+
             return rx.toast("Venta confirmada.", duration=3000)
 
     @rx.event

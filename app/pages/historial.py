@@ -95,77 +95,89 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
 
 
 def historial_page() -> rx.Component:
-    return rx.el.div(
-        rx.el.h1(
-            "Historial y Estadísticas",
-            class_name="text-2xl font-bold text-gray-800 mb-6",
-        ),
+    return rx.fragment(
         rx.el.div(
-            stat_card(
-                "banknote",
-                "Ventas con Efectivo",
-                rx.el.span(State.currency_symbol, State.total_ventas_efectivo.to_string()),
-                "text-green-600",
+            rx.el.h1(
+                "Historial y Estadísticas",
+                class_name="text-2xl font-bold text-gray-800 mb-6",
             ),
-            stat_card(
-                "smartphone",
-                "Ventas con Yape",
-                rx.el.span(State.currency_symbol, State.total_ventas_yape.to_string()),
-                "text-red-600",
-            ),
-            stat_card(
-                "qr-code",
-                "Ventas con Plin",
-                rx.el.span(State.currency_symbol, State.total_ventas_plin.to_string()),
-                "text-indigo-600",
-            ),
-            stat_card(
-                "wallet",
-                "Ventas Mixtas",
-                rx.el.span(State.currency_symbol, State.total_ventas_mixtas.to_string()),
-                "text-blue-600",
-            ),
-            stat_card(
-                "credit-card",
-                "Ventas con Tarjeta",
-                rx.el.span(State.currency_symbol, State.total_ventas_tarjeta.to_string()),
-                "text-purple-600",
-            ),
-            class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-6",
-        ),
-        rx.el.div(
-            history_filters(),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
-        ),
-        rx.el.div(
-            rx.el.table(
-                rx.el.thead(
-                    rx.el.tr(
-                        rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Tipo", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Descripcion", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Cantidad", class_name="py-3 px-4 text-center"),
-                        rx.el.th("Unidad", class_name="py-3 px-4 text-center"),
-                        rx.el.th("Total", class_name="py-3 px-4 text-right"),
-                        rx.el.th("Metodo de Pago", class_name="py-3 px-4 text-left"),
-                        rx.el.th("Detalle Pago", class_name="py-3 px-4 text-left"),
-                        class_name="bg-gray-100",
-                    )
+            rx.el.div(
+                stat_card(
+                    "banknote",
+                    "Ventas con Efectivo",
+                    rx.el.span(State.currency_symbol, State.total_ventas_efectivo.to_string()),
+                    "text-green-600",
                 ),
-                rx.el.tbody(rx.foreach(State.paginated_history, history_table_row)),
+                stat_card(
+                    "smartphone",
+                    "Ventas con Yape",
+                    rx.el.span(State.currency_symbol, State.total_ventas_yape.to_string()),
+                    "text-red-600",
+                ),
+                stat_card(
+                    "qr-code",
+                    "Ventas con Plin",
+                    rx.el.span(State.currency_symbol, State.total_ventas_plin.to_string()),
+                    "text-indigo-600",
+                ),
+                stat_card(
+                    "wallet",
+                    "Ventas Mixtas",
+                    rx.el.span(State.currency_symbol, State.total_ventas_mixtas.to_string()),
+                    "text-blue-600",
+                ),
+                stat_card(
+                    "credit-card",
+                    "Ventas con Tarjeta",
+                    rx.el.span(State.currency_symbol, State.total_ventas_tarjeta.to_string()),
+                    "text-purple-600",
+                ),
+                class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-6",
             ),
-            rx.cond(
-                State.filtered_history.length() == 0,
-                empty_state("No hay movimientos que coincidan con los filtros."),
-                rx.fragment(),
+            rx.el.div(
+                rx.el.div(
+                    history_filters(),
+                    class_name="flex-grow",
+                ),
+                rx.el.button(
+                    rx.icon("refresh-cw", class_name="h-5 w-5"),
+                    "Actualizar",
+                    on_click=State.reload_history,
+                    class_name="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md shadow-sm transition-colors h-fit self-end",
+                ),
+                class_name="flex flex-col lg:flex-row gap-4 bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6 items-end",
             ),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
+            rx.el.div(
+                rx.el.table(
+                    rx.el.thead(
+                        rx.el.tr(
+                            rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Tipo", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Descripcion", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Cantidad", class_name="py-3 px-4 text-center"),
+                            rx.el.th("Unidad", class_name="py-3 px-4 text-center"),
+                            rx.el.th("Total", class_name="py-3 px-4 text-right"),
+                            rx.el.th("Metodo de Pago", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Detalle Pago", class_name="py-3 px-4 text-left"),
+                            class_name="bg-gray-100",
+                        )
+                    ),
+                    rx.el.tbody(rx.foreach(State.paginated_history, history_table_row)),
+                ),
+                rx.cond(
+                    State.filtered_history.length() == 0,
+                    empty_state("No hay movimientos que coincidan con los filtros."),
+                    rx.fragment(),
+                ),
+                class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
+            ),
+            pagination_controls(
+                current_page=State.current_page_history,
+                total_pages=State.total_pages,
+                on_prev=lambda: State.set_history_page(State.current_page_history - 1),
+                on_next=lambda: State.set_history_page(State.current_page_history + 1),
+            ),
+            class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
         ),
-        pagination_controls(
-            current_page=State.current_page_history,
-            total_pages=State.total_pages,
-            on_prev=lambda: State.set_history_page(State.current_page_history - 1),
-            on_next=lambda: State.set_history_page(State.current_page_history + 1),
-        ),
-        class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
+        on_mount=State.reload_history,
     )

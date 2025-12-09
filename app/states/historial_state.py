@@ -22,11 +22,15 @@ class HistorialState(MixinState):
     staged_history_filter_end_date: str = ""
     current_page_history: int = 1
     items_per_page: int = 10
+    _history_update_trigger: int = 0
 
     @rx.var
     def filtered_history(self) -> list[Movement]:
         if not self.current_user["privileges"]["view_historial"]:
             return []
+        
+        # Dependency to force update
+        _ = self._history_update_trigger
         
         movements = []
         
@@ -180,6 +184,12 @@ class HistorialState(MixinState):
         self.history_filter_start_date = self.staged_history_filter_start_date
         self.history_filter_end_date = self.staged_history_filter_end_date
         self.current_page_history = 1
+        self._history_update_trigger += 1
+
+    @rx.event
+    def reload_history(self):
+        self._history_update_trigger += 1
+        # print("Reloading history...") # Debug
 
     @rx.event
     def reset_history_filters(self):
@@ -252,32 +262,41 @@ class HistorialState(MixinState):
     def _parse_payment_amount(self, text: str, keyword: str) -> float:
         """Extract amount for a keyword from a mixed payment string like 'Efectivo S/ 15.00'."""
         import re
-        # Regex to find "Keyword S/ 123.45" or "Keyword (Type) S/ 123.45"
-        # We look for the keyword, optional text, "S/", then the number.
-        # Example: "Plin S/ 20.00" -> matches "Plin"
         try:
-            # Case insensitive search for keyword followed by S/ and number
-            # We assume the format generated in venta_state.py: f"{label} {self._format_currency(amount)}"
-            # _format_currency uses "S/ {:,.2f}"
+            # Normalize separators.
+            # DB format: "Pagos Mixtos - Efectivo S/ 15.00 / Plin S/ 20.00 / Montos completos."
             
-            # Simple approach: split by "/" or " - " and look for keyword
-            parts = re.split(r'[:/|]|\s-\s', text)
+            # Replace " / " (slash with spaces) with a pipe
+            text = text.replace(" / ", "|")
+            # Replace " - " (dash with spaces) with a pipe
+            text = text.replace(" - ", "|")
+            # Replace "/" (slash without spaces) just in case
+            text = text.replace("/", "|")
+            
+            parts = text.split("|")
+            
             for part in parts:
+                part = part.strip()
+                # Check for keyword and "S/"
                 if keyword.lower() in part.lower() and "S/" in part:
-                    # Extract number
-                    num_part = part.split("S/")[1].strip()
-                    # Remove commas if any (though format_currency might add them)
-                    num_part = num_part.replace(",", "")
-                    # Extract first valid float
-                    match = re.search(r"([0-9]+\.?[0-9]*)", num_part)
-                    if match:
-                        return float(match.group(1))
+                    try:
+                        amount_str = part.split("S/")[1].strip()
+                        # Extract number (handle commas and decimals)
+                        match = re.search(r"([0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)", amount_str)
+                        if match:
+                            num_str = match.group(1).replace(",", "")
+                            return float(num_str)
+                    except IndexError:
+                        continue
         except Exception:
             pass
         return 0.0
 
     @rx.var
     def payment_stats(self) -> Dict[str, float]:
+        # Dependency to force update
+        _ = self._history_update_trigger
+
         stats = {
             "efectivo": 0.0,
             "yape": 0.0,
