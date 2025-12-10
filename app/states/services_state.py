@@ -854,13 +854,15 @@ class ServicesState(MixinState):
                 <style>
                     @page {{
                         size: 58mm auto;
-                        margin: 2mm;
+                        margin: 0;
                     }}
                     body {{
                         font-family: 'Courier New', monospace;
-                        width: 56mm;
-                        margin: 0 auto;
+                        width: 100%;
+                        margin: 0;
+                        padding: 2mm;
                         font-size: 11px;
+                        box-sizing: border-box;
                     }}
                     h1 {{
                         text-align: center;
@@ -912,6 +914,7 @@ class ServicesState(MixinState):
                 <div class="status">Estado: {reservation['status'].upper()}</div>
                 <hr />
                 <div style="text-align:center; font-size:10px;">Gracias por su preferencia</div>
+                <br><br>
             </body>
         </html>
         """

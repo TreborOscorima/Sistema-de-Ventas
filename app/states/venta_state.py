@@ -889,13 +889,15 @@ class VentaState(MixinState):
                 <style>
                     @page {{
                         size: 58mm auto;
-                        margin: 2mm;
+                        margin: 0;
                     }}
                     body {{
                         font-family: 'Courier New', monospace;
-                        width: 56mm;
-                        margin: 0 auto;
+                        width: 100%;
+                        margin: 0;
+                        padding: 2mm;
                         font-size: 11px;
+                        box-sizing: border-box;
                     }}
                     h1 {{
                         text-align: center;
@@ -941,6 +943,7 @@ class VentaState(MixinState):
                 <div class="section"><strong>Metodo de Pago:</strong> {self.last_payment_summary}</div>
                 <hr />
                 <div class="footer">Gracias por su preferencia</div>
+                <br><br>
             </body>
         </html>
         """
