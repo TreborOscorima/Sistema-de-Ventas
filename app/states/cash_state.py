@@ -726,37 +726,36 @@ class CashState(MixinState):
                 <style>
                     @page {{
                         size: 80mm auto;
-                        margin: 0;
+                        margin: 0mm;
                     }}
                     body {{
                         font-family: Arial, sans-serif;
                         width: 100%;
                         margin: 0;
-                        padding: 0;
+                        padding: 2mm;
                         font-size: 12px;
+                        line-height: 1.2;
                         box-sizing: border-box;
                     }}
                     .receipt {{
                         width: 100%;
-                        padding: 4mm;
                         box-sizing: border-box;
                         page-break-after: always;
-                        break-after: page;
                     }}
                     h1 {{
                         text-align: center;
                         font-size: 16px;
-                        margin: 0 0 10px 0;
+                        margin: 5px 0 10px 0;
                     }}
                     .section {{
-                        margin-bottom: 8px;
+                        margin-bottom: 5px;
                     }}
                     table {{
                         width: 100%;
                         border-collapse: collapse;
                     }}
                     td {{
-                        padding: 4px 0;
+                        padding: 3px 0;
                         text-align: left;
                         vertical-align: top;
                     }}
@@ -766,20 +765,24 @@ class CashState(MixinState):
                     hr {{
                         border: 0;
                         border-top: 1px dashed #000;
-                        margin: 10px 0;
+                        margin: 8px 0;
                     }}
                     .footer {{
                         text-align: center;
                         font-size: 11px;
                         margin-top: 15px;
-                        margin-bottom: 20px;
+                        margin-bottom: 10px;
                     }}
                     .cut-line {{
-                        border-top: 1px dotted #999;
-                        margin-top: 20px;
-                        margin-bottom: 20px;
+                        border-top: 1px dashed #000;
+                        margin-top: 10px;
+                        margin-bottom: 10px;
                         text-align: center;
                         display: block;
+                    }}
+                    .spacer {{
+                        height: 15mm;
+                        width: 100%;
                     }}
                 </style>
             </head>
@@ -798,8 +801,8 @@ class CashState(MixinState):
                     <hr />
                     <div class="footer">Gracias por su preferencia</div>
                     <br>
-                    <div class="cut-line">- - - - - - - - - - - - - - - -</div>
-                    <br>
+                    <div class="cut-line">. . . . . . . . . . . . . . . .</div>
+                    <div class="spacer"></div>
                 </div>
             </body>
         </html>
