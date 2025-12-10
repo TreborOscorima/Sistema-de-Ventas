@@ -853,32 +853,33 @@ class ServicesState(MixinState):
                 <title>Constancia de Reserva</title>
                 <style>
                     @page {{
-                        size: 58mm auto;
+                        size: 80mm auto;
                         margin: 0;
                     }}
                     body {{
-                        font-family: 'Courier New', monospace;
+                        font-family: Arial, sans-serif;
                         width: 100%;
                         margin: 0;
-                        padding: 2mm;
-                        font-size: 11px;
+                        padding: 4mm;
+                        font-size: 12px;
                         box-sizing: border-box;
                     }}
                     h1 {{
                         text-align: center;
-                        font-size: 14px;
-                        margin: 0 0 6px 0;
+                        font-size: 16px;
+                        margin: 0 0 10px 0;
                     }}
                     .section {{
-                        margin-bottom: 6px;
+                        margin-bottom: 8px;
                     }}
                     table {{
                         width: 100%;
                         border-collapse: collapse;
                     }}
                     td {{
-                        padding: 2px 0;
+                        padding: 4px 0;
                         text-align: left;
+                        vertical-align: top;
                     }}
                     td:last-child {{
                         text-align: right;
@@ -886,13 +887,19 @@ class ServicesState(MixinState):
                     hr {{
                         border: 0;
                         border-top: 1px dashed #000;
-                        margin: 6px 0;
+                        margin: 10px 0;
                     }}
                     .status {{
                         text-align: center;
                         font-weight: bold;
-                        margin: 10px 0;
-                        font-size: 12px;
+                        margin: 15px 0;
+                        font-size: 14px;
+                    }}
+                    .cut-line {{
+                        border-top: 1px dotted #999;
+                        margin-top: 20px;
+                        margin-bottom: 20px;
+                        text-align: center;
                     }}
                 </style>
             </head>
@@ -913,8 +920,10 @@ class ServicesState(MixinState):
                 </table>
                 <div class="status">Estado: {reservation['status'].upper()}</div>
                 <hr />
-                <div style="text-align:center; font-size:10px;">Gracias por su preferencia</div>
+                <div style="text-align:center; font-size:11px;">Gracias por su preferencia</div>
                 <br><br>
+                <div class="cut-line">- - - - - - - - - - - - - - - -</div>
+                <br>
             </body>
         </html>
         """
