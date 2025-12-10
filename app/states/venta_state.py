@@ -895,9 +895,16 @@ class VentaState(MixinState):
                         font-family: Arial, sans-serif;
                         width: 100%;
                         margin: 0;
-                        padding: 4mm;
+                        padding: 0;
                         font-size: 12px;
                         box-sizing: border-box;
+                    }}
+                    .receipt {{
+                        width: 100%;
+                        padding: 4mm;
+                        box-sizing: border-box;
+                        page-break-after: always;
+                        break-after: page;
                     }}
                     h1 {{
                         text-align: center;
@@ -935,25 +942,28 @@ class VentaState(MixinState):
                         margin-top: 20px;
                         margin-bottom: 20px;
                         text-align: center;
+                        display: block;
                     }}
                 </style>
             </head>
             <body>
-                <h1>Comprobante de Pago</h1>
-                <div class="section"><strong>Fecha:</strong> {self.last_sale_timestamp}</div>
-                <div class="section"><strong>Atendido por:</strong> {self.current_user.get('username', 'Desconocido')}</div>
-                <hr />
-                <table>
-                    {display_rows}
-                </table>
-                <hr />
-                <div class="section"><strong>Total General:</strong> <strong>{self._format_currency(display_total)}</strong></div>
-                <div class="section"><strong>Metodo de Pago:</strong> {self.last_payment_summary}</div>
-                <hr />
-                <div class="footer">Gracias por su preferencia</div>
-                <br><br>
-                <div class="cut-line">- - - - - - - - - - - - - - - -</div>
-                <br>
+                <div class="receipt">
+                    <h1>Comprobante de Pago</h1>
+                    <div class="section"><strong>Fecha:</strong> {self.last_sale_timestamp}</div>
+                    <div class="section"><strong>Atendido por:</strong> {self.current_user.get('username', 'Desconocido')}</div>
+                    <hr />
+                    <table>
+                        {display_rows}
+                    </table>
+                    <hr />
+                    <div class="section"><strong>Total General:</strong> <strong>{self._format_currency(display_total)}</strong></div>
+                    <div class="section"><strong>Metodo de Pago:</strong> {self.last_payment_summary}</div>
+                    <hr />
+                    <div class="footer">Gracias por su preferencia</div>
+                    <br>
+                    <div class="cut-line">- - - - - - - - - - - - - - - -</div>
+                    <br>
+                </div>
             </body>
         </html>
         """

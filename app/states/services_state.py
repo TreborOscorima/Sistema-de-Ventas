@@ -860,9 +860,16 @@ class ServicesState(MixinState):
                         font-family: Arial, sans-serif;
                         width: 100%;
                         margin: 0;
-                        padding: 4mm;
+                        padding: 0;
                         font-size: 12px;
                         box-sizing: border-box;
+                    }}
+                    .receipt {{
+                        width: 100%;
+                        padding: 4mm;
+                        box-sizing: border-box;
+                        page-break-after: always;
+                        break-after: page;
                     }}
                     h1 {{
                         text-align: center;
@@ -900,30 +907,33 @@ class ServicesState(MixinState):
                         margin-top: 20px;
                         margin-bottom: 20px;
                         text-align: center;
+                        display: block;
                     }}
                 </style>
             </head>
             <body>
-                <h1>Constancia de Reserva</h1>
-                <div class="section"><strong>Fecha Emision:</strong> {datetime.datetime.now().strftime("%Y-%m-%d")} <br/> {datetime.datetime.now().strftime("%H:%M:%S")}</div>
-                <hr />
-                <div class="section"><strong>Cliente:</strong> {reservation['client_name']}</div>
-                <div class="section"><strong>DNI:</strong> {reservation.get('dni') or ''}</div>
-                <div class="section"><strong>Campo:</strong> {reservation['field_name']}</div>
-                <div class="section"><strong>Inicio:</strong> {reservation['start_datetime']}</div>
-                <div class="section"><strong>Fin:</strong> {reservation['end_datetime']}</div>
-                <hr />
-                <table>
-                    <tr><td>Total</td><td>S/ {float(reservation['total_amount']):.2f}</td></tr>
-                    <tr><td>A cuenta</td><td>S/ {float(reservation['paid_amount']):.2f}</td></tr>
-                    <tr><td style='font-weight:bold;'>Saldo</td><td style='font-weight:bold;'>S/ {max(float(reservation['total_amount']) - float(reservation['paid_amount']), 0):.2f}</td></tr>
-                </table>
-                <div class="status">Estado: {reservation['status'].upper()}</div>
-                <hr />
-                <div style="text-align:center; font-size:11px;">Gracias por su preferencia</div>
-                <br><br>
-                <div class="cut-line">- - - - - - - - - - - - - - - -</div>
-                <br>
+                <div class="receipt">
+                    <h1>Constancia de Reserva</h1>
+                    <div class="section"><strong>Fecha Emision:</strong> {datetime.datetime.now().strftime("%Y-%m-%d")} <br/> {datetime.datetime.now().strftime("%H:%M:%S")}</div>
+                    <hr />
+                    <div class="section"><strong>Cliente:</strong> {reservation['client_name']}</div>
+                    <div class="section"><strong>DNI:</strong> {reservation.get('dni') or ''}</div>
+                    <div class="section"><strong>Campo:</strong> {reservation['field_name']}</div>
+                    <div class="section"><strong>Inicio:</strong> {reservation['start_datetime']}</div>
+                    <div class="section"><strong>Fin:</strong> {reservation['end_datetime']}</div>
+                    <hr />
+                    <table>
+                        <tr><td>Total</td><td>S/ {float(reservation['total_amount']):.2f}</td></tr>
+                        <tr><td>A cuenta</td><td>S/ {float(reservation['paid_amount']):.2f}</td></tr>
+                        <tr><td style='font-weight:bold;'>Saldo</td><td style='font-weight:bold;'>S/ {max(float(reservation['total_amount']) - float(reservation['paid_amount']), 0):.2f}</td></tr>
+                    </table>
+                    <div class="status">Estado: {reservation['status'].upper()}</div>
+                    <hr />
+                    <div style="text-align:center; font-size:11px;">Gracias por su preferencia</div>
+                    <br>
+                    <div class="cut-line">- - - - - - - - - - - - - - - -</div>
+                    <br>
+                </div>
             </body>
         </html>
         """
