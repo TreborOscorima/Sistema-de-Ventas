@@ -126,6 +126,13 @@ class CashboxLogEntry(TypedDict):
     closing_total: float
     totals_by_method: List[Dict[str, float]]
     notes: str
+    amount: float
+    quantity: float
+    unit: str
+    cost: float
+    formatted_amount: str
+    formatted_cost: str
+    formatted_quantity: str
 
 class InventoryAdjustment(TypedDict):
     temp_id: str

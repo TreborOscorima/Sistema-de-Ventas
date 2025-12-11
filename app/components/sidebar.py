@@ -14,6 +14,11 @@ SERVICES_SUBSECTIONS = [
     {"key": "piscina", "label": "Alquiler de Piscina", "icon": "waves"},
 ]
 
+CASH_SUBSECTIONS = [
+    {"key": "resumen", "label": "Resumen de Caja", "icon": "layout-dashboard"},
+    {"key": "movimientos", "label": "Movimientos de Caja Chica", "icon": "arrow-left-right"},
+]
+
 def nav_item(text: str, icon: str, page: str) -> rx.Component:
     return rx.el.a(
         rx.el.div(
@@ -93,6 +98,39 @@ def sidebar() -> rx.Component:
                                                     ),
                                                     class_name=rx.cond(
                                                         State.config_active_tab
+                                                        == section["key"],
+                                                        "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
+                                                        "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",
+                                                    ),
+                                                ),
+                                            ),
+                                            class_name="mt-2 ml-4 flex flex-col gap-1",
+                                        ),
+                                        rx.fragment(),
+                                    ),
+                                    rx.cond(
+                                        (item["page"] == "Gestion de Caja")
+                                        & (State.active_page == "Gestion de Caja"),
+                                        rx.el.div(
+                                            rx.foreach(
+                                                CASH_SUBSECTIONS,
+                                                lambda section: rx.el.button(
+                                                    rx.el.div(
+                                                        rx.icon(
+                                                            section["icon"],
+                                                            class_name="h-4 w-4 text-indigo-600",
+                                                        ),
+                                                        rx.el.span(
+                                                            section["label"],
+                                                            class_name="text-sm",
+                                                        ),
+                                                        class_name="flex items-center gap-2",
+                                                    ),
+                                                    on_click=lambda _, key=section[
+                                                        "key"
+                                                    ]: State.set_cash_tab(key),
+                                                    class_name=rx.cond(
+                                                        State.cash_active_tab
                                                         == section["key"],
                                                         "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
                                                         "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",

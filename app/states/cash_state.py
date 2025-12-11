@@ -5,6 +5,7 @@ import uuid
 import logging
 import json
 import io
+import sqlalchemy
 from io import BytesIO
 from sqlmodel import select, desc
 from app.models import CashboxSession as CashboxSessionModel, CashboxLog as CashboxLogModel, User as UserModel, Sale, SaleItem, StockMovement, Product
@@ -38,6 +39,149 @@ class CashState(MixinState):
     cashbox_log_modal_open: bool = False
     cashbox_log_selected: CashboxLogEntry | None = None
     _cashbox_update_trigger: int = 0
+    
+    cash_active_tab: str = "resumen"
+    petty_cash_amount: str = "" # Este será el Total calculado o manual
+    petty_cash_quantity: str = "1"
+    petty_cash_unit: str = "Unidad"
+    petty_cash_cost: str = ""
+    petty_cash_reason: str = ""
+    petty_cash_modal_open: bool = False
+
+    @rx.event
+    def open_petty_cash_modal(self):
+        self.petty_cash_modal_open = True
+
+    @rx.event
+    def close_petty_cash_modal(self):
+        self.petty_cash_modal_open = False
+
+    @rx.event
+    def set_cash_tab(self, tab: str):
+        self.cash_active_tab = tab
+
+    @rx.event
+    def set_petty_cash_amount(self, value: str | int | float):
+        self.petty_cash_amount = str(value)
+
+    @rx.event
+    def set_petty_cash_quantity(self, value: Any):
+        self.petty_cash_quantity = str(value)
+        self._calculate_petty_cash_total()
+
+    @rx.event
+    def set_petty_cash_unit(self, value: str):
+        self.petty_cash_unit = value
+
+    @rx.event
+    def set_petty_cash_cost(self, value: Any):
+        self.petty_cash_cost = str(value)
+        self._calculate_petty_cash_total()
+
+    def _calculate_petty_cash_total(self):
+        try:
+            qty = float(self.petty_cash_quantity) if self.petty_cash_quantity else 0
+            cost = float(self.petty_cash_cost) if self.petty_cash_cost else 0
+            self.petty_cash_amount = str(qty * cost)
+        except ValueError:
+            pass
+
+    @rx.event
+    def set_petty_cash_reason(self, value: str):
+        self.petty_cash_reason = value
+
+    @rx.event
+    def add_petty_cash_movement(self):
+        if not self.cashbox_is_open:
+            return rx.toast("Debe aperturar la caja para registrar movimientos.", duration=3000)
+        
+        try:
+            amount = float(self.petty_cash_amount)
+            if amount <= 0:
+                return rx.toast("El monto total debe ser mayor a 0.", duration=3000)
+            
+            quantity = float(self.petty_cash_quantity) if self.petty_cash_quantity else 1.0
+            cost = float(self.petty_cash_cost) if self.petty_cash_cost else amount
+            
+        except ValueError:
+            return rx.toast("Valores numéricos inválidos.", duration=3000)
+            
+        if not self.petty_cash_reason:
+            return rx.toast("Ingrese un motivo.", duration=3000)
+            
+        username = self.current_user["username"]
+        
+        with rx.session() as session:
+            user = session.exec(select(UserModel).where(UserModel.username == username)).first()
+            if not user:
+                return rx.toast("Usuario no encontrado.", duration=3000)
+                
+            log = CashboxLogModel(
+                user_id=user.id,
+                action="gasto_caja_chica",
+                amount=amount,
+                quantity=quantity,
+                unit=self.petty_cash_unit,
+                cost=cost,
+                notes=self.petty_cash_reason,
+                timestamp=datetime.datetime.now()
+            )
+            session.add(log)
+            session.commit()
+            
+        self.petty_cash_amount = ""
+        self.petty_cash_quantity = "1"
+        self.petty_cash_cost = ""
+        self.petty_cash_unit = "Unidad"
+        self.petty_cash_reason = ""
+        self.petty_cash_modal_open = False
+        self._cashbox_update_trigger += 1
+        return rx.toast("Movimiento registrado correctamente.", duration=3000)
+
+    @rx.var
+    def petty_cash_movements(self) -> List[CashboxLogEntry]:
+        _ = self._cashbox_update_trigger
+        with rx.session() as session:
+            statement = (
+                select(CashboxLogModel, UserModel.username)
+                .join(UserModel)
+                .where(CashboxLogModel.action == "gasto_caja_chica")
+                .order_by(desc(CashboxLogModel.timestamp))
+            )
+            
+            results = session.exec(statement).all()
+            
+            filtered = []
+            for log, username in results:
+                qty = log.quantity or 1.0
+                cost = log.cost or log.amount
+                
+                # Format quantity: integer if no decimal part, else 2 decimals
+                fmt_qty = f"{int(qty)}" if qty % 1 == 0 else f"{qty:.2f}"
+                
+                entry: CashboxLogEntry = {
+                    "id": str(log.id),
+                    "action": log.action,
+                    "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    "user": username,
+                    "opening_amount": 0.0,
+                    "closing_total": 0.0,
+                    "totals_by_method": [],
+                    "notes": log.notes,
+                    "amount": log.amount,
+                    "quantity": qty,
+                    "unit": log.unit or "Unidad",
+                    "cost": cost,
+                    "formatted_amount": f"{log.amount:.2f}",
+                    "formatted_cost": f"{cost:.2f}",
+                    "formatted_quantity": fmt_qty
+                }
+                filtered.append(entry)
+            return filtered
+
+    @rx.var
+    def cashbox_opening_amount_display(self) -> str:
+        return f"{self.cashbox_opening_amount:.2f}"
 
     @rx.var
     def current_cashbox_session(self) -> CashboxSession:
@@ -88,7 +232,36 @@ class CashState(MixinState):
 
     @rx.var
     def cashbox_opening_amount(self) -> float:
-        return float(self.current_cashbox_session.get("opening_amount", 0))
+        session_data = self.current_cashbox_session
+        if not session_data.get("is_open"):
+             return 0.0
+        
+        opening_amount = float(session_data.get("opening_amount", 0))
+        opening_time_str = session_data.get("opening_time")
+        if not opening_time_str:
+            return opening_amount
+
+        try:
+            opening_time = datetime.datetime.strptime(opening_time_str, "%Y-%m-%d %H:%M:%S")
+        except ValueError:
+            return opening_amount
+
+        username = session_data.get("opened_by")
+
+        with rx.session() as session:
+            user = session.exec(select(UserModel).where(UserModel.username == username)).first()
+            if not user:
+                return opening_amount
+            
+            # Sumar gastos
+            statement = select(sqlalchemy.func.sum(CashboxLogModel.amount)).where(
+                CashboxLogModel.user_id == user.id,
+                CashboxLogModel.action == "gasto_caja_chica",
+                CashboxLogModel.timestamp >= opening_time
+            )
+            expenses = session.exec(statement).one() or 0.0
+            
+            return opening_amount - expenses
 
     @rx.var
     def cashbox_opening_time(self) -> str:
@@ -199,6 +372,7 @@ class CashState(MixinState):
             statement = (
                 select(CashboxLogModel, UserModel.username)
                 .join(UserModel)
+                .where(CashboxLogModel.action.in_(["apertura", "cierre"]))
                 .order_by(desc(CashboxLogModel.timestamp))
             )
             
@@ -235,6 +409,7 @@ class CashState(MixinState):
                     "closing_total": log.amount if log.action == "cierre" else 0.0,
                     "totals_by_method": [],
                     "notes": log.notes,
+                    "amount": log.amount
                 }
                 filtered.append(entry)
                 
@@ -712,7 +887,7 @@ class CashState(MixinState):
         items = sale_data.get("items", [])
         rows = "".join(
             f"<tr><td colspan='2' class='item-row-1'>{item.get('description', '')}</td></tr>"
-            f"<tr><td class='item-row-2'>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</td><td class='item-row-2' style='text-align:right;'>{self._format_currency(item.get('subtotal', 0))}</td></tr>"
+            f"<tr><td class='item-row-2' style='width: 70%; padding-right: 5px;'>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</td><td class='item-row-2' style='width: 30%; text-align:right;'>{self._format_currency(item.get('subtotal', 0))}</td></tr>"
             for item in items
         )
         payment_summary = sale_data.get("payment_details") or sale_data.get(
@@ -794,6 +969,12 @@ class CashState(MixinState):
                     .cut-spacer {{
                         height: 20mm;
                         width: 100%;
+                        display: block;
+                        content: " ";
+                    }}
+                    @media print {{
+                        body {{ margin: 0; }}
+                        .receipt {{ width: 100%; }}
                     }}
                 </style>
             </head>
@@ -811,16 +992,18 @@ class CashState(MixinState):
                         {rows}
                     </table>
                     <hr />
-                    <div class="section" style="display: flex; justify-content: space-between; font-weight: bold;">
-                        <span>TOTAL GENERAL:</span> 
-                        <span>{self._format_currency(sale_data.get('total', 0))}</span>
-                    </div>
+                    <table style="width: 100%; margin-top: 5px;">
+                        <tr>
+                            <td style="text-align: left; font-weight: bold;">TOTAL GENERAL:</td>
+                            <td style="text-align: right; font-weight: bold;">{self._format_currency(sale_data.get('total', 0))}</td>
+                        </tr>
+                    </table>
                     <div class="section">Metodo de Pago: {payment_summary}</div>
                     <hr />
                     <div class="footer">Gracias por su preferencia</div>
                     
                     <!-- Espacio para corte -->
-                    <div class="cut-spacer"></div>
+                    <div class="cut-spacer">&nbsp;</div>
                 </div>
             </body>
         </html>

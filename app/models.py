@@ -102,6 +102,9 @@ class CashboxLog(rx.Model, table=True):
     )
     action: str = Field(nullable=False) # apertura, cierre, etc.
     amount: float = Field(default=0.0)
+    quantity: float = Field(default=1.0)
+    unit: str = Field(default="Unidad")
+    cost: float = Field(default=0.0)
     notes: str = Field(default="")
     
     # Claves Foráneas
