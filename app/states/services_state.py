@@ -857,11 +857,12 @@ class ServicesState(MixinState):
                         margin: 0;
                     }}
                     body {{
-                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        font-family: 'Courier New', Courier, monospace;
                         width: 100%;
                         margin: 0;
                         padding: 0;
                         background-color: #fff;
+                        color: #000;
                     }}
                     .receipt {{
                         width: 72mm;
@@ -869,17 +870,28 @@ class ServicesState(MixinState):
                         padding: 2mm 0;
                         page-break-after: always;
                     }}
+                    .header-company {{
+                        text-align: center;
+                        font-weight: bold;
+                        font-size: 14px;
+                        margin-bottom: 5px;
+                        text-transform: uppercase;
+                    }}
+                    .header-info {{
+                        text-align: center;
+                        font-size: 12px;
+                        margin-bottom: 2px;
+                    }}
                     h1 {{
                         text-align: center;
-                        font-size: 16px;
+                        font-size: 14px;
                         font-weight: bold;
-                        margin: 5px 0 10px 0;
+                        margin: 5px 0;
                         text-transform: uppercase;
                     }}
                     .section {{
                         font-size: 12px;
-                        margin-bottom: 4px;
-                        line-height: 1.4;
+                        margin-bottom: 2px;
                     }}
                     table {{
                         width: 100%;
@@ -888,62 +900,52 @@ class ServicesState(MixinState):
                     }}
                     td {{
                         font-size: 12px;
-                        padding: 4px 0;
+                        padding: 2px 0;
                         vertical-align: top;
-                        line-height: 1.3;
-                    }}
-                    td:first-child {{
-                        width: 70%;
-                        text-align: left;
-                        padding-right: 5px;
-                    }}
-                    td:last-child {{
-                        width: 30%;
-                        text-align: right;
-                        white-space: nowrap;
                     }}
                     hr {{
                         border: 0;
-                        border-top: 1px dashed #333;
-                        margin: 8px 0;
+                        border-top: 1px dashed #000;
+                        margin: 5px 0;
                     }}
                     .status {{
                         text-align: center;
                         font-weight: bold;
-                        margin: 15px 0;
+                        margin: 10px 0;
                         font-size: 14px;
                     }}
                     .footer {{
                         text-align: center;
-                        font-size: 11px;
-                        margin-top: 15px;
-                        font-style: italic;
+                        font-size: 12px;
+                        margin-top: 10px;
                     }}
                     .cut-spacer {{
-                        height: 15mm;
+                        height: 20mm;
                         width: 100%;
-                        border-bottom: 1px dotted #ccc;
-                        margin-top: 10mm;
                     }}
                 </style>
             </head>
             <body>
                 <div class="receipt">
-                    <h1>Constancia de Reserva</h1>
-                    <div class="section"><strong>Fecha Emision:</strong> {datetime.datetime.now().strftime("%Y-%m-%d")} <br/> {datetime.datetime.now().strftime("%H:%M:%S")}</div>
+                    <div class="header-company">LUXETY SPORT S.A.C</div>
+                    <div class="header-info">RUC: 20601348676</div>
+                    <div class="header-info">AV. ALFONSO UGARTE NRO. 096 LIMA- LIMA</div>
                     <hr />
-                    <div class="section"><strong>Cliente:</strong> {reservation['client_name']}</div>
-                    <div class="section"><strong>DNI:</strong> {reservation.get('dni') or ''}</div>
-                    <div class="section"><strong>Campo:</strong> {reservation['field_name']}</div>
-                    <div class="section"><strong>Inicio:</strong> {reservation['start_datetime']}</div>
-                    <div class="section"><strong>Fin:</strong> {reservation['end_datetime']}</div>
+                    <h1>CONSTANCIA DE RESERVA</h1>
+                    <div class="section">Fecha Emision: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
+                    <hr />
+                    <div class="section">Cliente: {reservation['client_name']}</div>
+                    <div class="section">DNI: {reservation.get('dni') or ''}</div>
+                    <div class="section">Campo: {reservation['field_name']}</div>
+                    <div class="section">Inicio: {reservation['start_datetime']}</div>
+                    <div class="section">Fin: {reservation['end_datetime']}</div>
                     <hr />
                     <table>
-                        <tr><td>Total</td><td>S/ {float(reservation['total_amount']):.2f}</td></tr>
-                        <tr><td>A cuenta</td><td>S/ {float(reservation['paid_amount']):.2f}</td></tr>
-                        <tr><td style='font-weight:bold;'>Saldo</td><td style='font-weight:bold;'>S/ {max(float(reservation['total_amount']) - float(reservation['paid_amount']), 0):.2f}</td></tr>
+                        <tr><td>TOTAL</td><td style='text-align:right;'>S/ {float(reservation['total_amount']):.2f}</td></tr>
+                        <tr><td>A CUENTA</td><td style='text-align:right;'>S/ {float(reservation['paid_amount']):.2f}</td></tr>
+                        <tr><td style='font-weight:bold;'>SALDO</td><td style='text-align:right;font-weight:bold;'>S/ {max(float(reservation['total_amount']) - float(reservation['paid_amount']), 0):.2f}</td></tr>
                     </table>
-                    <div class="status">Estado: {reservation['status'].upper()}</div>
+                    <div class="status">ESTADO: {reservation['status'].upper()}</div>
                     <hr />
                     <div class="footer">Gracias por su preferencia</div>
                     

@@ -844,8 +844,8 @@ class VentaState(MixinState):
                 duration=3000,
             )
         rows = "".join(
-            f"<tr><td colspan='2' style='font-weight:bold;text-align:center;font-size:13px;'>{item['description']}</td></tr>"
-            f"<tr><td>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td><td style='text-align:right;'>{self._format_currency(item['subtotal'])}</td></tr>"
+            f"<tr><td colspan='2' class='item-row-1'>{item['description']}</td></tr>"
+            f"<tr><td class='item-row-2'>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td><td class='item-row-2' style='text-align:right;'>{self._format_currency(item['subtotal'])}</td></tr>"
             for item in self.last_sale_receipt
         )
         summary_rows = ""
@@ -855,7 +855,7 @@ class VentaState(MixinState):
             header_row = ""
             if header:
                 header_row = (
-                    f"<tr><td colspan='2' style='text-align:center;font-weight:bold;font-size:13px;'>"
+                    f"<tr><td colspan='2' style='text-align:center;font-weight:bold;font-size:12px;padding-bottom:5px;'>"
                     f"{header}"
                     f"</td></tr>"
                 )
@@ -863,12 +863,12 @@ class VentaState(MixinState):
             summary_rows = (
                 header_row
                 + "<tr><td colspan='2' style='height:4px;'></td></tr>"
-                + f"<tr><td>Total reserva</td><td style='text-align:right;'>{self._format_currency(ctx['total'])}</td></tr>"
+                + f"<tr><td>TOTAL RESERVA</td><td style='text-align:right;'>{self._format_currency(ctx['total'])}</td></tr>"
                 + "<tr><td colspan='2' style='height:4px;'></td></tr>"
                 + f"<tr><td>Adelanto previo</td><td style='text-align:right;'>{self._format_currency(ctx['paid_before'])}</td></tr>"
-                + f"<tr><td style='font-weight:bold;'>Pago actual</td><td style='text-align:right;font-weight:bold;'>{self._format_currency(ctx['paid_now'])}</td></tr>"
+                + f"<tr><td style='font-weight:bold;'>PAGO ACTUAL</td><td style='text-align:right;font-weight:bold;'>{self._format_currency(ctx['paid_now'])}</td></tr>"
                 + (
-                    f"<tr><td>Productos adicionales</td><td style='text-align:right;'>{self._format_currency(products_total)}</td></tr>"
+                    f"<tr><td>PRODUCTOS ADICIONALES</td><td style='text-align:right;'>{self._format_currency(products_total)}</td></tr>"
                     if products_total > 0
                     else ""
                 )
@@ -892,11 +892,12 @@ class VentaState(MixinState):
                         margin: 0;
                     }}
                     body {{
-                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                        font-family: 'Courier New', Courier, monospace;
                         width: 100%;
                         margin: 0;
                         padding: 0;
                         background-color: #fff;
+                        color: #000;
                     }}
                     .receipt {{
                         width: 72mm;
@@ -904,17 +905,28 @@ class VentaState(MixinState):
                         padding: 2mm 0;
                         page-break-after: always;
                     }}
+                    .header-company {{
+                        text-align: center;
+                        font-weight: bold;
+                        font-size: 14px;
+                        margin-bottom: 5px;
+                        text-transform: uppercase;
+                    }}
+                    .header-info {{
+                        text-align: center;
+                        font-size: 12px;
+                        margin-bottom: 2px;
+                    }}
                     h1 {{
                         text-align: center;
-                        font-size: 16px;
+                        font-size: 14px;
                         font-weight: bold;
-                        margin: 5px 0 10px 0;
+                        margin: 5px 0;
                         text-transform: uppercase;
                     }}
                     .section {{
                         font-size: 12px;
-                        margin-bottom: 4px;
-                        line-height: 1.4;
+                        margin-bottom: 2px;
                     }}
                     table {{
                         width: 100%;
@@ -923,54 +935,50 @@ class VentaState(MixinState):
                     }}
                     td {{
                         font-size: 12px;
-                        padding: 4px 0;
+                        padding: 2px 0;
                         vertical-align: top;
-                        line-height: 1.3;
                     }}
-                    td:first-child {{
-                        width: 70%;
-                        text-align: left;
-                        padding-right: 5px;
+                    .item-row-1 {{
+                        font-weight: normal;
                     }}
-                    td:last-child {{
-                        width: 30%;
-                        text-align: right;
-                        white-space: nowrap;
+                    .item-row-2 {{
+                        padding-bottom: 5px;
                     }}
                     hr {{
                         border: 0;
-                        border-top: 1px dashed #333;
-                        margin: 8px 0;
+                        border-top: 1px dashed #000;
+                        margin: 5px 0;
                     }}
                     .footer {{
                         text-align: center;
-                        font-size: 11px;
-                        margin-top: 15px;
-                        font-style: italic;
+                        font-size: 12px;
+                        margin-top: 10px;
                     }}
                     .cut-spacer {{
-                        height: 15mm;
+                        height: 20mm;
                         width: 100%;
-                        border-bottom: 1px dotted #ccc;
-                        margin-top: 10mm;
                     }}
                 </style>
             </head>
             <body>
                 <div class="receipt">
-                    <h1>Comprobante de Pago</h1>
-                    <div class="section"><strong>Fecha:</strong> {self.last_sale_timestamp}</div>
-                    <div class="section"><strong>Atendido por:</strong> {self.current_user.get('username', 'Desconocido')}</div>
+                    <div class="header-company">LUXETY SPORT S.A.C</div>
+                    <div class="header-info">RUC: 20601348676</div>
+                    <div class="header-info">AV. ALFONSO UGARTE NRO. 096 LIMA- LIMA</div>
+                    <hr />
+                    <h1>COMPROBANTE DE PAGO</h1>
+                    <div class="section">Fecha: {self.last_sale_timestamp}</div>
+                    <div class="section">Atendido por: {self.current_user.get('username', 'Desconocido')}</div>
                     <hr />
                     <table>
                         {display_rows}
                     </table>
                     <hr />
-                    <div class="section" style="display: flex; justify-content: space-between;">
-                        <strong>Total General:</strong> 
-                        <strong>{self._format_currency(display_total)}</strong>
+                    <div class="section" style="display: flex; justify-content: space-between; font-weight: bold;">
+                        <span>TOTAL GENERAL:</span> 
+                        <span>{self._format_currency(display_total)}</span>
                     </div>
-                    <div class="section"><strong>Metodo de Pago:</strong> {self.last_payment_summary}</div>
+                    <div class="section">Metodo de Pago: {self.last_payment_summary}</div>
                     <hr />
                     <div class="footer">Gracias por su preferencia</div>
                     
