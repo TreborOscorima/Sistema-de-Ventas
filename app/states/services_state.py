@@ -854,45 +854,57 @@ class ServicesState(MixinState):
                 <style>
                     @page {{
                         size: 80mm auto;
-                        margin: 0mm;
+                        margin: 0;
                     }}
                     body {{
-                        font-family: Arial, sans-serif;
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                         width: 100%;
                         margin: 0;
-                        padding: 2mm;
-                        font-size: 12px;
-                        line-height: 1.2;
-                        box-sizing: border-box;
+                        padding: 0;
+                        background-color: #fff;
                     }}
                     .receipt {{
-                        width: 100%;
-                        box-sizing: border-box;
+                        width: 72mm;
+                        margin: 0 auto;
+                        padding: 2mm 0;
                         page-break-after: always;
                     }}
                     h1 {{
                         text-align: center;
                         font-size: 16px;
+                        font-weight: bold;
                         margin: 5px 0 10px 0;
+                        text-transform: uppercase;
                     }}
                     .section {{
-                        margin-bottom: 5px;
+                        font-size: 12px;
+                        margin-bottom: 4px;
+                        line-height: 1.4;
                     }}
                     table {{
                         width: 100%;
                         border-collapse: collapse;
+                        margin: 5px 0;
                     }}
                     td {{
-                        padding: 3px 0;
-                        text-align: left;
+                        font-size: 12px;
+                        padding: 4px 0;
                         vertical-align: top;
+                        line-height: 1.3;
+                    }}
+                    td:first-child {{
+                        width: 70%;
+                        text-align: left;
+                        padding-right: 5px;
                     }}
                     td:last-child {{
+                        width: 30%;
                         text-align: right;
+                        white-space: nowrap;
                     }}
                     hr {{
                         border: 0;
-                        border-top: 1px dashed #000;
+                        border-top: 1px dashed #333;
                         margin: 8px 0;
                     }}
                     .status {{
@@ -901,16 +913,17 @@ class ServicesState(MixinState):
                         margin: 15px 0;
                         font-size: 14px;
                     }}
-                    .cut-line {{
-                        border-top: 1px dashed #000;
-                        margin-top: 10px;
-                        margin-bottom: 10px;
+                    .footer {{
                         text-align: center;
-                        display: block;
+                        font-size: 11px;
+                        margin-top: 15px;
+                        font-style: italic;
                     }}
-                    .spacer {{
+                    .cut-spacer {{
                         height: 15mm;
                         width: 100%;
+                        border-bottom: 1px dotted #ccc;
+                        margin-top: 10mm;
                     }}
                 </style>
             </head>
@@ -932,10 +945,10 @@ class ServicesState(MixinState):
                     </table>
                     <div class="status">Estado: {reservation['status'].upper()}</div>
                     <hr />
-                    <div style="text-align:center; font-size:11px;">Gracias por su preferencia</div>
-                    <br>
-                    <div class="cut-line">. . . . . . . . . . . . . . . .</div>
-                    <div class="spacer"></div>
+                    <div class="footer">Gracias por su preferencia</div>
+                    
+                    <!-- Espacio para corte -->
+                    <div class="cut-spacer"></div>
                 </div>
             </body>
         </html>

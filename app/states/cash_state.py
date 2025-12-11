@@ -726,63 +726,70 @@ class CashState(MixinState):
                 <style>
                     @page {{
                         size: 80mm auto;
-                        margin: 0mm;
+                        margin: 0;
                     }}
                     body {{
-                        font-family: Arial, sans-serif;
+                        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                         width: 100%;
                         margin: 0;
-                        padding: 2mm;
-                        font-size: 12px;
-                        line-height: 1.2;
-                        box-sizing: border-box;
+                        padding: 0;
+                        background-color: #fff;
                     }}
                     .receipt {{
-                        width: 100%;
-                        box-sizing: border-box;
+                        width: 72mm;
+                        margin: 0 auto;
+                        padding: 2mm 0;
                         page-break-after: always;
                     }}
                     h1 {{
                         text-align: center;
                         font-size: 16px;
+                        font-weight: bold;
                         margin: 5px 0 10px 0;
+                        text-transform: uppercase;
                     }}
                     .section {{
-                        margin-bottom: 5px;
+                        font-size: 12px;
+                        margin-bottom: 4px;
+                        line-height: 1.4;
                     }}
                     table {{
                         width: 100%;
                         border-collapse: collapse;
+                        margin: 5px 0;
                     }}
                     td {{
-                        padding: 3px 0;
-                        text-align: left;
+                        font-size: 12px;
+                        padding: 4px 0;
                         vertical-align: top;
+                        line-height: 1.3;
+                    }}
+                    td:first-child {{
+                        width: 70%;
+                        text-align: left;
+                        padding-right: 5px;
                     }}
                     td:last-child {{
+                        width: 30%;
                         text-align: right;
+                        white-space: nowrap;
                     }}
                     hr {{
                         border: 0;
-                        border-top: 1px dashed #000;
+                        border-top: 1px dashed #333;
                         margin: 8px 0;
                     }}
                     .footer {{
                         text-align: center;
                         font-size: 11px;
                         margin-top: 15px;
-                        margin-bottom: 10px;
+                        font-style: italic;
                     }}
-                    .cut-line {{
-                        border-top: 1px dashed #000;
-                        margin-top: 10px;
-                        margin-bottom: 10px;
-                        text-align: center;
-                        display: block;
-                    }}
-                    .spacer {{
+                    .cut-spacer {{
                         height: 15mm;
                         width: 100%;
+                        border-bottom: 1px dotted #ccc;
+                        margin-top: 10mm;
                     }}
                 </style>
             </head>
@@ -796,13 +803,16 @@ class CashState(MixinState):
                         {rows}
                     </table>
                     <hr />
-                    <div class="section"><strong>Total General:</strong> <strong>{self._format_currency(sale_data.get('total', 0))}</strong></div>
+                    <div class="section" style="display: flex; justify-content: space-between;">
+                        <strong>Total General:</strong> 
+                        <strong>{self._format_currency(sale_data.get('total', 0))}</strong>
+                    </div>
                     <div class="section"><strong>Metodo de Pago:</strong> {payment_summary}</div>
                     <hr />
                     <div class="footer">Gracias por su preferencia</div>
-                    <br>
-                    <div class="cut-line">. . . . . . . . . . . . . . . .</div>
-                    <div class="spacer"></div>
+                    
+                    <!-- Espacio para corte -->
+                    <div class="cut-spacer"></div>
                 </div>
             </body>
         </html>
