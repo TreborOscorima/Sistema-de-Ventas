@@ -47,6 +47,23 @@ class CashState(MixinState):
     petty_cash_cost: str = ""
     petty_cash_reason: str = ""
     petty_cash_modal_open: bool = False
+    petty_cash_current_page: int = 1
+    petty_cash_items_per_page: int = 10
+
+    @rx.event
+    def set_petty_cash_page(self, page: int):
+        if 1 <= page <= self.petty_cash_total_pages:
+            self.petty_cash_current_page = page
+
+    @rx.event
+    def prev_petty_cash_page(self):
+        if self.petty_cash_current_page > 1:
+            self.petty_cash_current_page -= 1
+
+    @rx.event
+    def next_petty_cash_page(self):
+        if self.petty_cash_current_page < self.petty_cash_total_pages:
+            self.petty_cash_current_page += 1
 
     @rx.event
     def open_petty_cash_modal(self):
@@ -178,6 +195,19 @@ class CashState(MixinState):
                 }
                 filtered.append(entry)
             return filtered
+
+    @rx.var
+    def paginated_petty_cash_movements(self) -> List[CashboxLogEntry]:
+        start_index = (self.petty_cash_current_page - 1) * self.petty_cash_items_per_page
+        end_index = start_index + self.petty_cash_items_per_page
+        return self.petty_cash_movements[start_index:end_index]
+
+    @rx.var
+    def petty_cash_total_pages(self) -> int:
+        total = len(self.petty_cash_movements)
+        if total == 0:
+            return 1
+        return (total + self.petty_cash_items_per_page - 1) // self.petty_cash_items_per_page
 
     @rx.var
     def cashbox_opening_amount_display(self) -> str:
@@ -735,6 +765,53 @@ class CashState(MixinState):
         
         return rx.download(
             data=output.getvalue(), filename="aperturas_cierres_caja.xlsx"
+        )
+
+    @rx.event
+    def export_petty_cash_report(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        if not self.current_user["privileges"]["export_data"]:
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        
+        movements = self.petty_cash_movements
+        if not movements:
+            return rx.toast("No hay movimientos para exportar.", duration=3000)
+        
+        wb, ws = create_excel_workbook("Caja Chica")
+        
+        headers = [
+            "Fecha y Hora",
+            "Usuario",
+            "Motivo",
+            "Cantidad",
+            "Unidad",
+            "Costo Unitario",
+            "Total",
+        ]
+        style_header_row(ws, 1, headers)
+        
+        rows = []
+        for item in movements:
+            rows.append([
+                item.get("timestamp", ""),
+                item.get("user", ""),
+                item.get("notes", ""),
+                item.get("formatted_quantity", ""),
+                item.get("unit", ""),
+                item.get("formatted_cost", ""),
+                item.get("formatted_amount", ""),
+            ])
+            
+        add_data_rows(ws, rows, 2)
+        auto_adjust_column_widths(ws)
+        
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        return rx.download(
+            data=output.getvalue(), filename="movimientos_caja_chica.xlsx"
         )
 
     @rx.event

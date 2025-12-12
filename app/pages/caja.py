@@ -713,66 +713,86 @@ def petty_cash_view() -> rx.Component:
                 rx.el.div(
                     rx.el.h2("Movimientos de Caja Chica", class_name="text-xl font-semibold text-gray-800"),
                     rx.el.p("Gestión de gastos y salidas de efectivo.", class_name="text-sm text-gray-500"),
-                    class_name="flex flex-col",
+                    class_name="flex flex-col mb-4 lg:mb-0",
                 ),
                 rx.el.div(
                     rx.el.div(
-                        rx.el.span("Saldo Actual:", class_name="text-sm text-gray-600"),
+                        rx.el.span("Saldo Actual", class_name="text-xs font-medium text-gray-500 uppercase tracking-wider"),
                         rx.el.span(
                             State.currency_symbol + " " + State.cashbox_opening_amount_display,
-                            class_name="text-sm font-semibold text-indigo-700"
+                            class_name="text-2xl font-bold text-indigo-600"
                         ),
-                        class_name="flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-lg border border-gray-200"
+                        class_name="flex flex-col items-start justify-center bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 shadow-sm w-full sm:w-auto min-w-[160px]"
                     ),
-                    rx.el.button(
-                        "Registrar Movimiento",
-                        on_click=State.open_petty_cash_modal,
-                        class_name="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 font-semibold text-sm min-h-[40px]",
+                    rx.el.div(
+                        rx.el.button(
+                            rx.icon("download", class_name="w-4 h-4 mr-2"),
+                            "Exportar Excel",
+                            on_click=State.export_petty_cash_report,
+                            class_name="flex items-center justify-center bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-semibold text-sm h-full w-full sm:w-auto shadow-sm transition-colors min-h-[42px]",
+                        ),
+                        rx.el.button(
+                            rx.icon("plus", class_name="w-4 h-4 mr-2"),
+                            "Registrar Movimiento",
+                            on_click=State.open_petty_cash_modal,
+                            class_name="flex items-center justify-center bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-semibold text-sm h-full w-full sm:w-auto shadow-sm transition-colors min-h-[42px]",
+                        ),
+                        class_name="flex flex-col sm:flex-row gap-3 w-full sm:w-auto",
                     ),
-                    class_name="flex flex-col sm:flex-row items-start sm:items-center gap-3",
+                    class_name="flex flex-col md:flex-row items-stretch md:items-center gap-4 w-full md:w-auto",
                 ),
-                class_name="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6",
+                class_name="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6",
             ),
             rx.el.div(
                 rx.el.table(
                     rx.el.thead(
                         rx.el.tr(
-                            rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Usuario", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Motivo", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Cant.", class_name="py-3 px-4 text-right"),
-                            rx.el.th("Unidad", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Costo", class_name="py-3 px-4 text-right"),
-                            rx.el.th("Total", class_name="py-3 px-4 text-right"),
+                            rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left whitespace-nowrap"),
+                            rx.el.th("Usuario", class_name="py-3 px-4 text-left whitespace-nowrap"),
+                            rx.el.th("Motivo", class_name="py-3 px-4 text-left min-w-[200px]"),
+                            rx.el.th("Cant.", class_name="py-3 px-4 text-right whitespace-nowrap"),
+                            rx.el.th("Unidad", class_name="py-3 px-4 text-left whitespace-nowrap"),
+                            rx.el.th("Costo", class_name="py-3 px-4 text-right whitespace-nowrap"),
+                            rx.el.th("Total", class_name="py-3 px-4 text-right whitespace-nowrap"),
                             class_name="bg-gray-100",
                         )
                     ),
                     rx.el.tbody(
                         rx.foreach(
-                            State.petty_cash_movements,
+                            State.paginated_petty_cash_movements,
                             lambda item: rx.el.tr(
-                                rx.el.td(item["timestamp"], class_name="py-3 px-4"),
-                                rx.el.td(item["user"], class_name="py-3 px-4"),
+                                rx.el.td(item["timestamp"], class_name="py-3 px-4 whitespace-nowrap"),
+                                rx.el.td(item["user"], class_name="py-3 px-4 whitespace-nowrap"),
                                 rx.el.td(item["notes"], class_name="py-3 px-4"),
-                                rx.el.td(item["formatted_quantity"], class_name="py-3 px-4 text-right"),
-                                rx.el.td(item["unit"], class_name="py-3 px-4"),
+                                rx.el.td(item["formatted_quantity"], class_name="py-3 px-4 text-right whitespace-nowrap"),
+                                rx.el.td(item["unit"], class_name="py-3 px-4 whitespace-nowrap"),
                                 rx.el.td(
                                     State.currency_symbol,
                                     item["formatted_cost"],
-                                    class_name="py-3 px-4 text-right",
+                                    class_name="py-3 px-4 text-right whitespace-nowrap",
                                 ),
                                 rx.el.td(
                                     State.currency_symbol,
                                     item["formatted_amount"],
-                                    class_name="py-3 px-4 text-right font-semibold text-red-600",
+                                    class_name="py-3 px-4 text-right font-semibold text-red-600 whitespace-nowrap",
                                 ),
-                                class_name="border-b",
+                                class_name="border-b hover:bg-gray-50",
                             ),
                         )
                     ),
                     class_name="min-w-full",
                 ),
-                class_name="overflow-x-auto",
+                class_name="overflow-x-auto w-full border rounded-lg",
+            ),
+            rx.cond(
+                State.petty_cash_movements.length() > 0,
+                pagination_controls(
+                    current_page=State.petty_cash_current_page,
+                    total_pages=State.petty_cash_total_pages,
+                    on_prev=State.prev_petty_cash_page,
+                    on_next=State.next_petty_cash_page,
+                ),
+                rx.fragment(),
             ),
             rx.cond(
                 State.petty_cash_movements.length() == 0,
@@ -782,10 +802,10 @@ def petty_cash_view() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md w-full",
         ),
         petty_cash_modal(),
-        class_name="space-y-4",
+        class_name="space-y-4 w-full",
     )
 
 def cashbox_page() -> rx.Component:
