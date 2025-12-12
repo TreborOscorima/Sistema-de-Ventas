@@ -843,11 +843,18 @@ class VentaState(MixinState):
                 "No hay comprobante disponible. Confirme una venta primero.",
                 duration=3000,
             )
+        
+        # Generación de filas de ítems optimizada para 58mm
         rows = "".join(
-            f"<tr><td colspan='2' class='item-row-1'>{item['description']}</td></tr>"
-            f"<tr><td class='item-row-2'>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td><td class='item-row-2' style='text-align:right;'>{self._format_currency(item['subtotal'])}</td></tr>"
+            f"<tr><td colspan='2' style='font-weight:bold; text-align:center; font-size:12px;'>{item['description']}</td></tr>"
+            f"<tr>"
+            f"<td style='text-align:left;'>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td>"
+            f"<td style='text-align:right; font-weight:bold;'>{self._format_currency(item['subtotal'])}</td>"
+            f"</tr>"
+            f"<tr><td colspan='2' style='border-top: 1px dashed #888; padding-bottom: 5px;'></td></tr>"
             for item in self.last_sale_receipt
         )
+        
         summary_rows = ""
         if self.last_sale_reservation_context:
             ctx = self.last_sale_reservation_context
@@ -873,14 +880,16 @@ class VentaState(MixinState):
                     else ""
                 )
                 + f"<tr><td>Saldo pendiente</td><td style='text-align:right;'>{self._format_currency(ctx.get('balance_after', 0))}</td></tr>"
-                + "<tr><td colspan='2' style='height:6px;'></td></tr>"
+                + "<tr><td colspan='2' style='height:6px; border-bottom: 1px dashed #000;'></td></tr>"
             )
+            
         display_rows = summary_rows + rows
         display_total = (
             self.last_sale_reservation_context.get("charged_total", self.last_sale_total)
             if self.last_sale_reservation_context
             else self.last_sale_total
         )
+        
         html_content = f"""
         <html>
             <head>
@@ -888,19 +897,20 @@ class VentaState(MixinState):
                 <title>Comprobante de Pago</title>
                 <style>
                     @page {{
-                        size: 80mm auto;
-                        margin: 0;
+                        size: 58mm auto;
+                        margin: 1mm;
                     }}
                     body {{
-                        font-family: 'Courier New', Courier, monospace;
+                        font-family: monospace;
+                        font-size: 10px;
                         width: 100%;
                         margin: 0;
                         padding: 0;
                         background-color: #fff;
                         color: #000;
                     }}
-                    .receipt {{
-                        width: 72mm;
+                    .receipt-container {{
+                        width: 100%;
                         margin: 0 auto;
                         padding: 2mm 0;
                         page-break-after: always;
@@ -908,24 +918,24 @@ class VentaState(MixinState):
                     .header-company {{
                         text-align: center;
                         font-weight: bold;
-                        font-size: 14px;
+                        font-size: 12px;
                         margin-bottom: 5px;
                         text-transform: uppercase;
                     }}
                     .header-info {{
                         text-align: center;
-                        font-size: 12px;
+                        font-size: 10px;
                         margin-bottom: 2px;
                     }}
                     h1 {{
                         text-align: center;
-                        font-size: 14px;
+                        font-size: 12px;
                         font-weight: bold;
                         margin: 5px 0;
                         text-transform: uppercase;
                     }}
                     .section {{
-                        font-size: 12px;
+                        font-size: 10px;
                         margin-bottom: 2px;
                     }}
                     table {{
@@ -934,15 +944,9 @@ class VentaState(MixinState):
                         margin: 5px 0;
                     }}
                     td {{
-                        font-size: 12px;
+                        font-size: 10px;
                         padding: 2px 0;
                         vertical-align: top;
-                    }}
-                    .item-row-1 {{
-                        font-weight: normal;
-                    }}
-                    .item-row-2 {{
-                        padding-bottom: 5px;
                     }}
                     hr {{
                         border: 0;
@@ -951,17 +955,13 @@ class VentaState(MixinState):
                     }}
                     .footer {{
                         text-align: center;
-                        font-size: 12px;
+                        font-size: 10px;
                         margin-top: 10px;
-                    }}
-                    .cut-spacer {{
-                        height: 20mm;
-                        width: 100%;
                     }}
                 </style>
             </head>
             <body>
-                <div class="receipt">
+                <div class="receipt-container">
                     <div class="header-company">LUXETY SPORT S.A.C</div>
                     <div class="header-info">RUC: 20601348676</div>
                     <div class="header-info">AV. ALFONSO UGARTE NRO. 096 LIMA- LIMA</div>
@@ -974,16 +974,15 @@ class VentaState(MixinState):
                         {display_rows}
                     </table>
                     <hr />
-                    <div class="section" style="display: flex; justify-content: space-between; font-weight: bold;">
-                        <span>TOTAL GENERAL:</span> 
-                        <span>{self._format_currency(display_total)}</span>
-                    </div>
+                    <table style="width: 100%; margin-top: 5px;">
+                        <tr>
+                            <td style="text-align: left; font-weight: bold;">TOTAL A PAGAR:</td>
+                            <td style="text-align: right; font-weight: bold;">{self._format_currency(display_total)}</td>
+                        </tr>
+                    </table>
                     <div class="section">Metodo de Pago: {self.last_payment_summary}</div>
                     <hr />
                     <div class="footer">Gracias por su preferencia</div>
-                    
-                    <!-- Espacio para corte -->
-                    <div class="cut-spacer"></div>
                 </div>
             </body>
         </html>
