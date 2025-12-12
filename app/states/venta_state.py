@@ -837,32 +837,75 @@ class VentaState(MixinState):
             return rx.toast("Venta confirmada.", duration=3000)
 
     @rx.event
-    def print_sale_receipt(self):
-        if not self.sale_receipt_ready or not self.last_sale_receipt:
-            return rx.toast(
-                "No hay comprobante disponible. Confirme una venta primero.",
-                duration=3000,
+    def print_sale_receipt(self, receipt_id: Optional[str] = None):
+        # Determine data source
+        receipt_items = []
+        total = 0.0
+        timestamp = ""
+        user_name = ""
+        payment_summary = ""
+        reservation_context = None
+
+        if receipt_id:
+            # Fetch from DB for reprint
+            with rx.session() as session:
+                try:
+                    sale = session.exec(select(Sale).where(Sale.id == int(receipt_id))).first()
+                    if not sale:
+                        return rx.toast("Venta no encontrada.", duration=3000)
+                    
+                    timestamp = sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                    total = sale.total_amount
+                    payment_summary = sale.payment_details or sale.payment_method
+                    user_name = sale.user.username if sale.user else "Desconocido"
+                    
+                    for item in sale.items:
+                        receipt_items.append({
+                            "description": item.product_name_snapshot,
+                            "quantity": item.quantity,
+                            "unit": "Unidad", 
+                            "price": item.unit_price,
+                            "subtotal": item.subtotal
+                        })
+                except ValueError:
+                    return rx.toast("ID de venta inválido.", duration=3000)
+        else:
+            # Use current state
+            if not self.sale_receipt_ready or not self.last_sale_receipt:
+                return rx.toast(
+                    "No hay comprobante disponible. Confirme una venta primero.",
+                    duration=3000,
+                )
+            receipt_items = self.last_sale_receipt
+            reservation_context = self.last_sale_reservation_context
+            total = (
+                reservation_context.get("charged_total", self.last_sale_total)
+                if reservation_context
+                else self.last_sale_total
             )
-        
-        # Generación de filas de ítems optimizada para 58mm
+            timestamp = self.last_sale_timestamp
+            user_name = self.current_user.get('username', 'Desconocido')
+            payment_summary = self.last_payment_summary
+
+        # Generación de filas de ítems optimizada para 80mm con autocorte
         rows = "".join(
-            f"<tr><td colspan='2' style='font-weight:bold; text-align:center; font-size:12px;'>{item['description']}</td></tr>"
+            f"<tr><td colspan='2' class='text-center' style='font-weight:bold; font-size:12px;'>{item['description']}</td></tr>"
             f"<tr>"
-            f"<td style='text-align:left;'>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td>"
-            f"<td style='text-align:right; font-weight:bold;'>{self._format_currency(item['subtotal'])}</td>"
+            f"<td class='text-left'>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td>"
+            f"<td class='text-right' style='font-weight:bold;'>{self._format_currency(item['subtotal'])}</td>"
             f"</tr>"
-            f"<tr><td colspan='2' style='border-top: 1px dashed #888; padding-bottom: 5px;'></td></tr>"
-            for item in self.last_sale_receipt
+            f"<tr><td colspan='2'><div class='dashed-line'></div></td></tr>"
+            for item in receipt_items
         )
         
         summary_rows = ""
-        if self.last_sale_reservation_context:
-            ctx = self.last_sale_reservation_context
+        if reservation_context:
+            ctx = reservation_context
             header = ctx.get("header", "")
             header_row = ""
             if header:
                 header_row = (
-                    f"<tr><td colspan='2' style='text-align:center;font-weight:bold;font-size:12px;padding-bottom:5px;'>"
+                    f"<tr><td colspan='2' class='text-center' style='font-weight:bold; font-size:12px; padding-bottom:5px;'>"
                     f"{header}"
                     f"</td></tr>"
                 )
@@ -870,25 +913,20 @@ class VentaState(MixinState):
             summary_rows = (
                 header_row
                 + "<tr><td colspan='2' style='height:4px;'></td></tr>"
-                + f"<tr><td>TOTAL RESERVA</td><td style='text-align:right;'>{self._format_currency(ctx['total'])}</td></tr>"
+                + f"<tr><td class='text-left'>TOTAL RESERVA</td><td class='text-right'>{self._format_currency(ctx['total'])}</td></tr>"
                 + "<tr><td colspan='2' style='height:4px;'></td></tr>"
-                + f"<tr><td>Adelanto previo</td><td style='text-align:right;'>{self._format_currency(ctx['paid_before'])}</td></tr>"
-                + f"<tr><td style='font-weight:bold;'>PAGO ACTUAL</td><td style='text-align:right;font-weight:bold;'>{self._format_currency(ctx['paid_now'])}</td></tr>"
+                + f"<tr><td class='text-left'>Adelanto previo</td><td class='text-right'>{self._format_currency(ctx['paid_before'])}</td></tr>"
+                + f"<tr><td class='text-left' style='font-weight:bold;'>PAGO ACTUAL</td><td class='text-right' style='font-weight:bold;'>{self._format_currency(ctx['paid_now'])}</td></tr>"
                 + (
-                    f"<tr><td>PRODUCTOS ADICIONALES</td><td style='text-align:right;'>{self._format_currency(products_total)}</td></tr>"
+                    f"<tr><td class='text-left'>PRODUCTOS ADICIONALES</td><td class='text-right'>{self._format_currency(products_total)}</td></tr>"
                     if products_total > 0
                     else ""
                 )
-                + f"<tr><td>Saldo pendiente</td><td style='text-align:right;'>{self._format_currency(ctx.get('balance_after', 0))}</td></tr>"
-                + "<tr><td colspan='2' style='height:6px; border-bottom: 1px dashed #000;'></td></tr>"
+                + f"<tr><td class='text-left'>Saldo pendiente</td><td class='text-right'>{self._format_currency(ctx.get('balance_after', 0))}</td></tr>"
+                + "<tr><td colspan='2'><div class='dashed-line'></div></td></tr>"
             )
             
         display_rows = summary_rows + rows
-        display_total = (
-            self.last_sale_reservation_context.get("charged_total", self.last_sale_total)
-            if self.last_sale_reservation_context
-            else self.last_sale_total
-        )
         
         html_content = f"""
         <html>
@@ -897,7 +935,7 @@ class VentaState(MixinState):
                 <title>Comprobante de Pago</title>
                 <style>
                     @page {{
-                        size: 58mm auto;
+                        size: 80mm auto;
                         margin: 1mm;
                     }}
                     body {{
@@ -948,10 +986,13 @@ class VentaState(MixinState):
                         padding: 2px 0;
                         vertical-align: top;
                     }}
-                    hr {{
-                        border: 0;
+                    .text-center {{ text-align: center; }}
+                    .text-right {{ text-align: right; }}
+                    .text-left {{ text-align: left; }}
+                    .dashed-line {{
                         border-top: 1px dashed #000;
                         margin: 5px 0;
+                        width: 100%;
                     }}
                     .footer {{
                         text-align: center;
@@ -965,23 +1006,23 @@ class VentaState(MixinState):
                     <div class="header-company">LUXETY SPORT S.A.C</div>
                     <div class="header-info">RUC: 20601348676</div>
                     <div class="header-info">AV. ALFONSO UGARTE NRO. 096 LIMA- LIMA</div>
-                    <hr />
+                    <div class="dashed-line"></div>
                     <h1>COMPROBANTE DE PAGO</h1>
-                    <div class="section">Fecha: {self.last_sale_timestamp}</div>
-                    <div class="section">Atendido por: {self.current_user.get('username', 'Desconocido')}</div>
-                    <hr />
+                    <div class="section">Fecha: {timestamp}</div>
+                    <div class="section">Atendido por: {user_name}</div>
+                    <div class="dashed-line"></div>
                     <table>
                         {display_rows}
                     </table>
-                    <hr />
-                    <table style="width: 100%; margin-top: 5px;">
+                    <div class="dashed-line"></div>
+                    <table class="details-table" style="width: 100%; margin-top: 5px;">
                         <tr>
-                            <td style="text-align: left; font-weight: bold;">TOTAL A PAGAR:</td>
-                            <td style="text-align: right; font-weight: bold;">{self._format_currency(display_total)}</td>
+                            <td class="text-left" style="font-weight: bold;">TOTAL A PAGAR:</td>
+                            <td class="text-right" style="font-weight: bold;">{self._format_currency(total)}</td>
                         </tr>
                     </table>
-                    <div class="section">Metodo de Pago: {self.last_payment_summary}</div>
-                    <hr />
+                    <div class="section">Metodo de Pago: {payment_summary}</div>
+                    <div class="dashed-line"></div>
                     <div class="footer">Gracias por su preferencia</div>
                 </div>
             </body>
@@ -995,12 +1036,15 @@ class VentaState(MixinState):
         receiptWindow.print();
         """
         # Para cobros de reserva, libera seleccion despues de imprimir
-        if self.last_sale_reservation_context:
+        if self.last_sale_reservation_context and not receipt_id:
             if hasattr(self, "reservation_payment_id"):
                 self.reservation_payment_id = ""
             if hasattr(self, "reservation_payment_amount"):
                 self.reservation_payment_amount = ""
             self.last_sale_reservation_context = None
-        self._reset_payment_fields()
-        self._refresh_payment_feedback()
+        
+        if not receipt_id:
+            self._reset_payment_fields()
+            self._refresh_payment_feedback()
+            
         return rx.call_script(script)
