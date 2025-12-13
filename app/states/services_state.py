@@ -869,7 +869,6 @@ class ServicesState(MixinState):
                         width: 100%;
                         margin: 0 auto;
                         padding: 2mm 0;
-                        page-break-after: always;
                     }}
                     .header-company {{
                         text-align: center;
@@ -904,6 +903,9 @@ class ServicesState(MixinState):
                         padding: 2px 0;
                         vertical-align: top;
                     }}
+                    .data-table td, .details-table td {{
+                        padding: 4px 0;
+                    }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
                     .text-left {{ text-align: left; }}
@@ -934,7 +936,7 @@ class ServicesState(MixinState):
                     <h1>CONSTANCIA DE RESERVA</h1>
                     <div class="section">Fecha Emision: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
                     <div class="dashed-line"></div>
-                    <table>
+                    <table class="data-table">
                         <tr><td class="text-left">Cliente:</td><td class="text-right">{reservation['client_name']}</td></tr>
                         <tr><td class="text-left">DNI:</td><td class="text-right">{reservation.get('dni') or '-'}</td></tr>
                         <tr><td class="text-left">Campo:</td><td class="text-right">{reservation['field_name']}</td></tr>
@@ -942,7 +944,7 @@ class ServicesState(MixinState):
                         <tr><td class="text-left">Fin:</td><td class="text-right">{reservation['end_datetime']}</td></tr>
                     </table>
                     <div class="dashed-line"></div>
-                    <table>
+                    <table class="details-table">
                         <tr><td class="text-left">TOTAL</td><td class="text-right">S/ {float(reservation['total_amount']):.2f}</td></tr>
                         <tr><td class="text-left">A CUENTA</td><td class="text-right">S/ {float(reservation['paid_amount']):.2f}</td></tr>
                         <tr><td class="text-left" style='font-weight:bold;'>SALDO</td><td class="text-right" style='font-weight:bold;'>S/ {max(float(reservation['total_amount']) - float(reservation['paid_amount']), 0):.2f}</td></tr>

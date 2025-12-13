@@ -997,7 +997,6 @@ class CashState(MixinState):
                         width: 100%;
                         margin: 0 auto;
                         padding: 2mm 0;
-                        page-break-after: always;
                     }}
                     .header-company {{
                         text-align: center;
@@ -1032,6 +1031,9 @@ class CashState(MixinState):
                         padding: 2px 0;
                         vertical-align: top;
                     }}
+                    .data-table td, .details-table td {{
+                        padding: 4px 0;
+                    }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
                     .text-left {{ text-align: left; }}
@@ -1057,7 +1059,7 @@ class CashState(MixinState):
                     <div class="section">Fecha: {sale_data.get('timestamp', '')}</div>
                     <div class="section">Atendido por: {sale_data.get('user', 'Desconocido')}</div>
                     <div class="dashed-line"></div>
-                    <table>
+                    <table class="data-table">
                         {rows}
                     </table>
                     <div class="dashed-line"></div>
@@ -1182,7 +1184,6 @@ class CashState(MixinState):
                         width: 100%;
                         margin: 0 auto;
                         padding: 2mm 0;
-                        page-break-after: always;
                     }}
                     .header-company {{
                         text-align: center;
@@ -1211,6 +1212,9 @@ class CashState(MixinState):
                         font-size: 10px;
                         padding: 2px 0;
                         vertical-align: top;
+                    }}
+                    .data-table td, .details-table td {{
+                        padding: 4px 0;
                     }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
@@ -1243,7 +1247,7 @@ class CashState(MixinState):
                     <div class="dashed-line"></div>
                     
                     <div class="section" style="font-weight:bold; margin-top:5px;">TOTALES POR METODO</div>
-                    <table>
+                    <table class="data-table">
                         {summary_rows}
                         <tr><td colspan="2" style="height:4px;"></td></tr>
                         {grand_total_row}
@@ -1251,7 +1255,7 @@ class CashState(MixinState):
                     
                     <div class="dashed-line"></div>
                     <div class="section" style="font-weight:bold; margin-top:5px;">DETALLE DE VENTAS</div>
-                    <table>
+                    <table class="details-table">
                         {detail_rows}
                     </table>
                     

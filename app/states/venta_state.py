@@ -950,7 +950,6 @@ class VentaState(MixinState):
                         width: 100%;
                         margin: 0 auto;
                         padding: 2mm 0;
-                        page-break-after: always;
                     }}
                     .header-company {{
                         text-align: center;
@@ -985,6 +984,9 @@ class VentaState(MixinState):
                         padding: 2px 0;
                         vertical-align: top;
                     }}
+                    .data-table td, .details-table td {{
+                        padding: 4px 0;
+                    }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
                     .text-left {{ text-align: left; }}
@@ -1010,7 +1012,7 @@ class VentaState(MixinState):
                     <div class="section">Fecha: {timestamp}</div>
                     <div class="section">Atendido por: {user_name}</div>
                     <div class="dashed-line"></div>
-                    <table>
+                    <table class="data-table">
                         {display_rows}
                     </table>
                     <div class="dashed-line"></div>
