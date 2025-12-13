@@ -870,49 +870,16 @@ class ServicesState(MixinState):
                         margin: 0 auto;
                         padding: 2mm 0;
                     }}
-                    .header-company {{
-                        text-align: center;
-                        font-weight: bold;
-                        font-size: 12px;
-                        margin-bottom: 5px;
-                        text-transform: uppercase;
-                    }}
-                    .header-info {{
-                        text-align: center;
-                        font-size: 10px;
-                        margin-bottom: 2px;
-                    }}
-                    h1 {{
-                        text-align: center;
-                        font-size: 12px;
-                        font-weight: bold;
-                        margin: 5px 0;
-                        text-transform: uppercase;
-                    }}
-                    .section {{
-                        font-size: 10px;
-                        margin-bottom: 2px;
-                    }}
-                    table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin: 5px 0;
-                    }}
-                    td {{
-                        font-size: 10px;
-                        padding: 2px 0;
-                        vertical-align: top;
-                    }}
-                    .data-table td, .details-table td {{
-                        padding: 8px 0;
-                    }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
                     .text-left {{ text-align: left; }}
-                    .dashed-line {{
+                    .data-table td, .details-table td {{
+                        padding: 8px 0;
+                    }}
+                    hr {{
+                        border: 0;
                         border-top: 1px dashed #000;
-                        margin: 5px 0;
-                        width: 100%;
+                        margin: 10px 0;
                     }}
                     .status {{
                         text-align: center;
@@ -920,38 +887,51 @@ class ServicesState(MixinState):
                         margin: 10px 0;
                         font-size: 12px;
                     }}
-                    .footer {{
-                        text-align: center;
-                        font-size: 10px;
-                        margin-top: 10px;
-                    }}
                 </style>
             </head>
             <body>
                 <div class="receipt-container">
-                    <div class="header-company">LUXETY SPORT S.A.C</div>
-                    <div class="header-info">RUC: 20601348676</div>
-                    <div class="header-info">AV. ALFONSO UGARTE NRO. 096 LIMA- LIMA</div>
-                    <div class="dashed-line"></div>
-                    <h1>CONSTANCIA DE RESERVA</h1>
-                    <div class="section">Fecha Emision: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
-                    <div class="dashed-line"></div>
+                    <div class="text-center">
+                        <b style="font-size: 12px;">LUXETY SPORT S.A.C.</b><br><br>
+                        RUC: 20601348676<br><br>
+                        AV. ALFONSO UGARTE NRO. 096 LIMA-LIMA<br><br>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <b>CONSTANCIA DE RESERVA</b>
+                    </div>
+                    <br><br><br>
+                    
+                    <div class="section">Fecha Emision: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div><br>
+                    <div class="section">NRO. CONSTANCIA: {reservation['id']}</div><br><br>
+                    <hr>
+                    
                     <table class="data-table">
                         <tr><td class="text-left">Cliente:</td><td class="text-right">{reservation['client_name']}</td></tr>
                         <tr><td class="text-left">DNI:</td><td class="text-right">{reservation.get('dni') or '-'}</td></tr>
+                        <tr><td colspan='2'><br><br></td></tr>
                         <tr><td class="text-left">Campo:</td><td class="text-right">{reservation['field_name']}</td></tr>
                         <tr><td class="text-left">Inicio:</td><td class="text-right">{reservation['start_datetime']}</td></tr>
                         <tr><td class="text-left">Fin:</td><td class="text-right">{reservation['end_datetime']}</td></tr>
+                        <tr><td colspan='2'><br><br></td></tr>
                     </table>
-                    <div class="dashed-line"></div>
+                    <hr>
+                    
                     <table class="details-table">
                         <tr><td class="text-left">TOTAL</td><td class="text-right">S/ {float(reservation['total_amount']):.2f}</td></tr>
                         <tr><td class="text-left">A CUENTA</td><td class="text-right">S/ {float(reservation['paid_amount']):.2f}</td></tr>
                         <tr><td class="text-left" style='font-weight:bold;'>SALDO</td><td class="text-right" style='font-weight:bold;'>S/ {max(float(reservation['total_amount']) - float(reservation['paid_amount']), 0):.2f}</td></tr>
+                        <tr><td colspan='2'><br><br></td></tr>
                     </table>
+                    
                     <div class="status">ESTADO: {reservation['status'].upper()}</div>
-                    <div class="dashed-line"></div>
-                    <div class="footer">Gracias por su preferencia</div>
+                    <hr>
+                    
+                    <div class="text-center">
+                        <br><br>
+                        GRACIAS POR SU PREFERENCIA
+                        <br><br>
+                    </div>
                 </div>
             </body>
         </html>

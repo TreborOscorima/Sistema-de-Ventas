@@ -998,80 +998,57 @@ class CashState(MixinState):
                         margin: 0 auto;
                         padding: 2mm 0;
                     }}
-                    .header-company {{
-                        text-align: center;
-                        font-weight: bold;
-                        font-size: 12px;
-                        margin-bottom: 5px;
-                        text-transform: uppercase;
-                    }}
-                    .header-info {{
-                        text-align: center;
-                        font-size: 10px;
-                        margin-bottom: 2px;
-                    }}
-                    h1 {{
-                        text-align: center;
-                        font-size: 12px;
-                        font-weight: bold;
-                        margin: 5px 0;
-                        text-transform: uppercase;
-                    }}
-                    .section {{
-                        font-size: 10px;
-                        margin-bottom: 2px;
-                    }}
-                    table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin: 5px 0;
-                    }}
-                    td {{
-                        font-size: 10px;
-                        padding: 2px 0;
-                        vertical-align: top;
-                    }}
-                    .data-table td, .details-table td {{
-                        padding: 8px 0;
-                    }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
                     .text-left {{ text-align: left; }}
-                    .dashed-line {{
-                        border-top: 1px dashed #000;
-                        margin: 5px 0;
-                        width: 100%;
+                    .data-table td, .details-table td {{
+                        padding: 8px 0;
                     }}
-                    .footer {{
-                        text-align: center;
-                        font-size: 10px;
-                        margin-top: 10px;
+                    hr {{
+                        border: 0;
+                        border-top: 1px dashed #000;
+                        margin: 10px 0;
                     }}
                 </style>
             </head>
             <body>
                 <div class="receipt-container">
-                    <div class="header-company">LUXETY SPORT S.A.C</div>
-                    <div class="header-info">RUC: 20601348676</div>
-                    <div class="header-info">AV. ALFONSO UGARTE NRO. 096 LIMA- LIMA</div>
-                    <div class="dashed-line"></div>
-                    <h1>COMPROBANTE DE PAGO</h1>
-                    <div class="section">Fecha: {sale_data.get('timestamp', '')}</div>
-                    <div class="section">Atendido por: {sale_data.get('user', 'Desconocido')}</div>
-                    <div class="dashed-line"></div>
+                    <div class="text-center">
+                        <b style="font-size: 12px;">LUXETY SPORT S.A.C.</b><br><br>
+                        RUC: 20601348676<br><br>
+                        AV. ALFONSO UGARTE NRO. 096 LIMA-LIMA<br><br>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <b>COMPROBANTE DE PAGO</b>
+                    </div>
+                    <br><br><br>
+                    
+                    <div class="section">Fecha: {sale_data.get('timestamp', '')}</div><br>
+                    <div class="section">Atendido por: {sale_data.get('user', 'Desconocido')}</div><br><br>
+                    <hr>
+                    
                     <table class="data-table">
                         {rows}
                     </table>
-                    <div class="dashed-line"></div>
+                    <hr>
+                    
                     <table class="details-table" style="width: 100%; margin-top: 5px;">
                         <tr>
                             <td class="text-left" style="font-weight: bold;">TOTAL A PAGAR:</td>
                             <td class="text-right" style="font-weight: bold;">{self._format_currency(sale_data.get('total', 0))}</td>
                         </tr>
+                        <tr><td colspan='2'><br><br></td></tr>
                     </table>
+                    
                     <div class="section">Metodo de Pago: {payment_summary}</div>
-                    <div class="dashed-line"></div>
-                    <div class="footer">Gracias por su preferencia</div>
+                    <hr>
+                    
+                    <div class="text-center">
+                        <br><br>
+                        GRACIAS POR SU PREFERENCIA
+                        <br><br>
+                    </div>
                 </div>
             </body>
         </html>
@@ -1185,82 +1162,61 @@ class CashState(MixinState):
                         margin: 0 auto;
                         padding: 2mm 0;
                     }}
-                    .header-company {{
-                        text-align: center;
-                        font-weight: bold;
-                        font-size: 12px;
-                        margin-bottom: 5px;
-                        text-transform: uppercase;
-                    }}
-                    h1 {{
-                        text-align: center;
-                        font-size: 12px;
-                        font-weight: bold;
-                        margin: 5px 0;
-                        text-transform: uppercase;
-                    }}
-                    .section {{
-                        font-size: 10px;
-                        margin-bottom: 2px;
-                    }}
-                    table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin: 5px 0;
-                    }}
-                    td {{
-                        font-size: 10px;
-                        padding: 2px 0;
-                        vertical-align: top;
-                    }}
-                    .data-table td, .details-table td {{
-                        padding: 8px 0;
-                    }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
                     .text-left {{ text-align: left; }}
-                    .dashed-line {{
+                    .data-table td, .details-table td {{
+                        padding: 8px 0;
+                    }}
+                    hr {{
+                        border: 0;
                         border-top: 1px dashed #000;
-                        margin: 5px 0;
-                        width: 100%;
+                        margin: 10px 0;
                     }}
                     .dashed-line-light {{
                         border-top: 1px dotted #999;
                         margin: 2px 0;
                         width: 100%;
                     }}
-                    .footer {{
-                        text-align: center;
-                        font-size: 10px;
-                        margin-top: 10px;
-                    }}
                 </style>
             </head>
             <body>
                 <div class="receipt-container">
-                    <div class="header-company">LUXETY SPORT S.A.C</div>
-                    <div class="dashed-line"></div>
-                    <h1>RESUMEN DIARIO DE CAJA</h1>
-                    <div class="section">Fecha: {date}</div>
-                    <div class="section">Responsable: {self.current_user['username']}</div>
-                    <div class="section">Cierre: {closing_timestamp}</div>
-                    <div class="dashed-line"></div>
+                    <div class="text-center">
+                        <b style="font-size: 12px;">LUXETY SPORT S.A.C.</b><br><br>
+                        RUC: 20601348676<br><br>
+                        AV. ALFONSO UGARTE NRO. 096 LIMA-LIMA<br><br>
+                    </div>
+                    <hr>
+                    <div class="text-center">
+                        <b>RESUMEN DIARIO DE CAJA</b>
+                    </div>
+                    <br><br><br>
                     
-                    <div class="section" style="font-weight:bold; margin-top:5px;">TOTALES POR METODO</div>
+                    <div class="section">Fecha: {date}</div><br>
+                    <div class="section">Responsable: {self.current_user['username']}</div><br>
+                    <div class="section">Cierre: {closing_timestamp}</div><br><br>
+                    <hr>
+                    
+                    <div class="section" style="font-weight:bold; margin-top:5px;">TOTALES POR METODO</div><br>
                     <table class="data-table">
                         {summary_rows}
                         <tr><td colspan="2" style="height:4px;"></td></tr>
                         {grand_total_row}
                     </table>
+                    <hr>
                     
-                    <div class="dashed-line"></div>
-                    <div class="section" style="font-weight:bold; margin-top:5px;">DETALLE DE VENTAS</div>
+                    <div class="section" style="font-weight:bold; margin-top:5px;">DETALLE DE VENTAS</div><br>
                     <table class="details-table">
                         {detail_rows}
                     </table>
+                    <hr>
                     
-                    <div class="dashed-line"></div>
-                    <div class="footer">Fin del Reporte</div>
+                    <div class="text-center">
+                        <br><br>
+                        FIN DEL REPORTE
+                        <br><br>
+                    </div>
                 </div>
             </body>
         </html>
