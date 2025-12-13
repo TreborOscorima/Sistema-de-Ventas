@@ -836,8 +836,7 @@ class VentaState(MixinState):
 
             return rx.toast("Venta confirmada.", duration=3000)
 
-    @rx.event
-    def print_sale_receipt(self, receipt_id: Optional[str] = None):
+    def _print_receipt_logic(self, receipt_id: str | None = None):
         # Determine data source
         receipt_items = []
         total = 0.0
@@ -1048,3 +1047,11 @@ class VentaState(MixinState):
             self._refresh_payment_feedback()
             
         return rx.call_script(script)
+
+    @rx.event
+    def print_sale_receipt(self):
+        return self._print_receipt_logic(None)
+
+    @rx.event
+    def print_sale_receipt_by_id(self, receipt_id: str):
+        return self._print_receipt_logic(receipt_id)
