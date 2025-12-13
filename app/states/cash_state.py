@@ -968,7 +968,7 @@ class CashState(MixinState):
             f"<td class='text-left'>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</td>"
             f"<td class='text-right' style='font-weight:bold;'>{self._format_currency(item.get('subtotal', 0))}</td>"
             f"</tr>"
-            f"<tr><td colspan='2'><div class='dashed-line'></div></td></tr>"
+            f"<tr><td colspan='2'><br><br></td></tr>"
             for item in items
         )
         payment_summary = sale_data.get("payment_details") or sale_data.get(
@@ -1001,9 +1001,7 @@ class CashState(MixinState):
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
                     .text-left {{ text-align: left; }}
-                    .data-table td, .details-table td {{
-                        padding: 8px 0;
-                    }}
+                    .data-table, .details-table {{ width: 100%; border-collapse: collapse; }}
                     hr {{
                         border: 0;
                         border-top: 1px dashed #000;
@@ -1033,7 +1031,7 @@ class CashState(MixinState):
                     </table>
                     <hr>
                     
-                    <table class="details-table" style="width: 100%; margin-top: 5px;">
+                    <table class="details-table">
                         <tr>
                             <td class="text-left" style="font-weight: bold;">TOTAL A PAGAR:</td>
                             <td class="text-right" style="font-weight: bold;">{self._format_currency(sale_data.get('total', 0))}</td>
@@ -1043,12 +1041,11 @@ class CashState(MixinState):
                     
                     <div class="section">Metodo de Pago: {payment_summary}</div>
                     <hr>
-                    
-                    <div class="text-center">
-                        <br><br>
-                        GRACIAS POR SU PREFERENCIA
-                        <br><br>
-                    </div>
+                </div>
+                <div class="text-center">
+                    <br><br>
+                    GRACIAS POR SU PREFERENCIA
+                    <br><br>
                 </div>
             </body>
         </html>
@@ -1126,7 +1123,7 @@ class CashState(MixinState):
                 f"<tr><td colspan='2' style='font-size:9px;'>{sale['timestamp']} - {sale['user']}</td></tr>"
                 f"<tr><td class='text-left'>{method_label}</td><td class='text-right'>{self._format_currency(sale['total'])}</td></tr>"
                 f"{f'<tr><td colspan=2 style=font-size:8px;font-style:italic;>{breakdown_text}</td></tr>' if breakdown_text else ''}"
-                f"<tr><td colspan='2'><div class='dashed-line-light'></div></td></tr>"
+                f"<tr><td colspan='2'><br><br></td></tr>"
             )(
                 sale.get("payment_label", sale.get("payment_method", "")),
                 " / ".join(
@@ -1165,18 +1162,11 @@ class CashState(MixinState):
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
                     .text-left {{ text-align: left; }}
-                    .data-table td, .details-table td {{
-                        padding: 8px 0;
-                    }}
+                    .data-table, .details-table {{ width: 100%; border-collapse: collapse; }}
                     hr {{
                         border: 0;
                         border-top: 1px dashed #000;
                         margin: 10px 0;
-                    }}
-                    .dashed-line-light {{
-                        border-top: 1px dotted #999;
-                        margin: 2px 0;
-                        width: 100%;
                     }}
                 </style>
             </head>
@@ -1201,7 +1191,7 @@ class CashState(MixinState):
                     <div class="section" style="font-weight:bold; margin-top:5px;">TOTALES POR METODO</div><br>
                     <table class="data-table">
                         {summary_rows}
-                        <tr><td colspan="2" style="height:4px;"></td></tr>
+                        <tr><td colspan="2"><br></td></tr>
                         {grand_total_row}
                     </table>
                     <hr>
@@ -1211,12 +1201,11 @@ class CashState(MixinState):
                         {detail_rows}
                     </table>
                     <hr>
-                    
-                    <div class="text-center">
-                        <br><br>
-                        FIN DEL REPORTE
-                        <br><br>
-                    </div>
+                </div>
+                <div class="text-center">
+                    <br><br>
+                    FIN DEL REPORTE
+                    <br><br>
                 </div>
             </body>
         </html>
