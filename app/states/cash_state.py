@@ -1032,7 +1032,7 @@ class CashState(MixinState):
                         vertical-align: top;
                     }}
                     .data-table td, .details-table td {{
-                        padding: 4px 0;
+                        padding: 8px 0;
                     }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
@@ -1214,7 +1214,7 @@ class CashState(MixinState):
                         vertical-align: top;
                     }}
                     .data-table td, .details-table td {{
-                        padding: 4px 0;
+                        padding: 8px 0;
                     }}
                     .text-center {{ text-align: center; }}
                     .text-right {{ text-align: right; }}
