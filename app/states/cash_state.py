@@ -963,8 +963,12 @@ class CashState(MixinState):
             
         items = sale_data.get("items", [])
         rows = "".join(
-            f"<tr><td colspan='2' class='item-row-1'>{item.get('description', '')}</td></tr>"
-            f"<tr><td class='item-row-2' style='width: 70%; padding-right: 5px;'>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</td><td class='item-row-2' style='width: 30%; text-align:right;'>{self._format_currency(item.get('subtotal', 0))}</td></tr>"
+            f"<tr><td colspan='2' class='text-center' style='font-weight:bold; font-size:12px;'>{item.get('description', '')}</td></tr>"
+            f"<tr>"
+            f"<td class='text-left'>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</td>"
+            f"<td class='text-right' style='font-weight:bold;'>{self._format_currency(item.get('subtotal', 0))}</td>"
+            f"</tr>"
+            f"<tr><td colspan='2'><div class='dashed-line'></div></td></tr>"
             for item in items
         )
         payment_summary = sale_data.get("payment_details") or sale_data.get(
@@ -978,18 +982,19 @@ class CashState(MixinState):
                 <style>
                     @page {{
                         size: 80mm auto;
-                        margin: 0;
+                        margin: 1mm;
                     }}
                     body {{
-                        font-family: 'Courier New', Courier, monospace;
+                        font-family: monospace;
+                        font-size: 10px;
                         width: 100%;
                         margin: 0;
                         padding: 0;
                         background-color: #fff;
                         color: #000;
                     }}
-                    .receipt {{
-                        width: 72mm;
+                    .receipt-container {{
+                        width: 100%;
                         margin: 0 auto;
                         padding: 2mm 0;
                         page-break-after: always;
@@ -997,24 +1002,24 @@ class CashState(MixinState):
                     .header-company {{
                         text-align: center;
                         font-weight: bold;
-                        font-size: 14px;
+                        font-size: 12px;
                         margin-bottom: 5px;
                         text-transform: uppercase;
                     }}
                     .header-info {{
                         text-align: center;
-                        font-size: 12px;
+                        font-size: 10px;
                         margin-bottom: 2px;
                     }}
                     h1 {{
                         text-align: center;
-                        font-size: 14px;
+                        font-size: 12px;
                         font-weight: bold;
                         margin: 5px 0;
                         text-transform: uppercase;
                     }}
                     .section {{
-                        font-size: 12px;
+                        font-size: 10px;
                         margin-bottom: 2px;
                     }}
                     table {{
@@ -1023,64 +1028,48 @@ class CashState(MixinState):
                         margin: 5px 0;
                     }}
                     td {{
-                        font-size: 12px;
+                        font-size: 10px;
                         padding: 2px 0;
                         vertical-align: top;
                     }}
-                    .item-row-1 {{
-                        font-weight: normal;
-                    }}
-                    .item-row-2 {{
-                        padding-bottom: 5px;
-                    }}
-                    hr {{
-                        border: 0;
+                    .text-center {{ text-align: center; }}
+                    .text-right {{ text-align: right; }}
+                    .text-left {{ text-align: left; }}
+                    .dashed-line {{
                         border-top: 1px dashed #000;
                         margin: 5px 0;
+                        width: 100%;
                     }}
                     .footer {{
                         text-align: center;
-                        font-size: 12px;
+                        font-size: 10px;
                         margin-top: 10px;
-                    }}
-                    .cut-spacer {{
-                        height: 20mm;
-                        width: 100%;
-                        display: block;
-                        content: " ";
-                    }}
-                    @media print {{
-                        body {{ margin: 0; }}
-                        .receipt {{ width: 100%; }}
                     }}
                 </style>
             </head>
             <body>
-                <div class="receipt">
+                <div class="receipt-container">
                     <div class="header-company">LUXETY SPORT S.A.C</div>
                     <div class="header-info">RUC: 20601348676</div>
                     <div class="header-info">AV. ALFONSO UGARTE NRO. 096 LIMA- LIMA</div>
-                    <hr />
+                    <div class="dashed-line"></div>
                     <h1>COMPROBANTE DE PAGO</h1>
                     <div class="section">Fecha: {sale_data.get('timestamp', '')}</div>
                     <div class="section">Atendido por: {sale_data.get('user', 'Desconocido')}</div>
-                    <hr />
+                    <div class="dashed-line"></div>
                     <table>
                         {rows}
                     </table>
-                    <hr />
-                    <table style="width: 100%; margin-top: 5px;">
+                    <div class="dashed-line"></div>
+                    <table class="details-table" style="width: 100%; margin-top: 5px;">
                         <tr>
-                            <td style="text-align: left; font-weight: bold;">TOTAL GENERAL:</td>
-                            <td style="text-align: right; font-weight: bold;">{self._format_currency(sale_data.get('total', 0))}</td>
+                            <td class="text-left" style="font-weight: bold;">TOTAL A PAGAR:</td>
+                            <td class="text-right" style="font-weight: bold;">{self._format_currency(sale_data.get('total', 0))}</td>
                         </tr>
                     </table>
                     <div class="section">Metodo de Pago: {payment_summary}</div>
-                    <hr />
+                    <div class="dashed-line"></div>
                     <div class="footer">Gracias por su preferencia</div>
-                    
-                    <!-- Espacio para corte -->
-                    <div class="cut-spacer">&nbsp;</div>
                 </div>
             </body>
         </html>
@@ -1145,14 +1134,20 @@ class CashState(MixinState):
                 session.add(log)
                 session.commit()
         summary_rows = "".join(
-            f"<tr><td>{method}</td><td>{self._format_currency(amount)}</td></tr>"
+            f"<tr><td class='text-left'>{method}</td><td class='text-right'>{self._format_currency(amount)}</td></tr>"
             for method, amount in summary.items()
             if amount > 0
         )
-        grand_total_row = f"<tr><td><strong>Total cierre</strong></td><td><strong>{self._format_currency(closing_total)}</strong></td></tr>"
+        grand_total_row = f"<tr><td class='text-left' style='font-weight:bold;'>TOTAL CIERRE</td><td class='text-right' style='font-weight:bold;'>{self._format_currency(closing_total)}</td></tr>"
+        
+        # Simplified detail rows for thermal printing
         detail_rows = "".join(
             (
-                lambda method_label, breakdown_text: f"<tr><td>{sale['timestamp']}</td><td>{sale['user']}</td><td>{method_label}{('<br><small>' + breakdown_text + '</small>') if breakdown_text else ''}</td><td>{self._format_currency(sale['total'])}</td></tr>"
+                lambda method_label, breakdown_text: 
+                f"<tr><td colspan='2' style='font-size:9px;'>{sale['timestamp']} - {sale['user']}</td></tr>"
+                f"<tr><td class='text-left'>{method_label}</td><td class='text-right'>{self._format_currency(sale['total'])}</td></tr>"
+                f"{f'<tr><td colspan=2 style=font-size:8px;font-style:italic;>{breakdown_text}</td></tr>' if breakdown_text else ''}"
+                f"<tr><td colspan='2'><div class='dashed-line-light'></div></td></tr>"
             )(
                 sale.get("payment_label", sale.get("payment_method", "")),
                 " / ".join(
@@ -1163,50 +1158,106 @@ class CashState(MixinState):
             )
             for sale in day_sales
         )
+        
         html_content = f"""
         <html>
             <head>
                 <meta charset='utf-8' />
                 <title>Resumen de Caja</title>
                 <style>
-                    body {{ font-family: Arial, sans-serif; padding: 24px; }}
-                    h1 {{ text-align: center; }}
-                    table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
-                    th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
-                    th {{ background-color: #f3f4f6; }}
+                    @page {{
+                        size: 80mm auto;
+                        margin: 1mm;
+                    }}
+                    body {{
+                        font-family: monospace;
+                        font-size: 10px;
+                        width: 100%;
+                        margin: 0;
+                        padding: 0;
+                        background-color: #fff;
+                        color: #000;
+                    }}
+                    .receipt-container {{
+                        width: 100%;
+                        margin: 0 auto;
+                        padding: 2mm 0;
+                        page-break-after: always;
+                    }}
+                    .header-company {{
+                        text-align: center;
+                        font-weight: bold;
+                        font-size: 12px;
+                        margin-bottom: 5px;
+                        text-transform: uppercase;
+                    }}
+                    h1 {{
+                        text-align: center;
+                        font-size: 12px;
+                        font-weight: bold;
+                        margin: 5px 0;
+                        text-transform: uppercase;
+                    }}
+                    .section {{
+                        font-size: 10px;
+                        margin-bottom: 2px;
+                    }}
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        margin: 5px 0;
+                    }}
+                    td {{
+                        font-size: 10px;
+                        padding: 2px 0;
+                        vertical-align: top;
+                    }}
+                    .text-center {{ text-align: center; }}
+                    .text-right {{ text-align: right; }}
+                    .text-left {{ text-align: left; }}
+                    .dashed-line {{
+                        border-top: 1px dashed #000;
+                        margin: 5px 0;
+                        width: 100%;
+                    }}
+                    .dashed-line-light {{
+                        border-top: 1px dotted #999;
+                        margin: 2px 0;
+                        width: 100%;
+                    }}
+                    .footer {{
+                        text-align: center;
+                        font-size: 10px;
+                        margin-top: 10px;
+                    }}
                 </style>
             </head>
             <body>
-                <h1>Resumen Diario de Caja</h1>
-                <p><strong>Fecha:</strong> {date}</p>
-                <p><strong>Responsable:</strong> {self.current_user['username']}</p>
-                <h2>Totales por método</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Método</th>
-                            <th>Monto</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="receipt-container">
+                    <div class="header-company">LUXETY SPORT S.A.C</div>
+                    <div class="dashed-line"></div>
+                    <h1>RESUMEN DIARIO DE CAJA</h1>
+                    <div class="section">Fecha: {date}</div>
+                    <div class="section">Responsable: {self.current_user['username']}</div>
+                    <div class="section">Cierre: {closing_timestamp}</div>
+                    <div class="dashed-line"></div>
+                    
+                    <div class="section" style="font-weight:bold; margin-top:5px;">TOTALES POR METODO</div>
+                    <table>
                         {summary_rows}
+                        <tr><td colspan="2" style="height:4px;"></td></tr>
                         {grand_total_row}
-                    </tbody>
-                </table>
-                <h2>Detalle de ventas</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Fecha y Hora</th>
-                            <th>Usuario</th>
-                            <th>Método</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                    </table>
+                    
+                    <div class="dashed-line"></div>
+                    <div class="section" style="font-weight:bold; margin-top:5px;">DETALLE DE VENTAS</div>
+                    <table>
                         {detail_rows}
-                    </tbody>
-                </table>
+                    </table>
+                    
+                    <div class="dashed-line"></div>
+                    <div class="footer">Fin del Reporte</div>
+                </div>
             </body>
         </html>
         """
