@@ -886,101 +886,109 @@ class VentaState(MixinState):
             user_name = self.current_user.get('username', 'Desconocido')
             payment_summary = self.last_payment_summary
 
-        # Generación de filas de ítems para impresora térmica 80mm
-        items_html = ""
-        for item in receipt_items:
-            items_html += f"""
-                <div class="bold">{item['description']}</div>
-                <div class="spacer"></div>
-                <div class="row"><span>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</span><span class="bold">{self._format_currency(item['subtotal'])}</span></div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-            """
+        # Funciones auxiliares para formato de texto plano
+        def center(text, width=42):
+            return text.center(width)
         
-        summary_html = ""
+        def line(width=42):
+            return "-" * width
+        
+        def row(left, right, width=42):
+            spaces = width - len(left) - len(right)
+            return left + " " * max(spaces, 1) + right
+
+        # Construir recibo línea por línea
+        receipt_lines = [
+            "",
+            center("LUXETY SPORT S.A.C."),
+            "",
+            center("RUC: 20601348676"),
+            "",
+            center("AV. ALFONSO UGARTE NRO. 096"),
+            center("LIMA-LIMA"),
+            "",
+            line(),
+            center("COMPROBANTE DE PAGO"),
+            line(),
+            "",
+            f"Fecha: {timestamp}",
+            "",
+            f"Atendido por: {user_name}",
+            "",
+            line(),
+        ]
+        
+        # Agregar contexto de reserva si existe
         if reservation_context:
             ctx = reservation_context
             header = ctx.get("header", "")
             products_total = ctx.get("products_total", 0)
             
             if header:
-                summary_html += f'<div class="center bold">{header}</div><div class="spacer"></div><div class="line"></div>'
+                receipt_lines.append("")
+                receipt_lines.append(center(header))
+                receipt_lines.append("")
+                receipt_lines.append(line())
             
-            summary_html += f"""
-                <div class="row"><span>TOTAL RESERVA:</span><span>{self._format_currency(ctx['total'])}</span></div>
-                <div class="spacer"></div>
-                <div class="row"><span>Adelanto previo:</span><span>{self._format_currency(ctx['paid_before'])}</span></div>
-                <div class="spacer"></div>
-                <div class="row bold"><span>PAGO ACTUAL:</span><span>{self._format_currency(ctx['paid_now'])}</span></div>
-                <div class="spacer"></div>
-            """
+            receipt_lines.append("")
+            receipt_lines.append(row("TOTAL RESERVA:", self._format_currency(ctx['total'])))
+            receipt_lines.append("")
+            receipt_lines.append(row("Adelanto previo:", self._format_currency(ctx['paid_before'])))
+            receipt_lines.append("")
+            receipt_lines.append(row("PAGO ACTUAL:", self._format_currency(ctx['paid_now'])))
+            receipt_lines.append("")
+            
             if products_total > 0:
-                summary_html += f'<div class="row"><span>PRODUCTOS:</span><span>{self._format_currency(products_total)}</span></div><div class="spacer"></div>'
-            summary_html += f"""
-                <div class="row"><span>Saldo pendiente:</span><span>{self._format_currency(ctx.get('balance_after', 0))}</span></div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-            """
+                receipt_lines.append(row("PRODUCTOS:", self._format_currency(products_total)))
+                receipt_lines.append("")
+            
+            receipt_lines.append(row("Saldo pendiente:", self._format_currency(ctx.get('balance_after', 0))))
+            receipt_lines.append("")
+            receipt_lines.append(line())
         
-        html_content = f"""
-        <html>
-            <head>
-                <meta charset='utf-8' />
-                <title>Comprobante de Pago</title>
-                <style>
-                    @page {{ size: 80mm auto; margin: 0; }}
-                    body {{
-                        font-family: 'Courier New', monospace;
-                        font-size: 12px;
-                        width: 72mm;
-                        margin: 0 auto;
-                        padding: 2mm;
-                        line-height: 1.4;
-                    }}
-                    .center {{ text-align: center; }}
-                    .bold {{ font-weight: bold; }}
-                    .line {{ border-top: 1px dashed #000; margin: 8px 0; }}
-                    .row {{ display: flex; justify-content: space-between; }}
-                    .spacer {{ height: 12px; }}
-                </style>
-            </head>
-            <body>
-                <div class="center bold">LUXETY SPORT S.A.C.</div>
-                <div class="spacer"></div>
-                <div class="center">RUC: 20601348676</div>
-                <div class="spacer"></div>
-                <div class="center">AV. ALFONSO UGARTE NRO. 096</div>
-                <div class="center">LIMA-LIMA</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                <div class="center bold">COMPROBANTE DE PAGO</div>
-                <div class="line"></div>
-                <div class="spacer"></div>
-                
-                <div>Fecha: {timestamp}</div>
-                <div class="spacer"></div>
-                <div>Atendido por: {user_name}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                
-                {summary_html}
-                {items_html}
-                
-                <div class="row bold"><span>TOTAL A PAGAR:</span><span>{self._format_currency(total)}</span></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div>Metodo de Pago: {payment_summary}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div class="center">GRACIAS POR SU PREFERENCIA</div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-            </body>
-        </html>
-        """
+        # Agregar ítems
+        for item in receipt_items:
+            receipt_lines.append("")
+            receipt_lines.append(item['description'])
+            receipt_lines.append(f"{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}    {self._format_currency(item['subtotal'])}")
+            receipt_lines.append("")
+            receipt_lines.append(line())
+        
+        # Total y método de pago
+        receipt_lines.extend([
+            "",
+            row("TOTAL A PAGAR:", self._format_currency(total)),
+            "",
+            "",
+            f"Metodo de Pago: {payment_summary}",
+            "",
+            line(),
+            "",
+            "",
+            center("GRACIAS POR SU PREFERENCIA"),
+            "",
+            "",
+            "",
+            "",
+        ])
+        
+        receipt_text = "\\n".join(receipt_lines)
+        
+        html_content = f"""<html>
+<head>
+<meta charset='utf-8'/>
+<title>Comprobante de Pago</title>
+<style>
+@page {{ size: 80mm auto; margin: 0; }}
+body {{ margin: 0; padding: 2mm; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
+</style>
+</head>
+<body>
+<pre>{receipt_text}</pre>
+</body>
+</html>"""
+        
         script = f"""
         const receiptWindow = window.open('', '_blank');
         receiptWindow.document.write({json.dumps(html_content)});

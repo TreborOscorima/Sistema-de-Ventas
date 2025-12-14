@@ -960,79 +960,87 @@ class CashState(MixinState):
         
         if not sale_data:
             return rx.toast("Venta no encontrada.", duration=3000)
-            
-        items = sale_data.get("items", [])
-        items_html = ""
-        for item in items:
-            items_html += f"""
-                <div class="bold">{item.get('description', '')}</div>
-                <div class="spacer"></div>
-                <div class="row"><span>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</span><span class="bold">{self._format_currency(item.get('subtotal', 0))}</span></div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-            """
         
+        # Funciones auxiliares para formato de texto plano
+        def center(text, width=42):
+            return text.center(width)
+        
+        def line(width=42):
+            return "-" * width
+        
+        def row(left, right, width=42):
+            spaces = width - len(left) - len(right)
+            return left + " " * max(spaces, 1) + right
+        
+        items = sale_data.get("items", [])
         payment_summary = sale_data.get("payment_details") or sale_data.get(
             "payment_method", ""
         )
-        html_content = f"""
-        <html>
-            <head>
-                <meta charset='utf-8' />
-                <title>Comprobante de Pago</title>
-                <style>
-                    @page {{ size: 80mm auto; margin: 0; }}
-                    body {{
-                        font-family: 'Courier New', monospace;
-                        font-size: 12px;
-                        width: 72mm;
-                        margin: 0 auto;
-                        padding: 2mm;
-                        line-height: 1.4;
-                    }}
-                    .center {{ text-align: center; }}
-                    .bold {{ font-weight: bold; }}
-                    .line {{ border-top: 1px dashed #000; margin: 8px 0; }}
-                    .row {{ display: flex; justify-content: space-between; }}
-                    .spacer {{ height: 12px; }}
-                </style>
-            </head>
-            <body>
-                <div class="center bold">LUXETY SPORT S.A.C.</div>
-                <div class="spacer"></div>
-                <div class="center">RUC: 20601348676</div>
-                <div class="spacer"></div>
-                <div class="center">AV. ALFONSO UGARTE NRO. 096</div>
-                <div class="center">LIMA-LIMA</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                <div class="center bold">COMPROBANTE DE PAGO</div>
-                <div class="line"></div>
-                <div class="spacer"></div>
-                
-                <div>Fecha: {sale_data.get('timestamp', '')}</div>
-                <div class="spacer"></div>
-                <div>Atendido por: {sale_data.get('user', 'Desconocido')}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                
-                {items_html}
-                
-                <div class="row bold"><span>TOTAL A PAGAR:</span><span>{self._format_currency(sale_data.get('total', 0))}</span></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div>Metodo de Pago: {payment_summary}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div class="center">GRACIAS POR SU PREFERENCIA</div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-            </body>
-        </html>
-        """
+        
+        # Construir recibo línea por línea
+        receipt_lines = [
+            "",
+            center("LUXETY SPORT S.A.C."),
+            "",
+            center("RUC: 20601348676"),
+            "",
+            center("AV. ALFONSO UGARTE NRO. 096"),
+            center("LIMA-LIMA"),
+            "",
+            line(),
+            center("COMPROBANTE DE PAGO"),
+            line(),
+            "",
+            f"Fecha: {sale_data.get('timestamp', '')}",
+            "",
+            f"Atendido por: {sale_data.get('user', 'Desconocido')}",
+            "",
+            line(),
+        ]
+        
+        # Agregar ítems
+        for item in items:
+            receipt_lines.append("")
+            receipt_lines.append(item.get('description', ''))
+            receipt_lines.append(f"{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}    {self._format_currency(item.get('subtotal', 0))}")
+            receipt_lines.append("")
+            receipt_lines.append(line())
+        
+        # Total y método de pago
+        receipt_lines.extend([
+            "",
+            row("TOTAL A PAGAR:", self._format_currency(sale_data.get('total', 0))),
+            "",
+            "",
+            f"Metodo de Pago: {payment_summary}",
+            "",
+            line(),
+            "",
+            "",
+            center("GRACIAS POR SU PREFERENCIA"),
+            "",
+            "",
+            "",
+            "",
+        ])
+        
+        receipt_text = "\\n".join(receipt_lines)
+        
+        html_content = f"""<html>
+<head>
+<meta charset='utf-8'/>
+<title>Comprobante de Pago</title>
+<style>
+@page {{ size: 80mm auto; margin: 0; }}
+body {{ margin: 0; padding: 2mm; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
+</style>
+</head>
+<body>
+<pre>{receipt_text}</pre>
+</body>
+</html>"""
+        
         script = f"""
         const receiptWindow = window.open('', '_blank');
         receiptWindow.document.write({json.dumps(html_content)});
@@ -1092,85 +1100,92 @@ class CashState(MixinState):
                 )
                 session.add(log)
                 session.commit()
-        # Generar HTML de totales por método
-        summary_html = ""
+        
+        # Funciones auxiliares para formato de texto plano
+        def center(text, width=42):
+            return text.center(width)
+        
+        def line(width=42):
+            return "-" * width
+        
+        def row(left, right, width=42):
+            spaces = width - len(left) - len(right)
+            return left + " " * max(spaces, 1) + right
+        
+        # Construir recibo línea por línea
+        receipt_lines = [
+            "",
+            center("LUXETY SPORT S.A.C."),
+            "",
+            center("RUC: 20601348676"),
+            "",
+            center("AV. ALFONSO UGARTE NRO. 096"),
+            center("LIMA-LIMA"),
+            "",
+            line(),
+            center("RESUMEN DIARIO DE CAJA"),
+            line(),
+            "",
+            f"Fecha: {date}",
+            "",
+            f"Responsable: {self.current_user['username']}",
+            "",
+            f"Cierre: {closing_timestamp}",
+            "",
+            line(),
+            "",
+            "TOTALES POR METODO",
+            "",
+        ]
+        
+        # Agregar totales por método
         for method, amount in summary.items():
             if amount > 0:
-                summary_html += f'<div class="row"><span>{method}:</span><span>{self._format_currency(amount)}</span></div><div class="spacer"></div>'
+                receipt_lines.append(row(f"{method}:", self._format_currency(amount)))
+                receipt_lines.append("")
         
-        # Generar HTML de detalle de ventas
-        detail_html = ""
+        receipt_lines.append(row("TOTAL CIERRE:", self._format_currency(closing_total)))
+        receipt_lines.append("")
+        receipt_lines.append(line())
+        receipt_lines.append("")
+        receipt_lines.append("DETALLE DE VENTAS")
+        receipt_lines.append("")
+        
+        # Agregar detalle de ventas
         for sale in day_sales:
             method_label = sale.get("payment_label", sale.get("payment_method", ""))
-            detail_html += f"""
-                <div style="font-size:10px;">{sale['timestamp']} - {sale['user']}</div>
-                <div class="row"><span>{method_label}</span><span>{self._format_currency(sale['total'])}</span></div>
-                <div class="spacer"></div>
-            """
+            receipt_lines.append(f"{sale['timestamp']} - {sale['user']}")
+            receipt_lines.append(row(method_label, self._format_currency(sale['total'])))
+            receipt_lines.append("")
         
-        html_content = f"""
-        <html>
-            <head>
-                <meta charset='utf-8' />
-                <title>Resumen de Caja</title>
-                <style>
-                    @page {{ size: 80mm auto; margin: 0; }}
-                    body {{
-                        font-family: 'Courier New', monospace;
-                        font-size: 12px;
-                        width: 72mm;
-                        margin: 0 auto;
-                        padding: 2mm;
-                        line-height: 1.4;
-                    }}
-                    .center {{ text-align: center; }}
-                    .bold {{ font-weight: bold; }}
-                    .line {{ border-top: 1px dashed #000; margin: 8px 0; }}
-                    .row {{ display: flex; justify-content: space-between; }}
-                    .spacer {{ height: 12px; }}
-                </style>
-            </head>
-            <body>
-                <div class="center bold">LUXETY SPORT S.A.C.</div>
-                <div class="spacer"></div>
-                <div class="center">RUC: 20601348676</div>
-                <div class="spacer"></div>
-                <div class="center">AV. ALFONSO UGARTE NRO. 096</div>
-                <div class="center">LIMA-LIMA</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                <div class="center bold">RESUMEN DIARIO DE CAJA</div>
-                <div class="line"></div>
-                <div class="spacer"></div>
-                
-                <div>Fecha: {date}</div>
-                <div class="spacer"></div>
-                <div>Responsable: {self.current_user['username']}</div>
-                <div class="spacer"></div>
-                <div>Cierre: {closing_timestamp}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                
-                <div class="bold">TOTALES POR METODO</div>
-                <div class="spacer"></div>
-                {summary_html}
-                <div class="row bold"><span>TOTAL CIERRE:</span><span>{self._format_currency(closing_total)}</span></div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                
-                <div class="bold">DETALLE DE VENTAS</div>
-                <div class="spacer"></div>
-                {detail_html}
-                <div class="line"></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div class="center">FIN DEL REPORTE</div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-            </body>
-        </html>
-        """
+        receipt_lines.extend([
+            line(),
+            "",
+            "",
+            center("FIN DEL REPORTE"),
+            "",
+            "",
+            "",
+            "",
+        ])
+        
+        receipt_text = "\\n".join(receipt_lines)
+        
+        html_content = f"""<html>
+<head>
+<meta charset='utf-8'/>
+<title>Resumen de Caja</title>
+<style>
+@page {{ size: 80mm auto; margin: 0; }}
+body {{ margin: 0; padding: 2mm; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
+</style>
+</head>
+<body>
+<pre>{receipt_text}</pre>
+</body>
+</html>"""
+        
         script = f"""
         const cashboxWindow = window.open('', '_blank');
         cashboxWindow.document.write({json.dumps(html_content)});

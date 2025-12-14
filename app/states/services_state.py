@@ -850,81 +850,88 @@ class ServicesState(MixinState):
         paid = float(reservation['paid_amount'])
         saldo = max(total - paid, 0)
         
-        html_content = f"""
-        <html>
-            <head>
-                <meta charset='utf-8' />
-                <title>Constancia de Reserva</title>
-                <style>
-                    @page {{ size: 80mm auto; margin: 0; }}
-                    body {{
-                        font-family: 'Courier New', monospace;
-                        font-size: 12px;
-                        width: 72mm;
-                        margin: 0 auto;
-                        padding: 2mm;
-                        line-height: 1.4;
-                    }}
-                    .center {{ text-align: center; }}
-                    .bold {{ font-weight: bold; }}
-                    .line {{ border-top: 1px dashed #000; margin: 8px 0; }}
-                    .row {{ display: flex; justify-content: space-between; }}
-                    .spacer {{ height: 12px; }}
-                </style>
-            </head>
-            <body>
-                <div class="center bold">LUXETY SPORT S.A.C.</div>
-                <div class="spacer"></div>
-                <div class="center">RUC: 20601348676</div>
-                <div class="spacer"></div>
-                <div class="center">AV. ALFONSO UGARTE NRO. 096</div>
-                <div class="center">LIMA-LIMA</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                <div class="center bold">CONSTANCIA DE RESERVA</div>
-                <div class="line"></div>
-                <div class="spacer"></div>
-                
-                <div>Fecha Emision: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
-                <div class="spacer"></div>
-                <div>NRO. CONSTANCIA: {reservation['id']}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                
-                <div>Cliente: {reservation['client_name']}</div>
-                <div class="spacer"></div>
-                <div>DNI: {reservation.get('dni') or '-'}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                
-                <div>Campo: {reservation['field_name']}</div>
-                <div class="spacer"></div>
-                <div>Inicio: {reservation['start_datetime']}</div>
-                <div class="spacer"></div>
-                <div>Fin: {reservation['end_datetime']}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                
-                <div class="row"><span>TOTAL:</span><span>S/ {total:.2f}</span></div>
-                <div class="spacer"></div>
-                <div class="row"><span>A CUENTA:</span><span>S/ {paid:.2f}</span></div>
-                <div class="spacer"></div>
-                <div class="row bold"><span>SALDO:</span><span>S/ {saldo:.2f}</span></div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                
-                <div class="center bold">ESTADO: {reservation['status'].upper()}</div>
-                <div class="spacer"></div>
-                <div class="line"></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div class="center">GRACIAS POR SU PREFERENCIA</div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-                <div class="spacer"></div>
-            </body>
-        </html>
-        """
+        # Función para centrar texto en 42 caracteres (ancho típico de 80mm)
+        def center(text, width=42):
+            return text.center(width)
+        
+        def line(width=42):
+            return "-" * width
+        
+        def row(left, right, width=42):
+            spaces = width - len(left) - len(right)
+            return left + " " * max(spaces, 1) + right
+        
+        # Construir recibo línea por línea
+        receipt_lines = [
+            "",
+            center("LUXETY SPORT S.A.C."),
+            "",
+            center("RUC: 20601348676"),
+            "",
+            center("AV. ALFONSO UGARTE NRO. 096"),
+            center("LIMA-LIMA"),
+            "",
+            line(),
+            center("CONSTANCIA DE RESERVA"),
+            line(),
+            "",
+            f"Fecha Emision: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+            f"NRO. CONSTANCIA: {reservation['id']}",
+            "",
+            line(),
+            "",
+            f"Cliente: {reservation['client_name']}",
+            "",
+            f"DNI: {reservation.get('dni') or '-'}",
+            "",
+            line(),
+            "",
+            f"Campo: {reservation['field_name']}",
+            "",
+            f"Inicio: {reservation['start_datetime']}",
+            "",
+            f"Fin: {reservation['end_datetime']}",
+            "",
+            line(),
+            "",
+            row("TOTAL:", f"S/ {total:.2f}"),
+            "",
+            row("A CUENTA:", f"S/ {paid:.2f}"),
+            "",
+            row("SALDO:", f"S/ {saldo:.2f}"),
+            "",
+            line(),
+            "",
+            center(f"ESTADO: {reservation['status'].upper()}"),
+            "",
+            line(),
+            "",
+            "",
+            center("GRACIAS POR SU PREFERENCIA"),
+            "",
+            "",
+            "",
+            "",
+        ]
+        
+        receipt_text = "\\n".join(receipt_lines)
+        
+        html_content = f"""<html>
+<head>
+<meta charset='utf-8'/>
+<title>Constancia de Reserva</title>
+<style>
+@page {{ size: 80mm auto; margin: 0; }}
+body {{ margin: 0; padding: 2mm; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
+</style>
+</head>
+<body>
+<pre>{receipt_text}</pre>
+</body>
+</html>"""
+        
         script = f"""
         const receiptWindow = window.open('', '_blank');
         receiptWindow.document.write({json.dumps(html_content)});
