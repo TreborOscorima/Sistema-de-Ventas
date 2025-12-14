@@ -962,15 +962,16 @@ class CashState(MixinState):
             return rx.toast("Venta no encontrada.", duration=3000)
             
         items = sale_data.get("items", [])
-        rows = "".join(
-            f"<tr><td colspan='2' class='text-center' style='font-weight:bold; font-size:12px;'>{item.get('description', '')}</td></tr>"
-            f"<tr>"
-            f"<td class='text-left'>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</td>"
-            f"<td class='text-right' style='font-weight:bold;'>{self._format_currency(item.get('subtotal', 0))}</td>"
-            f"</tr>"
-            f"<tr><td colspan='2'><br><br></td></tr>"
-            for item in items
-        )
+        items_html = ""
+        for item in items:
+            items_html += f"""
+                <div class="bold">{item.get('description', '')}</div>
+                <div class="spacer"></div>
+                <div class="row"><span>{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}</span><span class="bold">{self._format_currency(item.get('subtotal', 0))}</span></div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+            """
+        
         payment_summary = sale_data.get("payment_details") or sale_data.get(
             "payment_method", ""
         )
@@ -980,73 +981,55 @@ class CashState(MixinState):
                 <meta charset='utf-8' />
                 <title>Comprobante de Pago</title>
                 <style>
-                    @page {{
-                        size: 80mm auto;
-                        margin: 1mm;
-                    }}
+                    @page {{ size: 80mm auto; margin: 0; }}
                     body {{
-                        font-family: monospace;
-                        font-size: 10px;
-                        width: 100%;
-                        margin: 0;
-                        padding: 0;
-                        background-color: #fff;
-                        color: #000;
-                    }}
-                    .receipt-container {{
-                        width: 100%;
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        width: 72mm;
                         margin: 0 auto;
-                        padding: 2mm 0;
+                        padding: 2mm;
+                        line-height: 1.4;
                     }}
-                    .text-center {{ text-align: center; }}
-                    .text-right {{ text-align: right; }}
-                    .text-left {{ text-align: left; }}
-                    .data-table, .details-table {{ width: 100%; border-collapse: collapse; }}
-                    hr {{
-                        border: 0;
-                        border-top: 1px dashed #000;
-                        margin: 10px 0;
-                    }}
+                    .center {{ text-align: center; }}
+                    .bold {{ font-weight: bold; }}
+                    .line {{ border-top: 1px dashed #000; margin: 8px 0; }}
+                    .row {{ display: flex; justify-content: space-between; }}
+                    .spacer {{ height: 12px; }}
                 </style>
             </head>
             <body>
-                <div class="receipt-container">
-                    <div class="text-center">
-                        <b style="font-size: 12px;">LUXETY SPORT S.A.C.</b><br><br>
-                        RUC: 20601348676<br><br>
-                        AV. ALFONSO UGARTE NRO. 096 LIMA-LIMA<br><br>
-                    </div>
-                    <hr>
-                    <div class="text-center">
-                        <b>COMPROBANTE DE PAGO</b>
-                    </div>
-                    <br><br><br>
-                    
-                    <div class="section">Fecha: {sale_data.get('timestamp', '')}</div><br>
-                    <div class="section">Atendido por: {sale_data.get('user', 'Desconocido')}</div><br><br>
-                    <hr>
-                    
-                    <table class="data-table">
-                        {rows}
-                    </table>
-                    <hr>
-                    
-                    <table class="details-table">
-                        <tr>
-                            <td class="text-left" style="font-weight: bold;">TOTAL A PAGAR:</td>
-                            <td class="text-right" style="font-weight: bold;">{self._format_currency(sale_data.get('total', 0))}</td>
-                        </tr>
-                        <tr><td colspan='2'><br><br></td></tr>
-                    </table>
-                    
-                    <div class="section">Metodo de Pago: {payment_summary}</div>
-                    <hr>
-                </div>
-                <div class="text-center">
-                    <br><br>
-                    GRACIAS POR SU PREFERENCIA
-                    <br><br>
-                </div>
+                <div class="center bold">LUXETY SPORT S.A.C.</div>
+                <div class="spacer"></div>
+                <div class="center">RUC: 20601348676</div>
+                <div class="spacer"></div>
+                <div class="center">AV. ALFONSO UGARTE NRO. 096</div>
+                <div class="center">LIMA-LIMA</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                <div class="center bold">COMPROBANTE DE PAGO</div>
+                <div class="line"></div>
+                <div class="spacer"></div>
+                
+                <div>Fecha: {sale_data.get('timestamp', '')}</div>
+                <div class="spacer"></div>
+                <div>Atendido por: {sale_data.get('user', 'Desconocido')}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                
+                {items_html}
+                
+                <div class="row bold"><span>TOTAL A PAGAR:</span><span>{self._format_currency(sale_data.get('total', 0))}</span></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div>Metodo de Pago: {payment_summary}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div class="center">GRACIAS POR SU PREFERENCIA</div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
             </body>
         </html>
         """
@@ -1109,31 +1092,21 @@ class CashState(MixinState):
                 )
                 session.add(log)
                 session.commit()
-        summary_rows = "".join(
-            f"<tr><td class='text-left'>{method}</td><td class='text-right'>{self._format_currency(amount)}</td></tr>"
-            for method, amount in summary.items()
-            if amount > 0
-        )
-        grand_total_row = f"<tr><td class='text-left' style='font-weight:bold;'>TOTAL CIERRE</td><td class='text-right' style='font-weight:bold;'>{self._format_currency(closing_total)}</td></tr>"
+        # Generar HTML de totales por método
+        summary_html = ""
+        for method, amount in summary.items():
+            if amount > 0:
+                summary_html += f'<div class="row"><span>{method}:</span><span>{self._format_currency(amount)}</span></div><div class="spacer"></div>'
         
-        # Simplified detail rows for thermal printing
-        detail_rows = "".join(
-            (
-                lambda method_label, breakdown_text: 
-                f"<tr><td colspan='2' style='font-size:9px;'>{sale['timestamp']} - {sale['user']}</td></tr>"
-                f"<tr><td class='text-left'>{method_label}</td><td class='text-right'>{self._format_currency(sale['total'])}</td></tr>"
-                f"{f'<tr><td colspan=2 style=font-size:8px;font-style:italic;>{breakdown_text}</td></tr>' if breakdown_text else ''}"
-                f"<tr><td colspan='2'><br><br></td></tr>"
-            )(
-                sale.get("payment_label", sale.get("payment_method", "")),
-                " / ".join(
-                    f"{item.get('label', '')}: {self._format_currency(item.get('amount', 0))}"
-                    for item in sale.get("payment_breakdown", [])
-                    if item.get("amount", 0)
-                ),
-            )
-            for sale in day_sales
-        )
+        # Generar HTML de detalle de ventas
+        detail_html = ""
+        for sale in day_sales:
+            method_label = sale.get("payment_label", sale.get("payment_method", ""))
+            detail_html += f"""
+                <div style="font-size:10px;">{sale['timestamp']} - {sale['user']}</div>
+                <div class="row"><span>{method_label}</span><span>{self._format_currency(sale['total'])}</span></div>
+                <div class="spacer"></div>
+            """
         
         html_content = f"""
         <html>
@@ -1141,72 +1114,60 @@ class CashState(MixinState):
                 <meta charset='utf-8' />
                 <title>Resumen de Caja</title>
                 <style>
-                    @page {{
-                        size: 80mm auto;
-                        margin: 1mm;
-                    }}
+                    @page {{ size: 80mm auto; margin: 0; }}
                     body {{
-                        font-family: monospace;
-                        font-size: 10px;
-                        width: 100%;
-                        margin: 0;
-                        padding: 0;
-                        background-color: #fff;
-                        color: #000;
-                    }}
-                    .receipt-container {{
-                        width: 100%;
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        width: 72mm;
                         margin: 0 auto;
-                        padding: 2mm 0;
+                        padding: 2mm;
+                        line-height: 1.4;
                     }}
-                    .text-center {{ text-align: center; }}
-                    .text-right {{ text-align: right; }}
-                    .text-left {{ text-align: left; }}
-                    .data-table, .details-table {{ width: 100%; border-collapse: collapse; }}
-                    hr {{
-                        border: 0;
-                        border-top: 1px dashed #000;
-                        margin: 10px 0;
-                    }}
+                    .center {{ text-align: center; }}
+                    .bold {{ font-weight: bold; }}
+                    .line {{ border-top: 1px dashed #000; margin: 8px 0; }}
+                    .row {{ display: flex; justify-content: space-between; }}
+                    .spacer {{ height: 12px; }}
                 </style>
             </head>
             <body>
-                <div class="receipt-container">
-                    <div class="text-center">
-                        <b style="font-size: 12px;">LUXETY SPORT S.A.C.</b><br><br>
-                        RUC: 20601348676<br><br>
-                        AV. ALFONSO UGARTE NRO. 096 LIMA-LIMA<br><br>
-                    </div>
-                    <hr>
-                    <div class="text-center">
-                        <b>RESUMEN DIARIO DE CAJA</b>
-                    </div>
-                    <br><br><br>
-                    
-                    <div class="section">Fecha: {date}</div><br>
-                    <div class="section">Responsable: {self.current_user['username']}</div><br>
-                    <div class="section">Cierre: {closing_timestamp}</div><br><br>
-                    <hr>
-                    
-                    <div class="section" style="font-weight:bold; margin-top:5px;">TOTALES POR METODO</div><br>
-                    <table class="data-table">
-                        {summary_rows}
-                        <tr><td colspan="2"><br></td></tr>
-                        {grand_total_row}
-                    </table>
-                    <hr>
-                    
-                    <div class="section" style="font-weight:bold; margin-top:5px;">DETALLE DE VENTAS</div><br>
-                    <table class="details-table">
-                        {detail_rows}
-                    </table>
-                    <hr>
-                </div>
-                <div class="text-center">
-                    <br><br>
-                    FIN DEL REPORTE
-                    <br><br>
-                </div>
+                <div class="center bold">LUXETY SPORT S.A.C.</div>
+                <div class="spacer"></div>
+                <div class="center">RUC: 20601348676</div>
+                <div class="spacer"></div>
+                <div class="center">AV. ALFONSO UGARTE NRO. 096</div>
+                <div class="center">LIMA-LIMA</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                <div class="center bold">RESUMEN DIARIO DE CAJA</div>
+                <div class="line"></div>
+                <div class="spacer"></div>
+                
+                <div>Fecha: {date}</div>
+                <div class="spacer"></div>
+                <div>Responsable: {self.current_user['username']}</div>
+                <div class="spacer"></div>
+                <div>Cierre: {closing_timestamp}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                
+                <div class="bold">TOTALES POR METODO</div>
+                <div class="spacer"></div>
+                {summary_html}
+                <div class="row bold"><span>TOTAL CIERRE:</span><span>{self._format_currency(closing_total)}</span></div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                
+                <div class="bold">DETALLE DE VENTAS</div>
+                <div class="spacer"></div>
+                {detail_html}
+                <div class="line"></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div class="center">FIN DEL REPORTE</div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
             </body>
         </html>
         """

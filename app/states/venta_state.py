@@ -886,46 +886,41 @@ class VentaState(MixinState):
             user_name = self.current_user.get('username', 'Desconocido')
             payment_summary = self.last_payment_summary
 
-        # Generación de filas de ítems optimizada para 80mm con autocorte
-        rows = "".join(
-            f"<tr><td colspan='2' class='text-center' style='font-weight:bold; font-size:12px;'>{item['description']}</td></tr>"
-            f"<tr>"
-            f"<td class='text-left'>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</td>"
-            f"<td class='text-right' style='font-weight:bold;'>{self._format_currency(item['subtotal'])}</td>"
-            f"</tr>"
-            f"<tr><td colspan='2'><div class='dashed-line'></div></td></tr>"
-            for item in receipt_items
-        )
+        # Generación de filas de ítems para impresora térmica 80mm
+        items_html = ""
+        for item in receipt_items:
+            items_html += f"""
+                <div class="bold">{item['description']}</div>
+                <div class="spacer"></div>
+                <div class="row"><span>{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}</span><span class="bold">{self._format_currency(item['subtotal'])}</span></div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+            """
         
-        summary_rows = ""
+        summary_html = ""
         if reservation_context:
             ctx = reservation_context
             header = ctx.get("header", "")
-            header_row = ""
-            if header:
-                header_row = (
-                    f"<tr><td colspan='2' class='text-center' style='font-weight:bold; font-size:12px; padding-bottom:5px;'>"
-                    f"{header}"
-                    f"</td></tr>"
-                )
             products_total = ctx.get("products_total", 0)
-            summary_rows = (
-                header_row
-                + "<tr><td colspan='2' style='height:4px;'></td></tr>"
-                + f"<tr><td class='text-left'>TOTAL RESERVA</td><td class='text-right'>{self._format_currency(ctx['total'])}</td></tr>"
-                + "<tr><td colspan='2' style='height:4px;'></td></tr>"
-                + f"<tr><td class='text-left'>Adelanto previo</td><td class='text-right'>{self._format_currency(ctx['paid_before'])}</td></tr>"
-                + f"<tr><td class='text-left' style='font-weight:bold;'>PAGO ACTUAL</td><td class='text-right' style='font-weight:bold;'>{self._format_currency(ctx['paid_now'])}</td></tr>"
-                + (
-                    f"<tr><td class='text-left'>PRODUCTOS ADICIONALES</td><td class='text-right'>{self._format_currency(products_total)}</td></tr>"
-                    if products_total > 0
-                    else ""
-                )
-                + f"<tr><td class='text-left'>Saldo pendiente</td><td class='text-right'>{self._format_currency(ctx.get('balance_after', 0))}</td></tr>"
-                + "<tr><td colspan='2'><div class='dashed-line'></div></td></tr>"
-            )
             
-        display_rows = summary_rows + rows
+            if header:
+                summary_html += f'<div class="center bold">{header}</div><div class="spacer"></div><div class="line"></div>'
+            
+            summary_html += f"""
+                <div class="row"><span>TOTAL RESERVA:</span><span>{self._format_currency(ctx['total'])}</span></div>
+                <div class="spacer"></div>
+                <div class="row"><span>Adelanto previo:</span><span>{self._format_currency(ctx['paid_before'])}</span></div>
+                <div class="spacer"></div>
+                <div class="row bold"><span>PAGO ACTUAL:</span><span>{self._format_currency(ctx['paid_now'])}</span></div>
+                <div class="spacer"></div>
+            """
+            if products_total > 0:
+                summary_html += f'<div class="row"><span>PRODUCTOS:</span><span>{self._format_currency(products_total)}</span></div><div class="spacer"></div>'
+            summary_html += f"""
+                <div class="row"><span>Saldo pendiente:</span><span>{self._format_currency(ctx.get('balance_after', 0))}</span></div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+            """
         
         html_content = f"""
         <html>
@@ -933,76 +928,56 @@ class VentaState(MixinState):
                 <meta charset='utf-8' />
                 <title>Comprobante de Pago</title>
                 <style>
-                    @page {{
-                        size: 80mm auto;
-                        margin: 1mm;
-                    }}
+                    @page {{ size: 80mm auto; margin: 0; }}
                     body {{
-                        font-family: monospace;
-                        font-size: 10px;
-                        width: 100%;
-                        margin: 0;
-                        padding: 0;
-                        background-color: #fff;
-                        color: #000;
-                    }}
-                    .receipt-container {{
-                        width: 100%;
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        width: 72mm;
                         margin: 0 auto;
-                        padding: 2mm 0;
+                        padding: 2mm;
+                        line-height: 1.4;
                     }}
-                    .text-center {{ text-align: center; }}
-                    .text-right {{ text-align: right; }}
-                    .text-left {{ text-align: left; }}
-                    .data-table td, .details-table td {{
-                        padding: 8px 0;
-                    }}
-                    hr {{
-                        border: 0;
-                        border-top: 1px dashed #000;
-                        margin: 10px 0;
-                    }}
+                    .center {{ text-align: center; }}
+                    .bold {{ font-weight: bold; }}
+                    .line {{ border-top: 1px dashed #000; margin: 8px 0; }}
+                    .row {{ display: flex; justify-content: space-between; }}
+                    .spacer {{ height: 12px; }}
                 </style>
             </head>
             <body>
-                <div class="receipt-container">
-                    <div class="text-center">
-                        <b style="font-size: 12px;">LUXETY SPORT S.A.C.</b><br><br>
-                        RUC: 20601348676<br><br>
-                        AV. ALFONSO UGARTE NRO. 096 LIMA-LIMA<br><br>
-                    </div>
-                    <hr>
-                    <div class="text-center">
-                        <b>COMPROBANTE DE PAGO</b>
-                    </div>
-                    <br><br><br>
-                    
-                    <div class="section">Fecha: {timestamp}</div><br>
-                    <div class="section">Atendido por: {user_name}</div><br><br>
-                    <hr>
-                    
-                    <table class="data-table">
-                        {display_rows}
-                    </table>
-                    <hr>
-                    
-                    <table class="details-table" style="width: 100%; margin-top: 5px;">
-                        <tr>
-                            <td class="text-left" style="font-weight: bold;">TOTAL A PAGAR:</td>
-                            <td class="text-right" style="font-weight: bold;">{self._format_currency(total)}</td>
-                        </tr>
-                        <tr><td colspan='2'><br><br></td></tr>
-                    </table>
-                    
-                    <div class="section">Metodo de Pago: {payment_summary}</div>
-                    <hr>
-                    
-                    <div class="text-center">
-                        <br><br>
-                        GRACIAS POR SU PREFERENCIA
-                        <br><br>
-                    </div>
-                </div>
+                <div class="center bold">LUXETY SPORT S.A.C.</div>
+                <div class="spacer"></div>
+                <div class="center">RUC: 20601348676</div>
+                <div class="spacer"></div>
+                <div class="center">AV. ALFONSO UGARTE NRO. 096</div>
+                <div class="center">LIMA-LIMA</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                <div class="center bold">COMPROBANTE DE PAGO</div>
+                <div class="line"></div>
+                <div class="spacer"></div>
+                
+                <div>Fecha: {timestamp}</div>
+                <div class="spacer"></div>
+                <div>Atendido por: {user_name}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                
+                {summary_html}
+                {items_html}
+                
+                <div class="row bold"><span>TOTAL A PAGAR:</span><span>{self._format_currency(total)}</span></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div>Metodo de Pago: {payment_summary}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div class="center">GRACIAS POR SU PREFERENCIA</div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
             </body>
         </html>
         """

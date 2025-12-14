@@ -846,93 +846,82 @@ class ServicesState(MixinState):
     def _print_reservation_proof(self, reservation: FieldReservation):
         import json
         
+        total = float(reservation['total_amount'])
+        paid = float(reservation['paid_amount'])
+        saldo = max(total - paid, 0)
+        
         html_content = f"""
         <html>
             <head>
                 <meta charset='utf-8' />
                 <title>Constancia de Reserva</title>
                 <style>
-                    @page {{
-                        size: 80mm auto;
-                        margin: 1mm;
-                    }}
+                    @page {{ size: 80mm auto; margin: 0; }}
                     body {{
-                        font-family: monospace;
-                        font-size: 10px;
-                        width: 100%;
-                        margin: 0;
-                        padding: 0;
-                        background-color: #fff;
-                        color: #000;
-                    }}
-                    .receipt-container {{
-                        width: 100%;
-                        margin: 0 auto;
-                        padding: 2mm 0;
-                    }}
-                    .text-center {{ text-align: center; }}
-                    .text-right {{ text-align: right; }}
-                    .text-left {{ text-align: left; }}
-                    .data-table td, .details-table td {{
-                        padding: 8px 0;
-                    }}
-                    hr {{
-                        border: 0;
-                        border-top: 1px dashed #000;
-                        margin: 10px 0;
-                    }}
-                    .status {{
-                        text-align: center;
-                        font-weight: bold;
-                        margin: 10px 0;
+                        font-family: 'Courier New', monospace;
                         font-size: 12px;
+                        width: 72mm;
+                        margin: 0 auto;
+                        padding: 2mm;
+                        line-height: 1.4;
                     }}
+                    .center {{ text-align: center; }}
+                    .bold {{ font-weight: bold; }}
+                    .line {{ border-top: 1px dashed #000; margin: 8px 0; }}
+                    .row {{ display: flex; justify-content: space-between; }}
+                    .spacer {{ height: 12px; }}
                 </style>
             </head>
             <body>
-                <div class="receipt-container">
-                    <div class="text-center">
-                        <b style="font-size: 12px;">LUXETY SPORT S.A.C.</b><br><br>
-                        RUC: 20601348676<br><br>
-                        AV. ALFONSO UGARTE NRO. 096 LIMA-LIMA<br><br>
-                    </div>
-                    <hr>
-                    <div class="text-center">
-                        <b>CONSTANCIA DE RESERVA</b>
-                    </div>
-                    <br><br><br>
-                    
-                    <div class="section">Fecha Emision: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div><br>
-                    <div class="section">NRO. CONSTANCIA: {reservation['id']}</div><br><br>
-                    <hr>
-                    
-                    <table class="data-table">
-                        <tr><td class="text-left">Cliente:</td><td class="text-right">{reservation['client_name']}</td></tr>
-                        <tr><td class="text-left">DNI:</td><td class="text-right">{reservation.get('dni') or '-'}</td></tr>
-                        <tr><td colspan='2'><br><br></td></tr>
-                        <tr><td class="text-left">Campo:</td><td class="text-right">{reservation['field_name']}</td></tr>
-                        <tr><td class="text-left">Inicio:</td><td class="text-right">{reservation['start_datetime']}</td></tr>
-                        <tr><td class="text-left">Fin:</td><td class="text-right">{reservation['end_datetime']}</td></tr>
-                        <tr><td colspan='2'><br><br></td></tr>
-                    </table>
-                    <hr>
-                    
-                    <table class="details-table">
-                        <tr><td class="text-left">TOTAL</td><td class="text-right">S/ {float(reservation['total_amount']):.2f}</td></tr>
-                        <tr><td class="text-left">A CUENTA</td><td class="text-right">S/ {float(reservation['paid_amount']):.2f}</td></tr>
-                        <tr><td class="text-left" style='font-weight:bold;'>SALDO</td><td class="text-right" style='font-weight:bold;'>S/ {max(float(reservation['total_amount']) - float(reservation['paid_amount']), 0):.2f}</td></tr>
-                        <tr><td colspan='2'><br><br></td></tr>
-                    </table>
-                    
-                    <div class="status">ESTADO: {reservation['status'].upper()}</div>
-                    <hr>
-                    
-                    <div class="text-center">
-                        <br><br>
-                        GRACIAS POR SU PREFERENCIA
-                        <br><br>
-                    </div>
-                </div>
+                <div class="center bold">LUXETY SPORT S.A.C.</div>
+                <div class="spacer"></div>
+                <div class="center">RUC: 20601348676</div>
+                <div class="spacer"></div>
+                <div class="center">AV. ALFONSO UGARTE NRO. 096</div>
+                <div class="center">LIMA-LIMA</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                <div class="center bold">CONSTANCIA DE RESERVA</div>
+                <div class="line"></div>
+                <div class="spacer"></div>
+                
+                <div>Fecha Emision: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</div>
+                <div class="spacer"></div>
+                <div>NRO. CONSTANCIA: {reservation['id']}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                
+                <div>Cliente: {reservation['client_name']}</div>
+                <div class="spacer"></div>
+                <div>DNI: {reservation.get('dni') or '-'}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                
+                <div>Campo: {reservation['field_name']}</div>
+                <div class="spacer"></div>
+                <div>Inicio: {reservation['start_datetime']}</div>
+                <div class="spacer"></div>
+                <div>Fin: {reservation['end_datetime']}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                
+                <div class="row"><span>TOTAL:</span><span>S/ {total:.2f}</span></div>
+                <div class="spacer"></div>
+                <div class="row"><span>A CUENTA:</span><span>S/ {paid:.2f}</span></div>
+                <div class="spacer"></div>
+                <div class="row bold"><span>SALDO:</span><span>S/ {saldo:.2f}</span></div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                
+                <div class="center bold">ESTADO: {reservation['status'].upper()}</div>
+                <div class="spacer"></div>
+                <div class="line"></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div class="center">GRACIAS POR SU PREFERENCIA</div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
+                <div class="spacer"></div>
             </body>
         </html>
         """
