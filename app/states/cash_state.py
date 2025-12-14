@@ -1024,7 +1024,7 @@ class CashState(MixinState):
             "",
         ])
         
-        receipt_text = "\\n".join(receipt_lines)
+        receipt_text = chr(10).join(receipt_lines)
         
         html_content = f"""<html>
 <head>
@@ -1169,7 +1169,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "",
         ])
         
-        receipt_text = "\\n".join(receipt_lines)
+        receipt_text = chr(10).join(receipt_lines)
         
         html_content = f"""<html>
 <head>

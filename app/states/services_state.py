@@ -915,7 +915,7 @@ class ServicesState(MixinState):
             "",
         ]
         
-        receipt_text = "\\n".join(receipt_lines)
+        receipt_text = chr(10).join(receipt_lines)
         
         html_content = f"""<html>
 <head>
