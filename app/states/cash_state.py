@@ -921,8 +921,7 @@ class CashState(MixinState):
                         )
                         session.add(movement)
             session.commit()
-        sale["is_deleted"] = True
-        sale["delete_reason"] = reason
+        
         self.close_sale_delete_modal()
         return rx.toast("Venta eliminada correctamente.", duration=3000)
 
