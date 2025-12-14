@@ -907,12 +907,10 @@ class ServicesState(MixinState):
             "",
             line(),
             "",
-            "",
             center("GRACIAS POR SU PREFERENCIA"),
-            "",
-            "",
-            "",
-            "",
+            " ",
+            " ",
+            " ",
         ]
         
         receipt_text = chr(10).join(receipt_lines)

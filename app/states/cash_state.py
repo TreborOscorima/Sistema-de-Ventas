@@ -1011,17 +1011,14 @@ class CashState(MixinState):
             "",
             row("TOTAL A PAGAR:", self._format_currency(sale_data.get('total', 0))),
             "",
-            "",
             f"Metodo de Pago: {payment_summary}",
             "",
             line(),
             "",
-            "",
             center("GRACIAS POR SU PREFERENCIA"),
-            "",
-            "",
-            "",
-            "",
+            " ",
+            " ",
+            " ",
         ])
         
         receipt_text = chr(10).join(receipt_lines)
@@ -1161,12 +1158,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         receipt_lines.extend([
             line(),
             "",
-            "",
             center("FIN DEL REPORTE"),
-            "",
-            "",
-            "",
-            "",
+            " ",
+            " ",
+            " ",
         ])
         
         receipt_text = chr(10).join(receipt_lines)

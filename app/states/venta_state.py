@@ -959,17 +959,14 @@ class VentaState(MixinState):
             "",
             row("TOTAL A PAGAR:", self._format_currency(total)),
             "",
-            "",
             f"Metodo de Pago: {payment_summary}",
             "",
             line(),
             "",
-            "",
             center("GRACIAS POR SU PREFERENCIA"),
-            "",
-            "",
-            "",
-            "",
+            " ",
+            " ",
+            " ",
         ])
         
         receipt_text = chr(10).join(receipt_lines)
