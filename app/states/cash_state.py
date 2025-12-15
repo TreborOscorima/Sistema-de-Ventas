@@ -836,7 +836,14 @@ class CashState(MixinState):
                 "opening_amount": log.amount if log.action == "apertura" else 0.0,
                 "closing_total": log.amount if log.action == "cierre" else 0.0,
                 "totals_by_method": [],
-                "notes": log.notes,
+                "notes": log.notes or "",
+                "amount": log.amount or 0.0,
+                "quantity": 0.0,
+                "unit": "",
+                "cost": 0.0,
+                "formatted_amount": self._format_currency(log.amount or 0),
+                "formatted_cost": "",
+                "formatted_quantity": "",
             }
             self.cashbox_log_modal_open = True
 
