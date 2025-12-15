@@ -6,6 +6,7 @@ from app.components.ui import (
     section_header,
     card_container,
     BUTTON_STYLES,
+    pagination_controls,
 )
 
 
@@ -987,7 +988,7 @@ def reservations_table() -> rx.Component:
                     class_name="bg-gray-100",
                 )
             ),
-            rx.el.tbody(rx.foreach(State.service_reservations_for_sport, reservation_row)),
+            rx.el.tbody(rx.foreach(State.paginated_reservations, reservation_row)),
             class_name="min-w-full",
         ),
         rx.cond(
@@ -996,7 +997,12 @@ def reservations_table() -> rx.Component:
                 "Aun no hay reservas en este deporte.",
                 class_name="text-center text-gray-500 py-4",
             ),
-            rx.fragment(),
+            pagination_controls(
+                current_page=State.reservation_current_page,
+                total_pages=State.reservation_total_pages,
+                on_prev=State.prev_reservation_page,
+                on_next=State.next_reservation_page,
+            ),
         ),
         class_name="bg-white border border-gray-200 rounded-lg p-4 sm:p-5 shadow-sm overflow-x-auto flex flex-col gap-3",
     )

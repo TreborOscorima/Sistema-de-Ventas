@@ -105,6 +105,10 @@ class ServicesState(MixinState):
     reservation_payment_routed: bool = False
     last_reservation_receipt: ReservationReceipt | None = None
     
+    # Paginación de reservas
+    reservation_current_page: int = 1
+    reservation_items_per_page: int = 10
+    
     def set_reservation_staged_search(self, value: str):
         self.reservation_staged_search = value
 
@@ -126,6 +130,7 @@ class ServicesState(MixinState):
         self.reservation_filter_status = self.reservation_staged_status
         self.reservation_filter_start_date = self.reservation_staged_start_date
         self.reservation_filter_end_date = self.reservation_staged_end_date
+        self.reservation_current_page = 1  # Reset pagination
 
     def reset_reservation_filters(self):
         self.reservation_staged_search = ""
@@ -295,7 +300,7 @@ class ServicesState(MixinState):
         # Buscar en todos los precios configurados para obtener los detalles
         price = next((p for p in self.field_prices if p["id"] == price_id), None)
         if price:
-            self.reservation_form["total_amount"] = str(price["price"])
+            self._apply_price_total(price)
             self.reservation_form["field_name"] = price["name"]
             self.reservation_form["sport_label"] = self._sport_label(price["sport"])
             # Actualizar el deporte activo si el precio seleccionado pertenece a otro deporte
@@ -353,6 +358,34 @@ class ServicesState(MixinState):
             ]
             
         return reservations
+
+    @rx.var
+    def reservation_total_pages(self) -> int:
+        total = len(self.service_reservations_for_sport)
+        if total == 0:
+            return 1
+        return (total + self.reservation_items_per_page - 1) // self.reservation_items_per_page
+
+    @rx.var
+    def paginated_reservations(self) -> list[FieldReservation]:
+        start_index = (self.reservation_current_page - 1) * self.reservation_items_per_page
+        end_index = start_index + self.reservation_items_per_page
+        return self.service_reservations_for_sport[start_index:end_index]
+
+    @rx.event
+    def set_reservation_page(self, page: int):
+        if 1 <= page <= self.reservation_total_pages:
+            self.reservation_current_page = page
+
+    @rx.event
+    def prev_reservation_page(self):
+        if self.reservation_current_page > 1:
+            self.reservation_current_page -= 1
+
+    @rx.event
+    def next_reservation_page(self):
+        if self.reservation_current_page < self.reservation_total_pages:
+            self.reservation_current_page += 1
 
     @rx.var
     def field_prices_for_current_sport(self) -> list[FieldPrice]:
@@ -469,6 +502,7 @@ class ServicesState(MixinState):
         if normalized not in ["futbol", "voley"]:
             return
         self.field_rental_sport = normalized
+        self.reservation_current_page = 1  # Reset pagination
         self.reservation_payment_id = ""
         self.reservation_payment_amount = ""
         self.reservation_cancel_selection = ""
