@@ -454,7 +454,8 @@ def close_cashbox_modal() -> rx.Component:
                             rx.el.tr(
                                 rx.el.th("Fecha y Hora", class_name="py-2 px-3 text-left"),
                                 rx.el.th("Usuario", class_name="py-2 px-3 text-left"),
-                                rx.el.th("Método", class_name="py-2 px-3 text-left"),
+                                rx.el.th("Método de Pago", class_name="py-2 px-3 text-left"),
+                                rx.el.th("Detalle", class_name="py-2 px-3 text-left"),
                                 rx.el.th("Total", class_name="py-2 px-3 text-right"),
                                 class_name="bg-gray-100 text-sm",
                             )
@@ -468,14 +469,18 @@ def close_cashbox_modal() -> rx.Component:
                                     rx.el.td(
                                         rx.el.div(
                                             rx.el.p(
-                                                rx.cond(
-                                                    sale["payment_label"] == "",
-                                                    sale["payment_method"],
-                                                    sale["payment_label"],
-                                                ),
+                                                sale["payment_label"],
                                                 class_name="text-sm font-medium text-gray-800",
                                             ),
                                             class_name="flex flex-col gap-1",
+                                        ),
+                                        class_name="py-2 px-3 text-sm",
+                                    ),
+                                    rx.el.td(
+                                        rx.el.p(
+                                            sale["payment_details"],
+                                            class_name="text-xs text-gray-600 max-w-xs truncate",
+                                            title=sale["payment_details"],
                                         ),
                                         class_name="py-2 px-3 text-sm",
                                     ),

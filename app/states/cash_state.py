@@ -1147,15 +1147,22 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         receipt_lines.append("DETALLE DE VENTAS")
         receipt_lines.append("")
         
-        # Agregar detalle de ventas
+        # Agregar detalle de ventas con método de pago completo
         for sale in day_sales:
             method_label = sale.get("payment_label", sale.get("payment_method", ""))
-            receipt_lines.append(f"{sale['timestamp']} - {sale['user']}")
-            receipt_lines.append(row(method_label, self._format_currency(sale['total'])))
-            receipt_lines.append("")
+            payment_detail = sale.get("payment_details", "")
+            receipt_lines.append(f"{sale['timestamp']}")
+            receipt_lines.append(f"Usuario: {sale['user']}")
+            receipt_lines.append(f"Metodo: {method_label}")
+            if payment_detail and payment_detail != method_label:
+                # Truncar si es muy largo
+                if len(payment_detail) > 40:
+                    payment_detail = payment_detail[:37] + "..."
+                receipt_lines.append(f"Detalle: {payment_detail}")
+            receipt_lines.append(row("Total:", self._format_currency(sale['total'])))
+            receipt_lines.append(line())
         
         receipt_lines.extend([
-            line(),
             "",
             center("FIN DEL REPORTE"),
             " ",
@@ -1208,15 +1215,39 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 
                 result = []
                 for sale, user in sales:
+                    # Crear payment_label descriptivo basado en payment_details
+                    payment_label = sale.payment_method or ""
+                    payment_details_str = sale.payment_details or ""
+                    
+                    # Determinar el label descriptivo
+                    if "Mixto" in payment_details_str or "Pagos Mixtos" in payment_details_str:
+                        payment_label = "Pagos Mixtos"
+                    elif "Yape" in payment_details_str:
+                        payment_label = "Billetera Digital / QR - Yape"
+                    elif "Plin" in payment_details_str:
+                        payment_label = "Billetera Digital / QR - Plin"
+                    elif "Billetera" in payment_details_str or "QR" in payment_details_str:
+                        payment_label = "Billetera Digital / QR"
+                    elif "Tarjeta" in payment_details_str:
+                        if "Debito" in payment_details_str or "Débito" in payment_details_str:
+                            payment_label = "Tarjeta de Débito"
+                        elif "Credito" in payment_details_str or "Crédito" in payment_details_str:
+                            payment_label = "Tarjeta de Crédito"
+                        else:
+                            payment_label = "Tarjeta"
+                    elif "Efectivo" in payment_details_str:
+                        payment_label = "Efectivo"
+                    
                     sale_dict = {
                         "sale_id": str(sale.id),
                         "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                         "user": user.username if user else "Desconocido",
                         "payment_method": sale.payment_method,
-                        "payment_details": sale.payment_details,
+                        "payment_label": payment_label,
+                        "payment_details": payment_details_str,
                         "total": sale.total_amount,
                         "is_deleted": sale.is_deleted,
-                        "payment_breakdown": [{"label": sale.payment_method, "amount": sale.total_amount}]
+                        "payment_breakdown": [{"label": payment_label, "amount": sale.total_amount}]
                     }
                     result.append(sale_dict)
                 return result
