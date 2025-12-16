@@ -174,7 +174,13 @@ class ConfigState(MixinState):
             return rx.toast("Complete codigo, nombre y simbolo.", duration=3000)
         if any(c["code"] == code for c in self.available_currencies):
             return rx.toast("La moneda ya existe.", duration=3000)
-        self.available_currencies.append({"code": code, "name": name, "symbol": symbol})
+        
+        with rx.session() as session:
+            new_currency = Currency(code=code, name=name, symbol=symbol)
+            session.add(new_currency)
+            session.commit()
+        
+        self.load_config_data()
         self.selected_currency_code = code
         self.new_currency_code = ""
         self.new_currency_name = ""
@@ -190,9 +196,14 @@ class ConfigState(MixinState):
             return rx.toast("Debe quedar al menos una moneda.", duration=3000)
         if not any(c["code"] == code for c in self.available_currencies):
             return
-        self.available_currencies = [
-            currency for currency in self.available_currencies if currency["code"] != code
-        ]
+        
+        with rx.session() as session:
+            currency_db = session.exec(select(Currency).where(Currency.code == code)).first()
+            if currency_db:
+                session.delete(currency_db)
+                session.commit()
+        
+        self.load_config_data()
         if self.selected_currency_code == code and self.available_currencies:
             self.selected_currency_code = self.available_currencies[0]["code"]
         if hasattr(self, "_refresh_payment_feedback"):
@@ -224,11 +235,18 @@ class ConfigState(MixinState):
             return rx.toast("Ingrese el nombre de la unidad.", duration=3000)
         if name in self.decimal_units:
             return rx.toast("Esa unidad ya esta registrada.", duration=3000)
-        if self.new_unit_allows_decimal:
-            self.decimal_units.add(name)
-        # Note: If it doesn't allow decimal, we just don't add it to the set, 
-        # but maybe we should track all units? The original code only tracked decimal_units set.
-        # Assuming 'categories' or similar tracks units elsewhere if needed, but here we only manage the decimal flag set.
+        
+        with rx.session() as session:
+            existing_unit = session.exec(select(Unit).where(Unit.name == name)).first()
+            if existing_unit:
+                existing_unit.allows_decimal = self.new_unit_allows_decimal
+                session.add(existing_unit)
+            else:
+                new_unit = Unit(name=name, allows_decimal=self.new_unit_allows_decimal)
+                session.add(new_unit)
+            session.commit()
+        
+        self.load_config_data()
         self.new_unit_name = ""
         self.new_unit_allows_decimal = False
         return rx.toast(f"Unidad {name} configurada.", duration=2500)
@@ -236,9 +254,14 @@ class ConfigState(MixinState):
     @rx.event
     def remove_decimal_unit(self, unit: str):
         unit = (unit or "").lower()
-        if unit in self.decimal_units:
-            self.decimal_units.remove(unit)
-            return rx.toast(f"Unidad {unit} ya no permite decimales.", duration=2500)
+        with rx.session() as session:
+            unit_db = session.exec(select(Unit).where(Unit.name == unit)).first()
+            if unit_db and unit_db.allows_decimal:
+                unit_db.allows_decimal = False
+                session.add(unit_db)
+                session.commit()
+                self.load_config_data()
+                return rx.toast(f"Unidad {unit} ya no permite decimales.", duration=2500)
 
     # Payment Methods
     def _payment_method_by_identifier(self, identifier: str) -> PaymentMethodConfig | None:
@@ -302,17 +325,30 @@ class ConfigState(MixinState):
             kind = "other"
         if any(m["name"].lower() == name.lower() for m in self.payment_methods):
             return rx.toast("Ya existe un metodo con ese nombre.", duration=3000)
+        
+        method_id = str(uuid.uuid4())
+        with rx.session() as session:
+            new_method = PaymentMethod(
+                method_id=method_id,
+                name=name,
+                description=description or "Sin descripcion",
+                kind=kind,
+                enabled=True
+            )
+            session.add(new_method)
+            session.commit()
+        
+        self.load_config_data()
+        self.new_payment_method_name = ""
+        self.new_payment_method_description = ""
+        self.new_payment_method_kind = "other"
         method: PaymentMethodConfig = {
-            "id": str(uuid.uuid4()),
+            "id": method_id,
             "name": name,
             "description": description or "Sin descripcion",
             "kind": kind,
             "enabled": True,
         }
-        self.payment_methods.append(method)
-        self.new_payment_method_name = ""
-        self.new_payment_method_description = ""
-        self.new_payment_method_kind = "other"
         if hasattr(self, "_set_payment_method"):
             self._set_payment_method(method)
         return rx.toast(f"Metodo {name} agregado.", duration=2500)
@@ -324,12 +360,22 @@ class ConfigState(MixinState):
         if isinstance(enabled, str):
             enabled = enabled.lower() in ["true", "1", "on", "yes"]
         active_methods = self._enabled_payment_methods_list()
-        for method in self.payment_methods:
-            if method["id"] == method_id:
-                if not enabled and method.get("enabled", True) and len(active_methods) <= 1:
-                    return rx.toast("Debe haber al menos un metodo activo.", duration=3000)
-                method["enabled"] = enabled
-                break
+        
+        method = self._payment_method_by_identifier(method_id)
+        if not method:
+            return
+        
+        if not enabled and method.get("enabled", True) and len(active_methods) <= 1:
+            return rx.toast("Debe haber al menos un metodo activo.", duration=3000)
+        
+        with rx.session() as session:
+            method_db = session.exec(select(PaymentMethod).where(PaymentMethod.method_id == method_id)).first()
+            if method_db:
+                method_db.enabled = enabled
+                session.add(method_db)
+                session.commit()
+        
+        self.load_config_data()
         self._ensure_payment_method_selected()
 
     @rx.event
@@ -342,6 +388,13 @@ class ConfigState(MixinState):
         ]
         if not remaining_enabled:
             return rx.toast("No puedes eliminar el unico metodo activo.", duration=3000)
-        self.payment_methods = [m for m in self.payment_methods if m["id"] != method_id]
+        
+        with rx.session() as session:
+            method_db = session.exec(select(PaymentMethod).where(PaymentMethod.method_id == method_id)).first()
+            if method_db:
+                session.delete(method_db)
+                session.commit()
+        
+        self.load_config_data()
         self._ensure_payment_method_selected()
         return rx.toast(f"Metodo {method['name']} eliminado.", duration=2500)

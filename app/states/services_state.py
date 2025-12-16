@@ -7,7 +7,7 @@ import math
 import calendar
 import io
 from sqlmodel import select
-from app.models import SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel
+from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice
 from .mixin_state import MixinState
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
@@ -1031,6 +1031,37 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         self._update_reservation_status(reservation)
         entry_type = "pago" if reservation["paid_amount"] >= reservation["total_amount"] else "adelanto"
         notes = "Pago completado" if entry_type == "pago" else "Pago parcial registrado"
+        
+        # Registrar el pago como venta para cierre de caja
+        with rx.session() as session:
+            user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
+            user_id = user.id if user else None
+            
+            payment_method = self.payment_method.get("name", "Efectivo") if self.payment_method else "Efectivo"
+            reservation_desc = f"Reserva {reservation.get('field_name', 'Campo')} - {reservation.get('customer_name', 'Cliente')}"
+            
+            new_sale = Sale(
+                timestamp=datetime.datetime.now(),
+                total_amount=applied_amount,
+                payment_method=payment_method,
+                payment_details=f"{entry_type.capitalize()} reserva: {reservation_desc}",
+                user_id=user_id,
+            )
+            session.add(new_sale)
+            session.flush()  # Obtener ID
+            
+            sale_item = SaleItem(
+                sale_id=new_sale.id,
+                product_id=None,  # Sin producto asociado
+                quantity=1,
+                unit_price=applied_amount,
+                subtotal=applied_amount,
+                product_name_snapshot=reservation_desc,
+                product_barcode_snapshot="RESERVA",
+            )
+            session.add(sale_item)
+            session.commit()
+        
         self._log_service_action(
             reservation,
             entry_type,

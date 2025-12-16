@@ -5,7 +5,7 @@ import uuid
 import logging
 import io
 from sqlmodel import select
-from app.models import Product, StockMovement, User as UserModel, Category
+from app.models import Product, StockMovement, User as UserModel, Category, SaleItem
 from .types import InventoryAdjustment
 from .mixin_state import MixinState
 from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
@@ -44,6 +44,7 @@ class InventoryState(MixinState):
     inventory_adjustment_items: List[InventoryAdjustment] = []
     inventory_adjustment_suggestions: List[str] = []
     categories: List[str] = ["General"]
+    _inventory_update_trigger: int = 0
 
     def load_categories(self):
         with rx.session() as session:
@@ -89,6 +90,8 @@ class InventoryState(MixinState):
 
     @rx.var
     def inventory_list(self) -> list[Product]:
+        # Usar trigger para forzar recálculo
+        _ = self._inventory_update_trigger
         if not self.current_user["privileges"]["view_inventario"]:
             return []
         
@@ -211,6 +214,7 @@ class InventoryState(MixinState):
                 msg = "Producto creado correctamente."
             
             session.commit()
+            self._inventory_update_trigger += 1
             self.is_editing_product = False
             return rx.toast(msg, duration=3000)
 
@@ -222,8 +226,16 @@ class InventoryState(MixinState):
         with rx.session() as session:
             product = session.get(Product, product_id)
             if product:
+                # Verificar si tiene historial de ventas
+                has_sales = session.exec(select(SaleItem).where(SaleItem.product_id == product_id)).first()
+                if has_sales:
+                    return rx.toast(
+                        "No se puede eliminar un producto con historial de ventas. Edítelo para desactivarlo.",
+                        duration=4000
+                    )
                 session.delete(product)
                 session.commit()
+                self._inventory_update_trigger += 1
                 return rx.toast("Producto eliminado.", duration=3000)
             else:
                 return rx.toast("Producto no encontrado.", duration=3000)
@@ -434,6 +446,7 @@ class InventoryState(MixinState):
                 
                 if recorded:
                     session.commit()
+                    self._inventory_update_trigger += 1
                 else:
                     return rx.toast(
                         "No se pudo registrar el re ajuste. Verifique los productos.",

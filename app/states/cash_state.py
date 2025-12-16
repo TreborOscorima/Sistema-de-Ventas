@@ -547,6 +547,7 @@ class CashState(MixinState):
 
     @rx.var
     def filtered_cashbox_sales(self) -> list[CashboxSale]:
+        _ = self._cashbox_update_trigger  # Forzar recálculo cuando cambia
         if not self.current_user["privileges"]["view_cashbox"]:
             return []
         
@@ -929,6 +930,7 @@ class CashState(MixinState):
                         session.add(movement)
             session.commit()
         
+        self._cashbox_update_trigger += 1
         self.close_sale_delete_modal()
         return rx.toast("Venta eliminada correctamente.", duration=3000)
 

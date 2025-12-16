@@ -232,6 +232,10 @@ class IngresoState(MixinState):
                     session.add(movement)
             
             session.commit()
+        
+        # Forzar actualización del inventario en la UI
+        if hasattr(self, "_inventory_update_trigger"):
+            self._inventory_update_trigger += 1
             
         self.new_entry_items = []
         self._reset_entry_form()
