@@ -19,7 +19,20 @@ CASH_SUBSECTIONS = [
     {"key": "movimientos", "label": "Movimientos de Caja Chica", "icon": "arrow-left-right"},
 ]
 
+# Mapeo de páginas a rutas URL
+PAGE_TO_ROUTE = {
+    "Ingreso": "/ingreso",
+    "Venta": "/venta",
+    "Gestion de Caja": "/caja",
+    "Inventario": "/inventario",
+    "Historial": "/historial",
+    "Servicios": "/servicios",
+    "Configuracion": "/configuracion",
+}
+
+
 def nav_item(text: str, icon: str, page: str) -> rx.Component:
+    route = PAGE_TO_ROUTE.get(page, "/")
     return rx.el.a(
         rx.el.div(
             rx.icon(icon, class_name="h-5 w-5"),
@@ -32,8 +45,7 @@ def nav_item(text: str, icon: str, page: str) -> rx.Component:
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 font-medium",
             ),
         ),
-        on_click=lambda: State.set_page(page),
-        href="#",
+        href=route,
         class_name="w-full",
     )
 

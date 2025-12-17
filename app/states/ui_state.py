@@ -2,10 +2,43 @@ import reflex as rx
 from typing import List, Dict, Any
 from .mixin_state import MixinState
 
+# Mapeo de rutas a páginas
+ROUTE_TO_PAGE = {
+    "/": "Ingreso",
+    "/ingreso": "Ingreso",
+    "/venta": "Venta",
+    "/caja": "Gestion de Caja",
+    "/inventario": "Inventario",
+    "/historial": "Historial",
+    "/servicios": "Servicios",
+    "/configuracion": "Configuracion",
+}
+
+PAGE_TO_ROUTE = {
+    "Ingreso": "/ingreso",
+    "Venta": "/venta",
+    "Gestion de Caja": "/caja",
+    "Inventario": "/inventario",
+    "Historial": "/historial",
+    "Servicios": "/servicios",
+    "Configuracion": "/configuracion",
+}
+
+
 class UIState(MixinState):
     sidebar_open: bool = True
     current_page: str = "Ingreso"
     config_active_tab: str = "usuarios"
+
+    @rx.event
+    def sync_page_from_route(self):
+        """Sincroniza current_page basándose en la ruta actual."""
+        route = self.router.page.path
+        page = ROUTE_TO_PAGE.get(route, "Ingreso")
+        if self._can_access_page(page):
+            self.current_page = page
+        elif self.allowed_pages:
+            self.current_page = self.allowed_pages[0]
 
     @rx.var
     def navigation_items(self) -> List[Dict[str, str]]:

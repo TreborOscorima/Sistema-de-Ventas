@@ -103,7 +103,31 @@ def _toast_provider() -> rx.Component:
     )
 
 
-def index() -> rx.Component:
+# Mapeo de rutas a páginas
+ROUTE_TO_PAGE = {
+    "/": "Ingreso",
+    "/ingreso": "Ingreso",
+    "/venta": "Venta",
+    "/caja": "Gestion de Caja",
+    "/inventario": "Inventario",
+    "/historial": "Historial",
+    "/servicios": "Servicios",
+    "/configuracion": "Configuracion",
+}
+
+PAGE_TO_ROUTE = {
+    "Ingreso": "/ingreso",
+    "Venta": "/venta",
+    "Gestion de Caja": "/caja",
+    "Inventario": "/inventario",
+    "Historial": "/historial",
+    "Servicios": "/servicios",
+    "Configuracion": "/configuracion",
+}
+
+
+def authenticated_layout(page_content: rx.Component) -> rx.Component:
+    """Layout wrapper para páginas autenticadas."""
     return rx.cond(
         State.is_authenticated,
         rx.el.main(
@@ -126,17 +150,7 @@ def index() -> rx.Component:
                                 ),
                                 class_name="flex flex-col items-center justify-center h-full p-6",
                             ),
-                            rx.match(
-                                State.active_page,
-                                ("Ingreso", ingreso_page()),
-                            ("Venta", venta_page()),
-                            ("Gestion de Caja", cashbox_page()),
-                            ("Inventario", inventario_page()),
-                            ("Historial", historial_page()),
-                            ("Servicios", servicios_page()),
-                            ("Configuracion", configuracion_page()),
-                                rx.el.div("Pagina no encontrada"),
-                            ),
+                            page_content,
                         ),
                         class_name="w-full max-w-7xl mx-auto flex flex-col gap-4 p-4 sm:p-6",
                     ),
@@ -148,6 +162,39 @@ def index() -> rx.Component:
         ),
         login_page(),
     )
+
+
+def index() -> rx.Component:
+    """Página principal - redirige a Ingreso."""
+    return authenticated_layout(ingreso_page())
+
+
+def page_ingreso() -> rx.Component:
+    return authenticated_layout(ingreso_page())
+
+
+def page_venta() -> rx.Component:
+    return authenticated_layout(venta_page())
+
+
+def page_caja() -> rx.Component:
+    return authenticated_layout(cashbox_page())
+
+
+def page_inventario() -> rx.Component:
+    return authenticated_layout(inventario_page())
+
+
+def page_historial() -> rx.Component:
+    return authenticated_layout(historial_page())
+
+
+def page_servicios() -> rx.Component:
+    return authenticated_layout(servicios_page())
+
+
+def page_configuracion() -> rx.Component:
+    return authenticated_layout(configuracion_page())
 
 
 app = rx.App(
@@ -168,4 +215,25 @@ app = rx.App(
         ),
     ],
 )
-app.add_page(index, on_load=[State.ensure_default_data, State.load_categories, State.load_field_prices, State.load_users, State.load_config_data, State.load_reservations])
+
+# Eventos de carga comunes para todas las páginas
+_common_on_load = [
+    State.ensure_default_data,
+    State.load_categories,
+    State.load_field_prices,
+    State.load_users,
+    State.load_config_data,
+    State.load_reservations,
+]
+
+# Página principal (redirige a ingreso)
+app.add_page(index, route="/", on_load=[State.sync_page_from_route] + _common_on_load)
+
+# Páginas individuales con rutas separadas
+app.add_page(page_ingreso, route="/ingreso", title="Ingreso - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_venta, route="/venta", title="Venta - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_caja, route="/caja", title="Gestión de Caja - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_inventario, route="/inventario", title="Inventario - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_historial, route="/historial", title="Historial - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_servicios, route="/servicios", title="Servicios - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_configuracion, route="/configuracion", title="Configuración - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
