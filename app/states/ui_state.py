@@ -33,7 +33,7 @@ class UIState(MixinState):
     @rx.event
     def sync_page_from_route(self):
         """Sincroniza current_page basándose en la ruta actual."""
-        route = self.router.page.path
+        route = self.router.url.path
         page = ROUTE_TO_PAGE.get(route, "Ingreso")
         if self._can_access_page(page):
             self.current_page = page
