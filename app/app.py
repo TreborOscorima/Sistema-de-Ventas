@@ -213,6 +213,38 @@ app = rx.App(
             }
             """
         ),
+        rx.script(
+            """
+            (function() {
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape') {
+                        // Buscar todos los elementos fixed con fondo oscuro (overlays de modales)
+                        var allFixed = document.querySelectorAll('.fixed');
+                        var overlayClicked = false;
+                        
+                        allFixed.forEach(function(el) {
+                            if (overlayClicked) return;
+                            
+                            // Verificar si es un overlay (tiene bg-black/40 o similar)
+                            var classList = el.className || '';
+                            if (classList.includes('bg-black') && classList.includes('inset-0')) {
+                                el.click();
+                                overlayClicked = true;
+                            }
+                        });
+                        
+                        // Si no se encontró overlay personalizado, buscar Radix dialogs
+                        if (!overlayClicked) {
+                            var radixOverlay = document.querySelector('[data-radix-dialog-overlay]');
+                            if (radixOverlay) {
+                                radixOverlay.click();
+                            }
+                        }
+                    }
+                });
+            })();
+            """
+        ),
     ],
 )
 

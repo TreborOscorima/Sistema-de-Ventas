@@ -395,6 +395,9 @@ class CashState(MixinState):
 
     @rx.var
     def filtered_cashbox_logs(self) -> list[CashboxLogEntry]:
+        # Dependency on trigger to refresh when cashbox is opened/closed
+        _ = self._cashbox_update_trigger
+        
         if not self.current_user["privileges"]["view_cashbox"]:
             return []
             
