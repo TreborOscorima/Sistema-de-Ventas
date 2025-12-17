@@ -19,21 +19,9 @@ CASH_SUBSECTIONS = [
     {"key": "movimientos", "label": "Movimientos de Caja Chica", "icon": "arrow-left-right"},
 ]
 
-# Mapeo de páginas a rutas URL
-PAGE_TO_ROUTE = {
-    "Ingreso": "/ingreso",
-    "Venta": "/venta",
-    "Gestion de Caja": "/caja",
-    "Inventario": "/inventario",
-    "Historial": "/historial",
-    "Servicios": "/servicios",
-    "Configuracion": "/configuracion",
-}
 
-
-def nav_item(text: str, icon: str, page: str) -> rx.Component:
-    route = PAGE_TO_ROUTE.get(page, "/")
-    return rx.el.a(
+def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
+    return rx.link(
         rx.el.div(
             rx.icon(icon, class_name="h-5 w-5"),
             rx.el.span(
@@ -46,7 +34,7 @@ def nav_item(text: str, icon: str, page: str) -> rx.Component:
             ),
         ),
         href=route,
-        class_name="w-full",
+        class_name="w-full no-underline",
     )
 
 
@@ -85,7 +73,7 @@ def sidebar() -> rx.Component:
                             rx.foreach(
                                 State.navigation_items,
                                 lambda item: rx.el.div(
-                                    nav_item(item["label"], item["icon"], item["page"]),
+                                    nav_item(item["label"], item["icon"], item["page"], item["route"]),
                                     rx.cond(
                                         (item["page"] == "Configuracion")
                                         & (State.active_page == "Configuracion"),

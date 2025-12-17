@@ -95,17 +95,18 @@ class UIState(MixinState):
 
     def _navigation_items_config(self) -> List[Dict[str, str]]:
         return [
-            {"label": "Ingreso", "icon": "arrow-down-to-line", "page": "Ingreso"},
-            {"label": "Venta", "icon": "arrow-up-from-line", "page": "Venta"},
+            {"label": "Ingreso", "icon": "arrow-down-to-line", "page": "Ingreso", "route": "/ingreso"},
+            {"label": "Venta", "icon": "arrow-up-from-line", "page": "Venta", "route": "/venta"},
             {
                 "label": "Gestion de Caja",
                 "icon": "wallet",
                 "page": "Gestion de Caja",
+                "route": "/caja",
             },
-            {"label": "Inventario", "icon": "boxes", "page": "Inventario"},
-            {"label": "Historial", "icon": "history", "page": "Historial"},
-            {"label": "Servicios", "icon": "briefcase", "page": "Servicios"},
-            {"label": "Configuracion", "icon": "settings", "page": "Configuracion"},
+            {"label": "Inventario", "icon": "boxes", "page": "Inventario", "route": "/inventario"},
+            {"label": "Historial", "icon": "history", "page": "Historial", "route": "/historial"},
+            {"label": "Servicios", "icon": "briefcase", "page": "Servicios", "route": "/servicios"},
+            {"label": "Configuracion", "icon": "settings", "page": "Configuracion", "route": "/configuracion"},
         ]
 
     def _page_permission_map(self) -> Dict[str, str]:
