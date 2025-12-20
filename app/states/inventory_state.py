@@ -85,8 +85,25 @@ class InventoryState(MixinState):
                 self.load_categories()
                 return rx.toast(f"Categoría '{category}' eliminada.", duration=2000)
 
+    @rx.event
     def handle_inventory_adjustment_change(self, field: str, value: Any):
         self.inventory_adjustment_item[field] = value
+        
+        # Buscar productos cuando se escribe en el campo descripción
+        if field == "description":
+            search_term = str(value).strip().lower()
+            if len(search_term) >= 2:
+                with rx.session() as session:
+                    products = session.exec(select(Product)).all()
+                    # Filtrar productos que coincidan con el término de búsqueda
+                    matching = [
+                        p.description for p in products
+                        if search_term in p.description.lower()
+                        or search_term in p.barcode.lower()
+                    ]
+                    self.inventory_adjustment_suggestions = matching[:10]  # Limitar a 10 sugerencias
+            else:
+                self.inventory_adjustment_suggestions = []
 
     @rx.var
     def inventory_list(self) -> list[Product]:

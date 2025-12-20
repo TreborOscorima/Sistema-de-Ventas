@@ -22,37 +22,59 @@ def history_filters() -> rx.Component:
     )
     
     return rx.el.div(
-        select_filter(
-            "Filtrar por tipo",
-            [("Todos", "Todos"), ("Ingreso", "Ingreso"), ("Venta", "Venta")],
-            State.staged_history_filter_type,
-            State.set_staged_history_filter_type,
-        ),
+        # Primera fila: Filtros
         rx.el.div(
-            rx.el.label(
-                "Buscar por producto",
-                class_name="text-sm font-medium text-gray-600",
+            select_filter(
+                "Filtrar por tipo",
+                [("Todos", "Todos"), ("Ingreso", "Ingreso"), ("Venta", "Venta")],
+                State.staged_history_filter_type,
+                State.set_staged_history_filter_type,
             ),
-            rx.el.input(
-                placeholder="Ej: Coca-Cola 600ml",
-                on_change=State.set_staged_history_filter_product,
-                class_name="w-full p-2 border rounded-md",
-                default_value=State.staged_history_filter_product,
+            rx.el.div(
+                rx.el.label(
+                    "Buscar por producto",
+                    class_name="text-sm font-medium text-gray-600",
+                ),
+                rx.el.input(
+                    placeholder="Ej: Coca-Cola 600ml",
+                    on_change=State.set_staged_history_filter_product,
+                    class_name="w-full p-2 border rounded-md",
+                    default_value=State.staged_history_filter_product,
+                ),
+                class_name="flex flex-col gap-1",
             ),
-            class_name="flex flex-col gap-1",
+            start_filter,
+            end_filter,
+            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end",
         ),
-        start_filter,
-        end_filter,
+        # Segunda fila: Botones de acción
         rx.el.div(
-            filter_action_buttons(
-                on_search=State.apply_history_filters,
-                on_clear=State.reset_history_filters,
-                on_export=State.export_to_excel,
-                export_text="Exportar a Excel",
+            rx.el.button(
+                rx.icon("search", class_name="h-4 w-4"),
+                "Buscar",
+                on_click=State.apply_history_filters,
+                class_name=BUTTON_STYLES["primary"],
             ),
-            class_name="sm:col-span-2 xl:col-span-1",
+            rx.el.button(
+                "Limpiar",
+                on_click=State.reset_history_filters,
+                class_name=BUTTON_STYLES["secondary"],
+            ),
+            rx.el.button(
+                rx.icon("download", class_name="h-4 w-4"),
+                "Exportar a Excel",
+                on_click=State.export_to_excel,
+                class_name=BUTTON_STYLES["success"],
+            ),
+            rx.el.button(
+                rx.icon("refresh-cw", class_name="h-4 w-4"),
+                "Actualizar",
+                on_click=State.reload_history,
+                class_name="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md shadow-sm transition-colors",
+            ),
+            class_name="flex flex-wrap gap-3 mt-4 justify-start lg:justify-end",
         ),
-        class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 items-end",
+        class_name="flex flex-col",
     )
 
 
@@ -135,17 +157,8 @@ def historial_page() -> rx.Component:
                 class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-6",
             ),
             rx.el.div(
-                rx.el.div(
-                    history_filters(),
-                    class_name="flex-grow",
-                ),
-                rx.el.button(
-                    rx.icon("refresh-cw", class_name="h-5 w-5"),
-                    "Actualizar",
-                    on_click=State.reload_history,
-                    class_name="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md shadow-sm transition-colors h-fit self-end",
-                ),
-                class_name="flex flex-col lg:flex-row gap-4 bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6 items-end",
+                history_filters(),
+                class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
             ),
             rx.el.div(
                 rx.el.table(

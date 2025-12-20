@@ -844,9 +844,7 @@ class ServicesState(MixinState):
             return rx.toast("No se puede cobrar una reserva cancelada o eliminada.", duration=3000)
         self.select_reservation_for_payment(reservation_id)
         self.reservation_payment_routed = True
-        # Redirigir usando set_page ya que es una SPA
-        if hasattr(self, "set_page"):
-            self.set_page("Venta")
+        return rx.redirect("/venta")
 
     @rx.event
     def print_reservation_receipt(self, reservation_id: str):
