@@ -6,7 +6,7 @@ from .mixin_state import MixinState
 ROUTE_TO_PAGE = {
     "/": "Ingreso",
     "/ingreso": "Ingreso",
-    "/venta": "Venta",
+    "/venta": "Punto de Venta",
     "/caja": "Gestion de Caja",
     "/inventario": "Inventario",
     "/historial": "Historial",
@@ -16,7 +16,7 @@ ROUTE_TO_PAGE = {
 
 PAGE_TO_ROUTE = {
     "Ingreso": "/ingreso",
-    "Venta": "/venta",
+    "Punto de Venta": "/venta",
     "Gestion de Caja": "/caja",
     "Inventario": "/inventario",
     "Historial": "/historial",
@@ -73,7 +73,7 @@ class UIState(MixinState):
         self.current_page = page
         
         # Cross-module logic (assumes methods/attrs exist on the main State)
-        if page == "Venta" and previous_page != "Venta":
+        if page == "Punto de Venta" and previous_page != "Punto de Venta":
             if hasattr(self, "_reset_sale_form"):
                 self._reset_sale_form()
             if hasattr(self, "reservation_payment_routed") and not self.reservation_payment_routed:
@@ -96,7 +96,7 @@ class UIState(MixinState):
     def _navigation_items_config(self) -> List[Dict[str, str]]:
         return [
             {"label": "Ingreso", "icon": "arrow-down-to-line", "page": "Ingreso", "route": "/ingreso"},
-            {"label": "Venta", "icon": "arrow-up-from-line", "page": "Venta", "route": "/venta"},
+            {"label": "Punto de Venta", "icon": "arrow-up-from-line", "page": "Punto de Venta", "route": "/venta"},
             {
                 "label": "Gestion de Caja",
                 "icon": "wallet",
@@ -112,7 +112,7 @@ class UIState(MixinState):
     def _page_permission_map(self) -> Dict[str, str]:
         return {
             "Ingreso": "view_ingresos",
-            "Venta": "view_ventas",
+            "Punto de Venta": "view_ventas",
             "Gestion de Caja": "view_cashbox",
             "Inventario": "view_inventario",
             "Historial": "view_historial",

@@ -526,7 +526,7 @@ def payment_method_section() -> rx.Component:
 
 def venta_page() -> rx.Component:
     return rx.el.div(
-        page_title("Control de Ventas y Pagos"),
+        page_title("Punto de Venta"),
         field_rental_sale_section(),
         add_product_section(),
         card_container(
