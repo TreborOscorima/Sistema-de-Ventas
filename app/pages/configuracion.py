@@ -775,7 +775,7 @@ def field_prices_section() -> rx.Component:
                 "Precios de Campo", class_name="text-xl font-semibold text-gray-700"
             ),
             rx.el.p(
-                "Configura los precios por deporte y modalidad (Futbol, Futbol, Voley, etc.).",
+                "Configura los precios por deporte y modalidad (Futbol, Voley).",
                 class_name="text-sm text-gray-500",
             ),
             class_name="space-y-1",
