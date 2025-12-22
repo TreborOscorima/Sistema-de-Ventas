@@ -534,26 +534,87 @@ def payment_sidebar() -> rx.Component:
                         class_name="flex flex-col gap-1",
                     ),
                     rx.el.div(
-                        rx.el.label("Tarjeta", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.input(
-                            type="number",
-                            value=State.payment_mixed_card,
-                            on_change=lambda value: State.set_mixed_card_amount(value),
-                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
-                            placeholder="0.00",
+                        rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.div(
+                            rx.el.button(
+                                "Tarjeta",
+                                on_click=lambda: State.set_mixed_non_cash_kind("card"),
+                                class_name=rx.cond(
+                                    State.payment_mixed_non_cash_kind == "card",
+                                    "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                ),
+                            ),
+                            rx.el.button(
+                                "Digital",
+                                on_click=lambda: State.set_mixed_non_cash_kind("wallet"),
+                                class_name=rx.cond(
+                                    State.payment_mixed_non_cash_kind == "wallet",
+                                    "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                ),
+                            ),
+                            class_name="flex gap-2",
                         ),
-                        class_name="flex flex-col gap-1",
+                        class_name="flex flex-col gap-2",
                     ),
-                    rx.el.div(
-                        rx.el.label("Digital", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.input(
-                            type="number",
-                            value=State.payment_mixed_wallet,
-                            on_change=lambda value: State.set_mixed_wallet_amount(value),
-                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
-                            placeholder="0.00",
+                    rx.cond(
+                        State.payment_mixed_non_cash_kind == "card",
+                        rx.el.div(
+                            rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.div(
+                                rx.el.button(
+                                    "Credito",
+                                    on_click=lambda: State.set_card_type("Credito"),
+                                    class_name=rx.cond(
+                                        State.payment_card_type == "Credito",
+                                        "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    ),
+                                ),
+                                rx.el.button(
+                                    "Debito",
+                                    on_click=lambda: State.set_card_type("Debito"),
+                                    class_name=rx.cond(
+                                        State.payment_card_type == "Debito",
+                                        "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    ),
+                                ),
+                                class_name="flex gap-2",
+                            ),
+                            class_name="flex flex-col gap-2",
                         ),
-                        class_name="flex flex-col gap-1",
+                        rx.fragment(),
+                    ),
+                    rx.cond(
+                        State.payment_mixed_non_cash_kind == "wallet",
+                        rx.el.div(
+                            rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.div(
+                                rx.el.button(
+                                    "Yape",
+                                    on_click=lambda: State.choose_wallet_provider("Yape"),
+                                    class_name=rx.cond(
+                                        State.payment_wallet_choice == "Yape",
+                                        "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium",
+                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    ),
+                                ),
+                                rx.el.button(
+                                    "Plin",
+                                    on_click=lambda: State.choose_wallet_provider("Plin"),
+                                    class_name=rx.cond(
+                                        State.payment_wallet_choice == "Plin",
+                                        "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium",
+                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    ),
+                                ),
+                                class_name="flex gap-2",
+                            ),
+                            class_name="flex flex-col gap-2",
+                        ),
+                        rx.fragment(),
                     ),
                     rx.cond(
                         State.payment_mixed_message != "",
@@ -764,26 +825,87 @@ def payment_mobile_section() -> rx.Component:
                     class_name="flex flex-col gap-1",
                 ),
                 rx.el.div(
-                    rx.el.label("Tarjeta", class_name="text-xs font-medium text-gray-600"),
-                    rx.el.input(
-                        type="number",
-                        value=State.payment_mixed_card,
-                        on_change=lambda value: State.set_mixed_card_amount(value),
-                        class_name="w-full px-3 py-2 border rounded-lg text-sm",
-                        placeholder="0.00",
+                    rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
+                    rx.el.div(
+                        rx.el.button(
+                            "Tarjeta",
+                            on_click=lambda: State.set_mixed_non_cash_kind("card"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "card",
+                                "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            ),
+                        ),
+                        rx.el.button(
+                            "Digital",
+                            on_click=lambda: State.set_mixed_non_cash_kind("wallet"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "wallet",
+                                "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            ),
+                        ),
+                        class_name="flex gap-2",
                     ),
-                    class_name="flex flex-col gap-1",
+                    class_name="flex flex-col gap-2",
                 ),
-                rx.el.div(
-                    rx.el.label("Digital", class_name="text-xs font-medium text-gray-600"),
-                    rx.el.input(
-                        type="number",
-                        value=State.payment_mixed_wallet,
-                        on_change=lambda value: State.set_mixed_wallet_amount(value),
-                        class_name="w-full px-3 py-2 border rounded-lg text-sm",
-                        placeholder="0.00",
+                rx.cond(
+                    State.payment_mixed_non_cash_kind == "card",
+                    rx.el.div(
+                        rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.div(
+                            rx.el.button(
+                                "Credito",
+                                on_click=lambda: State.set_card_type("Credito"),
+                                class_name=rx.cond(
+                                    State.payment_card_type == "Credito",
+                                    "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
+                                    "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                ),
+                            ),
+                            rx.el.button(
+                                "Debito",
+                                on_click=lambda: State.set_card_type("Debito"),
+                                class_name=rx.cond(
+                                    State.payment_card_type == "Debito",
+                                    "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
+                                    "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                ),
+                            ),
+                            class_name="flex gap-2",
+                        ),
+                        class_name="flex flex-col gap-2",
                     ),
-                    class_name="flex flex-col gap-1",
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    State.payment_mixed_non_cash_kind == "wallet",
+                    rx.el.div(
+                        rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.div(
+                            rx.el.button(
+                                "Yape",
+                                on_click=lambda: State.choose_wallet_provider("Yape"),
+                                class_name=rx.cond(
+                                    State.payment_wallet_choice == "Yape",
+                                    "flex-1 px-3 py-2.5 rounded-lg bg-purple-600 text-white font-medium",
+                                    "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                ),
+                            ),
+                            rx.el.button(
+                                "Plin",
+                                on_click=lambda: State.choose_wallet_provider("Plin"),
+                                class_name=rx.cond(
+                                    State.payment_wallet_choice == "Plin",
+                                    "flex-1 px-3 py-2.5 rounded-lg bg-teal-600 text-white font-medium",
+                                    "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                ),
+                            ),
+                            class_name="flex gap-2",
+                        ),
+                        class_name="flex flex-col gap-2",
+                    ),
+                    rx.fragment(),
                 ),
                 rx.cond(
                     State.payment_mixed_message != "",
@@ -797,7 +919,7 @@ def payment_mobile_section() -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
-                class_name="grid grid-cols-1 sm:grid-cols-3 gap-2 px-3 sm:px-4 pb-3",
+                class_name="flex flex-col gap-3 px-3 sm:px-4 pb-3",
             ),
             rx.fragment(),
         ),

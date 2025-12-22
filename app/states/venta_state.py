@@ -60,6 +60,7 @@ class VentaState(MixinState):
     payment_mixed_cash: float = 0
     payment_mixed_card: float = 0
     payment_mixed_wallet: float = 0
+    payment_mixed_non_cash_kind: str = "card"
     payment_mixed_message: str = ""
     payment_mixed_status: str = "neutral"
     payment_mixed_notes: str = ""
@@ -271,8 +272,7 @@ class VentaState(MixinState):
             self.payment_cash_message = "Monto exacto."
             self.payment_cash_status = "exact"
 
-    def _update_mixed_message(self, total_override: float | None = None):
-        total = 0
+    def _mixed_effective_total(self, total_override: float | None = None) -> float:
         if total_override is not None:
             total = total_override
         else:
@@ -280,9 +280,21 @@ class VentaState(MixinState):
             if hasattr(self, "selected_reservation_balance"):
                 res_balance = self.selected_reservation_balance
             total = self.sale_total if self.sale_total > 0 else res_balance
-            
-        total = self._round_currency(total)
-        
+        return self._round_currency(total)
+
+    def _auto_allocate_mixed_amounts(self, total_override: float | None = None):
+        total = self._mixed_effective_total(total_override)
+        paid_cash = self._round_currency(self.payment_mixed_cash)
+        remaining = self._round_currency(max(total - paid_cash, 0))
+        if self.payment_mixed_non_cash_kind == "wallet":
+            self.payment_mixed_wallet = remaining
+            self.payment_mixed_card = 0
+        else:
+            self.payment_mixed_card = remaining
+            self.payment_mixed_wallet = 0
+
+    def _update_mixed_message(self, total_override: float | None = None):
+        total = self._mixed_effective_total(total_override)
         paid_cash = self._round_currency(self.payment_mixed_cash)
         paid_card = self._round_currency(self.payment_mixed_card)
         paid_wallet = self._round_currency(self.payment_mixed_wallet)
@@ -314,6 +326,7 @@ class VentaState(MixinState):
         if self.payment_method_kind == "cash":
             self._update_cash_feedback(total_override=total_override)
         elif self.payment_method_kind == "mixed":
+            self._auto_allocate_mixed_amounts(total_override=total_override)
             self._update_mixed_message(total_override=total_override)
         else:
             self.payment_cash_message = ""
@@ -337,6 +350,7 @@ class VentaState(MixinState):
         self.payment_mixed_cash = 0
         self.payment_mixed_card = 0
         self.payment_mixed_wallet = 0
+        self.payment_mixed_non_cash_kind = "card"
         self.payment_mixed_message = ""
         self.payment_mixed_status = "neutral"
         self.payment_mixed_notes = ""
@@ -367,6 +381,9 @@ class VentaState(MixinState):
     @rx.event
     def set_card_type(self, card_type: str):
         self.payment_card_type = card_type
+        if self.payment_method_kind == "mixed" and self.payment_mixed_non_cash_kind == "card":
+            self._auto_allocate_mixed_amounts()
+            self._update_mixed_message()
 
     @rx.event
     def choose_wallet_provider(self, provider: str):
@@ -375,6 +392,9 @@ class VentaState(MixinState):
             self.payment_wallet_provider = ""
         else:
             self.payment_wallet_provider = provider
+        if self.payment_method_kind == "mixed" and self.payment_mixed_non_cash_kind == "wallet":
+            self._auto_allocate_mixed_amounts()
+            self._update_mixed_message()
 
     @rx.event
     def set_wallet_provider_custom(self, value: str):
@@ -388,6 +408,15 @@ class VentaState(MixinState):
     @rx.event
     def set_mixed_cash_amount(self, value: str):
         self.payment_mixed_cash = self._safe_amount(value)
+        self._auto_allocate_mixed_amounts()
+        self._update_mixed_message()
+
+    @rx.event
+    def set_mixed_non_cash_kind(self, kind: str):
+        if kind not in ["card", "wallet"]:
+            return
+        self.payment_mixed_non_cash_kind = kind
+        self._auto_allocate_mixed_amounts()
         self._update_mixed_message()
 
     @rx.event
