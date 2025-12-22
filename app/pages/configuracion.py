@@ -240,7 +240,7 @@ def user_form() -> rx.Component:
                                 on_click=State.create_role_from_current_privileges,
                                 class_name="bg-indigo-600 text-white px-3 py-2 rounded-md hover:bg-indigo-700",
                             ),
-                            class_name="flex items-center gap-3 mt-2",
+                            class_name="flex flex-col sm:flex-row sm:items-center gap-3 mt-2",
                         ),
                         class_name="mb-4",
                     ),
@@ -295,7 +295,7 @@ def user_form() -> rx.Component:
                                 on_click=State.save_role_template,
                                 class_name="text-sm text-green-700 border border-green-200 px-3 py-1 rounded-md hover:bg-green-50 min-h-[38px]",
                             ),
-                            class_name="flex items-center gap-2",
+                            class_name="flex flex-col sm:flex-row sm:items-center gap-2",
                         ),
                         class_name="flex flex-wrap justify-between items-start gap-3 mt-4 mb-2",
                     ),
@@ -828,57 +828,60 @@ def field_prices_section() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        rx.el.table(
-            rx.el.thead(
-                rx.el.tr(
-                    rx.el.th("Deporte", class_name="py-2 px-3 text-left"),
-                    rx.el.th("Campo", class_name="py-2 px-3 text-left"),
-                    rx.el.th("Precio (por hora)", class_name="py-2 px-3 text-left"),
-                    rx.el.th("Acciones", class_name="py-2 px-3 text-center"),
-                    class_name="bg-gray-100",
-                )
-            ),
-            rx.el.tbody(
-                rx.foreach(
-                    State.field_prices,
-                    lambda price: rx.el.tr(
-                        rx.el.td(
-                            price["sport"],
-                            class_name="py-2 px-3",
-                        ),
-                    rx.el.td(price["name"], class_name="py-2 px-3"),
-                    rx.el.td(
-                            rx.el.input(
-                                type="number",
-                                step="0.01",
-                                value=price["price"].to_string(),
-                                on_change=lambda value, pid=price["id"]: State.update_field_price_amount(
-                                    pid, value
+        rx.el.div(
+            rx.el.table(
+                rx.el.thead(
+                    rx.el.tr(
+                        rx.el.th("Deporte", class_name="py-2 px-3 text-left"),
+                        rx.el.th("Campo", class_name="py-2 px-3 text-left"),
+                        rx.el.th("Precio (por hora)", class_name="py-2 px-3 text-left"),
+                        rx.el.th("Acciones", class_name="py-2 px-3 text-center"),
+                        class_name="bg-gray-100",
+                    )
+                ),
+                rx.el.tbody(
+                    rx.foreach(
+                        State.field_prices,
+                        lambda price: rx.el.tr(
+                            rx.el.td(
+                                price["sport"],
+                                class_name="py-2 px-3",
+                            ),
+                            rx.el.td(price["name"], class_name="py-2 px-3"),
+                            rx.el.td(
+                                rx.el.input(
+                                    type="number",
+                                    step="0.01",
+                                    value=price["price"].to_string(),
+                                    on_change=lambda value, pid=price["id"]: State.update_field_price_amount(
+                                        pid, value
+                                    ),
+                                    class_name="w-full sm:w-32 p-2 border rounded-md",
                                 ),
-                                class_name="w-32 p-2 border rounded-md",
+                                class_name="py-2 px-3",
                             ),
-                            class_name="py-2 px-3",
-                        ),
-                        rx.el.td(
-                            rx.el.button(
-                                rx.icon("pencil", class_name="h-4 w-4"),
-                                on_click=lambda _, pid=price["id"]: State.edit_field_price(pid),
-                                class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
-                            ),
-                            rx.el.button(
-                                rx.icon("trash-2", class_name="h-4 w-4"),
-                                on_click=lambda _, pid=price["id"]: State.remove_field_price(
-                                    pid
+                            rx.el.td(
+                                rx.el.button(
+                                    rx.icon("pencil", class_name="h-4 w-4"),
+                                    on_click=lambda _, pid=price["id"]: State.edit_field_price(pid),
+                                    class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
                                 ),
-                                class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                                rx.el.button(
+                                    rx.icon("trash-2", class_name="h-4 w-4"),
+                                    on_click=lambda _, pid=price["id"]: State.remove_field_price(
+                                        pid
+                                    ),
+                                    class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                                ),
+                                class_name="py-2 px-3 text-center flex items-center justify-center gap-2",
                             ),
-                            class_name="py-2 px-3 text-center flex items-center justify-center gap-2",
+                            class_name="border-b",
                         ),
-                        class_name="border-b",
-                    ),
-                )
+                    )
+                ),
+                class_name="min-w-full",
             ),
-            class_name="min-w-full",
+            class_name="bg-white p-4 rounded-lg shadow-md overflow-x-auto",
         ),
         class_name="space-y-4",
     )

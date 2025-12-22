@@ -105,11 +105,11 @@ def edit_product_modal() -> rx.Component:
                         on_click=State.save_edited_product,
                         class_name="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
                     ),
-                    class_name="flex justify-end gap-3 mt-6",
+                    class_name="flex flex-col sm:flex-row sm:justify-end gap-3 mt-6",
                 ),
                 class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
             ),
-            class_name="fixed inset-0 z-50 flex items-center justify-center px-4",
+            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-y-auto",
         ),
         rx.fragment(),
     )
@@ -382,7 +382,7 @@ def inventory_adjustment_modal() -> rx.Component:
                                     ),
                                     class_name="w-full text-sm",
                                 ),
-                                class_name="mt-6 rounded-lg border overflow-hidden",
+                                class_name="mt-6 rounded-lg border overflow-x-auto",
                             ),
                             rx.el.p(
                                 "Aun no hay productos seleccionados para el ajuste.",

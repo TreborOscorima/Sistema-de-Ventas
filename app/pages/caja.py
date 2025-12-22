@@ -505,7 +505,7 @@ def close_cashbox_modal() -> rx.Component:
                         ),
                         class_name="min-w-full text-sm",
                     ),
-                    class_name="max-h-64 overflow-y-auto border rounded-lg",
+                    class_name="max-h-64 overflow-y-auto overflow-x-auto border rounded-lg",
                 ),
             ),
         ],
@@ -664,7 +664,7 @@ def petty_cash_modal() -> rx.Component:
                         ),
                         class_name="flex flex-col gap-2"
                     ),
-                    class_name="grid grid-cols-2 gap-4"
+                    class_name="grid grid-cols-1 sm:grid-cols-2 gap-4"
                 ),
                 rx.el.div(
                     rx.el.div(
@@ -699,7 +699,7 @@ def petty_cash_modal() -> rx.Component:
                         ),
                         class_name="flex flex-col gap-2"
                     ),
-                    class_name="grid grid-cols-2 gap-4"
+                    class_name="grid grid-cols-1 sm:grid-cols-2 gap-4"
                 ),
                 class_name="flex flex-col gap-4 py-4"
             )
@@ -885,7 +885,7 @@ def cashbox_page() -> rx.Component:
                     class_name="flex flex-col gap-6",
                 ),
             ),
-            class_name="flex flex-col gap-6 p-4 sm:p-6 max-w-7xl mx-auto",
+            class_name="flex flex-col gap-6 p-4 sm:p-6 w-full max-w-7xl mx-auto",
         ),
         rx.el.div(
             rx.el.h1("Acceso denegado", class_name="text-2xl font-bold text-red-600"),

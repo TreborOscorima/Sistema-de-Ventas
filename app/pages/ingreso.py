@@ -82,7 +82,7 @@ def ingreso_page() -> rx.Component:
                         type="text",
                         auto_complete="off",
                     ),
-                    class_name="w-48",
+                    class_name="w-full sm:w-48",
                 ),
                 rx.el.div(
                     rx.el.label(
@@ -130,7 +130,7 @@ def ingreso_page() -> rx.Component:
                         class_name="w-full p-2 border rounded-md",
                         value=State.new_entry_item["quantity"].to_string(),
                     ),
-                    class_name="w-24",
+                    class_name="w-full sm:w-24",
                 ),
                 rx.el.div(
                     rx.el.label(
@@ -145,7 +145,7 @@ def ingreso_page() -> rx.Component:
                         on_change=lambda val: State.handle_entry_change("unit", val),
                         class_name="w-full p-2 border rounded-md",
                     ),
-                    class_name="w-32",
+                    class_name="w-full sm:w-32",
                 ),
                 rx.el.div(
                     rx.el.label(
@@ -158,7 +158,7 @@ def ingreso_page() -> rx.Component:
                         class_name="w-full p-2 border rounded-md",
                         value=State.new_entry_item["price"].to_string(),
                     ),
-                    class_name="w-32",
+                    class_name="w-full sm:w-32",
                 ),
                 rx.el.div(
                     rx.el.label(
@@ -173,7 +173,7 @@ def ingreso_page() -> rx.Component:
                         class_name="w-full p-2 border rounded-md",
                         value=State.new_entry_item["sale_price"].to_string(),
                     ),
-                    class_name="w-32",
+                    class_name="w-full sm:w-32",
                 ),
                 rx.el.div(
                     rx.el.label(
@@ -185,7 +185,7 @@ def ingreso_page() -> rx.Component:
                         State.entry_subtotal.to_string(),
                         class_name="w-full p-2 font-semibold text-right",
                     ),
-                    class_name="w-32",
+                    class_name="w-full sm:w-32",
                 ),
                 rx.el.div(
                     rx.el.button(
@@ -193,7 +193,8 @@ def ingreso_page() -> rx.Component:
                         "Añadir",
                         on_click=State.add_item_to_entry,
                         class_name="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 mt-6 min-h-[44px]",
-                    )
+                    ),
+                    class_name="w-full sm:w-auto flex items-end",
                 ),
                 class_name="flex flex-wrap items-start gap-4",
             ),

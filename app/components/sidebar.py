@@ -215,9 +215,17 @@ def sidebar() -> rx.Component:
             ),
             class_name=rx.cond(
                 State.sidebar_open,
-                "flex flex-col h-screen bg-gray-50 border-r transition-all duration-300 w-64",
+                "fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen bg-gray-50 border-r transition-all duration-300 w-64 shadow-lg md:shadow-none",
                 "w-0 overflow-hidden transition-all duration-300",
             ),
+        ),
+        rx.cond(
+            State.sidebar_open,
+            rx.el.div(
+                on_click=State.toggle_sidebar,
+                class_name="fixed inset-0 z-40 bg-black/40 md:hidden",
+            ),
+            rx.fragment(),
         ),
         rx.cond(
             ~State.sidebar_open,

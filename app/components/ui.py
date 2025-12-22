@@ -366,7 +366,7 @@ def modal_container(
                 *body_parts,
                 class_name=f"relative z-10 w-full {max_width} rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto space-y-4",
             ),
-            class_name="fixed inset-0 z-50 flex items-center justify-center px-4",
+            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-y-auto",
         ),
         rx.fragment(),
     )

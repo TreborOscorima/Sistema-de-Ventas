@@ -343,7 +343,7 @@ def reservation_info_card() -> rx.Component:
                     ),
                     class_name="flex flex-col gap-1",
                 ),
-                class_name="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4",
+                class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4",
             ),
             # Resumen de montos
             rx.el.div(
@@ -374,7 +374,7 @@ def reservation_info_card() -> rx.Component:
                     ),
                     class_name="flex flex-col items-center p-3 bg-indigo-50 rounded-lg border-2 border-indigo-200",
                 ),
-                class_name="grid grid-cols-3 gap-3 mt-4",
+                class_name="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4",
             ),
             class_name="bg-white border-2 border-emerald-200 rounded-xl p-4 shadow-sm",
         ),
@@ -797,7 +797,7 @@ def payment_mobile_section() -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
-                class_name="grid grid-cols-3 gap-2 px-3 sm:px-4 pb-3",
+                class_name="grid grid-cols-1 sm:grid-cols-3 gap-2 px-3 sm:px-4 pb-3",
             ),
             rx.fragment(),
         ),
