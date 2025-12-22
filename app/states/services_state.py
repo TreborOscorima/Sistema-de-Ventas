@@ -846,6 +846,12 @@ class ServicesState(MixinState):
         self.reservation_payment_routed = True
         return rx.redirect("/venta")
 
+    def clear_pending_reservation(self):
+        """Limpia la reserva pendiente de pago para permitir ventas normales."""
+        self.reservation_payment_id = ""
+        self.reservation_payment_amount = ""
+        self.reservation_payment_routed = False
+
     @rx.event
     def print_reservation_receipt(self, reservation_id: str):
         # Always use the Reservation Proof format for reservations
