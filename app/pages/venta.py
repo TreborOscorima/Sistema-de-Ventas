@@ -104,7 +104,7 @@ def quick_add_bar() -> rx.Component:
                     type="text",
                     auto_complete="off",
                 ),
-                class_name="flex items-center gap-2 px-3 py-2.5 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full sm:w-36 lg:w-40",
+                class_name="flex items-center gap-2 px-3 py-2.5 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full sm:w-48 lg:w-56",
             ),
             # Búsqueda de producto
             rx.el.div(
@@ -592,7 +592,7 @@ def payment_sidebar() -> rx.Component:
         # Botones de acción
         rx.el.div(
             rx.el.button(
-                rx.icon("check-circle", class_name="h-5 w-5"),
+                rx.icon("circle-check", class_name="h-5 w-5"),
                 "Confirmar Venta",
                 on_click=State.confirm_sale,
                 class_name="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-lg",
@@ -817,7 +817,7 @@ def payment_mobile_section() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.button(
-                    rx.icon("check-circle", class_name="h-5 w-5"),
+                    rx.icon("circle-check", class_name="h-5 w-5"),
                     "Confirmar Venta",
                     on_click=State.confirm_sale,
                     class_name="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700",
