@@ -20,7 +20,7 @@ class CashState(MixinState):
     cashbox_staged_start_date: str = ""
     cashbox_staged_end_date: str = ""
     cashbox_current_page: int = 1
-    cashbox_items_per_page: int = 10
+    cashbox_items_per_page: int = 5
     show_cashbox_advances: bool = True
     sale_delete_modal_open: bool = False
     sale_to_delete: str = ""
@@ -36,6 +36,8 @@ class CashState(MixinState):
     cashbox_log_filter_end_date: str = ""
     cashbox_log_staged_start_date: str = ""
     cashbox_log_staged_end_date: str = ""
+    cashbox_log_current_page: int = 1
+    cashbox_log_items_per_page: int = 10
     cashbox_log_modal_open: bool = False
     cashbox_log_selected: CashboxLogEntry | None = None
     _cashbox_update_trigger: int = 0
@@ -448,6 +450,19 @@ class CashState(MixinState):
                 
             return filtered
 
+    @rx.var
+    def paginated_cashbox_logs(self) -> list[CashboxLogEntry]:
+        start_index = (self.cashbox_log_current_page - 1) * self.cashbox_log_items_per_page
+        end_index = start_index + self.cashbox_log_items_per_page
+        return self.filtered_cashbox_logs[start_index:end_index]
+
+    @rx.var
+    def cashbox_log_total_pages(self) -> int:
+        total = len(self.filtered_cashbox_logs)
+        if total == 0:
+            return 1
+        return (total + self.cashbox_log_items_per_page - 1) // self.cashbox_log_items_per_page
+
     @rx.event
     def set_cashbox_staged_start_date(self, value: str):
         denial = self._cashbox_guard()
@@ -500,6 +515,7 @@ class CashState(MixinState):
             return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
         self.cashbox_log_filter_start_date = self.cashbox_log_staged_start_date
         self.cashbox_log_filter_end_date = self.cashbox_log_staged_end_date
+        self.cashbox_log_current_page = 1
 
     @rx.event
     def reset_cashbox_log_filters(self):
@@ -509,6 +525,28 @@ class CashState(MixinState):
         self.cashbox_log_filter_end_date = ""
         self.cashbox_log_staged_start_date = ""
         self.cashbox_log_staged_end_date = ""
+        self.cashbox_log_current_page = 1
+
+    @rx.event
+    def set_cashbox_log_page(self, page: int):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        if 1 <= page <= self.cashbox_log_total_pages:
+            self.cashbox_log_current_page = page
+
+    @rx.event
+    def prev_cashbox_log_page(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        if self.cashbox_log_current_page > 1:
+            self.cashbox_log_current_page -= 1
+
+    @rx.event
+    def next_cashbox_log_page(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        if self.cashbox_log_current_page < self.cashbox_log_total_pages:
+            self.cashbox_log_current_page += 1
 
     @rx.event
     def set_cashbox_page(self, page: int):

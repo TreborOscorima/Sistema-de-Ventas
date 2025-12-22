@@ -344,10 +344,20 @@ def cashbox_logs_section() -> rx.Component:
                         class_name="bg-gray-50 border-b",
                     )
                 ),
-                rx.el.tbody(rx.foreach(State.filtered_cashbox_logs, cashbox_log_row)),
+                rx.el.tbody(rx.foreach(State.paginated_cashbox_logs, cashbox_log_row)),
                 class_name="min-w-full",
             ),
             class_name="overflow-x-auto rounded-lg border border-gray-200",
+        ),
+        rx.cond(
+            State.filtered_cashbox_logs.length() > 0,
+            pagination_controls(
+                current_page=State.cashbox_log_current_page,
+                total_pages=State.cashbox_log_total_pages,
+                on_prev=State.prev_cashbox_log_page,
+                on_next=State.next_cashbox_log_page,
+            ),
+            rx.fragment(),
         ),
         rx.cond(
             State.filtered_cashbox_logs.length() == 0,
