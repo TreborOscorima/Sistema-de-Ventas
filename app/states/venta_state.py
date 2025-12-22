@@ -319,7 +319,11 @@ class VentaState(MixinState):
             self.payment_mixed_message = f"Vuelto {self._format_currency(change)}"
             self.payment_mixed_status = "change"
         else:
-            self.payment_mixed_message = "Montos completos."
+            complemento = self._round_currency(paid_card + paid_wallet)
+            if complemento > 0 and paid_cash < total:
+                self.payment_mixed_message = f"Complemento {self._format_currency(complemento)}"
+            else:
+                self.payment_mixed_message = "Montos completos."
             self.payment_mixed_status = "exact"
 
     def _refresh_payment_feedback(self, total_override: float | None = None):
