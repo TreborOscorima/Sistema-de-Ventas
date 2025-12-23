@@ -218,27 +218,21 @@ app = rx.App(
             (function() {
                 document.addEventListener('keydown', function(e) {
                     if (e.key === 'Escape') {
-                        // Buscar todos los elementos fixed con fondo oscuro (overlays de modales)
-                        var allFixed = document.querySelectorAll('.fixed');
-                        var overlayClicked = false;
-                        
-                        allFixed.forEach(function(el) {
-                            if (overlayClicked) return;
-                            
-                            // Verificar si es un overlay (tiene bg-black/40 o similar)
-                            var classList = el.className || '';
-                            if (classList.includes('bg-black') && classList.includes('inset-0')) {
-                                el.click();
-                                overlayClicked = true;
-                            }
-                        });
-                        
-                        // Si no se encontró overlay personalizado, buscar Radix dialogs
-                        if (!overlayClicked) {
-                            var radixOverlay = document.querySelector('[data-radix-dialog-overlay]');
-                            if (radixOverlay) {
-                                radixOverlay.click();
-                            }
+                        var modalOverlays = document.querySelectorAll('.modal-overlay');
+                        if (modalOverlays.length > 0) {
+                            modalOverlays[modalOverlays.length - 1].click();
+                            return;
+                        }
+
+                        var radixOverlay = document.querySelector('[data-radix-dialog-overlay]');
+                        if (radixOverlay) {
+                            radixOverlay.click();
+                            return;
+                        }
+
+                        var sidebarOverlay = document.querySelector('.sidebar-overlay');
+                        if (sidebarOverlay) {
+                            sidebarOverlay.click();
                         }
                     }
                 });

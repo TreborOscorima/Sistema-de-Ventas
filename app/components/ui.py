@@ -360,7 +360,7 @@ def modal_container(
         rx.el.div(
             rx.el.div(
                 on_click=on_close,
-                class_name="fixed inset-0 bg-black/40",
+                class_name="fixed inset-0 bg-black/40 modal-overlay",
             ),
             rx.el.div(
                 *body_parts,

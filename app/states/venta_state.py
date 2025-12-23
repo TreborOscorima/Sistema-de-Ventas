@@ -102,6 +102,13 @@ class VentaState(MixinState):
     def payment_summary(self) -> str:
         return self._generate_payment_summary()
 
+    @rx.var
+    def payment_mixed_complement(self) -> float:
+        total = self._mixed_effective_total()
+        paid_cash = self._round_currency(self.payment_mixed_cash)
+        remaining = max(total - paid_cash, 0)
+        return self._round_currency(remaining)
+
     def _payment_method_by_identifier(self, identifier: str) -> PaymentMethodConfig | None:
         target = (identifier or "").strip().lower()
         if not target:

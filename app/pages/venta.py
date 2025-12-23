@@ -558,6 +558,20 @@ def payment_sidebar() -> rx.Component:
                         ),
                         class_name="flex flex-col gap-2",
                     ),
+                    rx.el.div(
+                        rx.el.label("Monto complemento", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.div(
+                            rx.el.span(State.currency_symbol, class_name="text-gray-400"),
+                            rx.el.input(
+                                type="number",
+                                value=State.payment_mixed_complement,
+                                is_disabled=True,
+                                class_name="flex-1 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
+                            ),
+                            class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
                     rx.cond(
                         State.payment_mixed_non_cash_kind == "card",
                         rx.el.div(
@@ -616,18 +630,6 @@ def payment_sidebar() -> rx.Component:
                         ),
                         rx.fragment(),
                     ),
-                    rx.cond(
-                        State.payment_mixed_message != "",
-                        rx.el.p(
-                            State.payment_mixed_message,
-                            class_name=rx.cond(
-                                State.payment_mixed_status == "change",
-                                "text-sm font-semibold text-emerald-600",
-                                "text-sm font-semibold text-red-600",
-                            ),
-                        ),
-                        rx.fragment(),
-                    ),
                     class_name="flex flex-col gap-3",
                 ),
                 rx.fragment(),
@@ -637,18 +639,18 @@ def payment_sidebar() -> rx.Component:
         # Total
         rx.el.div(
             rx.el.div(
-                rx.el.span("TOTAL", class_name="text-sm font-medium text-gray-500"),
+                rx.el.span("TOTAL", class_name="text-xs font-medium text-gray-500"),
                 rx.el.div(
-                    rx.el.span(State.currency_symbol, class_name="text-2xl text-indigo-600"),
+                    rx.el.span(State.currency_symbol, class_name="text-xl text-indigo-600"),
                     rx.el.span(
                         State.sale_total.to_string(),
-                        class_name="text-4xl font-bold text-indigo-600",
+                        class_name="text-3xl font-bold text-indigo-600",
                     ),
                     class_name="flex items-baseline gap-1",
                 ),
-                class_name="flex flex-col items-center py-4",
+                class_name="flex flex-col items-center py-3",
             ),
-            class_name="p-4 bg-gray-50",
+            class_name="p-3 bg-gray-50",
         ),
         # Botones de acción
         rx.el.div(
@@ -849,6 +851,20 @@ def payment_mobile_section() -> rx.Component:
                     ),
                     class_name="flex flex-col gap-2",
                 ),
+                rx.el.div(
+                    rx.el.label("Monto complemento", class_name="text-xs font-medium text-gray-600"),
+                    rx.el.div(
+                        rx.el.span(State.currency_symbol, class_name="text-gray-400"),
+                        rx.el.input(
+                            type="number",
+                            value=State.payment_mixed_complement,
+                            is_disabled=True,
+                            class_name="flex-1 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
+                        ),
+                        class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
                 rx.cond(
                     State.payment_mixed_non_cash_kind == "card",
                     rx.el.div(
@@ -904,18 +920,6 @@ def payment_mobile_section() -> rx.Component:
                             class_name="flex gap-2",
                         ),
                         class_name="flex flex-col gap-2",
-                    ),
-                    rx.fragment(),
-                ),
-                rx.cond(
-                    State.payment_mixed_message != "",
-                    rx.el.p(
-                        State.payment_mixed_message,
-                        class_name=rx.cond(
-                            State.payment_mixed_status == "change",
-                            "text-sm font-semibold text-emerald-600",
-                            "text-sm font-semibold text-red-600",
-                        ),
                     ),
                     rx.fragment(),
                 ),

@@ -190,7 +190,7 @@ def user_form() -> rx.Component:
         ),
         rx.radix.primitives.dialog.portal(
             rx.radix.primitives.dialog.overlay(
-                class_name="fixed inset-0 bg-black/40"
+                class_name="fixed inset-0 bg-black/40 modal-overlay"
             ),
             rx.radix.primitives.dialog.content(
                 rx.radix.primitives.dialog.title(

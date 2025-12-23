@@ -307,7 +307,7 @@ def reservation_modal() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 on_click=State.close_reservation_modal,
-                class_name="fixed inset-0 bg-black/40",
+                class_name="fixed inset-0 bg-black/40 modal-overlay",
             ),
             rx.el.div(
                 rx.el.div(
@@ -698,7 +698,7 @@ def reservation_delete_modal() -> rx.Component:
     return rx.radix.primitives.dialog.root(
         rx.radix.primitives.dialog.portal(
             rx.radix.primitives.dialog.overlay(
-                class_name="fixed inset-0 bg-black/40 z-40"
+                class_name="fixed inset-0 bg-black/40 z-40 modal-overlay"
             ),
             rx.radix.primitives.dialog.content(
                 rx.el.div(

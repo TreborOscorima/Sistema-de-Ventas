@@ -8,7 +8,7 @@ def edit_product_modal() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 on_click=State.cancel_edit_product,
-                class_name="fixed inset-0 bg-black/40",
+                class_name="fixed inset-0 bg-black/40 modal-overlay",
             ),
             rx.el.div(
                 rx.el.div(
@@ -121,7 +121,7 @@ def inventory_adjustment_modal() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 on_click=State.close_inventory_check_modal,
-                class_name="fixed inset-0 bg-black/40",
+                class_name="fixed inset-0 bg-black/40 modal-overlay",
             ),
             rx.el.div(
                 rx.el.div(

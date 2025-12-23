@@ -223,7 +223,7 @@ def sidebar() -> rx.Component:
             State.sidebar_open,
             rx.el.div(
                 on_click=State.toggle_sidebar,
-                class_name="fixed inset-0 z-40 bg-black/40 md:hidden",
+                class_name="fixed inset-0 z-40 bg-black/40 md:hidden sidebar-overlay",
             ),
             rx.fragment(),
         ),
