@@ -256,10 +256,10 @@ _common_on_load = [
 app.add_page(index, route="/", on_load=[State.sync_page_from_route] + _common_on_load)
 
 # Páginas individuales con rutas separadas
-app.add_page(page_ingreso, route="/ingreso", title="Ingreso - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_venta, route="/venta", title="Venta - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_caja, route="/caja", title="Gestión de Caja - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_inventario, route="/inventario", title="Inventario - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_historial, route="/historial", title="Historial - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_servicios, route="/servicios", title="Servicios - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_configuracion, route="/configuracion", title="Configuración - StockFlow", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_ingreso, route="/ingreso", title="Ingreso - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_venta, route="/venta", title="Venta - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_caja, route="/caja", title="Gestión de Caja - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_inventario, route="/inventario", title="Inventario - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_historial, route="/historial", title="Historial - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_servicios, route="/servicios", title="Servicios - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_configuracion, route="/configuracion", title="Configuración - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)

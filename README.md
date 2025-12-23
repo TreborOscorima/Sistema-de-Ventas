@@ -1,4 +1,4 @@
-# 📘 StockFlow: Sistema Integral de Gestión (ERP/POS)
+# 📘 TUWAYKIAPP: Sistema Integral de Gestión (ERP/POS)
 
 **Versión:** 2.0 (Stable - MySQL Persistence)  
 **Tecnología:** Python / Reflex / MySQL  
@@ -8,7 +8,7 @@
 
 ## 1. 🚀 Visión General
 
-**StockFlow** es una solución tecnológica integral de gestión empresarial (ERP) y Punto de Venta (POS) diseñada para comercios y centros deportivos.
+**TUWAYKIAPP** es una solución tecnológica integral de gestión empresarial (ERP) y Punto de Venta (POS) diseñada para comercios y centros deportivos.
 
 Esta versión **v2.0** marca un hito en la arquitectura del sistema al implementar una capa de persistencia robusta con **MySQL**, eliminando la volatilidad de los datos en memoria. El sistema garantiza la integridad transaccional de ventas, inventarios, cajas y reservas, permitiendo un despliegue seguro en entornos de producción local.
 
@@ -172,4 +172,4 @@ reflex db migrate
 ```
 
 ---
-© 2025 StockFlow. Desarrollado con ❤️ usando Reflex.
+© 2025 TUWAYKIAPP. Desarrollado con ❤️ usando Reflex.

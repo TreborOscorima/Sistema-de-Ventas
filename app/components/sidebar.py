@@ -47,7 +47,7 @@ def sidebar() -> rx.Component:
                         rx.icon("box", class_name="h-8 w-8 text-indigo-600"),
                         rx.cond(
                             State.sidebar_open,
-                            rx.el.span("StockFlow", class_name="text-xl font-bold"),
+                            rx.el.span("TUWAYKIAPP", class_name="text-xl font-bold"),
                             rx.fragment(),
                         ),
                         class_name="flex items-center gap-2 font-semibold",

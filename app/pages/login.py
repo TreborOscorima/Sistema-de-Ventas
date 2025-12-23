@@ -7,7 +7,17 @@ def login_page() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.icon("box", class_name="h-10 w-10 text-indigo-600"),
-                rx.el.h1("StockFlow", class_name="text-3xl font-bold text-gray-800"),
+                rx.el.div(
+                    rx.el.h1(
+                        "TUWAYKIAPP",
+                        class_name="text-3xl font-bold text-gray-800 text-center",
+                    ),
+                    rx.el.p(
+                        "Tu socio en el Negocio",
+                        class_name="text-xs text-gray-500 text-center",
+                    ),
+                    class_name="flex flex-col items-center leading-tight",
+                ),
                 class_name="flex items-center justify-center gap-3 mb-8",
             ),
             rx.el.form(
