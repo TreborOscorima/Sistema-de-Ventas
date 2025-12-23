@@ -48,25 +48,53 @@ def sport_selector() -> rx.Component:
         ),
         rx.el.div(
             rx.el.button(
-                soccer_ball_icon(),
-                rx.el.span("Campos de Futbol", class_name="font-semibold"),
-                rx.el.span("Reservas, pagos y comprobantes para futbol.", class_name="text-sm opacity-80"),
+                rx.el.div(
+                    class_name="absolute inset-0 bg-black/45 pointer-events-none",
+                ),
+                rx.el.div(
+                    soccer_ball_icon(class_name="h-5 w-5 text-white"),
+                    rx.el.span("Campos de Futbol", class_name="font-semibold text-white"),
+                    rx.el.span(
+                        "Reservas, pagos y comprobantes para futbol.",
+                        class_name="text-sm text-white/80",
+                    ),
+                    class_name="relative z-10 flex flex-col items-start gap-1",
+                ),
                 on_click=lambda: State.set_field_rental_sport("futbol"),
+                style={
+                    "backgroundImage": "url('/campo-futbol.png')",
+                    "backgroundSize": "cover",
+                    "backgroundPosition": "center",
+                },
                 class_name=rx.cond(
                     State.field_rental_sport == "futbol",
-                    "flex flex-col items-start gap-1 rounded-lg bg-emerald-600 text-white px-4 py-3 shadow",
-                    "flex flex-col items-start gap-1 rounded-lg border px-4 py-3 hover:bg-gray-50",
+                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white shadow ring-2 ring-emerald-400",
+                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white border border-white/20 hover:opacity-95",
                 ),
             ),
             rx.el.button(
-                rx.icon("volleyball", class_name="h-5 w-5"),
-                rx.el.span("Campos de Voley", class_name="font-semibold"),
-                rx.el.span("Control rapido de reservas para voley.", class_name="text-sm opacity-80"),
+                rx.el.div(
+                    class_name="absolute inset-0 bg-black/45 pointer-events-none",
+                ),
+                rx.el.div(
+                    rx.icon("volleyball", class_name="h-5 w-5 text-white"),
+                    rx.el.span("Campos de Voley", class_name="font-semibold text-white"),
+                    rx.el.span(
+                        "Control rapido de reservas para voley.",
+                        class_name="text-sm text-white/80",
+                    ),
+                    class_name="relative z-10 flex flex-col items-start gap-1",
+                ),
                 on_click=lambda: State.set_field_rental_sport("voley"),
+                style={
+                    "backgroundImage": "url('/campo-voley.png')",
+                    "backgroundSize": "cover",
+                    "backgroundPosition": "center",
+                },
                 class_name=rx.cond(
                     State.field_rental_sport == "voley",
-                    "flex flex-col items-start gap-1 rounded-lg bg-indigo-600 text-white px-4 py-3 shadow",
-                    "flex flex-col items-start gap-1 rounded-lg border px-4 py-3 hover:bg-gray-50",
+                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white shadow ring-2 ring-indigo-400",
+                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white border border-white/20 hover:opacity-95",
                 ),
             ),
             class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
