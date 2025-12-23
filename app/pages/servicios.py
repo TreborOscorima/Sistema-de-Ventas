@@ -52,13 +52,16 @@ def sport_selector() -> rx.Component:
                     class_name="absolute inset-0 bg-black/45 pointer-events-none",
                 ),
                 rx.el.div(
-                    soccer_ball_icon(class_name="h-5 w-5 text-white"),
-                    rx.el.span("Campos de Futbol", class_name="font-semibold text-white"),
-                    rx.el.span(
-                        "Reservas, pagos y comprobantes para futbol.",
-                        class_name="text-sm text-white/80",
+                    rx.el.img(
+                        src="/balon-futbol.png",
+                        alt="Balon futbol",
+                        class_name="h-6 w-6",
                     ),
-                    class_name="relative z-10 flex flex-col items-start gap-1",
+                    rx.el.span(
+                        "CAMPOS DE FUTBOL",
+                        class_name="text-sm font-semibold tracking-wide text-white",
+                    ),
+                    class_name="relative z-10 flex flex-col items-start gap-2",
                 ),
                 on_click=lambda: State.set_field_rental_sport("futbol"),
                 style={
@@ -77,13 +80,16 @@ def sport_selector() -> rx.Component:
                     class_name="absolute inset-0 bg-black/45 pointer-events-none",
                 ),
                 rx.el.div(
-                    rx.icon("volleyball", class_name="h-5 w-5 text-white"),
-                    rx.el.span("Campos de Voley", class_name="font-semibold text-white"),
-                    rx.el.span(
-                        "Control rapido de reservas para voley.",
-                        class_name="text-sm text-white/80",
+                    rx.el.img(
+                        src="/balon-voley.png",
+                        alt="Balon voley",
+                        class_name="h-6 w-6",
                     ),
-                    class_name="relative z-10 flex flex-col items-start gap-1",
+                    rx.el.span(
+                        "CAMPOS DE VOLEY",
+                        class_name="text-sm font-semibold tracking-wide text-white",
+                    ),
+                    class_name="relative z-10 flex flex-col items-start gap-2",
                 ),
                 on_click=lambda: State.set_field_rental_sport("voley"),
                 style={
