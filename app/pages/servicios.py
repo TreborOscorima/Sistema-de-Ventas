@@ -105,6 +105,24 @@ def sport_selector() -> rx.Component:
 
 def time_slot_button(slot: rx.Var[dict]) -> rx.Component:
     return rx.el.button(
+        rx.cond(
+            (State.field_rental_sport == "futbol") & slot["reserved"],
+            rx.el.img(
+                src="/balon-futbol.png",
+                alt="Reserva futbol",
+                class_name="absolute right-2 top-2 h-7 w-7 rounded-full bg-white/80 p-1 shadow pointer-events-none",
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            (State.field_rental_sport == "voley") & slot["reserved"],
+            rx.el.img(
+                src="/balon-voley.png",
+                alt="Reserva voley",
+                class_name="absolute right-2 top-2 h-7 w-7 rounded-full bg-white/80 p-1 shadow pointer-events-none",
+            ),
+            rx.fragment(),
+        ),
         rx.el.div(
             rx.el.span(
                 slot["start"],
@@ -129,11 +147,11 @@ def time_slot_button(slot: rx.Var[dict]) -> rx.Component:
         on_click=lambda _, start=slot["start"], end=slot["end"]: State.toggle_schedule_slot(start, end),
         class_name=rx.cond(
             slot["reserved"],
-            "w-full text-left rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2 cursor-not-allowed",
+            "w-full text-left rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2 cursor-not-allowed relative",
             rx.cond(
                 slot["selected"],
-                "w-full text-left rounded-lg bg-indigo-600 text-white px-3 py-2 shadow",
-                "w-full text-left rounded-lg border px-3 py-2 hover:bg-gray-50",
+                "w-full text-left rounded-lg bg-indigo-600 text-white px-3 py-2 shadow relative",
+                "w-full text-left rounded-lg border px-3 py-2 hover:bg-gray-50 relative",
             ),
         ),
         disabled=slot["reserved"],
