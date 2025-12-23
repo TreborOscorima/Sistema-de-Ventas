@@ -68,8 +68,8 @@ def sport_selector() -> rx.Component:
                 },
                 class_name=rx.cond(
                     State.field_rental_sport == "futbol",
-                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white shadow ring-2 ring-emerald-400",
-                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white border border-white/20 hover:opacity-95",
+                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white shadow ring-2 ring-emerald-400 min-h-[140px] sm:min-h-[160px]",
+                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white border border-white/20 hover:opacity-95 min-h-[140px] sm:min-h-[160px]",
                 ),
             ),
             rx.el.button(
@@ -93,8 +93,8 @@ def sport_selector() -> rx.Component:
                 },
                 class_name=rx.cond(
                     State.field_rental_sport == "voley",
-                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white shadow ring-2 ring-indigo-400",
-                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white border border-white/20 hover:opacity-95",
+                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white shadow ring-2 ring-indigo-400 min-h-[140px] sm:min-h-[160px]",
+                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white border border-white/20 hover:opacity-95 min-h-[140px] sm:min-h-[160px]",
                 ),
             ),
             class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
