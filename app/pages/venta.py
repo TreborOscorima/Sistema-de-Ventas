@@ -94,12 +94,13 @@ def quick_add_bar() -> rx.Component:
             rx.el.div(
                 rx.icon("scan-barcode", class_name="h-5 w-5 text-gray-400 flex-shrink-0"),
                 rx.el.input(
-                    id="barcode-input-sale",
+                    id="venta_barcode_input",
                     key=State.sale_form_key.to_string(),
                     default_value=State.new_sale_item["barcode"],
+                    on_change=lambda val: State.handle_sale_change("barcode", val),
                     placeholder="Código...",
                     on_blur=lambda e: State.process_sale_barcode_from_input(e),
-                    on_key_down=lambda k: State.handle_barcode_enter(k, "barcode-input-sale"),
+                    on_key_down=lambda k: State.handle_key_down(k),
                     class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none",
                     type="text",
                     auto_complete="off",

@@ -28,6 +28,11 @@ class VentaState(MixinState):
     last_sale_receipt: List[Dict[str, Any]] = []
     last_sale_total: float = 0
     last_sale_timestamp: str = ""
+
+    @rx.event
+    def handle_key_down(self, key: str):
+        if key == "Enter":
+            return self.add_item_to_sale()
     sale_receipt_ready: bool = False
     last_sale_reservation_context: Dict | None = None
     
@@ -619,6 +624,9 @@ class VentaState(MixinState):
         self.new_sale_items.append(item_copy)
         self._reset_sale_form()
         self._refresh_payment_feedback()
+        return rx.call_script(
+            "setTimeout(() => { const el = document.getElementById('venta_barcode_input'); if (el) { el.focus(); el.select(); } }, 0);"
+        )
 
     @rx.event
     def remove_item_from_sale(self, temp_id: str):
