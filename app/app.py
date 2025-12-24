@@ -131,6 +131,12 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
     return rx.cond(
         State.is_authenticated,
         rx.el.main(
+            rx.el.div(
+                class_name=(
+                    "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
+                    "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
+                ),
+            ),
             _toast_provider(),
             rx.el.div(
                 sidebar(),

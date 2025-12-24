@@ -5,6 +5,12 @@ from app.state import State
 def login_page() -> rx.Component:
     return rx.el.div(
         rx.el.div(
+            class_name=(
+                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
+                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
+            ),
+        ),
+        rx.el.div(
             rx.el.div(
                 rx.icon("box", class_name="h-10 w-10 text-indigo-600"),
                 rx.el.div(
