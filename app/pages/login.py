@@ -60,6 +60,28 @@ def login_page() -> rx.Component:
                     class_name="flex items-center gap-2 mt-4 bg-red-100 p-3 rounded-md border border-red-200",
                 ),
             ),
+            rx.el.div(
+                rx.el.div(
+                    rx.el.span("Created by", class_name="text-gray-500"),
+                    rx.el.a(
+                        "Trebor Oscorima",
+                        href="https://www.facebook.com/trebor.oscorima/?locale=es_LA",
+                        target="_blank",
+                        rel="noopener noreferrer",
+                        class_name="text-indigo-600 hover:text-indigo-700 transition-colors",
+                    ),
+                    rx.el.span("🧉⚽️", class_name="text-gray-500"),
+                    class_name="flex items-center gap-1",
+                ),
+                rx.el.a(
+                    "WhatsApp +5491168376517",
+                    href="https://wa.me/5491168376517",
+                    target="_blank",
+                    rel="noopener noreferrer",
+                    class_name="text-gray-500 hover:text-emerald-600 transition-colors",
+                ),
+                class_name="mt-6 flex flex-col items-center gap-1 text-xs",
+            ),
             class_name="w-full max-w-md p-6 sm:p-8 bg-white rounded-2xl shadow-lg border",
         ),
         class_name="flex items-center justify-center min-h-screen bg-gray-100 px-4",
