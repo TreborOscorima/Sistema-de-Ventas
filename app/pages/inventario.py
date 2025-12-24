@@ -1,5 +1,6 @@
 import reflex as rx
 from app.state import State
+from app.components.ui import pagination_controls
 
 
 def edit_product_modal() -> rx.Component:
@@ -522,7 +523,7 @@ def inventario_page() -> rx.Component:
                 ),
                 rx.el.tbody(
                     rx.foreach(
-                        State.inventory_list,
+                        State.inventory_paginated_list,
                         lambda product: rx.el.tr(
                             rx.el.td(
                                 product["barcode"],
@@ -607,6 +608,16 @@ def inventario_page() -> rx.Component:
                 rx.el.p(
                     "El inventario está vacío.",
                     class_name="text-gray-500 text-center py-8",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                State.inventory_total_pages > 1,
+                pagination_controls(
+                    current_page=State.inventory_display_page,
+                    total_pages=State.inventory_total_pages,
+                    on_prev=lambda: State.set_inventory_page(State.inventory_display_page - 1),
+                    on_next=lambda: State.set_inventory_page(State.inventory_display_page + 1),
                 ),
                 rx.fragment(),
             ),

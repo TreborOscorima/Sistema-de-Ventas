@@ -5,6 +5,7 @@ import uuid
 import logging
 import io
 from sqlmodel import select
+from sqlalchemy import or_
 from app.models import Product, StockMovement, User as UserModel, Category, SaleItem
 from .types import InventoryAdjustment
 from .mixin_state import MixinState
@@ -15,6 +16,9 @@ class InventoryState(MixinState):
     # categories: List[str] = ["General"] # Replaced by DB
     new_category_name: str = ""
     inventory_search_term: str = ""
+    inventory_current_page: int = 1
+    inventory_items_per_page: int = 10
+    inventory_recent_limit: int = 100
     
     editing_product: Dict[str, Any] = { # Changed type to Dict for form handling
         "id": None,
@@ -111,26 +115,53 @@ class InventoryState(MixinState):
         _ = self._inventory_update_trigger
         if not self.current_user["privileges"]["view_inventario"]:
             return []
-        
+
+        search = (self.inventory_search_term or "").strip().lower()
+
         with rx.session() as session:
-            query = select(Product)
+            if search:
+                query = select(Product).where(
+                    or_(
+                        Product.description.ilike(f"%{search}%"),
+                        Product.barcode.ilike(f"%{search}%"),
+                        Product.category.ilike(f"%{search}%"),
+                    )
+                )
+            else:
+                query = select(Product).order_by(Product.id.desc()).limit(self.inventory_recent_limit)
             products = session.exec(query).all()
-            
-            # Filter in python for flexibility with search terms
-            if self.inventory_search_term:
-                search = self.inventory_search_term.lower()
-                products = [
-                    p for p in products
-                    if search in p.description.lower()
-                    or search in p.barcode.lower()
-                    or search in p.category.lower()
-                ]
-            
             return sorted(products, key=lambda p: p.description)
+
+    @rx.var
+    def inventory_total_pages(self) -> int:
+        total_items = len(self.inventory_list)
+        if total_items == 0:
+            return 1
+        return (total_items + self.inventory_items_per_page - 1) // self.inventory_items_per_page
+
+    @rx.var
+    def inventory_display_page(self) -> int:
+        if self.inventory_current_page < 1:
+            return 1
+        if self.inventory_current_page > self.inventory_total_pages:
+            return self.inventory_total_pages
+        return self.inventory_current_page
+
+    @rx.var
+    def inventory_paginated_list(self) -> list[Product]:
+        start_index = (self.inventory_display_page - 1) * self.inventory_items_per_page
+        end_index = start_index + self.inventory_items_per_page
+        return self.inventory_list[start_index:end_index]
 
     @rx.event
     def set_inventory_search_term(self, value: str):
         self.inventory_search_term = value or ""
+        self.inventory_current_page = 1
+
+    @rx.event
+    def set_inventory_page(self, page_num: int):
+        if 1 <= page_num <= self.inventory_total_pages:
+            self.inventory_current_page = page_num
 
     @rx.event
     def open_edit_product(self, product: Product):
