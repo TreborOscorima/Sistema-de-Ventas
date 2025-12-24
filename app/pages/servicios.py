@@ -174,114 +174,40 @@ def time_slots_grid() -> rx.Component:
 def schedule_controls() -> rx.Component:
     return rx.el.div(
         rx.el.div(
-            rx.el.button(
-                rx.icon("calendar-check", class_name="h-4 w-4"),
-                "Día",
-                on_click=lambda: State.set_schedule_view("dia"),
-                class_name=rx.cond(
-                    State.schedule_view_mode == "dia",
-                    "flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-600 text-white shadow",
-                    "flex items-center gap-2 px-4 py-2 rounded-full border hover:bg-gray-50",
+            rx.el.div(
+                rx.el.span(
+                    "Vista",
+                    class_name="text-xs uppercase tracking-wide text-gray-500",
                 ),
-            ),
-            rx.el.button(
-                rx.icon("calendar-range", class_name="h-4 w-4"),
-                "Semana",
-                on_click=lambda: State.set_schedule_view("semana"),
-                class_name=rx.cond(
-                    State.schedule_view_mode == "semana",
-                    "flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-600 text-white shadow",
-                    "flex items-center gap-2 px-4 py-2 rounded-full border hover:bg-gray-50",
+                rx.el.button(
+                    rx.icon("calendar-check", class_name="h-4 w-4"),
+                    "Dia",
+                    on_click=lambda: State.set_schedule_view("dia"),
+                    class_name="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-600 text-white shadow-sm hover:bg-indigo-700",
                 ),
+                class_name="flex flex-col gap-2",
             ),
-            rx.el.button(
-                rx.icon("calendar", class_name="h-4 w-4"),
-                "Mes",
-                on_click=lambda: State.set_schedule_view("mes"),
-                class_name=rx.cond(
-                    State.schedule_view_mode == "mes",
-                    "flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-600 text-white shadow",
-                    "flex items-center gap-2 px-4 py-2 rounded-full border hover:bg-gray-50",
+            rx.el.div(
+                rx.el.span(
+                    "Fecha",
+                    class_name="text-xs uppercase tracking-wide text-gray-500",
                 ),
-            ),
-            class_name="grid grid-cols-3 gap-2 w-full sm:w-auto",
-        ),
-        rx.match(
-            State.schedule_view_mode,
-            (
-                "dia",
                 rx.el.div(
-                    rx.el.label("Fecha (día)", class_name="text-sm font-medium text-gray-700"),
+                    rx.icon("calendar", class_name="h-4 w-4 text-gray-500"),
                     rx.el.input(
                         type="date",
                         value=State.schedule_selected_date,
                         on_change=State.set_schedule_date,
-                        class_name="p-2 border rounded-md",
+                        class_name="w-full bg-transparent outline-none",
                     ),
-                    class_name="flex flex-col gap-1",
+                    class_name="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm",
                 ),
+                class_name="flex flex-col gap-2 w-full sm:w-64",
             ),
-            (
-                "semana",
-                rx.el.div(
-                    rx.el.label("Semana", class_name="text-sm font-medium text-gray-700"),
-                    rx.el.input(
-                        type="week",
-                        value=State.schedule_selected_week,
-                        on_change=State.set_schedule_week,
-                        class_name="p-2 border rounded-md",
-                    ),
-                    rx.el.div(
-                        rx.foreach(
-                            State.schedule_week_days,
-                            lambda item, idx: rx.el.button(
-                                item["label"],
-                                on_click=lambda _, offset=idx: State.select_week_day(offset),
-                                class_name=rx.cond(
-                                    State.schedule_selected_date == item["date"],
-                                    "px-3 py-2 rounded-md bg-emerald-600 text-white",
-                                    "px-3 py-2 rounded-md border hover:bg-gray-50",
-                                ),
-                            ),
-                        ),
-                        class_name="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mt-2",
-                    ),
-                    class_name="flex flex-col gap-2",
-                ),
-            ),
-            (
-                "mes",
-                rx.el.div(
-                    rx.el.label("Mes", class_name="text-sm font-medium text-gray-700"),
-                    rx.el.input(
-                        type="month",
-                        value=State.schedule_selected_month,
-                        on_change=State.set_schedule_month,
-                        class_name="p-2 border rounded-md",
-                    ),
-                    rx.el.div(
-                        rx.foreach(
-                            State.schedule_month_days,
-                            lambda item: rx.el.button(
-                                item["label"],
-                                on_click=lambda _, date=item["date"]: State.select_month_day(date),
-                                class_name=rx.cond(
-                                    State.schedule_selected_date == item["date"],
-                                    "px-3 py-2 rounded-md bg-emerald-600 text-white",
-                                    "px-3 py-2 rounded-md border hover:bg-gray-50",
-                                ),
-                            ),
-                        ),
-                        class_name="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-7 gap-2 mt-2",
-                    ),
-                    class_name="flex flex-col gap-2",
-                ),
-            ),
-            rx.fragment(),
+            class_name="flex flex-col sm:flex-row sm:items-end gap-4 justify-between",
         ),
-        class_name="flex flex-col gap-3",
+        class_name="rounded-xl border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-emerald-50 p-4",
     )
-
 
 def schedule_planner() -> rx.Component:
     return rx.el.div(
@@ -295,9 +221,16 @@ def schedule_planner() -> rx.Component:
         ),
         schedule_controls(),
         rx.el.div(
-            rx.el.h4("Horas del dia", class_name="text-sm font-semibold text-gray-700"),
+            rx.el.div(
+                rx.el.h4("Horas del dia", class_name="text-sm font-semibold text-gray-700"),
+                rx.el.span(
+                    "Selecciona bloques consecutivos para reservar.",
+                    class_name="text-xs text-gray-500",
+                ),
+                class_name="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1",
+            ),
             time_slots_grid(),
-            class_name="flex flex-col gap-2",
+            class_name="flex flex-col gap-3",
         ),
         rx.el.div(
             rx.el.div(
@@ -347,12 +280,10 @@ def schedule_planner() -> rx.Component:
                 ),
                 class_name="flex flex-col sm:flex-row gap-2 sm:items-center",
             ),
-            class_name="rounded-md border border-dashed border-gray-200 p-3 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3",
+            class_name="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3",
         ),
-        class_name="bg-white border border-gray-200 rounded-lg p-4 sm:p-5 shadow-sm flex flex-col gap-4",
+        class_name="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm flex flex-col gap-5",
     )
-
-
 def reservation_modal() -> rx.Component:
     return rx.cond(
         State.reservation_modal_open,
@@ -1353,3 +1284,4 @@ def servicios_page() -> rx.Component:
         ),
         class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4",
     )
+
