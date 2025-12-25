@@ -435,7 +435,11 @@ def payment_sidebar() -> rx.Component:
                         rx.el.span(State.currency_symbol, class_name="text-gray-400"),
                         rx.el.input(
                             type="number",
-                            value=State.payment_cash_amount,
+                            value=rx.cond(
+                                State.payment_cash_amount > 0,
+                                State.payment_cash_amount.to_string(),
+                                "",
+                            ),
                             on_change=lambda value: State.set_cash_amount(value),
                             class_name="flex-1 border-0 focus:ring-0 text-lg font-semibold bg-transparent outline-none text-right",
                             placeholder="0.00",
@@ -527,7 +531,11 @@ def payment_sidebar() -> rx.Component:
                         rx.el.label("Efectivo", class_name="text-xs font-medium text-gray-600"),
                         rx.el.input(
                             type="number",
-                            value=State.payment_mixed_cash,
+                            value=rx.cond(
+                                State.payment_mixed_cash > 0,
+                                State.payment_mixed_cash.to_string(),
+                                "",
+                            ),
                             on_change=lambda value: State.set_mixed_cash_amount(value),
                             class_name="w-full px-3 py-2 border rounded-lg text-sm",
                             placeholder="0.00",
@@ -732,7 +740,11 @@ def payment_mobile_section() -> rx.Component:
                     rx.el.span(State.currency_symbol, class_name="text-gray-400 text-lg"),
                     rx.el.input(
                         type="number",
-                        value=State.payment_cash_amount,
+                        value=rx.cond(
+                            State.payment_cash_amount > 0,
+                            State.payment_cash_amount.to_string(),
+                            "",
+                        ),
                         on_change=lambda value: State.set_cash_amount(value),
                         class_name="flex-1 border-0 focus:ring-0 text-xl font-semibold bg-transparent outline-none text-right",
                         placeholder="0.00",
@@ -820,7 +832,11 @@ def payment_mobile_section() -> rx.Component:
                     rx.el.label("Efectivo", class_name="text-xs font-medium text-gray-600"),
                     rx.el.input(
                         type="number",
-                        value=State.payment_mixed_cash,
+                        value=rx.cond(
+                            State.payment_mixed_cash > 0,
+                            State.payment_mixed_cash.to_string(),
+                            "",
+                        ),
                         on_change=lambda value: State.set_mixed_cash_amount(value),
                         class_name="w-full px-3 py-2 border rounded-lg text-sm",
                         placeholder="0.00",
