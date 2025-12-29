@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any
 from sqlmodel import select
 from sqlalchemy import func
 from app.models import User as UserModel
+from app.utils.auth import create_access_token, verify_token
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
 
@@ -93,17 +94,18 @@ class AuthState(MixinState):
 
     @rx.var
     def is_authenticated(self) -> bool:
-        return bool(self.token)
+        return bool(verify_token(self.token))
 
 
     @rx.var
     def current_user(self) -> User:
-        if not self.token:
+        username = verify_token(self.token)
+        if not username:
             return self._guest_user()
         
         with rx.session() as session:
             user = session.exec(
-                select(UserModel).where(UserModel.username == self.token)
+                select(UserModel).where(UserModel.username == username)
             ).first()
             
             if user:
@@ -194,7 +196,7 @@ class AuthState(MixinState):
                     session.add(admin_user)
                     session.commit()
                     
-                    self.token = "admin"
+                    self.token = create_access_token("admin")
                     self.error_message = ""
                     return rx.redirect("/")
                 else:
@@ -206,7 +208,7 @@ class AuthState(MixinState):
             ).first()
             
             if user and bcrypt.checkpw(password, user.password_hash.encode("utf-8")):
-                self.token = username
+                self.token = create_access_token(username)
                 self.error_message = ""
                 return rx.redirect("/")
             

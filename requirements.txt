@@ -1,4 +1,5 @@
-reflex==0.8.19
+reflex==0.8.24
 openpyxl
 bcrypt
 wrapt
+pyjwt
