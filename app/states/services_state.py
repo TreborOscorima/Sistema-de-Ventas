@@ -7,6 +7,7 @@ import math
 import calendar
 import io
 from sqlmodel import select
+from sqlalchemy import func, or_
 from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice
 from .mixin_state import MixinState
@@ -47,40 +48,86 @@ class ServicesState(MixinState):
     service_reservations: List[FieldReservation] = []
     service_admin_log: List[ServiceLogEntry] = []
     reservation_payment_id: str = ""
+    reservation_total_count: int = 0
+
+    def _reservation_to_dict(self, reservation: FieldReservationModel) -> FieldReservation:
+        return {
+            "id": str(reservation.id),
+            "client_name": reservation.client_name,
+            "dni": reservation.client_dni or "",
+            "phone": reservation.client_phone or "",
+            "sport": reservation.sport,
+            "sport_label": self._sport_label(reservation.sport),
+            "field_name": reservation.field_name,
+            "start_datetime": reservation.start_datetime.strftime("%Y-%m-%d %H:%M"),
+            "end_datetime": reservation.end_datetime.strftime("%Y-%m-%d %H:%M"),
+            "advance_amount": reservation.paid_amount,
+            "total_amount": reservation.total_amount,
+            "paid_amount": reservation.paid_amount,
+            "status": reservation.status,
+            "created_at": reservation.created_at.strftime("%Y-%m-%d %H:%M")
+            if reservation.created_at
+            else "",
+            "cancellation_reason": reservation.cancellation_reason or "",
+            "delete_reason": reservation.delete_reason or "",
+        }
+
+    def _apply_reservation_filters(self, query):
+        query = query.where(FieldReservationModel.sport == self.field_rental_sport)
+        if self.reservation_filter_status != "todos":
+            query = query.where(FieldReservationModel.status == self.reservation_filter_status)
+        if self.reservation_search:
+            search = f"%{self.reservation_search.strip()}%"
+            query = query.where(
+                or_(
+                    FieldReservationModel.client_name.ilike(search),
+                    FieldReservationModel.field_name.ilike(search),
+                )
+            )
+        if self.reservation_filter_start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                    self.reservation_filter_start_date, "%Y-%m-%d"
+                )
+                query = query.where(FieldReservationModel.start_datetime >= start_date)
+            except ValueError:
+                pass
+        if self.reservation_filter_end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    self.reservation_filter_end_date, "%Y-%m-%d"
+                )
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+                query = query.where(FieldReservationModel.start_datetime <= end_date)
+            except ValueError:
+                pass
+        return query
 
     def load_reservations(self):
         with rx.session() as session:
-            reservations = session.exec(select(FieldReservationModel).order_by(FieldReservationModel.start_datetime.desc())).all()
+            page = max(self.reservation_current_page, 1)
+            per_page = max(self.reservation_items_per_page, 1)
+
+            count_query = select(func.count()).select_from(FieldReservationModel)
+            count_query = self._apply_reservation_filters(count_query)
+            self.reservation_total_count = session.exec(count_query).one()
+
+            data_query = (
+                select(FieldReservationModel)
+                .order_by(FieldReservationModel.start_datetime.desc())
+            )
+            data_query = self._apply_reservation_filters(data_query)
+            data_query = data_query.offset((page - 1) * per_page).limit(per_page)
+            reservations = session.exec(data_query).all()
             self.service_reservations = [
-                {
-                    "id": str(r.id),
-                    "client_name": r.client_name,
-                    "dni": r.client_dni or "",
-                    "phone": r.client_phone or "",
-                    "sport": r.sport,
-                    "sport_label": self._sport_label(r.sport),
-                    "field_name": r.field_name,
-                    "start_datetime": r.start_datetime.strftime("%Y-%m-%d %H:%M"),
-                    "end_datetime": r.end_datetime.strftime("%Y-%m-%d %H:%M"),
-                    "advance_amount": r.paid_amount, # In the model paid_amount tracks what has been paid
-                    "total_amount": r.total_amount,
-                    "paid_amount": r.paid_amount,
-                    "status": r.status,
-                    "created_at": r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
-                    "cancellation_reason": r.cancellation_reason or "",
-                    "delete_reason": r.delete_reason or "",
-                }
-                for r in reservations
+                self._reservation_to_dict(reservation) for reservation in reservations
             ]
     
     @rx.var
     def reservation_selected_for_payment(self) -> FieldReservation | None:
         if not self.reservation_payment_id:
             return None
-        return next(
-            (r for r in self.service_reservations if r["id"] == self.reservation_payment_id),
-            None,
-        )
+        return self._find_reservation_by_id(self.reservation_payment_id)
 
     @rx.var
     def selected_reservation_balance(self) -> float:
@@ -131,6 +178,7 @@ class ServicesState(MixinState):
         self.reservation_filter_start_date = self.reservation_staged_start_date
         self.reservation_filter_end_date = self.reservation_staged_end_date
         self.reservation_current_page = 1  # Reset pagination
+        self.load_reservations()
 
     def reset_reservation_filters(self):
         self.reservation_staged_search = ""
@@ -140,7 +188,14 @@ class ServicesState(MixinState):
         self.apply_reservation_filters()
 
     def export_reservations_excel(self):
-        data = self.service_reservations_for_sport
+        with rx.session() as session:
+            data_query = (
+                select(FieldReservationModel)
+                .order_by(FieldReservationModel.start_datetime.desc())
+            )
+            data_query = self._apply_reservation_filters(data_query)
+            reservations = session.exec(data_query).all()
+            data = [self._reservation_to_dict(reservation) for reservation in reservations]
         
         if not data:
             return rx.toast("No hay datos para exportar.", duration=3000)
@@ -320,72 +375,40 @@ class ServicesState(MixinState):
     def reservation_selected_for_delete(self) -> FieldReservation | None:
         if not self.reservation_delete_selection:
             return None
-        return next(
-            (r for r in self.service_reservations if r["id"] == self.reservation_delete_selection),
-            None,
-        )
+        return self._find_reservation_by_id(self.reservation_delete_selection)
 
     @rx.var
     def service_reservations_for_sport(self) -> list[FieldReservation]:
-        reservations = [
-            r for r in self.service_reservations
-            if r["sport"] == self.field_rental_sport
-        ]
-        
-        # Filter by status
-        if self.reservation_filter_status != "todos":
-            reservations = [r for r in reservations if r["status"] == self.reservation_filter_status]
-            
-        # Filter by search (client name, field name)
-        if self.reservation_search:
-            search = self.reservation_search.lower()
-            reservations = [
-                r for r in reservations
-                if search in r["client_name"].lower() or search in r["field_name"].lower()
-            ]
-            
-        # Filter by date range
-        if self.reservation_filter_start_date:
-            reservations = [
-                r for r in reservations
-                if r["start_datetime"].split(" ")[0] >= self.reservation_filter_start_date
-            ]
-            
-        if self.reservation_filter_end_date:
-            reservations = [
-                r for r in reservations
-                if r["start_datetime"].split(" ")[0] <= self.reservation_filter_end_date
-            ]
-            
-        return reservations
+        return self.service_reservations
 
     @rx.var
     def reservation_total_pages(self) -> int:
-        total = len(self.service_reservations_for_sport)
+        total = self.reservation_total_count
         if total == 0:
             return 1
         return (total + self.reservation_items_per_page - 1) // self.reservation_items_per_page
 
     @rx.var
     def paginated_reservations(self) -> list[FieldReservation]:
-        start_index = (self.reservation_current_page - 1) * self.reservation_items_per_page
-        end_index = start_index + self.reservation_items_per_page
-        return self.service_reservations_for_sport[start_index:end_index]
+        return self.service_reservations
 
     @rx.event
     def set_reservation_page(self, page: int):
         if 1 <= page <= self.reservation_total_pages:
             self.reservation_current_page = page
+            self.load_reservations()
 
     @rx.event
     def prev_reservation_page(self):
         if self.reservation_current_page > 1:
             self.reservation_current_page -= 1
+            self.load_reservations()
 
     @rx.event
     def next_reservation_page(self):
         if self.reservation_current_page < self.reservation_total_pages:
             self.reservation_current_page += 1
+            self.load_reservations()
 
     @rx.var
     def field_prices_for_current_sport(self) -> list[FieldPrice]:
@@ -472,13 +495,27 @@ class ServicesState(MixinState):
             or self.reservation_form.get("date", "")
             or TODAY_STR
         )
+        reservations = self._reservations_for_date(date_str, self.field_rental_sport)
         slots: list[dict] = []
         for hour in range(24):
             start = f"{hour:02d}:00"
             end = "23:59" if hour == 23 else f"{hour + 1:02d}:00"
-            reserved = self._slot_has_conflict(
-                date_str, start, end, self.field_rental_sport
-            )
+            try:
+                slot_start = datetime.datetime.strptime(
+                    f"{date_str} {start}", "%Y-%m-%d %H:%M"
+                )
+                slot_end = datetime.datetime.strptime(
+                    f"{date_str} {end}", "%Y-%m-%d %H:%M"
+                )
+            except ValueError:
+                slot_start = None
+                slot_end = None
+            reserved = False
+            if slot_start and slot_end:
+                reserved = any(
+                    slot_start < res_end and slot_end > res_start
+                    for res_start, res_end in reservations
+                )
             is_selected = any(
                 selected.get("start") == start for selected in self.schedule_selected_slots
             )
@@ -514,6 +551,7 @@ class ServicesState(MixinState):
         self.schedule_selected_month = CURRENT_MONTH_STR
         self._clear_schedule_selection()
         self.reservation_form = self._reservation_default_form()
+        self.load_reservations()
 
     @rx.event
     def set_schedule_view(self, view: str):
@@ -659,14 +697,22 @@ class ServicesState(MixinState):
         self.reservation_form["sport_label"] = self._sport_label(self.field_rental_sport)
         self.reservation_form["selected_price_id"] = ""
         existing = None
-        for reservation in self.service_reservations:
-            if reservation.get("status") in ["cancelado", "eliminado"]:
-                continue
-            if reservation.get("sport") != self.field_rental_sport:
-                continue
-            if reservation.get("start_datetime", "").endswith(start_time) and reservation.get("start_datetime", "").startswith(date_str):
-                existing = reservation
-                break
+        try:
+            start_dt = datetime.datetime.strptime(
+                f"{date_str} {start_time}", "%Y-%m-%d %H:%M"
+            )
+        except ValueError:
+            start_dt = None
+        if start_dt:
+            with rx.session() as session:
+                existing_row = session.exec(
+                    select(FieldReservationModel)
+                    .where(FieldReservationModel.sport == self.field_rental_sport)
+                    .where(FieldReservationModel.status.notin_(["cancelado", "eliminado"]))
+                    .where(FieldReservationModel.start_datetime == start_dt)
+                ).first()
+                if existing_row:
+                    existing = self._reservation_to_dict(existing_row)
         if existing:
             self.reservation_modal_mode = "view"
             self.reservation_modal_reservation_id = existing["id"]
@@ -1335,6 +1381,24 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 return
             self._apply_price_total(target)
 
+    def _reservations_for_date(
+        self, date_str: str, sport: str
+    ) -> list[tuple[datetime.datetime, datetime.datetime]]:
+        try:
+            start_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return []
+        end_date = start_date.replace(hour=23, minute=59, second=59)
+        with rx.session() as session:
+            query = (
+                select(FieldReservationModel.start_datetime, FieldReservationModel.end_datetime)
+                .where(FieldReservationModel.sport == sport)
+                .where(FieldReservationModel.status.notin_(["cancelado", "eliminado"]))
+                .where(FieldReservationModel.start_datetime >= start_date)
+                .where(FieldReservationModel.start_datetime <= end_date)
+            )
+            return session.exec(query).all()
+
     def _slot_has_conflict(
         self, date_str: str, start_time: str, end_time: str, sport: str
     ) -> bool:
@@ -1347,27 +1411,16 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             )
         except ValueError:
             return False
-        for reservation in self.service_reservations:
-            if reservation.get("status") in ["cancelado", "eliminado"]:
-                continue
-            if reservation.get("sport") != sport:
-                continue
-            if not reservation.get("start_datetime") or not reservation.get("end_datetime"):
-                continue
-            try:
-                res_start = datetime.datetime.strptime(
-                    reservation["start_datetime"], "%Y-%m-%d %H:%M"
-                )
-                res_end = datetime.datetime.strptime(
-                    reservation["end_datetime"], "%Y-%m-%d %H:%M"
-                )
-            except ValueError:
-                continue
-            if res_start.date().strftime("%Y-%m-%d") != date_str:
-                continue
-            if slot_start < res_end and slot_end > res_start:
-                return True
-        return False
+        with rx.session() as session:
+            conflict = session.exec(
+                select(FieldReservationModel.id)
+                .where(FieldReservationModel.sport == sport)
+                .where(FieldReservationModel.status.notin_(["cancelado", "eliminado"]))
+                .where(FieldReservationModel.start_datetime < slot_end)
+                .where(FieldReservationModel.end_datetime > slot_start)
+                .limit(1)
+            ).first()
+        return conflict is not None
 
     def _log_service_action(
         self,
@@ -1424,7 +1477,23 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         }
 
     def _find_reservation_by_id(self, res_id: str) -> FieldReservation | None:
-        return next((r for r in self.service_reservations if r["id"] == res_id), None)
+        if not res_id:
+            return None
+        res_id = str(res_id).strip()
+        cached = next((r for r in self.service_reservations if r["id"] == res_id), None)
+        if cached:
+            return cached
+        try:
+            reservation_id = int(res_id)
+        except ValueError:
+            return None
+        with rx.session() as session:
+            reservation = session.exec(
+                select(FieldReservationModel).where(FieldReservationModel.id == reservation_id)
+            ).first()
+            if not reservation:
+                return None
+            return self._reservation_to_dict(reservation)
 
     def _sport_label(self, sport: str) -> str:
         sport_lower = sport.lower()

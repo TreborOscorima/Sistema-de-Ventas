@@ -1,11 +1,12 @@
 import reflex as rx
 from typing import List, Dict, Any
 import datetime
+import json
 import logging
 import io
 from decimal import Decimal
-from sqlmodel import select, or_
-from sqlalchemy.orm import selectinload
+from sqlmodel import select
+import sqlalchemy as sa
 from app.models import Sale, SaleItem, StockMovement, Product, User as UserModel, CashboxLog
 from .types import Movement
 from .mixin_state import MixinState
@@ -25,6 +26,185 @@ class HistorialState(MixinState):
     items_per_page: int = 10
     _history_update_trigger: int = 0
 
+    def _history_union_subquery(self):
+        search = (self.history_filter_product or "").strip()
+        start_date = None
+        end_date = None
+        if self.history_filter_start_date:
+            try:
+                start_date = datetime.datetime.fromisoformat(
+                    self.history_filter_start_date
+                )
+            except ValueError:
+                start_date = None
+        if self.history_filter_end_date:
+            try:
+                end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+            except ValueError:
+                end_date = None
+
+        sales_query = (
+            select(
+                sa.cast(SaleItem.id, sa.String).label("id"),
+                Sale.timestamp.label("timestamp"),
+                sa.literal("Venta").label("type"),
+                SaleItem.product_name_snapshot.label("product_description"),
+                SaleItem.quantity.label("quantity"),
+                sa.func.coalesce(Product.unit, sa.literal("Global")).label("unit"),
+                SaleItem.subtotal.label("total"),
+                sa.func.coalesce(Sale.payment_method, sa.literal("-")).label(
+                    "payment_method"
+                ),
+                sa.cast(Sale.payment_details, sa.String).label("payment_details"),
+                sa.func.coalesce(UserModel.username, sa.literal("Desconocido")).label(
+                    "user"
+                ),
+                sa.cast(Sale.id, sa.String).label("sale_id"),
+                sa.literal("sale").label("source"),
+            )
+            .select_from(SaleItem)
+            .join(Sale)
+            .join(Product, isouter=True)
+            .join(UserModel, isouter=True)
+        )
+
+        stock_query = (
+            select(
+                sa.cast(StockMovement.id, sa.String).label("id"),
+                StockMovement.timestamp.label("timestamp"),
+                StockMovement.type.label("type"),
+                sa.func.concat(
+                    Product.description,
+                    sa.literal(" ("),
+                    StockMovement.description,
+                    sa.literal(")"),
+                ).label("product_description"),
+                StockMovement.quantity.label("quantity"),
+                Product.unit.label("unit"),
+                sa.literal(0).label("total"),
+                sa.literal("-").label("payment_method"),
+                sa.cast(StockMovement.description, sa.String).label("payment_details"),
+                sa.func.coalesce(UserModel.username, sa.literal("Desconocido")).label(
+                    "user"
+                ),
+                sa.literal("").label("sale_id"),
+                sa.literal("stock").label("source"),
+            )
+            .select_from(StockMovement)
+            .join(Product)
+            .join(UserModel, isouter=True)
+        )
+
+        log_query = (
+            select(
+                sa.cast(CashboxLog.id, sa.String).label("id"),
+                CashboxLog.timestamp.label("timestamp"),
+                CashboxLog.action.label("type"),
+                CashboxLog.notes.label("product_description"),
+                sa.literal(0).label("quantity"),
+                sa.literal("-").label("unit"),
+                CashboxLog.amount.label("total"),
+                sa.literal("Efectivo").label("payment_method"),
+                sa.cast(CashboxLog.notes, sa.String).label("payment_details"),
+                sa.func.coalesce(UserModel.username, sa.literal("Desconocido")).label(
+                    "user"
+                ),
+                sa.literal("").label("sale_id"),
+                sa.literal("log").label("source"),
+            )
+            .select_from(CashboxLog)
+            .join(UserModel, isouter=True)
+        )
+
+        if search:
+            like_search = f"%{search}%"
+            sales_query = sales_query.where(
+                SaleItem.product_name_snapshot.ilike(like_search)
+            )
+            stock_query = stock_query.where(Product.description.ilike(like_search))
+
+        if start_date:
+            sales_query = sales_query.where(Sale.timestamp >= start_date)
+            stock_query = stock_query.where(StockMovement.timestamp >= start_date)
+            log_query = log_query.where(CashboxLog.timestamp >= start_date)
+
+        if end_date:
+            sales_query = sales_query.where(Sale.timestamp <= end_date)
+            stock_query = stock_query.where(StockMovement.timestamp <= end_date)
+            log_query = log_query.where(CashboxLog.timestamp <= end_date)
+
+        queries = [sales_query, stock_query]
+        if not search:
+            queries.append(log_query)
+
+        return sa.union_all(*queries).subquery()
+
+    def _history_base_select(self):
+        history_union = self._history_union_subquery()
+        query = select(*history_union.c)
+        if self.history_filter_type != "Todos":
+            query = query.where(history_union.c.type == self.history_filter_type)
+        query = query.order_by(history_union.c.timestamp.desc())
+        return query, history_union
+
+    def _history_row_to_movement(self, row) -> Movement:
+        def _value(key: str, default: Any = None):
+            if isinstance(row, dict):
+                return row.get(key, default)
+            if hasattr(row, key):
+                return getattr(row, key)
+            try:
+                return row[key]
+            except (KeyError, IndexError, TypeError):
+                return default
+
+        timestamp = _value("timestamp")
+        movement_type = _value("type") or ""
+        source = _value("source") or ""
+        if source == "log":
+            movement_type = movement_type.capitalize()
+        movement_id = f"{source or 'row'}-{_value('id')}"
+        payment_details = _value("payment_details")
+        if isinstance(payment_details, str):
+            stripped = payment_details.strip()
+            if stripped.startswith("{") or stripped.startswith("["):
+                try:
+                    payment_details = json.loads(stripped)
+                except json.JSONDecodeError:
+                    pass
+        return {
+            "id": movement_id,
+            "timestamp": timestamp.strftime("%Y-%m-%d %H:%M:%S") if timestamp else "",
+            "type": movement_type,
+            "product_description": _value("product_description") or "",
+            "quantity": _value("quantity") or 0,
+            "unit": _value("unit") or "-",
+            "total": _value("total") or 0,
+            "payment_method": _value("payment_method") or "-",
+            "payment_details": self._payment_details_text(payment_details),
+            "user": _value("user") or "Desconocido",
+            "sale_id": _value("sale_id") or "",
+        }
+
+    def _fetch_history(self, offset: int | None = None, limit: int | None = None) -> list[Movement]:
+        with rx.session() as session:
+            query, _ = self._history_base_select()
+            if offset is not None:
+                query = query.offset(offset)
+            if limit is not None:
+                query = query.limit(limit)
+            rows = session.execute(query).all()
+            return [self._history_row_to_movement(row) for row in rows]
+
+    def _history_total_count(self) -> int:
+        with rx.session() as session:
+            history_union = self._history_union_subquery()
+            count_query = select(sa.func.count()).select_from(history_union)
+            if self.history_filter_type != "Todos":
+                count_query = count_query.where(history_union.c.type == self.history_filter_type)
+            return session.exec(count_query).one()
+
     @rx.var
     def filtered_history(self) -> list[Movement]:
         if not self.current_user["privileges"]["view_historial"]:
@@ -32,143 +212,17 @@ class HistorialState(MixinState):
         
         # Dependency to force update
         _ = self._history_update_trigger
-        
-        movements = []
-        
-        with rx.session() as session:
-            # 1. Fetch Sales
-            sales_query = select(Sale, UserModel).join(UserModel, isouter=True).options(
-                selectinload(Sale.items).selectinload(SaleItem.product)
-            )
-            
-            if self.history_filter_start_date:
-                try:
-                    start_date = datetime.datetime.fromisoformat(self.history_filter_start_date)
-                    sales_query = sales_query.where(Sale.timestamp >= start_date)
-                except ValueError: pass
-            if self.history_filter_end_date:
-                try:
-                    end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
-                    # Add one day to include the end date fully if it's just a date
-                    # But input is usually date string.
-                    # Assuming format YYYY-MM-DD
-                    end_date = end_date.replace(hour=23, minute=59, second=59)
-                    sales_query = sales_query.where(Sale.timestamp <= end_date)
-                except ValueError: pass
-                
-            sales_results = session.exec(sales_query).all()
-            
-            for sale, user in sales_results:
-                # Eager load items if possible, or just access them (lazy load)
-                sale_items = sale.items
-                
-                # Filter by product
-                if self.history_filter_product:
-                    sale_items = [i for i in sale_items if self.history_filter_product.lower() in i.product_name_snapshot.lower()]
-                    if not sale_items:
-                        continue
-                
-                for item in sale_items:
-                    unit = "Global"
-                    if item.product:
-                        unit = item.product.unit
-                    
-                    movements.append({
-                        "id": f"{sale.id}-{item.id}",
-                        "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                        "type": "Venta",
-                        "product_description": item.product_name_snapshot,
-                        "quantity": item.quantity,
-                        "unit": unit,
-                        "total": item.subtotal,
-                        "payment_method": sale.payment_method,
-                        "payment_details": self._payment_details_text(sale.payment_details),
-                        "user": user.username if user else "Desconocido",
-                        "sale_id": str(sale.id)
-                    })
-
-            # 2. Fetch Stock Movements
-            stock_query = select(StockMovement, Product, UserModel).join(Product).join(UserModel, isouter=True)
-            
-            if self.history_filter_start_date:
-                try:
-                    start_date = datetime.datetime.fromisoformat(self.history_filter_start_date)
-                    stock_query = stock_query.where(StockMovement.timestamp >= start_date)
-                except ValueError: pass
-            if self.history_filter_end_date:
-                try:
-                    end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
-                    end_date = end_date.replace(hour=23, minute=59, second=59)
-                    stock_query = stock_query.where(StockMovement.timestamp <= end_date)
-                except ValueError: pass
-            
-            if self.history_filter_product:
-                stock_query = stock_query.where(Product.description.ilike(f"%{self.history_filter_product}%"))
-                
-            stock_results = session.exec(stock_query).all()
-            
-            for mov, prod, user in stock_results:
-                movements.append({
-                    "id": str(mov.id),
-                    "timestamp": mov.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                    "type": mov.type,
-                    "product_description": f"{prod.description} ({mov.description})",
-                    "quantity": mov.quantity,
-                    "unit": prod.unit,
-                    "total": 0,
-                    "payment_method": "-",
-                    "payment_details": mov.description,
-                    "user": user.username if user else "Desconocido",
-                    "sale_id": ""
-                })
-
-            # 3. Fetch Cashbox Logs
-            # Only if no product filter is active, as logs don't have products
-            if not self.history_filter_product:
-                log_query = select(CashboxLog, UserModel).join(UserModel, isouter=True)
-                if self.history_filter_start_date:
-                    try:
-                        start_date = datetime.datetime.fromisoformat(self.history_filter_start_date)
-                        log_query = log_query.where(CashboxLog.timestamp >= start_date)
-                    except ValueError: pass
-                if self.history_filter_end_date:
-                    try:
-                        end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
-                        end_date = end_date.replace(hour=23, minute=59, second=59)
-                        log_query = log_query.where(CashboxLog.timestamp <= end_date)
-                    except ValueError: pass
-                
-                log_results = session.exec(log_query).all()
-                for log, user in log_results:
-                    movements.append({
-                        "id": str(log.id),
-                        "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                        "type": log.action.capitalize(),
-                        "product_description": log.notes,
-                        "quantity": 0,
-                        "unit": "-",
-                        "total": log.amount,
-                        "payment_method": "Efectivo",
-                        "payment_details": log.notes,
-                        "user": user.username if user else "Desconocido",
-                        "sale_id": ""
-                    })
-
-        # Filter by type if needed
-        if self.history_filter_type != "Todos":
-            movements = [m for m in movements if m["type"] == self.history_filter_type]
-            
-        return sorted(movements, key=lambda m: m["timestamp"], reverse=True)
+        offset = (self.current_page_history - 1) * self.items_per_page
+        return self._fetch_history(offset=offset, limit=self.items_per_page)
 
     @rx.var
     def paginated_history(self) -> list[Movement]:
-        start_index = (self.current_page_history - 1) * self.items_per_page
-        end_index = start_index + self.items_per_page
-        return self.filtered_history[start_index:end_index]
+        return self.filtered_history
 
     @rx.var
     def total_pages(self) -> int:
-        total_items = len(self.filtered_history)
+        _ = self._history_update_trigger
+        total_items = self._history_total_count()
         if total_items == 0:
             return 1
         return (total_items + self.items_per_page - 1) // self.items_per_page
@@ -236,7 +290,7 @@ class HistorialState(MixinState):
         style_header_row(ws, 1, headers)
         
         rows = []
-        for movement in self.filtered_history:
+        for movement in self._fetch_history():
             method_display = self._normalize_wallet_label(
                 movement.get("payment_method", "")
             )

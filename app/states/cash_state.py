@@ -157,27 +157,42 @@ class CashState(MixinState):
         self._cashbox_update_trigger += 1
         return rx.toast("Movimiento registrado correctamente.", duration=3000)
 
-    @rx.var
-    def petty_cash_movements(self) -> List[CashboxLogEntry]:
-        _ = self._cashbox_update_trigger
+    def _petty_cash_query(self):
+        return (
+            select(CashboxLogModel, UserModel.username)
+            .join(UserModel)
+            .where(CashboxLogModel.action == "gasto_caja_chica")
+            .order_by(desc(CashboxLogModel.timestamp))
+        )
+
+    def _petty_cash_count(self) -> int:
+        statement = (
+            select(sqlalchemy.func.count())
+            .select_from(CashboxLogModel)
+            .where(CashboxLogModel.action == "gasto_caja_chica")
+        )
         with rx.session() as session:
-            statement = (
-                select(CashboxLogModel, UserModel.username)
-                .join(UserModel)
-                .where(CashboxLogModel.action == "gasto_caja_chica")
-                .order_by(desc(CashboxLogModel.timestamp))
-            )
-            
+            return session.exec(statement).one()
+
+    def _fetch_petty_cash(
+        self, offset: int | None = None, limit: int | None = None
+    ) -> List[CashboxLogEntry]:
+        with rx.session() as session:
+            statement = self._petty_cash_query()
+            if offset is not None:
+                statement = statement.offset(offset)
+            if limit is not None:
+                statement = statement.limit(limit)
             results = session.exec(statement).all()
-            
-            filtered = []
+
+            filtered: List[CashboxLogEntry] = []
             for log, username in results:
                 qty = log.quantity or 1.0
                 cost = log.cost or log.amount
-                
+
                 # Format quantity: integer if no decimal part, else 2 decimals
                 fmt_qty = f"{int(qty)}" if qty % 1 == 0 else f"{qty:.2f}"
-                
+
                 entry: CashboxLogEntry = {
                     "id": str(log.id),
                     "action": log.action,
@@ -193,20 +208,27 @@ class CashState(MixinState):
                     "cost": cost,
                     "formatted_amount": f"{log.amount:.2f}",
                     "formatted_cost": f"{cost:.2f}",
-                    "formatted_quantity": fmt_qty
+                    "formatted_quantity": fmt_qty,
                 }
                 filtered.append(entry)
             return filtered
 
     @rx.var
+    def petty_cash_movements(self) -> List[CashboxLogEntry]:
+        _ = self._cashbox_update_trigger
+        page = max(self.petty_cash_current_page, 1)
+        per_page = max(self.petty_cash_items_per_page, 1)
+        offset = (page - 1) * per_page
+        return self._fetch_petty_cash(offset=offset, limit=per_page)
+
+    @rx.var
     def paginated_petty_cash_movements(self) -> List[CashboxLogEntry]:
-        start_index = (self.petty_cash_current_page - 1) * self.petty_cash_items_per_page
-        end_index = start_index + self.petty_cash_items_per_page
-        return self.petty_cash_movements[start_index:end_index]
+        return self.petty_cash_movements
 
     @rx.var
     def petty_cash_total_pages(self) -> int:
-        total = len(self.petty_cash_movements)
+        _ = self._cashbox_update_trigger
+        total = self._petty_cash_count()
         if total == 0:
             return 1
         return (total + self.petty_cash_items_per_page - 1) // self.petty_cash_items_per_page
@@ -395,46 +417,77 @@ class CashState(MixinState):
         
         self._cashbox_update_trigger += 1
 
-    @rx.var
-    def filtered_cashbox_logs(self) -> list[CashboxLogEntry]:
-        # Dependency on trigger to refresh when cashbox is opened/closed
-        _ = self._cashbox_update_trigger
-        
-        if not self.current_user["privileges"]["view_cashbox"]:
-            return []
-            
-        with rx.session() as session:
-            statement = (
-                select(CashboxLogModel, UserModel.username)
-                .join(UserModel)
-                .where(CashboxLogModel.action.in_(["apertura", "cierre"]))
-                .order_by(desc(CashboxLogModel.timestamp))
-            )
-            
-            results = session.exec(statement).all()
-            
-            filtered = []
-            start_date = None
-            end_date = None
-            
-            if self.cashbox_log_filter_start_date:
-                try:
-                    start_date = datetime.datetime.strptime(self.cashbox_log_filter_start_date, "%Y-%m-%d").date()
-                except: pass
-            
-            if self.cashbox_log_filter_end_date:
-                try:
-                    end_date = datetime.datetime.strptime(self.cashbox_log_filter_end_date, "%Y-%m-%d").date()
-                except: pass
+    def _cashbox_logs_query(self):
+        statement = (
+            select(CashboxLogModel, UserModel.username)
+            .join(UserModel)
+            .where(CashboxLogModel.action.in_(["apertura", "cierre"]))
+            .order_by(desc(CashboxLogModel.timestamp))
+        )
 
+        if self.cashbox_log_filter_start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                    self.cashbox_log_filter_start_date, "%Y-%m-%d"
+                )
+                statement = statement.where(CashboxLogModel.timestamp >= start_date)
+            except ValueError:
+                pass
+
+        if self.cashbox_log_filter_end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    self.cashbox_log_filter_end_date, "%Y-%m-%d"
+                )
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+                statement = statement.where(CashboxLogModel.timestamp <= end_date)
+            except ValueError:
+                pass
+
+        return statement
+
+    def _cashbox_logs_count(self) -> int:
+        statement = (
+            select(sqlalchemy.func.count())
+            .select_from(CashboxLogModel)
+            .where(CashboxLogModel.action.in_(["apertura", "cierre"]))
+        )
+
+        if self.cashbox_log_filter_start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                    self.cashbox_log_filter_start_date, "%Y-%m-%d"
+                )
+                statement = statement.where(CashboxLogModel.timestamp >= start_date)
+            except ValueError:
+                pass
+
+        if self.cashbox_log_filter_end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    self.cashbox_log_filter_end_date, "%Y-%m-%d"
+                )
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+                statement = statement.where(CashboxLogModel.timestamp <= end_date)
+            except ValueError:
+                pass
+
+        with rx.session() as session:
+            return session.exec(statement).one()
+
+    def _fetch_cashbox_logs(
+        self, offset: int | None = None, limit: int | None = None
+    ) -> list[CashboxLogEntry]:
+        with rx.session() as session:
+            statement = self._cashbox_logs_query()
+            if offset is not None:
+                statement = statement.offset(offset)
+            if limit is not None:
+                statement = statement.limit(limit)
+            results = session.exec(statement).all()
+
+            filtered: list[CashboxLogEntry] = []
             for log, username in results:
-                log_date = log.timestamp.date()
-                
-                if start_date and log_date < start_date:
-                    continue
-                if end_date and log_date > end_date:
-                    continue
-                
                 entry: CashboxLogEntry = {
                     "id": str(log.id),
                     "action": log.action,
@@ -444,21 +497,30 @@ class CashState(MixinState):
                     "closing_total": log.amount if log.action == "cierre" else 0.0,
                     "totals_by_method": [],
                     "notes": log.notes,
-                    "amount": log.amount
+                    "amount": log.amount,
                 }
                 filtered.append(entry)
-                
+
             return filtered
 
     @rx.var
+    def filtered_cashbox_logs(self) -> list[CashboxLogEntry]:
+        _ = self._cashbox_update_trigger
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return []
+        page = max(self.cashbox_log_current_page, 1)
+        per_page = max(self.cashbox_log_items_per_page, 1)
+        offset = (page - 1) * per_page
+        return self._fetch_cashbox_logs(offset=offset, limit=per_page)
+
+    @rx.var
     def paginated_cashbox_logs(self) -> list[CashboxLogEntry]:
-        start_index = (self.cashbox_log_current_page - 1) * self.cashbox_log_items_per_page
-        end_index = start_index + self.cashbox_log_items_per_page
-        return self.filtered_cashbox_logs[start_index:end_index]
+        return self.filtered_cashbox_logs
 
     @rx.var
     def cashbox_log_total_pages(self) -> int:
-        total = len(self.filtered_cashbox_logs)
+        _ = self._cashbox_update_trigger
+        total = self._cashbox_logs_count()
         if total == 0:
             return 1
         return (total + self.cashbox_log_items_per_page - 1) // self.cashbox_log_items_per_page
@@ -578,86 +640,144 @@ class CashState(MixinState):
         denial = self._cashbox_guard()
         if denial:
             return denial
-        total_pages = (
-            (len(self.filtered_cashbox_sales) + self.cashbox_items_per_page - 1)
-            // self.cashbox_items_per_page
-        )
-        total_pages = total_pages or 1
+        total_pages = self.cashbox_total_pages
         if self.cashbox_current_page < total_pages:
             self.cashbox_current_page += 1
 
+    def _cashbox_sales_query(self):
+        query = (
+            select(Sale, UserModel)
+            .select_from(Sale)
+            .join(UserModel, Sale.user_id == UserModel.id, isouter=True)
+            .order_by(desc(Sale.timestamp))
+        )
+
+        if self.cashbox_filter_start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                    self.cashbox_filter_start_date, "%Y-%m-%d"
+                )
+                query = query.where(Sale.timestamp >= start_date)
+            except ValueError:
+                pass
+
+        if self.cashbox_filter_end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    self.cashbox_filter_end_date, "%Y-%m-%d"
+                )
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+                query = query.where(Sale.timestamp <= end_date)
+            except ValueError:
+                pass
+
+        if not self.show_cashbox_advances:
+            details_expr = sqlalchemy.func.lower(
+                sqlalchemy.func.coalesce(
+                    sqlalchemy.cast(Sale.payment_details, sqlalchemy.String), ""
+                )
+            )
+            query = query.where(~details_expr.like("%adelanto%"))
+
+        return query
+
+    def _cashbox_sales_count(self) -> int:
+        query = select(sqlalchemy.func.count(Sale.id)).select_from(Sale)
+
+        if self.cashbox_filter_start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                    self.cashbox_filter_start_date, "%Y-%m-%d"
+                )
+                query = query.where(Sale.timestamp >= start_date)
+            except ValueError:
+                pass
+
+        if self.cashbox_filter_end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    self.cashbox_filter_end_date, "%Y-%m-%d"
+                )
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+                query = query.where(Sale.timestamp <= end_date)
+            except ValueError:
+                pass
+
+        if not self.show_cashbox_advances:
+            details_expr = sqlalchemy.func.lower(
+                sqlalchemy.func.coalesce(
+                    sqlalchemy.cast(Sale.payment_details, sqlalchemy.String), ""
+                )
+            )
+            query = query.where(~details_expr.like("%adelanto%"))
+
+        with rx.session() as session:
+            return session.exec(query).one()
+
+    def _cashbox_sale_row(self, sale: Sale, user: UserModel | None) -> CashboxSale:
+        details_text = self._payment_details_text(sale.payment_details)
+        items: list[dict] = []
+        items_total = 0
+        for item in sale.items or []:
+            items.append(
+                {
+                    "description": item.product_name_snapshot,
+                    "quantity": item.quantity,
+                    "unit": "Unidad",
+                    "price": item.unit_price,
+                    "sale_price": item.unit_price,
+                    "subtotal": item.subtotal,
+                }
+            )
+            items_total += item.subtotal or 0
+        total_amount = sale.total_amount if sale.total_amount is not None else items_total
+        sale_dict: CashboxSale = {
+            "sale_id": str(sale.id),
+            "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "user": user.username if user else "Desconocido",
+            "payment_method": sale.payment_method,
+            "payment_details": details_text,
+            "total": total_amount,
+            "is_deleted": sale.is_deleted,
+            "delete_reason": sale.delete_reason,
+            "items": items,
+            "service_total": total_amount,
+        }
+        return sale_dict
+
+    def _fetch_cashbox_sales(
+        self, offset: int | None = None, limit: int | None = None
+    ) -> list[CashboxSale]:
+        with rx.session() as session:
+            query = self._cashbox_sales_query()
+            if offset is not None:
+                query = query.offset(offset)
+            if limit is not None:
+                query = query.limit(limit)
+            sales_results = session.exec(query).all()
+            return [
+                self._cashbox_sale_row(sale, user)
+                for sale, user in sales_results
+            ]
+
     @rx.var
     def filtered_cashbox_sales(self) -> list[CashboxSale]:
-        _ = self._cashbox_update_trigger  # Forzar recálculo cuando cambia
+        _ = self._cashbox_update_trigger
         if not self.current_user["privileges"]["view_cashbox"]:
             return []
-        
-        with rx.session() as session:
-            query = select(Sale, UserModel).join(UserModel, isouter=True).order_by(desc(Sale.timestamp))
-            
-            if self.cashbox_filter_start_date:
-                try:
-                    start_date = datetime.datetime.strptime(self.cashbox_filter_start_date, "%Y-%m-%d")
-                    query = query.where(Sale.timestamp >= start_date)
-                except ValueError: pass
-            
-            if self.cashbox_filter_end_date:
-                try:
-                    end_date = datetime.datetime.strptime(self.cashbox_filter_end_date, "%Y-%m-%d")
-                    end_date = end_date.replace(hour=23, minute=59, second=59)
-                    query = query.where(Sale.timestamp <= end_date)
-                except ValueError: pass
-                
-            sales_results = session.exec(query).all()
-            
-            final_sales = []
-            for sale, user in sales_results:
-                details_text = self._payment_details_text(sale.payment_details)
-                # Check for advance sale
-                is_advance = "adelanto" in details_text.lower()
-                if not self.show_cashbox_advances and is_advance:
-                    continue
-                
-                sale_dict = {
-                    "sale_id": str(sale.id),
-                    "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                    "user": user.username if user else "Desconocido",
-                    "payment_method": sale.payment_method,
-                    "payment_details": details_text,
-                    "total": sale.total_amount,
-                    "is_deleted": sale.is_deleted,
-                    "delete_reason": sale.delete_reason,
-                }
-                
-                items = sale.items
-                if not items:
-                    final_sales.append(sale_dict)
-                else:
-                    for item in items:
-                        item_sale = sale_dict.copy()
-                        item_sale["items"] = [{
-                            "description": item.product_name_snapshot,
-                            "quantity": item.quantity,
-                            "unit": "Unidad", 
-                            "price": item.unit_price,
-                            "sale_price": item.unit_price,
-                            "subtotal": item.subtotal
-                        }]
-                        item_sale["service_total"] = item.subtotal
-                        item_sale["total"] = item.subtotal
-                        final_sales.append(item_sale)
-                        
-            return final_sales
+        page = max(self.cashbox_current_page, 1)
+        per_page = max(self.cashbox_items_per_page, 1)
+        offset = (page - 1) * per_page
+        return self._fetch_cashbox_sales(offset=offset, limit=per_page)
 
     @rx.var
     def paginated_cashbox_sales(self) -> list[CashboxSale]:
-        start_index = (self.cashbox_current_page - 1) * self.cashbox_items_per_page
-        end_index = start_index + self.cashbox_items_per_page
-        return self.filtered_cashbox_sales[start_index:end_index]
+        return self.filtered_cashbox_sales
 
     @rx.var
     def cashbox_total_pages(self) -> int:
-        total = len(self.filtered_cashbox_sales)
+        _ = self._cashbox_update_trigger
+        total = self._cashbox_sales_count()
         if total == 0:
             return 1
         return (total + self.cashbox_items_per_page - 1) // self.cashbox_items_per_page
@@ -712,7 +832,7 @@ class CashState(MixinState):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
         
-        sales = self.filtered_cashbox_sales
+        sales = self._fetch_cashbox_sales()
         if not sales:
             return rx.toast("No hay ventas para exportar.", duration=3000)
         
@@ -765,7 +885,7 @@ class CashState(MixinState):
             return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
-        logs = self.filtered_cashbox_logs
+        logs = self._fetch_cashbox_logs()
         if not logs:
             return rx.toast("No hay aperturas o cierres para exportar.", duration=3000)
         
