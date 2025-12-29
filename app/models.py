@@ -1,8 +1,10 @@
 import reflex as rx
 from typing import Optional, List, Dict
 from datetime import datetime
+from decimal import Decimal
 from sqlmodel import Field, Relationship, JSON, Column
 import sqlalchemy
+from sqlalchemy import Numeric
 
 class User(rx.Model, table=True):
     """Modelo de Usuario con privilegios en JSON."""
@@ -26,10 +28,19 @@ class Product(rx.Model, table=True):
     barcode: str = Field(unique=True, index=True, nullable=False)
     description: str = Field(nullable=False)
     category: str = Field(default="General", index=True)
-    stock: float = Field(default=0.0)
+    stock: Decimal = Field(
+        default=Decimal("0.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
     unit: str = Field(default="Unidad")
-    purchase_price: float = Field(default=0.0)
-    sale_price: float = Field(default=0.0)
+    purchase_price: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    sale_price: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
     
     # Relaciones
     sale_items: List["SaleItem"] = Relationship(back_populates="product")
@@ -40,7 +51,10 @@ class Sale(rx.Model, table=True):
         default_factory=datetime.now,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False), server_default=sqlalchemy.func.now())
     )
-    total_amount: float = Field(default=0.0)
+    total_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
     payment_method: str = Field(default="Efectivo")
     
     # Detalles complejos del pago (JSON o Texto)
@@ -58,9 +72,18 @@ class Sale(rx.Model, table=True):
 
 class SaleItem(rx.Model, table=True):
     """Detalle de Venta (TransactionItem)."""
-    quantity: float = Field(default=1.0)
-    unit_price: float = Field(default=0.0)
-    subtotal: float = Field(default=0.0)
+    quantity: Decimal = Field(
+        default=Decimal("1.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
+    unit_price: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    subtotal: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
     
     # Guardamos snapshot del producto por si se borra o cambia el original
     product_name_snapshot: str = Field(default="")
@@ -84,8 +107,14 @@ class CashboxSession(rx.Model, table=True):
         default=None,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False))
     )
-    opening_amount: float = Field(default=0.0)
-    closing_amount: float = Field(default=0.0)
+    opening_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    closing_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
     is_open: bool = Field(default=True)
     
     # Claves Foráneas
@@ -101,10 +130,19 @@ class CashboxLog(rx.Model, table=True):
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False))
     )
     action: str = Field(nullable=False) # apertura, cierre, etc.
-    amount: float = Field(default=0.0)
-    quantity: float = Field(default=1.0)
+    amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    quantity: Decimal = Field(
+        default=Decimal("1.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
     unit: str = Field(default="Unidad")
-    cost: float = Field(default=0.0)
+    cost: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
     notes: str = Field(default="")
     
     # Claves Foráneas
@@ -130,8 +168,14 @@ class FieldReservation(rx.Model, table=True):
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False))
     )
     
-    total_amount: float = Field(default=0.0)
-    paid_amount: float = Field(default=0.0)
+    total_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    paid_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
     status: str = Field(default="pendiente") # pendiente, pagado, cancelado
     
     # Claves Foráneas
@@ -159,7 +203,10 @@ class StockMovement(rx.Model, table=True):
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False))
     )
     type: str = Field(nullable=False) # Ingreso, Ajuste
-    quantity: float = Field(default=0.0)
+    quantity: Decimal = Field(
+        default=Decimal("0.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
     description: str = Field(default="")
     
     # Claves Foráneas
@@ -193,4 +240,7 @@ class FieldPrice(rx.Model, table=True):
     """Precios de alquiler de canchas."""
     sport: str = Field(nullable=False) # Futbol, Voley
     name: str = Field(nullable=False) # "Hora Dia", "Hora Noche"
-    price: float = Field(default=0.0)
+    price: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )

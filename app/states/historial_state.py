@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 import datetime
 import logging
 import io
+from decimal import Decimal
 from sqlmodel import select, or_
 from sqlalchemy.orm import selectinload
 from app.models import Sale, SaleItem, StockMovement, Product, User as UserModel, CashboxLog
@@ -259,7 +260,7 @@ class HistorialState(MixinState):
         
         return rx.download(data=output.getvalue(), filename="historial_movimientos.xlsx")
 
-    def _parse_payment_amount(self, text: str, keyword: str) -> float:
+    def _parse_payment_amount(self, text: str, keyword: str) -> Decimal:
         """Extract amount for a keyword from a mixed payment string like 'Efectivo S/ 15.00'."""
         import re
         try:
@@ -285,12 +286,12 @@ class HistorialState(MixinState):
                         match = re.search(r"([0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)", amount_str)
                         if match:
                             num_str = match.group(1).replace(",", "")
-                            return float(num_str)
+                            return Decimal(num_str)
                     except IndexError:
                         continue
         except Exception:
             pass
-        return 0.0
+        return Decimal("0.00")
 
     @rx.var
     def payment_stats(self) -> Dict[str, float]:
@@ -298,11 +299,11 @@ class HistorialState(MixinState):
         _ = self._history_update_trigger
 
         stats = {
-            "efectivo": 0.0,
-            "yape": 0.0,
-            "plin": 0.0,
-            "tarjeta": 0.0,
-            "mixto": 0.0
+            "efectivo": Decimal("0.00"),
+            "yape": Decimal("0.00"),
+            "plin": Decimal("0.00"),
+            "tarjeta": Decimal("0.00"),
+            "mixto": Decimal("0.00"),
         }
         
         with rx.session() as session:
@@ -326,7 +327,7 @@ class HistorialState(MixinState):
             for sale in sales:
                 method = (sale.payment_method or "").lower()
                 details = (sale.payment_details or "")
-                total = sale.total_amount
+                total = sale.total_amount or Decimal("0.00")
                 
                 # Check for Mixed Payment first
                 if "mixto" in method:
@@ -411,10 +412,13 @@ class HistorialState(MixinState):
         from collections import defaultdict
         with rx.session() as session:
             sales = session.exec(select(Sale).where(Sale.is_deleted == False)).all()
-            daily_sales = defaultdict(float)
+            daily_sales = defaultdict(Decimal)
             for sale in sales:
                 date_str = sale.timestamp.strftime("%Y-%m-%d")
-                daily_sales[date_str] += sale.total_amount
+                daily_sales[date_str] += sale.total_amount or Decimal("0.00")
             
             sorted_days = sorted(daily_sales.keys())[-7:]
-            return [{"date": day, "total": daily_sales[day]} for day in sorted_days]
+            return [
+                {"date": day, "total": self._round_currency(daily_sales[day])}
+                for day in sorted_days
+            ]

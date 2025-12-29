@@ -4,28 +4,38 @@ Calculation utilities for sales and inventory.
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any
 
-def calculate_subtotal(quantity: float, price: float) -> float:
+MONEY_QUANT = Decimal("0.01")
+
+
+def _to_decimal(value: Decimal | str | int | float) -> Decimal:
+    return Decimal(str(value or 0))
+
+
+def calculate_subtotal(quantity: Decimal, price: Decimal) -> Decimal:
     """
     Calculate subtotal for a line item.
     """
-    return float(
-        (Decimal(str(quantity)) * Decimal(str(price))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return (_to_decimal(quantity) * _to_decimal(price)).quantize(
+        MONEY_QUANT, rounding=ROUND_HALF_UP
     )
 
-def calculate_total(items: List[Dict[str, Any]], key: str = "subtotal") -> float:
+
+def calculate_total(items: List[Dict[str, Any]], key: str = "subtotal") -> Decimal:
     """
     Calculate total from a list of items.
     """
     total = Decimal("0.00")
     for item in items:
-        val = item.get(key, 0)
-        total += Decimal(str(val))
-    
-    return float(total.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        total += _to_decimal(item.get(key, 0))
 
-def calculate_change(payment: float, total: float) -> float:
+    return total.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+
+def calculate_change(payment: Decimal, total: Decimal) -> Decimal:
     """
     Calculate change to return to customer.
     """
-    change = Decimal(str(payment)) - Decimal(str(total))
-    return float(change.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)) if change > 0 else 0.0
+    change = _to_decimal(payment) - _to_decimal(total)
+    if change <= 0:
+        return Decimal("0.00")
+    return change.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
