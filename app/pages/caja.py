@@ -200,8 +200,11 @@ def sale_items_list(items: rx.Var[list[dict]]) -> rx.Component:
             items,
             lambda item: rx.el.div(
                 rx.el.div(
-                    rx.el.span(item["description"], class_name="font-medium text-gray-900"),
-                    class_name="text-sm",
+                    rx.el.span(
+                        item["description"],
+                        title=item["description"],
+                        class_name="block text-sm font-medium text-gray-900 truncate",
+                    ),
                 ),
                 rx.el.div(
                     rx.el.span(
@@ -220,7 +223,25 @@ def sale_items_list(items: rx.Var[list[dict]]) -> rx.Component:
                 class_name="flex flex-col gap-0.5 border-b border-dashed border-gray-100 last:border-0 pb-1 last:pb-0",
             ),
         ),
-        class_name="flex flex-col gap-2",
+        class_name="flex flex-col gap-1 max-h-28 overflow-y-auto pr-2",
+    )
+
+
+def render_payment_details(details: rx.Var[str]) -> rx.Component:
+    return rx.cond(
+        details.length() > 50,
+        rx.tooltip(
+            rx.el.span(
+                rx.icon("info", class_name="h-3 w-3"),
+                "Detalle",
+                class_name="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-200 cursor-help",
+            ),
+            content=details,
+            side="bottom",
+            align="start",
+            side_offset=6,
+        ),
+        rx.el.p(details, class_name="text-xs text-gray-500"),
     )
 
 
@@ -230,9 +251,9 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
         rx.el.td(sale["user"], class_name="py-3 px-4 align-top"),
         rx.el.td(
             rx.el.p(sale["payment_method"], class_name="font-medium text-gray-900"),
-            rx.el.p(
-                sale["payment_details"],
-                class_name="text-xs text-gray-500 mt-1",
+            rx.el.div(
+                render_payment_details(sale["payment_details"]),
+                class_name="mt-1",
             ),
             rx.cond(
                 sale["is_deleted"],
@@ -256,7 +277,10 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
             ),
             class_name="py-3 px-4 text-right align-top",
         ),
-        rx.el.td(sale_items_list(sale["items"]), class_name="py-3 px-4 align-top"),
+        rx.el.td(
+            sale_items_list(sale["items"]),
+            class_name="py-3 px-4 align-top min-w-[240px]",
+        ),
         rx.el.td(
             rx.el.div(
                 rx.el.button(
