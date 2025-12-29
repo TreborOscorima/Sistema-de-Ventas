@@ -8,6 +8,7 @@ from .venta_state import VentaState
 from .cash_state import CashState
 from .historial_state import HistorialState
 from .services_state import ServicesState
+from .venta import CartMixin, PaymentMixin, ReceiptMixin
 
 import reflex as rx
 from .auth_state import AuthState
@@ -43,6 +44,15 @@ _class_dict = {
 }
 
 for _mixin in _mixins:
+    if _mixin is VentaState:
+        for _venta_mixin in (CartMixin, PaymentMixin, ReceiptMixin):
+            if hasattr(_venta_mixin, "__annotations__"):
+                _class_dict["__annotations__"].update(_venta_mixin.__annotations__)
+            for _name, _value in _venta_mixin.__dict__.items():
+                if _name.startswith("__"):
+                    continue
+                _class_dict[_name] = _value
+
     # Merge annotations
     if hasattr(_mixin, "__annotations__"):
         _class_dict["__annotations__"].update(_mixin.__annotations__)
