@@ -34,7 +34,10 @@ class ReceiptMixin:
 
                     timestamp = sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
                     total = sale.total_amount
-                    payment_summary = sale.payment_details or sale.payment_method
+                    payment_summary = (
+                        self._payment_details_text(sale.payment_details)
+                        or sale.payment_method
+                    )
                     user_name = sale.user.username if sale.user else "Desconocido"
 
                     for item in sale.items:

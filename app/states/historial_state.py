@@ -82,7 +82,7 @@ class HistorialState(MixinState):
                         "unit": unit,
                         "total": item.subtotal,
                         "payment_method": sale.payment_method,
-                        "payment_details": sale.payment_details,
+                        "payment_details": self._payment_details_text(sale.payment_details),
                         "user": user.username if user else "Desconocido",
                         "sale_id": str(sale.id)
                     })
@@ -248,7 +248,7 @@ class HistorialState(MixinState):
                 movement["unit"],
                 movement["total"],
                 method_display,
-                movement.get("payment_details", ""),
+                self._payment_details_text(movement.get("payment_details", "")),
             ])
             
         add_data_rows(ws, rows, 2)
@@ -326,28 +326,49 @@ class HistorialState(MixinState):
             
             for sale in sales:
                 method = (sale.payment_method or "").lower()
-                details = (sale.payment_details or "")
+                details_raw = sale.payment_details
+                details_text = self._payment_details_text(details_raw)
+                details_lower = details_text.lower()
                 total = sale.total_amount or Decimal("0.00")
+                method_kind = ""
+                breakdown = None
+                if isinstance(details_raw, dict):
+                    method_kind = (details_raw.get("method_kind") or "").lower()
+                    if isinstance(details_raw.get("breakdown"), list):
+                        breakdown = details_raw.get("breakdown")
                 
                 # Check for Mixed Payment first
-                if "mixto" in method:
+                if "mixto" in method or method_kind == "mixed":
                     stats["mixto"] += total
-                    # Parse breakdown
-                    stats["efectivo"] += self._parse_payment_amount(details, "Efectivo")
-                    stats["yape"] += self._parse_payment_amount(details, "Yape")
-                    stats["plin"] += self._parse_payment_amount(details, "Plin")
-                    stats["tarjeta"] += self._parse_payment_amount(details, "Tarjeta")
+                    if breakdown:
+                        for item in breakdown:
+                            label = (item.get("label") or "").lower()
+                            amount = Decimal(str(item.get("amount", 0) or 0))
+                            if "efectivo" in label:
+                                stats["efectivo"] += amount
+                            elif "yape" in label:
+                                stats["yape"] += amount
+                            elif "plin" in label:
+                                stats["plin"] += amount
+                            elif "tarjeta" in label:
+                                stats["tarjeta"] += amount
+                    else:
+                        # Parse breakdown from legacy string
+                        stats["efectivo"] += self._parse_payment_amount(details_text, "Efectivo")
+                        stats["yape"] += self._parse_payment_amount(details_text, "Yape")
+                        stats["plin"] += self._parse_payment_amount(details_text, "Plin")
+                        stats["tarjeta"] += self._parse_payment_amount(details_text, "Tarjeta")
                     # Note: We add to both "mixto" (total) and specific methods (parts).
                     continue
 
                 # Single Payment Methods
                 if "efectivo" in method:
                     stats["efectivo"] += total
-                elif "yape" in method or "yape" in details.lower():
+                elif "yape" in method or "yape" in details_lower:
                     stats["yape"] += total
-                elif "plin" in method or "plin" in details.lower():
+                elif "plin" in method or "plin" in details_lower:
                     stats["plin"] += total
-                elif "tarjeta" in method or "tarjeta" in details.lower():
+                elif "tarjeta" in method or "tarjeta" in details_lower:
                     stats["tarjeta"] += total
                 else:
                     # Fallback for generic "Billetera" if not caught above

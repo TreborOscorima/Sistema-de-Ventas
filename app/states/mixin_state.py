@@ -9,6 +9,19 @@ class MixinState:
             Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         )
 
+    def _payment_details_text(self, value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, dict):
+            for key in ("summary", "legacy", "label", "method"):
+                text = value.get(key)
+                if isinstance(text, str) and text.strip():
+                    return text
+            return str(value)
+        if isinstance(value, list):
+            return str(value)
+        return str(value or "")
+
     @rx.var
     def currency_symbol(self) -> str:
         # Accessing available_currencies and selected_currency_code from RootState

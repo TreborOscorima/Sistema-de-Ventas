@@ -141,11 +141,39 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
             if user_obj:
                 user_id = user_obj.id
 
+            payment_data = {
+                "summary": payment_summary,
+                "method": self.payment_method,
+                "method_kind": self.payment_method_kind,
+                "label": payment_label,
+                "breakdown": payment_breakdown,
+                "total": sale_total_display,
+                "cash": {
+                    "amount": self._round_currency(self.payment_cash_amount),
+                    "message": self.payment_cash_message,
+                    "status": self.payment_cash_status,
+                },
+                "card": {"type": self.payment_card_type},
+                "wallet": {
+                    "provider": self.payment_wallet_provider or self.payment_wallet_choice,
+                    "choice": self.payment_wallet_choice,
+                },
+                "mixed": {
+                    "cash": self._round_currency(self.payment_mixed_cash),
+                    "card": self._round_currency(self.payment_mixed_card),
+                    "wallet": self._round_currency(self.payment_mixed_wallet),
+                    "non_cash_kind": self.payment_mixed_non_cash_kind,
+                    "notes": self.payment_mixed_notes,
+                    "message": self.payment_mixed_message,
+                    "status": self.payment_mixed_status,
+                },
+            }
+
             new_sale = Sale(
                 timestamp=timestamp,
                 total_amount=sale_total,
                 payment_method=self.payment_method,
-                payment_details=payment_summary,  # Storing summary string for now
+                payment_details=payment_data,
                 user_id=user_id,
                 is_deleted=False,
             )

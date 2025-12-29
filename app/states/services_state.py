@@ -1043,12 +1043,21 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             
             payment_method = self.payment_method.get("name", "Efectivo") if self.payment_method else "Efectivo"
             reservation_desc = f"Reserva {reservation.get('field_name', 'Campo')} - {reservation.get('customer_name', 'Cliente')}"
+            payment_summary = f"{entry_type.capitalize()} reserva: {reservation_desc}"
+            payment_data = {
+                "summary": payment_summary,
+                "method": payment_method,
+                "method_kind": "other",
+                "label": payment_method,
+                "breakdown": [{"label": payment_method, "amount": applied_amount}],
+                "total": self._round_currency(applied_amount),
+            }
             
             new_sale = Sale(
                 timestamp=datetime.datetime.now(),
                 total_amount=applied_amount,
                 payment_method=payment_method,
-                payment_details=f"{entry_type.capitalize()} reserva: {reservation_desc}",
+                payment_details=payment_data,
                 user_id=user_id,
             )
             session.add(new_sale)

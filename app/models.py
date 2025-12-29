@@ -57,8 +57,8 @@ class Sale(rx.Model, table=True):
     )
     payment_method: str = Field(default="Efectivo")
     
-    # Detalles complejos del pago (JSON o Texto)
-    payment_details: str = Field(default="") 
+    # Detalles complejos del pago (JSON)
+    payment_details: Dict | list | str = Field(default={}, sa_column=Column(JSON))
     
     is_deleted: bool = Field(default=False)
     delete_reason: Optional[str] = Field(default=None)

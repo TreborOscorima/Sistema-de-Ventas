@@ -612,8 +612,9 @@ class CashState(MixinState):
             
             final_sales = []
             for sale, user in sales_results:
+                details_text = self._payment_details_text(sale.payment_details)
                 # Check for advance sale
-                is_advance = "adelanto" in (sale.payment_details or "").lower()
+                is_advance = "adelanto" in details_text.lower()
                 if not self.show_cashbox_advances and is_advance:
                     continue
                 
@@ -622,7 +623,7 @@ class CashState(MixinState):
                     "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                     "user": user.username if user else "Desconocido",
                     "payment_method": sale.payment_method,
-                    "payment_details": sale.payment_details,
+                    "payment_details": details_text,
                     "total": sale.total_amount,
                     "is_deleted": sale.is_deleted,
                     "delete_reason": sale.delete_reason,
@@ -744,7 +745,7 @@ class CashState(MixinState):
                 sale["user"],
                 method_raw,
                 method_label,
-                sale["payment_details"],
+                self._payment_details_text(sale.get("payment_details", "")),
                 sale["total"],
                 details,
             ])
@@ -999,7 +1000,7 @@ class CashState(MixinState):
                     sale_data = {
                         "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                         "total": sale.total_amount,
-                        "payment_details": sale.payment_details,
+                        "payment_details": self._payment_details_text(sale.payment_details),
                         "payment_method": sale.payment_method,
                         "items": items_data,
                         "user": sale.user.username if sale.user else "Desconocido"
@@ -1022,9 +1023,9 @@ class CashState(MixinState):
             return left + " " * max(spaces, 1) + right
         
         items = sale_data.get("items", [])
-        payment_summary = sale_data.get("payment_details") or sale_data.get(
-            "payment_method", ""
-        )
+        payment_summary = self._payment_details_text(
+            sale_data.get("payment_details")
+        ) or sale_data.get("payment_method", "")
         
         # Construir recibo línea por línea
         receipt_lines = [
@@ -1200,7 +1201,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         # Agregar detalle de ventas con método de pago completo
         for sale in day_sales:
             method_label = sale.get("payment_label", sale.get("payment_method", ""))
-            payment_detail = sale.get("payment_details", "")
+            payment_detail = self._payment_details_text(sale.get("payment_details", ""))
             receipt_lines.append(f"{sale['timestamp']}")
             receipt_lines.append(f"Usuario: {sale['user']}")
             receipt_lines.append(f"Metodo: {method_label}")
@@ -1267,7 +1268,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 for sale, user in sales:
                     # Crear payment_label descriptivo basado en payment_details
                     payment_label = sale.payment_method or ""
-                    payment_details_str = sale.payment_details or ""
+                    payment_details_str = self._payment_details_text(sale.payment_details)
                     
                     # Determinar el label descriptivo
                     if "Mixto" in payment_details_str or "Pagos Mixtos" in payment_details_str:
@@ -1288,6 +1289,16 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     elif "Efectivo" in payment_details_str:
                         payment_label = "Efectivo"
                     
+                    if isinstance(sale.payment_details, dict):
+                        label_from_details = sale.payment_details.get("label")
+                        if isinstance(label_from_details, str) and label_from_details.strip():
+                            payment_label = label_from_details
+                    breakdown_from_details = None
+                    if isinstance(sale.payment_details, dict) and isinstance(
+                        sale.payment_details.get("breakdown"), list
+                    ):
+                        breakdown_from_details = sale.payment_details.get("breakdown")
+
                     sale_dict = {
                         "sale_id": str(sale.id),
                         "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1297,7 +1308,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         "payment_details": payment_details_str,
                         "total": sale.total_amount,
                         "is_deleted": sale.is_deleted,
-                        "payment_breakdown": [{"label": payment_label, "amount": sale.total_amount}]
+                        "payment_breakdown": breakdown_from_details
+                        or [{"label": payment_label, "amount": sale.total_amount}],
                     }
                     result.append(sale_dict)
                 return result
@@ -1347,7 +1359,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if sale.get("is_advance"):
             return True
         label = (sale.get("payment_label") or "").lower()
-        details = (sale.get("payment_details") or "").lower()
+        details = self._payment_details_text(sale.get("payment_details")).lower()
         description = " ".join(item.get("description", "") for item in sale.get("items", []))
         return (
             "adelanto" in label
@@ -1370,11 +1382,23 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         )
         
         with rx.session() as session:
+            payment_summary = (
+                f"Adelanto registrado al crear la reserva. "
+                f"Monto {self._format_currency(amount)} | {description}"
+            )
+            payment_data = {
+                "summary": payment_summary,
+                "method": "Efectivo",
+                "method_kind": "cash",
+                "label": "Efectivo",
+                "breakdown": [{"label": "Efectivo", "amount": amount}],
+                "total": self._round_currency(amount),
+            }
             # Create Sale for advance
             new_sale = Sale(
                 total_amount=amount,
                 payment_method="Efectivo",
-                payment_details=f"Adelanto registrado al crear la reserva. Monto {self._format_currency(amount)} | {description}",
+                payment_details=payment_data,
                 user_id=self.current_user.get("id"),
                 is_deleted=False
             )
