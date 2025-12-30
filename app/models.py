@@ -236,6 +236,14 @@ class Currency(rx.Model, table=True):
     name: str = Field(nullable=False)
     symbol: str = Field(nullable=False)
 
+class CompanySettings(rx.Model, table=True):
+    """Configuracion de datos de empresa (singleton)."""
+    company_name: str = Field(default="", nullable=False)
+    ruc: str = Field(default="", nullable=False)
+    address: str = Field(default="", nullable=False)
+    phone: Optional[str] = Field(default=None)
+    footer_message: Optional[str] = Field(default=None)
+
 class FieldPrice(rx.Model, table=True):
     """Precios de alquiler de canchas."""
     sport: str = Field(nullable=False) # Futbol, Voley

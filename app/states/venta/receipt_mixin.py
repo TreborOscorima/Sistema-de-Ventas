@@ -81,26 +81,42 @@ class ReceiptMixin:
             spaces = width - len(left) - len(right)
             return left + " " * max(spaces, 1) + right
 
+        company = self._company_settings_snapshot()
+        company_name = (company.get("company_name") or "").strip()
+        ruc = (company.get("ruc") or "").strip()
+        address = (company.get("address") or "").strip()
+        phone = (company.get("phone") or "").strip()
+        footer_message = (company.get("footer_message") or "").strip()
+        address_lines = self._wrap_receipt_lines(address, 42)
+
         # Construir recibo l¡nea por l¡nea
-        receipt_lines = [
-            "",
-            center("LUXETY SPORT S.A.C."),
-            "",
-            center("RUC: 20601348676"),
-            "",
-            center("AV. ALFONSO UGARTE NRO. 096"),
-            center("LIMA-LIMA"),
-            "",
-            line(),
-            center("COMPROBANTE DE PAGO"),
-            line(),
-            "",
-            f"Fecha: {timestamp}",
-            "",
-            f"Atendido por: {user_name}",
-            "",
-            line(),
-        ]
+        receipt_lines = [""]
+        if company_name:
+            receipt_lines.append(center(company_name))
+            receipt_lines.append("")
+        if ruc:
+            receipt_lines.append(center(f"RUC: {ruc}"))
+            receipt_lines.append("")
+        for addr_line in address_lines:
+            receipt_lines.append(center(addr_line))
+        if address_lines:
+            receipt_lines.append("")
+        if phone:
+            receipt_lines.append(center(f"Tel: {phone}"))
+            receipt_lines.append("")
+        receipt_lines.extend(
+            [
+                line(),
+                center("COMPROBANTE DE PAGO"),
+                line(),
+                "",
+                f"Fecha: {timestamp}",
+                "",
+                f"Atendido por: {user_name}",
+                "",
+                line(),
+            ]
+        )
 
         # Agregar contexto de reserva si existe
         if reservation_context:
@@ -154,12 +170,11 @@ class ReceiptMixin:
                 "",
                 line(),
                 "",
-                center("GRACIAS POR SU PREFERENCIA"),
-                " ",
-                " ",
-                " ",
             ]
         )
+        if footer_message:
+            receipt_lines.append(center(footer_message))
+        receipt_lines.extend([" ", " ", " "])
 
         receipt_text = chr(10).join(receipt_lines)
 

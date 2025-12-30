@@ -3,11 +3,18 @@ import uuid
 from typing import List, Dict, Any, Set
 from decimal import Decimal, ROUND_HALF_UP
 from sqlmodel import select
-from app.models import Unit, PaymentMethod, Currency
+from app.models import Unit, PaymentMethod, Currency, CompanySettings
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
 
 class ConfigState(MixinState):
+    # Company settings
+    company_name: str = ""
+    ruc: str = ""
+    address: str = ""
+    phone: str = ""
+    footer_message: str = ""
+
     # Currency
     selected_currency_code: str = "PEN"
     new_currency_name: str = ""
@@ -54,6 +61,72 @@ class ConfigState(MixinState):
                 }
                 for m in methods
             ]
+
+    @rx.event
+    def load_settings(self):
+        with rx.session() as session:
+            settings = session.exec(select(CompanySettings)).first()
+            if settings:
+                self.company_name = settings.company_name or ""
+                self.ruc = settings.ruc or ""
+                self.address = settings.address or ""
+                self.phone = settings.phone or ""
+                self.footer_message = settings.footer_message or ""
+                return
+        self.company_name = ""
+        self.ruc = ""
+        self.address = ""
+        self.phone = ""
+        self.footer_message = ""
+
+    @rx.event
+    def set_company_name(self, value: str):
+        self.company_name = value or ""
+
+    @rx.event
+    def set_ruc(self, value: str):
+        self.ruc = value or ""
+
+    @rx.event
+    def set_address(self, value: str):
+        self.address = value or ""
+
+    @rx.event
+    def set_phone(self, value: str):
+        self.phone = value or ""
+
+    @rx.event
+    def set_footer_message(self, value: str):
+        self.footer_message = value or ""
+
+    @rx.event
+    def save_settings(self):
+        company_name = (self.company_name or "").strip()
+        ruc = (self.ruc or "").strip()
+        address = (self.address or "").strip()
+        phone = (self.phone or "").strip()
+        footer_message = (self.footer_message or "").strip()
+
+        with rx.session() as session:
+            settings = session.exec(select(CompanySettings)).first()
+            if settings:
+                settings.company_name = company_name
+                settings.ruc = ruc
+                settings.address = address
+                settings.phone = phone or None
+                settings.footer_message = footer_message or None
+                session.add(settings)
+            else:
+                settings = CompanySettings(
+                    company_name=company_name,
+                    ruc=ruc,
+                    address=address,
+                    phone=phone or None,
+                    footer_message=footer_message or None,
+                )
+                session.add(settings)
+            session.commit()
+        return rx.toast("Configuracion de empresa guardada.", duration=2500)
 
     @rx.event
     def go_to_config_tab(self, tab: str):

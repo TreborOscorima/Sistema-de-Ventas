@@ -1141,6 +1141,14 @@ class CashState(MixinState):
         def row(left, right, width=42):
             spaces = width - len(left) - len(right)
             return left + " " * max(spaces, 1) + right
+
+        company = self._company_settings_snapshot()
+        company_name = (company.get("company_name") or "").strip()
+        ruc = (company.get("ruc") or "").strip()
+        address = (company.get("address") or "").strip()
+        phone = (company.get("phone") or "").strip()
+        footer_message = (company.get("footer_message") or "").strip()
+        address_lines = self._wrap_receipt_lines(address, 42)
         
         items = sale_data.get("items", [])
         payment_summary = self._payment_details_text(
@@ -1148,25 +1156,33 @@ class CashState(MixinState):
         ) or sale_data.get("payment_method", "")
         
         # Construir recibo línea por línea
-        receipt_lines = [
-            "",
-            center("LUXETY SPORT S.A.C."),
-            "",
-            center("RUC: 20601348676"),
-            "",
-            center("AV. ALFONSO UGARTE NRO. 096"),
-            center("LIMA-LIMA"),
-            "",
-            line(),
-            center("COMPROBANTE DE PAGO"),
-            line(),
-            "",
-            f"Fecha: {sale_data.get('timestamp', '')}",
-            "",
-            f"Atendido por: {sale_data.get('user', 'Desconocido')}",
-            "",
-            line(),
-        ]
+        receipt_lines = [""]
+        if company_name:
+            receipt_lines.append(center(company_name))
+            receipt_lines.append("")
+        if ruc:
+            receipt_lines.append(center(f"RUC: {ruc}"))
+            receipt_lines.append("")
+        for addr_line in address_lines:
+            receipt_lines.append(center(addr_line))
+        if address_lines:
+            receipt_lines.append("")
+        if phone:
+            receipt_lines.append(center(f"Tel: {phone}"))
+            receipt_lines.append("")
+        receipt_lines.extend(
+            [
+                line(),
+                center("COMPROBANTE DE PAGO"),
+                line(),
+                "",
+                f"Fecha: {sale_data.get('timestamp', '')}",
+                "",
+                f"Atendido por: {sale_data.get('user', 'Desconocido')}",
+                "",
+                line(),
+            ]
+        )
         
         # Agregar ítems
         for item in items:
@@ -1185,11 +1201,10 @@ class CashState(MixinState):
             "",
             line(),
             "",
-            center("GRACIAS POR SU PREFERENCIA"),
-            " ",
-            " ",
-            " ",
         ])
+        if footer_message:
+            receipt_lines.append(center(footer_message))
+        receipt_lines.extend([" ", " ", " "])
         
         receipt_text = chr(10).join(receipt_lines)
         
@@ -1280,30 +1295,45 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             return left + " " * max(spaces, 1) + right
         
         # Construir recibo línea por línea
-        receipt_lines = [
-            "",
-            center("LUXETY SPORT S.A.C."),
-            "",
-            center("RUC: 20601348676"),
-            "",
-            center("AV. ALFONSO UGARTE NRO. 096"),
-            center("LIMA-LIMA"),
-            "",
-            line(),
-            center("RESUMEN DIARIO DE CAJA"),
-            line(),
-            "",
-            f"Fecha: {date}",
-            "",
-            f"Responsable: {self.current_user['username']}",
-            "",
-            f"Cierre: {closing_timestamp}",
-            "",
-            line(),
-            "",
-            "TOTALES POR METODO",
-            "",
-        ]
+        company = self._company_settings_snapshot()
+        company_name = (company.get("company_name") or "").strip()
+        ruc = (company.get("ruc") or "").strip()
+        address = (company.get("address") or "").strip()
+        phone = (company.get("phone") or "").strip()
+        address_lines = self._wrap_receipt_lines(address, 42)
+
+        receipt_lines = [""]
+        if company_name:
+            receipt_lines.append(center(company_name))
+            receipt_lines.append("")
+        if ruc:
+            receipt_lines.append(center(f"RUC: {ruc}"))
+            receipt_lines.append("")
+        for addr_line in address_lines:
+            receipt_lines.append(center(addr_line))
+        if address_lines:
+            receipt_lines.append("")
+        if phone:
+            receipt_lines.append(center(f"Tel: {phone}"))
+            receipt_lines.append("")
+        receipt_lines.extend(
+            [
+                line(),
+                center("RESUMEN DIARIO DE CAJA"),
+                line(),
+                "",
+                f"Fecha: {date}",
+                "",
+                f"Responsable: {self.current_user['username']}",
+                "",
+                f"Cierre: {closing_timestamp}",
+                "",
+                line(),
+                "",
+                "TOTALES POR METODO",
+                "",
+            ]
+        )
         
         # Agregar totales por método
         for method, amount in summary.items():

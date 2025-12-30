@@ -3,6 +3,12 @@ from app.state import State
 
 CONFIG_SECTIONS: list[dict[str, str]] = [
     {
+        "key": "empresa",
+        "label": "Datos de Empresa",
+        "description": "Informacion fiscal y de contacto",
+        "icon": "building",
+    },
+    {
         "key": "usuarios",
         "label": "Gestion de Usuarios",
         "description": "Roles, accesos y credenciales",
@@ -176,6 +182,97 @@ def config_nav() -> rx.Component:
             class_name="flex flex-col gap-2",
         ),
         class_name="bg-white rounded-lg shadow-sm border p-4 space-y-3",
+    )
+
+
+def company_settings_section() -> rx.Component:
+    return rx.el.div(
+        rx.el.div(
+            rx.el.h2(
+                "Datos de mi Empresa", class_name="text-xl font-semibold text-gray-700"
+            ),
+            rx.el.p(
+                "Actualiza la informacion que aparece en recibos y reportes.",
+                class_name="text-sm text-gray-500",
+            ),
+            class_name="space-y-1",
+        ),
+        rx.el.div(
+            rx.el.div(
+                rx.el.div(
+                    rx.el.label(
+                        "Razon Social / Nombre", class_name="text-sm font-medium"
+                    ),
+                    rx.el.input(
+                        value=State.company_name,
+                        on_change=State.set_company_name,
+                        placeholder="Ej: Tu Empresa SAC",
+                        class_name="w-full p-2 border rounded-md",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("RUC", class_name="text-sm font-medium"),
+                    rx.el.input(
+                        value=State.ruc,
+                        on_change=State.set_ruc,
+                        placeholder="Ej: 20123456789",
+                        class_name="w-full p-2 border rounded-md",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label("Direccion Fiscal", class_name="text-sm font-medium"),
+                    rx.el.input(
+                        value=State.address,
+                        on_change=State.set_address,
+                        placeholder="Ej: Av. Principal 123",
+                        class_name="w-full p-2 border rounded-md",
+                    ),
+                    class_name="flex flex-col gap-1 md:col-span-2",
+                ),
+                rx.el.div(
+                    rx.el.label("Telefono / Celular", class_name="text-sm font-medium"),
+                    rx.el.input(
+                        value=State.phone,
+                        on_change=State.set_phone,
+                        placeholder="Ej: 999 999 999",
+                        class_name="w-full p-2 border rounded-md",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label(
+                        "Mensaje en Recibo/Ticket", class_name="text-sm font-medium"
+                    ),
+                    rx.el.input(
+                        value=State.footer_message,
+                        on_change=State.set_footer_message,
+                        placeholder="Ej: Gracias por su compra",
+                        class_name="w-full p-2 border rounded-md",
+                    ),
+                    class_name="flex flex-col gap-1 md:col-span-2",
+                ),
+                class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
+            ),
+            rx.el.div(
+                rx.el.p(
+                    "Estos datos se muestran en recibos y reportes.",
+                    class_name="text-xs text-gray-500",
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        "Guardar Configuracion",
+                        on_click=State.save_settings,
+                        class_name="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[44px]",
+                    ),
+                    class_name="flex justify-end sm:justify-start",
+                ),
+                class_name="flex flex-col sm:flex-row sm:items-center justify-between gap-3",
+            ),
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md border border-gray-100 space-y-4",
+        ),
+        class_name="space-y-4",
     )
 
 
@@ -888,40 +985,44 @@ def field_prices_section() -> rx.Component:
 
 
 def configuracion_page() -> rx.Component:
-    return rx.cond(
-        State.current_user["privileges"]["manage_users"],
-        rx.el.div(
+    return rx.fragment(
+        rx.cond(
+            State.current_user["privileges"]["manage_users"],
             rx.el.div(
-                    rx.el.h1(
-                        "Configuracion del Sistema",
-                        class_name="text-2xl font-bold text-gray-800",
-                    ),
-                    rx.el.p(
-                        "Gestiona usuarios, monedas, unidades, metodos de pago y precios de campo desde un solo lugar.",
-                        class_name="text-sm text-gray-500",
-                    ),
-                    class_name="space-y-1",
-                ),
                 rx.el.div(
-                    rx.match(
-                        State.config_active_tab,
-                        ("usuarios", user_section()),
-                        ("monedas", currency_section()),
-                        ("unidades", unit_section()),
-                        ("pagos", payment_methods_section()),
-                        ("precios_campo", field_prices_section()),
-                        user_section(),
+                        rx.el.h1(
+                            "Configuracion del Sistema",
+                            class_name="text-2xl font-bold text-gray-800",
+                        ),
+                        rx.el.p(
+                            "Gestiona usuarios, monedas, unidades, metodos de pago y precios de campo desde un solo lugar.",
+                            class_name="text-sm text-gray-500",
+                        ),
+                        class_name="space-y-1",
                     ),
-                    class_name="space-y-4",
-                ),
-            class_name="p-4 sm:p-6 w-full max-w-6xl mx-auto flex flex-col gap-6",
-        ),
-        rx.el.div(
-            rx.el.h1("Acceso Denegado", class_name="text-2xl font-bold text-red-600"),
-            rx.el.p(
-                "No tienes los privilegios necesarios para acceder a esta seccion.",
-                class_name="text-gray-600 mt-2",
+                    rx.el.div(
+                        rx.match(
+                            State.config_active_tab,
+                            ("empresa", company_settings_section()),
+                            ("usuarios", user_section()),
+                            ("monedas", currency_section()),
+                            ("unidades", unit_section()),
+                            ("pagos", payment_methods_section()),
+                            ("precios_campo", field_prices_section()),
+                            user_section(),
+                        ),
+                        class_name="space-y-4",
+                    ),
+                class_name="p-4 sm:p-6 w-full max-w-6xl mx-auto flex flex-col gap-6",
             ),
-            class_name="flex flex-col items-center justify-center h-full p-4 sm:p-6",
+            rx.el.div(
+                rx.el.h1("Acceso Denegado", class_name="text-2xl font-bold text-red-600"),
+                rx.el.p(
+                    "No tienes los privilegios necesarios para acceder a esta seccion.",
+                    class_name="text-gray-600 mt-2",
+                ),
+                class_name="flex flex-col items-center justify-center h-full p-4 sm:p-6",
+            ),
         ),
+        on_mount=State.load_settings,
     )

@@ -22,6 +22,56 @@ class MixinState:
             return str(value)
         return str(value or "")
 
+    def _wrap_receipt_lines(self, text: str, width: int) -> List[str]:
+        if not text:
+            return []
+        parts = [part.strip() for part in text.splitlines() if part.strip()]
+        if not parts:
+            return []
+        lines: List[str] = []
+        for part in parts:
+            words = part.split()
+            if not words:
+                continue
+            current = words[0]
+            for word in words[1:]:
+                if len(current) + 1 + len(word) <= width:
+                    current = f"{current} {word}"
+                else:
+                    lines.append(current)
+                    current = word
+            if current:
+                lines.append(current)
+        return lines
+
+    def _company_settings_snapshot(self) -> Dict[str, str]:
+        defaults = {
+            "company_name": "",
+            "ruc": "",
+            "address": "",
+            "phone": "",
+            "footer_message": "",
+        }
+        try:
+            from sqlmodel import select
+            from app.models import CompanySettings
+        except Exception:
+            return defaults
+        try:
+            with rx.session() as session:
+                settings = session.exec(select(CompanySettings)).first()
+        except Exception:
+            return defaults
+        if not settings:
+            return defaults
+        return {
+            "company_name": settings.company_name or "",
+            "ruc": settings.ruc or "",
+            "address": settings.address or "",
+            "phone": settings.phone or "",
+            "footer_message": settings.footer_message or "",
+        }
+
     @rx.var
     def currency_symbol(self) -> str:
         # Accessing available_currencies and selected_currency_code from RootState

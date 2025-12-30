@@ -2,6 +2,7 @@ import reflex as rx
 from app.state import State
 
 CONFIG_SUBSECTIONS = [
+    {"key": "empresa", "label": "Datos de Empresa", "icon": "building"},
     {"key": "usuarios", "label": "Gestion de Usuarios", "icon": "users"},
     {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
     {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
