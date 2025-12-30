@@ -48,59 +48,97 @@ def sport_selector() -> rx.Component:
         ),
         rx.el.div(
             rx.el.button(
-                rx.el.div(
-                    class_name="absolute inset-0 bg-black/45 pointer-events-none",
+                rx.cond(
+                    State.field_rental_sport == "futbol",
+                    rx.fragment(
+                        rx.el.div(
+                            class_name="absolute inset-0 rounded-xl bg-[conic-gradient(from_0deg,#22d3ee,#a855f7,#f59e0b,#22d3ee)] opacity-45 blur-[0.5px] animate-[spin_18s_linear_infinite] pointer-events-none",
+                        ),
+                        rx.el.div(
+                            class_name="absolute inset-0 rounded-xl bg-[conic-gradient(from_0deg,transparent_0deg,transparent_30deg,rgba(34,211,238,0.25)_45deg,rgba(34,211,238,0.85)_140deg,rgba(168,85,247,1)_240deg,rgba(245,158,11,1)_320deg,rgba(34,211,238,0.95)_360deg)] blur-[1px] animate-[spin_6s_linear_infinite] pointer-events-none",
+                        ),
+                    ),
+                    rx.fragment(),
                 ),
                 rx.el.div(
-                    rx.el.img(
-                        src="/balon-futbol.png",
-                        alt="Balon futbol",
-                        class_name="h-6 w-6",
+                    rx.el.div(
+                        class_name="absolute inset-0 rounded-[10px] bg-black/45 pointer-events-none",
                     ),
-                    rx.el.span(
-                        "CAMPOS DE FUTBOL",
-                        class_name="text-sm font-semibold tracking-wide text-white",
+                    rx.el.div(
+                        rx.el.img(
+                            src="/balon-futbol.png",
+                            alt="Balon futbol",
+                            class_name="h-6 w-6",
+                        ),
+                        rx.el.span(
+                            "CAMPOS DE FUTBOL",
+                            class_name="text-sm font-semibold tracking-wide text-white",
+                        ),
+                        class_name="relative z-10 flex flex-col items-start gap-2",
                     ),
-                    class_name="relative z-10 flex flex-col items-start gap-2",
+                    style={
+                        "backgroundImage": "url('/campo-futbol.png')",
+                        "backgroundSize": "cover",
+                        "backgroundPosition": "center",
+                    },
+                    class_name=rx.cond(
+                        State.field_rental_sport == "futbol",
+                        "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white min-h-[140px] sm:min-h-[160px] transition-transform duration-300",
+                        "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white border border-white/25 min-h-[140px] sm:min-h-[160px] transition-transform duration-300 group-hover:opacity-95",
+                    ),
                 ),
                 on_click=lambda: State.set_field_rental_sport("futbol"),
-                style={
-                    "backgroundImage": "url('/campo-futbol.png')",
-                    "backgroundSize": "cover",
-                    "backgroundPosition": "center",
-                },
                 class_name=rx.cond(
                     State.field_rental_sport == "futbol",
-                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white shadow ring-2 ring-emerald-400 min-h-[140px] sm:min-h-[160px]",
-                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white border border-white/20 hover:opacity-95 min-h-[140px] sm:min-h-[160px]",
+                    "group relative overflow-hidden rounded-xl p-[5px] shadow-[0_0_48px_rgba(34,211,238,0.95)] ring-1 ring-white/60 transition-all duration-300",
+                    "group relative overflow-hidden rounded-xl p-[2px] bg-transparent transition-all duration-300",
                 ),
             ),
             rx.el.button(
-                rx.el.div(
-                    class_name="absolute inset-0 bg-black/45 pointer-events-none",
+                rx.cond(
+                    State.field_rental_sport == "voley",
+                    rx.fragment(
+                        rx.el.div(
+                            class_name="absolute inset-0 rounded-xl bg-[conic-gradient(from_0deg,#22d3ee,#a855f7,#f59e0b,#22d3ee)] opacity-45 blur-[0.5px] animate-[spin_18s_linear_infinite] pointer-events-none",
+                        ),
+                        rx.el.div(
+                            class_name="absolute inset-0 rounded-xl bg-[conic-gradient(from_0deg,transparent_0deg,transparent_30deg,rgba(34,211,238,0.25)_45deg,rgba(34,211,238,0.85)_140deg,rgba(168,85,247,1)_240deg,rgba(245,158,11,1)_320deg,rgba(34,211,238,0.95)_360deg)] blur-[1px] animate-[spin_6s_linear_infinite] pointer-events-none",
+                        ),
+                    ),
+                    rx.fragment(),
                 ),
                 rx.el.div(
-                    rx.el.img(
-                        src="/balon-voley.png",
-                        alt="Balon voley",
-                        class_name="h-6 w-6",
+                    rx.el.div(
+                        class_name="absolute inset-0 rounded-[10px] bg-black/45 pointer-events-none",
                     ),
-                    rx.el.span(
-                        "CAMPOS DE VOLEY",
-                        class_name="text-sm font-semibold tracking-wide text-white",
+                    rx.el.div(
+                        rx.el.img(
+                            src="/balon-voley.png",
+                            alt="Balon voley",
+                            class_name="h-6 w-6",
+                        ),
+                        rx.el.span(
+                            "CAMPOS DE VOLEY",
+                            class_name="text-sm font-semibold tracking-wide text-white",
+                        ),
+                        class_name="relative z-10 flex flex-col items-start gap-2",
                     ),
-                    class_name="relative z-10 flex flex-col items-start gap-2",
+                    style={
+                        "backgroundImage": "url('/campo-voley.png')",
+                        "backgroundSize": "cover",
+                        "backgroundPosition": "center",
+                    },
+                    class_name=rx.cond(
+                        State.field_rental_sport == "voley",
+                        "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white min-h-[140px] sm:min-h-[160px] transition-transform duration-300",
+                        "relative z-10 overflow-hidden flex flex-col items-start gap-1 rounded-[10px] px-4 py-3 text-white border border-white/25 min-h-[140px] sm:min-h-[160px] transition-transform duration-300 group-hover:opacity-95",
+                    ),
                 ),
                 on_click=lambda: State.set_field_rental_sport("voley"),
-                style={
-                    "backgroundImage": "url('/campo-voley.png')",
-                    "backgroundSize": "cover",
-                    "backgroundPosition": "center",
-                },
                 class_name=rx.cond(
                     State.field_rental_sport == "voley",
-                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white shadow ring-2 ring-indigo-400 min-h-[140px] sm:min-h-[160px]",
-                    "relative overflow-hidden flex flex-col items-start gap-1 rounded-lg px-4 py-3 text-white border border-white/20 hover:opacity-95 min-h-[140px] sm:min-h-[160px]",
+                    "group relative overflow-hidden rounded-xl p-[5px] shadow-[0_0_48px_rgba(34,211,238,0.95)] ring-1 ring-white/60 transition-all duration-300",
+                    "group relative overflow-hidden rounded-xl p-[2px] bg-transparent transition-all duration-300",
                 ),
             ),
             class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
