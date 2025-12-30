@@ -1,12 +1,24 @@
 from __future__ import annotations
 
 import datetime
+import os
 from typing import Any
 
 import jwt
+from dotenv import load_dotenv
 from jwt import ExpiredSignatureError, PyJWTError
 
-SECRET_KEY = "tuwaykiapp_dev_secret_2025_04_18_8f45d2f7a9c94c4d9b3a1d5f3c7a2b91"
+load_dotenv()
+
+
+def _require_env(var_name: str) -> str:
+    value = os.getenv(var_name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {var_name}")
+    return value
+
+
+SECRET_KEY = _require_env("AUTH_SECRET_KEY")
 ALGORITHM = "HS256"
 
 

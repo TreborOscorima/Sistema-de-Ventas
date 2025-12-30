@@ -3,3 +3,4 @@ openpyxl
 bcrypt
 wrapt
 pyjwt
+python-dotenv
