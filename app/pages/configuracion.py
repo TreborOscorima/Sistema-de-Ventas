@@ -204,9 +204,10 @@ def company_settings_section() -> rx.Component:
                         "Razon Social / Nombre", class_name="text-sm font-medium"
                     ),
                     rx.el.input(
-                        value=State.company_name,
+                        default_value=State.company_name,
                         on_change=State.set_company_name,
                         placeholder="Ej: Tu Empresa SAC",
+                        key=State.company_form_key.to_string() + "-company_name",
                         class_name="w-full p-2 border rounded-md",
                     ),
                     class_name="flex flex-col gap-1",
@@ -214,9 +215,10 @@ def company_settings_section() -> rx.Component:
                 rx.el.div(
                     rx.el.label("RUC", class_name="text-sm font-medium"),
                     rx.el.input(
-                        value=State.ruc,
+                        default_value=State.ruc,
                         on_change=State.set_ruc,
                         placeholder="Ej: 20123456789",
+                        key=State.company_form_key.to_string() + "-ruc",
                         class_name="w-full p-2 border rounded-md",
                     ),
                     class_name="flex flex-col gap-1",
@@ -224,9 +226,10 @@ def company_settings_section() -> rx.Component:
                 rx.el.div(
                     rx.el.label("Direccion Fiscal", class_name="text-sm font-medium"),
                     rx.el.input(
-                        value=State.address,
+                        default_value=State.address,
                         on_change=State.set_address,
                         placeholder="Ej: Av. Principal 123",
+                        key=State.company_form_key.to_string() + "-address",
                         class_name="w-full p-2 border rounded-md",
                     ),
                     class_name="flex flex-col gap-1 md:col-span-2",
@@ -234,9 +237,10 @@ def company_settings_section() -> rx.Component:
                 rx.el.div(
                     rx.el.label("Telefono / Celular", class_name="text-sm font-medium"),
                     rx.el.input(
-                        value=State.phone,
+                        default_value=State.phone,
                         on_change=State.set_phone,
                         placeholder="Ej: 999 999 999",
+                        key=State.company_form_key.to_string() + "-phone",
                         class_name="w-full p-2 border rounded-md",
                     ),
                     class_name="flex flex-col gap-1",
@@ -246,9 +250,10 @@ def company_settings_section() -> rx.Component:
                         "Mensaje en Recibo/Ticket", class_name="text-sm font-medium"
                     ),
                     rx.el.input(
-                        value=State.footer_message,
+                        default_value=State.footer_message,
                         on_change=State.set_footer_message,
                         placeholder="Ej: Gracias por su compra",
+                        key=State.company_form_key.to_string() + "-footer_message",
                         class_name="w-full p-2 border rounded-md",
                     ),
                     class_name="flex flex-col gap-1 md:col-span-2",

@@ -14,6 +14,7 @@ class ConfigState(MixinState):
     address: str = ""
     phone: str = ""
     footer_message: str = ""
+    company_form_key: int = 0
 
     # Currency
     selected_currency_code: str = "PEN"
@@ -64,6 +65,11 @@ class ConfigState(MixinState):
 
     @rx.event
     def load_settings(self):
+        self.company_name = ""
+        self.ruc = ""
+        self.address = ""
+        self.phone = ""
+        self.footer_message = ""
         with rx.session() as session:
             settings = session.exec(select(CompanySettings)).first()
             if settings:
@@ -72,12 +78,7 @@ class ConfigState(MixinState):
                 self.address = settings.address or ""
                 self.phone = settings.phone or ""
                 self.footer_message = settings.footer_message or ""
-                return
-        self.company_name = ""
-        self.ruc = ""
-        self.address = ""
-        self.phone = ""
-        self.footer_message = ""
+        self.company_form_key += 1
 
     @rx.event
     def set_company_name(self, value: str):
@@ -126,6 +127,12 @@ class ConfigState(MixinState):
                 )
                 session.add(settings)
             session.commit()
+        self.company_name = company_name
+        self.ruc = ruc
+        self.address = address
+        self.phone = phone
+        self.footer_message = footer_message
+        self.company_form_key += 1
         return rx.toast("Configuracion de empresa guardada.", duration=2500)
 
     @rx.event
