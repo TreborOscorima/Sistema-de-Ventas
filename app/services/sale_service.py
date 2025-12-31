@@ -7,7 +7,8 @@ from typing import Any, Dict, List
 
 from sqlmodel import Session, select
 
-from app.models import FieldReservation, Product, Sale, SaleItem, Unit
+from app.enums import PaymentMethodType, ReservationStatus, SaleStatus
+from app.models import FieldReservation, Product, Sale, SaleItem, SalePayment, Unit
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.utils.calculations import calculate_subtotal, calculate_total
 
@@ -60,14 +61,77 @@ def _money_to_float(value: Decimal) -> float:
     return float(_round_money(value))
 
 
-def _serialize_value(value: Any) -> Any:
-    if isinstance(value, Decimal):
-        return float(value)
-    if isinstance(value, list):
-        return [_serialize_value(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _serialize_value(val) for key, val in value.items()}
-    return value
+def _reservation_status_value(status: Any) -> str:
+    if isinstance(status, ReservationStatus):
+        return status.value
+    return str(status or "").strip().lower()
+
+
+def _method_type_from_kind(kind: str) -> PaymentMethodType:
+    normalized = (kind or "").strip().lower()
+    if normalized == "cash":
+        return PaymentMethodType.cash
+    if normalized == "card":
+        return PaymentMethodType.card
+    if normalized == "wallet":
+        return PaymentMethodType.wallet
+    if normalized == "transfer":
+        return PaymentMethodType.transfer
+    if normalized == "mixed":
+        return PaymentMethodType.mixed
+    return PaymentMethodType.other
+
+
+def _allocate_mixed_payments(
+    sale_total: Decimal,
+    cash_amount: Decimal,
+    card_amount: Decimal,
+    wallet_amount: Decimal,
+) -> list[tuple[PaymentMethodType, Decimal]]:
+    remaining = _round_money(sale_total)
+    allocations: list[tuple[PaymentMethodType, Decimal]] = []
+
+    def apply(amount: Decimal, method_type: PaymentMethodType) -> None:
+        nonlocal remaining
+        amount = _round_money(amount)
+        if amount <= 0 or remaining <= 0:
+            return
+        applied = min(amount, remaining)
+        allocations.append((method_type, _round_money(applied)))
+        remaining = _round_money(remaining - applied)
+
+    apply(card_amount, PaymentMethodType.card)
+    apply(wallet_amount, PaymentMethodType.wallet)
+    apply(cash_amount, PaymentMethodType.cash)
+
+    if remaining > 0:
+        if allocations:
+            method_type, amount = allocations[0]
+            allocations[0] = (method_type, _round_money(amount + remaining))
+        else:
+            allocations.append((PaymentMethodType.other, _round_money(sale_total)))
+
+    return allocations
+
+
+def _build_sale_payments(
+    payment_data: PaymentInfoDTO,
+    sale_total: Decimal,
+) -> list[tuple[PaymentMethodType, Decimal]]:
+    kind = (payment_data.method_kind or "other").strip().lower()
+    if kind == "mixed":
+        return _allocate_mixed_payments(
+            sale_total,
+            _to_decimal(payment_data.mixed.cash),
+            _to_decimal(payment_data.mixed.card),
+            _to_decimal(payment_data.mixed.wallet),
+        )
+    method_type = _method_type_from_kind(kind)
+    if method_type == PaymentMethodType.cash:
+        amount = min(_to_decimal(payment_data.cash.amount), sale_total)
+    else:
+        amount = sale_total
+    return [(method_type, _round_money(amount))]
 
 
 class SaleService:
@@ -89,10 +153,17 @@ class SaleService:
             reservation = session.exec(
                 select(FieldReservation).where(FieldReservation.id == reservation_id)
             ).first()
-            if reservation and reservation.status in ["cancelado", "eliminado"]:
-                raise ValueError(
-                    "No se puede cobrar una reserva cancelada o eliminada."
-                )
+            if reservation:
+                status_value = _reservation_status_value(reservation.status)
+                if status_value in {
+                    ReservationStatus.cancelled.value,
+                    ReservationStatus.refunded.value,
+                    "cancelado",
+                    "eliminado",
+                }:
+                    raise ValueError(
+                        "No se puede cobrar una reserva cancelada o eliminada."
+                    )
             if reservation:
                 raw_balance = reservation.total_amount - reservation.paid_amount
                 if raw_balance < 0:
@@ -186,20 +257,29 @@ class SaleService:
                 raise ValueError(message)
 
         timestamp = datetime.datetime.now()
-        payment_details = _serialize_value(payment_data.to_dict())
         sale_total_display = _money_to_float(sale_total)
-        payment_details["total"] = sale_total_display
 
         new_sale = Sale(
             timestamp=timestamp,
             total_amount=sale_total,
-            payment_method=payment_method,
-            payment_details=payment_details,
+            status=SaleStatus.completed,
             user_id=user_id,
-            is_deleted=False,
         )
         session.add(new_sale)
         session.flush()
+
+        for method_type, amount in _build_sale_payments(payment_data, sale_total):
+            if amount <= 0:
+                continue
+            session.add(
+                SalePayment(
+                    sale_id=new_sale.id,
+                    amount=amount,
+                    method_type=method_type,
+                    reference_code=None,
+                    created_at=timestamp,
+                )
+            )
 
         for item, product in locked_products:
             new_stock = product.stock - item["quantity"]
@@ -231,7 +311,7 @@ class SaleService:
                 reservation.paid_amount + applied_amount
             )
             if reservation.paid_amount >= reservation.total_amount:
-                reservation.status = "pagado"
+                reservation.status = ReservationStatus.paid
             session.add(reservation)
 
             res_item = SaleItem(

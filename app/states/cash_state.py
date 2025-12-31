@@ -8,7 +8,18 @@ import io
 import sqlalchemy
 from io import BytesIO
 from sqlmodel import select, desc
-from app.models import CashboxSession as CashboxSessionModel, CashboxLog as CashboxLogModel, User as UserModel, Sale, SaleItem, StockMovement, Product
+from sqlalchemy.orm import selectinload
+from app.enums import PaymentMethodType, SaleStatus
+from app.models import (
+    CashboxSession as CashboxSessionModel,
+    CashboxLog as CashboxLogModel,
+    User as UserModel,
+    Sale,
+    SaleItem,
+    SalePayment,
+    StockMovement,
+    Product,
+)
 from .types import CashboxSale, CashboxSession, CashboxLogEntry, Movement
 from .mixin_state import MixinState
 from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
@@ -649,6 +660,7 @@ class CashState(MixinState):
             select(Sale, UserModel)
             .select_from(Sale)
             .join(UserModel, Sale.user_id == UserModel.id, isouter=True)
+            .options(selectinload(Sale.items), selectinload(Sale.payments))
             .order_by(desc(Sale.timestamp))
         )
 
@@ -672,12 +684,16 @@ class CashState(MixinState):
                 pass
 
         if not self.show_cashbox_advances:
-            details_expr = sqlalchemy.func.lower(
-                sqlalchemy.func.coalesce(
-                    sqlalchemy.cast(Sale.payment_details, sqlalchemy.String), ""
+            advance_exists = (
+                sqlalchemy.exists()
+                .where(SaleItem.sale_id == Sale.id)
+                .where(
+                    sqlalchemy.func.lower(
+                        sqlalchemy.func.coalesce(SaleItem.product_name_snapshot, "")
+                    ).like("%adelanto%")
                 )
             )
-            query = query.where(~details_expr.like("%adelanto%"))
+            query = query.where(~advance_exists)
 
         return query
 
@@ -704,18 +720,127 @@ class CashState(MixinState):
                 pass
 
         if not self.show_cashbox_advances:
-            details_expr = sqlalchemy.func.lower(
-                sqlalchemy.func.coalesce(
-                    sqlalchemy.cast(Sale.payment_details, sqlalchemy.String), ""
+            advance_exists = (
+                sqlalchemy.exists()
+                .where(SaleItem.sale_id == Sale.id)
+                .where(
+                    sqlalchemy.func.lower(
+                        sqlalchemy.func.coalesce(SaleItem.product_name_snapshot, "")
+                    ).like("%adelanto%")
                 )
             )
-            query = query.where(~details_expr.like("%adelanto%"))
+            query = query.where(~advance_exists)
 
         with rx.session() as session:
             return session.exec(query).one()
 
+    def _payment_method_key(self, method_type: Any) -> str:
+        if isinstance(method_type, PaymentMethodType):
+            return method_type.value
+        if hasattr(method_type, "value"):
+            return str(method_type.value).strip().lower()
+        return str(method_type or "").strip().lower()
+
+    def _payment_method_label(self, method_key: str) -> str:
+        mapping = {
+            "cash": "Efectivo",
+            "card": "Tarjeta",
+            "wallet": "Billetera",
+            "transfer": "Transferencia",
+            "mixed": "Mixto",
+            "other": "Otros",
+        }
+        return mapping.get(method_key, "Otros")
+
+    def _payment_method_abbrev(self, method_key: str) -> str:
+        mapping = {
+            "cash": "Efe",
+            "card": "Tar",
+            "wallet": "Bil",
+            "transfer": "Trans",
+            "mixed": "Mix",
+            "other": "Otro",
+        }
+        return mapping.get(method_key, "Otro")
+
+    def _sorted_payment_keys(self, keys: list[str]) -> list[str]:
+        order = ["cash", "card", "wallet", "transfer", "mixed", "other"]
+        ordered = [key for key in order if key in keys]
+        for key in keys:
+            if key not in ordered:
+                ordered.append(key)
+        return ordered
+
+    def _payment_summary_from_payments(self, payments: list[Any]) -> str:
+        if not payments:
+            return "-"
+        totals: dict[str, float] = {}
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if not key:
+                continue
+            amount = float(getattr(payment, "amount", 0) or 0)
+            totals[key] = totals.get(key, 0.0) + amount
+        if not totals:
+            return "-"
+        parts = []
+        for key in self._sorted_payment_keys(list(totals.keys())):
+            label = self._payment_method_label(key)
+            parts.append(f"{label}: {self._format_currency(totals[key])}")
+        return ", ".join(parts)
+
+    def _payment_method_display(self, payments: list[Any]) -> str:
+        if not payments:
+            return "-"
+        keys: list[str] = []
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if key and key not in keys:
+                keys.append(key)
+        if not keys:
+            return "-"
+        if len(keys) == 1:
+            return self._payment_method_label(keys[0])
+        abbrevs = [
+            self._payment_method_abbrev(key)
+            for key in self._sorted_payment_keys(keys)
+        ]
+        return f"Mixto ({'/'.join(abbrevs)})"
+
+    def _payment_breakdown_from_payments(self, payments: list[Any]) -> list[dict[str, float]]:
+        if not payments:
+            return []
+        totals: dict[str, float] = {}
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if not key:
+                continue
+            amount = float(getattr(payment, "amount", 0) or 0)
+            totals[key] = totals.get(key, 0.0) + amount
+        breakdown = []
+        for key in self._sorted_payment_keys(list(totals.keys())):
+            label = self._payment_method_label(key)
+            breakdown.append({"label": label, "amount": self._round_currency(totals[key])})
+        return breakdown
+
+    def _payment_kind_from_payments(self, payments: list[Any]) -> str:
+        keys = {
+            self._payment_method_key(getattr(payment, "method_type", None))
+            for payment in payments
+        }
+        keys.discard("")
+        if len(keys) > 1:
+            return "mixed"
+        if len(keys) == 1:
+            return next(iter(keys))
+        return ""
+
     def _cashbox_sale_row(self, sale: Sale, user: UserModel | None) -> CashboxSale:
-        details_text = self._payment_details_text(sale.payment_details)
+        payments = sale.payments or []
+        details_text = self._payment_summary_from_payments(payments)
+        method_label = self._payment_method_display(payments)
+        payment_breakdown = self._payment_breakdown_from_payments(payments)
+        payment_kind = self._payment_kind_from_payments(payments)
         items: list[dict] = []
         items_total = 0
         for item in sale.items or []:
@@ -735,13 +860,16 @@ class CashState(MixinState):
             "sale_id": str(sale.id),
             "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
             "user": user.username if user else "Desconocido",
-            "payment_method": sale.payment_method,
+            "payment_method": method_label,
+            "payment_label": method_label,
             "payment_details": details_text,
             "total": total_amount,
-            "is_deleted": sale.is_deleted,
+            "is_deleted": sale.status == SaleStatus.cancelled,
             "delete_reason": sale.delete_reason,
             "items": items,
             "service_total": total_amount,
+            "payment_breakdown": payment_breakdown,
+            "payment_kind": payment_kind,
         }
         return sale_dict
 
@@ -1067,8 +1195,8 @@ class CashState(MixinState):
             if not sale_db:
                 return rx.toast("Venta no encontrada en BD.", duration=3000)
             
-            # Mark as deleted in DB
-            sale_db.is_deleted = True
+            # Mark as cancelled in DB
+            sale_db.status = SaleStatus.cancelled
             sale_db.delete_reason = reason
             session.add(sale_db)
             
@@ -1105,7 +1233,15 @@ class CashState(MixinState):
         with rx.session() as session:
             try:
                 sale_db_id = int(sale_id)
-                sale = session.exec(select(Sale).where(Sale.id == sale_db_id)).first()
+                sale = session.exec(
+                    select(Sale)
+                    .where(Sale.id == sale_db_id)
+                    .options(
+                        selectinload(Sale.items),
+                        selectinload(Sale.payments),
+                        selectinload(Sale.user),
+                    )
+                ).first()
                 if sale:
                     items_data = []
                     for item in sale.items:
@@ -1120,8 +1256,12 @@ class CashState(MixinState):
                     sale_data = {
                         "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                         "total": sale.total_amount,
-                        "payment_details": self._payment_details_text(sale.payment_details),
-                        "payment_method": sale.payment_method,
+                        "payment_details": self._payment_summary_from_payments(
+                            sale.payments or []
+                        ),
+                        "payment_method": self._payment_method_display(
+                            sale.payments or []
+                        ),
                         "items": items_data,
                         "user": sale.user.username if sale.user else "Desconocido"
                     }
@@ -1405,61 +1545,42 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 target_date = datetime.datetime.strptime(date, "%Y-%m-%d")
                 start_dt = target_date.replace(hour=0, minute=0, second=0)
                 end_dt = target_date.replace(hour=23, minute=59, second=59)
-                
+
                 sales = session.exec(
                     select(Sale, UserModel)
                     .join(UserModel, isouter=True)
                     .where(Sale.timestamp >= start_dt)
                     .where(Sale.timestamp <= end_dt)
-                    .where(Sale.is_deleted == False)
+                    .where(Sale.status != SaleStatus.cancelled)
+                    .options(selectinload(Sale.payments), selectinload(Sale.items))
                 ).all()
-                
+
                 result = []
                 for sale, user in sales:
-                    # Crear payment_label descriptivo basado en payment_details
-                    payment_label = sale.payment_method or ""
-                    payment_details_str = self._payment_details_text(sale.payment_details)
-                    
-                    # Determinar el label descriptivo
-                    if "Mixto" in payment_details_str or "Pagos Mixtos" in payment_details_str:
-                        payment_label = "Pagos Mixtos"
-                    elif "Yape" in payment_details_str:
-                        payment_label = "Billetera Digital / QR - Yape"
-                    elif "Plin" in payment_details_str:
-                        payment_label = "Billetera Digital / QR - Plin"
-                    elif "Billetera" in payment_details_str or "QR" in payment_details_str:
-                        payment_label = "Billetera Digital / QR"
-                    elif "Tarjeta" in payment_details_str:
-                        if "Debito" in payment_details_str or "Débito" in payment_details_str:
-                            payment_label = "Tarjeta de Débito"
-                        elif "Credito" in payment_details_str or "Crédito" in payment_details_str:
-                            payment_label = "Tarjeta de Crédito"
-                        else:
-                            payment_label = "Tarjeta"
-                    elif "Efectivo" in payment_details_str:
-                        payment_label = "Efectivo"
-                    
-                    if isinstance(sale.payment_details, dict):
-                        label_from_details = sale.payment_details.get("label")
-                        if isinstance(label_from_details, str) and label_from_details.strip():
-                            payment_label = label_from_details
-                    breakdown_from_details = None
-                    if isinstance(sale.payment_details, dict) and isinstance(
-                        sale.payment_details.get("breakdown"), list
-                    ):
-                        breakdown_from_details = sale.payment_details.get("breakdown")
+                    payments = sale.payments or []
+                    payment_label = self._payment_method_display(payments)
+                    payment_details_str = self._payment_summary_from_payments(payments)
+                    breakdown_from_payments = self._payment_breakdown_from_payments(
+                        payments
+                    )
+                    payment_kind = self._payment_kind_from_payments(payments)
+                    if not breakdown_from_payments:
+                        fallback_label = payment_label if payment_label != "-" else "Otros"
+                        breakdown_from_payments = [
+                            {"label": fallback_label, "amount": sale.total_amount}
+                        ]
 
                     sale_dict = {
                         "sale_id": str(sale.id),
                         "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                         "user": user.username if user else "Desconocido",
-                        "payment_method": sale.payment_method,
+                        "payment_method": payment_label,
                         "payment_label": payment_label,
                         "payment_details": payment_details_str,
                         "total": sale.total_amount,
-                        "is_deleted": sale.is_deleted,
-                        "payment_breakdown": breakdown_from_details
-                        or [{"label": payment_label, "amount": sale.total_amount}],
+                        "is_deleted": sale.status == SaleStatus.cancelled,
+                        "payment_breakdown": breakdown_from_payments,
+                        "payment_kind": payment_kind,
                     }
                     result.append(sale_dict)
                 return result
@@ -1509,11 +1630,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if sale.get("is_advance"):
             return True
         label = (sale.get("payment_label") or "").lower()
-        details = self._payment_details_text(sale.get("payment_details")).lower()
         description = " ".join(item.get("description", "") for item in sale.get("items", []))
         return (
             "adelanto" in label
-            or "adelanto" in details
             or "adelanto" in description.lower()
         )
 
@@ -1532,28 +1651,26 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         )
         
         with rx.session() as session:
-            payment_summary = (
-                f"Adelanto registrado al crear la reserva. "
-                f"Monto {self._format_currency(amount)} | {description}"
-            )
-            payment_data = {
-                "summary": payment_summary,
-                "method": "Efectivo",
-                "method_kind": "cash",
-                "label": "Efectivo",
-                "breakdown": [{"label": "Efectivo", "amount": amount}],
-                "total": self._round_currency(amount),
-            }
+            timestamp = datetime.datetime.now()
             # Create Sale for advance
             new_sale = Sale(
+                timestamp=timestamp,
                 total_amount=amount,
-                payment_method="Efectivo",
-                payment_details=payment_data,
                 user_id=self.current_user.get("id"),
-                is_deleted=False
+                status=SaleStatus.completed,
             )
             session.add(new_sale)
             session.flush()
+
+            session.add(
+                SalePayment(
+                    sale_id=new_sale.id,
+                    amount=amount,
+                    method_type=PaymentMethodType.cash,
+                    reference_code=None,
+                    created_at=timestamp,
+                )
+            )
             
             # Create SaleItem (Service)
             sale_item = SaleItem(

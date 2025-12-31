@@ -3,7 +3,8 @@ import bcrypt
 from typing import Dict, List, Optional, Any
 from sqlmodel import select
 from sqlalchemy import func
-from app.models import User as UserModel
+from sqlalchemy.orm import selectinload
+from app.models import Permission, Role, User as UserModel
 from app.utils.auth import create_access_token, verify_token
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
@@ -105,15 +106,18 @@ class AuthState(MixinState):
         
         with rx.session() as session:
             user = session.exec(
-                select(UserModel).where(UserModel.username == username)
+                select(UserModel)
+                .where(UserModel.username == username)
+                .options(selectinload(UserModel.role).selectinload(Role.permissions))
             ).first()
             
             if user:
+                role_name = user.role.name if user.role else "Sin rol"
                 return {
                     "id": user.id,
                     "username": user.username,
-                    "role": user.role,
-                    "privileges": self._normalize_privileges(user.privileges or {}),
+                    "role": role_name,
+                    "privileges": self._get_privileges_dict(user),
                     "password_hash": user.password_hash,
                 }
         
@@ -123,13 +127,19 @@ class AuthState(MixinState):
 
     def load_users(self):
         with rx.session() as session:
-            users = session.exec(select(UserModel)).all()
+            users = session.exec(
+                select(UserModel)
+                .options(selectinload(UserModel.role).selectinload(Role.permissions))
+            ).all()
+            self._load_roles_cache(session)
             normalized_users = []
             for user in users:
+                role_name = user.role.name if user.role else "Sin rol"
                 normalized_users.append({
+                    "id": user.id,
                     "username": user.username,
-                    "role": user.role,
-                    "privileges": self._normalize_privileges(user.privileges or {}),
+                    "role": role_name,
+                    "privileges": self._get_privileges_dict(user),
                     "password_hash": user.password_hash,
                 })
             self.users_list = sorted(normalized_users, key=lambda u: u["username"])
@@ -146,6 +156,109 @@ class AuthState(MixinState):
         normalized = EMPTY_PRIVILEGES.copy()
         normalized.update(privileges)
         return normalized
+
+    def _get_privileges_dict(self, user: UserModel | None) -> Privileges:
+        if not user or not user.role:
+            return EMPTY_PRIVILEGES.copy()
+        permissions = {
+            perm.codename: True
+            for perm in (user.role.permissions or [])
+            if perm.codename
+        }
+        role_name = (user.role.name or "").strip().lower()
+        if role_name == "superadmin":
+            all_privileges = {key: True for key in DEFAULT_USER_PRIVILEGES}
+            all_privileges.update(permissions)
+            return self._normalize_privileges(all_privileges)
+        return self._normalize_privileges(permissions)
+
+    def _load_roles_cache(self, session):
+        roles = session.exec(
+            select(Role).options(selectinload(Role.permissions))
+        ).all()
+        if not roles:
+            self.roles = list(DEFAULT_ROLE_TEMPLATES)
+            self.role_privileges = DEFAULT_ROLE_TEMPLATES.copy()
+            return
+        self.roles = [role.name for role in roles]
+        self.role_privileges = {
+            role.name: self._normalize_privileges(
+                {
+                    perm.codename: True
+                    for perm in (role.permissions or [])
+                    if perm.codename
+                }
+            )
+            for role in roles
+        }
+
+    def _ensure_permissions(self, session, codenames: list[str]) -> Dict[str, Permission]:
+        if not codenames:
+            return {}
+        existing = session.exec(
+            select(Permission).where(Permission.codename.in_(codenames))
+        ).all()
+        by_code = {perm.codename: perm for perm in existing if perm.codename}
+        for code in codenames:
+            if code not in by_code:
+                perm = Permission(codename=code, description="")
+                session.add(perm)
+                by_code[code] = perm
+        session.flush()
+        return by_code
+
+    def _get_role_by_name(self, session, role_name: str) -> Role | None:
+        target = (role_name or "").strip().lower()
+        if not target:
+            return None
+        return session.exec(
+            select(Role)
+            .where(func.lower(Role.name) == target)
+            .options(selectinload(Role.permissions))
+        ).first()
+
+    def _ensure_role(
+        self,
+        session,
+        role_name: str,
+        privileges: Privileges,
+        overwrite: bool = False,
+    ) -> Role:
+        role = self._get_role_by_name(session, role_name)
+        if not role:
+            role = Role(name=role_name, description="")
+            session.add(role)
+            session.flush()
+        if overwrite or not role.permissions:
+            permission_map = self._ensure_permissions(
+                session, list(privileges.keys())
+            )
+            role.permissions = [
+                permission_map[code]
+                for code, enabled in privileges.items()
+                if enabled
+            ]
+            session.add(role)
+        return role
+
+    def _bootstrap_default_roles(self, session):
+        role_count = session.exec(select(func.count(Role.id))).one()
+        if role_count and role_count > 0:
+            self._load_roles_cache(session)
+            return
+        permission_map = self._ensure_permissions(
+            session, list(DEFAULT_USER_PRIVILEGES.keys())
+        )
+        for role_name, privileges in DEFAULT_ROLE_TEMPLATES.items():
+            role = Role(name=role_name, description="")
+            role.permissions = [
+                permission_map[code]
+                for code, enabled in privileges.items()
+                if enabled
+            ]
+            session.add(role)
+        session.commit()
+        self._load_roles_cache(session)
 
     def _role_privileges(self, role: str) -> Privileges:
         role_key = self._find_role_key(role)
@@ -177,6 +290,7 @@ class AuthState(MixinState):
         password = form_data["password"].encode("utf-8")
         
         with rx.session() as session:
+            self._bootstrap_default_roles(session)
             # Check if any users exist (Bootstrap Admin)
             user_count = session.exec(select(func.count(UserModel.id))).one()
             
@@ -186,12 +300,18 @@ class AuthState(MixinState):
                     password_hash = bcrypt.hashpw(
                         password, bcrypt.gensalt()
                     ).decode()
-                    
+                    role = self._get_role_by_name(session, "Superadmin")
+                    if not role:
+                        role = self._ensure_role(
+                            session,
+                            "Superadmin",
+                            self._normalize_privileges(SUPERADMIN_PRIVILEGES),
+                            overwrite=True,
+                        )
                     admin_user = UserModel(
                         username="admin",
                         password_hash=password_hash,
-                        role="Superadmin",
-                        privileges=self._role_privileges("Superadmin")
+                        role_id=role.id,
                     )
                     session.add(admin_user)
                     session.commit()
@@ -208,8 +328,29 @@ class AuthState(MixinState):
             ).first()
             
             if user and bcrypt.checkpw(password, user.password_hash.encode("utf-8")):
+                if not user.role_id:
+                    fallback_role = (
+                        "Superadmin" if username == "admin" else "Usuario"
+                    )
+                    role = self._get_role_by_name(session, fallback_role)
+                    if not role:
+                        default_privileges = (
+                            SUPERADMIN_PRIVILEGES
+                            if fallback_role == "Superadmin"
+                            else DEFAULT_USER_PRIVILEGES
+                        )
+                        role = self._ensure_role(
+                            session,
+                            fallback_role,
+                            self._normalize_privileges(default_privileges),
+                            overwrite=True,
+                        )
+                    user.role_id = role.id
+                    session.add(user)
+                    session.commit()
                 self.token = create_access_token(username)
                 self.error_message = ""
+                self._load_roles_cache(session)
                 return rx.redirect("/")
             
         self.error_message = "Usuario o contraseña incorrectos."
@@ -254,17 +395,20 @@ class AuthState(MixinState):
         
         with rx.session() as session:
             user = session.exec(
-                select(UserModel).where(UserModel.username == key)
+                select(UserModel)
+                .where(UserModel.username == key)
+                .options(selectinload(UserModel.role).selectinload(Role.permissions))
             ).first()
             
             if not user:
                 return rx.toast("Usuario a editar no encontrado.", duration=3000)
             
             # Convert to dict
+            role_name = user.role.name if user.role else "Sin rol"
             user_dict = {
                 "username": user.username,
-                "role": user.role,
-                "privileges": user.privileges or {},
+                "role": role_name,
+                "privileges": self._get_privileges_dict(user),
                 "password_hash": user.password_hash,
             }
             self._open_user_editor(user_dict)
@@ -318,9 +462,12 @@ class AuthState(MixinState):
             return rx.toast("Ese rol ya existe.", duration=3000)
         
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
-        self.role_privileges[name] = privileges.copy()
-        if name not in self.roles:
-            self.roles.append(name)
+        with rx.session() as session:
+            if self._get_role_by_name(session, name):
+                return rx.toast("Ese rol ya existe.", duration=3000)
+            self._ensure_role(session, name, privileges, overwrite=True)
+            session.commit()
+            self._load_roles_cache(session)
             
         self.new_role_name = ""
         self.new_user_data["role"] = name
@@ -336,13 +483,12 @@ class AuthState(MixinState):
             return rx.toast("No se puede modificar los privilegios de Superadmin.", duration=3000)
             
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
-        role_key = self._find_role_key(role) or role
-        
-        self.role_privileges[role_key] = privileges.copy()
-        if role_key not in self.roles:
-            self.roles.append(role_key)
+        with rx.session() as session:
+            self._ensure_role(session, role, privileges, overwrite=True)
+            session.commit()
+            self._load_roles_cache(session)
             
-        return rx.toast(f"Plantilla de rol {role_key} actualizada.", duration=3000)
+        return rx.toast(f"Plantilla de rol {role} actualizada.", duration=3000)
 
     @rx.event
     def save_user(self):
@@ -351,13 +497,24 @@ class AuthState(MixinState):
             
         username = self.new_user_data["username"].lower().strip()
         if not username:
-            return rx.toast("El nombre de usuario no puede estar vacío.", duration=3000)
+            return rx.toast("El nombre de usuario no puede estar vac¡o.", duration=3000)
+        role_name = (self.new_user_data.get("role") or "").strip()
+        if not role_name:
+            return rx.toast("Debe asignar un rol al usuario.", duration=3000)
             
         self.new_user_data["privileges"] = self._normalize_privileges(
             self.new_user_data["privileges"]
         )
 
         with rx.session() as session:
+            role = self._get_role_by_name(session, role_name)
+            if not role:
+                role = self._ensure_role(
+                    session,
+                    role_name,
+                    self.new_user_data["privileges"],
+                    overwrite=True,
+                )
             if self.editing_user:
                 # Update existing user
                 user_to_update = session.exec(
@@ -372,17 +529,17 @@ class AuthState(MixinState):
                         self.new_user_data["password"]
                         != self.new_user_data["confirm_password"]
                     ):
-                        return rx.toast("Las contraseñas no coinciden.", duration=3000)
+                        return rx.toast("Las contrase¤as no coinciden.", duration=3000)
                     password_hash = bcrypt.hashpw(
                         self.new_user_data["password"].encode(), bcrypt.gensalt()
                     ).decode()
                     user_to_update.password_hash = password_hash
                     
-                user_to_update.role = self.new_user_data["role"]
-                user_to_update.privileges = self.new_user_data["privileges"].copy()
+                user_to_update.role_id = role.id
                 
                 session.add(user_to_update)
                 session.commit()
+                self._load_roles_cache(session)
                 
                 self.hide_user_form()
                 self.load_users()
@@ -396,9 +553,9 @@ class AuthState(MixinState):
                 if existing_user:
                     return rx.toast("El nombre de usuario ya existe.", duration=3000)
                 if not self.new_user_data["password"]:
-                    return rx.toast("La contraseña no puede estar vacía.", duration=3000)
+                    return rx.toast("La contrase¤a no puede estar vac¡a.", duration=3000)
                 if self.new_user_data["password"] != self.new_user_data["confirm_password"]:
-                    return rx.toast("Las contraseñas no coinciden.", duration=3000)
+                    return rx.toast("Las contrase¤as no coinciden.", duration=3000)
                     
                 password_hash = bcrypt.hashpw(
                     self.new_user_data["password"].encode(), bcrypt.gensalt()
@@ -407,11 +564,11 @@ class AuthState(MixinState):
                 new_user = UserModel(
                     username=username,
                     password_hash=password_hash,
-                    role=self.new_user_data["role"],
-                    privileges=self.new_user_data["privileges"].copy(),
+                    role_id=role.id,
                 )
                 session.add(new_user)
                 session.commit()
+                self._load_roles_cache(session)
                 
                 self.hide_user_form()
                 self.load_users()

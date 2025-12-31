@@ -1,8 +1,10 @@
 import json
+from decimal import Decimal
 from typing import Any, Dict, List
 
 import reflex as rx
 from sqlmodel import select
+from sqlalchemy.orm import selectinload
 
 from app.models import Sale
 
@@ -14,6 +16,65 @@ class ReceiptMixin:
     sale_receipt_ready: bool = False
     last_sale_reservation_context: Dict | None = None
     last_payment_summary: str = ""
+
+    def _payment_method_key(self, method_type: Any) -> str:
+        if hasattr(method_type, "value"):
+            return str(method_type.value).strip().lower()
+        return str(method_type or "").strip().lower()
+
+    def _payment_method_label(self, method_key: str) -> str:
+        mapping = {
+            "cash": "Efectivo",
+            "card": "Tarjeta",
+            "wallet": "Billetera",
+            "transfer": "Transferencia",
+            "mixed": "Mixto",
+            "other": "Otros",
+        }
+        return mapping.get(method_key, "Otros")
+
+    def _sorted_payment_keys(self, keys: list[str]) -> list[str]:
+        order = ["cash", "card", "wallet", "transfer", "mixed", "other"]
+        ordered = [key for key in order if key in keys]
+        for key in keys:
+            if key not in ordered:
+                ordered.append(key)
+        return ordered
+
+    def _payment_summary_from_payments(self, payments: list[Any]) -> str:
+        if not payments:
+            return "No especificado"
+        totals: dict[str, Decimal] = {}
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if not key:
+                continue
+            amount = Decimal(str(getattr(payment, "amount", 0) or 0))
+            totals[key] = totals.get(key, Decimal("0.00")) + amount
+        if not totals:
+            return "No especificado"
+        parts = []
+        for key in self._sorted_payment_keys(list(totals.keys())):
+            label = self._payment_method_label(key)
+            parts.append(f"{label}: {self._format_currency(totals[key])}")
+        return ", ".join(parts)
+
+    def _legacy_payment_summary(self, details: Any, method: Any) -> str:
+        if details:
+            formatter = getattr(self, "_payment_details_text", None)
+            if callable(formatter):
+                text = formatter(details)
+                if text:
+                    return text
+            if isinstance(details, (dict, list)):
+                try:
+                    return json.dumps(details)
+                except Exception:
+                    return str(details)
+            return str(details)
+        if method:
+            return str(method)
+        return "No especificado"
 
     def _print_receipt_logic(self, receipt_id: str | None = None):
         # Determine data source
@@ -28,16 +89,28 @@ class ReceiptMixin:
             # Fetch from DB for reprint
             with rx.session() as session:
                 try:
-                    sale = session.exec(select(Sale).where(Sale.id == int(receipt_id))).first()
+                    sale = session.exec(
+                        select(Sale)
+                        .where(Sale.id == int(receipt_id))
+                        .options(
+                            selectinload(Sale.payments),
+                            selectinload(Sale.items),
+                            selectinload(Sale.user),
+                        )
+                    ).first()
                     if not sale:
                         return rx.toast("Venta no encontrada.", duration=3000)
 
                     timestamp = sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
                     total = sale.total_amount
-                    payment_summary = (
-                        self._payment_details_text(sale.payment_details)
-                        or sale.payment_method
+                    payment_summary = self._payment_summary_from_payments(
+                        sale.payments or []
                     )
+                    if not payment_summary or payment_summary == "No especificado":
+                        payment_summary = self._legacy_payment_summary(
+                            getattr(sale, "payment_details", None),
+                            getattr(sale, "payment_method", None),
+                        )
                     user_name = sale.user.username if sale.user else "Desconocido"
 
                     for item in sale.items:
@@ -69,6 +142,11 @@ class ReceiptMixin:
             timestamp = self.last_sale_timestamp
             user_name = self.current_user.get("username", "Desconocido")
             payment_summary = self.last_payment_summary
+            if not payment_summary or payment_summary == "No especificado":
+                payment_summary = self._legacy_payment_summary(
+                    getattr(self, "last_payment_details", None),
+                    getattr(self, "last_payment_method", None),
+                )
 
         # Funciones auxiliares para formato de texto plano
         def center(text, width=42):

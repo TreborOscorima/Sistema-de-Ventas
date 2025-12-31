@@ -7,7 +7,17 @@ import io
 from decimal import Decimal
 from sqlmodel import select
 import sqlalchemy as sa
-from app.models import Sale, SaleItem, StockMovement, Product, User as UserModel, CashboxLog
+from sqlalchemy.orm import selectinload
+from app.enums import PaymentMethodType, SaleStatus
+from app.models import (
+    Sale,
+    SaleItem,
+    SalePayment,
+    StockMovement,
+    Product,
+    User as UserModel,
+    CashboxLog,
+)
 from .types import Movement
 from .mixin_state import MixinState
 from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
@@ -53,10 +63,8 @@ class HistorialState(MixinState):
                 SaleItem.quantity.label("quantity"),
                 sa.func.coalesce(Product.unit, sa.literal("Global")).label("unit"),
                 SaleItem.subtotal.label("total"),
-                sa.func.coalesce(Sale.payment_method, sa.literal("-")).label(
-                    "payment_method"
-                ),
-                sa.cast(Sale.payment_details, sa.String).label("payment_details"),
+                sa.literal("-").label("payment_method"),
+                sa.literal("").label("payment_details"),
                 sa.func.coalesce(UserModel.username, sa.literal("Desconocido")).label(
                     "user"
                 ),
@@ -148,7 +156,101 @@ class HistorialState(MixinState):
         query = query.order_by(history_union.c.timestamp.desc())
         return query, history_union
 
-    def _history_row_to_movement(self, row) -> Movement:
+    def _payment_method_key(self, method_type: Any) -> str:
+        if isinstance(method_type, PaymentMethodType):
+            return method_type.value
+        if hasattr(method_type, "value"):
+            return str(method_type.value).strip().lower()
+        return str(method_type or "").strip().lower()
+
+    def _payment_method_label(self, method_key: str) -> str:
+        mapping = {
+            "cash": "Efectivo",
+            "card": "Tarjeta",
+            "wallet": "Billetera",
+            "transfer": "Transferencia",
+            "mixed": "Mixto",
+            "other": "Otros",
+        }
+        return mapping.get(method_key, "Otros")
+
+    def _payment_method_abbrev(self, method_key: str) -> str:
+        mapping = {
+            "cash": "Efe",
+            "card": "Tar",
+            "wallet": "Bil",
+            "transfer": "Trans",
+            "mixed": "Mix",
+            "other": "Otro",
+        }
+        return mapping.get(method_key, "Otro")
+
+    def _sorted_payment_keys(self, keys: list[str]) -> list[str]:
+        order = ["cash", "card", "wallet", "transfer", "mixed", "other"]
+        ordered = [key for key in order if key in keys]
+        for key in keys:
+            if key not in ordered:
+                ordered.append(key)
+        return ordered
+
+    def _payment_summary_from_payments(self, payments: list[Any]) -> str:
+        if not payments:
+            return "-"
+        totals: dict[str, Decimal] = {}
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if not key:
+                continue
+            amount = Decimal(str(getattr(payment, "amount", 0) or 0))
+            totals[key] = totals.get(key, Decimal("0.00")) + amount
+        if not totals:
+            return "-"
+        parts = []
+        for key in self._sorted_payment_keys(list(totals.keys())):
+            label = self._payment_method_label(key)
+            parts.append(f"{label}: {self._format_currency(totals[key])}")
+        return ", ".join(parts)
+
+    def _payment_method_display(self, payments: list[Any]) -> str:
+        if not payments:
+            return "-"
+        keys: list[str] = []
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if key and key not in keys:
+                keys.append(key)
+        if not keys:
+            return "-"
+        if len(keys) == 1:
+            return self._payment_method_label(keys[0])
+        abbrevs = [
+            self._payment_method_abbrev(key)
+            for key in self._sorted_payment_keys(keys)
+        ]
+        return f"Mixto ({'/'.join(abbrevs)})"
+
+    def _sale_payment_info(self, session, sale_ids: list[int]) -> dict[str, dict[str, str]]:
+        if not sale_ids:
+            return {}
+        sales = session.exec(
+            select(Sale)
+            .where(Sale.id.in_(sale_ids))
+            .options(selectinload(Sale.payments))
+        ).all()
+        info: dict[str, dict[str, str]] = {}
+        for sale in sales:
+            payments = sale.payments or []
+            info[str(sale.id)] = {
+                "payment_method": self._payment_method_display(payments),
+                "payment_details": self._payment_summary_from_payments(payments),
+            }
+        return info
+
+    def _history_row_to_movement(
+        self,
+        row,
+        sale_payment_info: dict[str, dict[str, str]] | None = None,
+    ) -> Movement:
         def _value(key: str, default: Any = None):
             if isinstance(row, dict):
                 return row.get(key, default)
@@ -166,6 +268,11 @@ class HistorialState(MixinState):
             movement_type = movement_type.capitalize()
         movement_id = f"{source or 'row'}-{_value('id')}"
         payment_details = _value("payment_details")
+        sale_id = _value("sale_id") or ""
+        payment_method = _value("payment_method") or "-"
+        if sale_payment_info and sale_id in sale_payment_info:
+            payment_method = sale_payment_info[sale_id].get("payment_method", "-")
+            payment_details = sale_payment_info[sale_id].get("payment_details", "")
         if isinstance(payment_details, str):
             stripped = payment_details.strip()
             if stripped.startswith("{") or stripped.startswith("["):
@@ -181,10 +288,10 @@ class HistorialState(MixinState):
             "quantity": _value("quantity") or 0,
             "unit": _value("unit") or "-",
             "total": _value("total") or 0,
-            "payment_method": _value("payment_method") or "-",
+            "payment_method": payment_method or "-",
             "payment_details": self._payment_details_text(payment_details),
             "user": _value("user") or "Desconocido",
-            "sale_id": _value("sale_id") or "",
+            "sale_id": sale_id,
         }
 
     def _fetch_history(self, offset: int | None = None, limit: int | None = None) -> list[Movement]:
@@ -195,7 +302,28 @@ class HistorialState(MixinState):
             if limit is not None:
                 query = query.limit(limit)
             rows = session.execute(query).all()
-            return [self._history_row_to_movement(row) for row in rows]
+            sale_ids: set[int] = set()
+            for row in rows:
+                sale_id = None
+                if isinstance(row, dict):
+                    sale_id = row.get("sale_id")
+                elif hasattr(row, "sale_id"):
+                    sale_id = getattr(row, "sale_id")
+                else:
+                    try:
+                        sale_id = row["sale_id"]
+                    except (KeyError, IndexError, TypeError):
+                        sale_id = None
+                if sale_id:
+                    try:
+                        sale_ids.add(int(sale_id))
+                    except (TypeError, ValueError):
+                        continue
+            sale_payment_info = self._sale_payment_info(session, list(sale_ids))
+            return [
+                self._history_row_to_movement(row, sale_payment_info)
+                for row in rows
+            ]
 
     def _history_total_count(self) -> int:
         with rx.session() as session:
@@ -359,77 +487,86 @@ class HistorialState(MixinState):
             "tarjeta": Decimal("0.00"),
             "mixto": Decimal("0.00"),
         }
-        
-        with rx.session() as session:
-            # Apply same date filters as history list for consistency
-            query = select(Sale).where(Sale.is_deleted == False)
-            
-            if self.history_filter_start_date:
-                try:
-                    start_date = datetime.datetime.fromisoformat(self.history_filter_start_date)
-                    query = query.where(Sale.timestamp >= start_date)
-                except ValueError: pass
-            if self.history_filter_end_date:
-                try:
-                    end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
-                    end_date = end_date.replace(hour=23, minute=59, second=59)
-                    query = query.where(Sale.timestamp <= end_date)
-                except ValueError: pass
-                
-            sales = session.exec(query).all()
-            
-            for sale in sales:
-                method = (sale.payment_method or "").lower()
-                details_raw = sale.payment_details
-                details_text = self._payment_details_text(details_raw)
-                details_lower = details_text.lower()
-                total = sale.total_amount or Decimal("0.00")
-                method_kind = ""
-                breakdown = None
-                if isinstance(details_raw, dict):
-                    method_kind = (details_raw.get("method_kind") or "").lower()
-                    if isinstance(details_raw.get("breakdown"), list):
-                        breakdown = details_raw.get("breakdown")
-                
-                # Check for Mixed Payment first
-                if "mixto" in method or method_kind == "mixed":
-                    stats["mixto"] += total
-                    if breakdown:
-                        for item in breakdown:
-                            label = (item.get("label") or "").lower()
-                            amount = Decimal(str(item.get("amount", 0) or 0))
-                            if "efectivo" in label:
-                                stats["efectivo"] += amount
-                            elif "yape" in label:
-                                stats["yape"] += amount
-                            elif "plin" in label:
-                                stats["plin"] += amount
-                            elif "tarjeta" in label:
-                                stats["tarjeta"] += amount
-                    else:
-                        # Parse breakdown from legacy string
-                        stats["efectivo"] += self._parse_payment_amount(details_text, "Efectivo")
-                        stats["yape"] += self._parse_payment_amount(details_text, "Yape")
-                        stats["plin"] += self._parse_payment_amount(details_text, "Plin")
-                        stats["tarjeta"] += self._parse_payment_amount(details_text, "Tarjeta")
-                    # Note: We add to both "mixto" (total) and specific methods (parts).
-                    continue
 
-                # Single Payment Methods
-                if "efectivo" in method:
-                    stats["efectivo"] += total
-                elif "yape" in method or "yape" in details_lower:
-                    stats["yape"] += total
-                elif "plin" in method or "plin" in details_lower:
-                    stats["plin"] += total
-                elif "tarjeta" in method or "tarjeta" in details_lower:
-                    stats["tarjeta"] += total
-                else:
-                    # Fallback for generic "Billetera" if not caught above
-                    if "billetera" in method:
-                        # If details specify provider, we might have caught it. If not, where does it go?
-                        # For now, if it's not Yape/Plin, maybe it's another wallet.
-                        pass
+        start_date = None
+        end_date = None
+        if self.history_filter_start_date:
+            try:
+                start_date = datetime.datetime.fromisoformat(
+                    self.history_filter_start_date
+                )
+            except ValueError:
+                start_date = None
+        if self.history_filter_end_date:
+            try:
+                end_date = datetime.datetime.fromisoformat(
+                    self.history_filter_end_date
+                )
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+            except ValueError:
+                end_date = None
+
+        filters = [Sale.status != SaleStatus.cancelled]
+        if start_date:
+            filters.append(Sale.timestamp >= start_date)
+        if end_date:
+            filters.append(Sale.timestamp <= end_date)
+
+        with rx.session() as session:
+            totals_query = (
+                select(
+                    SalePayment.method_type,
+                    sa.func.coalesce(sa.func.sum(SalePayment.amount), 0),
+                )
+                .select_from(SalePayment)
+                .join(Sale)
+                .where(*filters)
+                .group_by(SalePayment.method_type)
+            )
+
+            for method_type, total in session.exec(totals_query).all():
+                key = self._payment_method_key(method_type)
+                if not key:
+                    continue
+                amount = Decimal(str(total or 0))
+                if key == PaymentMethodType.cash.value:
+                    stats["efectivo"] += amount
+                elif key == PaymentMethodType.card.value:
+                    stats["tarjeta"] += amount
+                elif key == PaymentMethodType.wallet.value:
+                    stats["yape"] += amount
+                elif key == PaymentMethodType.transfer.value:
+                    stats["plin"] += amount
+
+            mix_subq = (
+                select(
+                    SalePayment.sale_id.label("sale_id"),
+                    sa.func.count(
+                        sa.func.distinct(SalePayment.method_type)
+                    ).label("method_count"),
+                    sa.func.max(
+                        sa.case(
+                            (SalePayment.method_type == PaymentMethodType.mixed, 1),
+                            else_=0,
+                        )
+                    ).label("has_mixed"),
+                )
+                .select_from(SalePayment)
+                .join(Sale)
+                .where(*filters)
+                .group_by(SalePayment.sale_id)
+            ).subquery()
+
+            mixto_query = (
+                select(sa.func.coalesce(sa.func.sum(Sale.total_amount), 0))
+                .select_from(Sale)
+                .join(mix_subq, Sale.id == mix_subq.c.sale_id)
+                .where(
+                    sa.or_(mix_subq.c.method_count > 1, mix_subq.c.has_mixed == 1)
+                )
+            )
+            mixto_total = session.exec(mixto_query).one()
+            stats["mixto"] = Decimal(str(mixto_total or 0))
 
         return {k: self._round_currency(v) for k, v in stats.items()}
 
@@ -486,7 +623,9 @@ class HistorialState(MixinState):
     def sales_by_day(self) -> list[dict]:
         from collections import defaultdict
         with rx.session() as session:
-            sales = session.exec(select(Sale).where(Sale.is_deleted == False)).all()
+            sales = session.exec(
+                select(Sale).where(Sale.status != SaleStatus.cancelled)
+            ).all()
             daily_sales = defaultdict(Decimal)
             for sale in sales:
                 date_str = sale.timestamp.strftime("%Y-%m-%d")

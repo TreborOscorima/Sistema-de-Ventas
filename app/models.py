@@ -1,23 +1,52 @@
 import reflex as rx
-from typing import Optional, List, Dict
+from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
-from sqlmodel import Field, Relationship, JSON, Column
+from sqlmodel import Field, Relationship
 import sqlalchemy
 from sqlalchemy import Numeric
 
+from .enums import PaymentMethodType, ReservationStatus, SaleStatus, SportType
+
+
+class RolePermission(rx.Model, table=True):
+    """Tabla intermedia para relacionar roles y permisos."""
+    role_id: int = Field(foreign_key="role.id")
+    permission_id: int = Field(foreign_key="permission.id")
+
+
+class Role(rx.Model, table=True):
+    """Rol configurable para RBAC."""
+    name: str = Field(unique=True, index=True, nullable=False)
+    description: str = Field(default="")
+
+    users: List["User"] = Relationship(back_populates="role")
+    permissions: List["Permission"] = Relationship(
+        back_populates="roles",
+        link_model=RolePermission,
+    )
+
+
+class Permission(rx.Model, table=True):
+    """Permiso granular asociado a roles."""
+    codename: str = Field(unique=True, index=True, nullable=False)
+    description: str = Field(default="")
+
+    roles: List[Role] = Relationship(
+        back_populates="permissions",
+        link_model=RolePermission,
+    )
+
 class User(rx.Model, table=True):
-    """Modelo de Usuario con privilegios en JSON."""
+    """Modelo de Usuario con RBAC."""
     username: str = Field(unique=True, index=True, nullable=False)
     password_hash: str = Field(nullable=False)
-    role: str = Field(default="empleado")
     is_active: bool = Field(default=True)
-    
-    # Almacenamos los privilegios como un objeto JSON para flexibilidad
-    # Ejemplo: {"view_ventas": True, "create_ventas": False}
-    privileges: Dict = Field(default={}, sa_column=Column(JSON))
+
+    role_id: int = Field(foreign_key="role.id")
 
     # Relaciones
+    role: Role = Relationship(back_populates="users")
     sales: List["Sale"] = Relationship(back_populates="user")
     sessions: List["CashboxSession"] = Relationship(back_populates="user")
     logs: List["CashboxLog"] = Relationship(back_populates="user")
@@ -55,12 +84,8 @@ class Sale(rx.Model, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
-    payment_method: str = Field(default="Efectivo")
-    
-    # Detalles complejos del pago (JSON)
-    payment_details: Dict | list | str = Field(default={}, sa_column=Column(JSON))
-    
-    is_deleted: bool = Field(default=False)
+
+    status: SaleStatus = Field(default=SaleStatus.completed)
     delete_reason: Optional[str] = Field(default=None)
     
     # Claves Foráneas
@@ -69,6 +94,25 @@ class Sale(rx.Model, table=True):
     # Relaciones
     user: Optional[User] = Relationship(back_populates="sales")
     items: List["SaleItem"] = Relationship(back_populates="sale")
+    payments: List["SalePayment"] = Relationship(back_populates="sale")
+
+
+class SalePayment(rx.Model, table=True):
+    """Transaccion de pago asociada a una venta."""
+    sale_id: int = Field(foreign_key="sale.id")
+    amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    method_type: PaymentMethodType = Field(nullable=False)
+    reference_code: Optional[str] = Field(default=None)
+    created_at: datetime = Field(
+        default_factory=datetime.now,
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False))
+    )
+
+    # Relaciones
+    sale: Optional[Sale] = Relationship(back_populates="payments")
 
 class SaleItem(rx.Model, table=True):
     """Detalle de Venta (TransactionItem)."""
@@ -157,7 +201,7 @@ class FieldReservation(rx.Model, table=True):
     client_dni: Optional[str] = Field(default=None)
     client_phone: Optional[str] = Field(default=None)
     
-    sport: str = Field(default="Futbol") # Futbol, Voley
+    sport: SportType = Field(default=SportType.futbol)
     field_name: str = Field(nullable=False)
     
     # Fechas importantes (DateTime)
@@ -176,7 +220,7 @@ class FieldReservation(rx.Model, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
-    status: str = Field(default="pendiente") # pendiente, pagado, cancelado
+    status: ReservationStatus = Field(default=ReservationStatus.pending)
     
     # Claves Foráneas
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
@@ -227,7 +271,7 @@ class PaymentMethod(rx.Model, table=True):
     method_id: str = Field(unique=True, index=True, nullable=False) # 'cash', 'card', etc.
     name: str = Field(nullable=False)
     description: str = Field(default="")
-    kind: str = Field(default="other") # cash, card, wallet, mixed, other
+    kind: PaymentMethodType = Field(default=PaymentMethodType.other)
     enabled: bool = Field(default=True)
 
 class Currency(rx.Model, table=True):
@@ -246,7 +290,7 @@ class CompanySettings(rx.Model, table=True):
 
 class FieldPrice(rx.Model, table=True):
     """Precios de alquiler de canchas."""
-    sport: str = Field(nullable=False) # Futbol, Voley
+    sport: SportType = Field(nullable=False)
     name: str = Field(nullable=False) # "Hora Dia", "Hora Noche"
     price: Decimal = Field(
         default=Decimal("0.00"),
