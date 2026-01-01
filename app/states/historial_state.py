@@ -12,7 +12,6 @@ from app.enums import PaymentMethodType, SaleStatus
 from app.models import (
     Sale,
     SaleItem,
-    SalePayment,
     StockMovement,
     Product,
     User as UserModel,
@@ -506,67 +505,59 @@ class HistorialState(MixinState):
             except ValueError:
                 end_date = None
 
-        filters = [Sale.status != SaleStatus.cancelled]
-        if start_date:
-            filters.append(Sale.timestamp >= start_date)
-        if end_date:
-            filters.append(Sale.timestamp <= end_date)
-
         with rx.session() as session:
-            totals_query = (
-                select(
-                    SalePayment.method_type,
-                    sa.func.coalesce(sa.func.sum(SalePayment.amount), 0),
-                )
-                .select_from(SalePayment)
-                .join(Sale)
-                .where(*filters)
-                .group_by(SalePayment.method_type)
+            query = (
+                select(Sale)
+                .where(Sale.status != SaleStatus.cancelled)
+                .options(selectinload(Sale.payments))
             )
+            if start_date:
+                query = query.where(Sale.timestamp >= start_date)
+            if end_date:
+                query = query.where(Sale.timestamp <= end_date)
 
-            for method_type, total in session.exec(totals_query).all():
-                key = self._payment_method_key(method_type)
-                if not key:
+            sales = session.exec(query).all()
+
+            for sale in sales:
+                payments = sale.payments or []
+                method_keys: set[str] = set()
+                has_mixed = False
+                for payment in payments:
+                    key = self._payment_method_key(
+                        getattr(payment, "method_type", None)
+                    )
+                    if not key:
+                        continue
+                    if key == PaymentMethodType.mixed.value:
+                        has_mixed = True
+                    method_keys.add(key)
+
+                total = sale.total_amount
+                if total is None:
+                    total = sum(
+                        Decimal(str(getattr(payment, "amount", 0) or 0))
+                        for payment in payments
+                    )
+                total_amount = Decimal(str(total or 0))
+
+                if not method_keys:
+                    stats["mixto"] += total_amount
                     continue
-                amount = Decimal(str(total or 0))
+                if has_mixed or len(method_keys) > 1:
+                    stats["mixto"] += total_amount
+                    continue
+
+                key = next(iter(method_keys))
                 if key == PaymentMethodType.cash.value:
-                    stats["efectivo"] += amount
+                    stats["efectivo"] += total_amount
                 elif key == PaymentMethodType.card.value:
-                    stats["tarjeta"] += amount
+                    stats["tarjeta"] += total_amount
                 elif key == PaymentMethodType.wallet.value:
-                    stats["yape"] += amount
+                    stats["yape"] += total_amount
                 elif key == PaymentMethodType.transfer.value:
-                    stats["plin"] += amount
-
-            mix_subq = (
-                select(
-                    SalePayment.sale_id.label("sale_id"),
-                    sa.func.count(
-                        sa.func.distinct(SalePayment.method_type)
-                    ).label("method_count"),
-                    sa.func.max(
-                        sa.case(
-                            (SalePayment.method_type == PaymentMethodType.mixed, 1),
-                            else_=0,
-                        )
-                    ).label("has_mixed"),
-                )
-                .select_from(SalePayment)
-                .join(Sale)
-                .where(*filters)
-                .group_by(SalePayment.sale_id)
-            ).subquery()
-
-            mixto_query = (
-                select(sa.func.coalesce(sa.func.sum(Sale.total_amount), 0))
-                .select_from(Sale)
-                .join(mix_subq, Sale.id == mix_subq.c.sale_id)
-                .where(
-                    sa.or_(mix_subq.c.method_count > 1, mix_subq.c.has_mixed == 1)
-                )
-            )
-            mixto_total = session.exec(mixto_query).one()
-            stats["mixto"] = Decimal(str(mixto_total or 0))
+                    stats["plin"] += total_amount
+                else:
+                    stats["mixto"] += total_amount
 
         return {k: self._round_currency(v) for k, v in stats.items()}
 
