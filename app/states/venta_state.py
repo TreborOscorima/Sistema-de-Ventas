@@ -9,7 +9,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
     sale_form_key: int = 0
 
     @rx.event
-    def confirm_sale(self):
+    async def confirm_sale(self):
         if not self.current_user["privileges"]["create_ventas"]:
             return rx.toast("No tiene permisos para crear ventas.", duration=3000)
 
@@ -64,22 +64,17 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
         if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
             reservation_id = self.reservation_payment_id
 
-        with rx.session() as session:
-            try:
-                result = SaleService.process_sale(
-                    session=session,
-                    user_id=self.current_user.get("id"),
-                    items=item_dtos,
-                    payment_data=payment_dto,
-                    reservation_id=reservation_id,
-                )
-                session.commit()
-            except (ValueError, StockError) as exc:
-                session.rollback()
-                return rx.toast(str(exc), duration=3000)
-            except Exception:
-                session.rollback()
-                return rx.toast("No se pudo procesar la venta.", duration=3000)
+        try:
+            result = await SaleService.process_sale(
+                user_id=self.current_user.get("id"),
+                items=item_dtos,
+                payment_data=payment_dto,
+                reservation_id=reservation_id,
+            )
+        except (ValueError, StockError) as exc:
+            return rx.toast(str(exc), duration=3000)
+        except Exception:
+            return rx.toast("No se pudo procesar la venta.", duration=3000)
 
         self.last_sale_receipt = result.receipt_items
         self.last_sale_reservation_context = result.reservation_context

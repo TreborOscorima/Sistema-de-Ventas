@@ -4,3 +4,4 @@ bcrypt
 wrapt
 pyjwt
 python-dotenv
+aiomysql
