@@ -190,11 +190,67 @@ class ConfigState(MixinState):
                 session.add(Currency(code="USD", name="Dolar estadounidense (USD)", symbol="US$"))
 
             # Payment Methods
-            if not session.exec(select(PaymentMethod)).first():
-                session.add(PaymentMethod(method_id="cash", name="Efectivo", description="Billetes, Monedas", kind="cash", enabled=True))
-                session.add(PaymentMethod(method_id="card", name="Tarjeta", description="Credito, Debito", kind="card", enabled=True))
-                session.add(PaymentMethod(method_id="wallet", name="Billetera Digital / QR", description="Yape, Plin", kind="wallet", enabled=True))
-                session.add(PaymentMethod(method_id="mixed", name="Pagos Mixtos", description="Combinacion", kind="mixed", enabled=True))
+            existing_methods = {
+                method.method_id: method
+                for method in session.exec(select(PaymentMethod)).all()
+                if method.method_id
+            }
+            defaults = [
+                {
+                    "method_id": "cash",
+                    "name": "Efectivo",
+                    "description": "Billetes, Monedas",
+                    "kind": "cash",
+                },
+                {
+                    "method_id": "debit",
+                    "name": "T. Débito",
+                    "description": "Pago con tarjeta débito",
+                    "kind": "debit",
+                },
+                {
+                    "method_id": "credit",
+                    "name": "T. Crédito",
+                    "description": "Pago con tarjeta crédito",
+                    "kind": "credit",
+                },
+                {
+                    "method_id": "yape",
+                    "name": "Yape",
+                    "description": "Pago con Yape",
+                    "kind": "yape",
+                },
+                {
+                    "method_id": "plin",
+                    "name": "Plin",
+                    "description": "Pago con Plin",
+                    "kind": "plin",
+                },
+                {
+                    "method_id": "transfer",
+                    "name": "Transferencia",
+                    "description": "Transferencia",
+                    "kind": "transfer",
+                },
+                {
+                    "method_id": "mixed",
+                    "name": "Pago Mixto",
+                    "description": "Combinacion",
+                    "kind": "mixed",
+                },
+            ]
+            for method in defaults:
+                if method["method_id"] in existing_methods:
+                    continue
+                session.add(
+                    PaymentMethod(
+                        method_id=method["method_id"],
+                        name=method["name"],
+                        description=method["description"],
+                        kind=method["kind"],
+                        enabled=True,
+                    )
+                )
             
             session.commit()
         self.load_config_data()
@@ -401,7 +457,18 @@ class ConfigState(MixinState):
         kind = (self.new_payment_method_kind or "other").strip().lower()
         if not name:
             return rx.toast("Asigne un nombre al metodo de pago.", duration=3000)
-        if kind not in ["cash", "card", "wallet", "mixed", "other"]:
+        if kind not in [
+            "cash",
+            "debit",
+            "credit",
+            "yape",
+            "plin",
+            "transfer",
+            "card",
+            "wallet",
+            "mixed",
+            "other",
+        ]:
             kind = "other"
         if any(m["name"].lower() == name.lower() for m in self.payment_methods):
             return rx.toast("Ya existe un metodo con ese nombre.", duration=3000)

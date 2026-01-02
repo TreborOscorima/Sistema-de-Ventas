@@ -19,22 +19,39 @@ class ReceiptMixin:
 
     def _payment_method_key(self, method_type: Any) -> str:
         if hasattr(method_type, "value"):
-            return str(method_type.value).strip().lower()
-        return str(method_type or "").strip().lower()
+            key = str(method_type.value).strip().lower()
+        else:
+            key = str(method_type or "").strip().lower()
+        if key == "card":
+            return "credit"
+        if key == "wallet":
+            return "yape"
+        return key
 
     def _payment_method_label(self, method_key: str) -> str:
         mapping = {
             "cash": "Efectivo",
-            "card": "Tarjeta",
-            "wallet": "Billetera",
-            "transfer": "Transferencia",
-            "mixed": "Mixto",
+            "debit": "Tarjeta de Débito",
+            "credit": "Tarjeta de Crédito",
+            "yape": "Billetera Digital (Yape)",
+            "plin": "Billetera Digital (Plin)",
+            "transfer": "Transferencia Bancaria",
+            "mixed": "Pago Mixto",
             "other": "Otros",
         }
         return mapping.get(method_key, "Otros")
 
     def _sorted_payment_keys(self, keys: list[str]) -> list[str]:
-        order = ["cash", "card", "wallet", "transfer", "mixed", "other"]
+        order = [
+            "cash",
+            "debit",
+            "credit",
+            "yape",
+            "plin",
+            "transfer",
+            "mixed",
+            "other",
+        ]
         ordered = [key for key in order if key in keys]
         for key in keys:
             if key not in ordered:

@@ -38,7 +38,7 @@ class PaymentMixin:
     payment_mixed_cash: float = 0
     payment_mixed_card: float = 0
     payment_mixed_wallet: float = 0
-    payment_mixed_non_cash_kind: str = "card"
+    payment_mixed_non_cash_kind: str = "credit"
     payment_mixed_message: str = ""
     payment_mixed_status: str = "neutral"
     payment_mixed_notes: str = ""
@@ -112,7 +112,18 @@ class PaymentMixin:
         kind = (self.new_payment_method_kind or "other").strip().lower()
         if not name:
             return rx.toast("Asigne un nombre al metodo de pago.", duration=3000)
-        if kind not in ["cash", "card", "wallet", "mixed", "other"]:
+        if kind not in [
+            "cash",
+            "debit",
+            "credit",
+            "yape",
+            "plin",
+            "transfer",
+            "card",
+            "wallet",
+            "mixed",
+            "other",
+        ]:
             kind = "other"
         if any(m["name"].lower() == name.lower() for m in self.payment_methods):
             return rx.toast("Ya existe un metodo con ese nombre.", duration=3000)
@@ -162,11 +173,20 @@ class PaymentMixin:
     def _generate_payment_summary(self) -> str:
         method = self.payment_method or "No especificado"
         kind = (self.payment_method_kind or "other").lower()
+        mapping = {
+            "debit": "Tarjeta de Débito",
+            "credit": "Tarjeta de Crédito",
+            "yape": "Billetera Digital (Yape)",
+            "plin": "Billetera Digital (Plin)",
+            "transfer": "Transferencia Bancaria",
+        }
         if kind == "cash":
             detail = f"Monto {self._format_currency(self.payment_cash_amount)}"
             if self.payment_cash_message:
                 detail += f" ({self.payment_cash_message})"
             return f"{method} - {detail}"
+        if kind in ["debit", "credit", "yape", "plin", "transfer"]:
+            return mapping.get(kind, method)
         if kind == "card":
             return f"{method} - {self.payment_card_type}"
         if kind == "wallet":
@@ -177,12 +197,17 @@ class PaymentMixin:
             )
             return f"{method} - {provider}"
         if kind == "mixed":
+            non_cash_kind = (self.payment_mixed_non_cash_kind or "").lower()
             parts = []
             if self.payment_mixed_cash > 0:
                 parts.append(f"Efectivo {self._format_currency(self.payment_mixed_cash)}")
             if self.payment_mixed_card > 0:
+                card_label = mapping.get(
+                    non_cash_kind,
+                    f"Tarjeta ({self.payment_card_type})",
+                )
                 parts.append(
-                    f"Tarjeta ({self.payment_card_type}) {self._format_currency(self.payment_mixed_card)}"
+                    f"{card_label} {self._format_currency(self.payment_mixed_card)}"
                 )
             if self.payment_mixed_wallet > 0:
                 provider = (
@@ -190,7 +215,10 @@ class PaymentMixin:
                     or self.payment_wallet_choice
                     or "Billetera"
                 )
-                parts.append(f"{provider} {self._format_currency(self.payment_mixed_wallet)}")
+                wallet_label = mapping.get(non_cash_kind, provider)
+                parts.append(
+                    f"{wallet_label} {self._format_currency(self.payment_mixed_wallet)}"
+                )
             if self.payment_mixed_notes:
                 parts.append(self.payment_mixed_notes)
             if not parts:
@@ -247,7 +275,7 @@ class PaymentMixin:
         total = self._mixed_effective_total(total_override)
         paid_cash = self._round_currency(self.payment_mixed_cash)
         remaining = self._round_currency(max(total - paid_cash, 0))
-        if self.payment_mixed_non_cash_kind == "wallet":
+        if self.payment_mixed_non_cash_kind in ["wallet", "yape", "plin"]:
             self.payment_mixed_wallet = remaining
             self.payment_mixed_card = 0
         else:
@@ -301,21 +329,30 @@ class PaymentMixin:
         if method:
             self.payment_method = method.get("name", "")
             self.payment_method_description = method.get("description", "")
-            self.payment_method_kind = (method.get("kind", "other") or "other").lower()
+            kind = (method.get("kind", "other") or "other").lower()
+            self.payment_method_kind = kind
         else:
             self.payment_method = ""
             self.payment_method_description = ""
-            self.payment_method_kind = "other"
+            kind = "other"
+            self.payment_method_kind = kind
         self.payment_cash_amount = 0
         self.payment_cash_message = ""
         self.payment_cash_status = "neutral"
-        self.payment_card_type = "Credito"
-        self.payment_wallet_choice = "Yape"
-        self.payment_wallet_provider = "Yape"
+        if kind == "debit":
+            self.payment_card_type = "Debito"
+        else:
+            self.payment_card_type = "Credito"
+        if kind == "plin":
+            self.payment_wallet_choice = "Plin"
+            self.payment_wallet_provider = "Plin"
+        else:
+            self.payment_wallet_choice = "Yape"
+            self.payment_wallet_provider = "Yape"
         self.payment_mixed_cash = 0
         self.payment_mixed_card = 0
         self.payment_mixed_wallet = 0
-        self.payment_mixed_non_cash_kind = "card"
+        self.payment_mixed_non_cash_kind = "credit"
         self.payment_mixed_message = ""
         self.payment_mixed_status = "neutral"
         self.payment_mixed_notes = ""
@@ -348,7 +385,7 @@ class PaymentMixin:
         self.payment_card_type = card_type
         if (
             self.payment_method_kind == "mixed"
-            and self.payment_mixed_non_cash_kind == "card"
+            and self.payment_mixed_non_cash_kind in ["card", "debit", "credit", "transfer"]
         ):
             self._auto_allocate_mixed_amounts()
             self._update_mixed_message()
@@ -362,7 +399,7 @@ class PaymentMixin:
             self.payment_wallet_provider = provider
         if (
             self.payment_method_kind == "mixed"
-            and self.payment_mixed_non_cash_kind == "wallet"
+            and self.payment_mixed_non_cash_kind in ["wallet", "yape", "plin"]
         ):
             self._auto_allocate_mixed_amounts()
             self._update_mixed_message()
@@ -384,8 +421,26 @@ class PaymentMixin:
 
     @rx.event
     def set_mixed_non_cash_kind(self, kind: str):
-        if kind not in ["card", "wallet"]:
+        if kind not in [
+            "card",
+            "wallet",
+            "debit",
+            "credit",
+            "yape",
+            "plin",
+            "transfer",
+        ]:
             return
+        if kind == "debit":
+            self.payment_card_type = "Debito"
+        elif kind == "credit":
+            self.payment_card_type = "Credito"
+        elif kind == "yape":
+            self.payment_wallet_choice = "Yape"
+            self.payment_wallet_provider = "Yape"
+        elif kind == "plin":
+            self.payment_wallet_choice = "Plin"
+            self.payment_wallet_provider = "Plin"
         self.payment_mixed_non_cash_kind = kind
         self._auto_allocate_mixed_amounts()
         self._update_mixed_message()
@@ -407,51 +462,109 @@ class PaymentMixin:
         method_name = self._normalize_wallet_label(self.payment_method or "Metodo")
         breakdown: list[PaymentBreakdownItem] = []
         label = method_name
+        mapping = {
+            "cash": "Efectivo",
+            "debit": "Tarjeta de Débito",
+            "credit": "Tarjeta de Crédito",
+            "yape": "Billetera Digital (Yape)",
+            "plin": "Billetera Digital (Plin)",
+            "transfer": "Transferencia Bancaria",
+            "mixed": "Pago Mixto",
+            "other": "Otros",
+        }
         if kind == "cash":
-            label = "Efectivo"
+            label = mapping["cash"]
+            breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
+        elif kind in ["debit", "credit", "yape", "plin", "transfer"]:
+            label = mapping[kind]
             breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
         elif kind == "card":
-            card_type = self.payment_card_type or "Tarjeta"
-            label = f"{method_name} ({card_type})"
+            card_type = (self.payment_card_type or "").lower()
+            label = mapping["debit"] if "deb" in card_type else mapping["credit"]
             breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
         elif kind == "wallet":
-            provider = self.payment_wallet_provider or self.payment_wallet_choice or "Billetera"
-            label = f"{method_name} ({provider})"
+            provider = (
+                self.payment_wallet_provider
+                or self.payment_wallet_choice
+                or "Billetera"
+            )
+            provider_key = provider.strip().lower()
+            if "plin" in provider_key:
+                label = mapping["plin"]
+            else:
+                label = mapping["yape"]
             breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
         elif kind == "mixed":
             paid_cash = self._round_currency(self.payment_mixed_cash)
             paid_card = self._round_currency(self.payment_mixed_card)
             paid_wallet = self._round_currency(self.payment_mixed_wallet)
-            provider = self.payment_wallet_provider or self.payment_wallet_choice or "Billetera"
+            non_cash_kind = (self.payment_mixed_non_cash_kind or "").lower()
             remaining = self._round_currency(sale_total)
             parts: list[PaymentBreakdownItem] = []
+
             if paid_card > 0:
                 applied_card = min(paid_card, remaining)
                 if applied_card > 0:
+                    if non_cash_kind in ["debit", "credit", "transfer"]:
+                        card_label = mapping[non_cash_kind]
+                    elif non_cash_kind == "card":
+                        card_type = (self.payment_card_type or "").lower()
+                        card_label = (
+                            mapping["debit"]
+                            if "deb" in card_type
+                            else mapping["credit"]
+                        )
+                    else:
+                        card_label = mapping["credit"]
                     parts.append(
                         {
-                            "label": f"Tarjeta ({self.payment_card_type})",
+                            "label": card_label,
                             "amount": self._round_currency(applied_card),
                         }
                     )
                     remaining = self._round_currency(remaining - applied_card)
+
             if paid_wallet > 0 and remaining > 0:
                 applied_wallet = min(paid_wallet, remaining)
                 if applied_wallet > 0:
+                    if non_cash_kind in ["yape", "plin"]:
+                        wallet_label = mapping[non_cash_kind]
+                    elif non_cash_kind == "wallet":
+                        provider = (
+                            self.payment_wallet_provider
+                            or self.payment_wallet_choice
+                            or "Billetera"
+                        )
+                        provider_key = provider.strip().lower()
+                        wallet_label = (
+                            mapping["plin"]
+                            if "plin" in provider_key
+                            else mapping["yape"]
+                        )
+                    else:
+                        wallet_label = mapping["yape"]
                     parts.append(
-                        {"label": provider, "amount": self._round_currency(applied_wallet)}
+                        {
+                            "label": wallet_label,
+                            "amount": self._round_currency(applied_wallet),
+                        }
                     )
                     remaining = self._round_currency(remaining - applied_wallet)
+
             if paid_cash > 0 and remaining > 0:
                 applied_cash = min(paid_cash, remaining)
                 if applied_cash > 0:
                     parts.append(
-                        {"label": "Efectivo", "amount": self._round_currency(applied_cash)}
+                        {
+                            "label": mapping["cash"],
+                            "amount": self._round_currency(applied_cash),
+                        }
                     )
                     remaining = self._round_currency(remaining - applied_cash)
+
             if not parts:
                 breakdown = [
-                    {"label": method_name, "amount": self._round_currency(sale_total)}
+                    {"label": mapping["mixed"], "amount": self._round_currency(sale_total)}
                 ]
             else:
                 if remaining > 0:
@@ -460,9 +573,9 @@ class PaymentMixin:
                     )
                 breakdown = parts
             labels = [p["label"] for p in breakdown]
-            detail = ", ".join(labels) if labels else method_name
-            label = f"{method_name} ({detail})"
+            detail = ", ".join(labels) if labels else mapping["mixed"]
+            label = f"{mapping['mixed']} ({detail})"
         else:
-            label = method_name or "Otros"
+            label = method_name or mapping["other"]
             breakdown = [{"label": label, "amount": self._round_currency(sale_total)}]
         return label, breakdown

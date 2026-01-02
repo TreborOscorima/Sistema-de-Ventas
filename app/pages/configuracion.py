@@ -36,10 +36,15 @@ CONFIG_SECTIONS: list[dict[str, str]] = [
 
 PAYMENT_KIND_LABELS: dict[str, str] = {
     "cash": "Efectivo",
-    "card": "Tarjeta",
-    "wallet": "Billetera Digital / QR",
+    "debit": "Tarjeta de Débito",
+    "credit": "Tarjeta de Crédito",
+    "yape": "Billetera Digital (Yape)",
+    "plin": "Billetera Digital (Plin)",
+    "transfer": "Transferencia Bancaria",
     "mixed": "Pago Mixto",
     "other": "Otro",
+    "card": "Tarjeta de Crédito",
+    "wallet": "Billetera Digital (Yape)",
 }
 
 PRIVILEGE_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
@@ -769,7 +774,16 @@ def payment_methods_section() -> rx.Component:
                 rx.el.select(
                     *[
                         rx.el.option(PAYMENT_KIND_LABELS[kind], value=kind)
-                        for kind in ["cash", "card", "wallet", "mixed", "other"]
+                        for kind in [
+                            "cash",
+                            "debit",
+                            "credit",
+                            "yape",
+                            "plin",
+                            "transfer",
+                            "mixed",
+                            "other",
+                        ]
                     ],
                     value=State.new_payment_method_kind,
                     on_change=State.set_new_payment_method_kind,

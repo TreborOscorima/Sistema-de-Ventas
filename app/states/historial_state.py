@@ -157,18 +157,26 @@ class HistorialState(MixinState):
 
     def _payment_method_key(self, method_type: Any) -> str:
         if isinstance(method_type, PaymentMethodType):
-            return method_type.value
-        if hasattr(method_type, "value"):
-            return str(method_type.value).strip().lower()
-        return str(method_type or "").strip().lower()
+            key = method_type.value
+        elif hasattr(method_type, "value"):
+            key = str(method_type.value).strip().lower()
+        else:
+            key = str(method_type or "").strip().lower()
+        if key == "card":
+            return "credit"
+        if key == "wallet":
+            return "yape"
+        return key
 
     def _payment_method_label(self, method_key: str) -> str:
         mapping = {
             "cash": "Efectivo",
-            "card": "Tarjeta",
-            "wallet": "Billetera",
-            "transfer": "Transferencia",
-            "mixed": "Mixto",
+            "debit": "Tarjeta de Débito",
+            "credit": "Tarjeta de Crédito",
+            "yape": "Billetera Digital (Yape)",
+            "plin": "Billetera Digital (Plin)",
+            "transfer": "Transferencia Bancaria",
+            "mixed": "Pago Mixto",
             "other": "Otros",
         }
         return mapping.get(method_key, "Otros")
@@ -176,16 +184,27 @@ class HistorialState(MixinState):
     def _payment_method_abbrev(self, method_key: str) -> str:
         mapping = {
             "cash": "Efe",
-            "card": "Tar",
-            "wallet": "Bil",
-            "transfer": "Trans",
-            "mixed": "Mix",
+            "debit": "Deb",
+            "credit": "Cre",
+            "yape": "Yap",
+            "plin": "Plin",
+            "transfer": "Transf",
+            "mixed": "Mixto",
             "other": "Otro",
         }
         return mapping.get(method_key, "Otro")
 
     def _sorted_payment_keys(self, keys: list[str]) -> list[str]:
-        order = ["cash", "card", "wallet", "transfer", "mixed", "other"]
+        order = [
+            "cash",
+            "debit",
+            "credit",
+            "yape",
+            "plin",
+            "transfer",
+            "mixed",
+            "other",
+        ]
         ordered = [key for key in order if key in keys]
         for key in keys:
             if key not in ordered:
@@ -226,7 +245,7 @@ class HistorialState(MixinState):
             self._payment_method_abbrev(key)
             for key in self._sorted_payment_keys(keys)
         ]
-        return f"Mixto ({'/'.join(abbrevs)})"
+        return f"{self._payment_method_label('mixed')} ({'/'.join(abbrevs)})"
 
     def _sale_payment_info(self, session, sale_ids: list[int]) -> dict[str, dict[str, str]]:
         if not sale_ids:
@@ -481,9 +500,11 @@ class HistorialState(MixinState):
 
         stats = {
             "efectivo": Decimal("0.00"),
+            "debito": Decimal("0.00"),
+            "credito": Decimal("0.00"),
             "yape": Decimal("0.00"),
             "plin": Decimal("0.00"),
-            "tarjeta": Decimal("0.00"),
+            "transferencia": Decimal("0.00"),
             "mixto": Decimal("0.00"),
         }
 
@@ -550,12 +571,16 @@ class HistorialState(MixinState):
                 key = next(iter(method_keys))
                 if key == PaymentMethodType.cash.value:
                     stats["efectivo"] += total_amount
-                elif key == PaymentMethodType.card.value:
-                    stats["tarjeta"] += total_amount
-                elif key == PaymentMethodType.wallet.value:
+                elif key == PaymentMethodType.debit.value:
+                    stats["debito"] += total_amount
+                elif key == PaymentMethodType.credit.value:
+                    stats["credito"] += total_amount
+                elif key == PaymentMethodType.yape.value:
                     stats["yape"] += total_amount
-                elif key == PaymentMethodType.transfer.value:
+                elif key == PaymentMethodType.plin.value:
                     stats["plin"] += total_amount
+                elif key == PaymentMethodType.transfer.value:
+                    stats["transferencia"] += total_amount
                 else:
                     stats["mixto"] += total_amount
 
@@ -564,6 +589,14 @@ class HistorialState(MixinState):
     @rx.var
     def total_ventas_efectivo(self) -> float:
         return self.payment_stats["efectivo"]
+
+    @rx.var
+    def total_ventas_debito(self) -> float:
+        return self.payment_stats["debito"]
+
+    @rx.var
+    def total_ventas_credito(self) -> float:
+        return self.payment_stats["credito"]
 
     @rx.var
     def total_ventas_yape(self) -> float:
@@ -575,7 +608,13 @@ class HistorialState(MixinState):
 
     @rx.var
     def total_ventas_tarjeta(self) -> float:
-        return self.payment_stats["tarjeta"]
+        return self._round_currency(
+            self.payment_stats["debito"] + self.payment_stats["credito"]
+        )
+
+    @rx.var
+    def total_ventas_transferencia(self) -> float:
+        return self.payment_stats["transferencia"]
 
     @rx.var
     def total_ventas_mixtas(self) -> float:

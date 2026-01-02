@@ -403,12 +403,20 @@ def payment_sidebar() -> rx.Component:
                             method["kind"] == "cash",
                             rx.icon("banknote", class_name="h-4 w-4"),
                             rx.cond(
-                                method["kind"] == "card",
+                                (method["kind"] == "debit")
+                                | (method["kind"] == "credit")
+                                | (method["kind"] == "card"),
                                 rx.icon("credit-card", class_name="h-4 w-4"),
                                 rx.cond(
-                                    method["kind"] == "wallet",
+                                    (method["kind"] == "yape")
+                                    | (method["kind"] == "plin")
+                                    | (method["kind"] == "wallet"),
                                     rx.icon("smartphone", class_name="h-4 w-4"),
-                                    rx.icon("layers", class_name="h-4 w-4"),
+                                    rx.cond(
+                                        method["kind"] == "transfer",
+                                        rx.icon("arrow-left-right", class_name="h-4 w-4"),
+                                        rx.icon("layers", class_name="h-4 w-4"),
+                                    ),
                                 ),
                             ),
                         ),
@@ -542,31 +550,58 @@ def payment_sidebar() -> rx.Component:
                         ),
                         class_name="flex flex-col gap-1",
                     ),
+                rx.el.div(
+                    rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
                     rx.el.div(
-                        rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.div(
-                            rx.el.button(
-                                "Tarjeta",
-                                on_click=lambda: State.set_mixed_non_cash_kind("card"),
-                                class_name=rx.cond(
-                                    State.payment_mixed_non_cash_kind == "card",
-                                    "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                                ),
+                        rx.el.button(
+                            "T. Débito",
+                            on_click=lambda: State.set_mixed_non_cash_kind("debit"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "debit",
+                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
                             ),
-                            rx.el.button(
-                                "Digital",
-                                on_click=lambda: State.set_mixed_non_cash_kind("wallet"),
-                                class_name=rx.cond(
-                                    State.payment_mixed_non_cash_kind == "wallet",
-                                    "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                                ),
-                            ),
-                            class_name="flex gap-2",
                         ),
-                        class_name="flex flex-col gap-2",
+                        rx.el.button(
+                            "T. Crédito",
+                            on_click=lambda: State.set_mixed_non_cash_kind("credit"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "credit",
+                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                            ),
+                        ),
+                        rx.el.button(
+                            "Yape",
+                            on_click=lambda: State.set_mixed_non_cash_kind("yape"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "yape",
+                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                            ),
+                        ),
+                        rx.el.button(
+                            "Plin",
+                            on_click=lambda: State.set_mixed_non_cash_kind("plin"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "plin",
+                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                            ),
+                        ),
+                        rx.el.button(
+                            "Transferencia",
+                            on_click=lambda: State.set_mixed_non_cash_kind("transfer"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "transfer",
+                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                            ),
+                        ),
+                        class_name="grid grid-cols-2 gap-2",
                     ),
+                    class_name="flex flex-col gap-2",
+                ),
                     rx.el.div(
                         rx.el.label("Monto complemento", class_name="text-xs font-medium text-gray-600"),
                         rx.el.div(
@@ -711,12 +746,20 @@ def payment_mobile_section() -> rx.Component:
                         method["kind"] == "cash",
                         rx.icon("banknote", class_name="h-4 w-4"),
                         rx.cond(
-                            method["kind"] == "card",
+                            (method["kind"] == "debit")
+                            | (method["kind"] == "credit")
+                            | (method["kind"] == "card"),
                             rx.icon("credit-card", class_name="h-4 w-4"),
                             rx.cond(
-                                method["kind"] == "wallet",
+                                (method["kind"] == "yape")
+                                | (method["kind"] == "plin")
+                                | (method["kind"] == "wallet"),
                                 rx.icon("smartphone", class_name="h-4 w-4"),
-                                rx.icon("layers", class_name="h-4 w-4"),
+                                rx.cond(
+                                    method["kind"] == "transfer",
+                                    rx.icon("arrow-left-right", class_name="h-4 w-4"),
+                                    rx.icon("layers", class_name="h-4 w-4"),
+                                ),
                             ),
                         ),
                     ),
@@ -847,24 +890,51 @@ def payment_mobile_section() -> rx.Component:
                     rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
                     rx.el.div(
                         rx.el.button(
-                            "Tarjeta",
-                            on_click=lambda: State.set_mixed_non_cash_kind("card"),
+                            "T. Débito",
+                            on_click=lambda: State.set_mixed_non_cash_kind("debit"),
                             class_name=rx.cond(
-                                State.payment_mixed_non_cash_kind == "card",
+                                State.payment_mixed_non_cash_kind == "debit",
                                 "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
                                 "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
                             ),
                         ),
                         rx.el.button(
-                            "Digital",
-                            on_click=lambda: State.set_mixed_non_cash_kind("wallet"),
+                            "T. Crédito",
+                            on_click=lambda: State.set_mixed_non_cash_kind("credit"),
                             class_name=rx.cond(
-                                State.payment_mixed_non_cash_kind == "wallet",
+                                State.payment_mixed_non_cash_kind == "credit",
                                 "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
                                 "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
                             ),
                         ),
-                        class_name="flex gap-2",
+                        rx.el.button(
+                            "Yape",
+                            on_click=lambda: State.set_mixed_non_cash_kind("yape"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "yape",
+                                "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            ),
+                        ),
+                        rx.el.button(
+                            "Plin",
+                            on_click=lambda: State.set_mixed_non_cash_kind("plin"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "plin",
+                                "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            ),
+                        ),
+                        rx.el.button(
+                            "Transferencia",
+                            on_click=lambda: State.set_mixed_non_cash_kind("transfer"),
+                            class_name=rx.cond(
+                                State.payment_mixed_non_cash_kind == "transfer",
+                                "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            ),
+                        ),
+                        class_name="grid grid-cols-2 gap-2",
                     ),
                     class_name="flex flex-col gap-2",
                 ),

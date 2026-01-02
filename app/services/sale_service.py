@@ -71,15 +71,37 @@ def _method_type_from_kind(kind: str) -> PaymentMethodType:
     normalized = (kind or "").strip().lower()
     if normalized == "cash":
         return PaymentMethodType.cash
-    if normalized == "card":
-        return PaymentMethodType.card
-    if normalized == "wallet":
-        return PaymentMethodType.wallet
+    if normalized == "debit":
+        return PaymentMethodType.debit
+    if normalized == "credit":
+        return PaymentMethodType.credit
+    if normalized == "yape":
+        return PaymentMethodType.yape
+    if normalized == "plin":
+        return PaymentMethodType.plin
     if normalized == "transfer":
         return PaymentMethodType.transfer
     if normalized == "mixed":
         return PaymentMethodType.mixed
+    if normalized == "card":
+        return PaymentMethodType.credit
+    if normalized == "wallet":
+        return PaymentMethodType.yape
     return PaymentMethodType.other
+
+
+def _card_method_type(card_type: str) -> PaymentMethodType:
+    value = (card_type or "").strip().lower()
+    if "deb" in value:
+        return PaymentMethodType.debit
+    return PaymentMethodType.credit
+
+
+def _wallet_method_type(provider: str) -> PaymentMethodType:
+    value = (provider or "").strip().lower()
+    if "plin" in value:
+        return PaymentMethodType.plin
+    return PaymentMethodType.yape
 
 
 def _allocate_mixed_payments(
@@ -87,6 +109,8 @@ def _allocate_mixed_payments(
     cash_amount: Decimal,
     card_amount: Decimal,
     wallet_amount: Decimal,
+    card_type: PaymentMethodType,
+    wallet_type: PaymentMethodType,
 ) -> list[tuple[PaymentMethodType, Decimal]]:
     remaining = _round_money(sale_total)
     allocations: list[tuple[PaymentMethodType, Decimal]] = []
@@ -100,8 +124,8 @@ def _allocate_mixed_payments(
         allocations.append((method_type, _round_money(applied)))
         remaining = _round_money(remaining - applied)
 
-    apply(card_amount, PaymentMethodType.card)
-    apply(wallet_amount, PaymentMethodType.wallet)
+    apply(card_amount, card_type)
+    apply(wallet_amount, wallet_type)
     apply(cash_amount, PaymentMethodType.cash)
 
     if remaining > 0:
@@ -120,13 +144,31 @@ def _build_sale_payments(
 ) -> list[tuple[PaymentMethodType, Decimal]]:
     kind = (payment_data.method_kind or "other").strip().lower()
     if kind == "mixed":
+        non_cash_kind = (payment_data.mixed.non_cash_kind or "").strip().lower()
+        card_type = _card_method_type(payment_data.card.type)
+        wallet_type = _wallet_method_type(
+            payment_data.wallet.provider or payment_data.wallet.choice
+        )
+        if non_cash_kind in {"debit", "credit", "transfer"}:
+            card_type = _method_type_from_kind(non_cash_kind)
+        elif non_cash_kind in {"yape", "plin"}:
+            wallet_type = _method_type_from_kind(non_cash_kind)
         return _allocate_mixed_payments(
             sale_total,
             _to_decimal(payment_data.mixed.cash),
             _to_decimal(payment_data.mixed.card),
             _to_decimal(payment_data.mixed.wallet),
+            card_type,
+            wallet_type,
         )
-    method_type = _method_type_from_kind(kind)
+    if kind == "card":
+        method_type = _card_method_type(payment_data.card.type)
+    elif kind == "wallet":
+        method_type = _wallet_method_type(
+            payment_data.wallet.provider or payment_data.wallet.choice
+        )
+    else:
+        method_type = _method_type_from_kind(kind)
     if method_type == PaymentMethodType.cash:
         amount = min(_to_decimal(payment_data.cash.amount), sale_total)
     else:

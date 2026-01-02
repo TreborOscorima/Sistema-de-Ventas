@@ -22,18 +22,26 @@ class SaleStatus(str, Enum):
 
 class PaymentMethodType(str, Enum):
     cash = "cash"
-    card = "card"
+    debit = "debit"
+    credit = "credit"
+    yape = "yape"
+    plin = "plin"
     transfer = "transfer"
-    wallet = "wallet"
     mixed = "mixed"
     other = "other"
+    card = "card"
+    wallet = "wallet"
 
     CASH = cash
-    CARD = card
+    DEBIT = debit
+    CREDIT = credit
+    YAPE = yape
+    PLIN = plin
     TRANSFER = transfer
-    WALLET = wallet
     MIXED = mixed
     OTHER = other
+    CARD = card
+    WALLET = wallet
 
 class SportType(str, Enum):
     futbol = "futbol"

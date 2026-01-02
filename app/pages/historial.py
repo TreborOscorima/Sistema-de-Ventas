@@ -127,8 +127,26 @@ def historial_page() -> rx.Component:
                 stat_card(
                     "banknote",
                     "Ventas con Efectivo",
-                    rx.el.span(State.currency_symbol, State.total_ventas_efectivo.to_string()),
+                    rx.el.span(
+                        State.currency_symbol, State.total_ventas_efectivo.to_string()
+                    ),
                     "text-green-600",
+                ),
+                stat_card(
+                    "credit-card",
+                    "Ventas con T. Débito",
+                    rx.el.span(
+                        State.currency_symbol, State.total_ventas_debito.to_string()
+                    ),
+                    "text-emerald-600",
+                ),
+                stat_card(
+                    "credit-card",
+                    "Ventas con T. Crédito",
+                    rx.el.span(
+                        State.currency_symbol, State.total_ventas_credito.to_string()
+                    ),
+                    "text-purple-600",
                 ),
                 stat_card(
                     "smartphone",
@@ -143,18 +161,21 @@ def historial_page() -> rx.Component:
                     "text-indigo-600",
                 ),
                 stat_card(
+                    "arrow-left-right",
+                    "Ventas con Transferencia",
+                    rx.el.span(
+                        State.currency_symbol,
+                        State.total_ventas_transferencia.to_string(),
+                    ),
+                    "text-sky-600",
+                ),
+                stat_card(
                     "wallet",
                     "Ventas Mixtas",
                     rx.el.span(State.currency_symbol, State.total_ventas_mixtas.to_string()),
                     "text-blue-600",
                 ),
-                stat_card(
-                    "credit-card",
-                    "Ventas con Tarjeta",
-                    rx.el.span(State.currency_symbol, State.total_ventas_tarjeta.to_string()),
-                    "text-purple-600",
-                ),
-                class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-6",
+                class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6 mb-6",
             ),
             rx.el.div(
                 history_filters(),

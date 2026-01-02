@@ -122,15 +122,35 @@ class ServicesState(MixinState):
         normalized = (kind or "").strip().lower()
         if normalized == "cash":
             return PaymentMethodType.CASH
-        if normalized == "card":
-            return PaymentMethodType.CARD
-        if normalized == "wallet":
-            return PaymentMethodType.WALLET
+        if normalized == "debit":
+            return PaymentMethodType.DEBIT
+        if normalized == "credit":
+            return PaymentMethodType.CREDIT
+        if normalized == "yape":
+            return PaymentMethodType.YAPE
+        if normalized == "plin":
+            return PaymentMethodType.PLIN
         if normalized == "transfer":
             return PaymentMethodType.TRANSFER
         if normalized == "mixed":
             return PaymentMethodType.MIXED
+        if normalized == "card":
+            return PaymentMethodType.CREDIT
+        if normalized == "wallet":
+            return PaymentMethodType.YAPE
         return PaymentMethodType.OTHER
+
+    def _card_method_type(self, card_type: str) -> PaymentMethodType:
+        value = (card_type or "").strip().lower()
+        if "deb" in value:
+            return PaymentMethodType.DEBIT
+        return PaymentMethodType.CREDIT
+
+    def _wallet_method_type(self, provider: str) -> PaymentMethodType:
+        value = (provider or "").strip().lower()
+        if "plin" in value:
+            return PaymentMethodType.PLIN
+        return PaymentMethodType.YAPE
 
     def _build_reservation_payments(
         self, total: float
@@ -140,6 +160,20 @@ class ServicesState(MixinState):
         if kind == "mixed":
             remaining = total_value
             allocations: list[tuple[PaymentMethodType, float]] = []
+            non_cash_kind = (
+                getattr(self, "payment_mixed_non_cash_kind", "") or ""
+            ).lower()
+            card_type = self._card_method_type(
+                getattr(self, "payment_card_type", "")
+            )
+            wallet_type = self._wallet_method_type(
+                getattr(self, "payment_wallet_provider", "")
+                or getattr(self, "payment_wallet_choice", "")
+            )
+            if non_cash_kind in {"debit", "credit", "transfer"}:
+                card_type = self._payment_method_type_from_kind(non_cash_kind)
+            elif non_cash_kind in {"yape", "plin"}:
+                wallet_type = self._payment_method_type_from_kind(non_cash_kind)
 
             def apply(amount: float, method_type: PaymentMethodType) -> None:
                 nonlocal remaining
@@ -150,8 +184,8 @@ class ServicesState(MixinState):
                 allocations.append((method_type, self._round_currency(applied)))
                 remaining = self._round_currency(remaining - applied)
 
-            apply(getattr(self, "payment_mixed_card", 0), PaymentMethodType.CARD)
-            apply(getattr(self, "payment_mixed_wallet", 0), PaymentMethodType.WALLET)
+            apply(getattr(self, "payment_mixed_card", 0), card_type)
+            apply(getattr(self, "payment_mixed_wallet", 0), wallet_type)
             apply(getattr(self, "payment_mixed_cash", 0), PaymentMethodType.CASH)
 
             if remaining > 0:
@@ -166,7 +200,17 @@ class ServicesState(MixinState):
 
             return allocations
 
-        method_type = self._payment_method_type_from_kind(kind)
+        if kind == "card":
+            method_type = self._card_method_type(
+                getattr(self, "payment_card_type", "")
+            )
+        elif kind == "wallet":
+            method_type = self._wallet_method_type(
+                getattr(self, "payment_wallet_provider", "")
+                or getattr(self, "payment_wallet_choice", "")
+            )
+        else:
+            method_type = self._payment_method_type_from_kind(kind)
         if method_type == PaymentMethodType.CASH:
             cash_amount = self._round_currency(
                 getattr(self, "payment_cash_amount", 0)
