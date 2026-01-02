@@ -16,6 +16,7 @@ from app.models import (
     Product,
     User as UserModel,
     CashboxLog,
+    PaymentMethod,
 )
 from .types import Movement
 from .mixin_state import MixinState
@@ -585,6 +586,81 @@ class HistorialState(MixinState):
                     stats["mixto"] += total_amount
 
         return {k: self._round_currency(v) for k, v in stats.items()}
+
+    @rx.var
+    def dynamic_payment_cards(self) -> list[dict]:
+        stats = self.payment_stats
+        styles = {
+            "cash": {"icon": "coins", "color": "blue"},
+            "debit": {"icon": "credit-card", "color": "indigo"},
+            "card": {"icon": "credit-card", "color": "indigo"},
+            "credit": {"icon": "credit-card", "color": "violet"},
+            "yape": {"icon": "qr-code", "color": "pink"},
+            "plin": {"icon": "qr-code", "color": "cyan"},
+            "transfer": {"icon": "landmark", "color": "orange"},
+            "mixed": {"icon": "layers", "color": "amber"},
+            "other": {"icon": "circle-help", "color": "gray"},
+        }
+        stats_key_map = {
+            "cash": "efectivo",
+            "debit": "debito",
+            "card": "credito",
+            "credit": "credito",
+            "yape": "yape",
+            "plin": "plin",
+            "wallet": "yape",
+            "transfer": "transferencia",
+            "mixed": "mixto",
+            "other": "mixto",
+        }
+
+        with rx.session() as session:
+            methods = session.exec(
+                select(PaymentMethod).where(PaymentMethod.enabled == True)
+            ).all()
+
+        order_alias = {
+            "card": "credit",
+            "wallet": "yape",
+        }
+        order_index = {
+            "cash": 0,
+            "yape": 1,
+            "plin": 2,
+            "credit": 3,
+            "debit": 4,
+            "transfer": 5,
+            "mixed": 6,
+            "other": 7,
+        }
+
+        cards: list[dict] = []
+        for method in methods:
+            kind = (method.kind or method.method_id or "other").strip().lower()
+            sort_kind = order_alias.get(kind, kind)
+            stats_key = stats_key_map.get(kind, "")
+            amount = stats.get(stats_key, 0.0) if stats_key else 0.0
+            style = styles.get(kind, styles["other"])
+            name = method.name or method.method_id or "Metodo"
+            cards.append(
+                {
+                    "name": name,
+                    "amount": amount,
+                    "icon": style["icon"],
+                    "color": style["color"],
+                    "_sort_key": sort_kind,
+                }
+            )
+
+        def _sorter(card: dict) -> tuple[int, str]:
+            name = (card.get("name") or "").strip().lower()
+            key = card.get("_sort_key") or ""
+            return (order_index.get(key, 99), name)
+
+        cards.sort(key=_sorter)
+        for card in cards:
+            card.pop("_sort_key", None)
+        return cards
 
     @rx.var
     def total_ventas_efectivo(self) -> float:

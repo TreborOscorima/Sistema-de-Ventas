@@ -1,13 +1,10 @@
 import reflex as rx
 from app.state import State
 from app.components.ui import (
-    stat_card,
     pagination_controls,
     empty_state,
     select_filter,
     date_range_filter,
-    filter_action_buttons,
-    card_container,
     BUTTON_STYLES,
 )
 
@@ -116,6 +113,63 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
     )
 
 
+def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
+    icon_class = rx.match(
+        card["color"],
+        ("blue", "h-6 w-6 text-blue-600"),
+        ("indigo", "h-6 w-6 text-indigo-600"),
+        ("violet", "h-6 w-6 text-violet-600"),
+        ("pink", "h-6 w-6 text-pink-600"),
+        ("cyan", "h-6 w-6 text-cyan-600"),
+        ("orange", "h-6 w-6 text-orange-600"),
+        ("amber", "h-6 w-6 text-amber-600"),
+        ("gray", "h-6 w-6 text-gray-600"),
+        "h-6 w-6 text-gray-600",
+    )
+    icon_wrapper = rx.match(
+        card["color"],
+        ("blue", "p-3 rounded-lg bg-blue-100"),
+        ("indigo", "p-3 rounded-lg bg-indigo-100"),
+        ("violet", "p-3 rounded-lg bg-violet-100"),
+        ("pink", "p-3 rounded-lg bg-pink-100"),
+        ("cyan", "p-3 rounded-lg bg-cyan-100"),
+        ("orange", "p-3 rounded-lg bg-orange-100"),
+        ("amber", "p-3 rounded-lg bg-amber-100"),
+        ("gray", "p-3 rounded-lg bg-gray-100"),
+        "p-3 rounded-lg bg-gray-100",
+    )
+    icon_component = rx.match(
+        card["icon"],
+        ("coins", rx.icon("coins", class_name=icon_class)),
+        ("credit-card", rx.icon("credit-card", class_name=icon_class)),
+        ("qr-code", rx.icon("qr-code", class_name=icon_class)),
+        ("landmark", rx.icon("landmark", class_name=icon_class)),
+        ("layers", rx.icon("layers", class_name=icon_class)),
+        ("circle-help", rx.icon("circle-help", class_name=icon_class)),
+        rx.icon("circle-help", class_name=icon_class),
+    )
+    return rx.card(
+        rx.el.div(
+            rx.el.div(
+                icon_component,
+                class_name=icon_wrapper,
+            ),
+            rx.el.div(
+                rx.el.p(card["name"], class_name="text-sm font-medium text-gray-500"),
+                rx.el.p(
+                    rx.el.span(
+                        State.currency_symbol, card["amount"].to_string()
+                    ),
+                    class_name="text-2xl font-bold text-gray-800",
+                ),
+                class_name="flex-1",
+            ),
+            class_name="flex items-center gap-4",
+        ),
+        class_name="bg-white p-4 rounded-xl shadow-sm border",
+    )
+
+
 def historial_page() -> rx.Component:
     return rx.fragment(
         rx.el.div(
@@ -124,58 +178,8 @@ def historial_page() -> rx.Component:
                 class_name="text-2xl font-bold text-gray-800 mb-6",
             ),
             rx.el.div(
-                stat_card(
-                    "banknote",
-                    "Ventas con Efectivo",
-                    rx.el.span(
-                        State.currency_symbol, State.total_ventas_efectivo.to_string()
-                    ),
-                    "text-green-600",
-                ),
-                stat_card(
-                    "credit-card",
-                    "Ventas con T. Débito",
-                    rx.el.span(
-                        State.currency_symbol, State.total_ventas_debito.to_string()
-                    ),
-                    "text-emerald-600",
-                ),
-                stat_card(
-                    "credit-card",
-                    "Ventas con T. Crédito",
-                    rx.el.span(
-                        State.currency_symbol, State.total_ventas_credito.to_string()
-                    ),
-                    "text-purple-600",
-                ),
-                stat_card(
-                    "smartphone",
-                    "Ventas con Yape",
-                    rx.el.span(State.currency_symbol, State.total_ventas_yape.to_string()),
-                    "text-red-600",
-                ),
-                stat_card(
-                    "qr-code",
-                    "Ventas con Plin",
-                    rx.el.span(State.currency_symbol, State.total_ventas_plin.to_string()),
-                    "text-indigo-600",
-                ),
-                stat_card(
-                    "arrow-left-right",
-                    "Ventas con Transferencia",
-                    rx.el.span(
-                        State.currency_symbol,
-                        State.total_ventas_transferencia.to_string(),
-                    ),
-                    "text-sky-600",
-                ),
-                stat_card(
-                    "wallet",
-                    "Ventas Mixtas",
-                    rx.el.span(State.currency_symbol, State.total_ventas_mixtas.to_string()),
-                    "text-blue-600",
-                ),
-                class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6 mb-6",
+                rx.foreach(State.dynamic_payment_cards, render_dynamic_card),
+                class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6",
             ),
             rx.el.div(
                 history_filters(),
