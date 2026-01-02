@@ -6,7 +6,11 @@ from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.utils.logger import get_logger
+
 load_dotenv()
+
+logger = get_logger("DatabaseTurbo")
 
 
 def _require_env(var_name: str) -> str:
@@ -39,12 +43,11 @@ AsyncSessionLocal = async_sessionmaker(
 
 @asynccontextmanager
 async def get_async_session() -> AsyncIterator[AsyncSession]:
-    # --- AGREGA ESTE PRINT ---
-    print("\n🚀 [SISTEMA] Iniciando Motor ASÍNCRONO (Carril Rápido activado) 🚀\n")
-    # -------------------------
+    logger.info("🚀 Iniciando Transacción ASÍNCRONA...")
     async with AsyncSessionLocal() as session:
         try:
             yield session
-        except Exception:
+        except Exception as e:
+            logger.error(f"🔥 Error en sesión DB: {e}")
             await session.rollback()
             raise

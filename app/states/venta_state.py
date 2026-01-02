@@ -1,12 +1,13 @@
 import reflex as rx
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.services.sale_service import SaleService, StockError
+from app.utils.logger import get_logger
 from .mixin_state import MixinState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin
 
-# ✅ NUEVO: Importamos el gestor de sesión asíncrona (el "Carril Rápido")
-from app.utils.db import get_async_session 
 
+
+logger = get_logger("VentaState")
 class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
     sale_form_key: int = 0
 
@@ -21,6 +22,14 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
                 return denial
 
         sale_total_guess = self.sale_total
+        username = self.current_user.get("username", "desconocido")
+        user_id = self.current_user.get("id")
+        logger.info(
+            "Inicio de venta usuario=%s id=%s total=%s",
+            username,
+            user_id,
+            sale_total_guess,
+        )
         self._refresh_payment_feedback(total_override=sale_total_guess)
 
         payment_summary = self._generate_payment_summary()
@@ -66,33 +75,24 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
         if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
             reservation_id = self.reservation_payment_id
 
-        # ✅ BLOQUE CRÍTICO ACTUALIZADO (CARRIL RÁPIDO)
-        # Usamos async with para abrir la conexión asíncrona segura
-        async with get_async_session() as session:
-            try:
-                # Pasamos la 'session' explícitamente al servicio
-                result = await SaleService.process_sale(
-                    session=session,  # <--- Esto es vital
-                    user_id=self.current_user.get("id"),
-                    items=item_dtos,
-                    payment_data=payment_dto,
-                    reservation_id=reservation_id,
-                )
-                
-                # Si todo sale bien, confirmamos la transacción en la BD
-                await session.commit() 
+        try:
+            result = await SaleService.process_sale(
+                user_id=self.current_user.get("id"),
+                items=item_dtos,
+                payment_data=payment_dto,
+                reservation_id=reservation_id,
+            )
+            logger.info(
+                "✅ Venta confirmada exitosamente. ID: %s",
+                result.sale.id,
+            )
+        except (ValueError, StockError) as exc:
+            logger.warning("Validacion de venta fallida: %s", exc)
+            return rx.toast(str(exc), duration=3000)
+        except Exception:
+            logger.error("Error critico al confirmar venta.", exc_info=True)
+            return rx.toast("No se pudo procesar la venta.", duration=3000)
 
-            except (ValueError, StockError) as exc:
-                # Si falla por lógica de negocio (stock, validación), cancelamos
-                await session.rollback()
-                return rx.toast(str(exc), duration=3000)
-            except Exception as e:
-                # Si falla por error técnico, cancelamos y logueamos
-                await session.rollback()
-                print(f"Error crítico en venta: {e}")
-                return rx.toast("No se pudo procesar la venta.", duration=3000)
-
-        # Si llegamos aquí, la venta se guardó correctamente en la BD.
         # Actualizamos el estado visual (UI) de Reflex.
         self.last_sale_receipt = result.receipt_items
         self.last_sale_reservation_context = result.reservation_context
