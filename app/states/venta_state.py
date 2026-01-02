@@ -4,6 +4,8 @@ from app.services.sale_service import SaleService, StockError
 from .mixin_state import MixinState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin
 
+# ✅ NUEVO: Importamos el gestor de sesión asíncrona (el "Carril Rápido")
+from app.utils.db import get_async_session 
 
 class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
     sale_form_key: int = 0
@@ -64,18 +66,34 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
         if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
             reservation_id = self.reservation_payment_id
 
-        try:
-            result = await SaleService.process_sale(
-                user_id=self.current_user.get("id"),
-                items=item_dtos,
-                payment_data=payment_dto,
-                reservation_id=reservation_id,
-            )
-        except (ValueError, StockError) as exc:
-            return rx.toast(str(exc), duration=3000)
-        except Exception:
-            return rx.toast("No se pudo procesar la venta.", duration=3000)
+        # ✅ BLOQUE CRÍTICO ACTUALIZADO (CARRIL RÁPIDO)
+        # Usamos async with para abrir la conexión asíncrona segura
+        async with get_async_session() as session:
+            try:
+                # Pasamos la 'session' explícitamente al servicio
+                result = await SaleService.process_sale(
+                    session=session,  # <--- Esto es vital
+                    user_id=self.current_user.get("id"),
+                    items=item_dtos,
+                    payment_data=payment_dto,
+                    reservation_id=reservation_id,
+                )
+                
+                # Si todo sale bien, confirmamos la transacción en la BD
+                await session.commit() 
 
+            except (ValueError, StockError) as exc:
+                # Si falla por lógica de negocio (stock, validación), cancelamos
+                await session.rollback()
+                return rx.toast(str(exc), duration=3000)
+            except Exception as e:
+                # Si falla por error técnico, cancelamos y logueamos
+                await session.rollback()
+                print(f"Error crítico en venta: {e}")
+                return rx.toast("No se pudo procesar la venta.", duration=3000)
+
+        # Si llegamos aquí, la venta se guardó correctamente en la BD.
+        # Actualizamos el estado visual (UI) de Reflex.
         self.last_sale_receipt = result.receipt_items
         self.last_sale_reservation_context = result.reservation_context
         self.last_sale_total = result.sale_total_display

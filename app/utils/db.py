@@ -39,6 +39,9 @@ AsyncSessionLocal = async_sessionmaker(
 
 @asynccontextmanager
 async def get_async_session() -> AsyncIterator[AsyncSession]:
+    # --- AGREGA ESTE PRINT ---
+    print("\n🚀 [SISTEMA] Iniciando Motor ASÍNCRONO (Carril Rápido activado) 🚀\n")
+    # -------------------------
     async with AsyncSessionLocal() as session:
         try:
             yield session
