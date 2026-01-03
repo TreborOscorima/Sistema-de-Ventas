@@ -5,3 +5,6 @@ wrapt
 pyjwt
 python-dotenv
 aiomysql
+pytest
+pytest-asyncio
+pytest-mock
