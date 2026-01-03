@@ -270,15 +270,24 @@ class SaleService:
                 }
             )
 
-        locked_products: list[tuple[Dict[str, Any], Product]] = []
-        for item in decimal_snapshot:
-            product = (
+        descriptions = [item["description"] for item in decimal_snapshot]
+        products_by_description: dict[str, Product] = {}
+        if descriptions:
+            unique_descriptions = list(dict.fromkeys(descriptions))
+            products = (
                 await session.exec(
                     select(Product)
-                    .where(Product.description == item["description"])
+                    .where(Product.description.in_(unique_descriptions))
                     .with_for_update()
                 )
-            ).first()
+            ).all()
+            products_by_description = {
+                product.description: product for product in products
+            }
+
+        locked_products: list[tuple[Dict[str, Any], Product]] = []
+        for item in decimal_snapshot:
+            product = products_by_description.get(item["description"])
             if not product:
                 raise StockError(
                     f"Producto {item['description']} no encontrado en inventario."
