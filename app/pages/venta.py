@@ -3,6 +3,7 @@ from app.state import State
 from app.components.ui import (
     INPUT_STYLES,
 )
+from app.pages.clientes import client_form_modal
 
 
 def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
@@ -82,6 +83,109 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
             class_name="flex items-center gap-4 mt-2",
         ),
         class_name="p-3 bg-white border-b border-gray-100",
+    )
+
+
+def client_selector() -> rx.Component:
+    """Selector de cliente para ventas a credito."""
+    return rx.box(
+        rx.cond(
+            State.selected_client != None,
+            rx.hstack(
+                rx.hstack(
+                    rx.vstack(
+                        rx.el.span(
+                            State.selected_client["name"],
+                            class_name="text-sm font-semibold text-gray-900",
+                        ),
+                        rx.el.span(
+                            "DNI: ",
+                            State.selected_client["dni"],
+                            class_name="text-xs text-gray-500 font-mono",
+                        ),
+                        spacing="1",
+                        align="start",
+                        class_name="min-w-0",
+                    ),
+                    rx.badge(
+                        rx.el.span(
+                            "Linea de Credito: ",
+                            State.currency_symbol,
+                            State.selected_client_credit_available.to_string(),
+                        ),
+                        color_scheme="green",
+                        variant="soft",
+                        size="2",
+                        class_name="whitespace-nowrap",
+                    ),
+                    spacing="3",
+                    align="center",
+                    class_name="flex-1 min-w-0",
+                ),
+                rx.icon_button(
+                    "trash-2",
+                    on_click=State.clear_selected_client,
+                    color_scheme="red",
+                    variant="soft",
+                    size="2",
+                ),
+                align="center",
+                justify="between",
+                class_name="w-full",
+            ),
+            rx.vstack(
+                rx.el.div(
+                    rx.el.input(
+                        placeholder="Buscar cliente (DNI o nombre)...",
+                        value=State.client_search_query,
+                        on_change=State.search_client_change,
+                        debounce_timeout=300,
+                        class_name="flex-1 px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500",
+                        auto_complete="off",
+                    ),
+                    rx.el.button(
+                        rx.icon("plus", class_name="h-4 w-4"),
+                        on_click=State.open_modal_from_pos,
+                        class_name="h-10 w-10 flex items-center justify-center rounded-lg border text-indigo-600 hover:bg-indigo-50",
+                        title="Nuevo cliente",
+                    ),
+                    class_name="flex items-center gap-2 w-full",
+                ),
+                rx.cond(
+                    State.client_suggestions.length() > 0,
+                    rx.vstack(
+                        rx.foreach(
+                            State.client_suggestions,
+                            lambda client: rx.button(
+                                rx.vstack(
+                                    rx.el.span(
+                                        client["name"],
+                                        class_name="font-medium text-gray-900",
+                                    ),
+                                    rx.el.span(
+                                        "DNI: ",
+                                        client["dni"],
+                                        class_name="text-xs text-gray-500 font-mono",
+                                    ),
+                                    spacing="1",
+                                    align="start",
+                                    class_name="w-full",
+                                ),
+                                on_click=lambda _, c=client: State.select_client(c),
+                                variant="ghost",
+                                class_name="w-full justify-start text-left",
+                            ),
+                        ),
+                        spacing="1",
+                        class_name="w-full rounded-lg border bg-white shadow-sm p-1",
+                    ),
+                    rx.fragment(),
+                ),
+                spacing="2",
+                class_name="w-full",
+            ),
+        ),
+        class_name="w-full p-3 bg-white rounded-lg border shadow-sm",
     )
 
 
@@ -435,6 +539,76 @@ def payment_sidebar() -> rx.Component:
             ),
             class_name="p-4 border-b",
         ),
+        rx.divider(class_name="mx-4"),
+        # Venta a credito
+        rx.el.div(
+            rx.hstack(
+                rx.el.div(
+                    rx.el.span("Venta a Credito / Fiado", class_name="text-xs font-medium text-gray-600"),
+                    rx.el.span("Configura cuotas y pago inicial", class_name="text-[11px] text-gray-400"),
+                    class_name="flex flex-col",
+                ),
+                rx.switch(
+                    checked=State.is_credit_mode,
+                    on_change=State.toggle_credit_mode,
+                ),
+                class_name="flex items-center justify-between",
+            ),
+            rx.cond(
+                State.is_credit_mode,
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.label("Cuotas", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.input(
+                            type="number",
+                            min="1",
+                            value=State.credit_installments.to_string(),
+                            on_change=lambda value: State.set_installments_count(value),
+                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
+                    rx.el.div(
+                        rx.el.label("Frecuencia (Dias)", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.input(
+                            type="number",
+                            min="1",
+                            value=State.credit_interval_days.to_string(),
+                            on_change=lambda value: State.set_payment_interval_days(value),
+                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
+                    rx.el.div(
+                        rx.el.label("Pago Inicial", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.input(
+                            type="number",
+                            min="0",
+                            step="0.01",
+                            value=State.credit_initial_payment,
+                            on_change=lambda value: State.set_credit_initial_payment(value),
+                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
+                    rx.el.div(
+                        rx.el.span(
+                            "Saldo a financiar: ",
+                            State.currency_symbol,
+                            State.credit_financed_amount.to_string(),
+                            " en ",
+                            State.credit_installments.to_string(),
+                            " cuotas",
+                            class_name="text-xs text-gray-600",
+                        ),
+                        class_name="px-3 py-2 rounded-lg bg-gray-50 border",
+                    ),
+                    class_name="flex flex-col gap-3 mt-3",
+                ),
+                rx.fragment(),
+            ),
+            class_name="p-4 border-b",
+        ),
         # Opciones según método
         rx.el.div(
             rx.cond(
@@ -457,20 +631,24 @@ def payment_sidebar() -> rx.Component:
                         class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
                     ),
                     rx.cond(
-                        State.payment_cash_message != "",
-                        rx.el.p(
-                            State.payment_cash_message,
-                            class_name=rx.cond(
-                                State.payment_cash_status == "change",
-                                "text-sm font-semibold text-emerald-600 mt-2",
-                                rx.cond(
-                                    State.payment_cash_status == "due",
-                                    "text-sm font-semibold text-red-600 mt-2",
-                                    "text-sm text-gray-500 mt-2",
+                        State.is_credit_mode,
+                        rx.fragment(),
+                        rx.cond(
+                            State.payment_cash_message != "",
+                            rx.el.p(
+                                State.payment_cash_message,
+                                class_name=rx.cond(
+                                    State.payment_cash_status == "change",
+                                    "text-sm font-semibold text-emerald-600 mt-2",
+                                    rx.cond(
+                                        State.payment_cash_status == "due",
+                                        "text-sm font-semibold text-red-600 mt-2",
+                                        "text-sm text-gray-500 mt-2",
+                                    ),
                                 ),
                             ),
+                            rx.fragment(),
                         ),
-                        rx.fragment(),
                     ),
                     class_name="flex flex-col gap-2",
                 ),
@@ -776,6 +954,71 @@ def payment_mobile_section() -> rx.Component:
             ),
             class_name="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 sm:p-4",
         ),
+        # Venta a credito
+        rx.el.div(
+            rx.hstack(
+                rx.el.span("Venta a Credito / Fiado", class_name="text-sm font-semibold text-gray-800"),
+                rx.switch(
+                    checked=State.is_credit_mode,
+                    on_change=State.toggle_credit_mode,
+                ),
+                class_name="flex items-center justify-between",
+            ),
+            rx.cond(
+                State.is_credit_mode,
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.label("Cuotas", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.input(
+                            type="number",
+                            min="1",
+                            value=State.credit_installments.to_string(),
+                            on_change=lambda value: State.set_installments_count(value),
+                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
+                    rx.el.div(
+                        rx.el.label("Frecuencia (Dias)", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.input(
+                            type="number",
+                            min="1",
+                            value=State.credit_interval_days.to_string(),
+                            on_change=lambda value: State.set_payment_interval_days(value),
+                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
+                    rx.el.div(
+                        rx.el.label("Pago Inicial", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.input(
+                            type="number",
+                            min="0",
+                            step="0.01",
+                            value=State.credit_initial_payment,
+                            on_change=lambda value: State.set_credit_initial_payment(value),
+                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
+                    rx.el.div(
+                        rx.el.span(
+                            "Saldo a financiar: ",
+                            State.currency_symbol,
+                            State.credit_financed_amount.to_string(),
+                            " en ",
+                            State.credit_installments.to_string(),
+                            " cuotas",
+                            class_name="text-xs text-gray-600",
+                        ),
+                        class_name="px-3 py-2 rounded-lg bg-gray-50 border",
+                    ),
+                    class_name="flex flex-col gap-3 mt-3",
+                ),
+                rx.fragment(),
+            ),
+            class_name="px-3 sm:px-4 pb-3 border-b",
+        ),
         # Opciones según método - solo efectivo por ahora en móvil
         rx.cond(
             State.payment_method_kind == "cash",
@@ -797,16 +1040,20 @@ def payment_mobile_section() -> rx.Component:
                     class_name="flex items-center gap-2 px-3 py-3 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
                 ),
                 rx.cond(
-                    State.payment_cash_message != "",
-                    rx.el.p(
-                        State.payment_cash_message,
-                        class_name=rx.cond(
-                            State.payment_cash_status == "change",
-                            "text-sm font-semibold text-emerald-600 mt-1",
-                            "text-sm font-semibold text-red-600 mt-1",
-                        ),
-                    ),
+                    State.is_credit_mode,
                     rx.fragment(),
+                    rx.cond(
+                        State.payment_cash_message != "",
+                        rx.el.p(
+                            State.payment_cash_message,
+                            class_name=rx.cond(
+                                State.payment_cash_status == "change",
+                                "text-sm font-semibold text-emerald-600 mt-1",
+                                "text-sm font-semibold text-red-600 mt-1",
+                            ),
+                        ),
+                        rx.fragment(),
+                    ),
                 ),
                 class_name="flex flex-col gap-2 px-3 sm:px-4 pb-3",
             ),
@@ -1060,6 +1307,7 @@ def venta_page() -> rx.Component:
         rx.el.div(
             # Info de reserva/servicio prominente (si aplica)
             reservation_info_card(),
+            client_selector(),
             # Barra de entrada rápida
             quick_add_bar(),
             # Tabla de productos
@@ -1073,5 +1321,6 @@ def venta_page() -> rx.Component:
             payment_sidebar(),
             class_name="hidden lg:block h-[calc(100vh-4rem)] sticky top-16",
         ),
+        client_form_modal(),
         class_name="flex min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)]",
     )

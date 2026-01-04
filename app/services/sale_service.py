@@ -9,7 +9,17 @@ from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession  # ✅ IMPORTANTE
 
 from app.enums import PaymentMethodType, ReservationStatus, SaleStatus
-from app.models import FieldReservation, Product, Sale, SaleItem, SalePayment, Unit
+from app.models import (
+    CashboxLog,
+    Client,
+    FieldReservation,
+    Product,
+    Sale,
+    SaleInstallment,
+    SaleItem,
+    SalePayment,
+    Unit,
+)
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.utils.calculations import calculate_subtotal, calculate_total
 
@@ -62,6 +72,10 @@ def _quantity_for_receipt(value: Any, allows_decimal: bool) -> float | int:
 
 def _money_to_float(value: Decimal) -> float:
     return float(_round_money(value))
+
+
+def _money_display(value: Decimal) -> str:
+    return f"S/ {float(_round_money(value)):.2f}"
 
 
 def _reservation_status_value(status: Any) -> str:
@@ -177,6 +191,25 @@ def _build_sale_payments(
     else:
         amount = sale_total
     return [(method_type, _round_money(amount))]
+
+
+def _split_installments(total: Decimal, count: int) -> list[Decimal]:
+    total = _round_money(total)
+    if count <= 0:
+        return []
+    quant = Decimal("0.01")
+    base = (total / count).quantize(quant, rounding=ROUND_HALF_UP)
+    amounts = [base for _ in range(count)]
+    distributed = (base * count).quantize(quant, rounding=ROUND_HALF_UP)
+    remainder = (total - distributed).quantize(quant, rounding=ROUND_HALF_UP)
+    if remainder != 0:
+        step = quant if remainder > 0 else -quant
+        steps = int(abs(remainder / quant))
+        for i in range(steps):
+            amounts[i] = (amounts[i] + step).quantize(
+                quant, rounding=ROUND_HALF_UP
+            )
+    return amounts
 
 
 class SaleService:
@@ -303,27 +336,91 @@ class SaleService:
         if sale_total <= Decimal("0.00"):
             raise ValueError("No hay importe para cobrar.")
 
+        is_credit = bool(payment_data.is_credit)
+        initial_payment = _round_money(payment_data.initial_payment)
+        if initial_payment < 0:
+            raise ValueError("Monto inicial invalido.")
+        initial_payment_input = initial_payment
+
         kind = (payment_data.method_kind or "other").lower()
+        total_paid_now = Decimal("0.00")
         if kind == "cash":
             cash_amount = _to_decimal(payment_data.cash.amount)
-            if cash_amount <= 0 or cash_amount < sale_total:
+            total_paid_now = _round_money(cash_amount)
+            if not is_credit:
+                if cash_amount <= 0 or cash_amount < sale_total:
+                    message = (
+                        payment_data.cash.message
+                        or "Ingrese un monto valido en efectivo."
+                    )
+                    raise ValueError(message)
+            elif cash_amount < 0:
                 message = (
                     payment_data.cash.message
                     or "Ingrese un monto valido en efectivo."
                 )
                 raise ValueError(message)
         elif kind == "mixed":
-            total_paid = (
+            total_paid_now = _round_money(
                 _to_decimal(payment_data.mixed.cash)
                 + _to_decimal(payment_data.mixed.card)
                 + _to_decimal(payment_data.mixed.wallet)
             )
-            if total_paid <= 0 or total_paid < sale_total:
+            if not is_credit:
+                if total_paid_now <= 0 or total_paid_now < sale_total:
+                    message = (
+                        payment_data.mixed.message
+                        or "Complete los montos del pago mixto."
+                    )
+                    raise ValueError(message)
+            elif total_paid_now < 0:
                 message = (
                     payment_data.mixed.message
                     or "Complete los montos del pago mixto."
                 )
                 raise ValueError(message)
+        else:
+            if is_credit:
+                total_paid_now = _round_money(initial_payment)
+            else:
+                total_paid_now = sale_total
+
+        if (
+            is_credit
+            and initial_payment_input > Decimal("0.00")
+            and total_paid_now <= Decimal("0.00")
+        ):
+            total_paid_now = initial_payment_input
+
+        if is_credit and kind in {"cash", "mixed"} and initial_payment_input <= Decimal(
+            "0.00"
+        ):
+            initial_payment = total_paid_now
+
+        sale_payment_label = payment_method
+        if is_credit:
+            sale_payment_label = (
+                "Crédito c/ Inicial"
+                if initial_payment > Decimal("0.00")
+                else "Crédito"
+            )
+
+        client = None
+        installments_plan: list[tuple[datetime.datetime, Decimal]] = []
+        financed_amount = Decimal("0.00")
+        if is_credit:
+            if payment_data.client_id is None:
+                raise ValueError("Cliente requerido para venta a credito.")
+            client = await session.get(Client, payment_data.client_id)
+            if not client:
+                raise ValueError("Cliente no encontrado.")
+            credit_base = _round_money(sale_total - initial_payment)
+            if credit_base < Decimal("0.00"):
+                credit_base = Decimal("0.00")
+            if _round_money(client.current_debt) + credit_base > _round_money(
+                client.credit_limit
+            ):
+                raise ValueError("Limite de credito excedido.")
 
         timestamp = datetime.datetime.now()
         sale_total_display = _money_to_float(sale_total)
@@ -334,11 +431,20 @@ class SaleService:
             status=SaleStatus.completed,
             user_id=user_id,
         )
+        if hasattr(Sale, "payment_method"):
+            new_sale.payment_method = sale_payment_label
+        if is_credit:
+            new_sale.payment_condition = "credito"
+            new_sale.client_id = client.id
         session.add(new_sale)
         await session.flush()
 
+        paid_now_total = sale_total
+        if is_credit:
+            paid_now_total = total_paid_now
+
         for method_type, amount in _build_sale_payments(
-            payment_data, sale_total
+            payment_data, paid_now_total
         ):
             if amount <= 0:
                 continue
@@ -351,6 +457,65 @@ class SaleService:
                     created_at=timestamp,
                 )
             )
+
+        cashbox_amount = paid_now_total
+        if is_credit and initial_payment_input > Decimal("0.00"):
+            cashbox_amount = initial_payment_input
+
+        if cashbox_amount > 0:
+            action_label = "Venta"
+            notes = f"Venta {new_sale.id}"
+            if is_credit:
+                action_label = "Inicial Credito"
+                notes = f"Adelanto Venta a Crédito #{new_sale.id}"
+                if client:
+                    client_name = (client.name or "").strip() or f"ID {client.id}"
+                    notes = f"{notes} - Cliente {client_name}"
+            session.add(
+                CashboxLog(
+                    action=action_label,
+                    amount=cashbox_amount,
+                    payment_method=payment_method,
+                    notes=notes,
+                    timestamp=timestamp,
+                    user_id=user_id,
+                )
+            )
+
+        if is_credit:
+            financed_amount = _round_money(sale_total - total_paid_now)
+            if financed_amount < Decimal("0.00"):
+                financed_amount = Decimal("0.00")
+            if financed_amount > 0:
+                installments_count = int(payment_data.installments or 1)
+                if installments_count < 1:
+                    raise ValueError("Cantidad de cuotas invalida.")
+                interval_days = int(payment_data.interval_days or 0)
+                if interval_days <= 0:
+                    interval_days = 30
+                for number, amount in enumerate(
+                    _split_installments(financed_amount, installments_count),
+                    start=1,
+                ):
+                    due_date = timestamp + datetime.timedelta(
+                        days=interval_days * number
+                    )
+                    installments_plan.append((due_date, amount))
+                    session.add(
+                        SaleInstallment(
+                            sale_id=new_sale.id,
+                            number=number,
+                            amount=amount,
+                            due_date=due_date,
+                            status="pending",
+                            paid_amount=Decimal("0.00"),
+                            payment_date=None,
+                        )
+                    )
+                client.current_debt = _round_money(
+                    client.current_debt + financed_amount
+                )
+                session.add(client)
 
         for item, product in locked_products:
             new_stock = product.stock - item["quantity"]
@@ -430,6 +595,24 @@ class SaleService:
             )
 
         payment_summary = payment_data.summary or payment_method
+        if is_credit:
+            credit_lines = [
+                "CONDICION: CREDITO",
+                f"Pago Inicial: {_money_display(_round_money(initial_payment))}",
+                f"Saldo a Financiar: {_money_display(_round_money(financed_amount))}",
+                "Plan de Pagos:",
+            ]
+            if installments_plan:
+                for due_date, amount in installments_plan:
+                    credit_lines.append(
+                        f"- {due_date.strftime('%Y-%m-%d')}: {_money_display(amount)}"
+                    )
+            credit_lines.append("_____________________")
+            credit_block = "\n".join(credit_lines)
+            if payment_summary:
+                payment_summary = f"{payment_summary}\n{credit_block}"
+            else:
+                payment_summary = credit_block
 
         return SaleProcessResult(
             sale=new_sale,

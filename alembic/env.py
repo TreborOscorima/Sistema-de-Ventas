@@ -1,6 +1,7 @@
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool, create_engine # Agregamos create_engine
 from alembic import context
+import reflex as rx
 
 # --- IMPORTACIÓN DE TU CONFIGURACIÓN DE REFLEX ---
 import sys
@@ -16,7 +17,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Importamos tus modelos para que Alembic reconozca las tablas
-from app.models import rx 
+import app.models
 target_metadata = rx.Model.metadata
 
 def run_migrations_offline() -> None:

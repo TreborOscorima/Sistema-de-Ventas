@@ -10,6 +10,8 @@ from app.pages.historial import historial_page
 from app.pages.configuracion import configuracion_page
 from app.pages.login import login_page
 from app.pages.servicios import servicios_page
+from app.pages.cuentas import cuentas_page
+from app.pages.clientes import clientes_page
 
 
 def cashbox_banner() -> rx.Component:
@@ -109,6 +111,8 @@ ROUTE_TO_PAGE = {
     "/ingreso": "Ingreso",
     "/venta": "Venta",
     "/caja": "Gestion de Caja",
+    "/clientes": "Clientes",
+    "/cuentas": "Cuentas Corrientes",
     "/inventario": "Inventario",
     "/historial": "Historial",
     "/servicios": "Servicios",
@@ -119,6 +123,8 @@ PAGE_TO_ROUTE = {
     "Ingreso": "/ingreso",
     "Venta": "/venta",
     "Gestion de Caja": "/caja",
+    "Clientes": "/clientes",
+    "Cuentas Corrientes": "/cuentas",
     "Inventario": "/inventario",
     "Historial": "/historial",
     "Servicios": "/servicios",
@@ -185,6 +191,14 @@ def page_venta() -> rx.Component:
 
 def page_caja() -> rx.Component:
     return authenticated_layout(cashbox_page())
+
+
+def page_clientes() -> rx.Component:
+    return authenticated_layout(clientes_page())
+
+
+def page_cuentas() -> rx.Component:
+    return authenticated_layout(cuentas_page())
 
 
 def page_inventario() -> rx.Component:
@@ -256,6 +270,7 @@ _common_on_load = [
     State.load_users,
     State.load_config_data,
     State.load_reservations,
+    State.check_overdue_alerts,
 ]
 
 # Página principal (redirige a ingreso)
@@ -265,6 +280,8 @@ app.add_page(index, route="/", on_load=[State.sync_page_from_route] + _common_on
 app.add_page(page_ingreso, route="/ingreso", title="Ingreso - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
 app.add_page(page_venta, route="/venta", title="Venta - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
 app.add_page(page_caja, route="/caja", title="Gestión de Caja - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_clientes, route="/clientes", title="Clientes | Sistema de Ventas", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(page_cuentas, route="/cuentas", title="Cuentas Corrientes | Sistema de Ventas", on_load=[State.sync_page_from_route] + _common_on_load)
 app.add_page(page_inventario, route="/inventario", title="Inventario - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
 app.add_page(page_historial, route="/historial", title="Historial - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
 app.add_page(page_servicios, route="/servicios", title="Servicios - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)

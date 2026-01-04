@@ -69,6 +69,11 @@ class PaymentInfoDTO(BaseSchema):
     method: str = ""
     method_kind: str = ""
     label: str = ""
+    client_id: int | None = None
+    is_credit: bool = False
+    installments: int = 1
+    interval_days: int = 30
+    initial_payment: Decimal = Decimal("0.00")
     breakdown: list[PaymentBreakdownItemDTO] = Field(default_factory=list)
     total: Decimal = Decimal("0.00")
     cash: PaymentCashDTO = Field(default_factory=PaymentCashDTO)

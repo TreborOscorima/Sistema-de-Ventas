@@ -37,7 +37,7 @@ class CashState(MixinState):
     sale_to_delete: str = ""
     sale_delete_reason: str = ""
     cashbox_close_modal_open: bool = False
-    cashbox_close_summary_totals: Dict[str, float] = {}
+    summary_by_method: list[dict] = []
     cashbox_close_summary_sales: List[CashboxSale] = []
     cashbox_close_summary_date: str = ""
     cashbox_sessions: Dict[str, CashboxSession] = {}
@@ -346,6 +346,31 @@ class CashState(MixinState):
                 duration=3000,
             )
         return None
+
+    def _active_cashbox_session_info(self) -> dict[str, Any] | None:
+        if not hasattr(self, "current_user") or not self.current_user:
+            return None
+        username = self.current_user.get("username", "")
+        if not username:
+            return None
+        with rx.session() as session:
+            user = session.exec(
+                select(UserModel).where(UserModel.username == username)
+            ).first()
+            if not user:
+                return None
+            cashbox_session = session.exec(
+                select(CashboxSessionModel)
+                .where(CashboxSessionModel.user_id == user.id)
+                .where(CashboxSessionModel.is_open == True)
+            ).first()
+            if not cashbox_session:
+                return None
+            return {
+                "user_id": user.id,
+                "opening_time": cashbox_session.opening_time,
+                "closing_time": cashbox_session.closing_time,
+            }
 
     @rx.event
     def set_cashbox_open_amount_input(self, value: float | str):
@@ -860,6 +885,10 @@ class CashState(MixinState):
         method_label = self._payment_method_display(payments)
         payment_breakdown = self._payment_breakdown_from_payments(payments)
         payment_kind = self._payment_kind_from_payments(payments)
+        paid_total = sum(
+            float(getattr(payment, "amount", 0) or 0) for payment in payments
+        )
+        paid_total = self._round_currency(paid_total)
         items: list[dict] = []
         items_total = 0
         for item in sale.items or []:
@@ -882,6 +911,7 @@ class CashState(MixinState):
             "payment_method": method_label,
             "payment_label": method_label,
             "payment_details": details_text,
+            "amount": paid_total,
             "total": total_amount,
             "is_deleted": sale.status == SaleStatus.cancelled,
             "delete_reason": sale.delete_reason,
@@ -934,14 +964,18 @@ class CashState(MixinState):
         if not self.current_user["privileges"]["view_cashbox"]:
             return []
         return [
-            {"method": method, "amount": self._format_currency(amount)}
-            for method, amount in self.cashbox_close_summary_totals.items()
-            if amount > 0
+            {
+                "method": item.get("method", "No especificado"),
+                "count": str(int(item.get("count", 0))),
+                "total": self._format_currency(item.get("total", 0)),
+            }
+            for item in self.summary_by_method
+            if item.get("total", 0) > 0
         ]
 
     @rx.var
     def cashbox_close_total_amount(self) -> str:
-        total_value = sum(self.cashbox_close_summary_totals.values())
+        total_value = sum(item.get("total", 0) for item in self.summary_by_method)
         return self._format_currency(total_value)
 
     @rx.var
@@ -957,9 +991,10 @@ class CashState(MixinState):
             return denial
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         day_sales = self._get_day_sales(today)
-        if not day_sales:
-            return rx.toast("No hay ventas registradas hoy.", duration=3000)
-        self.cashbox_close_summary_totals = self._build_cashbox_summary(day_sales)
+        summary = self._build_cashbox_summary(today)
+        if not day_sales and not summary:
+            return rx.toast("No hay movimientos de caja hoy.", duration=3000)
+        self.summary_by_method = summary
         self.cashbox_close_summary_sales = day_sales
         self.cashbox_close_summary_date = today
         self.cashbox_close_modal_open = True
@@ -1402,18 +1437,21 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "%Y-%m-%d"
         )
         day_sales = self.cashbox_close_summary_sales or self._get_day_sales(date)
-        if not day_sales:
-            return rx.toast("No hay ventas registradas hoy.", duration=3000)
-        summary = self.cashbox_close_summary_totals or self._build_cashbox_summary(
-            day_sales
-        )
+        summary = self.summary_by_method or self._build_cashbox_summary(date)
+        if not day_sales and not summary:
+            return rx.toast("No hay movimientos de caja hoy.", duration=3000)
         closing_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         totals_list = [
-            {"method": method, "amount": self._round_currency(amount)}
-            for method, amount in summary.items()
-            if amount > 0
+            {
+                "method": item.get("method", "No especificado"),
+                "amount": self._round_currency(item.get("total", 0)),
+            }
+            for item in summary
+            if item.get("total", 0) > 0
         ]
-        closing_total = self._round_currency(sum(summary.values()))
+        closing_total = self._round_currency(
+            sum(item.get("total", 0) for item in summary)
+        )
         
         with rx.session() as session:
             user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
@@ -1495,9 +1533,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         )
         
         # Agregar totales por método
-        for method, amount in summary.items():
+        for item in summary:
+            amount = item.get("total", 0)
             if amount > 0:
-                receipt_lines.append(row(f"{method}:", self._format_currency(amount)))
+                method = item.get("method", "No especificado")
+                receipt_lines.append(
+                    row(f"{method}:", self._format_currency(amount))
+                )
                 receipt_lines.append("")
         
         receipt_lines.append(row("TOTAL CIERRE:", self._format_currency(closing_total)))
@@ -1559,79 +1601,113 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         return rx.call_script(script)
 
     def _get_day_sales(self, date: str) -> list[CashboxSale]:
-        with rx.session() as session:
+        session_info = self._active_cashbox_session_info()
+        if session_info:
+            start_dt = session_info.get("opening_time")
+            end_dt = session_info.get("closing_time") or datetime.datetime.now()
+        else:
             try:
                 target_date = datetime.datetime.strptime(date, "%Y-%m-%d")
                 start_dt = target_date.replace(hour=0, minute=0, second=0)
                 end_dt = target_date.replace(hour=23, minute=59, second=59)
-
-                sales = session.exec(
-                    select(Sale, UserModel)
-                    .join(UserModel, isouter=True)
-                    .where(Sale.timestamp >= start_dt)
-                    .where(Sale.timestamp <= end_dt)
-                    .where(Sale.status != SaleStatus.cancelled)
-                    .options(selectinload(Sale.payments), selectinload(Sale.items))
-                ).all()
-
-                result = []
-                for sale, user in sales:
-                    payments = sale.payments or []
-                    payment_label = self._payment_method_display(payments)
-                    payment_details_str = self._payment_summary_from_payments(payments)
-                    breakdown_from_payments = self._payment_breakdown_from_payments(
-                        payments
-                    )
-                    payment_kind = self._payment_kind_from_payments(payments)
-                    if not breakdown_from_payments:
-                        fallback_label = payment_label if payment_label != "-" else "Otros"
-                        breakdown_from_payments = [
-                            {"label": fallback_label, "amount": sale.total_amount}
-                        ]
-
-                    sale_dict = {
-                        "sale_id": str(sale.id),
-                        "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-                        "user": user.username if user else "Desconocido",
-                        "payment_method": payment_label,
-                        "payment_label": payment_label,
-                        "payment_details": payment_details_str,
-                        "total": sale.total_amount,
-                        "is_deleted": sale.status == SaleStatus.cancelled,
-                        "payment_breakdown": breakdown_from_payments,
-                        "payment_kind": payment_kind,
-                    }
-                    result.append(sale_dict)
-                return result
             except ValueError:
                 return []
 
-    def _build_cashbox_summary(self, sales: list[CashboxSale]) -> dict[str, float]:
-        summary: dict[str, float] = {}
-        for sale in sales:
-            breakdown = sale.get("payment_breakdown") if isinstance(sale, dict) else []
-            if breakdown:
-                for item in breakdown:
-                    method_label = self._normalize_wallet_label(
-                        item.get("label") or sale.get("payment_label") or sale.get("payment_method", "Otros")
-                    )
-                    amount = self._round_currency(item.get("amount", 0))
-                    summary[method_label] = self._round_currency(
-                        summary.get(method_label, 0) + amount
-                    )
-            else:
-                category = self._payment_category(
-                    self._normalize_wallet_label(sale.get("payment_method", "")),
-                    sale.get("payment_kind", ""),
+        with rx.session() as session:
+            statement = (
+                select(CashboxLogModel, UserModel.username)
+                .join(UserModel, isouter=True)
+                .where(CashboxLogModel.amount > 0)
+                .where(CashboxLogModel.timestamp >= start_dt)
+                .where(CashboxLogModel.timestamp <= end_dt)
+                .order_by(desc(CashboxLogModel.timestamp))
+            )
+            if session_info:
+                statement = statement.where(
+                    CashboxLogModel.user_id == session_info["user_id"]
                 )
-                if category not in summary:
-                    summary[category] = 0.0
-                summary[category] = self._round_currency(summary[category] + sale["total"])
+            logs = session.exec(statement).all()
+
+            result: list[CashboxSale] = []
+            for log, username in logs:
+                method_label = (log.payment_method or "No especificado").strip() or "No especificado"
+                payment_detail = log.notes or ""
+                result.append(
+                    {
+                        "sale_id": str(log.id),
+                        "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "user": username or "Desconocido",
+                        "payment_method": method_label,
+                        "payment_label": method_label,
+                        "payment_details": payment_detail,
+                        "amount": self._round_currency(float(log.amount or 0)),
+                        "total": log.amount,
+                        "is_deleted": False,
+                        "payment_breakdown": [
+                            {
+                                "label": method_label,
+                                "amount": self._round_currency(float(log.amount or 0)),
+                            }
+                        ],
+                        "payment_kind": "",
+                    }
+                )
+            return result
+
+    def _build_cashbox_summary(self, date: str) -> list[dict]:
+        session_info = self._active_cashbox_session_info()
+        if session_info:
+            start_date = session_info.get("opening_time")
+            end_date = session_info.get("closing_time") or datetime.datetime.now()
+        else:
+            try:
+                start_date = datetime.datetime.strptime(date, "%Y-%m-%d")
+            except ValueError:
+                start_date = datetime.datetime.now().replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+            end_date = start_date + datetime.timedelta(days=1)
+        method_col = sqlalchemy.func.coalesce(
+            CashboxLogModel.payment_method, "No especificado"
+        )
+        statement = (
+            select(
+                method_col,
+                sqlalchemy.func.count(CashboxLogModel.id),
+                sqlalchemy.func.sum(CashboxLogModel.amount),
+            )
+            .where(CashboxLogModel.amount > 0)
+            .where(CashboxLogModel.timestamp >= start_date)
+        )
+        if session_info:
+            statement = (
+                statement.where(CashboxLogModel.user_id == session_info["user_id"])
+                .where(CashboxLogModel.timestamp <= end_date)
+            )
+        else:
+            statement = statement.where(CashboxLogModel.timestamp < end_date)
+        statement = (
+            statement
+            .group_by(method_col)
+        )
+        summary: list[dict] = []
+        with rx.session() as session:
+            results = session.exec(statement).all()
+        for method, count, amount in results:
+            label = (method or "No especificado").strip() or "No especificado"
+            summary.append(
+                {
+                    "method": label,
+                    "count": int(count or 0),
+                    "total": self._round_currency(float(amount or 0)),
+                }
+            )
+        summary.sort(key=lambda item: item.get("total", 0), reverse=True)
         return summary
 
     def _reset_cashbox_close_summary(self):
         self.cashbox_close_modal_open = False
-        self.cashbox_close_summary_totals = {}
+        self.summary_by_method = []
         self.cashbox_close_summary_sales = []
         self.cashbox_close_summary_date = ""
 
@@ -1668,6 +1744,15 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             f"Adelanto {reservation['field_name']} "
             f"({reservation['start_datetime']} - {reservation['end_datetime']})"
         )
+        status_value = str(reservation.get("status", "")).strip().lower()
+        total_amount = float(reservation.get("total_amount", 0) or 0)
+        paid_amount = float(reservation.get("paid_amount", amount) or 0)
+        is_paid = status_value in {"pagado", "paid"} or paid_amount >= total_amount
+        action_label = "Reserva" if is_paid else "Adelanto"
+        payment_label = (getattr(self, "payment_method", "") or "").strip()
+        if not payment_label:
+            method_kind = (getattr(self, "payment_method_kind", "") or "cash").lower()
+            payment_label = self._payment_method_label(method_kind)
         
         with rx.session() as session:
             timestamp = datetime.datetime.now()
@@ -1681,15 +1766,23 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             session.add(new_sale)
             session.flush()
 
-            session.add(
-                SalePayment(
-                    sale_id=new_sale.id,
-                    amount=amount,
-                    method_type=PaymentMethodType.cash,
-                    reference_code=None,
-                    created_at=timestamp,
+            allocations = []
+            if hasattr(self, "_build_reservation_payments"):
+                allocations = self._build_reservation_payments(amount)
+            if not allocations:
+                allocations = [(PaymentMethodType.cash, amount)]
+            for method_type, method_amount in allocations:
+                if method_amount <= 0:
+                    continue
+                session.add(
+                    SalePayment(
+                        sale_id=new_sale.id,
+                        amount=method_amount,
+                        method_type=method_type,
+                        reference_code=None,
+                        created_at=timestamp,
+                    )
                 )
-            )
             
             # Create SaleItem (Service)
             sale_item = SaleItem(
@@ -1702,4 +1795,14 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 product_barcode_snapshot=str(reservation["id"])
             )
             session.add(sale_item)
+            session.add(
+                CashboxLogModel(
+                    user_id=self.current_user.get("id"),
+                    action=action_label,
+                    amount=amount,
+                    payment_method=payment_label,
+                    notes=description,
+                    timestamp=timestamp,
+                )
+            )
             session.commit()

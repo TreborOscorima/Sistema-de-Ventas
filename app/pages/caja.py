@@ -245,12 +245,31 @@ def render_payment_details(details: rx.Var[str]) -> rx.Component:
     )
 
 
+def payment_method_badge(method: rx.Var[str]) -> rx.Component:
+    is_credit_sale = (method == None) | (method == "") | (method == "-")
+    return rx.cond(
+        is_credit_sale,
+        rx.badge("Venta a Crédito / Fiado", color_scheme="yellow", variant="solid"),
+        rx.match(
+            method,
+            ("Efectivo", rx.badge("Efectivo", color_scheme="green", variant="soft")),
+            ("Yape", rx.badge("Yape", color_scheme="purple", variant="soft")),
+            ("Plin", rx.badge("Plin", color_scheme="purple", variant="soft")),
+            ("Transferencia", rx.badge("Transferencia", color_scheme="purple", variant="soft")),
+            ("Tarjeta", rx.badge(method, color_scheme="blue", variant="soft")),
+            ("T. Debito", rx.badge(method, color_scheme="blue", variant="soft")),
+            ("T. Credito", rx.badge(method, color_scheme="blue", variant="soft")),
+            rx.badge(method, color_scheme="gray", variant="soft"),
+        ),
+    )
+
+
 def sale_row(sale: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
         rx.el.td(sale["timestamp"], class_name="py-3 px-4 align-top"),
         rx.el.td(sale["user"], class_name="py-3 px-4 align-top"),
         rx.el.td(
-            rx.el.p(sale["payment_method"], class_name="font-medium text-gray-900"),
+            payment_method_badge(sale["payment_method"]),
             rx.el.div(
                 render_payment_details(sale["payment_details"]),
                 class_name="mt-1",
@@ -272,7 +291,7 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
         rx.el.td(
             rx.el.span(
                 State.currency_symbol,
-                sale["service_total"].to_string(),
+                sale["amount"].to_string(),
                 class_name="font-semibold text-gray-900",
             ),
             class_name="py-3 px-4 text-right align-top",
@@ -442,7 +461,8 @@ def close_cashbox_modal() -> rx.Component:
                     rx.el.thead(
                         rx.el.tr(
                             rx.el.th("Método", class_name="py-2 px-3 text-left"),
-                            rx.el.th("Monto", class_name="py-2 px-3 text-right"),
+                            rx.el.th("Movimientos", class_name="py-2 px-3 text-center"),
+                            rx.el.th("Total", class_name="py-2 px-3 text-right"),
                             class_name="bg-gray-100 text-sm",
                         )
                     ),
@@ -455,7 +475,11 @@ def close_cashbox_modal() -> rx.Component:
                                     class_name="py-2 px-3 text-left text-sm",
                                 ),
                                 rx.el.td(
-                                    item["amount"],
+                                    item["count"],
+                                    class_name="py-2 px-3 text-center text-sm font-semibold",
+                                ),
+                                rx.el.td(
+                                    item["total"],
                                     class_name="py-2 px-3 text-right text-sm font-semibold",
                                 ),
                                 class_name="border-b",
@@ -465,6 +489,10 @@ def close_cashbox_modal() -> rx.Component:
                             rx.el.td(
                                 rx.el.span("Total cierre", class_name="font-semibold"),
                                 class_name="py-2 px-3 text-left text-sm",
+                            ),
+                            rx.el.td(
+                                rx.el.span("-", class_name="text-gray-400"),
+                                class_name="py-2 px-3 text-center text-sm",
                             ),
                             rx.el.td(
                                 State.cashbox_close_total_amount,
@@ -501,13 +529,7 @@ def close_cashbox_modal() -> rx.Component:
                                     rx.el.td(sale["timestamp"], class_name="py-2 px-3 text-sm"),
                                     rx.el.td(sale["user"], class_name="py-2 px-3 text-sm"),
                                     rx.el.td(
-                                        rx.el.div(
-                                            rx.el.p(
-                                                sale["payment_label"],
-                                                class_name="text-sm font-medium text-gray-800",
-                                            ),
-                                            class_name="flex flex-col gap-1",
-                                        ),
+                                        payment_method_badge(sale["payment_label"]),
                                         class_name="py-2 px-3 text-sm",
                                     ),
                                     rx.el.td(
@@ -874,7 +896,7 @@ def cashbox_page() -> rx.Component:
                                     rx.el.tr(
                                         rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
                                         rx.el.th("Usuario", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
-                                        rx.el.th("Pago", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
+                                        rx.el.th("Metodo", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
                                         rx.el.th("Total", class_name="py-3 px-4 text-right font-semibold text-gray-700"),
                                         rx.el.th("Detalle", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
                                         rx.el.th("Acciones", class_name="py-3 px-4 text-center font-semibold text-gray-700"),

@@ -23,7 +23,7 @@ def history_filters() -> rx.Component:
         rx.el.div(
             select_filter(
                 "Filtrar por tipo",
-                [("Todos", "Todos"), ("Ingreso", "Ingreso"), ("Venta", "Venta")],
+                [("Todos", "Todos"), ("Venta", "Venta")],
                 State.staged_history_filter_type,
                 State.set_staged_history_filter_type,
             ),
@@ -75,41 +75,256 @@ def history_filters() -> rx.Component:
     )
 
 
+def payment_method_badge(method: rx.Var[str]) -> rx.Component:
+    return rx.cond(
+        method,
+        rx.match(
+            method,
+            (
+                "No especificado",
+                rx.el.span(
+                    "No especificado",
+                    class_name="text-xs font-semibold text-gray-400",
+                ),
+            ),
+            ("-", rx.el.span("-", class_name="text-xs font-semibold text-gray-400")),
+            ("Crédito", rx.badge("Crédito", color_scheme="yellow")),
+            ("Credito", rx.badge("Crédito", color_scheme="yellow")),
+            (
+                "Crédito c/ Inicial",
+                rx.badge("Crédito c/ Inicial", color_scheme="yellow"),
+            ),
+            (
+                "Credito c/ Inicial",
+                rx.badge("Crédito c/ Inicial", color_scheme="yellow"),
+            ),
+            ("Efectivo", rx.badge("Efectivo", color_scheme="green")),
+            ("Yape", rx.badge("Yape", color_scheme="purple")),
+            (
+                "Billetera Digital (Yape)",
+                rx.badge("Yape", color_scheme="purple"),
+            ),
+            ("Plin", rx.badge("Plin", color_scheme="pink")),
+            (
+                "Billetera Digital (Plin)",
+                rx.badge("Plin", color_scheme="pink"),
+            ),
+            (
+                "Transferencia",
+                rx.badge("Transferencia", color_scheme="orange"),
+            ),
+            (
+                "Transferencia Bancaria",
+                rx.badge("Transferencia", color_scheme="orange"),
+            ),
+            ("Pago Mixto", rx.badge("Pago Mixto", color_scheme="orange")),
+            ("T. Debito", rx.badge("T. Debito", color_scheme="blue")),
+            ("T. Credito", rx.badge("T. Credito", color_scheme="blue")),
+            (
+                "Tarjeta de Débito",
+                rx.badge("Tarjeta de Débito", color_scheme="blue"),
+            ),
+            (
+                "Tarjeta de Crédito",
+                rx.badge("Tarjeta de Crédito", color_scheme="blue"),
+            ),
+            rx.badge(method, color_scheme="gray"),
+        ),
+        rx.el.span(
+            "No especificado",
+            class_name="text-xs font-semibold text-gray-400",
+        ),
+    )
+
+
 def history_table_row(movement: rx.Var[dict]) -> rx.Component:
     """Render a single row in the history table."""
     return rx.el.tr(
         rx.el.td(movement["timestamp"], class_name="py-3 px-4"),
         rx.el.td(
-            rx.el.span(
-                movement["type"],
-                class_name=rx.cond(
-                    movement["type"] == "Ingreso",
-                    "px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800",
-                    "px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800",
-                ),
-            )
-        ),
-        rx.el.td(movement["product_description"], class_name="py-3 px-4"),
-        rx.el.td(movement["quantity"].to_string(), class_name="py-3 px-4 text-center"),
-        rx.el.td(movement["unit"], class_name="py-3 px-4 text-center"),
-        rx.el.td(
-            State.currency_symbol,
-            movement["total"].to_string(),
-            class_name="py-3 px-4 text-right font-medium",
-        ),
-        rx.el.td(
-            rx.cond(
-                movement.get("payment_method"),
-                rx.el.span(movement.get("payment_method"), class_name="font-medium"),
-                rx.el.span("-", class_name="text-gray-400"),
-            ),
+            movement["client_name"],
             class_name="py-3 px-4",
         ),
         rx.el.td(
-            movement.get("payment_details", "-"),
-            class_name="py-3 px-4 text-sm text-gray-600",
+            State.currency_symbol,
+            movement["total"].to_string(),
+            class_name="py-3 px-4 text-right font-semibold",
+        ),
+        rx.el.td(
+            payment_method_badge(movement.get("payment_method")),
+            class_name="py-3 px-4",
+        ),
+        rx.el.td(
+            movement.get("user", "Desconocido"),
+            class_name="py-3 px-4",
+        ),
+        rx.el.td(
+            rx.el.button(
+                rx.icon("eye", class_name="h-4 w-4"),
+                "Ver Detalle",
+                on_click=lambda _, sale_id=movement["sale_id"]: State.open_sale_detail(sale_id),
+                class_name=BUTTON_STYLES["link_primary"],
+            ),
+            class_name="py-3 px-4 text-center",
         ),
         class_name="border-b",
+    )
+
+def sale_detail_modal() -> rx.Component:
+    return rx.radix.primitives.dialog.root(
+        rx.radix.primitives.dialog.portal(
+            rx.radix.primitives.dialog.overlay(
+                class_name="fixed inset-0 bg-black/40 z-40 modal-overlay"
+            ),
+            rx.radix.primitives.dialog.content(
+                rx.el.div(
+                    rx.el.h3("Detalle de venta", class_name="text-lg font-semibold text-gray-800"),
+                    rx.el.p(
+                        "Productos y resumen del comprobante seleccionado.",
+                        class_name="text-sm text-gray-600",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.cond(
+                    State.selected_sale_id == "",
+                    rx.el.p("Venta no disponible.", class_name="text-sm text-gray-600"),
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.span("Fecha", class_name="text-xs uppercase text-gray-500"),
+                                rx.el.span(
+                                    State.selected_sale_summary["timestamp"],
+                                    class_name="text-sm font-semibold text-gray-900",
+                                ),
+                                class_name="flex flex-col gap-1",
+                            ),
+                            rx.el.div(
+                                rx.el.span("Cliente", class_name="text-xs uppercase text-gray-500"),
+                                rx.el.span(
+                                    State.selected_sale_summary["client_name"],
+                                    class_name="text-sm font-semibold text-gray-900",
+                                ),
+                                class_name="flex flex-col gap-1",
+                            ),
+                            rx.el.div(
+                                rx.el.span("Usuario", class_name="text-xs uppercase text-gray-500"),
+                                rx.el.span(
+                                    State.selected_sale_summary["user"],
+                                    class_name="text-sm font-semibold text-gray-900",
+                                ),
+                                class_name="flex flex-col gap-1",
+                            ),
+                            class_name="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-gray-50 border border-gray-100 rounded-md p-3",
+                        ),
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.span("Metodo de pago", class_name="text-xs uppercase text-gray-500"),
+                                payment_method_badge(State.selected_sale_summary["payment_method"]),
+                                class_name="flex flex-col gap-1",
+                            ),
+                            rx.el.div(
+                                rx.el.span("Total", class_name="text-xs uppercase text-gray-500"),
+                                rx.el.span(
+                                    State.currency_symbol,
+                                    State.selected_sale_summary["total"].to_string(),
+                                    class_name="text-lg font-semibold text-gray-900",
+                                ),
+                                class_name="flex flex-col gap-1",
+                            ),
+                            class_name="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-gray-50 border border-gray-100 rounded-md p-3",
+                        ),
+                        rx.el.div(
+                            rx.el.h4("Productos", class_name="text-sm font-semibold text-gray-700"),
+                            rx.cond(
+                                State.selected_sale_items_view.length() == 0,
+                                rx.el.p(
+                                    "Sin productos registrados.",
+                                    class_name="text-sm text-gray-600",
+                                ),
+                                rx.el.div(
+                                    rx.el.table(
+                                        rx.el.thead(
+                                            rx.el.tr(
+                                                rx.el.th("Producto", class_name="py-2 px-3 text-left"),
+                                                rx.el.th("Cantidad", class_name="py-2 px-3 text-right"),
+                                                rx.el.th("Precio", class_name="py-2 px-3 text-right"),
+                                                rx.el.th("Subtotal", class_name="py-2 px-3 text-right"),
+                                                class_name="bg-gray-100 text-sm",
+                                            )
+                                        ),
+                                        rx.el.tbody(
+                                            rx.foreach(
+                                                State.selected_sale_items_view,
+                                                lambda item: rx.el.tr(
+                                                    rx.el.td(item["description"], class_name="py-2 px-3 text-sm"),
+                                                    rx.el.td(item["quantity"].to_string(), class_name="py-2 px-3 text-right text-sm"),
+                                                    rx.el.td(
+                                                        State.currency_symbol,
+                                                        item["unit_price"].to_string(),
+                                                        class_name="py-2 px-3 text-right text-sm",
+                                                    ),
+                                                    rx.el.td(
+                                                        State.currency_symbol,
+                                                        item["subtotal"].to_string(),
+                                                        class_name="py-2 px-3 text-right text-sm font-semibold",
+                                                    ),
+                                                    class_name="border-b",
+                                                ),
+                                            )
+                                        ),
+                                        class_name="min-w-full text-sm",
+                                    ),
+                                    class_name="max-h-64 overflow-y-auto overflow-x-auto border rounded-lg",
+                                ),
+                            ),
+                            class_name="flex flex-col gap-2",
+                        ),
+                        class_name="flex flex-col gap-4",
+                    ),
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        "Cerrar",
+                        on_click=State.close_sale_detail,
+                        class_name="px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[40px]",
+                    ),
+                    class_name="flex justify-end gap-3",
+                ),
+                class_name=(
+                    "bg-white rounded-lg shadow-lg p-5 w-full max-w-3xl space-y-4 "
+                    "data-[state=open]:animate-in data-[state=closed]:animate-out "
+                    "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 "
+                    "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 "
+                    "data-[state=open]:slide-in-from-top-4 data-[state=closed]:slide-out-to-top-4 "
+                    "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 shadow-xl focus:outline-none"
+                ),
+            ),
+        ),
+        open=State.sale_detail_modal_open,
+        on_open_change=State.set_sale_detail_modal_open,
+    )
+
+
+def credit_sales_card() -> rx.Component:
+    return rx.card(
+        rx.el.div(
+            rx.el.div(
+                rx.icon("credit-card", class_name="h-6 w-6 text-amber-600"),
+                class_name="p-3 rounded-lg bg-amber-100",
+            ),
+            rx.el.div(
+                rx.el.p("Ventas a Credito", class_name="text-sm font-medium text-gray-500"),
+                rx.el.p(
+                    rx.el.span(
+                        State.currency_symbol, State.total_credit.to_string()
+                    ),
+                    class_name="text-2xl font-bold text-gray-800",
+                ),
+                class_name="flex-1",
+            ),
+            class_name="flex items-center gap-4",
+        ),
+        class_name="bg-white p-4 rounded-xl shadow-sm border",
     )
 
 
@@ -178,6 +393,7 @@ def historial_page() -> rx.Component:
                 class_name="text-2xl font-bold text-gray-800 mb-6",
             ),
             rx.el.div(
+                credit_sales_card(),
                 rx.foreach(State.dynamic_payment_cards, render_dynamic_card),
                 class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6",
             ),
@@ -190,13 +406,11 @@ def historial_page() -> rx.Component:
                     rx.el.thead(
                         rx.el.tr(
                             rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Tipo", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Descripcion", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Cantidad", class_name="py-3 px-4 text-center"),
-                            rx.el.th("Unidad", class_name="py-3 px-4 text-center"),
+                            rx.el.th("Cliente", class_name="py-3 px-4 text-left"),
                             rx.el.th("Total", class_name="py-3 px-4 text-right"),
                             rx.el.th("Metodo de Pago", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Detalle Pago", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Usuario", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Acciones", class_name="py-3 px-4 text-center"),
                             class_name="bg-gray-100",
                         )
                     ),
@@ -217,5 +431,6 @@ def historial_page() -> rx.Component:
             ),
             class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
         ),
+        sale_detail_modal(),
         on_mount=State.reload_history,
     )

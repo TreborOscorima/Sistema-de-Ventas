@@ -11,6 +11,7 @@ from app.enums import PaymentMethodType, ReservationStatus, SaleStatus, SportTyp
 
 if TYPE_CHECKING:
     from .auth import User
+    from .client import Client
     from .inventory import Product
 
 
@@ -31,12 +32,16 @@ class Sale(rx.Model, table=True):
 
     status: SaleStatus = Field(default=SaleStatus.completed)
     delete_reason: Optional[str] = Field(default=None)
+    payment_condition: str = Field(default="contado")
 
+    client_id: Optional[int] = Field(default=None, foreign_key="client.id")
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
+    client: Optional["Client"] = Relationship(back_populates="sales")
     user: Optional["User"] = Relationship(back_populates="sales")
     items: List["SaleItem"] = Relationship(back_populates="sale")
     payments: List["SalePayment"] = Relationship(back_populates="sale")
+    installments: List["SaleInstallment"] = Relationship(back_populates="sale")
 
 
 class SalePayment(rx.Model, table=True):
@@ -81,6 +86,31 @@ class SaleItem(rx.Model, table=True):
 
     sale: Optional["Sale"] = Relationship(back_populates="items")
     product: Optional["Product"] = Relationship(back_populates="sale_items")
+
+
+class SaleInstallment(rx.Model, table=True):
+    """Cuotas de una venta a credito."""
+
+    sale_id: int = Field(foreign_key="sale.id")
+    number: int = Field(nullable=False)
+    amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    due_date: datetime = Field(
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+    status: str = Field(default="pending")
+    paid_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    payment_date: Optional[datetime] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+
+    sale: Optional["Sale"] = Relationship(back_populates="installments")
 
 
 class CashboxSession(rx.Model, table=True):
@@ -130,6 +160,7 @@ class CashboxLog(rx.Model, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
+    payment_method: Optional[str] = Field(default="Efectivo", index=True)
     notes: str = Field(default="")
 
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")

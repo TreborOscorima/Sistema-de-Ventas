@@ -22,11 +22,27 @@ CASH_SUBSECTIONS = [
 
 
 def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
+    show_badge = (
+        (page == "Cuentas Corrientes")
+        & (State.overdue_alerts_count > 0)
+        & State.sidebar_open
+    )
     return rx.link(
         rx.el.div(
             rx.icon(icon, class_name="h-5 w-5"),
             rx.el.span(
                 text, class_name=rx.cond(State.sidebar_open, "opacity-100", "opacity-0")
+            ),
+            rx.cond(
+                show_badge,
+                rx.badge(
+                    State.overdue_alerts_count.to_string(),
+                    color_scheme="red",
+                    variant="solid",
+                    size="1",
+                    class_name="ml-1",
+                ),
+                rx.fragment(),
             ),
             class_name=rx.cond(
                 State.active_page == page,

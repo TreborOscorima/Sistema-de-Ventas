@@ -1,6 +1,13 @@
 import reflex as rx
+from decimal import Decimal
+from typing import Any
+from sqlmodel import select
+from sqlalchemy import or_
+
+from app.models import Client
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.services.sale_service import SaleService, StockError
+from app.utils.db import get_async_session
 from app.utils.logger import get_logger
 from .mixin_state import MixinState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin
@@ -10,6 +17,170 @@ from .venta import CartMixin, PaymentMixin, ReceiptMixin
 logger = get_logger("VentaState")
 class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
     sale_form_key: int = 0
+    client_search_query: str = ""
+    client_suggestions: list[dict] = []
+    selected_client: dict | None = None
+    is_credit_mode: bool = False
+    credit_installments: int = 1
+    credit_interval_days: int = 30
+    credit_initial_payment: str = "0"
+
+    @rx.var
+    def selected_client_credit_available(self) -> float:
+        if not self.selected_client:
+            return 0.0
+        balance = None
+        client_id = None
+        if isinstance(self.selected_client, dict):
+            balance = self.selected_client.get("balance")
+            client_id = self.selected_client.get("id")
+        if balance is None and client_id:
+            with rx.session() as session:
+                client = session.get(Client, client_id)
+                if not client:
+                    return 0.0
+                balance = client.credit_limit - client.current_debt
+        if balance is None:
+            return 0.0
+        available = float(balance)
+        if available < 0:
+            available = 0
+        return self._round_currency(available)
+
+    @rx.var
+    def credit_financed_amount(self) -> float:
+        if not self.is_credit_mode:
+            return 0.0
+        try:
+            initial_payment = Decimal(str(self.credit_initial_payment or "0"))
+        except Exception:
+            initial_payment = Decimal("0")
+        total = Decimal(str(self.sale_total or 0))
+        financed = total - initial_payment
+        if financed < 0:
+            financed = Decimal("0")
+        return self._round_currency(float(financed))
+
+    @rx.var
+    def credit_installment_amount(self) -> float:
+        if not self.is_credit_mode:
+            return 0.0
+        count = self.credit_installments if self.credit_installments > 0 else 1
+        return self._round_currency(self.credit_financed_amount / count)
+
+    @rx.event
+    def search_client_change(self, query: str):
+        self.client_search_query = query or ""
+        term = (query or "").strip()
+        if len(term) <= 2:
+            self.client_suggestions = []
+            return
+        like_search = f"%{term}%"
+        with rx.session() as session:
+            clients = session.exec(
+                select(Client)
+                .where(
+                    or_(
+                        Client.name.ilike(like_search),
+                        Client.dni.ilike(like_search),
+                    )
+                )
+                .limit(6)
+            ).all()
+        self.client_suggestions = [
+            {
+                "id": client.id,
+                "name": client.name,
+                "dni": client.dni,
+                "balance": self._round_currency(
+                    float(max(client.credit_limit - client.current_debt, 0))
+                ),
+            }
+            for client in clients
+        ]
+
+    @rx.event
+    def select_client(self, client_data: dict | Client):
+        selected = None
+        if isinstance(client_data, Client):
+            if hasattr(client_data, "model_dump"):
+                selected = client_data.model_dump()
+            else:
+                selected = client_data.dict()
+            balance = client_data.credit_limit - client_data.current_debt
+            if balance is None:
+                balance = 0
+            selected["balance"] = self._round_currency(float(max(balance, 0)))
+        elif isinstance(client_data, dict) and client_data:
+            selected = dict(client_data)
+        self.selected_client = dict(selected) if isinstance(selected, dict) else None
+        self.client_search_query = ""
+        self.client_suggestions = []
+
+    @rx.event
+    def clear_selected_client(self):
+        self.selected_client = None
+
+    @rx.event
+    def toggle_credit_mode(self, value: bool | str):
+        if isinstance(value, str):
+            value = value.lower() in ["true", "1", "on", "yes"]
+        self.is_credit_mode = bool(value)
+        if self.is_credit_mode and self.payment_method_kind == "mixed":
+            self.payment_mixed_card = 0
+            self.payment_mixed_wallet = 0
+            self._update_mixed_message()
+
+    @rx.event
+    def set_installments_count(self, value: str):
+        try:
+            count = int(value)
+        except (TypeError, ValueError):
+            count = 1
+        if count < 1:
+            count = 1
+        self.credit_installments = count
+
+    @rx.event
+    def set_payment_interval_days(self, value: str):
+        try:
+            days = int(value)
+        except (TypeError, ValueError):
+            days = 30
+        if days < 1:
+            days = 1
+        self.credit_interval_days = days
+
+    @rx.event
+    def set_credit_initial_payment(self, value: Any):
+        self.credit_initial_payment = str(value or "")
+        self.payment_cash_amount = self._safe_amount(self.credit_initial_payment)
+        if self.payment_method_kind == "cash":
+            self._update_cash_feedback()
+
+    def _reset_credit_context(self):
+        self.selected_client = None
+        self.client_search_query = ""
+        self.client_suggestions = []
+        self.is_credit_mode = False
+        self.credit_initial_payment = ""
+        self.credit_installments = 1
+        self.credit_interval_days = 30
+        self.payment_cash_amount = 0
+        if hasattr(self, "clear_pending_reservation"):
+            self.clear_pending_reservation()
+        else:
+            if hasattr(self, "reservation_payment_id"):
+                self.reservation_payment_id = ""
+            if hasattr(self, "reservation_payment_amount"):
+                self.reservation_payment_amount = ""
+            if hasattr(self, "reservation_payment_routed"):
+                self.reservation_payment_routed = False
+
+    def _auto_allocate_mixed_amounts(self, total_override: float | None = None):
+        if self.is_credit_mode:
+            return
+        return PaymentMixin._auto_allocate_mixed_amounts(self, total_override)
 
     @rx.event
     async def confirm_sale(self):
@@ -64,6 +235,22 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
                 "status": self.payment_mixed_status,
             },
         }
+        client_id = None
+        if isinstance(self.selected_client, dict):
+            client_id = self.selected_client.get("id")
+        try:
+            initial_payment = Decimal(str(self.credit_initial_payment or "0"))
+        except Exception:
+            initial_payment = Decimal("0")
+        payment_data.update(
+            {
+                "client_id": client_id,
+                "is_credit": self.is_credit_mode,
+                "installments": self.credit_installments,
+                "interval_days": self.credit_interval_days,
+                "initial_payment": initial_payment,
+            }
+        )
 
         try:
             item_dtos = [SaleItemDTO(**item) for item in self.new_sale_items]
@@ -75,23 +262,29 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
         if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
             reservation_id = self.reservation_payment_id
 
-        try:
-            result = await SaleService.process_sale(
-                user_id=self.current_user.get("id"),
-                items=item_dtos,
-                payment_data=payment_dto,
-                reservation_id=reservation_id,
-            )
-            logger.info(
-                "✅ Venta confirmada exitosamente. ID: %s",
-                result.sale.id,
-            )
-        except (ValueError, StockError) as exc:
-            logger.warning("Validacion de venta fallida: %s", exc)
-            return rx.toast(str(exc), duration=3000)
-        except Exception:
-            logger.error("Error critico al confirmar venta.", exc_info=True)
-            return rx.toast("No se pudo procesar la venta.", duration=3000)
+        result = None
+        async with get_async_session() as session:
+            try:
+                result = await SaleService.process_sale(
+                    session=session,
+                    user_id=user_id,
+                    items=item_dtos,
+                    payment_data=payment_dto,
+                    reservation_id=reservation_id,
+                )
+                await session.commit()
+                logger.info(
+                    "✅ Venta confirmada exitosamente. ID: %s",
+                    result.sale.id,
+                )
+            except (ValueError, StockError) as exc:
+                await session.rollback()
+                logger.warning("Validacion de venta fallida: %s", exc)
+                return rx.toast(str(exc), duration=3000)
+            except Exception:
+                await session.rollback()
+                logger.error("Error critico al confirmar venta.", exc_info=True)
+                return rx.toast("No se pudo procesar la venta.", duration=3000)
 
         # Actualizamos el estado visual (UI) de Reflex.
         self.last_sale_receipt = result.receipt_items
@@ -103,6 +296,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
         self.new_sale_items = []
         self._reset_sale_form()
         self._reset_payment_fields()
+        self._reset_credit_context()
         self._refresh_payment_feedback()
 
         if hasattr(self, "reload_history"):

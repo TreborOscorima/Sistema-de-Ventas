@@ -8,7 +8,7 @@ import calendar
 import io
 from sqlmodel import select
 from sqlalchemy import func, or_
-from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel, SalePayment
+from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel, SalePayment, CashboxLog
 from app.enums import SaleStatus, ReservationStatus, PaymentMethodType
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice
 from .mixin_state import MixinState
@@ -1303,6 +1303,22 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 product_barcode_snapshot="RESERVA",
             )
             session.add(sale_item)
+            payment_label = (getattr(self, "payment_method", "") or "").strip() or "Efectivo"
+            log_action = "Reserva" if entry_type == "pago" else "Adelanto"
+            log_notes = (
+                f"{log_action} reserva {reservation.get('id', '')} - "
+                f"{reservation.get('field_name', '')}"
+            ).strip(" -")
+            session.add(
+                CashboxLog(
+                    action=log_action,
+                    amount=applied_amount,
+                    payment_method=payment_label,
+                    notes=log_notes,
+                    timestamp=datetime.datetime.now(),
+                    user_id=user_id,
+                )
+            )
             session.commit()
         
         self._log_service_action(
@@ -1405,6 +1421,22 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 product_barcode_snapshot="RESERVA",
             )
             session.add(sale_item)
+            payment_label = (getattr(self, "payment_method", "") or "").strip() or "No especificado"
+            log_action = "Reserva" if entry_type == "pago" else "Adelanto"
+            log_notes = payment_summary or (
+                f"{log_action} reserva {reservation.get('id', '')} - "
+                f"{reservation.get('field_name', '')}"
+            ).strip(" -")
+            session.add(
+                CashboxLog(
+                    action=log_action,
+                    amount=applied_amount,
+                    payment_method=payment_label,
+                    notes=log_notes,
+                    timestamp=datetime.datetime.now(),
+                    user_id=user_id,
+                )
+            )
 
             reservation_model = session.exec(
                 select(FieldReservationModel)

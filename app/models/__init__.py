@@ -10,7 +10,10 @@ from .sales import (
     Sale,
     SaleItem,
     SalePayment,
+    SaleInstallment,
 )
+
+from .client import Client
 
 __all__ = [
     "Permission",
@@ -25,6 +28,8 @@ __all__ = [
     "Sale",
     "SaleItem",
     "SalePayment",
+    "SaleInstallment",
+    "Client",
     "CashboxSession",
     "CashboxLog",
     "FieldReservation",

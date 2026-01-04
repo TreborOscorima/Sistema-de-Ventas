@@ -1,9 +1,8 @@
 import reflex as rx
-from typing import List, Dict, Any
+from typing import Dict, Any
 import datetime
-import json
-import logging
 import io
+import unicodedata
 from decimal import Decimal
 from sqlmodel import select
 import sqlalchemy as sa
@@ -12,13 +11,10 @@ from app.enums import PaymentMethodType, SaleStatus
 from app.models import (
     Sale,
     SaleItem,
-    StockMovement,
     Product,
-    User as UserModel,
     CashboxLog,
     PaymentMethod,
 )
-from .types import Movement
 from .mixin_state import MixinState
 from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
 
@@ -35,9 +31,12 @@ class HistorialState(MixinState):
     current_page_history: int = 1
     items_per_page: int = 10
     _history_update_trigger: int = 0
+    sale_detail_modal_open: bool = False
+    selected_sale_id: str = ""
+    selected_sale_summary: dict = {}
+    selected_sale_items: list[SaleItem] = []
 
-    def _history_union_subquery(self):
-        search = (self.history_filter_product or "").strip()
+    def _history_date_range(self) -> tuple[datetime.datetime | None, datetime.datetime | None]:
         start_date = None
         end_date = None
         if self.history_filter_start_date:
@@ -49,112 +48,48 @@ class HistorialState(MixinState):
                 start_date = None
         if self.history_filter_end_date:
             try:
-                end_date = datetime.datetime.fromisoformat(self.history_filter_end_date)
+                end_date = datetime.datetime.fromisoformat(
+                    self.history_filter_end_date
+                )
                 end_date = end_date.replace(hour=23, minute=59, second=59)
             except ValueError:
                 end_date = None
+        return start_date, end_date
 
-        sales_query = (
-            select(
-                sa.cast(SaleItem.id, sa.String).label("id"),
-                Sale.timestamp.label("timestamp"),
-                sa.literal("Venta").label("type"),
-                SaleItem.product_name_snapshot.label("product_description"),
-                SaleItem.quantity.label("quantity"),
-                sa.func.coalesce(Product.unit, sa.literal("Global")).label("unit"),
-                SaleItem.subtotal.label("total"),
-                sa.literal("-").label("payment_method"),
-                sa.literal("").label("payment_details"),
-                sa.func.coalesce(UserModel.username, sa.literal("Desconocido")).label(
-                    "user"
-                ),
-                sa.cast(Sale.id, sa.String).label("sale_id"),
-                sa.literal("sale").label("source"),
-            )
-            .select_from(SaleItem)
-            .join(Sale)
-            .join(Product, isouter=True)
-            .join(UserModel, isouter=True)
-        )
+    def _apply_sales_filters(self, query):
+        start_date, end_date = self._history_date_range()
+        if start_date:
+            query = query.where(Sale.timestamp >= start_date)
+        if end_date:
+            query = query.where(Sale.timestamp <= end_date)
 
-        stock_query = (
-            select(
-                sa.cast(StockMovement.id, sa.String).label("id"),
-                StockMovement.timestamp.label("timestamp"),
-                StockMovement.type.label("type"),
-                sa.func.concat(
-                    Product.description,
-                    sa.literal(" ("),
-                    StockMovement.description,
-                    sa.literal(")"),
-                ).label("product_description"),
-                StockMovement.quantity.label("quantity"),
-                Product.unit.label("unit"),
-                sa.literal(0).label("total"),
-                sa.literal("-").label("payment_method"),
-                sa.cast(StockMovement.description, sa.String).label("payment_details"),
-                sa.func.coalesce(UserModel.username, sa.literal("Desconocido")).label(
-                    "user"
-                ),
-                sa.literal("").label("sale_id"),
-                sa.literal("stock").label("source"),
-            )
-            .select_from(StockMovement)
-            .join(Product)
-            .join(UserModel, isouter=True)
-        )
+        if self.history_filter_type not in {"Todos", "Venta"}:
+            query = query.where(sa.false())
 
-        log_query = (
-            select(
-                sa.cast(CashboxLog.id, sa.String).label("id"),
-                CashboxLog.timestamp.label("timestamp"),
-                CashboxLog.action.label("type"),
-                CashboxLog.notes.label("product_description"),
-                sa.literal(0).label("quantity"),
-                sa.literal("-").label("unit"),
-                CashboxLog.amount.label("total"),
-                sa.literal("Efectivo").label("payment_method"),
-                sa.cast(CashboxLog.notes, sa.String).label("payment_details"),
-                sa.func.coalesce(UserModel.username, sa.literal("Desconocido")).label(
-                    "user"
-                ),
-                sa.literal("").label("sale_id"),
-                sa.literal("log").label("source"),
-            )
-            .select_from(CashboxLog)
-            .join(UserModel, isouter=True)
-        )
-
+        search = (self.history_filter_product or "").strip()
         if search:
             like_search = f"%{search}%"
-            sales_query = sales_query.where(
-                SaleItem.product_name_snapshot.ilike(like_search)
+            sale_ids = (
+                select(SaleItem.sale_id)
+                .where(SaleItem.product_name_snapshot.ilike(like_search))
+                .distinct()
             )
-            stock_query = stock_query.where(Product.description.ilike(like_search))
+            query = query.where(Sale.id.in_(sale_ids))
+        return query
 
-        if start_date:
-            sales_query = sales_query.where(Sale.timestamp >= start_date)
-            stock_query = stock_query.where(StockMovement.timestamp >= start_date)
-            log_query = log_query.where(CashboxLog.timestamp >= start_date)
-
-        if end_date:
-            sales_query = sales_query.where(Sale.timestamp <= end_date)
-            stock_query = stock_query.where(StockMovement.timestamp <= end_date)
-            log_query = log_query.where(CashboxLog.timestamp <= end_date)
-
-        queries = [sales_query, stock_query]
-        if not search:
-            queries.append(log_query)
-
-        return sa.union_all(*queries).subquery()
-
-    def _history_base_select(self):
-        history_union = self._history_union_subquery()
-        query = select(*history_union.c)
-        if self.history_filter_type != "Todos":
-            query = query.where(history_union.c.type == self.history_filter_type)
-        query = query.order_by(history_union.c.timestamp.desc())
-        return query, history_union
+    def _sales_query(self):
+        query = (
+            select(Sale)
+            .where(Sale.status != SaleStatus.cancelled)
+            .options(
+                selectinload(Sale.payments),
+                selectinload(Sale.items),
+                selectinload(Sale.user),
+                selectinload(Sale.client),
+            )
+        )
+        query = self._apply_sales_filters(query)
+        return query.order_by(Sale.timestamp.desc())
 
     def _payment_method_key(self, method_type: Any) -> str:
         if isinstance(method_type, PaymentMethodType):
@@ -248,128 +183,165 @@ class HistorialState(MixinState):
         ]
         return f"{self._payment_method_label('mixed')} ({'/'.join(abbrevs)})"
 
-    def _sale_payment_info(self, session, sale_ids: list[int]) -> dict[str, dict[str, str]]:
+    def _credit_sale_payment_label(
+        self, sale: Sale, payments: list[Any]
+    ) -> str | None:
+        condition = (sale.payment_condition or "").strip().lower()
+        if condition != "credito":
+            return None
+        paid_total = sum(
+            Decimal(str(getattr(payment, "amount", 0) or 0))
+            for payment in payments
+        )
+        if paid_total > 0:
+            return "Crédito c/ Inicial"
+        return "Crédito"
+
+    def _sale_payment_method_label(
+        self, sale: Sale, payments: list[Any], fallback: str
+    ) -> str:
+        explicit = (getattr(sale, "payment_method", "") or "").strip()
+        credit_label = self._credit_sale_payment_label(sale, payments)
+        if credit_label:
+            if explicit and explicit not in {"-", "No especificado"}:
+                normalized = explicit.lower()
+                if normalized.startswith("credito") or normalized.startswith("crédito"):
+                    return explicit
+            return credit_label
+        if explicit and explicit not in {"-", "No especificado"}:
+            return explicit
+        return fallback
+
+    def _normalize_credit_label(self, label: str) -> str:
+        normalized = unicodedata.normalize("NFKD", label or "")
+        normalized = "".join(
+            ch for ch in normalized if not unicodedata.combining(ch)
+        )
+        normalized = "".join(
+            ch for ch in normalized if ch.isalpha() or ch.isspace()
+        )
+        return normalized.lower().strip()
+
+    def _is_credit_label(self, label: str) -> bool:
+        normalized = self._normalize_credit_label(label)
+        return (
+            "credito" in normalized
+            or "creito" in normalized
+            or "crdito" in normalized
+        )
+
+    def _sale_log_payment_info(
+        self, session, sale_ids: list[int]
+    ) -> dict[int, dict[str, str]]:
         if not sale_ids:
             return {}
-        sales = session.exec(
-            select(Sale)
-            .where(Sale.id.in_(sale_ids))
-            .options(selectinload(Sale.payments))
+        conditions = [
+            CashboxLog.notes.like(f"%Venta%{sale_id}%") for sale_id in sale_ids
+        ]
+        if not conditions:
+            return {}
+        logs = session.exec(
+            select(CashboxLog)
+            .where(CashboxLog.action.in_(["Venta", "Inicial Credito"]))
+            .where(sa.or_(*conditions))
         ).all()
-        info: dict[str, dict[str, str]] = {}
-        for sale in sales:
-            payments = sale.payments or []
-            info[str(sale.id)] = {
-                "payment_method": self._payment_method_display(payments),
-                "payment_details": self._payment_summary_from_payments(payments),
+        info: dict[int, dict[str, str]] = {}
+        import re
+        for log in logs:
+            notes = log.notes or ""
+            match = re.search(r"Venta[^0-9]*(\d+)", notes, re.IGNORECASE)
+            if not match:
+                continue
+            try:
+                sale_id = int(match.group(1))
+            except ValueError:
+                continue
+            if sale_id not in sale_ids:
+                continue
+            if sale_id in info:
+                continue
+            info[sale_id] = {
+                "payment_method": (log.payment_method or "No especificado").strip()
+                or "No especificado",
+                "payment_details": notes,
             }
         return info
 
-    def _history_row_to_movement(
-        self,
-        row,
-        sale_payment_info: dict[str, dict[str, str]] | None = None,
-    ) -> Movement:
-        def _value(key: str, default: Any = None):
-            if isinstance(row, dict):
-                return row.get(key, default)
-            if hasattr(row, key):
-                return getattr(row, key)
-            try:
-                return row[key]
-            except (KeyError, IndexError, TypeError):
-                return default
-
-        timestamp = _value("timestamp")
-        movement_type = _value("type") or ""
-        source = _value("source") or ""
-        if source == "log":
-            movement_type = movement_type.capitalize()
-        movement_id = f"{source or 'row'}-{_value('id')}"
-        payment_details = _value("payment_details")
-        sale_id = _value("sale_id") or ""
-        payment_method = _value("payment_method") or "-"
-        if sale_payment_info and sale_id in sale_payment_info:
-            payment_method = sale_payment_info[sale_id].get("payment_method", "-")
-            payment_details = sale_payment_info[sale_id].get("payment_details", "")
-        if isinstance(payment_details, str):
-            stripped = payment_details.strip()
-            if stripped.startswith("{") or stripped.startswith("["):
-                try:
-                    payment_details = json.loads(stripped)
-                except json.JSONDecodeError:
-                    pass
-        return {
-            "id": movement_id,
-            "timestamp": timestamp.strftime("%Y-%m-%d %H:%M:%S") if timestamp else "",
-            "type": movement_type,
-            "product_description": _value("product_description") or "",
-            "quantity": _value("quantity") or 0,
-            "unit": _value("unit") or "-",
-            "total": _value("total") or 0,
-            "payment_method": payment_method or "-",
-            "payment_details": self._payment_details_text(payment_details),
-            "user": _value("user") or "Desconocido",
-            "sale_id": sale_id,
-        }
-
-    def _fetch_history(self, offset: int | None = None, limit: int | None = None) -> list[Movement]:
+    def _fetch_sales_history(
+        self, offset: int | None = None, limit: int | None = None
+    ) -> list[dict]:
         with rx.session() as session:
-            query, _ = self._history_base_select()
+            query = self._sales_query()
             if offset is not None:
                 query = query.offset(offset)
             if limit is not None:
                 query = query.limit(limit)
-            rows = session.execute(query).all()
-            sale_ids: set[int] = set()
-            for row in rows:
-                sale_id = None
-                if isinstance(row, dict):
-                    sale_id = row.get("sale_id")
-                elif hasattr(row, "sale_id"):
-                    sale_id = getattr(row, "sale_id")
-                else:
-                    try:
-                        sale_id = row["sale_id"]
-                    except (KeyError, IndexError, TypeError):
-                        sale_id = None
-                if sale_id:
-                    try:
-                        sale_ids.add(int(sale_id))
-                    except (TypeError, ValueError):
-                        continue
-            sale_payment_info = self._sale_payment_info(session, list(sale_ids))
-            return [
-                self._history_row_to_movement(row, sale_payment_info)
-                for row in rows
-            ]
+            sales = session.exec(query).all()
+            sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
+            log_payment_info = self._sale_log_payment_info(session, sale_ids)
 
-    def _history_total_count(self) -> int:
+            rows: list[dict] = []
+            for sale in sales:
+                payments = sale.payments or []
+                payment_method = self._payment_method_display(payments)
+                payment_details = self._payment_summary_from_payments(payments)
+                if payment_method.strip() in {"", "-"}:
+                    payment_method = "No especificado"
+                payment_method = self._sale_payment_method_label(
+                    sale, payments, payment_method
+                )
+                fallback = log_payment_info.get(sale.id)
+                if fallback and payment_method == "No especificado":
+                    payment_method = fallback.get("payment_method", payment_method)
+                    payment_details = fallback.get("payment_details", payment_details)
+                client_name = (
+                    sale.client.name if sale.client else "Sin cliente"
+                )
+                user_name = sale.user.username if sale.user else "Desconocido"
+                total_amount = self._round_currency(float(sale.total_amount or 0))
+                rows.append(
+                    {
+                        "sale_id": str(sale.id),
+                        "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                        if sale.timestamp
+                        else "",
+                        "client_name": client_name,
+                        "total": total_amount,
+                        "payment_method": payment_method,
+                        "payment_details": self._payment_details_text(payment_details),
+                        "user": user_name,
+                    }
+                )
+            return rows
+
+    def _sales_total_count(self) -> int:
         with rx.session() as session:
-            history_union = self._history_union_subquery()
-            count_query = select(sa.func.count()).select_from(history_union)
-            if self.history_filter_type != "Todos":
-                count_query = count_query.where(history_union.c.type == self.history_filter_type)
+            count_query = (
+                select(sa.func.count())
+                .select_from(Sale)
+                .where(Sale.status != SaleStatus.cancelled)
+            )
+            count_query = self._apply_sales_filters(count_query)
             return session.exec(count_query).one()
 
     @rx.var
-    def filtered_history(self) -> list[Movement]:
+    def filtered_history(self) -> list[dict]:
         if not self.current_user["privileges"]["view_historial"]:
             return []
         
         # Dependency to force update
         _ = self._history_update_trigger
         offset = (self.current_page_history - 1) * self.items_per_page
-        return self._fetch_history(offset=offset, limit=self.items_per_page)
+        return self._fetch_sales_history(offset=offset, limit=self.items_per_page)
 
     @rx.var
-    def paginated_history(self) -> list[Movement]:
+    def paginated_history(self) -> list[dict]:
         return self.filtered_history
 
     @rx.var
     def total_pages(self) -> int:
         _ = self._history_update_trigger
-        total_items = self._history_total_count()
+        total_items = self._sales_total_count()
         if total_items == 0:
             return 1
         return (total_items + self.items_per_page - 1) // self.items_per_page
@@ -418,6 +390,86 @@ class HistorialState(MixinState):
         self.staged_history_filter_end_date = value or ""
 
     @rx.event
+    def open_sale_detail(self, sale_id: str):
+        if not sale_id:
+            return rx.toast("Venta no encontrada.", duration=3000)
+        try:
+            sale_db_id = int(sale_id)
+        except ValueError:
+            return rx.toast("Venta no encontrada.", duration=3000)
+        with rx.session() as session:
+            sale = session.exec(
+                select(Sale)
+                .where(Sale.id == sale_db_id)
+                .options(
+                    selectinload(Sale.items),
+                    selectinload(Sale.payments),
+                    selectinload(Sale.user),
+                    selectinload(Sale.client),
+                )
+            ).first()
+            if not sale:
+                return rx.toast("Venta no encontrada.", duration=3000)
+            payments = sale.payments or []
+            payment_method = self._payment_method_display(payments)
+            payment_details = self._payment_summary_from_payments(payments)
+            if payment_method.strip() in {"", "-"}:
+                payment_method = "No especificado"
+            payment_method = self._sale_payment_method_label(
+                sale, payments, payment_method
+            )
+            if payment_method == "No especificado":
+                log_info = self._sale_log_payment_info(session, [sale.id]).get(
+                    sale.id, {}
+                )
+                if log_info:
+                    payment_method = log_info.get("payment_method", payment_method)
+                    payment_details = log_info.get(
+                        "payment_details", payment_details
+                    )
+            self.selected_sale_items = sale.items or []
+            self.selected_sale_id = str(sale.id)
+            self.selected_sale_summary = {
+                "sale_id": str(sale.id),
+                "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                if sale.timestamp
+                else "",
+                "client_name": sale.client.name if sale.client else "Sin cliente",
+                "user": sale.user.username if sale.user else "Desconocido",
+                "payment_method": payment_method,
+                "payment_details": self._payment_details_text(payment_details),
+                "total": self._round_currency(float(sale.total_amount or 0)),
+            }
+        self.sale_detail_modal_open = True
+
+    @rx.event
+    def close_sale_detail(self):
+        self.sale_detail_modal_open = False
+        self.selected_sale_id = ""
+        self.selected_sale_summary = {}
+        self.selected_sale_items = []
+
+    @rx.event
+    def set_sale_detail_modal_open(self, open_state: bool):
+        if open_state:
+            self.sale_detail_modal_open = True
+        else:
+            self.close_sale_detail()
+
+    @rx.var
+    def selected_sale_items_view(self) -> list[dict]:
+        items = self.selected_sale_items or []
+        return [
+            {
+                "description": item.product_name_snapshot,
+                "quantity": float(item.quantity or 0),
+                "unit_price": self._round_currency(float(item.unit_price or 0)),
+                "subtotal": self._round_currency(float(item.subtotal or 0)),
+            }
+            for item in items
+        ]
+
+    @rx.event
     def export_to_excel(self):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
@@ -426,29 +478,25 @@ class HistorialState(MixinState):
         
         headers = [
             "Fecha y Hora",
-            "Tipo",
-            "Descripcion",
-            "Cantidad",
-            "Unidad",
+            "Cliente",
             "Total",
             "Metodo de Pago",
+            "Usuario",
             "Detalle Pago",
         ]
         style_header_row(ws, 1, headers)
         
         rows = []
-        for movement in self._fetch_history():
+        for movement in self._fetch_sales_history():
             method_display = self._normalize_wallet_label(
                 movement.get("payment_method", "")
             )
             rows.append([
                 movement["timestamp"],
-                movement["type"],
-                movement["product_description"],
-                movement["quantity"],
-                movement["unit"],
+                movement.get("client_name", ""),
                 movement["total"],
                 method_display,
+                movement.get("user", ""),
                 self._payment_details_text(movement.get("payment_details", "")),
             ])
             
@@ -586,6 +634,37 @@ class HistorialState(MixinState):
                     stats["mixto"] += total_amount
 
         return {k: self._round_currency(v) for k, v in stats.items()}
+
+    @rx.var
+    def total_credit(self) -> float:
+        _ = self._history_update_trigger
+        total_credit = Decimal("0.00")
+        start_date, end_date = self._history_date_range()
+
+        with rx.session() as session:
+            query = (
+                select(Sale)
+                .where(Sale.status != SaleStatus.cancelled)
+                .options(selectinload(Sale.payments))
+            )
+            if start_date:
+                query = query.where(Sale.timestamp >= start_date)
+            if end_date:
+                query = query.where(Sale.timestamp <= end_date)
+
+            sales = session.exec(query).all()
+            for sale in sales:
+                payments = sale.payments or []
+                payment_method = self._payment_method_display(payments)
+                if payment_method.strip() in {"", "-"}:
+                    payment_method = "No especificado"
+                payment_method = self._sale_payment_method_label(
+                    sale, payments, payment_method
+                )
+                if self._is_credit_label(payment_method):
+                    total_credit += Decimal(str(sale.total_amount or 0))
+
+        return self._round_currency(total_credit)
 
     @rx.var
     def dynamic_payment_cards(self) -> list[dict]:

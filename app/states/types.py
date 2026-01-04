@@ -104,6 +104,7 @@ class CashboxSale(TypedDict):
     payment_label: str
     payment_breakdown: List[PaymentBreakdownItem]
     payment_details: str
+    amount: float
     total: float
     service_total: float
     items: List[TransactionItem]

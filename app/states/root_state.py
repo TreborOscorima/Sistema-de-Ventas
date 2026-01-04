@@ -8,9 +8,17 @@ from .venta_state import VentaState
 from .cash_state import CashState
 from .historial_state import HistorialState
 from .services_state import ServicesState
+from .cuentas_state import CuentasState
+from .clientes_state import ClientesState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin
 
+import datetime
+
 import reflex as rx
+from sqlalchemy import func
+from sqlmodel import select
+
+from app.models import SaleInstallment
 from .auth_state import AuthState
 from .ui_state import UIState
 from .config_state import ConfigState
@@ -20,9 +28,13 @@ from .venta_state import VentaState
 from .cash_state import CashState
 from .historial_state import HistorialState
 from .services_state import ServicesState
+from .cuentas_state import CuentasState
+from .clientes_state import ClientesState
 
 _mixins = [
     ServicesState,
+    CuentasState,
+    ClientesState,
     HistorialState,
     CashState,
     VentaState,
@@ -32,6 +44,17 @@ _mixins = [
     UIState,
     AuthState,
 ]
+
+@rx.event
+def check_overdue_alerts(self):
+    with rx.session() as session:
+        count = session.exec(
+            select(func.count())
+            .select_from(SaleInstallment)
+            .where(SaleInstallment.due_date < datetime.datetime.now())
+            .where(SaleInstallment.status != "paid")
+        ).one()
+    self.overdue_alerts_count = int(count or 0)
 
 _class_dict = {
     "__module__": __name__,
@@ -61,6 +84,10 @@ for _mixin in _mixins:
     for _name, _value in _mixin.__dict__.items():
         if _name.startswith("__"): continue
         _class_dict[_name] = _value
+
+_class_dict["__annotations__"]["overdue_alerts_count"] = int
+_class_dict["overdue_alerts_count"] = 0
+_class_dict["check_overdue_alerts"] = check_overdue_alerts
 
 # Create RootState dynamically to ensure BaseStateMeta processes all mixin methods
 RootState = type("RootState", (*_mixins, rx.State), _class_dict)
