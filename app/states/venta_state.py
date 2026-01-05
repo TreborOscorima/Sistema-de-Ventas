@@ -24,6 +24,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
     credit_installments: int = 1
     credit_interval_days: int = 30
     credit_initial_payment: str = "0"
+    is_processing_sale: bool = False
 
     @rx.var
     def selected_client_credit_available(self) -> float:
@@ -184,124 +185,136 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
 
     @rx.event
     async def confirm_sale(self):
-        if not self.current_user["privileges"]["create_ventas"]:
-            return rx.toast("No tiene permisos para crear ventas.", duration=3000)
-
-        if hasattr(self, "_require_cashbox_open"):
-            denial = self._require_cashbox_open()
-            if denial:
-                return denial
-
-        sale_total_guess = self.sale_total
-        username = self.current_user.get("username", "desconocido")
-        user_id = self.current_user.get("id")
-        logger.info(
-            "Inicio de venta usuario=%s id=%s total=%s",
-            username,
-            user_id,
-            sale_total_guess,
-        )
-        self._refresh_payment_feedback(total_override=sale_total_guess)
-
-        payment_summary = self._generate_payment_summary()
-        payment_label, payment_breakdown = self._payment_label_and_breakdown(
-            sale_total_guess
-        )
-
-        payment_data = {
-            "summary": payment_summary,
-            "method": self.payment_method,
-            "method_kind": self.payment_method_kind,
-            "label": payment_label,
-            "breakdown": payment_breakdown,
-            "total": sale_total_guess,
-            "cash": {
-                "amount": self._round_currency(self.payment_cash_amount),
-                "message": self.payment_cash_message,
-                "status": self.payment_cash_status,
-            },
-            "card": {"type": self.payment_card_type},
-            "wallet": {
-                "provider": self.payment_wallet_provider or self.payment_wallet_choice,
-                "choice": self.payment_wallet_choice,
-            },
-            "mixed": {
-                "cash": self._round_currency(self.payment_mixed_cash),
-                "card": self._round_currency(self.payment_mixed_card),
-                "wallet": self._round_currency(self.payment_mixed_wallet),
-                "non_cash_kind": self.payment_mixed_non_cash_kind,
-                "notes": self.payment_mixed_notes,
-                "message": self.payment_mixed_message,
-                "status": self.payment_mixed_status,
-            },
-        }
-        client_id = None
-        if isinstance(self.selected_client, dict):
-            client_id = self.selected_client.get("id")
+        self.is_processing_sale = True
+        yield
         try:
-            initial_payment = Decimal(str(self.credit_initial_payment or "0"))
-        except Exception:
-            initial_payment = Decimal("0")
-        payment_data.update(
-            {
-                "client_id": client_id,
-                "is_credit": self.is_credit_mode,
-                "installments": self.credit_installments,
-                "interval_days": self.credit_interval_days,
-                "initial_payment": initial_payment,
+            if not self.current_user["privileges"]["create_ventas"]:
+                yield rx.toast("No tiene permisos para crear ventas.", duration=3000)
+                return
+
+            if hasattr(self, "_require_cashbox_open"):
+                denial = self._require_cashbox_open()
+                if denial:
+                    yield denial
+                    return
+
+            sale_total_guess = self.sale_total
+            username = self.current_user.get("username", "desconocido")
+            user_id = self.current_user.get("id")
+            logger.info(
+                "Inicio de venta usuario=%s id=%s total=%s",
+                username,
+                user_id,
+                sale_total_guess,
+            )
+            self._refresh_payment_feedback(total_override=sale_total_guess)
+
+            payment_summary = self._generate_payment_summary()
+            payment_label, payment_breakdown = self._payment_label_and_breakdown(
+                sale_total_guess
+            )
+
+            payment_data = {
+                "summary": payment_summary,
+                "method": self.payment_method,
+                "method_kind": self.payment_method_kind,
+                "label": payment_label,
+                "breakdown": payment_breakdown,
+                "total": sale_total_guess,
+                "cash": {
+                    "amount": self._round_currency(self.payment_cash_amount),
+                    "message": self.payment_cash_message,
+                    "status": self.payment_cash_status,
+                },
+                "card": {"type": self.payment_card_type},
+                "wallet": {
+                    "provider": self.payment_wallet_provider
+                    or self.payment_wallet_choice,
+                    "choice": self.payment_wallet_choice,
+                },
+                "mixed": {
+                    "cash": self._round_currency(self.payment_mixed_cash),
+                    "card": self._round_currency(self.payment_mixed_card),
+                    "wallet": self._round_currency(self.payment_mixed_wallet),
+                    "non_cash_kind": self.payment_mixed_non_cash_kind,
+                    "notes": self.payment_mixed_notes,
+                    "message": self.payment_mixed_message,
+                    "status": self.payment_mixed_status,
+                },
             }
-        )
-
-        try:
-            item_dtos = [SaleItemDTO(**item) for item in self.new_sale_items]
-            payment_dto = PaymentInfoDTO(**payment_data)
-        except Exception:
-            return rx.toast("Datos de venta invalidos.", duration=3000)
-
-        reservation_id = None
-        if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
-            reservation_id = self.reservation_payment_id
-
-        result = None
-        async with get_async_session() as session:
+            client_id = None
+            if isinstance(self.selected_client, dict):
+                client_id = self.selected_client.get("id")
             try:
-                result = await SaleService.process_sale(
-                    session=session,
-                    user_id=user_id,
-                    items=item_dtos,
-                    payment_data=payment_dto,
-                    reservation_id=reservation_id,
-                )
-                await session.commit()
-                logger.info(
-                    "✅ Venta confirmada exitosamente. ID: %s",
-                    result.sale.id,
-                )
-            except (ValueError, StockError) as exc:
-                await session.rollback()
-                logger.warning("Validacion de venta fallida: %s", exc)
-                return rx.toast(str(exc), duration=3000)
+                initial_payment = Decimal(str(self.credit_initial_payment or "0"))
             except Exception:
-                await session.rollback()
-                logger.error("Error critico al confirmar venta.", exc_info=True)
-                return rx.toast("No se pudo procesar la venta.", duration=3000)
+                initial_payment = Decimal("0")
+            payment_data.update(
+                {
+                    "client_id": client_id,
+                    "is_credit": self.is_credit_mode,
+                    "installments": self.credit_installments,
+                    "interval_days": self.credit_interval_days,
+                    "initial_payment": initial_payment,
+                }
+            )
 
-        # Actualizamos el estado visual (UI) de Reflex.
-        self.last_sale_receipt = result.receipt_items
-        self.last_sale_reservation_context = result.reservation_context
-        self.last_sale_total = result.sale_total_display
-        self.last_sale_timestamp = result.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-        self.last_payment_summary = result.payment_summary
-        self.sale_receipt_ready = True
-        self.new_sale_items = []
-        self._reset_sale_form()
-        self._reset_payment_fields()
-        self._reset_credit_context()
-        self._refresh_payment_feedback()
+            try:
+                item_dtos = [SaleItemDTO(**item) for item in self.new_sale_items]
+                payment_dto = PaymentInfoDTO(**payment_data)
+            except Exception:
+                yield rx.toast("Datos de venta invalidos.", duration=3000)
+                return
 
-        if hasattr(self, "reload_history"):
-            self.reload_history()
-        if hasattr(self, "_cashbox_update_trigger"):
-            self._cashbox_update_trigger += 1
+            reservation_id = None
+            if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
+                reservation_id = self.reservation_payment_id
 
-        return rx.toast("Venta confirmada.", duration=3000)
+            result = None
+            async with get_async_session() as session:
+                try:
+                    result = await SaleService.process_sale(
+                        session=session,
+                        user_id=user_id,
+                        items=item_dtos,
+                        payment_data=payment_dto,
+                        reservation_id=reservation_id,
+                    )
+                    await session.commit()
+                    logger.info(
+                        "? Venta confirmada exitosamente. ID: %s",
+                        result.sale.id,
+                    )
+                except (ValueError, StockError) as exc:
+                    await session.rollback()
+                    logger.warning("Validacion de venta fallida: %s", exc)
+                    yield rx.toast(str(exc), duration=3000)
+                    return
+                except Exception:
+                    await session.rollback()
+                    logger.error("Error critico al confirmar venta.", exc_info=True)
+                    yield rx.toast("No se pudo procesar la venta.", duration=3000)
+                    return
+
+            # Actualizamos el estado visual (UI) de Reflex.
+            self.last_sale_receipt = result.receipt_items
+            self.last_sale_reservation_context = result.reservation_context
+            self.last_sale_total = result.sale_total_display
+            self.last_sale_timestamp = result.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            self.last_payment_summary = result.payment_summary
+            self.sale_receipt_ready = True
+            self.new_sale_items = []
+            self._reset_sale_form()
+            self._reset_payment_fields()
+            self._reset_credit_context()
+            self._refresh_payment_feedback()
+
+            if hasattr(self, "reload_history"):
+                self.reload_history()
+            if hasattr(self, "_cashbox_update_trigger"):
+                self._cashbox_update_trigger += 1
+
+            yield rx.toast("Venta confirmada.", duration=3000)
+            return
+        finally:
+            self.is_processing_sale = False

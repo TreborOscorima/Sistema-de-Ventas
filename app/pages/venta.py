@@ -882,10 +882,26 @@ def payment_sidebar() -> rx.Component:
         # Botones de acción
         rx.el.div(
             rx.el.button(
-                rx.icon("circle-check", class_name="h-5 w-5"),
-                "Confirmar Venta",
+                rx.cond(
+                    State.is_processing_sale,
+                    rx.hstack(
+                        rx.spinner(size="2"),
+                        rx.text("Procesando..."),
+                        spacing="2",
+                    ),
+                    rx.hstack(
+                        rx.icon("circle-check", class_name="h-5 w-5"),
+                        rx.text("Confirmar Venta"),
+                        spacing="2",
+                    ),
+                ),
                 on_click=State.confirm_sale,
-                class_name="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-lg",
+                disabled=State.is_processing_sale,
+                class_name=rx.cond(
+                    State.is_processing_sale,
+                    "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold transition-colors text-lg opacity-50 cursor-not-allowed",
+                    "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-lg",
+                ),
             ),
             rx.cond(
                 State.sale_receipt_ready,
@@ -1282,10 +1298,26 @@ def payment_mobile_section() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.button(
-                    rx.icon("circle-check", class_name="h-5 w-5"),
-                    "Confirmar Venta",
+                    rx.cond(
+                        State.is_processing_sale,
+                        rx.hstack(
+                            rx.spinner(size="2"),
+                            rx.text("Procesando..."),
+                            spacing="2",
+                        ),
+                        rx.hstack(
+                            rx.icon("circle-check", class_name="h-5 w-5"),
+                            rx.text("Confirmar Venta"),
+                            spacing="2",
+                        ),
+                    ),
                     on_click=State.confirm_sale,
-                    class_name="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700",
+                    disabled=State.is_processing_sale,
+                    class_name=rx.cond(
+                        State.is_processing_sale,
+                        "flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold opacity-50 cursor-not-allowed",
+                        "flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700",
+                    ),
                 ),
                 rx.cond(
                     State.sale_receipt_ready,
