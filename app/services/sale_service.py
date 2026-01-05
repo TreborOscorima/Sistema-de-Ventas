@@ -24,12 +24,15 @@ from app.models import (
 )
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.utils.calculations import calculate_subtotal, calculate_total
+from app.utils.logger import get_logger
 
 # NOTA: Ya no importamos get_async_session aquí porque la sesión viene desde fuera
 
 QTY_DECIMAL_QUANT = Decimal("0.0001")
 QTY_DISPLAY_QUANT = Decimal("0.01")
 QTY_INTEGER_QUANT = Decimal("1")
+
+logger = get_logger("SaleService")
 
 
 class StockError(ValueError):
@@ -452,235 +455,242 @@ class SaleService:
             ):
                 raise ValueError("Limite de credito excedido.")
 
-        timestamp = datetime.datetime.now()
-        sale_total_display = _money_to_float(sale_total)
-
-        new_sale = Sale(
-            timestamp=timestamp,
-            total_amount=sale_total,
-            status=SaleStatus.completed,
-            user_id=user_id,
-        )
-        if hasattr(Sale, "payment_method"):
-            new_sale.payment_method = sale_payment_label
-        if is_credit:
-            new_sale.payment_condition = "credito"
-            new_sale.client_id = client.id
-        session.add(new_sale)
-        await session.flush()
-
-        paid_now_total = sale_total
-        if is_credit:
-            paid_now_total = total_paid_now
-
-        payment_allocations = _build_sale_payments(payment_data, paid_now_total)
-        valid_allocations = [
-            (method_type, amount)
-            for method_type, amount in payment_allocations
-            if amount > 0
-        ]
-        for method_type, amount in valid_allocations:
-            method_code = _payment_method_code(method_type)
-            method_id = resolve_payment_method_id(method_code)
-            session.add(
-                SalePayment(
-                    sale_id=new_sale.id,
-                    amount=amount,
-                    method_type=method_type,
-                    reference_code=None,
-                    payment_method_id=method_id,
-                    created_at=timestamp,
-                )
+        try:
+            timestamp = datetime.datetime.now()
+            sale_total_display = _money_to_float(sale_total)
+    
+            new_sale = Sale(
+                timestamp=timestamp,
+                total_amount=sale_total,
+                status=SaleStatus.completed,
+                user_id=user_id,
             )
-
-        cashbox_amount = paid_now_total
-        if is_credit and initial_payment_input > Decimal("0.00"):
-            cashbox_amount = initial_payment_input
-
-        if cashbox_amount > 0:
-            cashbox_method_id = None
-            main_payment_code = None
-            if kind == "cash":
-                main_payment_code = "cash"
-            elif kind == "card":
-                card_type = _card_method_type(payment_data.card.type)
-                main_payment_code = _payment_method_code(card_type)
-            elif kind == "wallet":
-                wallet_type = _wallet_method_type(
-                    payment_data.wallet.provider or payment_data.wallet.choice
-                )
-                main_payment_code = _payment_method_code(wallet_type)
-            elif kind == "mixed":
-                if valid_allocations:
-                    primary_method_type, _ = max(
-                        valid_allocations, key=lambda item: item[1]
-                    )
-                    main_payment_code = _payment_method_code(primary_method_type)
-            else:
-                main_payment_code = _payment_method_code(
-                    _method_type_from_kind(kind)
-                )
-            cashbox_method_id = resolve_payment_method_id(main_payment_code)
-            action_label = "Venta"
-            notes = f"Venta {new_sale.id}"
+            if hasattr(Sale, "payment_method"):
+                new_sale.payment_method = sale_payment_label
             if is_credit:
-                action_label = "Inicial Credito"
-                notes = f"Adelanto Venta a Crédito #{new_sale.id}"
-                if client:
-                    client_name = (client.name or "").strip() or f"ID {client.id}"
-                    notes = f"{notes} - Cliente {client_name}"
-            session.add(
-                CashboxLog(
-                    action=action_label,
-                    amount=cashbox_amount,
-                    payment_method=payment_method,
-                    payment_method_id=cashbox_method_id,
-                    notes=notes,
-                    timestamp=timestamp,
-                    user_id=user_id,
-                )
-            )
-
-        if is_credit:
-            financed_amount = _round_money(sale_total - total_paid_now)
-            if financed_amount < Decimal("0.00"):
-                financed_amount = Decimal("0.00")
-            if financed_amount > 0:
-                installments_count = int(payment_data.installments or 1)
-                if installments_count < 1:
-                    raise ValueError("Cantidad de cuotas invalida.")
-                interval_days = int(payment_data.interval_days or 0)
-                if interval_days <= 0:
-                    interval_days = 30
-                for number, amount in enumerate(
-                    _split_installments(financed_amount, installments_count),
-                    start=1,
-                ):
-                    due_date = timestamp + datetime.timedelta(
-                        days=interval_days * number
-                    )
-                    installments_plan.append((due_date, amount))
-                    session.add(
-                        SaleInstallment(
-                            sale_id=new_sale.id,
-                            number=number,
-                            amount=amount,
-                            due_date=due_date,
-                            status="pending",
-                            paid_amount=Decimal("0.00"),
-                            payment_date=None,
-                        )
-                    )
-                client.current_debt = _round_money(
-                    client.current_debt + financed_amount
-                )
-                session.add(client)
-
-        for item, product in locked_products:
-            allows_decimal = decimal_units.get(
-                (product.unit or "").strip().lower(), False
-            )
-            scale = 4 if allows_decimal else 0
-            product.stock = func.round(
-                Product.stock - item["quantity"], scale
-            )
-            session.add(product)
-
-            sale_item = SaleItem(
-                sale_id=new_sale.id,
-                product_id=product.id,
-                quantity=item["quantity"],
-                unit_price=item["price"],
-                subtotal=item["subtotal"],
-                product_name_snapshot=product.description,
-                product_barcode_snapshot=product.barcode,
-            )
-            session.add(sale_item)
-
-        reservation_context = None
-        reservation_balance_display = _money_to_float(reservation_balance)
-        if reservation and reservation_balance > Decimal("0.00"):
-            applied_amount = reservation_balance
-            paid_before = reservation.paid_amount
-            reservation.paid_amount = _round_money(
-                reservation.paid_amount + applied_amount
-            )
-            if reservation.paid_amount >= reservation.total_amount:
-                reservation.status = ReservationStatus.paid
-            session.add(reservation)
-
-            res_item = SaleItem(
-                sale_id=new_sale.id,
-                product_id=None,
-                quantity=Decimal("1.0000"),
-                unit_price=applied_amount,
-                subtotal=applied_amount,
-                product_name_snapshot=(
-                    f"Alquiler {reservation.field_name} "
-                    f"({reservation.start_datetime} - {reservation.end_datetime})"
-                ),
-                product_barcode_snapshot=str(reservation.id),
-            )
-            session.add(res_item)
-
-            balance_after = reservation.total_amount - reservation.paid_amount
-            if balance_after < 0:
-                balance_after = Decimal("0.00")
-            reservation_context = {
-                "total": _money_to_float(reservation.total_amount),
-                "paid_before": _money_to_float(paid_before),
-                "paid_now": _money_to_float(applied_amount),
-                "paid_after": _money_to_float(reservation.paid_amount),
-                "balance_after": _money_to_float(balance_after),
-                "header": (
-                    f"Alquiler {reservation.field_name} "
-                    f"({reservation.start_datetime} - {reservation.end_datetime})"
-                ),
-                "products_total": _money_to_float(items_total),
-                "charged_total": sale_total_display,
-            }
-
-        receipt_items = list(product_snapshot)
-        if reservation and reservation_balance > Decimal("0.00"):
-            receipt_items.insert(
-                0,
-                {
-                    "description": f"Alquiler {reservation.field_name}",
-                    "quantity": 1,
-                    "unit": "Servicio",
-                    "price": reservation_balance_display,
-                    "subtotal": reservation_balance_display,
-                },
-            )
-
-        payment_summary = payment_data.summary or payment_method
-        if is_credit:
-            credit_lines = [
-                "CONDICION: CREDITO",
-                f"Pago Inicial: {_money_display(_round_money(initial_payment))}",
-                f"Saldo a Financiar: {_money_display(_round_money(financed_amount))}",
-                "Plan de Pagos:",
+                new_sale.payment_condition = "credito"
+                new_sale.client_id = client.id
+            session.add(new_sale)
+            await session.flush()
+            await session.refresh(new_sale)
+    
+            paid_now_total = sale_total
+            if is_credit:
+                paid_now_total = total_paid_now
+    
+            payment_allocations = _build_sale_payments(payment_data, paid_now_total)
+            valid_allocations = [
+                (method_type, amount)
+                for method_type, amount in payment_allocations
+                if amount > 0
             ]
-            if installments_plan:
-                for due_date, amount in installments_plan:
-                    credit_lines.append(
-                        f"- {due_date.strftime('%Y-%m-%d')}: {_money_display(amount)}"
+            for method_type, amount in valid_allocations:
+                method_code = _payment_method_code(method_type)
+                method_id = resolve_payment_method_id(method_code)
+                session.add(
+                    SalePayment(
+                        sale_id=new_sale.id,
+                        amount=amount,
+                        method_type=method_type,
+                        reference_code=None,
+                        payment_method_id=method_id,
+                        created_at=timestamp,
                     )
-            credit_lines.append("_____________________")
-            credit_block = "\n".join(credit_lines)
-            if payment_summary:
-                payment_summary = f"{payment_summary}\n{credit_block}"
-            else:
-                payment_summary = credit_block
-
-        return SaleProcessResult(
-            sale=new_sale,
-            receipt_items=receipt_items,
-            sale_total=sale_total,
-            sale_total_display=sale_total_display,
-            timestamp=timestamp,
-            payment_summary=payment_summary,
-            reservation_context=reservation_context,
-            reservation_balance=reservation_balance,
-            reservation_balance_display=reservation_balance_display,
-        )
+                )
+    
+            cashbox_amount = paid_now_total
+            if is_credit and initial_payment_input > Decimal("0.00"):
+                cashbox_amount = initial_payment_input
+    
+            if cashbox_amount > 0:
+                cashbox_method_id = None
+                main_payment_code = None
+                if kind == "cash":
+                    main_payment_code = "cash"
+                elif kind == "card":
+                    card_type = _card_method_type(payment_data.card.type)
+                    main_payment_code = _payment_method_code(card_type)
+                elif kind == "wallet":
+                    wallet_type = _wallet_method_type(
+                        payment_data.wallet.provider or payment_data.wallet.choice
+                    )
+                    main_payment_code = _payment_method_code(wallet_type)
+                elif kind == "mixed":
+                    if valid_allocations:
+                        primary_method_type, _ = max(
+                            valid_allocations, key=lambda item: item[1]
+                        )
+                        main_payment_code = _payment_method_code(primary_method_type)
+                else:
+                    main_payment_code = _payment_method_code(
+                        _method_type_from_kind(kind)
+                    )
+                cashbox_method_id = resolve_payment_method_id(main_payment_code)
+                action_label = "Venta"
+                notes = f"Venta {new_sale.id}"
+                if is_credit:
+                    action_label = "Inicial Credito"
+                    notes = f"Adelanto Venta a Crédito #{new_sale.id}"
+                    if client:
+                        client_name = (client.name or "").strip() or f"ID {client.id}"
+                        notes = f"{notes} - Cliente {client_name}"
+                session.add(
+                    CashboxLog(
+                        action=action_label,
+                        amount=cashbox_amount,
+                        payment_method=payment_method,
+                        payment_method_id=cashbox_method_id,
+                        notes=notes,
+                        timestamp=timestamp,
+                        user_id=user_id,
+                    )
+                )
+    
+            if is_credit:
+                financed_amount = _round_money(sale_total - total_paid_now)
+                if financed_amount < Decimal("0.00"):
+                    financed_amount = Decimal("0.00")
+                if financed_amount > 0:
+                    installments_count = int(payment_data.installments or 1)
+                    if installments_count < 1:
+                        raise ValueError("Cantidad de cuotas invalida.")
+                    interval_days = int(payment_data.interval_days or 0)
+                    if interval_days <= 0:
+                        interval_days = 30
+                    for number, amount in enumerate(
+                        _split_installments(financed_amount, installments_count),
+                        start=1,
+                    ):
+                        due_date = timestamp + datetime.timedelta(
+                            days=interval_days * number
+                        )
+                        installments_plan.append((due_date, amount))
+                        session.add(
+                            SaleInstallment(
+                                sale_id=new_sale.id,
+                                number=number,
+                                amount=amount,
+                                due_date=due_date,
+                                status="pending",
+                                paid_amount=Decimal("0.00"),
+                                payment_date=None,
+                            )
+                        )
+                    client.current_debt = _round_money(
+                        client.current_debt + financed_amount
+                    )
+                    session.add(client)
+    
+            for item, product in locked_products:
+                allows_decimal = decimal_units.get(
+                    (product.unit or "").strip().lower(), False
+                )
+                scale = 4 if allows_decimal else 0
+                product.stock = func.round(
+                    Product.stock - item["quantity"], scale
+                )
+                session.add(product)
+    
+                sale_item = SaleItem(
+                    sale_id=new_sale.id,
+                    product_id=product.id,
+                    quantity=item["quantity"],
+                    unit_price=item["price"],
+                    subtotal=item["subtotal"],
+                    product_name_snapshot=product.description,
+                    product_barcode_snapshot=product.barcode,
+                )
+                session.add(sale_item)
+    
+            reservation_context = None
+            reservation_balance_display = _money_to_float(reservation_balance)
+            if reservation and reservation_balance > Decimal("0.00"):
+                applied_amount = reservation_balance
+                paid_before = reservation.paid_amount
+                reservation.paid_amount = _round_money(
+                    reservation.paid_amount + applied_amount
+                )
+                if reservation.paid_amount >= reservation.total_amount:
+                    reservation.status = ReservationStatus.paid
+                session.add(reservation)
+    
+                res_item = SaleItem(
+                    sale_id=new_sale.id,
+                    product_id=None,
+                    quantity=Decimal("1.0000"),
+                    unit_price=applied_amount,
+                    subtotal=applied_amount,
+                    product_name_snapshot=(
+                        f"Alquiler {reservation.field_name} "
+                        f"({reservation.start_datetime} - {reservation.end_datetime})"
+                    ),
+                    product_barcode_snapshot=str(reservation.id),
+                )
+                session.add(res_item)
+    
+                balance_after = reservation.total_amount - reservation.paid_amount
+                if balance_after < 0:
+                    balance_after = Decimal("0.00")
+                reservation_context = {
+                    "total": _money_to_float(reservation.total_amount),
+                    "paid_before": _money_to_float(paid_before),
+                    "paid_now": _money_to_float(applied_amount),
+                    "paid_after": _money_to_float(reservation.paid_amount),
+                    "balance_after": _money_to_float(balance_after),
+                    "header": (
+                        f"Alquiler {reservation.field_name} "
+                        f"({reservation.start_datetime} - {reservation.end_datetime})"
+                    ),
+                    "products_total": _money_to_float(items_total),
+                    "charged_total": sale_total_display,
+                }
+    
+            receipt_items = list(product_snapshot)
+            if reservation and reservation_balance > Decimal("0.00"):
+                receipt_items.insert(
+                    0,
+                    {
+                        "description": f"Alquiler {reservation.field_name}",
+                        "quantity": 1,
+                        "unit": "Servicio",
+                        "price": reservation_balance_display,
+                        "subtotal": reservation_balance_display,
+                    },
+                )
+    
+            payment_summary = payment_data.summary or payment_method
+            if is_credit:
+                credit_lines = [
+                    "CONDICION: CREDITO",
+                    f"Pago Inicial: {_money_display(_round_money(initial_payment))}",
+                    f"Saldo a Financiar: {_money_display(_round_money(financed_amount))}",
+                    "Plan de Pagos:",
+                ]
+                if installments_plan:
+                    for due_date, amount in installments_plan:
+                        credit_lines.append(
+                            f"- {due_date.strftime('%Y-%m-%d')}: {_money_display(amount)}"
+                        )
+                credit_lines.append("_____________________")
+                credit_block = "\n".join(credit_lines)
+                if payment_summary:
+                    payment_summary = f"{payment_summary}\n{credit_block}"
+                else:
+                    payment_summary = credit_block
+    
+            await session.commit()
+            return SaleProcessResult(
+                sale=new_sale,
+                receipt_items=receipt_items,
+                sale_total=sale_total,
+                sale_total_display=sale_total_display,
+                timestamp=timestamp,
+                payment_summary=payment_summary,
+                reservation_context=reservation_context,
+                reservation_balance=reservation_balance,
+                reservation_balance_display=reservation_balance_display,
+            )
+        except Exception as e:
+            await session.rollback()
+            logger.error("Transacción fallida. Rollback ejecutado.", exc_info=True)
+            raise e
