@@ -18,7 +18,7 @@ class Product(rx.Model, table=True):
     """Modelo de producto de inventario."""
 
     barcode: str = Field(unique=True, index=True, nullable=False)
-    description: str = Field(nullable=False)
+    description: str = Field(nullable=False, index=True)
     category: str = Field(default="General", index=True)
     stock: Decimal = Field(
         default=Decimal("0.0000"),

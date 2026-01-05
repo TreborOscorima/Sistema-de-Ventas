@@ -245,10 +245,13 @@ class ConfigState(MixinState):
                 session.add(
                     PaymentMethod(
                         method_id=method["method_id"],
+                        code=method["method_id"],
                         name=method["name"],
                         description=method["description"],
                         kind=method["kind"],
                         enabled=True,
+                        is_active=True,
+                        allows_change=method["method_id"] == "cash",
                     )
                 )
             
@@ -477,10 +480,13 @@ class ConfigState(MixinState):
         with rx.session() as session:
             new_method = PaymentMethod(
                 method_id=method_id,
+                code=method_id,
                 name=name,
                 description=description or "Sin descripcion",
                 kind=kind,
-                enabled=True
+                enabled=True,
+                is_active=True,
+                allows_change=kind == "cash",
             )
             session.add(new_method)
             session.commit()
@@ -519,6 +525,7 @@ class ConfigState(MixinState):
             method_db = session.exec(select(PaymentMethod).where(PaymentMethod.method_id == method_id)).first()
             if method_db:
                 method_db.enabled = enabled
+                method_db.is_active = enabled
                 session.add(method_db)
                 session.commit()
         

@@ -12,6 +12,7 @@ from app.pages.login import login_page
 from app.pages.servicios import servicios_page
 from app.pages.cuentas import cuentas_page
 from app.pages.clientes import clientes_page
+from app.components.notification import NotificationHolder
 
 
 def cashbox_banner() -> rx.Component:
@@ -144,6 +145,7 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                 ),
             ),
             _toast_provider(),
+            NotificationHolder(),
             rx.el.div(
                 sidebar(),
                 rx.el.div(
@@ -172,7 +174,7 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
             ),
             class_name="font-['Inter']",
         ),
-        login_page(),
+        rx.fragment(NotificationHolder(), login_page()),
     )
 
 
@@ -265,6 +267,7 @@ app = rx.App(
 # Eventos de carga comunes para todas las páginas
 _common_on_load = [
     State.ensure_default_data,
+    State.ensure_payment_methods,
     State.load_categories,
     State.load_field_prices,
     State.load_users,

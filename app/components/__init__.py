@@ -2,6 +2,7 @@
 Reusable components for the Sistema de Ventas application.
 """
 from app.components.sidebar import sidebar
+from app.components.notification import NotificationHolder
 from app.components.ui import (
     BUTTON_STYLES,
     INPUT_STYLES,
@@ -26,6 +27,7 @@ from app.components.ui import (
 
 __all__ = [
     "sidebar",
+    "NotificationHolder",
     "BUTTON_STYLES",
     "INPUT_STYLES",
     "CARD_STYLES",

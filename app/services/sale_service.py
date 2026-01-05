@@ -6,6 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List
 
 from sqlmodel import select
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession  # ✅ IMPORTANTE
 
 from app.enums import PaymentMethodType, ReservationStatus, SaleStatus
@@ -13,6 +14,7 @@ from app.models import (
     CashboxLog,
     Client,
     FieldReservation,
+    PaymentMethod,
     Product,
     Sale,
     SaleInstallment,
@@ -193,6 +195,22 @@ def _build_sale_payments(
     return [(method_type, _round_money(amount))]
 
 
+def _payment_method_code(method_type: PaymentMethodType) -> str | None:
+    if method_type == PaymentMethodType.cash:
+        return "cash"
+    if method_type == PaymentMethodType.yape:
+        return "yape"
+    if method_type == PaymentMethodType.plin:
+        return "plin"
+    if method_type == PaymentMethodType.transfer:
+        return "transfer"
+    if method_type == PaymentMethodType.debit:
+        return "debit_card"
+    if method_type == PaymentMethodType.credit:
+        return "credit_card"
+    return None
+
+
 def _split_installments(total: Decimal, count: int) -> list[Decimal]:
     total = _round_money(total)
     if count <= 0:
@@ -224,6 +242,18 @@ class SaleService:
         payment_method = (payment_data.method or "").strip()
         if not payment_method:
             raise ValueError("Seleccione un metodo de pago.")
+
+        all_methods = (await session.exec(select(PaymentMethod))).all()
+        methods_map = {
+            (method.code or "").strip().lower(): method.id
+            for method in all_methods
+            if method.code
+        }
+
+        def resolve_payment_method_id(code: str | None) -> int | None:
+            if not code:
+                return None
+            return methods_map.get(code.strip().lower())
 
         # --- AQUI EMPIEZA LA LÓGICA DE NEGOCIO ---
         # Ya no usamos 'async with get_async_session()' porque 'session' ya llegó como argumento.
@@ -342,7 +372,7 @@ class SaleService:
             raise ValueError("Monto inicial invalido.")
         initial_payment_input = initial_payment
 
-        kind = (payment_data.method_kind or "other").lower()
+        kind = (payment_data.method_kind or "other").strip().lower()
         total_paid_now = Decimal("0.00")
         if kind == "cash":
             cash_amount = _to_decimal(payment_data.cash.amount)
@@ -443,17 +473,22 @@ class SaleService:
         if is_credit:
             paid_now_total = total_paid_now
 
-        for method_type, amount in _build_sale_payments(
-            payment_data, paid_now_total
-        ):
-            if amount <= 0:
-                continue
+        payment_allocations = _build_sale_payments(payment_data, paid_now_total)
+        valid_allocations = [
+            (method_type, amount)
+            for method_type, amount in payment_allocations
+            if amount > 0
+        ]
+        for method_type, amount in valid_allocations:
+            method_code = _payment_method_code(method_type)
+            method_id = resolve_payment_method_id(method_code)
             session.add(
                 SalePayment(
                     sale_id=new_sale.id,
                     amount=amount,
                     method_type=method_type,
                     reference_code=None,
+                    payment_method_id=method_id,
                     created_at=timestamp,
                 )
             )
@@ -463,6 +498,29 @@ class SaleService:
             cashbox_amount = initial_payment_input
 
         if cashbox_amount > 0:
+            cashbox_method_id = None
+            main_payment_code = None
+            if kind == "cash":
+                main_payment_code = "cash"
+            elif kind == "card":
+                card_type = _card_method_type(payment_data.card.type)
+                main_payment_code = _payment_method_code(card_type)
+            elif kind == "wallet":
+                wallet_type = _wallet_method_type(
+                    payment_data.wallet.provider or payment_data.wallet.choice
+                )
+                main_payment_code = _payment_method_code(wallet_type)
+            elif kind == "mixed":
+                if valid_allocations:
+                    primary_method_type, _ = max(
+                        valid_allocations, key=lambda item: item[1]
+                    )
+                    main_payment_code = _payment_method_code(primary_method_type)
+            else:
+                main_payment_code = _payment_method_code(
+                    _method_type_from_kind(kind)
+                )
+            cashbox_method_id = resolve_payment_method_id(main_payment_code)
             action_label = "Venta"
             notes = f"Venta {new_sale.id}"
             if is_credit:
@@ -476,6 +534,7 @@ class SaleService:
                     action=action_label,
                     amount=cashbox_amount,
                     payment_method=payment_method,
+                    payment_method_id=cashbox_method_id,
                     notes=notes,
                     timestamp=timestamp,
                     user_id=user_id,
@@ -518,13 +577,13 @@ class SaleService:
                 session.add(client)
 
         for item, product in locked_products:
-            new_stock = product.stock - item["quantity"]
-            if new_stock < 0:
-                new_stock = Decimal("0.00")
             allows_decimal = decimal_units.get(
                 (product.unit or "").strip().lower(), False
             )
-            product.stock = _round_quantity(new_stock, allows_decimal)
+            scale = 4 if allows_decimal else 0
+            product.stock = func.round(
+                Product.stock - item["quantity"], scale
+            )
             session.add(product)
 
             sale_item = SaleItem(

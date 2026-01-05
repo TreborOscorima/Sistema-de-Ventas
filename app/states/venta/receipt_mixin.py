@@ -7,6 +7,7 @@ from sqlmodel import select
 from sqlalchemy.orm import selectinload
 
 from app.models import Sale
+from app.services.receipt_service import ReceiptService
 
 
 class ReceiptMixin:
@@ -165,128 +166,20 @@ class ReceiptMixin:
                     getattr(self, "last_payment_method", None),
                 )
 
-        # Funciones auxiliares para formato de texto plano
-        def center(text, width=42):
-            return text.center(width)
-
-        def line(width=42):
-            return "-" * width
-
-        def row(left, right, width=42):
-            spaces = width - len(left) - len(right)
-            return left + " " * max(spaces, 1) + right
-
         company = self._company_settings_snapshot()
-        company_name = (company.get("company_name") or "").strip()
-        ruc = (company.get("ruc") or "").strip()
-        address = (company.get("address") or "").strip()
-        phone = (company.get("phone") or "").strip()
-        footer_message = (company.get("footer_message") or "").strip()
-        address_lines = self._wrap_receipt_lines(address, 42)
+        receipt_data = {
+            "items": receipt_items,
+            "total": total,
+            "timestamp": timestamp,
+            "user_name": user_name,
+            "payment_summary": payment_summary,
+            "reservation_context": reservation_context,
+            "currency_symbol": self.currency_symbol,
+        }
 
-        # Construir recibo l¡nea por l¡nea
-        receipt_lines = [""]
-        if company_name:
-            receipt_lines.append(center(company_name))
-            receipt_lines.append("")
-        if ruc:
-            receipt_lines.append(center(f"RUC: {ruc}"))
-            receipt_lines.append("")
-        for addr_line in address_lines:
-            receipt_lines.append(center(addr_line))
-        if address_lines:
-            receipt_lines.append("")
-        if phone:
-            receipt_lines.append(center(f"Tel: {phone}"))
-            receipt_lines.append("")
-        receipt_lines.extend(
-            [
-                line(),
-                center("COMPROBANTE DE PAGO"),
-                line(),
-                "",
-                f"Fecha: {timestamp}",
-                "",
-                f"Atendido por: {user_name}",
-                "",
-                line(),
-            ]
+        html_content = ReceiptService.generate_receipt_html(
+            receipt_data, company
         )
-
-        # Agregar contexto de reserva si existe
-        if reservation_context:
-            ctx = reservation_context
-            header = ctx.get("header", "")
-            products_total = ctx.get("products_total", 0)
-
-            if header:
-                receipt_lines.append("")
-                receipt_lines.append(center(header))
-                receipt_lines.append("")
-                receipt_lines.append(line())
-
-            receipt_lines.append("")
-            receipt_lines.append(row("TOTAL RESERVA:", self._format_currency(ctx["total"])))
-            receipt_lines.append("")
-            receipt_lines.append(
-                row("Adelanto previo:", self._format_currency(ctx["paid_before"]))
-            )
-            receipt_lines.append("")
-            receipt_lines.append(row("PAGO ACTUAL:", self._format_currency(ctx["paid_now"])))
-            receipt_lines.append("")
-
-            if products_total > 0:
-                receipt_lines.append(row("PRODUCTOS:", self._format_currency(products_total)))
-                receipt_lines.append("")
-
-            receipt_lines.append(
-                row("Saldo pendiente:", self._format_currency(ctx.get("balance_after", 0)))
-            )
-            receipt_lines.append("")
-            receipt_lines.append(line())
-
-        # Agregar ¡tems
-        for item in receipt_items:
-            receipt_lines.append("")
-            receipt_lines.append(item["description"])
-            receipt_lines.append(
-                f"{item['quantity']} {item['unit']} x {self._format_currency(item['price'])}    {self._format_currency(item['subtotal'])}"
-            )
-            receipt_lines.append("")
-            receipt_lines.append(line())
-
-        # Total y m‚todo de pago
-        receipt_lines.extend(
-            [
-                "",
-                row("TOTAL A PAGAR:", self._format_currency(total)),
-                "",
-                f"Metodo de Pago: {payment_summary}",
-                "",
-                line(),
-                "",
-            ]
-        )
-        if footer_message:
-            receipt_lines.append(center(footer_message))
-        receipt_lines.extend([" ", " ", " "])
-
-        receipt_text = chr(10).join(receipt_lines)
-
-        html_content = f"""<html>
-<head>
-<meta charset='utf-8'/>
-<title>Comprobante de Pago</title>
-<style>
-@page {{ size: 80mm auto; margin: 0; }}
-body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
-</style>
-</head>
-<body>
-<pre>{receipt_text}</pre>
-</body>
-</html>"""
 
         script = f"""
         const receiptWindow = window.open('', '_blank');
