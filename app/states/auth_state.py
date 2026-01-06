@@ -26,6 +26,10 @@ DEFAULT_USER_PRIVILEGES: Privileges = {
     "view_servicios": True,
     "manage_reservations": True,
     "manage_config": False,
+    "view_clientes": True,
+    "manage_clientes": True,
+    "view_cuentas": True,
+    "manage_cuentas": False,
 }
 
 ADMIN_PRIVILEGES: Privileges = {
@@ -44,6 +48,10 @@ ADMIN_PRIVILEGES: Privileges = {
     "view_servicios": True,
     "manage_reservations": True,
     "manage_config": True,
+    "view_clientes": True,
+    "manage_clientes": True,
+    "view_cuentas": True,
+    "manage_cuentas": True,
 }
 
 CASHIER_PRIVILEGES: Privileges = {
@@ -62,6 +70,10 @@ CASHIER_PRIVILEGES: Privileges = {
     "view_servicios": False,
     "manage_reservations": False,
     "manage_config": False,
+    "view_clientes": True,
+    "manage_clientes": True,
+    "view_cuentas": False,
+    "manage_cuentas": False,
 }
 
 SUPERADMIN_PRIVILEGES: Privileges = {key: True for key in DEFAULT_USER_PRIVILEGES}
@@ -82,6 +94,7 @@ class AuthState(MixinState):
     role_privileges: Dict[str, Privileges] = DEFAULT_ROLE_TEMPLATES.copy()
     
     error_message: str = ""
+    needs_initial_admin: bool = False
     show_user_form: bool = False
     new_user_data: NewUser = {
         "username": "",
@@ -285,16 +298,19 @@ class AuthState(MixinState):
         self.new_role_name = ""
 
     @rx.event
+    def ensure_roles_and_permissions(self):
+        with rx.session() as session:
+            self._bootstrap_default_roles(session)
+            user_count = session.exec(select(func.count(UserModel.id))).one()
+            self.needs_initial_admin = not user_count or user_count == 0
+
+    @rx.event
     def login(self, form_data: dict):
         username = form_data["username"].lower()
         password = form_data["password"].encode("utf-8")
-        
+
         with rx.session() as session:
-            self._bootstrap_default_roles(session)
-            # Check if any users exist (Bootstrap Admin)
-            user_count = session.exec(select(func.count(UserModel.id))).one()
-            
-            if user_count == 0:
+            if self.needs_initial_admin:
                 if username == "admin" and form_data["password"] == "admin":
                     # Create superadmin
                     password_hash = bcrypt.hashpw(
@@ -315,9 +331,10 @@ class AuthState(MixinState):
                     )
                     session.add(admin_user)
                     session.commit()
-                    
+
                     self.token = create_access_token("admin")
                     self.error_message = ""
+                    self.needs_initial_admin = False
                     return rx.redirect("/")
                 else:
                     self.error_message = "Sistema no inicializado. Ingrese como admin/admin."
@@ -508,12 +525,22 @@ class AuthState(MixinState):
 
         with rx.session() as session:
             role = self._get_role_by_name(session, role_name)
+            # CASO 1: El rol no existe -> Lo creamos nuevo con los permisos del form
             if not role:
                 role = self._ensure_role(
                     session,
                     role_name,
                     self.new_user_data["privileges"],
                     overwrite=True,
+                )
+            # CASO 2: El rol YA existe y NO es Superadmin -> Actualizamos sus permisos
+            # Esto permite redefinir qué puede hacer un 'Cajero' o 'Admin' desde la UI
+            elif role.name != "Superadmin":
+                role = self._ensure_role(
+                    session,
+                    role_name,
+                    self.new_user_data["privileges"],
+                    overwrite=True, # <--- La clave: fuerza la actualización en la DB
                 )
             if self.editing_user:
                 # Update existing user
@@ -525,13 +552,23 @@ class AuthState(MixinState):
                     return rx.toast("Usuario a editar no encontrado.", duration=3000)
                     
                 if self.new_user_data["password"]:
-                    if (
-                        self.new_user_data["password"]
-                        != self.new_user_data["confirm_password"]
-                    ):
-                        return rx.toast("Las contrase¤as no coinciden.", duration=3000)
+                    password = self.new_user_data["password"]
+                    if len(password) < 6:
+                        return rx.toast(
+                            "La contraseña debe tener al menos 6 caracteres.",
+                            duration=3000,
+                        )
+                    if password.lower() == username:
+                        return rx.toast(
+                            "La contraseña no puede ser igual al usuario.",
+                            duration=3000,
+                        )
+                    if password != self.new_user_data["confirm_password"]:
+                        return rx.toast(
+                            "Las contrase¤as no coinciden.", duration=3000
+                        )
                     password_hash = bcrypt.hashpw(
-                        self.new_user_data["password"].encode(), bcrypt.gensalt()
+                        password.encode(), bcrypt.gensalt()
                     ).decode()
                     user_to_update.password_hash = password_hash
                     
@@ -552,13 +589,26 @@ class AuthState(MixinState):
                 
                 if existing_user:
                     return rx.toast("El nombre de usuario ya existe.", duration=3000)
-                if not self.new_user_data["password"]:
-                    return rx.toast("La contrase¤a no puede estar vac¡a.", duration=3000)
-                if self.new_user_data["password"] != self.new_user_data["confirm_password"]:
+                password = self.new_user_data["password"]
+                if not password:
+                    return rx.toast(
+                        "La contrase¤a no puede estar vac¡a.", duration=3000
+                    )
+                if len(password) < 6:
+                    return rx.toast(
+                        "La contraseña debe tener al menos 6 caracteres.",
+                        duration=3000,
+                    )
+                if password.lower() == username:
+                    return rx.toast(
+                        "La contraseña no puede ser igual al usuario.",
+                        duration=3000,
+                    )
+                if password != self.new_user_data["confirm_password"]:
                     return rx.toast("Las contrase¤as no coinciden.", duration=3000)
-                    
+
                 password_hash = bcrypt.hashpw(
-                    self.new_user_data["password"].encode(), bcrypt.gensalt()
+                    password.encode(), bcrypt.gensalt()
                 ).decode()
                 
                 new_user = UserModel(
@@ -578,20 +628,24 @@ class AuthState(MixinState):
     def delete_user(self, username: str):
         if not self.current_user["privileges"]["manage_users"]:
             return rx.toast("No tiene permisos para eliminar usuarios.", duration=3000)
-        if username == "admin":
-            return rx.toast("No se puede eliminar al superadmin.", duration=3000)
         if username == self.current_user["username"]:
             return rx.toast("No puedes eliminar tu propio usuario.", duration=3000)
             
         with rx.session() as session:
             user = session.exec(
-                select(UserModel).where(UserModel.username == username)
+                select(UserModel)
+                .where(UserModel.username == username)
+                .options(selectinload(UserModel.role))
             ).first()
             
-            if user:
-                session.delete(user)
-                session.commit()
-                self.load_users()
-                return rx.toast(f"Usuario {username} eliminado.", duration=3000)
+            if not user:
+                return rx.toast(f"Usuario {username} no encontrado.", duration=3000)
+            role_name = (user.role.name if user.role else "").strip().lower()
+            if role_name == "superadmin":
+                return rx.toast("No se puede eliminar al superadmin.", duration=3000)
+            session.delete(user)
+            session.commit()
+            self.load_users()
+            return rx.toast(f"Usuario {username} eliminado.", duration=3000)
                 
         return rx.toast(f"Usuario {username} no encontrado.", duration=3000)

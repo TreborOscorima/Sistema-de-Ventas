@@ -266,6 +266,7 @@ app = rx.App(
 
 # Eventos de carga comunes para todas las páginas
 _common_on_load = [
+    State.ensure_roles_and_permissions,
     State.ensure_default_data,
     State.ensure_payment_methods,
     State.load_categories,

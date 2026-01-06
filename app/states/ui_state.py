@@ -120,6 +120,8 @@ class UIState(MixinState):
             "Ingreso": "view_ingresos",
             "Punto de Venta": "view_ventas",
             "Gestion de Caja": "view_cashbox",
+            "Clientes": "view_clientes",
+            "Cuentas Corrientes": "view_cuentas",
             "Inventario": "view_inventario",
             "Historial": "view_historial",
             "Servicios": "view_servicios",

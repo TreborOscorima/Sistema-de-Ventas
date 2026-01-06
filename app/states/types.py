@@ -161,6 +161,10 @@ class Privileges(TypedDict):
     view_servicios: bool
     manage_reservations: bool
     manage_config: bool
+    view_clientes: bool
+    manage_clientes: bool
+    view_cuentas: bool
+    manage_cuentas: bool
 
 class NewUser(TypedDict):
     username: str

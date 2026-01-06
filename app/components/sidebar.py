@@ -27,7 +27,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         & (State.overdue_alerts_count > 0)
         & State.sidebar_open
     )
-    return rx.link(
+    link = rx.link(
         rx.el.div(
             rx.icon(icon, class_name="h-5 w-5"),
             rx.el.span(
@@ -52,6 +52,23 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         ),
         href=route,
         class_name="w-full no-underline",
+    )
+    return rx.cond(
+        page == "Clientes",
+        rx.cond(
+            State.current_user["privileges"]["view_clientes"],
+            link,
+            rx.fragment(),
+        ),
+        rx.cond(
+            page == "Cuentas Corrientes",
+            rx.cond(
+                State.current_user["privileges"]["view_cuentas"],
+                link,
+                rx.fragment(),
+            ),
+            link,
+        ),
     )
 
 
