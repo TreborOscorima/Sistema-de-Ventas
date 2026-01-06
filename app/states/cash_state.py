@@ -22,7 +22,13 @@ from app.models import (
 )
 from .types import CashboxSale, CashboxSession, CashboxLogEntry, Movement
 from .mixin_state import MixinState
-from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
+from app.utils.exports import (
+    create_excel_workbook,
+    style_header_row,
+    add_data_rows,
+    auto_adjust_column_widths,
+    create_pdf_report,
+)
 
 class CashState(MixinState):
     # cashbox_sales: List[CashboxSale] = [] # Removed in favor of DB
@@ -1060,6 +1066,95 @@ class CashState(MixinState):
         output.seek(0)
         
         return rx.download(data=output.getvalue(), filename="gestion_caja.xlsx")
+
+    @rx.event
+    def export_cashbox_close_pdf(self):
+        if not (
+            self.current_user["privileges"]["view_cashbox"]
+            or self.current_user["privileges"]["export_data"]
+        ):
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+
+        report_date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
+            "%Y-%m-%d"
+        )
+        summary = self.summary_by_method or self._build_cashbox_summary(report_date)
+        day_sales = self.cashbox_close_summary_sales or self._get_day_sales(
+            report_date
+        )
+
+        if not summary and not day_sales:
+            return rx.toast("No hay movimientos de caja para exportar.", duration=3000)
+
+        info_dict = {
+            "Fecha Cierre": report_date,
+            "Responsable": self.current_user["username"],
+        }
+        total_value = 0.0
+        for item in summary:
+            total = item.get("total", 0) or 0
+            if total <= 0:
+                continue
+            method = (item.get("method", "No especificado") or "").strip() or "No especificado"
+            info_dict[f"Total {method}"] = self._format_currency(total)
+            total_value += float(total)
+
+        if total_value > 0:
+            info_dict["Total Cierre"] = self._format_currency(total_value)
+
+        def _format_time(timestamp: str) -> str:
+            if not timestamp:
+                return ""
+            if " " in timestamp:
+                return timestamp.split(" ", 1)[1]
+            try:
+                parsed = datetime.datetime.fromisoformat(timestamp)
+                return parsed.strftime("%H:%M:%S")
+            except ValueError:
+                return timestamp
+
+        def _format_amount(value: Any) -> str:
+            try:
+                amount = float(value or 0)
+            except (TypeError, ValueError):
+                amount = 0.0
+            return self._format_currency(amount)
+
+        headers = ["Hora", "Operación", "Método", "Referencia", "Monto"]
+        data = []
+        for sale in day_sales:
+            if sale.get("is_deleted"):
+                continue
+            operation_raw = sale.get("action") or sale.get("type") or "Venta"
+            operation = str(operation_raw).replace("_", " ").strip().title() or "Venta"
+            method_raw = sale.get("payment_label") or sale.get("payment_method") or ""
+            method_label = (
+                self._normalize_wallet_label(method_raw) if method_raw else "No especificado"
+            )
+            reference = self._payment_details_text(sale.get("payment_details", ""))
+            amount = sale.get("total")
+            if amount is None:
+                amount = sale.get("amount", 0)
+            data.append(
+                [
+                    _format_time(sale.get("timestamp", "")),
+                    operation,
+                    method_label,
+                    reference,
+                    _format_amount(amount),
+                ]
+            )
+
+        output = io.BytesIO()
+        create_pdf_report(
+            output,
+            "Reporte de Cierre de Caja",
+            data,
+            headers,
+            info_dict,
+        )
+
+        return rx.download(data=output.getvalue(), filename="cierre_caja.pdf")
 
     @rx.event
     def export_cashbox_sessions(self):

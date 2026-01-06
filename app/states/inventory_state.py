@@ -516,17 +516,16 @@ class InventoryState(MixinState):
         wb, ws = create_excel_workbook("Inventario Actual")
         
         headers = [
-            "Codigo de Barra",
-            "Descripcion",
-            "Categoria",
+            "Código",
+            "Descripción",
+            "Categoría",
+            "Stock",
             "Unidad",
-            "Stock Sistema",
-            "Precio Compra",
+            "Costo Unit.",
             "Precio Venta",
-            "Valor Total",
-            "Conteo Fisico",
-            "Diferencia",
-            "Notas Adicionales",
+            "Inversión Total (Costo)",
+            "Venta Potencial Total",
+            "Margen Unitario",
         ]
         style_header_row(ws, 1, headers)
         
@@ -539,26 +538,30 @@ class InventoryState(MixinState):
             description = product.description
             category = product.category
             unit = product.unit
-            stock = product.stock
-            purchase_price = product.purchase_price
-            sale_price = product.sale_price
-            total_value = stock * purchase_price
+            stock = product.stock or 0
+            purchase_price = product.purchase_price or 0
+            sale_price = product.sale_price or 0
+            investment_total = stock * purchase_price
+            potential_total = stock * sale_price
+            margin_unit = sale_price - purchase_price
             
             rows.append([
                 barcode,
                 description,
                 category,
-                unit,
                 stock,
+                unit,
                 purchase_price,
                 sale_price,
-                total_value,
-                "",  # Conteo Fisico
-                "",  # Diferencia
-                "",  # Notas Adicionales
+                investment_total,
+                potential_total,
+                margin_unit,
             ])
             
         add_data_rows(ws, rows, 2)
+        for row_idx in range(2, 2 + len(rows)):
+            for col_idx in (6, 7, 8, 9, 10):
+                ws.cell(row=row_idx, column=col_idx).number_format = "#,##0.00"
         auto_adjust_column_widths(ws)
         
         output = io.BytesIO()

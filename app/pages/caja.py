@@ -561,6 +561,20 @@ def close_cashbox_modal() -> rx.Component:
                 on_click=State.close_cashbox_close_modal,
                 class_name=BUTTON_STYLES["secondary"],
             ),
+            rx.cond(
+                (State.cashbox_close_sales.length() > 0)
+                | (State.cashbox_close_totals.length() > 0),
+                rx.el.button(
+                    rx.icon("file-text", class_name="h-4 w-4"),
+                    "Descargar PDF",
+                    on_click=State.export_cashbox_close_pdf,
+                    class_name=(
+                        "flex items-center gap-2 bg-red-600 text-white px-4 py-2 "
+                        "rounded-md hover:bg-red-700 transition-colors"
+                    ),
+                ),
+                rx.fragment(),
+            ),
             rx.el.button(
                 rx.icon("lock", class_name="h-4 w-4"),
                 "Confirmar Cierre",

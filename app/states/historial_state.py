@@ -477,36 +477,91 @@ class HistorialState(MixinState):
         wb, ws = create_excel_workbook("Historial Movimientos")
         
         headers = [
-            "Fecha y Hora",
+            "ID Venta",
+            "Fecha",
             "Cliente",
+            "Productos Vendidos",
             "Total",
-            "Metodo de Pago",
+            "Método Pago",
             "Usuario",
-            "Detalle Pago",
+            "Notas",
         ]
         style_header_row(ws, 1, headers)
-        
-        rows = []
-        for movement in self._fetch_sales_history():
-            method_display = self._normalize_wallet_label(
-                movement.get("payment_method", "")
+
+        def _format_quantity(value: Any) -> str:
+            qty = Decimal(str(value or 0))
+            text = format(qty.normalize(), "f")
+            if "." in text:
+                text = text.rstrip("0").rstrip(".")
+            return text or "0"
+
+        with rx.session() as session:
+            query = (
+                select(Sale)
+                .where(Sale.status != SaleStatus.cancelled)
+                .options(
+                    selectinload(Sale.items),
+                    selectinload(Sale.payments),
+                    selectinload(Sale.user),
+                    selectinload(Sale.client),
+                )
             )
-            rows.append([
-                movement["timestamp"],
-                movement.get("client_name", ""),
-                movement["total"],
-                method_display,
-                movement.get("user", ""),
-                self._payment_details_text(movement.get("payment_details", "")),
-            ])
-            
+            query = self._apply_sales_filters(query).order_by(
+                Sale.timestamp.desc()
+            )
+            sales = session.exec(query).all()
+            sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
+            log_payment_info = self._sale_log_payment_info(session, sale_ids)
+
+            rows = []
+            for sale in sales:
+                payments = sale.payments or []
+                payment_method = self._payment_method_display(payments)
+                payment_details = self._payment_summary_from_payments(payments)
+                if payment_method.strip() in {"", "-"}:
+                    payment_method = "No especificado"
+                payment_method = self._sale_payment_method_label(
+                    sale, payments, payment_method
+                )
+                fallback = log_payment_info.get(sale.id)
+                if fallback and payment_method == "No especificado":
+                    payment_method = fallback.get("payment_method", payment_method)
+                    payment_details = fallback.get(
+                        "payment_details", payment_details
+                    )
+
+                items = sale.items or []
+                item_parts = []
+                for item in items:
+                    name = (item.product_name_snapshot or "").strip() or "Producto"
+                    quantity = _format_quantity(item.quantity)
+                    item_parts.append(f"{name} (x{quantity})")
+                products_summary = ", ".join(item_parts) if item_parts else "-"
+
+                client_name = sale.client.name if sale.client else "Sin cliente"
+                user_name = sale.user.username if sale.user else "Desconocido"
+                total_amount = self._round_currency(float(sale.total_amount or 0))
+
+                rows.append([
+                    str(sale.id),
+                    sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                    if sale.timestamp
+                    else "",
+                    client_name,
+                    products_summary,
+                    total_amount,
+                    self._normalize_wallet_label(payment_method),
+                    user_name,
+                    self._payment_details_text(payment_details),
+                ])
+
         add_data_rows(ws, rows, 2)
         auto_adjust_column_widths(ws)
-        
+
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        
+
         return rx.download(data=output.getvalue(), filename="historial_movimientos.xlsx")
 
     def _parse_payment_amount(self, text: str, keyword: str) -> Decimal:

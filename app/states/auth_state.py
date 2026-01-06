@@ -305,6 +305,46 @@ class AuthState(MixinState):
             self.needs_initial_admin = not user_count or user_count == 0
 
     @rx.event
+    def ensure_view_clientes(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("view_clientes"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para ver Clientes.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
+    def ensure_view_cuentas(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("view_cuentas"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para ver Cuentas.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
+    def ensure_admin_access(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        # Verifica roles exactos segun tu DB (Mayusculas importan)
+        if self.current_user["role"] not in ["Superadmin", "Administrador"]:
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: Se requiere nivel de Administrador.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
     def login(self, form_data: dict):
         username = form_data["username"].lower()
         password = form_data["password"].encode("utf-8")
