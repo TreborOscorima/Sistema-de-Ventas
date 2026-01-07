@@ -233,17 +233,72 @@ class CartMixin:
             )
 
         description = self.new_sale_item["description"].strip()
+        barcode = str(self.new_sale_item.get("barcode", "") or "").strip()
+
+        existing_index = None
+        existing_item = None
+        for idx, item in enumerate(self.new_sale_items):
+            item_barcode = str(item.get("barcode", "") or "").strip()
+            item_description = str(item.get("description", "") or "").strip()
+            if barcode and item_barcode == barcode:
+                existing_index = idx
+                existing_item = item
+                break
+            if item_description == description:
+                existing_index = idx
+                existing_item = item
+                break
+
+        existing_qty = float(existing_item["quantity"]) if existing_item else 0.0
+        new_qty = float(self.new_sale_item["quantity"])
+        total_qty = existing_qty + new_qty
         with rx.session() as session:
-            product = session.exec(
-                select(Product).where(Product.description == description)
-            ).first()
+            if barcode:
+                product = session.exec(
+                    select(Product).where(Product.barcode == barcode)
+                ).first()
+            else:
+                product = session.exec(
+                    select(Product).where(Product.description == description)
+                ).first()
 
             if not product:
                 return rx.toast(
                     "Producto no encontrado en el inventario.", duration=3000
                 )
-            if product.stock < self.new_sale_item["quantity"]:
-                return rx.toast("Stock insuficiente para realizar la venta.", duration=3000)
+            if product.stock < total_qty:
+                remaining = max(product.stock - existing_qty, 0)
+                unit = product.unit or self.new_sale_item.get("unit", "")
+                in_cart_display = self._normalize_quantity_value(existing_qty, unit)
+                remaining_display = self._normalize_quantity_value(remaining, unit)
+                return rx.toast(
+                    f"Stock insuficiente: ya tienes {in_cart_display} en el carrito y solo quedan {remaining_display} disponibles.",
+                    duration=3000,
+                )
+
+        if existing_item is not None:
+            updated_item = existing_item.copy()
+            unit = updated_item.get("unit", "")
+            updated_item["quantity"] = self._normalize_quantity_value(
+                existing_qty + new_qty, unit
+            )
+            updated_item["subtotal"] = self._round_currency(
+                updated_item["quantity"] * updated_item["price"]
+            )
+            items = list(self.new_sale_items)
+            items[existing_index] = updated_item
+            self.new_sale_items = items
+            self._reset_sale_form()
+            self._refresh_payment_feedback()
+            return [
+                rx.toast(
+                    f"Cantidad actualizada a {updated_item['quantity']}",
+                    duration=2000,
+                ),
+                rx.call_script(
+                    "setTimeout(() => { const el = document.getElementById('venta_barcode_input'); if (el) { el.focus(); el.select(); } }, 0);"
+                ),
+            ]
 
         item_copy = self.new_sale_item.copy()
         item_copy["temp_id"] = str(uuid.uuid4())
@@ -251,9 +306,15 @@ class CartMixin:
         self.new_sale_items.append(item_copy)
         self._reset_sale_form()
         self._refresh_payment_feedback()
-        return rx.call_script(
-            "setTimeout(() => { const el = document.getElementById('venta_barcode_input'); if (el) { el.focus(); el.select(); } }, 0);"
-        )
+        return [
+            rx.toast(
+                f"Producto '{item_copy['description']}' agregado",
+                duration=2000,
+            ),
+            rx.call_script(
+                "setTimeout(() => { const el = document.getElementById('venta_barcode_input'); if (el) { el.focus(); el.select(); } }, 0);"
+            ),
+        ]
 
     @rx.event
     def remove_item_from_sale(self, temp_id: str):
