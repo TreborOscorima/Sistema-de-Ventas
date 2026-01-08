@@ -527,13 +527,35 @@ class SaleService:
                     )
                 cashbox_method_id = resolve_payment_method_id(main_payment_code)
                 action_label = "Venta"
-                notes = f"Venta {new_sale.id}"
+                summary_items: list[str] = []
+                if reservation is not None:
+                    field_name = (reservation.field_name or "").strip()
+                    if field_name:
+                        summary_items.append(f"Alquiler {field_name}")
+                    else:
+                        summary_items.append("Alquiler")
+                for item in decimal_snapshot:
+                    description = (item.get("description") or "").strip()
+                    if not description:
+                        continue
+                    qty_value = _to_decimal(item.get("quantity", 0))
+                    if qty_value == qty_value.to_integral_value():
+                        qty_display = str(int(qty_value))
+                    else:
+                        qty_display = format(qty_value.normalize(), "f").rstrip("0").rstrip(".")
+                    summary_items.append(f"{description} (x{qty_display})")
+                summary_text = ", ".join(summary_items)
+                notes = f"#{new_sale.id}: {summary_text}"
                 if is_credit:
                     action_label = "Inicial Credito"
-                    notes = f"Adelanto Venta a Crédito #{new_sale.id}"
+                    client_name = ""
                     if client:
                         client_name = (client.name or "").strip() or f"ID {client.id}"
+                    notes = f"Inicial #{new_sale.id} ({summary_text})"
+                    if client_name:
                         notes = f"{notes} - Cliente {client_name}"
+                if len(notes) > 250:
+                    notes = notes[:250]
                 session.add(
                     CashboxLog(
                         action=action_label,
