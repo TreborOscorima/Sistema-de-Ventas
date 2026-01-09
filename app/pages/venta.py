@@ -150,7 +150,7 @@ def client_selector() -> rx.Component:
                         class_name="h-10 w-10 flex items-center justify-center rounded-lg border text-indigo-600 hover:bg-indigo-50",
                         title="Nuevo cliente",
                     ),
-                    class_name="flex items-center gap-2 w-full",
+                    class_name="flex items-center gap-1 w-full",
                 ),
                 rx.cond(
                     State.client_suggestions.length() > 0,
@@ -182,11 +182,11 @@ def client_selector() -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
-                spacing="2",
+                spacing="1",
                 class_name="w-full",
             ),
         ),
-        class_name="w-full p-3 bg-white rounded-lg border shadow-sm",
+        class_name="w-full p-2.5 bg-white rounded-lg border shadow-sm",
     )
 
 
@@ -207,11 +207,11 @@ def quick_add_bar() -> rx.Component:
                     placeholder="Código...",
                     on_blur=lambda e: State.process_sale_barcode_from_input(e),
                     on_key_down=lambda k: State.handle_key_down(k),
-                    class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none",
+                    class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
                     type="text",
                     auto_complete="off",
                 ),
-                class_name="flex items-center gap-2 px-3 py-2.5 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full sm:w-48 lg:w-56",
+                class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full sm:w-48 lg:w-56",
             ),
             # Búsqueda de producto
             rx.el.div(
@@ -222,11 +222,11 @@ def quick_add_bar() -> rx.Component:
                             value=State.new_sale_item["description"],
                             on_change=lambda val: State.handle_sale_change("description", val),
                             placeholder="Buscar producto...",
-                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none",
+                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
                         ),
                         debounce_timeout=300,
                     ),
-                    class_name="flex items-center gap-2 px-3 py-2.5 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
+                    class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                 ),
                 rx.cond(
                     State.autocomplete_suggestions.length() > 0,
@@ -245,7 +245,7 @@ def quick_add_bar() -> rx.Component:
                 ),
                 class_name="relative flex-1 min-w-0",
             ),
-            class_name="flex flex-col sm:flex-row gap-2 flex-1",
+            class_name="flex flex-col sm:flex-row gap-1 flex-1",
         ),
         # Fila 2: Cantidad, Precio, Subtotal y Botón
         rx.el.div(
@@ -258,7 +258,7 @@ def quick_add_bar() -> rx.Component:
                     step="0.01",
                     value=State.new_sale_item["quantity"].to_string(),
                     on_change=lambda val: State.handle_sale_change("quantity", val),
-                    class_name="w-full px-3 py-2.5 border rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500",
+                    class_name="w-full px-3 py-2 border rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500",
                     placeholder="1",
                 ),
                 class_name="flex flex-col gap-1 w-16 sm:w-20",
@@ -276,7 +276,7 @@ def quick_add_bar() -> rx.Component:
                         on_change=lambda val: State.handle_sale_change("price", val),
                         class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
                     ),
-                    class_name="flex items-center gap-1 px-3 py-2.5 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
+                    class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
                 ),
                 class_name="flex flex-col gap-1 w-20 sm:w-24",
             ),
@@ -289,7 +289,7 @@ def quick_add_bar() -> rx.Component:
                         State.sale_subtotal.to_string(),
                         class_name="text-sm font-semibold text-indigo-600",
                     ),
-                    class_name="px-3 py-2.5 bg-gray-100 rounded-lg text-right h-[42px] flex items-center justify-end",
+                    class_name="px-3 py-2 bg-gray-100 rounded-lg text-right h-[42px] flex items-center justify-end",
                 ),
                 class_name="flex flex-col gap-1 w-20 sm:w-24",
             ),
@@ -298,11 +298,11 @@ def quick_add_bar() -> rx.Component:
                 rx.icon("plus", class_name="h-5 w-5"),
                 rx.el.span("Añadir", class_name="sm:hidden"),
                 on_click=State.add_item_to_sale,
-                class_name="px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 h-[42px] flex-1 sm:flex-none sm:w-auto self-end",
+                class_name="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 h-[42px] flex-1 sm:flex-none sm:w-auto self-end",
             ),
-            class_name="flex items-end gap-2",
+            class_name="flex items-end gap-1",
         ),
-        class_name="flex flex-col gap-3 p-3 bg-gray-50 border-b",
+        class_name="flex flex-col gap-2 p-2.5 bg-gray-50 border-b",
     )
 
 
@@ -319,7 +319,7 @@ def products_table() -> rx.Component:
                     "(", State.new_sale_items.length().to_string(), ")",
                     class_name="text-sm text-gray-500",
                 ),
-                class_name="flex items-center gap-2",
+                class_name="flex items-center gap-1",
             ),
             rx.el.button(
                 rx.icon("trash-2", class_name="h-4 w-4"),
@@ -327,7 +327,7 @@ def products_table() -> rx.Component:
                 on_click=State.clear_sale_items,
                 class_name="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors",
             ),
-            class_name="flex items-center justify-between p-3 bg-white border-b",
+            class_name="flex items-center justify-between p-2.5 bg-white border-b",
         ),
         # Contenido
         rx.el.div(
@@ -365,9 +365,9 @@ def products_table() -> rx.Component:
                     class_name="flex flex-col items-center justify-center py-8 sm:py-12 text-center",
                 ),
             ),
-            class_name="flex-1 overflow-y-auto",
+            class_name="flex-1 overflow-y-auto px-3 py-2",
         ),
-        class_name="flex flex-col bg-white rounded-lg border shadow-sm flex-1 min-h-0",
+        class_name="flex flex-col bg-white rounded-lg border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
     )
 
 
@@ -1349,7 +1349,7 @@ def venta_page() -> rx.Component:
             products_table(),
             # Pago móvil/tablet
             payment_mobile_section(),
-            class_name="flex flex-col flex-1 min-h-0 gap-3 sm:gap-4 p-3 sm:p-4 lg:pr-0 overflow-y-auto lg:overflow-hidden",
+            class_name="flex flex-col flex-1 min-h-0 gap-2 sm:gap-3 p-2.5 sm:p-3 lg:pr-0 overflow-y-auto lg:overflow-hidden",
         ),
         # Sidebar de pago (solo desktop grande)
         rx.el.div(
