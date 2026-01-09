@@ -388,7 +388,7 @@ def reservation_info_card() -> rx.Component:
                         rx.el.span("Alquiler de Campo", class_name="text-sm text-gray-500"),
                         class_name="flex flex-col",
                     ),
-                    class_name="flex items-center gap-3",
+                    class_name="flex items-center gap-2",
                 ),
                 # Botón cerrar para limpiar la reserva pendiente
                 rx.el.button(
@@ -453,7 +453,7 @@ def reservation_info_card() -> rx.Component:
                     ),
                     class_name="flex flex-col gap-1",
                 ),
-                class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4",
+                class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2",
             ),
             # Resumen de montos
             rx.el.div(
@@ -464,7 +464,7 @@ def reservation_info_card() -> rx.Component:
                         State.reservation_selected_for_payment["total_amount"].to_string(),
                         class_name="text-lg font-bold text-gray-800",
                     ),
-                    class_name="flex flex-col items-center p-3 bg-gray-50 rounded-lg",
+                    class_name="flex flex-col items-center p-2 bg-gray-50 rounded-lg",
                 ),
                 rx.el.div(
                     rx.el.span("Adelanto Pagado", class_name="text-sm text-gray-600"),
@@ -473,7 +473,7 @@ def reservation_info_card() -> rx.Component:
                         State.reservation_selected_for_payment["advance_amount"].to_string(),
                         class_name="text-lg font-bold text-emerald-600",
                     ),
-                    class_name="flex flex-col items-center p-3 bg-emerald-50 rounded-lg",
+                    class_name="flex flex-col items-center p-2 bg-emerald-50 rounded-lg",
                 ),
                 rx.el.div(
                     rx.el.span("Saldo a Cobrar", class_name="text-sm text-gray-600"),
@@ -482,11 +482,11 @@ def reservation_info_card() -> rx.Component:
                         State.selected_reservation_balance.to_string(),
                         class_name="text-2xl font-bold text-indigo-600",
                     ),
-                    class_name="flex flex-col items-center p-3 bg-indigo-50 rounded-lg border-2 border-indigo-200",
+                    class_name="flex flex-col items-center p-2 bg-indigo-50 rounded-lg border-2 border-indigo-200",
                 ),
-                class_name="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4",
+                class_name="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-2",
             ),
-            class_name="bg-white border-2 border-emerald-200 rounded-xl p-4 shadow-sm",
+            class_name="bg-white border-2 border-emerald-200 rounded-xl p-2 shadow-sm",
         ),
         rx.fragment(),
     )
