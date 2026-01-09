@@ -205,7 +205,6 @@ def quick_add_bar() -> rx.Component:
                     on_change=lambda val: State.handle_sale_change("barcode", val),
                     debounce_timeout=300,
                     placeholder="Código...",
-                    on_blur=lambda e: State.process_sale_barcode_from_input(e),
                     on_key_down=lambda k: State.handle_key_down(k),
                     class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
                     type="text",
