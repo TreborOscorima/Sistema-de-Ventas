@@ -167,10 +167,7 @@ class CartMixin:
                                     product, keep_quantity=False
                                 )
                                 self.autocomplete_suggestions = []
-                                return rx.toast(
-                                    f"Producto '{product.description}' cargado",
-                                    duration=2000,
-                                )
+                                return
         except ValueError as e:
             logging.exception(f"Error parsing sale value: {e}")
 
@@ -195,9 +192,7 @@ class CartMixin:
                 if product:
                     self._fill_sale_item_from_product(product, keep_quantity=False)
                     self.autocomplete_suggestions = []
-                    return rx.toast(
-                        f"Producto '{product.description}' cargado", duration=2000
-                    )
+                    return
 
     @rx.event
     def select_product_for_sale(self, description: str):
