@@ -19,6 +19,30 @@ TODAY_STR = get_today_str()
 CURRENT_WEEK_STR = get_current_week_str()
 CURRENT_MONTH_STR = get_current_month_str()
 
+MONTH_NAMES_ES = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
+DAY_NAMES_ES = [
+    "Lunes",
+    "Martes",
+    "Miercoles",
+    "Jueves",
+    "Viernes",
+    "Sabado",
+    "Domingo",
+]
+
 class ServicesState(MixinState):
     service_active_tab: str = "campo"
 
@@ -28,6 +52,8 @@ class ServicesState(MixinState):
 
     field_rental_sport: str = "futbol"
     schedule_view_mode: str = "dia"
+    selected_date: datetime.date = datetime.date.today()
+    display_month: datetime.date = datetime.date.today().replace(day=1)
     schedule_selected_date: str = TODAY_STR
     schedule_selected_week: str = CURRENT_WEEK_STR
     schedule_selected_month: str = CURRENT_MONTH_STR
@@ -622,6 +648,61 @@ class ServicesState(MixinState):
             return []
 
     @rx.var
+    def display_month_label(self) -> str:
+        if not self.display_month:
+            return ""
+        month_index = self.display_month.month - 1
+        if 0 <= month_index < len(MONTH_NAMES_ES):
+            month_name = MONTH_NAMES_ES[month_index]
+        else:
+            month_name = str(self.display_month.month)
+        return f"{month_name} {self.display_month.year}"
+
+    @rx.var
+    def selected_date_label(self) -> str:
+        if not self.selected_date:
+            return ""
+        weekday_index = self.selected_date.weekday()
+        if 0 <= weekday_index < len(DAY_NAMES_ES):
+            day_name = DAY_NAMES_ES[weekday_index]
+        else:
+            day_name = ""
+        month_index = self.selected_date.month - 1
+        if 0 <= month_index < len(MONTH_NAMES_ES):
+            month_name = MONTH_NAMES_ES[month_index]
+        else:
+            month_name = str(self.selected_date.month)
+        return (
+            f"{day_name}, {self.selected_date.day} de {month_name} "
+            f"{self.selected_date.year}"
+        ).strip().strip(",")
+
+    @rx.var
+    def calendar_grid(self) -> list[list[dict[str, Any]]]:
+        if not self.display_month:
+            return []
+        year = self.display_month.year
+        month = self.display_month.month
+        today = datetime.date.today()
+        selected = self.selected_date
+        weeks: list[list[dict[str, Any]]] = []
+        for week in calendar.Calendar(firstweekday=0).monthdatescalendar(year, month):
+            week_cells: list[dict[str, Any]] = []
+            for day in week:
+                is_padding = day.month != month
+                week_cells.append(
+                    {
+                        "day": day.day if not is_padding else 0,
+                        "date_str": day.strftime("%Y-%m-%d") if not is_padding else "",
+                        "is_padding": is_padding,
+                        "is_today": (not is_padding) and day == today,
+                        "is_selected": (not is_padding) and day == selected,
+                    }
+                )
+            weeks.append(week_cells)
+        return weeks
+
+    @rx.var
     def schedule_selected_slots_count(self) -> int:
         return len(self.schedule_selected_slots)
 
@@ -651,7 +732,7 @@ class ServicesState(MixinState):
         )
         reservations = self._reservations_for_date(date_str, self.field_rental_sport)
         slots: list[dict] = []
-        for hour in range(24):
+        for hour in range(6, 24):
             start = f"{hour:02d}:00"
             end = "23:59" if hour == 23 else f"{hour + 1:02d}:00"
             try:
@@ -683,6 +764,56 @@ class ServicesState(MixinState):
             )
         return slots
 
+    def _sync_calendar_state(
+        self, selected: datetime.date, clear_selection: bool = True
+    ) -> None:
+        if not selected:
+            return
+        self.selected_date = selected
+        self.display_month = selected.replace(day=1)
+        date_str = selected.strftime("%Y-%m-%d")
+        self.schedule_selected_date = date_str
+        self.schedule_selected_week = selected.strftime("%G-W%V")
+        self.schedule_selected_month = selected.strftime("%Y-%m")
+        if isinstance(self.reservation_form, dict):
+            self.reservation_form["date"] = date_str
+        if clear_selection:
+            self._clear_schedule_selection()
+
+    @rx.event
+    def prev_month(self):
+        base = self.display_month or self.selected_date or datetime.date.today()
+        year = base.year
+        month = base.month - 1
+        if month <= 0:
+            month = 12
+            year -= 1
+        self.display_month = datetime.date(year, month, 1)
+
+    @rx.event
+    def next_month(self):
+        base = self.display_month or self.selected_date or datetime.date.today()
+        year = base.year
+        month = base.month + 1
+        if month > 12:
+            month = 1
+            year += 1
+        self.display_month = datetime.date(year, month, 1)
+
+    @rx.event
+    def set_selected_date(self, date_str: str):
+        if not date_str:
+            return
+        try:
+            selected = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return rx.toast("Fecha invalida.", duration=2500)
+        self._sync_calendar_state(selected, clear_selection=True)
+
+    @rx.event
+    def go_to_today(self):
+        self._sync_calendar_state(datetime.date.today(), clear_selection=True)
+
     @rx.event
     def set_service_active_tab(self, tab: str):
         self.service_active_tab = tab
@@ -700,10 +831,7 @@ class ServicesState(MixinState):
         self.reservation_modal_open = False
         self.reservation_modal_mode = "new"
         self.reservation_modal_reservation_id = ""
-        self.schedule_selected_date = TODAY_STR
-        self.schedule_selected_week = CURRENT_WEEK_STR
-        self.schedule_selected_month = CURRENT_MONTH_STR
-        self._clear_schedule_selection()
+        self._sync_calendar_state(datetime.date.today(), clear_selection=True)
         self.reservation_form = self._reservation_default_form()
         self.load_reservations()
 
@@ -715,9 +843,17 @@ class ServicesState(MixinState):
 
     @rx.event
     def set_schedule_date(self, date: str):
-        self.schedule_selected_date = date or ""
-        self.update_reservation_form("date", date)
-        self._clear_schedule_selection()
+        if not date:
+            self.schedule_selected_date = ""
+            if isinstance(self.reservation_form, dict):
+                self.reservation_form["date"] = ""
+            self._clear_schedule_selection()
+            return
+        try:
+            selected = datetime.datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            return rx.toast("Fecha invalida.", duration=2500)
+        self._sync_calendar_state(selected, clear_selection=True)
 
     @rx.event
     def set_schedule_week(self, week: str):
@@ -739,10 +875,7 @@ class ServicesState(MixinState):
                 f"{year_str}-W{week_str}-1", "%G-W%V-%u"
             )
             target = base_date + datetime.timedelta(days=int(offset))
-            date_str = target.strftime("%Y-%m-%d")
-            self.schedule_selected_date = date_str
-            self.update_reservation_form("date", date_str)
-            self._clear_schedule_selection()
+            self._sync_calendar_state(target.date(), clear_selection=True)
         except ValueError:
             return rx.toast("Semana invalida.", duration=2500)
 
@@ -752,10 +885,7 @@ class ServicesState(MixinState):
             return
         try:
             parsed = datetime.datetime.strptime(date, "%Y-%m-%d").date()
-            self.schedule_selected_month = parsed.strftime("%Y-%m")
-            self.schedule_selected_date = parsed.strftime("%Y-%m-%d")
-            self.update_reservation_form("date", self.schedule_selected_date)
-            self._clear_schedule_selection()
+            self._sync_calendar_state(parsed, clear_selection=True)
         except ValueError:
             return rx.toast("Dia invalido para el mes seleccionado.", duration=2500)
 
@@ -776,10 +906,17 @@ class ServicesState(MixinState):
             date_str = TODAY_STR
         if self._slot_has_conflict(date_str, start, end, self.field_rental_sport):
             return rx.toast("Este horario ya esta reservado. Elige otro.", duration=3000)
+        try:
+            parsed_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            parsed_date = None
+        if parsed_date:
+            self._sync_calendar_state(parsed_date, clear_selection=False)
+        else:
+            self.schedule_selected_date = date_str
+            self.reservation_form["date"] = date_str
         self.reservation_form["start_time"] = start
         self.reservation_form["end_time"] = end
-        self.reservation_form["date"] = date_str
-        self.schedule_selected_date = date_str
         self.reservation_modal_open = True
         self.reservation_modal_mode = "new"
         self.reservation_modal_reservation_id = ""
@@ -793,6 +930,15 @@ class ServicesState(MixinState):
         )
         if self._slot_has_conflict(date_str, start_time, end_time, self.field_rental_sport):
             return rx.toast("Este horario ya esta reservado. Elige otro.", duration=3000)
+        try:
+            parsed_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            parsed_date = None
+        if parsed_date:
+            self._sync_calendar_state(parsed_date, clear_selection=False)
+        else:
+            self.schedule_selected_date = date_str
+            self.reservation_form["date"] = date_str
         exists = any(slot.get("start") == start_time for slot in self.schedule_selected_slots)
         if exists:
             self.schedule_selected_slots = [
@@ -801,8 +947,6 @@ class ServicesState(MixinState):
         else:
             self.schedule_selected_slots.append({"start": start_time, "end": end_time})
             self.schedule_selected_slots = self._sorted_selected_slots()
-        self.schedule_selected_date = date_str
-        self.reservation_form["date"] = date_str
         if self.schedule_selected_slots:
             sorted_slots = self._sorted_selected_slots()
             self.reservation_form["start_time"] = sorted_slots[0]["start"]
@@ -829,8 +973,15 @@ class ServicesState(MixinState):
             return rx.toast("El rango seleccionado tiene un cruce con otra reserva.", duration=3000)
         # Limpia el formulario antes de preparar una nueva reserva
         self.reservation_form = self._reservation_default_form()
-        self.schedule_selected_date = date_str
-        self.reservation_form["date"] = date_str
+        try:
+            parsed_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            parsed_date = None
+        if parsed_date:
+            self._sync_calendar_state(parsed_date, clear_selection=False)
+        else:
+            self.schedule_selected_date = date_str
+            self.reservation_form["date"] = date_str
         self.reservation_form["start_time"] = start_time
         self.reservation_form["end_time"] = end_time
         self.reservation_form["sport_label"] = self._sport_label(self.field_rental_sport)
@@ -844,8 +995,15 @@ class ServicesState(MixinState):
         date_str = self.schedule_selected_date or self.reservation_form.get("date", "") or TODAY_STR
         # Prepara un formulario limpio antes de decidir modo
         self.reservation_form = self._reservation_default_form()
-        self.schedule_selected_date = date_str
-        self.reservation_form["date"] = date_str
+        try:
+            parsed_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            parsed_date = None
+        if parsed_date:
+            self._sync_calendar_state(parsed_date, clear_selection=False)
+        else:
+            self.schedule_selected_date = date_str
+            self.reservation_form["date"] = date_str
         self.reservation_form["start_time"] = start_time
         self.reservation_form["end_time"] = end_time
         self.reservation_form["sport_label"] = self._sport_label(self.field_rental_sport)

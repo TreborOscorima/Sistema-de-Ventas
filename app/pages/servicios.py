@@ -209,118 +209,189 @@ def time_slots_grid() -> rx.Component:
     )
 
 
+def mini_calendar_day(day: rx.Var[dict]) -> rx.Component:
+    base_classes = (
+        "h-9 w-9 rounded-full flex items-center justify-center text-sm font-semibold "
+        "transition-colors"
+    )
+    return rx.cond(
+        day["is_padding"],
+        rx.el.div(class_name="h-9 w-9"),
+        rx.el.button(
+            day["day"],
+            on_click=lambda: State.set_selected_date(day["date_str"]),
+            class_name=rx.cond(
+                day["is_selected"],
+                f"{base_classes} bg-indigo-600 text-white shadow-sm",
+                rx.cond(
+                    day["is_today"],
+                    f"{base_classes} border border-indigo-600 text-indigo-600",
+                    f"{base_classes} text-gray-700 hover:bg-gray-100",
+                ),
+            ),
+        ),
+    )
+
+
+def mini_calendar_sidebar() -> rx.Component:
+    day_headers = ["L", "M", "M", "J", "V", "S", "D"]
+    return rx.el.div(
+        rx.el.div(
+            rx.el.span(
+                State.display_month_label,
+                class_name="text-sm font-semibold text-gray-800",
+            ),
+            rx.el.div(
+                rx.el.button(
+                    rx.icon("chevron-left", class_name="h-4 w-4"),
+                    on_click=State.prev_month,
+                    class_name="p-1 rounded-full text-gray-600 hover:bg-gray-100",
+                ),
+                rx.el.button(
+                    rx.icon("chevron-right", class_name="h-4 w-4"),
+                    on_click=State.next_month,
+                    class_name="p-1 rounded-full text-gray-600 hover:bg-gray-100",
+                ),
+                class_name="flex items-center gap-1",
+            ),
+            class_name="flex items-center justify-between",
+        ),
+        rx.el.button(
+            "Hoy",
+            on_click=State.go_to_today,
+            class_name="mt-3 w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm",
+        ),
+        rx.grid(
+            *[
+                rx.el.span(
+                    day,
+                    class_name="text-center text-xs font-semibold text-gray-400",
+                )
+                for day in day_headers
+            ],
+            rx.foreach(
+                State.calendar_grid,
+                lambda week: rx.foreach(week, mini_calendar_day),
+            ),
+            columns="7",
+            class_name="mt-3 gap-2",
+        ),
+        class_name="bg-white rounded-xl shadow-sm p-4 border border-gray-200",
+    )
+
+
 def schedule_controls() -> rx.Component:
     return rx.el.div(
         rx.el.div(
-            rx.el.div(
-                rx.el.span(
-                    "Vista",
-                    class_name="text-xs uppercase tracking-wide text-gray-500",
-                ),
-                rx.el.button(
-                    rx.icon("calendar-check", class_name="h-4 w-4"),
-                    "Dia",
-                    on_click=lambda: State.set_schedule_view("dia"),
-                    class_name="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-600 text-white shadow-sm hover:bg-indigo-700",
-                ),
-                class_name="flex flex-col gap-2",
+            rx.el.span(
+                "Fecha",
+                class_name="text-xs uppercase tracking-wide text-gray-500",
             ),
             rx.el.div(
-                rx.el.span(
-                    "Fecha",
-                    class_name="text-xs uppercase tracking-wide text-gray-500",
+                rx.icon("calendar", class_name="h-4 w-4 text-gray-500"),
+                rx.el.input(
+                    type="date",
+                    value=State.schedule_selected_date,
+                    on_change=State.set_selected_date,
+                    class_name="w-full bg-transparent outline-none",
                 ),
-                rx.el.div(
-                    rx.icon("calendar", class_name="h-4 w-4 text-gray-500"),
-                    rx.el.input(
-                        type="date",
-                        value=State.schedule_selected_date,
-                        on_change=State.set_schedule_date,
-                        class_name="w-full bg-transparent outline-none",
-                    ),
-                    class_name="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm",
-                ),
-                class_name="flex flex-col gap-2 w-full sm:w-64",
+                class_name="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm",
             ),
-            class_name="flex flex-col sm:flex-row sm:items-end gap-4 justify-between",
+            class_name="flex flex-col gap-2 w-full sm:flex-1",
         ),
-        class_name="rounded-xl border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-emerald-50 p-4",
+        rx.el.button(
+            rx.icon("sun", class_name="h-4 w-4"),
+            "Hoy",
+            on_click=State.go_to_today,
+            class_name="flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm sm:w-32",
+        ),
+        class_name="flex flex-col sm:flex-row sm:items-end gap-3 rounded-xl border border-gray-200 bg-gradient-to-r from-indigo-50 via-white to-emerald-50 p-4 lg:hidden",
     )
 
 def schedule_planner() -> rx.Component:
     return rx.el.div(
         rx.el.div(
-            rx.el.h3("Planificador horario", class_name="text-lg font-semibold text-gray-800"),
-            rx.el.p(
-                "Selecciona fecha y franja horaria entre 00:00 y 23:59 para registrar la reserva.",
-                class_name="text-sm text-gray-600",
-            ),
-            class_name="flex flex-col gap-1",
-        ),
-        schedule_controls(),
-        rx.el.div(
             rx.el.div(
-                rx.el.h4("Horas del dia", class_name="text-sm font-semibold text-gray-700"),
-                rx.el.span(
-                    "Selecciona bloques consecutivos para reservar.",
-                    class_name="text-xs text-gray-500",
-                ),
-                class_name="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1",
-            ),
-            time_slots_grid(),
-            class_name="flex flex-col gap-3",
-        ),
-        rx.el.div(
-            rx.el.div(
-                rx.el.span("Seleccion actual", class_name="text-xs uppercase text-gray-500"),
-                rx.el.span(
-                    State.schedule_selected_date,
-                    " ",
-                    State.schedule_selection_label,
-                    class_name="text-sm font-semibold text-gray-900",
+                rx.el.h2(
+                    State.selected_date_label,
+                    class_name="text-2xl sm:text-3xl font-bold text-gray-900",
                 ),
                 rx.el.span(
-                    rx.cond(
-                        State.schedule_selection_valid,
-                        "Listo para registrar la reserva en bloque.",
-                        rx.cond(
-                            State.schedule_selected_slots_count == 0,
-                            "Selecciona uno o varios horarios disponibles.",
-                            "Elige horarios consecutivos para reservar en un solo bloque.",
-                        ),
-                    ),
-                    class_name="text-xs text-gray-600",
+                    "Planificador horario",
+                    class_name="text-sm font-semibold text-gray-700",
+                ),
+                rx.el.p(
+                    "Selecciona la fecha en el calendario y una franja horaria entre 00:00 y 23:59.",
+                    class_name="text-sm text-gray-600",
                 ),
                 class_name="flex flex-col gap-1",
             ),
+            schedule_controls(),
             rx.el.div(
-                rx.el.button(
-                    rx.icon("rotate-ccw", class_name="h-4 w-4"),
-                    "Limpiar seleccion",
-                    on_click=State.clear_schedule_selection,
-                    disabled=rx.cond(State.schedule_selected_slots_count == 0, True, False),
-                    class_name=rx.cond(
-                        State.schedule_selected_slots_count == 0,
-                        "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[38px]",
-                        "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[38px]",
+                rx.el.div(
+                    rx.el.h4("Horas del dia", class_name="text-sm font-semibold text-gray-700"),
+                    rx.el.span(
+                        "Selecciona bloques consecutivos para reservar.",
+                        class_name="text-xs text-gray-500",
                     ),
+                    class_name="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1",
                 ),
-                rx.el.button(
-                    rx.icon("calendar-plus", class_name="h-4 w-4"),
-                    "Reservar seleccion",
-                    on_click=State.open_selected_slots_modal,
-                    disabled=rx.cond(State.schedule_selection_valid, False, True),
-                    class_name=rx.cond(
-                        State.schedule_selection_valid,
-                        "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[38px]",
-                        "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[38px]",
-                    ),
-                ),
-                class_name="flex flex-col sm:flex-row gap-2 sm:items-center",
+                time_slots_grid(),
+                class_name="flex flex-col gap-3",
             ),
-            class_name="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3",
+            rx.el.div(
+                rx.el.div(
+                    rx.el.span("Seleccion actual", class_name="text-xs uppercase text-gray-500"),
+                    rx.el.span(
+                        State.schedule_selected_date,
+                        " ",
+                        State.schedule_selection_label,
+                        class_name="text-sm font-semibold text-gray-900",
+                    ),
+                    rx.el.span(
+                        rx.cond(
+                            State.schedule_selection_valid,
+                            "Listo para registrar la reserva en bloque.",
+                            rx.cond(
+                                State.schedule_selected_slots_count == 0,
+                                "Selecciona uno o varios horarios disponibles.",
+                                "Elige horarios consecutivos para reservar en un solo bloque.",
+                            ),
+                        ),
+                        class_name="text-xs text-gray-600",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.button(
+                        rx.icon("rotate-ccw", class_name="h-4 w-4"),
+                        "Limpiar seleccion",
+                        on_click=State.clear_schedule_selection,
+                        disabled=rx.cond(State.schedule_selected_slots_count == 0, True, False),
+                        class_name=rx.cond(
+                            State.schedule_selected_slots_count == 0,
+                            "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[38px]",
+                            "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[38px]",
+                        ),
+                    ),
+                    rx.el.button(
+                        rx.icon("calendar-plus", class_name="h-4 w-4"),
+                        "Reservar seleccion",
+                        on_click=State.open_selected_slots_modal,
+                        disabled=rx.cond(State.schedule_selection_valid, False, True),
+                        class_name=rx.cond(
+                            State.schedule_selection_valid,
+                            "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[38px]",
+                            "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[38px]",
+                        ),
+                    ),
+                    class_name="flex flex-col sm:flex-row gap-2 sm:items-center",
+                ),
+                class_name="rounded-lg border border-indigo-100 bg-indigo-50/70 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3",
+            ),
+            class_name="p-4 sm:p-6 flex flex-col gap-5",
         ),
-        class_name="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm flex flex-col gap-5",
+        class_name="flex-1 min-w-0 bg-white rounded-xl shadow-sm border border-gray-200 h-fit",
     )
 def reservation_modal() -> rx.Component:
     return rx.cond(
@@ -1288,7 +1359,18 @@ def admin_log_table() -> rx.Component:
 def campo_tab() -> rx.Component:
     return rx.el.div(
         sport_selector(),
-        schedule_planner(),
+        rx.flex(
+            rx.box(
+                mini_calendar_sidebar(),
+                class_name="hidden lg:block w-72 shrink-0 sticky top-4",
+            ),
+            rx.el.div(
+                schedule_planner(),
+                class_name="flex-1 w-full",
+            ),
+            align="start",
+            class_name="flex-col lg:flex-row gap-6 items-start w-full",
+        ),
         reservations_table(),
         reservation_delete_modal(),
         reservation_modal(),
@@ -1320,6 +1402,6 @@ def servicios_page() -> rx.Component:
             ("piscina", servicio_card("Alquiler de Piscina", "Registro y seguimiento de alquiler de piscina.")),
             servicio_card("Alquiler de Campo", "Reserva y control de alquiler de campo."),
         ),
-        class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4",
+        class_name="min-h-screen p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4",
     )
 
