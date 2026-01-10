@@ -492,436 +492,443 @@ def reservation_info_card() -> rx.Component:
 
 
 def payment_sidebar() -> rx.Component:
-    """Sidebar derecho con método de pago y total."""
+    """Sidebar derecho con m‚todo de pago y total."""
     return rx.el.aside(
         # Header
         rx.el.div(
             rx.icon("wallet", class_name="h-5 w-5 text-indigo-600"),
             rx.el.span("Cobro", class_name="font-bold text-gray-800"),
-            class_name="flex items-center gap-2 p-4 border-b",
+            class_name="flex items-center gap-2 p-4 border-b shrink-0",
         ),
-        # Métodos de pago
+        # Contenido scrollable
         rx.el.div(
-            rx.el.p("Método de pago", class_name="text-xs font-medium text-gray-500 uppercase mb-2"),
+            # M‚todos de pago
             rx.el.div(
-                rx.foreach(
-                    State.enabled_payment_methods,
-                    lambda method: rx.el.button(
-                        rx.cond(
-                            method["kind"] == "cash",
-                            rx.icon("banknote", class_name="h-4 w-4"),
+                rx.el.p("M‚todo de pago", class_name="text-xs font-medium text-gray-500 uppercase mb-2"),
+                rx.el.div(
+                    rx.foreach(
+                        State.enabled_payment_methods,
+                        lambda method: rx.el.button(
                             rx.cond(
-                                (method["kind"] == "debit")
-                                | (method["kind"] == "credit")
-                                | (method["kind"] == "card"),
-                                rx.icon("credit-card", class_name="h-4 w-4"),
+                                method["kind"] == "cash",
+                                rx.icon("banknote", class_name="h-4 w-4"),
                                 rx.cond(
-                                    (method["kind"] == "yape")
-                                    | (method["kind"] == "plin")
-                                    | (method["kind"] == "wallet"),
-                                    rx.icon("smartphone", class_name="h-4 w-4"),
+                                    (method["kind"] == "debit")
+                                    | (method["kind"] == "credit")
+                                    | (method["kind"] == "card"),
+                                    rx.icon("credit-card", class_name="h-4 w-4"),
                                     rx.cond(
-                                        method["kind"] == "transfer",
-                                        rx.icon("arrow-left-right", class_name="h-4 w-4"),
-                                        rx.icon("layers", class_name="h-4 w-4"),
+                                        (method["kind"] == "yape")
+                                        | (method["kind"] == "plin")
+                                        | (method["kind"] == "wallet"),
+                                        rx.icon("smartphone", class_name="h-4 w-4"),
+                                        rx.cond(
+                                            method["kind"] == "transfer",
+                                            rx.icon("arrow-left-right", class_name="h-4 w-4"),
+                                            rx.icon("layers", class_name="h-4 w-4"),
+                                        ),
                                     ),
                                 ),
                             ),
-                        ),
-                        rx.el.span(method["name"], class_name="text-xs uppercase font-medium"),
-                        on_click=lambda _, mid=method["id"]: State.select_payment_method(mid),
-                        class_name=rx.cond(
-                            State.payment_method == method["name"],
-                            "flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white w-full justify-center",
-                            "flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-gray-700 hover:bg-gray-50 w-full justify-center",
+                            rx.el.span(method["name"], class_name="text-xs uppercase font-medium"),
+                            on_click=lambda _, mid=method["id"]: State.select_payment_method(mid),
+                            class_name=rx.cond(
+                                State.payment_method == method["name"],
+                                "flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white w-full justify-center",
+                                "flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-gray-700 hover:bg-gray-50 w-full justify-center",
+                            ),
                         ),
                     ),
+                    class_name="grid grid-cols-2 gap-2",
                 ),
-                class_name="grid grid-cols-2 gap-2",
+                class_name="p-4 border-b",
             ),
-            class_name="p-4 border-b",
-        ),
-        rx.divider(class_name="mx-4"),
-        # Venta a credito
-        rx.el.div(
-            rx.hstack(
-                rx.el.div(
-                    rx.el.span("Venta a Credito / Fiado", class_name="text-xs font-medium text-gray-600"),
-                    rx.el.span("Configura cuotas y pago inicial", class_name="text-[11px] text-gray-400"),
-                    class_name="flex flex-col",
+            rx.divider(class_name="mx-4"),
+            # Venta a credito
+            rx.el.div(
+                rx.hstack(
+                    rx.el.div(
+                        rx.el.span("Venta a Credito / Fiado", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.span("Configura cuotas y pago inicial", class_name="text-[11px] text-gray-400"),
+                        class_name="flex flex-col",
+                    ),
+                    rx.switch(
+                        checked=State.is_credit_mode,
+                        on_change=State.toggle_credit_mode,
+                    ),
+                    class_name="flex items-center justify-between",
                 ),
-                rx.switch(
-                    checked=State.is_credit_mode,
-                    on_change=State.toggle_credit_mode,
+                rx.cond(
+                    State.is_credit_mode,
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.label("Cuotas", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.input(
+                                type="number",
+                                min="1",
+                                value=State.credit_installments.to_string(),
+                                on_change=lambda value: State.set_installments_count(value),
+                                class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                            ),
+                            class_name="flex flex-col gap-1",
+                        ),
+                        rx.el.div(
+                            rx.el.label("Frecuencia (Dias)", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.input(
+                                type="number",
+                                min="1",
+                                value=State.credit_interval_days.to_string(),
+                                on_change=lambda value: State.set_payment_interval_days(value),
+                                class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                            ),
+                            class_name="flex flex-col gap-1",
+                        ),
+                        rx.el.div(
+                            rx.el.label("Pago Inicial", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.input(
+                                type="number",
+                                min="0",
+                                step="0.01",
+                                value=State.credit_initial_payment,
+                                on_change=lambda value: State.set_credit_initial_payment(value),
+                                class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                            ),
+                            class_name="flex flex-col gap-1",
+                        ),
+                        rx.el.div(
+                            rx.el.span(
+                                "Saldo a financiar: ",
+                                State.currency_symbol,
+                                State.credit_financed_amount.to_string(),
+                                " en ",
+                                State.credit_installments.to_string(),
+                                " cuotas",
+                                class_name="text-xs text-gray-600",
+                            ),
+                            class_name="px-3 py-2 rounded-lg bg-gray-50 border",
+                        ),
+                        class_name="flex flex-col gap-3 mt-3",
+                    ),
+                    rx.fragment(),
                 ),
-                class_name="flex items-center justify-between",
+                class_name="p-4 border-b",
             ),
-            rx.cond(
-                State.is_credit_mode,
-                rx.el.div(
+            # Opciones seg£n m‚todo
+            rx.el.div(
+                rx.cond(
+                    State.payment_method_kind == "cash",
                     rx.el.div(
-                        rx.el.label("Cuotas", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.input(
-                            type="number",
-                            min="1",
-                            value=State.credit_installments.to_string(),
-                            on_change=lambda value: State.set_installments_count(value),
-                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
-                        ),
-                        class_name="flex flex-col gap-1",
-                    ),
-                    rx.el.div(
-                        rx.el.label("Frecuencia (Dias)", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.input(
-                            type="number",
-                            min="1",
-                            value=State.credit_interval_days.to_string(),
-                            on_change=lambda value: State.set_payment_interval_days(value),
-                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
-                        ),
-                        class_name="flex flex-col gap-1",
-                    ),
-                    rx.el.div(
-                        rx.el.label("Pago Inicial", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.input(
-                            type="number",
-                            min="0",
-                            step="0.01",
-                            value=State.credit_initial_payment,
-                            on_change=lambda value: State.set_credit_initial_payment(value),
-                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
-                        ),
-                        class_name="flex flex-col gap-1",
-                    ),
-                    rx.el.div(
-                        rx.el.span(
-                            "Saldo a financiar: ",
-                            State.currency_symbol,
-                            State.credit_financed_amount.to_string(),
-                            " en ",
-                            State.credit_installments.to_string(),
-                            " cuotas",
-                            class_name="text-xs text-gray-600",
-                        ),
-                        class_name="px-3 py-2 rounded-lg bg-gray-50 border",
-                    ),
-                    class_name="flex flex-col gap-3 mt-3",
-                ),
-                rx.fragment(),
-            ),
-            class_name="p-4 border-b",
-        ),
-        # Opciones según método
-        rx.el.div(
-            rx.cond(
-                State.payment_method_kind == "cash",
-                rx.el.div(
-                    rx.el.label("Monto recibido", class_name="text-xs font-medium text-gray-600"),
-                    rx.el.div(
-                        rx.el.span(State.currency_symbol, class_name="text-gray-400"),
-                        rx.el.input(
-                            type="number",
-                            value=rx.cond(
-                                State.payment_cash_amount > 0,
-                                State.payment_cash_amount.to_string(),
-                                "",
-                            ),
-                            on_change=lambda value: State.set_cash_amount(value),
-                            class_name="flex-1 border-0 focus:ring-0 text-lg font-semibold bg-transparent outline-none text-right",
-                            placeholder="0.00",
-                        ),
-                        class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
-                    ),
-                    rx.cond(
-                        State.is_credit_mode,
-                        rx.fragment(),
-                        rx.cond(
-                            State.payment_cash_message != "",
-                            rx.el.p(
-                                State.payment_cash_message,
-                                class_name=rx.cond(
-                                    State.payment_cash_status == "change",
-                                    "text-sm font-semibold text-emerald-600 mt-2",
-                                    rx.cond(
-                                        State.payment_cash_status == "due",
-                                        "text-sm font-semibold text-red-600 mt-2",
-                                        "text-sm text-gray-500 mt-2",
-                                    ),
-                                ),
-                            ),
-                            rx.fragment(),
-                        ),
-                    ),
-                    class_name="flex flex-col gap-2",
-                ),
-                rx.fragment(),
-            ),
-            rx.cond(
-                State.payment_method_kind == "card",
-                rx.el.div(
-                    rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
-                    rx.el.div(
-                        rx.el.button(
-                            "Crédito",
-                            on_click=lambda: State.set_card_type("Credito"),
-                            class_name=rx.cond(
-                                State.payment_card_type == "Credito",
-                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        rx.el.button(
-                            "Débito",
-                            on_click=lambda: State.set_card_type("Debito"),
-                            class_name=rx.cond(
-                                State.payment_card_type == "Debito",
-                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        class_name="flex gap-2",
-                    ),
-                    class_name="flex flex-col gap-2",
-                ),
-                rx.fragment(),
-            ),
-            rx.cond(
-                State.payment_method_kind == "wallet",
-                rx.el.div(
-                    rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
-                    rx.el.div(
-                        rx.el.button(
-                            "Yape",
-                            on_click=lambda: State.choose_wallet_provider("Yape"),
-                            class_name=rx.cond(
-                                State.payment_wallet_choice == "Yape",
-                                "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        rx.el.button(
-                            "Plin",
-                            on_click=lambda: State.choose_wallet_provider("Plin"),
-                            class_name=rx.cond(
-                                State.payment_wallet_choice == "Plin",
-                                "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        class_name="flex gap-2",
-                    ),
-                    class_name="flex flex-col gap-2",
-                ),
-                rx.fragment(),
-            ),
-            rx.cond(
-                State.payment_method_kind == "mixed",
-                rx.el.div(
-                    rx.el.div(
-                        rx.el.label("Efectivo", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.input(
-                            type="number",
-                            value=rx.cond(
-                                State.payment_mixed_cash > 0,
-                                State.payment_mixed_cash.to_string(),
-                                "",
-                            ),
-                            on_change=lambda value: State.set_mixed_cash_amount(value),
-                            class_name="w-full px-3 py-2 border rounded-lg text-sm",
-                            placeholder="0.00",
-                        ),
-                        class_name="flex flex-col gap-1",
-                    ),
-                rx.el.div(
-                    rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
-                    rx.el.div(
-                        rx.el.button(
-                            "T. Débito",
-                            on_click=lambda: State.set_mixed_non_cash_kind("debit"),
-                            class_name=rx.cond(
-                                State.payment_mixed_non_cash_kind == "debit",
-                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        rx.el.button(
-                            "T. Crédito",
-                            on_click=lambda: State.set_mixed_non_cash_kind("credit"),
-                            class_name=rx.cond(
-                                State.payment_mixed_non_cash_kind == "credit",
-                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        rx.el.button(
-                            "Yape",
-                            on_click=lambda: State.set_mixed_non_cash_kind("yape"),
-                            class_name=rx.cond(
-                                State.payment_mixed_non_cash_kind == "yape",
-                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        rx.el.button(
-                            "Plin",
-                            on_click=lambda: State.set_mixed_non_cash_kind("plin"),
-                            class_name=rx.cond(
-                                State.payment_mixed_non_cash_kind == "plin",
-                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        rx.el.button(
-                            "Transferencia",
-                            on_click=lambda: State.set_mixed_non_cash_kind("transfer"),
-                            class_name=rx.cond(
-                                State.payment_mixed_non_cash_kind == "transfer",
-                                "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
-                            ),
-                        ),
-                        class_name="grid grid-cols-2 gap-2",
-                    ),
-                    class_name="flex flex-col gap-2",
-                ),
-                    rx.el.div(
-                        rx.el.label("Monto complemento", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Monto recibido", class_name="text-xs font-medium text-gray-600"),
                         rx.el.div(
                             rx.el.span(State.currency_symbol, class_name="text-gray-400"),
                             rx.el.input(
                                 type="number",
-                                value=State.payment_mixed_complement,
-                                is_disabled=True,
-                                class_name="flex-1 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
+                                value=rx.cond(
+                                    State.payment_cash_amount > 0,
+                                    State.payment_cash_amount.to_string(),
+                                    "",
+                                ),
+                                on_change=lambda value: State.set_cash_amount(value),
+                                class_name="flex-1 border-0 focus:ring-0 text-lg font-semibold bg-transparent outline-none text-right",
+                                placeholder="0.00",
                             ),
-                            class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50",
+                            class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
                         ),
-                        class_name="flex flex-col gap-1",
+                        rx.cond(
+                            State.is_credit_mode,
+                            rx.fragment(),
+                            rx.cond(
+                                State.payment_cash_message != "",
+                                rx.el.p(
+                                    State.payment_cash_message,
+                                    class_name=rx.cond(
+                                        State.payment_cash_status == "change",
+                                        "text-sm font-semibold text-emerald-600 mt-2",
+                                        rx.cond(
+                                            State.payment_cash_status == "due",
+                                            "text-sm font-semibold text-red-600 mt-2",
+                                            "text-sm text-gray-500 mt-2",
+                                        ),
+                                    ),
+                                ),
+                                rx.fragment(),
+                            ),
+                        ),
+                        class_name="flex flex-col gap-2",
                     ),
-                    rx.cond(
-                        State.payment_mixed_non_cash_kind == "card",
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    State.payment_method_kind == "card",
+                    rx.el.div(
+                        rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
                         rx.el.div(
-                            rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.button(
+                                "Cr‚dito",
+                                on_click=lambda: State.set_card_type("Credito"),
+                                class_name=rx.cond(
+                                    State.payment_card_type == "Credito",
+                                    "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                ),
+                            ),
+                            rx.el.button(
+                                "D‚bito",
+                                on_click=lambda: State.set_card_type("Debito"),
+                                class_name=rx.cond(
+                                    State.payment_card_type == "Debito",
+                                    "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                ),
+                            ),
+                            class_name="flex gap-2",
+                        ),
+                        class_name="flex flex-col gap-2",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    State.payment_method_kind == "wallet",
+                    rx.el.div(
+                        rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.div(
+                            rx.el.button(
+                                "Yape",
+                                on_click=lambda: State.choose_wallet_provider("Yape"),
+                                class_name=rx.cond(
+                                    State.payment_wallet_choice == "Yape",
+                                    "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium",
+                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                ),
+                            ),
+                            rx.el.button(
+                                "Plin",
+                                on_click=lambda: State.choose_wallet_provider("Plin"),
+                                class_name=rx.cond(
+                                    State.payment_wallet_choice == "Plin",
+                                    "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium",
+                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                ),
+                            ),
+                            class_name="flex gap-2",
+                        ),
+                        class_name="flex flex-col gap-2",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    State.payment_method_kind == "mixed",
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.label("Efectivo", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.input(
+                                type="number",
+                                value=rx.cond(
+                                    State.payment_mixed_cash > 0,
+                                    State.payment_mixed_cash.to_string(),
+                                    "",
+                                ),
+                                on_change=lambda value: State.set_mixed_cash_amount(value),
+                                class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                                placeholder="0.00",
+                            ),
+                            class_name="flex flex-col gap-1",
+                        ),
+                        rx.el.div(
+                            rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
                             rx.el.div(
                                 rx.el.button(
-                                    "Credito",
-                                    on_click=lambda: State.set_card_type("Credito"),
+                                    "T. D‚bito",
+                                    on_click=lambda: State.set_mixed_non_cash_kind("debit"),
                                     class_name=rx.cond(
-                                        State.payment_card_type == "Credito",
+                                        State.payment_mixed_non_cash_kind == "debit",
                                         "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
                                         "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
                                     ),
                                 ),
                                 rx.el.button(
-                                    "Debito",
-                                    on_click=lambda: State.set_card_type("Debito"),
+                                    "T. Cr‚dito",
+                                    on_click=lambda: State.set_mixed_non_cash_kind("credit"),
                                     class_name=rx.cond(
-                                        State.payment_card_type == "Debito",
+                                        State.payment_mixed_non_cash_kind == "credit",
                                         "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
                                         "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
                                     ),
                                 ),
-                                class_name="flex gap-2",
-                            ),
-                            class_name="flex flex-col gap-2",
-                        ),
-                        rx.fragment(),
-                    ),
-                    rx.cond(
-                        State.payment_mixed_non_cash_kind == "wallet",
-                        rx.el.div(
-                            rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
-                            rx.el.div(
                                 rx.el.button(
                                     "Yape",
-                                    on_click=lambda: State.choose_wallet_provider("Yape"),
+                                    on_click=lambda: State.set_mixed_non_cash_kind("yape"),
                                     class_name=rx.cond(
-                                        State.payment_wallet_choice == "Yape",
-                                        "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium",
+                                        State.payment_mixed_non_cash_kind == "yape",
+                                        "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
                                         "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
                                     ),
                                 ),
                                 rx.el.button(
                                     "Plin",
-                                    on_click=lambda: State.choose_wallet_provider("Plin"),
+                                    on_click=lambda: State.set_mixed_non_cash_kind("plin"),
                                     class_name=rx.cond(
-                                        State.payment_wallet_choice == "Plin",
-                                        "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium",
+                                        State.payment_mixed_non_cash_kind == "plin",
+                                        "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
                                         "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
                                     ),
                                 ),
-                                class_name="flex gap-2",
+                                rx.el.button(
+                                    "Transferencia",
+                                    on_click=lambda: State.set_mixed_non_cash_kind("transfer"),
+                                    class_name=rx.cond(
+                                        State.payment_mixed_non_cash_kind == "transfer",
+                                        "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    ),
+                                ),
+                                class_name="grid grid-cols-2 gap-2",
                             ),
                             class_name="flex flex-col gap-2",
                         ),
-                        rx.fragment(),
+                        rx.el.div(
+                            rx.el.label("Monto complemento", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.div(
+                                rx.el.span(State.currency_symbol, class_name="text-gray-400"),
+                                rx.el.input(
+                                    type="number",
+                                    value=State.payment_mixed_complement,
+                                    is_disabled=True,
+                                    class_name="flex-1 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
+                                ),
+                                class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50",
+                            ),
+                            class_name="flex flex-col gap-1",
+                        ),
+                        rx.cond(
+                            State.payment_mixed_non_cash_kind == "card",
+                            rx.el.div(
+                                rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
+                                rx.el.div(
+                                    rx.el.button(
+                                        "Credito",
+                                        on_click=lambda: State.set_card_type("Credito"),
+                                        class_name=rx.cond(
+                                            State.payment_card_type == "Credito",
+                                            "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                            "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        ),
+                                    ),
+                                    rx.el.button(
+                                        "Debito",
+                                        on_click=lambda: State.set_card_type("Debito"),
+                                        class_name=rx.cond(
+                                            State.payment_card_type == "Debito",
+                                            "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
+                                            "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        ),
+                                    ),
+                                    class_name="flex gap-2",
+                                ),
+                                class_name="flex flex-col gap-2",
+                            ),
+                            rx.fragment(),
+                        ),
+                        rx.cond(
+                            State.payment_mixed_non_cash_kind == "wallet",
+                            rx.el.div(
+                                rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
+                                rx.el.div(
+                                    rx.el.button(
+                                        "Yape",
+                                        on_click=lambda: State.choose_wallet_provider("Yape"),
+                                        class_name=rx.cond(
+                                            State.payment_wallet_choice == "Yape",
+                                            "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium",
+                                            "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        ),
+                                    ),
+                                    rx.el.button(
+                                        "Plin",
+                                        on_click=lambda: State.choose_wallet_provider("Plin"),
+                                        class_name=rx.cond(
+                                            State.payment_wallet_choice == "Plin",
+                                            "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium",
+                                            "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        ),
+                                    ),
+                                    class_name="flex gap-2",
+                                ),
+                                class_name="flex flex-col gap-2",
+                            ),
+                            rx.fragment(),
+                        ),
+                        class_name="flex flex-col gap-3",
                     ),
-                    class_name="flex flex-col gap-3",
+                    rx.fragment(),
                 ),
-                rx.fragment(),
+                class_name="p-4 border-b min-h-[80px]",
             ),
-            class_name="p-4 border-b min-h-[80px]",
+            class_name="flex-1 overflow-y-auto min-h-0",
         ),
-        # Total
+        # Footer fijo
         rx.el.div(
+            # Total
             rx.el.div(
-                rx.el.span("TOTAL", class_name="text-xs font-medium text-gray-500"),
                 rx.el.div(
-                    rx.el.span(State.currency_symbol, class_name="text-xl text-indigo-600"),
-                    rx.el.span(
-                        State.sale_total.to_string(),
-                        class_name="text-3xl font-bold text-indigo-600",
+                    rx.el.span("TOTAL", class_name="text-xs font-medium text-gray-500"),
+                    rx.el.div(
+                        rx.el.span(State.currency_symbol, class_name="text-xl text-indigo-600"),
+                        rx.el.span(
+                            State.sale_total.to_string(),
+                            class_name="text-3xl font-bold text-indigo-600",
+                        ),
+                        class_name="flex items-baseline gap-1",
                     ),
-                    class_name="flex items-baseline gap-1",
+                    class_name="flex flex-col items-center py-3",
                 ),
-                class_name="flex flex-col items-center py-3",
+                class_name="p-3 bg-gray-50",
             ),
-            class_name="p-3 bg-gray-50",
-        ),
-        # Botones de acción
-        rx.el.div(
-            rx.el.button(
+            # Botones de acci¢n
+            rx.el.div(
+                rx.el.button(
+                    rx.cond(
+                        State.is_processing_sale,
+                        rx.hstack(
+                            rx.spinner(size="2"),
+                            rx.text("Procesando..."),
+                            spacing="2",
+                        ),
+                        rx.hstack(
+                            rx.icon("circle-check", class_name="h-5 w-5"),
+                            rx.text("Confirmar Venta"),
+                            spacing="2",
+                        ),
+                    ),
+                    on_click=State.confirm_sale,
+                    disabled=State.is_processing_sale,
+                    class_name=rx.cond(
+                        State.is_processing_sale,
+                        "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold transition-colors text-lg opacity-50 cursor-not-allowed",
+                        "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-lg",
+                    ),
+                ),
                 rx.cond(
-                    State.is_processing_sale,
-                    rx.hstack(
-                        rx.spinner(size="2"),
-                        rx.text("Procesando..."),
-                        spacing="2",
+                    State.sale_receipt_ready,
+                    rx.el.button(
+                        rx.icon("printer", class_name="h-4 w-4"),
+                        "Imprimir",
+                        on_click=State.print_sale_receipt,
+                        class_name="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-indigo-600 text-indigo-600 rounded-lg font-medium hover:bg-indigo-50 transition-colors",
                     ),
-                    rx.hstack(
-                        rx.icon("circle-check", class_name="h-5 w-5"),
-                        rx.text("Confirmar Venta"),
-                        spacing="2",
+                    rx.el.button(
+                        rx.icon("printer", class_name="h-4 w-4"),
+                        "Imprimir",
+                        disabled=True,
+                        class_name="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-400 rounded-lg cursor-not-allowed",
                     ),
                 ),
-                on_click=State.confirm_sale,
-                disabled=State.is_processing_sale,
-                class_name=rx.cond(
-                    State.is_processing_sale,
-                    "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold transition-colors text-lg opacity-50 cursor-not-allowed",
-                    "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-lg",
-                ),
+                class_name="p-4 flex flex-col gap-2",
             ),
-            rx.cond(
-                State.sale_receipt_ready,
-                rx.el.button(
-                    rx.icon("printer", class_name="h-4 w-4"),
-                    "Imprimir",
-                    on_click=State.print_sale_receipt,
-                    class_name="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-indigo-600 text-indigo-600 rounded-lg font-medium hover:bg-indigo-50 transition-colors",
-                ),
-                rx.el.button(
-                    rx.icon("printer", class_name="h-4 w-4"),
-                    "Imprimir",
-                    disabled=True,
-                    class_name="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-400 rounded-lg cursor-not-allowed",
-                ),
-            ),
-            class_name="p-4 flex flex-col gap-2 mt-auto",
+            class_name="shrink-0 bg-white border-t",
         ),
         class_name="w-80 bg-white border-l flex flex-col h-full",
     )
-
 
 def payment_mobile_section() -> rx.Component:
     """Sección de pago para móvil y tablet."""
