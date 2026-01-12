@@ -917,6 +917,9 @@ class CashState(MixinState):
             "payment_method": method_label,
             "payment_label": method_label,
             "payment_details": details_text,
+            "payment_condition": sale.payment_condition,
+            "is_credit": (sale.payment_condition or "").strip().lower() == "credito",
+            "amount_paid": paid_total,
             "amount": paid_total,
             "total": total_amount,
             "is_deleted": sale.status == SaleStatus.cancelled,
@@ -1038,22 +1041,74 @@ class CashState(MixinState):
         style_header_row(ws, 1, headers)
         
         rows = []
+        invalid_labels = {"", "-", "no especificado"}
         for sale in sales:
             if sale.get("is_deleted"):
                 continue
+            payment_condition = (sale.get("payment_condition") or "").strip().lower()
+            payment_type = (sale.get("payment_type") or "").strip().lower()
+            is_credit = (
+                bool(sale.get("is_credit"))
+                or payment_type == "credit"
+                or payment_condition in {"credito", "credit"}
+            )
             method_raw = self._normalize_wallet_label(sale.get("payment_method", ""))
             method_label = self._normalize_wallet_label(
                 sale.get("payment_label", sale.get("payment_method", ""))
             )
-            details = ", ".join(
-                f"{item['description']} (x{item['quantity']})" for item in sale["items"]
-            )
+            payment_details = self._payment_details_text(
+                sale.get("payment_details", "")
+            ).strip()
+            if is_credit:
+                method_raw = "Venta a Crédito / Fiado"
+                method_label = method_raw
+                amount_paid = sale.get("amount_paid")
+                if amount_paid is None:
+                    amount_paid = sale.get("amount", 0)
+                try:
+                    amount_paid_value = float(amount_paid or 0)
+                except (TypeError, ValueError):
+                    amount_paid_value = 0.0
+                if amount_paid_value > 0:
+                    payment_details = (
+                        f"Crédito (Adelanto: {self._format_currency(amount_paid_value)})"
+                    )
+                else:
+                    payment_details = "Crédito (Pendiente de Pago)"
+            else:
+                if (method_raw or "").strip().lower() in invalid_labels:
+                    if (method_label or "").strip().lower() not in invalid_labels:
+                        method_raw = method_label
+                    else:
+                        method_raw = "Metodo no registrado"
+                if (method_label or "").strip().lower() in invalid_labels:
+                    if (method_raw or "").strip().lower() not in invalid_labels:
+                        method_label = method_raw
+                    else:
+                        method_label = "Metodo no registrado"
+                if (payment_details or "").strip().lower() in invalid_labels:
+                    if (method_label or "").strip().lower() not in invalid_labels:
+                        payment_details = f"Pago en {method_label}"
+                    else:
+                        payment_details = "Pago registrado"
+            item_parts = []
+            for item in sale.get("items", []):
+                name = (item.get("description") or "").strip() or "Producto"
+                quantity = item.get("quantity", 0)
+                unit_price = item.get("price")
+                if unit_price is None:
+                    unit_price = item.get("sale_price")
+                if unit_price is None:
+                    unit_price = item.get("subtotal")
+                price_display = self._format_currency(unit_price or 0)
+                item_parts.append(f"{name} (x{quantity}) - {price_display}")
+            details = ", ".join(item_parts) if item_parts else ""
             rows.append([
                 sale["timestamp"],
                 sale["user"],
                 method_raw,
                 method_label,
-                self._payment_details_text(sale.get("payment_details", "")),
+                payment_details,
                 sale["total"],
                 details,
             ])

@@ -514,6 +514,7 @@ class HistorialState(MixinState):
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
 
             rows = []
+            invalid_labels = {"", "-", "no especificado"}
             for sale in sales:
                 payments = sale.payments or []
                 payment_method = self._payment_method_display(payments)
@@ -529,13 +530,46 @@ class HistorialState(MixinState):
                     payment_details = fallback.get(
                         "payment_details", payment_details
                     )
+                payment_type = (
+                    getattr(sale, "payment_type", "") or ""
+                ).strip().lower()
+                payment_condition = (sale.payment_condition or "").strip().lower()
+                is_credit = (
+                    bool(getattr(sale, "is_credit", False))
+                    or payment_type == "credit"
+                    or payment_condition in {"credito", "credit"}
+                )
+                if is_credit:
+                    payment_method = "Venta a Crédito / Fiado"
+                    amount_paid = getattr(sale, "amount_paid", None)
+                    if amount_paid is None:
+                        amount_paid = sum(
+                            Decimal(str(getattr(payment, "amount", 0) or 0))
+                            for payment in payments
+                        )
+                    amount_paid_value = Decimal(str(amount_paid or 0))
+                    if amount_paid_value > 0:
+                        payment_details = (
+                            f"Crédito (Adelanto: {self._format_currency(amount_paid_value)})"
+                        )
+                    else:
+                        payment_details = "Crédito (Pendiente de Pago)"
+                else:
+                    if (payment_method or "").strip().lower() in invalid_labels:
+                        payment_method = "Metodo no registrado"
+                    if (payment_details or "").strip().lower() in invalid_labels:
+                        if (payment_method or "").strip().lower() not in invalid_labels:
+                            payment_details = f"Pago en {payment_method}"
+                        else:
+                            payment_details = "Pago registrado"
 
                 items = sale.items or []
                 item_parts = []
                 for item in items:
                     name = (item.product_name_snapshot or "").strip() or "Producto"
                     quantity = _format_quantity(item.quantity)
-                    item_parts.append(f"{name} (x{quantity})")
+                    price_display = self._format_currency(item.unit_price or 0)
+                    item_parts.append(f"{name} (x{quantity}) - {price_display}")
                 products_summary = ", ".join(item_parts) if item_parts else "-"
 
                 client_name = sale.client.name if sale.client else "Sin cliente"
