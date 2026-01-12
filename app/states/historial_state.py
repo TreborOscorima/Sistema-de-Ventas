@@ -656,25 +656,12 @@ class HistorialState(MixinState):
             "mixto": Decimal("0.00"),
         }
 
-        start_date = None
-        end_date = None
-        if self.history_filter_start_date:
-            try:
-                start_date = datetime.datetime.fromisoformat(
-                    self.history_filter_start_date
-                )
-            except ValueError:
-                start_date = None
-        if self.history_filter_end_date:
-            try:
-                end_date = datetime.datetime.fromisoformat(
-                    self.history_filter_end_date
-                )
-                end_date = end_date.replace(hour=23, minute=59, second=59)
-            except ValueError:
-                end_date = None
+        start_date, end_date = self._history_date_range()
 
         with rx.session() as session:
+            # -------------------------------------------------------
+            # 1. SUMA DE VENTAS (Tabla Sale)
+            # -------------------------------------------------------
             query = (
                 select(Sale)
                 .where(Sale.status != SaleStatus.cancelled)
@@ -692,9 +679,7 @@ class HistorialState(MixinState):
                 method_keys: set[str] = set()
                 has_mixed = False
                 for payment in payments:
-                    key = self._payment_method_key(
-                        getattr(payment, "method_type", None)
-                    )
+                    key = self._payment_method_key(getattr(payment, "method_type", None))
                     if not key:
                         continue
                     if key == PaymentMethodType.mixed.value:
@@ -709,30 +694,90 @@ class HistorialState(MixinState):
                     )
                 total_amount = Decimal(str(total or 0))
 
-                if not method_keys:
-                    stats["mixto"] += total_amount
-                    continue
-                if has_mixed or len(method_keys) > 1:
+                if not method_keys or has_mixed or len(method_keys) > 1:
                     stats["mixto"] += total_amount
                     continue
 
                 key = next(iter(method_keys))
-                if key == PaymentMethodType.cash.value:
-                    stats["efectivo"] += total_amount
-                elif key == PaymentMethodType.debit.value:
-                    stats["debito"] += total_amount
-                elif key == PaymentMethodType.credit.value:
-                    stats["credito"] += total_amount
-                elif key == PaymentMethodType.yape.value:
-                    stats["yape"] += total_amount
-                elif key == PaymentMethodType.plin.value:
-                    stats["plin"] += total_amount
-                elif key == PaymentMethodType.transfer.value:
-                    stats["transferencia"] += total_amount
+                self._add_to_stats(stats, key, total_amount)
+
+            # -------------------------------------------------------
+            # 2. SUMA DE COBROS DE CUOTAS Y ADELANTOS (Tabla CashboxLog)
+            # -------------------------------------------------------
+            query_log = select(CashboxLog).where(
+                CashboxLog.action.in_(
+                    [
+                        "Cobranza",
+                        "Cobro de Cuota",   
+                        "Adelanto",         
+                        "Pago Cuota",
+                        "Cobro Cuota",
+                        "Ingreso Cuota",
+                        "Amortizacion",
+                        "Pago Credito",
+                    ]
+                )
+            )
+            
+            if start_date:
+                query_log = query_log.where(CashboxLog.timestamp >= start_date)
+            if end_date:
+                query_log = query_log.where(CashboxLog.timestamp <= end_date)
+
+            logs = session.exec(query_log).all()
+
+            for log in logs:
+                amount = Decimal(str(log.amount or 0))
+                # Normalizar método: "T. Credito" -> "t. credito"
+                method_str = str(log.payment_method or "other").lower().strip()
+                
+                # --- LÓGICA DE CLASIFICACIÓN MEJORADA ---
+                
+                # 1. Efectivo
+                if "efectivo" in method_str:
+                    stats["efectivo"] += amount
+                
+                # 2. Billeteras Digitales
+                elif "yape" in method_str:
+                    stats["yape"] += amount
+                elif "plin" in method_str:
+                    stats["plin"] += amount
+                
+                # 3. Tarjetas (Detecta "T. Credito", "Crédito", "Visa", etc.)
+                elif "credito" in method_str or "crédito" in method_str:
+                    stats["credito"] += amount
+                elif "debito" in method_str or "débito" in method_str:
+                    stats["debito"] += amount
+                elif "tarjeta" in method_str or "card" in method_str:
+                    # Si dice "Tarjeta" genérico, lo asignamos a Débito por defecto
+                    stats["debito"] += amount
+                
+                # 4. Transferencias
+                elif "transfer" in method_str:
+                    stats["transferencia"] += amount
+                
+                # 5. Resto (Mixto / Otros)
                 else:
-                    stats["mixto"] += total_amount
+                    stats["mixto"] += amount
 
         return {k: self._round_currency(v) for k, v in stats.items()}
+
+    def _add_to_stats(self, stats: dict, key: str, amount: Decimal):
+        """Helper para sumar montos usando las keys del Enum."""
+        if key == PaymentMethodType.cash.value:
+            stats["efectivo"] += amount
+        elif key == PaymentMethodType.debit.value:
+            stats["debito"] += amount
+        elif key == PaymentMethodType.credit.value:
+            stats["credito"] += amount
+        elif key == PaymentMethodType.yape.value:
+            stats["yape"] += amount
+        elif key == PaymentMethodType.plin.value:
+            stats["plin"] += amount
+        elif key == PaymentMethodType.transfer.value:
+            stats["transferencia"] += amount
+        else:
+            stats["mixto"] += amount
 
     @rx.var
     def total_credit(self) -> float:
