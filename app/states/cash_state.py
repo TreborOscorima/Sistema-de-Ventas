@@ -691,7 +691,11 @@ class CashState(MixinState):
             select(Sale, UserModel)
             .select_from(Sale)
             .join(UserModel, Sale.user_id == UserModel.id, isouter=True)
-            .options(selectinload(Sale.items), selectinload(Sale.payments))
+            .options(
+                selectinload(Sale.items),
+                selectinload(Sale.payments),
+                selectinload(Sale.installments),
+            )
             .order_by(desc(Sale.timestamp))
         )
 
@@ -894,7 +898,13 @@ class CashState(MixinState):
         paid_total = sum(
             float(getattr(payment, "amount", 0) or 0) for payment in payments
         )
+        installments_paid = sum(
+            float(getattr(installment, "paid_amount", 0) or 0)
+            for installment in sale.installments or []
+        )
+        total_paid = paid_total + installments_paid
         paid_total = self._round_currency(paid_total)
+        total_paid = self._round_currency(total_paid)
         items: list[dict] = []
         items_total = 0
         for item in sale.items or []:
@@ -919,7 +929,7 @@ class CashState(MixinState):
             "payment_details": details_text,
             "payment_condition": sale.payment_condition,
             "is_credit": (sale.payment_condition or "").strip().lower() == "credito",
-            "amount_paid": paid_total,
+            "amount_paid": total_paid,
             "amount": paid_total,
             "total": total_amount,
             "is_deleted": sale.status == SaleStatus.cancelled,
@@ -1069,12 +1079,18 @@ class CashState(MixinState):
                     amount_paid_value = float(amount_paid or 0)
                 except (TypeError, ValueError):
                     amount_paid_value = 0.0
-                if amount_paid_value > 0:
+                try:
+                    total_amount_value = float(sale.get("total", 0) or 0)
+                except (TypeError, ValueError):
+                    total_amount_value = 0.0
+                if total_amount_value > 0 and amount_paid_value >= total_amount_value:
+                    payment_details = "Crédito (Completado)"
+                elif amount_paid_value > 0:
                     payment_details = (
                         f"Crédito (Adelanto: {self._format_currency(amount_paid_value)})"
                     )
                 else:
-                    payment_details = "Crédito (Pendiente de Pago)"
+                    payment_details = "Crédito (Pendiente Total)"
             else:
                 if (method_raw or "").strip().lower() in invalid_labels:
                     if (method_label or "").strip().lower() not in invalid_labels:

@@ -502,6 +502,7 @@ class HistorialState(MixinState):
                 .options(
                     selectinload(Sale.items),
                     selectinload(Sale.payments),
+                    selectinload(Sale.installments),
                     selectinload(Sale.user),
                     selectinload(Sale.client),
                 )
@@ -539,21 +540,26 @@ class HistorialState(MixinState):
                     or payment_type == "credit"
                     or payment_condition in {"credito", "credit"}
                 )
+                paid_total = sum(
+                    Decimal(str(getattr(payment, "amount", 0) or 0))
+                    for payment in payments
+                )
+                installments_paid = sum(
+                    Decimal(str(getattr(installment, "paid_amount", 0) or 0))
+                    for installment in sale.installments or []
+                )
+                amount_paid_total = paid_total + installments_paid
+                total_amount_value = Decimal(str(sale.total_amount or 0))
                 if is_credit:
                     payment_method = "Venta a Crédito / Fiado"
-                    amount_paid = getattr(sale, "amount_paid", None)
-                    if amount_paid is None:
-                        amount_paid = sum(
-                            Decimal(str(getattr(payment, "amount", 0) or 0))
-                            for payment in payments
-                        )
-                    amount_paid_value = Decimal(str(amount_paid or 0))
-                    if amount_paid_value > 0:
+                    if total_amount_value > 0 and amount_paid_total >= total_amount_value:
+                        payment_details = "Crédito (Completado)"
+                    elif amount_paid_total > 0:
                         payment_details = (
-                            f"Crédito (Adelanto: {self._format_currency(amount_paid_value)})"
+                            f"Crédito (Adelanto: {self._format_currency(amount_paid_total)})"
                         )
                     else:
-                        payment_details = "Crédito (Pendiente de Pago)"
+                        payment_details = "Crédito (Pendiente Total)"
                 else:
                     if (payment_method or "").strip().lower() in invalid_labels:
                         payment_method = "Metodo no registrado"
@@ -575,6 +581,10 @@ class HistorialState(MixinState):
                 client_name = sale.client.name if sale.client else "Sin cliente"
                 user_name = sale.user.username if sale.user else "Desconocido"
                 total_amount = self._round_currency(float(sale.total_amount or 0))
+                if is_credit:
+                    method_display = payment_method
+                else:
+                    method_display = self._normalize_wallet_label(payment_method)
 
                 rows.append([
                     str(sale.id),
@@ -584,7 +594,7 @@ class HistorialState(MixinState):
                     client_name,
                     products_summary,
                     total_amount,
-                    self._normalize_wallet_label(payment_method),
+                    method_display,
                     user_name,
                     self._payment_details_text(payment_details),
                 ])
