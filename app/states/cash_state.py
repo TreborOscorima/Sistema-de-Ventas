@@ -1794,18 +1794,35 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 )
             logs = session.exec(statement).all()
 
+            import re
+
             result: list[CashboxSale] = []
             for log, username in logs:
                 method_label = (log.payment_method or "No especificado").strip() or "No especificado"
                 payment_detail = log.notes or ""
+                concept = payment_detail.strip()
+                if concept:
+                    concept = re.sub(r"#\d+", "", concept)
+                    concept = re.sub(r"\s{2,}", " ", concept)
+                    concept = concept.strip()
+                    concept = re.sub(r"^[\s:;-]+", "", concept)
+                if not concept:
+                    action_label = (log.action or "").replace("_", " ").strip().title()
+                    concept = action_label or method_label
+                timestamp = log.timestamp
+                time_label = ""
+                if timestamp:
+                    time_label = timestamp.strftime("%H:%M")
                 result.append(
                     {
                         "sale_id": str(log.id),
                         "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "time": time_label,
                         "user": username or "Desconocido",
                         "payment_method": method_label,
                         "payment_label": method_label,
                         "payment_details": payment_detail,
+                        "concept": concept,
                         "amount": self._round_currency(float(log.amount or 0)),
                         "total": log.amount,
                         "is_deleted": False,

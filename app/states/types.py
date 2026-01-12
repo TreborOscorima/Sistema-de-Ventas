@@ -99,6 +99,8 @@ class ReservationReceipt(TypedDict):
 class CashboxSale(TypedDict):
     sale_id: str
     timestamp: str
+    time: str
+    concept: str
     user: str
     payment_method: str
     payment_label: str
