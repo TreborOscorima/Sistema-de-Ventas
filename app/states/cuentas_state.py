@@ -1,12 +1,20 @@
 import datetime
+import io
 from decimal import Decimal
 
 import reflex as rx
 from sqlmodel import select
+from sqlalchemy import func
 
-from app.models import Client, SaleInstallment
+from app.models import Client, Sale, SaleInstallment
 from app.services.credit_service import CreditService
 from app.utils.db import get_async_session
+from app.utils.exports import (
+    create_excel_workbook,
+    style_header_row,
+    add_data_rows,
+    auto_adjust_column_widths,
+)
 from .mixin_state import MixinState
 
 
@@ -18,11 +26,16 @@ class CuentasState(MixinState):
     payment_amount: str = ""
     installment_payment_method: str = "Efectivo"
     selected_installment_id: int | None = None
+    total_pagadas: int = 0
+    total_pendientes: int = 0
+    current_client_pagadas: int = 0
+    current_client_pendientes: int = 0
 
     def _installment_status_label(self, status: str) -> str:
         value = (status or "").strip().lower()
         mapping = {
             "paid": "Pagado",
+            "completed": "Pagado",
             "partial": "Parcial",
             "pending": "Pendiente",
         }
@@ -42,13 +55,76 @@ class CuentasState(MixinState):
             "current_debt": current_debt,
         }
 
+    def _sanitize_report_name(self, value: str) -> str:
+        cleaned = "".join(
+            char
+            for char in (value or "").strip()
+            if char.isalnum() or char in {" ", "_", "-"}
+        )
+        cleaned = cleaned.replace(" ", "_").strip("_")
+        return cleaned or "Cliente"
+
+    def _compute_installment_counts(
+        self, installments: list[SaleInstallment]
+    ) -> tuple[int, int]:
+        paid_count = 0
+        pending_count = 0
+        for installment in installments:
+            status = (installment.status or "").strip().lower()
+            if status in {"paid", "completed"}:
+                paid_count += 1
+            elif status == "pending":
+                pending_count += 1
+        return paid_count, pending_count
+
+    def _set_current_client_totals(
+        self, installments: list[SaleInstallment]
+    ) -> None:
+        paid_count, pending_count = self._compute_installment_counts(
+            installments
+        )
+        self.current_client_pagadas = paid_count
+        self.current_client_pendientes = pending_count
+
+    async def _refresh_installment_totals(self, session) -> None:
+        paid_result = await session.exec(
+            select(func.count())
+            .select_from(SaleInstallment)
+            .where(
+                func.lower(SaleInstallment.status).in_(
+                    ["paid", "completed"]
+                )
+            )
+        )
+        pending_result = await session.exec(
+            select(func.count())
+            .select_from(SaleInstallment)
+            .where(func.lower(SaleInstallment.status) == "pending")
+        )
+        self.total_pagadas = int(paid_result.one() or 0)
+        self.total_pendientes = int(pending_result.one() or 0)
+
+    @rx.var
+    def selected_client_id(self) -> int | None:
+        if isinstance(self.selected_client, dict):
+            client_id = self.selected_client.get("id")
+        else:
+            client_id = None
+        if isinstance(client_id, str):
+            return int(client_id) if client_id.isdigit() else None
+        if isinstance(client_id, int):
+            return client_id
+        return None
+
     @rx.var
     def client_installments_view(self) -> list[dict]:
         rows: list[dict] = []
         today = datetime.date.today()
         for installment in self.client_installments:
             status = (installment.status or "pending").strip().lower()
-            is_paid = status == "paid"
+            if status == "completed":
+                status = "paid"
+            is_paid = status in {"paid", "completed"}
             amount = Decimal(str(installment.amount or 0))
             paid_amount = Decimal(str(installment.paid_amount or 0))
             pending_amount = amount - paid_amount
@@ -90,6 +166,79 @@ class CuentasState(MixinState):
             self.debtors = [
                 self._client_snapshot(client) for client in result.all()
             ]
+            await self._refresh_installment_totals(session)
+
+    @rx.event
+    async def export_cuentas_excel(self, client_id: int | None = None):
+        normalized_client_id: int | None = None
+        if isinstance(client_id, str):
+            normalized_client_id = (
+                int(client_id) if client_id.isdigit() else None
+            )
+        elif isinstance(client_id, int):
+            normalized_client_id = client_id
+
+        report_client_name = ""
+        async with get_async_session() as session:
+            query = (
+                select(SaleInstallment, Client)
+                .join(Sale, SaleInstallment.sale_id == Sale.id)
+                .outerjoin(Client, Sale.client_id == Client.id)
+            )
+            if normalized_client_id is not None:
+                query = query.where(Sale.client_id == normalized_client_id)
+                client = await session.get(Client, normalized_client_id)
+                if client:
+                    report_client_name = client.name or ""
+            query = query.order_by(
+                SaleInstallment.due_date.desc(),
+                SaleInstallment.id.desc(),
+            )
+            result = await session.exec(query)
+            rows = result.all()
+
+        workbook, sheet = create_excel_workbook("Cuentas")
+
+        headers = ["Fecha", "Cliente", "Concepto", "Monto", "Estado"]
+        style_header_row(sheet, 1, headers)
+
+        data_rows: list[list[object]] = []
+        for installment, client in rows:
+            due_date = (
+                installment.due_date.strftime("%Y-%m-%d")
+                if installment.due_date
+                else ""
+            )
+            client_name = client.name if client else "Sin cliente"
+            concept = (
+                f"Venta #{installment.sale_id} / Cuota {installment.number}"
+            )
+            amount = Decimal(str(installment.amount or 0))
+            status_label = self._installment_status_label(installment.status)
+            data_rows.append(
+                [
+                    due_date,
+                    client_name,
+                    concept,
+                    self._round_currency(float(amount)),
+                    status_label,
+                ]
+            )
+
+        add_data_rows(sheet, data_rows, 2)
+        auto_adjust_column_widths(sheet)
+
+        filename = "Reporte_Cuentas_Global.xlsx"
+        if normalized_client_id is not None:
+            safe_name = self._sanitize_report_name(
+                report_client_name or f"Cliente_{normalized_client_id}"
+            )
+            filename = f"Reporte_Cliente_{safe_name}.xlsx"
+
+        output = io.BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        return rx.download(data=output.getvalue(), filename=filename)
 
     @rx.event
     async def open_detail(self, client: dict | Client):
@@ -121,6 +270,7 @@ class CuentasState(MixinState):
                 .order_by(SaleInstallment.due_date)
             )
             self.client_installments = installments.all()
+            self._set_current_client_totals(self.client_installments)
         self.payment_amount = ""
         self.selected_installment_id = None
         self.show_payment_modal = True
@@ -132,6 +282,8 @@ class CuentasState(MixinState):
         self.client_installments = []
         self.selected_installment_id = None
         self.payment_amount = ""
+        self.current_client_pagadas = 0
+        self.current_client_pendientes = 0
 
     @rx.event
     def prepare_payment(self, installment_id: int, amount: Decimal):
@@ -209,6 +361,7 @@ class CuentasState(MixinState):
                     .order_by(SaleInstallment.due_date)
                 )
                 self.client_installments = installments.all()
+                self._set_current_client_totals(self.client_installments)
 
             debtors_result = await session.exec(
                 select(Client).where(Client.current_debt > 0)
@@ -217,6 +370,7 @@ class CuentasState(MixinState):
                 self._client_snapshot(client)
                 for client in debtors_result.all()
             ]
+            await self._refresh_installment_totals(session)
 
         self.selected_installment_id = None
         self.payment_amount = ""

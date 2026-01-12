@@ -14,6 +14,89 @@ PAYMENT_METHOD_OPTIONS = [
 ]
 
 
+def stats_dashboard_component(
+    pagadas: rx.Var[int],
+    pendientes: rx.Var[int],
+    export_event: callable,
+) -> rx.Component:
+    return rx.grid(
+        rx.el.div(
+            rx.el.div(
+                rx.el.div(
+                    rx.icon(
+                        "circle-check",
+                        class_name="h-5 w-5 text-emerald-600",
+                    ),
+                    class_name="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-50",
+                ),
+                rx.el.div(
+                    rx.el.p(
+                        "Cuotas Pagadas",
+                        class_name="text-sm font-semibold text-gray-600",
+                    ),
+                    rx.el.p(
+                        pagadas.to_string(),
+                        class_name="text-3xl font-bold text-gray-900",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                class_name="flex items-center gap-3",
+            ),
+            class_name="bg-white rounded-xl border border-gray-200 shadow-sm p-4",
+        ),
+        rx.el.div(
+            rx.el.div(
+                rx.el.div(
+                    rx.icon(
+                        "clock",
+                        class_name="h-5 w-5 text-amber-500",
+                    ),
+                    class_name="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50",
+                ),
+                rx.el.div(
+                    rx.el.p(
+                        "Cuotas Pendientes",
+                        class_name="text-sm font-semibold text-gray-600",
+                    ),
+                    rx.el.p(
+                        pendientes.to_string(),
+                        class_name="text-3xl font-bold text-gray-900",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                class_name="flex items-center gap-3",
+            ),
+            class_name="bg-white rounded-xl border border-gray-200 shadow-sm p-4",
+        ),
+        rx.el.div(
+            rx.el.div(
+                rx.el.span(
+                    "Reporte de Cuentas",
+                    class_name="text-xs font-semibold uppercase tracking-wide text-indigo-600",
+                ),
+                rx.el.p(
+                    "Descarga el reporte completo de cuotas.",
+                    class_name="text-sm font-semibold text-gray-800",
+                ),
+                rx.el.p(
+                    "Incluye fecha, cliente, concepto, monto y estado.",
+                    class_name="text-xs text-gray-500",
+                ),
+                class_name="flex flex-col gap-1",
+            ),
+            rx.el.button(
+                rx.icon("download", class_name="h-4 w-4"),
+                "Exportar Reporte (Excel)",
+                on_click=export_event,
+                class_name="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-white font-semibold hover:bg-indigo-700",
+            ),
+            class_name="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-4",
+        ),
+        columns="1",
+        class_name="grid grid-cols-1 lg:grid-cols-3 gap-4 my-4",
+    )
+
+
 def debtor_row(client: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
         rx.el.td(client["name"], class_name="py-3 px-4 font-medium text-gray-900"),
@@ -256,6 +339,13 @@ def cuentas_detail_modal() -> rx.Component:
                     ),
                     class_name="flex items-start justify-between gap-4",
                 ),
+                stats_dashboard_component(
+                    pagadas=State.current_client_pagadas,
+                    pendientes=State.current_client_pendientes,
+                    export_event=State.export_cuentas_excel(
+                        State.selected_client_id
+                    ),
+                ),
                 rx.el.div(
                     rx.el.h4(
                         "Estado de Cuenta",
@@ -333,6 +423,11 @@ def cuentas_page() -> rx.Component:
             rx.el.p(
                 "Gestiona clientes con saldo pendiente y registra pagos por cuota.",
                 class_name="text-sm text-gray-600",
+            ),
+            stats_dashboard_component(
+                pagadas=State.total_pagadas,
+                pendientes=State.total_pendientes,
+                export_event=State.export_cuentas_excel(None),
             ),
             rx.el.div(
                 rx.el.table(
