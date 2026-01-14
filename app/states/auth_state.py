@@ -408,6 +408,11 @@ class AuthState(MixinState):
                 self.token = create_access_token(username)
                 self.error_message = ""
                 self._load_roles_cache(session)
+                role_name = ""
+                if user and user.role:
+                    role_name = (user.role.name or "").strip()
+                if "cajero" in role_name.lower():
+                    return rx.redirect("/venta")
                 return rx.redirect("/")
             
         self.error_message = "Usuario o contraseña incorrectos."
