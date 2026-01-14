@@ -408,10 +408,10 @@ class AuthState(MixinState):
                 self.token = create_access_token(username)
                 self.error_message = ""
                 self._load_roles_cache(session)
-                role_name = ""
-                if user and user.role:
-                    role_name = (user.role.name or "").strip()
-                if "cajero" in role_name.lower():
+                privileges = self._get_privileges_dict(user) or {}
+                if privileges.get("view_ingresos"):
+                    return rx.redirect("/")
+                if privileges.get("view_ventas"):
                     return rx.redirect("/venta")
                 return rx.redirect("/")
             
