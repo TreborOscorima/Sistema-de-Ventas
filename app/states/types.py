@@ -176,8 +176,8 @@ class NewUser(TypedDict):
     privileges: Privileges
 
 class User(TypedDict):
+    id: int | None
     username: str
-    password_hash: str
     role: str
     privileges: Privileges
 

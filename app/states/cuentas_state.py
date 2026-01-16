@@ -159,6 +159,11 @@ class CuentasState(MixinState):
 
     @rx.event
     async def load_debtors(self):
+        if not self.current_user["privileges"].get("view_cuentas"):
+            self.debtors = []
+            self.total_pagadas = 0
+            self.total_pendientes = 0
+            return
         async with get_async_session() as session:
             result = await session.exec(
                 select(Client).where(Client.current_debt > 0)
@@ -170,6 +175,10 @@ class CuentasState(MixinState):
 
     @rx.event
     async def export_cuentas_excel(self, client_id: int | None = None):
+        if not self.current_user["privileges"].get("export_data"):
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        if not self.current_user["privileges"].get("view_cuentas"):
+            return rx.toast("No tiene permisos para ver cuentas.", duration=3000)
         normalized_client_id: int | None = None
         if isinstance(client_id, str):
             normalized_client_id = (
@@ -242,6 +251,8 @@ class CuentasState(MixinState):
 
     @rx.event
     async def open_detail(self, client: dict | Client):
+        if not self.current_user["privileges"].get("view_cuentas"):
+            return rx.toast("No tiene permisos para ver cuentas.", duration=3000)
         if not client:
             return
         client_id = None
@@ -311,6 +322,8 @@ class CuentasState(MixinState):
 
     @rx.event
     async def submit_payment(self):
+        if not self.current_user["privileges"].get("manage_cuentas"):
+            return rx.toast("No tiene permisos para gestionar cuentas.", duration=3000)
         if not self.selected_installment_id:
             return rx.toast("Seleccione una cuota para pagar.", duration=3000)
         try:

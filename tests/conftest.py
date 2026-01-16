@@ -26,6 +26,9 @@ class FakeAsyncSession:
         self.added = []
         self.add = Mock(side_effect=self._add)
         self.flush = AsyncMock(side_effect=self._flush)
+        self.refresh = AsyncMock()
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
 
     def _add(self, obj) -> None:
         self.added.append(obj)

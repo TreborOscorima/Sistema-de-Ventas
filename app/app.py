@@ -271,9 +271,7 @@ _common_on_load = [
     State.ensure_payment_methods,
     State.load_categories,
     State.load_field_prices,
-    State.load_users,
     State.load_config_data,
-    State.load_reservations,
     State.check_overdue_alerts,
 ]
 
@@ -288,5 +286,16 @@ app.add_page(page_clientes, route="/clientes", title="Clientes | Sistema de Vent
 app.add_page(page_cuentas, route="/cuentas", title="Cuentas Corrientes | Sistema de Ventas", on_load=[State.ensure_view_cuentas, State.sync_page_from_route] + _common_on_load)
 app.add_page(page_inventario, route="/inventario", title="Inventario - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
 app.add_page(page_historial, route="/historial", title="Historial - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_servicios, route="/servicios", title="Servicios - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_configuracion, route="/configuracion", title="Configuración - TUWAYKIAPP", on_load=[State.ensure_admin_access, State.sync_page_from_route] + _common_on_load)
+app.add_page(
+    page_servicios,
+    route="/servicios",
+    title="Servicios - TUWAYKIAPP",
+    on_load=[State.sync_page_from_route, State.load_reservations] + _common_on_load,
+)
+app.add_page(
+    page_configuracion,
+    route="/configuracion",
+    title="Configuración - TUWAYKIAPP",
+    on_load=[State.ensure_admin_access, State.load_users, State.sync_page_from_route]
+    + _common_on_load,
+)

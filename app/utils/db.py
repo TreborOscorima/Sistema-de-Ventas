@@ -23,10 +23,11 @@ def _require_env(var_name: str) -> str:
 DB_USER = _require_env("DB_USER")
 DB_PASSWORD = _require_env("DB_PASSWORD")
 DB_HOST = _require_env("DB_HOST")
+DB_PORT = os.getenv("DB_PORT", "3306")
 DB_NAME = _require_env("DB_NAME")
 
 ASYNC_DATABASE_URL = (
-    f"mysql+aiomysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:3306/{DB_NAME}"
+    f"mysql+aiomysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
 async_engine: AsyncEngine = create_async_engine(

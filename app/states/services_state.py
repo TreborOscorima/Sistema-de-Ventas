@@ -283,6 +283,10 @@ class ServicesState(MixinState):
         return query
 
     def load_reservations(self):
+        if not self.current_user["privileges"].get("view_servicios"):
+            self.service_reservations = []
+            self.reservation_total_count = 0
+            return
         with rx.session() as session:
             page = max(self.reservation_current_page, 1)
             per_page = max(self.reservation_items_per_page, 1)
@@ -1378,6 +1382,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
     @rx.event
     def apply_reservation_payment(self):
+        if not self.current_user["privileges"].get("manage_reservations"):
+            return rx.toast("No tiene permisos para gestionar reservas.", duration=3000)
         reservation = self._find_reservation_by_id(self.reservation_payment_id)
         if not reservation:
             return rx.toast("Seleccione una reserva para registrar el pago.", duration=3000)
@@ -1492,6 +1498,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
     @rx.event
     def pay_reservation_with_payment_method(self):
+        if not self.current_user["privileges"].get("manage_reservations"):
+            return rx.toast("No tiene permisos para gestionar reservas.", duration=3000)
         reservation = self._find_reservation_by_id(self.reservation_payment_id)
         if not reservation:
             return rx.toast("Seleccione una reserva desde Servicios -> Pagar.", duration=3000)

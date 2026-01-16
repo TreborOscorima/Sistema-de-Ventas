@@ -23,6 +23,7 @@ async def test_process_sale_cash_happy_path(
     sale_data_sample,
 ):
     session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
     ]
@@ -60,6 +61,7 @@ async def test_process_sale_stock_insufficient(
         cash=PaymentCashDTO(amount=Decimal("50.00")),
     )
     session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
     ]
@@ -93,6 +95,7 @@ async def test_process_sale_decimal_math(
         cash=PaymentCashDTO(amount=Decimal("30.00")),
     )
     session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
     ]
@@ -133,6 +136,7 @@ async def test_process_sale_mixed_payment(
         card=PaymentCardDTO(type="debit"),
     )
     session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
     ]

@@ -127,6 +127,8 @@ class ClientesState(MixinState):
 
     @rx.event
     def save_client(self):
+        if not self.current_user["privileges"].get("manage_clientes"):
+            return rx.toast("No tiene permisos para gestionar clientes.", duration=3000)
         name = (self.current_client.get("name") or "").strip()
         dni = (self.current_client.get("dni") or "").strip()
         if not name or not dni:
@@ -198,6 +200,8 @@ class ClientesState(MixinState):
 
     @rx.event
     def delete_client(self, client_id: int):
+        if not self.current_user["privileges"].get("manage_clientes"):
+            return rx.toast("No tiene permisos para gestionar clientes.", duration=3000)
         with rx.session() as session:
             client = session.get(Client, client_id)
             if not client:

@@ -108,7 +108,8 @@ class AuthState(MixinState):
 
     @rx.var
     def is_authenticated(self) -> bool:
-        return bool(verify_token(self.token))
+        user = self.current_user
+        return bool(user and user.get("username") != "Invitado")
 
 
     @rx.var
@@ -124,14 +125,13 @@ class AuthState(MixinState):
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
             ).first()
             
-            if user:
+            if user and user.is_active:
                 role_name = user.role.name if user.role else "Sin rol"
                 return {
                     "id": user.id,
                     "username": user.username,
                     "role": role_name,
                     "privileges": self._get_privileges_dict(user),
-                    "password_hash": user.password_hash,
                 }
         
         return self._guest_user()
@@ -139,6 +139,9 @@ class AuthState(MixinState):
     users_list: List[User] = []
 
     def load_users(self):
+        if not self.current_user["privileges"].get("manage_users"):
+            self.users_list = []
+            return
         with rx.session() as session:
             users = session.exec(
                 select(UserModel)
@@ -153,14 +156,13 @@ class AuthState(MixinState):
                     "username": user.username,
                     "role": role_name,
                     "privileges": self._get_privileges_dict(user),
-                    "password_hash": user.password_hash,
                 })
             self.users_list = sorted(normalized_users, key=lambda u: u["username"])
 
     def _guest_user(self) -> User:
         return {
+            "id": None,
             "username": "Invitado",
-            "password_hash": "",
             "role": "Invitado",
             "privileges": EMPTY_PRIVILEGES.copy(),
         }
@@ -385,6 +387,9 @@ class AuthState(MixinState):
             ).first()
             
             if user and bcrypt.checkpw(password, user.password_hash.encode("utf-8")):
+                if not user.is_active:
+                    self.error_message = "Usuario inactivo. Contacte al administrador."
+                    return
                 if not user.role_id:
                     fallback_role = (
                         "Superadmin" if username == "admin" else "Usuario"
@@ -424,6 +429,8 @@ class AuthState(MixinState):
 
     @rx.event
     def show_create_user_form(self):
+        if not self.current_user["privileges"].get("manage_users"):
+            return rx.toast("No tiene permisos para gestionar usuarios.", duration=3000)
         self._reset_new_user_form()
         self.show_user_form = True
 
@@ -449,10 +456,14 @@ class AuthState(MixinState):
 
     @rx.event
     def show_edit_user_form(self, user: User):
+        if not self.current_user["privileges"].get("manage_users"):
+            return rx.toast("No tiene permisos para gestionar usuarios.", duration=3000)
         self._open_user_editor(user)
 
     @rx.event
     def show_edit_user_form_by_username(self, username: str):
+        if not self.current_user["privileges"].get("manage_users"):
+            return rx.toast("No tiene permisos para gestionar usuarios.", duration=3000)
         key = (username or "").strip().lower()
         
         with rx.session() as session:
@@ -471,7 +482,6 @@ class AuthState(MixinState):
                 "username": user.username,
                 "role": role_name,
                 "privileges": self._get_privileges_dict(user),
-                "password_hash": user.password_hash,
             }
             self._open_user_editor(user_dict)
 
@@ -514,6 +524,8 @@ class AuthState(MixinState):
 
     @rx.event
     def create_role_from_current_privileges(self):
+        if not self.current_user["privileges"].get("manage_users"):
+            return rx.toast("No tiene permisos para gestionar usuarios.", duration=3000)
         name = (self.new_role_name or "").strip()
         if not name:
             return rx.toast("Ingrese un nombre para el rol nuevo.", duration=3000)
@@ -538,6 +550,8 @@ class AuthState(MixinState):
 
     @rx.event
     def save_role_template(self):
+        if not self.current_user["privileges"].get("manage_users"):
+            return rx.toast("No tiene permisos para gestionar usuarios.", duration=3000)
         role = (self.new_user_data.get("role") or "").strip()
         if not role:
             return rx.toast("Seleccione un rol para guardar sus privilegios.", duration=3000)
