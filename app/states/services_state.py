@@ -50,6 +50,15 @@ class ServicesState(MixinState):
     def set_service_tab(self, tab: str):
         self.service_active_tab = tab
 
+    def _require_manage_config(self):
+        if hasattr(self, "current_user") and not self.current_user["privileges"].get(
+            "manage_config"
+        ):
+            return rx.toast(
+                "No tiene permisos para configurar el sistema.", duration=3000
+            )
+        return None
+
     field_rental_sport: str = "futbol"
     schedule_view_mode: str = "dia"
     selected_date: datetime.date = datetime.date.today()
@@ -371,6 +380,10 @@ class ServicesState(MixinState):
         self.apply_reservation_filters()
 
     def export_reservations_excel(self):
+        if not self.current_user["privileges"].get("view_servicios"):
+            return rx.toast("No tiene permisos para ver servicios.", duration=3000)
+        if not self.current_user["privileges"].get("export_data"):
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
         with rx.session() as session:
             data_query = (
                 select(FieldReservationModel)
@@ -458,6 +471,9 @@ class ServicesState(MixinState):
         self.new_field_price_amount = str(value)
 
     def add_field_price(self):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         if self.new_field_price_name and self.new_field_price_amount:
             try:
                 price = float(self.new_field_price_amount)
@@ -477,6 +493,9 @@ class ServicesState(MixinState):
                 return rx.toast("El precio debe ser un número válido.", duration=3000)
 
     def update_field_price(self):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         if not self.editing_field_price_id:
             return
         
@@ -500,6 +519,9 @@ class ServicesState(MixinState):
             return rx.toast("El precio debe ser un número válido.", duration=3000)
 
     def update_field_price_amount(self, price_id: str, value: str):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         try:
             val = float(value)
             with rx.session() as session:
@@ -513,6 +535,9 @@ class ServicesState(MixinState):
             pass
 
     def edit_field_price(self, price_id: str):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         with rx.session() as session:
             price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(price_id))).first()
             if price:
@@ -522,6 +547,9 @@ class ServicesState(MixinState):
                 self.new_field_price_sport = price.sport
 
     def remove_field_price(self, price_id: str):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         with rx.session() as session:
             price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(price_id))).first()
             if price:

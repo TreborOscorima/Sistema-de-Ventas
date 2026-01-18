@@ -98,14 +98,20 @@ class InventoryState(MixinState):
             search_term = str(value).strip().lower()
             if len(search_term) >= 2:
                 with rx.session() as session:
-                    products = session.exec(select(Product)).all()
-                    # Filtrar productos que coincidan con el término de búsqueda
-                    matching = [
+                    search = f"%{search_term}%"
+                    products = session.exec(
+                        select(Product)
+                        .where(
+                            or_(
+                                Product.description.ilike(search),
+                                Product.barcode.ilike(search),
+                            )
+                        )
+                        .limit(10)
+                    ).all()
+                    self.inventory_adjustment_suggestions = [
                         p.description for p in products
-                        if search_term in p.description.lower()
-                        or search_term in p.barcode.lower()
                     ]
-                    self.inventory_adjustment_suggestions = matching[:10]  # Limitar a 10 sugerencias
             else:
                 self.inventory_adjustment_suggestions = []
 
@@ -343,6 +349,21 @@ class InventoryState(MixinState):
         self.inventory_adjustment_item["adjust_quantity"] = 0
         self.inventory_adjustment_item["reason"] = ""
 
+    def _find_adjustment_product(
+        self, session, barcode: str, description: str
+    ) -> Product | None:
+        if barcode:
+            product = session.exec(
+                select(Product).where(Product.barcode == barcode)
+            ).first()
+            if product:
+                return product
+        if description:
+            return session.exec(
+                select(Product).where(Product.description == description)
+            ).first()
+        return None
+
     @rx.event
     def select_inventory_adjustment_product(self, description: str):
         if isinstance(description, dict):
@@ -390,11 +411,12 @@ class InventoryState(MixinState):
         if not self.current_user["privileges"]["edit_inventario"]:
             return rx.toast("No tiene permisos para ajustar inventario.", duration=3000)
         description = self.inventory_adjustment_item["description"].strip()
-        if not description:
+        barcode = (self.inventory_adjustment_item.get("barcode") or "").strip()
+        if not description and not barcode:
             return rx.toast("Seleccione un producto para ajustar.", duration=3000)
         
         with rx.session() as session:
-            product = session.exec(select(Product).where(Product.barcode == description)).first()
+            product = self._find_adjustment_product(session, barcode, description)
             if not product:
                 return rx.toast("Producto no encontrado en el inventario.", duration=3000)
             
@@ -450,11 +472,14 @@ class InventoryState(MixinState):
             recorded = False
             with rx.session() as session:
                 for item in self.inventory_adjustment_items:
-                    description = item["description"].strip()
-                    if not description:
+                    description = (item.get("description") or "").strip()
+                    barcode = (item.get("barcode") or "").strip()
+                    if not description and not barcode:
                         continue
                     
-                    product = session.exec(select(Product).where(Product.barcode == description)).first()
+                    product = self._find_adjustment_product(
+                        session, barcode, description
+                    )
                     if not product:
                         continue
                     

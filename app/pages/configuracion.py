@@ -184,7 +184,7 @@ def config_nav() -> rx.Component:
                         ),
                         class_name="flex items-center gap-3",
                     ),
-                    on_click=lambda _, key=section["key"]: State.set_config_tab(key),
+                    on_click=lambda _, key=section["key"]: State.set_config_active_tab(key),
                     class_name=rx.cond(
                         State.config_active_tab == section["key"],
                         "w-full text-left bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg shadow-sm",
@@ -1015,7 +1015,7 @@ def field_prices_section() -> rx.Component:
 def configuracion_page() -> rx.Component:
     return rx.fragment(
         rx.cond(
-            State.current_user["privileges"]["manage_users"],
+            State.current_user["privileges"]["manage_config"],
             rx.el.div(
                 rx.el.div(
                         rx.el.h1(

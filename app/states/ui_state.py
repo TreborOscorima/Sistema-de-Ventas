@@ -125,7 +125,7 @@ class UIState(MixinState):
             "Inventario": "view_inventario",
             "Historial": "view_historial",
             "Servicios": "view_servicios",
-            "Configuracion": "manage_users",
+            "Configuracion": "manage_config",
         }
 
     def _can_access_page(self, page: str) -> bool:

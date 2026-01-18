@@ -279,18 +279,43 @@ _common_on_load = [
 app.add_page(index, route="/", on_load=[State.sync_page_from_route] + _common_on_load)
 
 # Páginas individuales con rutas separadas
-app.add_page(page_ingreso, route="/ingreso", title="Ingreso - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_venta, route="/venta", title="Venta - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_caja, route="/caja", title="Gestión de Caja - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(
+    page_ingreso,
+    route="/ingreso",
+    title="Ingreso - TUWAYKIAPP",
+    on_load=[State.ensure_view_ingresos, State.sync_page_from_route] + _common_on_load,
+)
+app.add_page(
+    page_venta,
+    route="/venta",
+    title="Venta - TUWAYKIAPP",
+    on_load=[State.ensure_view_ventas, State.sync_page_from_route] + _common_on_load,
+)
+app.add_page(
+    page_caja,
+    route="/caja",
+    title="Gestión de Caja - TUWAYKIAPP",
+    on_load=[State.ensure_view_cashbox, State.sync_page_from_route] + _common_on_load,
+)
 app.add_page(page_clientes, route="/clientes", title="Clientes | Sistema de Ventas", on_load=[State.ensure_view_clientes, State.sync_page_from_route] + _common_on_load)
 app.add_page(page_cuentas, route="/cuentas", title="Cuentas Corrientes | Sistema de Ventas", on_load=[State.ensure_view_cuentas, State.sync_page_from_route] + _common_on_load)
-app.add_page(page_inventario, route="/inventario", title="Inventario - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
-app.add_page(page_historial, route="/historial", title="Historial - TUWAYKIAPP", on_load=[State.sync_page_from_route] + _common_on_load)
+app.add_page(
+    page_inventario,
+    route="/inventario",
+    title="Inventario - TUWAYKIAPP",
+    on_load=[State.ensure_view_inventario, State.sync_page_from_route] + _common_on_load,
+)
+app.add_page(
+    page_historial,
+    route="/historial",
+    title="Historial - TUWAYKIAPP",
+    on_load=[State.ensure_view_historial, State.sync_page_from_route] + _common_on_load,
+)
 app.add_page(
     page_servicios,
     route="/servicios",
     title="Servicios - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.load_reservations] + _common_on_load,
+    on_load=[State.ensure_view_servicios, State.sync_page_from_route, State.load_reservations] + _common_on_load,
 )
 app.add_page(
     page_configuracion,

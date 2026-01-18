@@ -104,9 +104,11 @@ class SaleInstallment(rx.Model, table=True):
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
     due_date: datetime = Field(
-        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.DateTime(timezone=False), index=True
+        ),
     )
-    status: str = Field(default="pending")
+    status: str = Field(default="pending", index=True)
     paid_amount: Decimal = Field(
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
@@ -190,7 +192,9 @@ class FieldReservation(rx.Model, table=True):
     field_name: str = Field(nullable=False)
 
     start_datetime: datetime = Field(
-        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.DateTime(timezone=False), index=True
+        ),
     )
     end_datetime: datetime = Field(
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),

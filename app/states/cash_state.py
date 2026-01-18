@@ -4,6 +4,7 @@ import datetime
 import uuid
 import logging
 import json
+import html
 import io
 import sqlalchemy
 from io import BytesIO
@@ -1567,6 +1568,7 @@ class CashState(MixinState):
         receipt_lines.extend([" ", " ", " "])
         
         receipt_text = chr(10).join(receipt_lines)
+        safe_receipt_text = html.escape(receipt_text)
         
         html_content = f"""<html>
 <head>
@@ -1579,7 +1581,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 </style>
 </head>
 <body>
-<pre>{receipt_text}</pre>
+<pre>{safe_receipt_text}</pre>
 </body>
 </html>"""
         
@@ -1739,6 +1741,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         ])
         
         receipt_text = chr(10).join(receipt_lines)
+        safe_receipt_text = html.escape(receipt_text)
         
         html_content = f"""<html>
 <head>
@@ -1751,7 +1754,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 </style>
 </head>
 <body>
-<pre>{receipt_text}</pre>
+<pre>{safe_receipt_text}</pre>
 </body>
 </html>"""
         

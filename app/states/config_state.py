@@ -32,6 +32,15 @@ class ConfigState(MixinState):
     unit_rows: List[Dict[str, Any]] = []
     payment_methods: List[PaymentMethodConfig] = []
 
+    def _require_manage_config(self):
+        if hasattr(self, "current_user") and not self.current_user["privileges"].get(
+            "manage_config"
+        ):
+            return rx.toast(
+                "No tiene permisos para configurar el sistema.", duration=3000
+            )
+        return None
+
     def load_config_data(self):
         with rx.session() as session:
             # Load Currencies
@@ -102,6 +111,9 @@ class ConfigState(MixinState):
 
     @rx.event
     def save_settings(self):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         company_name = (self.company_name or "").strip()
         ruc = (self.ruc or "").strip()
         address = (self.address or "").strip()
@@ -140,6 +152,9 @@ class ConfigState(MixinState):
         self.config_active_tab = tab
 
     def add_unit(self):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         name = self.new_unit_name.strip()
         if not name:
             return
@@ -157,6 +172,9 @@ class ConfigState(MixinState):
                 return rx.toast("La unidad ya existe.", duration=2000)
 
     def set_unit_decimal(self, unit_name: str, allows_decimal: bool):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         with rx.session() as session:
             unit = session.exec(select(Unit).where(Unit.name == unit_name)).first()
             if unit:
@@ -166,6 +184,9 @@ class ConfigState(MixinState):
         self.load_config_data()
 
     def remove_unit(self, unit_name: str):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         with rx.session() as session:
             unit = session.exec(select(Unit).where(Unit.name == unit_name)).first()
             if unit:
@@ -306,6 +327,9 @@ class ConfigState(MixinState):
 
     @rx.event
     def add_currency(self):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         code = (self.new_currency_code or "").strip().upper()
         name = (self.new_currency_name or "").strip()
         symbol = (self.new_currency_symbol or "").strip()
@@ -330,6 +354,9 @@ class ConfigState(MixinState):
 
     @rx.event
     def remove_currency(self, code: str):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         code = (code or "").upper()
         if len(self.available_currencies) <= 1:
             return rx.toast("Debe quedar al menos una moneda.", duration=3000)
@@ -369,6 +396,9 @@ class ConfigState(MixinState):
 
     @rx.event
     def add_decimal_unit(self):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         name = (self.new_unit_name or "").strip().lower()
         if not name:
             return rx.toast("Ingrese el nombre de la unidad.", duration=3000)
@@ -392,6 +422,9 @@ class ConfigState(MixinState):
 
     @rx.event
     def remove_decimal_unit(self, unit: str):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         unit = (unit or "").lower()
         with rx.session() as session:
             unit_db = session.exec(select(Unit).where(Unit.name == unit)).first()

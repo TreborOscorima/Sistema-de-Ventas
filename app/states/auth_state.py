@@ -307,6 +307,84 @@ class AuthState(MixinState):
             self.needs_initial_admin = not user_count or user_count == 0
 
     @rx.event
+    def ensure_view_ingresos(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("view_ingresos"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para ver Ingresos.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
+    def ensure_view_ventas(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("view_ventas"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para ver Ventas.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
+    def ensure_view_cashbox(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("view_cashbox"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para ver Caja.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
+    def ensure_view_inventario(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("view_inventario"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para ver Inventario.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
+    def ensure_view_historial(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("view_historial"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para ver Historial.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
+    def ensure_view_servicios(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("view_servicios"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para ver Servicios.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
     def ensure_view_clientes(self):
         if not self.is_authenticated:
             return rx.redirect("/")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
+import html
 from typing import Any, Dict, List
 
 
@@ -209,6 +210,7 @@ class ReceiptService:
         receipt_lines.extend([" ", " ", " "])
 
         receipt_text = chr(10).join(receipt_lines)
+        safe_receipt_text = html.escape(receipt_text)
 
         return f"""<html>
 <head>
@@ -221,6 +223,6 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 </style>
 </head>
 <body>
-<pre>{receipt_text}</pre>
+<pre>{safe_receipt_text}</pre>
 </body>
 </html>"""
