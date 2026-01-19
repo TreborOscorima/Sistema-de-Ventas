@@ -86,6 +86,7 @@ class SaleItem(rx.Model, table=True):
 
     product_name_snapshot: str = Field(default="")
     product_barcode_snapshot: str = Field(default="")
+    product_category_snapshot: str = Field(default="")
 
     sale_id: int = Field(foreign_key="sale.id")
     product_id: Optional[int] = Field(default=None, foreign_key="product.id")

@@ -2004,7 +2004,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 unit_price=amount,
                 subtotal=amount,
                 product_name_snapshot=description,
-                product_barcode_snapshot=str(reservation["id"])
+                product_barcode_snapshot=str(reservation["id"]),
+                product_category_snapshot="Servicios",
             )
             session.add(sale_item)
             session.add(

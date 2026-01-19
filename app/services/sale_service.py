@@ -621,6 +621,7 @@ class SaleService:
                     subtotal=item["subtotal"],
                     product_name_snapshot=product.description,
                     product_barcode_snapshot=product.barcode,
+                    product_category_snapshot=product.category or "General",
                 )
                 session.add(sale_item)
     
@@ -647,6 +648,7 @@ class SaleService:
                         f"({reservation.start_datetime} - {reservation.end_datetime})"
                     ),
                     product_barcode_snapshot=str(reservation.id),
+                    product_category_snapshot="Servicios",
                 )
                 session.add(res_item)
     

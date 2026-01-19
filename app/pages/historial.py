@@ -29,6 +29,24 @@ def history_filters() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.label(
+                    "Categoria",
+                    class_name="text-sm font-medium text-gray-600",
+                ),
+                rx.el.select(
+                    rx.foreach(
+                        State.available_category_options,
+                        lambda option: rx.el.option(
+                            option[0], value=option[1]
+                        ),
+                    ),
+                    value=State.staged_history_filter_category,
+                    on_change=State.set_staged_history_filter_category,
+                    class_name="w-full p-2 border rounded-md",
+                ),
+                class_name="flex flex-col gap-1",
+            ),
+            rx.el.div(
+                rx.el.label(
                     "Buscar por producto",
                     class_name="text-sm font-medium text-gray-600",
                 ),
@@ -42,7 +60,7 @@ def history_filters() -> rx.Component:
             ),
             start_filter,
             end_filter,
-            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end",
+            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end",
         ),
         # Segunda fila: Botones de acción
         rx.el.div(

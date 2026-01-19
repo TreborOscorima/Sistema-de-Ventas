@@ -11,6 +11,7 @@ from app.enums import PaymentMethodType, SaleStatus
 from app.models import (
     Sale,
     SaleItem,
+    Category,
     Product,
     CashboxLog,
     PaymentMethod,
@@ -22,12 +23,15 @@ class HistorialState(MixinState):
     # history: List[Movement] = [] # Removed in favor of DB
     history_filter_type: str = "Todos"
     history_filter_product: str = ""
+    history_filter_category: str = "Todas"
     history_filter_start_date: str = ""
     history_filter_end_date: str = ""
     staged_history_filter_type: str = "Todos"
     staged_history_filter_product: str = ""
+    staged_history_filter_category: str = "Todas"
     staged_history_filter_start_date: str = ""
     staged_history_filter_end_date: str = ""
+    available_category_options: list[list[str]] = [["Todas", "Todas"]]
     current_page_history: int = 1
     items_per_page: int = 10
     _history_update_trigger: int = 0
@@ -56,6 +60,35 @@ class HistorialState(MixinState):
                 end_date = None
         return start_date, end_date
 
+    def _load_category_options(self) -> None:
+        categories: set[str] = set()
+        with rx.session() as session:
+            for name in session.exec(select(Category.name)).all():
+                if name:
+                    categories.add(str(name).strip())
+            for name in session.exec(select(Product.category)).all():
+                if name:
+                    categories.add(str(name).strip())
+            for name in session.exec(
+                select(SaleItem.product_category_snapshot)
+            ).all():
+                if name:
+                    categories.add(str(name).strip())
+
+        categories = {name for name in categories if name}
+        if not categories:
+            categories = {"General"}
+
+        options = [["Todas", "Todas"]]
+        options.extend([[name, name] for name in sorted(categories)])
+        self.available_category_options = options
+
+        valid_values = {option[1] for option in options}
+        if self.history_filter_category not in valid_values:
+            self.history_filter_category = "Todas"
+        if self.staged_history_filter_category not in valid_values:
+            self.staged_history_filter_category = "Todas"
+
     def _apply_sales_filters(self, query):
         start_date, end_date = self._history_date_range()
         if start_date:
@@ -72,6 +105,15 @@ class HistorialState(MixinState):
             sale_ids = (
                 select(SaleItem.sale_id)
                 .where(SaleItem.product_name_snapshot.ilike(like_search))
+                .distinct()
+            )
+            query = query.where(Sale.id.in_(sale_ids))
+
+        category = (self.history_filter_category or "").strip()
+        if category and category != "Todas":
+            sale_ids = (
+                select(SaleItem.sale_id)
+                .where(SaleItem.product_category_snapshot == category)
                 .distinct()
             )
             query = query.where(Sale.id.in_(sale_ids))
@@ -355,6 +397,7 @@ class HistorialState(MixinState):
     def apply_history_filters(self):
         self.history_filter_type = self.staged_history_filter_type
         self.history_filter_product = self.staged_history_filter_product
+        self.history_filter_category = self.staged_history_filter_category
         self.history_filter_start_date = self.staged_history_filter_start_date
         self.history_filter_end_date = self.staged_history_filter_end_date
         self.current_page_history = 1
@@ -362,6 +405,7 @@ class HistorialState(MixinState):
 
     @rx.event
     def reload_history(self):
+        self._load_category_options()
         self._history_update_trigger += 1
         # print("Reloading history...") # Debug
 
@@ -369,6 +413,7 @@ class HistorialState(MixinState):
     def reset_history_filters(self):
         self.staged_history_filter_type = "Todos"
         self.staged_history_filter_product = ""
+        self.staged_history_filter_category = "Todas"
         self.staged_history_filter_start_date = ""
         self.staged_history_filter_end_date = ""
         self.apply_history_filters()
@@ -380,6 +425,10 @@ class HistorialState(MixinState):
     @rx.event
     def set_staged_history_filter_product(self, value: str):
         self.staged_history_filter_product = value or ""
+
+    @rx.event
+    def set_staged_history_filter_category(self, value: str):
+        self.staged_history_filter_category = value or "Todas"
 
     @rx.event
     def set_staged_history_filter_start_date(self, value: str):
@@ -481,6 +530,7 @@ class HistorialState(MixinState):
             "Fecha",
             "Cliente",
             "Productos Vendidos",
+            "Categorias",
             "Total",
             "Método Pago",
             "Usuario",
@@ -578,6 +628,17 @@ class HistorialState(MixinState):
                     item_parts.append(f"{name} (x{quantity}) - {price_display}")
                 products_summary = ", ".join(item_parts) if item_parts else "-"
 
+                category_parts = []
+                for item in items:
+                    category = (item.product_category_snapshot or "").strip()
+                    if not category:
+                        category = "Servicios" if item.product_id is None else "General"
+                    if category not in category_parts:
+                        category_parts.append(category)
+                categories_summary = (
+                    ", ".join(category_parts) if category_parts else "-"
+                )
+
                 client_name = sale.client.name if sale.client else "Sin cliente"
                 user_name = sale.user.username if sale.user else "Desconocido"
                 total_amount = self._round_currency(float(sale.total_amount or 0))
@@ -593,6 +654,7 @@ class HistorialState(MixinState):
                     else "",
                     client_name,
                     products_summary,
+                    categories_summary,
                     total_amount,
                     method_display,
                     user_name,

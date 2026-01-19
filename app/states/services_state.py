@@ -1525,6 +1525,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 subtotal=applied_amount,
                 product_name_snapshot=f"{entry_type.capitalize()} reserva: {reservation.get('field_name')}",
                 product_barcode_snapshot="RESERVA",
+                product_category_snapshot="Servicios",
             )
             session.add(sale_item)
             payment_label = (getattr(self, "payment_method", "") or "").strip() or "Efectivo"
@@ -1645,6 +1646,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     f"{entry_type.capitalize()} reserva: {reservation.get('field_name')}"
                 ),
                 product_barcode_snapshot="RESERVA",
+                product_category_snapshot="Servicios",
             )
             session.add(sale_item)
             payment_label = (getattr(self, "payment_method", "") or "").strip() or "No especificado"
