@@ -252,3 +252,5 @@ class CompanySettings(rx.Model, table=True):
     address: str = Field(default="", nullable=False)
     phone: Optional[str] = Field(default=None)
     footer_message: Optional[str] = Field(default=None)
+    receipt_paper: str = Field(default="80", nullable=False)
+    receipt_width: Optional[int] = Field(default=None)

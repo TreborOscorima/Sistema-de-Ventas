@@ -167,6 +167,8 @@ class ReceiptMixin:
                 )
 
         company = self._company_settings_snapshot()
+        receipt_width = self._receipt_width()
+        paper_width_mm = self._receipt_paper_mm()
         receipt_data = {
             "items": receipt_items,
             "total": total,
@@ -175,6 +177,8 @@ class ReceiptMixin:
             "payment_summary": payment_summary,
             "reservation_context": reservation_context,
             "currency_symbol": self.currency_symbol,
+            "width": receipt_width,
+            "paper_width_mm": paper_width_mm,
         }
 
         html_content = ReceiptService.generate_receipt_html(

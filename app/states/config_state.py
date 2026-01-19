@@ -14,6 +14,8 @@ class ConfigState(MixinState):
     address: str = ""
     phone: str = ""
     footer_message: str = ""
+    receipt_paper: str = "80"
+    receipt_width: str = ""
     company_form_key: int = 0
 
     # Currency
@@ -79,6 +81,8 @@ class ConfigState(MixinState):
         self.address = ""
         self.phone = ""
         self.footer_message = ""
+        self.receipt_paper = "80"
+        self.receipt_width = ""
         with rx.session() as session:
             settings = session.exec(select(CompanySettings)).first()
             if settings:
@@ -87,6 +91,13 @@ class ConfigState(MixinState):
                 self.address = settings.address or ""
                 self.phone = settings.phone or ""
                 self.footer_message = settings.footer_message or ""
+                receipt_paper = settings.receipt_paper or "80"
+                self.receipt_paper = receipt_paper if receipt_paper in {"58", "80"} else "80"
+                self.receipt_width = (
+                    str(settings.receipt_width)
+                    if settings.receipt_width is not None
+                    else ""
+                )
         self.company_form_key += 1
 
     @rx.event
@@ -110,6 +121,14 @@ class ConfigState(MixinState):
         self.footer_message = value or ""
 
     @rx.event
+    def set_receipt_paper(self, value: str):
+        self.receipt_paper = value or "80"
+
+    @rx.event
+    def set_receipt_width(self, value: str):
+        self.receipt_width = value or ""
+
+    @rx.event
     def save_settings(self):
         toast = self._require_manage_config()
         if toast:
@@ -119,6 +138,24 @@ class ConfigState(MixinState):
         address = (self.address or "").strip()
         phone = (self.phone or "").strip()
         footer_message = (self.footer_message or "").strip()
+        receipt_paper = (self.receipt_paper or "80").strip()
+        if receipt_paper not in {"58", "80"}:
+            receipt_paper = "80"
+        receipt_width_value = None
+        receipt_width_raw = (self.receipt_width or "").strip()
+        if receipt_width_raw:
+            try:
+                receipt_width_value = int(receipt_width_raw)
+            except ValueError:
+                return rx.toast(
+                    "El ancho de recibo debe ser un numero.",
+                    duration=3000,
+                )
+            if receipt_width_value < 24 or receipt_width_value > 64:
+                return rx.toast(
+                    "El ancho de recibo debe estar entre 24 y 64.",
+                    duration=3000,
+                )
 
         with rx.session() as session:
             settings = session.exec(select(CompanySettings)).first()
@@ -128,6 +165,8 @@ class ConfigState(MixinState):
                 settings.address = address
                 settings.phone = phone or None
                 settings.footer_message = footer_message or None
+                settings.receipt_paper = receipt_paper
+                settings.receipt_width = receipt_width_value
                 session.add(settings)
             else:
                 settings = CompanySettings(
@@ -136,6 +175,8 @@ class ConfigState(MixinState):
                     address=address,
                     phone=phone or None,
                     footer_message=footer_message or None,
+                    receipt_paper=receipt_paper,
+                    receipt_width=receipt_width_value,
                 )
                 session.add(settings)
             session.commit()
@@ -144,6 +185,10 @@ class ConfigState(MixinState):
         self.address = address
         self.phone = phone
         self.footer_message = footer_message
+        self.receipt_paper = receipt_paper
+        self.receipt_width = (
+            str(receipt_width_value) if receipt_width_value is not None else ""
+        )
         self.company_form_key += 1
         return rx.toast("Configuracion de empresa guardada.", duration=2500)
 

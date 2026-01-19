@@ -1492,14 +1492,17 @@ class CashState(MixinState):
         if not sale_data:
             return rx.toast("Venta no encontrada.", duration=3000)
         
+        receipt_width = self._receipt_width()
+        paper_width_mm = self._receipt_paper_mm()
+
         # Funciones auxiliares para formato de texto plano
-        def center(text, width=42):
+        def center(text, width=receipt_width):
             return text.center(width)
         
-        def line(width=42):
+        def line(width=receipt_width):
             return "-" * width
         
-        def row(left, right, width=42):
+        def row(left, right, width=receipt_width):
             spaces = width - len(left) - len(right)
             return left + " " * max(spaces, 1) + right
 
@@ -1509,7 +1512,7 @@ class CashState(MixinState):
         address = (company.get("address") or "").strip()
         phone = (company.get("phone") or "").strip()
         footer_message = (company.get("footer_message") or "").strip()
-        address_lines = self._wrap_receipt_lines(address, 42)
+        address_lines = self._wrap_receipt_lines(address, receipt_width)
         
         items = sale_data.get("items", [])
         payment_summary = self._payment_details_text(
@@ -1519,7 +1522,8 @@ class CashState(MixinState):
         # Construir recibo línea por línea
         receipt_lines = [""]
         if company_name:
-            receipt_lines.append(center(company_name))
+            for name_line in self._wrap_receipt_lines(company_name, receipt_width):
+                receipt_lines.append(center(name_line))
             receipt_lines.append("")
         if ruc:
             receipt_lines.append(center(f"RUC: {ruc}"))
@@ -1548,23 +1552,32 @@ class CashState(MixinState):
         # Agregar ítems
         for item in items:
             receipt_lines.append("")
-            receipt_lines.append(item.get('description', ''))
-            receipt_lines.append(f"{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}    {self._format_currency(item.get('subtotal', 0))}")
+            description = item.get("description", "")
+            for desc_line in self._wrap_receipt_lines(description, receipt_width):
+                receipt_lines.append(desc_line)
+            receipt_lines.append(
+                f"{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}    {self._format_currency(item.get('subtotal', 0))}"
+            )
             receipt_lines.append("")
             receipt_lines.append(line())
         
         # Total y método de pago
-        receipt_lines.extend([
-            "",
-            row("TOTAL A PAGAR:", self._format_currency(sale_data.get('total', 0))),
-            "",
-            f"Metodo de Pago: {payment_summary}",
-            "",
-            line(),
-            "",
-        ])
+        receipt_lines.append("")
+        receipt_lines.append(
+            row("TOTAL A PAGAR:", self._format_currency(sale_data.get("total", 0)))
+        )
+        receipt_lines.append("")
+        receipt_lines.extend(
+            self._wrap_receipt_label_value(
+                "Metodo de Pago", payment_summary, receipt_width
+            )
+        )
+        receipt_lines.append("")
+        receipt_lines.append(line())
+        receipt_lines.append("")
         if footer_message:
-            receipt_lines.append(center(footer_message))
+            for footer_line in self._wrap_receipt_lines(footer_message, receipt_width):
+                receipt_lines.append(center(footer_line))
         receipt_lines.extend([" ", " ", " "])
         
         receipt_text = chr(10).join(receipt_lines)
@@ -1575,9 +1588,9 @@ class CashState(MixinState):
 <meta charset='utf-8'/>
 <title>Comprobante de Pago</title>
 <style>
-@page {{ size: 80mm auto; margin: 0; }}
+@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
 body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
 </style>
 </head>
 <body>
@@ -1648,14 +1661,17 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 session.add(log)
                 session.commit()
         
+        receipt_width = self._receipt_width()
+        paper_width_mm = self._receipt_paper_mm()
+
         # Funciones auxiliares para formato de texto plano
-        def center(text, width=42):
+        def center(text, width=receipt_width):
             return text.center(width)
         
-        def line(width=42):
+        def line(width=receipt_width):
             return "-" * width
         
-        def row(left, right, width=42):
+        def row(left, right, width=receipt_width):
             spaces = width - len(left) - len(right)
             return left + " " * max(spaces, 1) + right
         
@@ -1665,11 +1681,12 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         ruc = (company.get("ruc") or "").strip()
         address = (company.get("address") or "").strip()
         phone = (company.get("phone") or "").strip()
-        address_lines = self._wrap_receipt_lines(address, 42)
+        address_lines = self._wrap_receipt_lines(address, receipt_width)
 
         receipt_lines = [""]
         if company_name:
-            receipt_lines.append(center(company_name))
+            for name_line in self._wrap_receipt_lines(company_name, receipt_width):
+                receipt_lines.append(center(name_line))
             receipt_lines.append("")
         if ruc:
             receipt_lines.append(center(f"RUC: {ruc}"))
@@ -1722,13 +1739,22 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             method_label = sale.get("payment_label", sale.get("payment_method", ""))
             payment_detail = self._payment_details_text(sale.get("payment_details", ""))
             receipt_lines.append(f"{sale['timestamp']}")
-            receipt_lines.append(f"Usuario: {sale['user']}")
-            receipt_lines.append(f"Metodo: {method_label}")
+            receipt_lines.extend(
+                self._wrap_receipt_label_value(
+                    "Usuario", sale["user"], receipt_width
+                )
+            )
+            receipt_lines.extend(
+                self._wrap_receipt_label_value(
+                    "Metodo", method_label, receipt_width
+                )
+            )
             if payment_detail and payment_detail != method_label:
-                # Truncar si es muy largo
-                if len(payment_detail) > 40:
-                    payment_detail = payment_detail[:37] + "..."
-                receipt_lines.append(f"Detalle: {payment_detail}")
+                receipt_lines.extend(
+                    self._wrap_receipt_label_value(
+                        "Detalle", payment_detail, receipt_width
+                    )
+                )
             receipt_lines.append(row("Total:", self._format_currency(sale['total'])))
             receipt_lines.append(line())
         
@@ -1748,9 +1774,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 <meta charset='utf-8'/>
 <title>Resumen de Caja</title>
 <style>
-@page {{ size: 80mm auto; margin: 0; }}
+@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
 body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
 </style>
 </head>
 <body>

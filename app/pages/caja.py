@@ -30,11 +30,9 @@ def cashbox_filters() -> rx.Component:
         rx.el.div(
             rx.el.label("Mostrar adelantos", class_name="text-sm font-medium text-gray-600"),
             rx.el.div(
-                rx.el.input(
-                    type="checkbox",
+                rx.switch(
                     checked=State.show_cashbox_advances,
-                    on_change=lambda val: State.set_show_cashbox_advances(val),
-                    class_name="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500",
+                    on_change=State.set_show_cashbox_advances,
                 ),
                 rx.el.span(
                     "Incluir adelantos en el listado",

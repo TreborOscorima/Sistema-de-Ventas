@@ -1257,21 +1257,25 @@ class ServicesState(MixinState):
         return rx.toast("Reserva no encontrada.", duration=3000)
 
     def _print_reservation_proof(self, reservation: FieldReservation):
+        import html
         import json
         
         total = float(reservation['total_amount'])
         paid = float(reservation['paid_amount'])
         saldo = max(total - paid, 0)
         status_val = self._reservation_status_to_ui(reservation.get("status", ""))
+
+        receipt_width = self._receipt_width()
+        paper_width_mm = self._receipt_paper_mm()
         
-        # Función para centrar texto en 42 caracteres (ancho típico de 80mm)
-        def center(text, width=42):
+        # Funcion para centrar texto segun el ancho configurado.
+        def center(text, width=receipt_width):
             return text.center(width)
         
-        def line(width=42):
+        def line(width=receipt_width):
             return "-" * width
         
-        def row(left, right, width=42):
+        def row(left, right, width=receipt_width):
             spaces = width - len(left) - len(right)
             return left + " " * max(spaces, 1) + right
 
@@ -1281,11 +1285,12 @@ class ServicesState(MixinState):
         address = (company.get("address") or "").strip()
         phone = (company.get("phone") or "").strip()
         footer_message = (company.get("footer_message") or "").strip()
-        address_lines = self._wrap_receipt_lines(address, 42)
+        address_lines = self._wrap_receipt_lines(address, receipt_width)
         
         receipt_lines = [""]
         if company_name:
-            receipt_lines.append(center(company_name))
+            for name_line in self._wrap_receipt_lines(company_name, receipt_width):
+                receipt_lines.append(center(name_line))
             receipt_lines.append("")
         if ruc:
             receipt_lines.append(center(f"RUC: {ruc}"))
@@ -1309,52 +1314,79 @@ class ServicesState(MixinState):
                 "",
                 line(),
                 "",
-                f"Cliente: {reservation['client_name']}",
-                "",
-                f"DNI: {reservation.get('dni') or '-'}",
-                "",
-                line(),
-                "",
-                f"Campo: {reservation['field_name']}",
-                "",
-                f"Inicio: {reservation['start_datetime']}",
-                "",
-                f"Fin: {reservation['end_datetime']}",
-                "",
-                line(),
-                "",
-                row("TOTAL:", f"S/ {total:.2f}"),
-                "",
-                row("A CUENTA:", f"S/ {paid:.2f}"),
-                "",
-                row("SALDO:", f"S/ {saldo:.2f}"),
-                "",
-                line(),
-                "",
-                center(f"ESTADO: {status_val.upper()}"),
-                "",
-                line(),
-                "",
             ]
         )
+        receipt_lines.extend(
+            self._wrap_receipt_label_value(
+                "Cliente", reservation["client_name"], receipt_width
+            )
+        )
+        receipt_lines.append("")
+        receipt_lines.extend(
+            self._wrap_receipt_label_value(
+                "DNI", reservation.get("dni") or "-", receipt_width
+            )
+        )
+        receipt_lines.append("")
+        receipt_lines.append(line())
+        receipt_lines.append("")
+        receipt_lines.extend(
+            self._wrap_receipt_label_value(
+                "Campo", reservation["field_name"], receipt_width
+            )
+        )
+        receipt_lines.append("")
+        receipt_lines.extend(
+            self._wrap_receipt_label_value(
+                "Inicio", reservation["start_datetime"], receipt_width
+            )
+        )
+        receipt_lines.append("")
+        receipt_lines.extend(
+            self._wrap_receipt_label_value(
+                "Fin", reservation["end_datetime"], receipt_width
+            )
+        )
+        receipt_lines.append("")
+        receipt_lines.append(line())
+        receipt_lines.append("")
+        receipt_lines.append(row("TOTAL:", f"S/ {total:.2f}"))
+        receipt_lines.append("")
+        receipt_lines.append(row("A CUENTA:", f"S/ {paid:.2f}"))
+        receipt_lines.append("")
+        receipt_lines.append(row("SALDO:", f"S/ {saldo:.2f}"))
+        receipt_lines.append("")
+        receipt_lines.append(line())
+        receipt_lines.append("")
+        status_lines = self._wrap_receipt_lines(
+            f"ESTADO: {status_val.upper()}", receipt_width
+        )
+        for status_line in status_lines:
+            receipt_lines.append(center(status_line))
+        receipt_lines.append("")
+        receipt_lines.append(line())
+        receipt_lines.append("")
         if footer_message:
-            receipt_lines.append(center(footer_message))
+            footer_lines = self._wrap_receipt_lines(footer_message, receipt_width)
+            for footer_line in footer_lines:
+                receipt_lines.append(center(footer_line))
         receipt_lines.extend([" ", " ", " "])
         
         receipt_text = chr(10).join(receipt_lines)
+        safe_receipt_text = html.escape(receipt_text)
         
         html_content = f"""<html>
 <head>
 <meta charset='utf-8'/>
 <title>Constancia de Reserva</title>
 <style>
-@page {{ size: 80mm auto; margin: 0; }}
+@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
 body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
 </style>
 </head>
 <body>
-<pre>{receipt_text}</pre>
+<pre>{safe_receipt_text}</pre>
 </body>
 </html>"""
         

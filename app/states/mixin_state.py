@@ -1,3 +1,4 @@
+import os
 import reflex as rx
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any
@@ -25,6 +26,7 @@ class MixinState:
     def _wrap_receipt_lines(self, text: str, width: int) -> List[str]:
         if not text:
             return []
+        width = max(int(width), 1)
         parts = [part.strip() for part in text.splitlines() if part.strip()]
         if not parts:
             return []
@@ -33,9 +35,17 @@ class MixinState:
             words = part.split()
             if not words:
                 continue
-            current = words[0]
-            for word in words[1:]:
-                if len(current) + 1 + len(word) <= width:
+            current = ""
+            for word in words:
+                while len(word) > width:
+                    if current:
+                        lines.append(current)
+                        current = ""
+                    lines.append(word[:width])
+                    word = word[width:]
+                if not current:
+                    current = word
+                elif len(current) + 1 + len(word) <= width:
                     current = f"{current} {word}"
                 else:
                     lines.append(current)
@@ -44,13 +54,67 @@ class MixinState:
                 lines.append(current)
         return lines
 
-    def _company_settings_snapshot(self) -> Dict[str, str]:
+    def _wrap_receipt_label_value(self, label: str, value: str, width: int) -> List[str]:
+        label = (label or "").strip()
+        value = (value or "").strip()
+        if not label:
+            return self._wrap_receipt_lines(value, width)
+        prefix = f"{label}: "
+        if not value:
+            return [prefix.rstrip()]
+        available = max(width - len(prefix), 1)
+        value_lines = self._wrap_receipt_lines(value, available)
+        if not value_lines:
+            return [prefix.rstrip()]
+        lines = [prefix + value_lines[0]]
+        indent = " " * len(prefix)
+        lines.extend(f"{indent}{line}" for line in value_lines[1:])
+        return lines
+
+    def _receipt_width(self) -> int:
+        settings = self._company_settings_snapshot()
+        raw_width = settings.get("receipt_width")
+        width_raw = os.getenv("RECEIPT_WIDTH", "").strip()
+        width = None
+        if isinstance(raw_width, int):
+            width = raw_width
+        elif isinstance(raw_width, str) and raw_width.strip().isdigit():
+            width = int(raw_width.strip())
+        elif width_raw.isdigit():
+            width = int(width_raw)
+        else:
+            paper = (settings.get("receipt_paper") or "").strip().lower()
+            if not paper:
+                paper = os.getenv("RECEIPT_PAPER", "").strip().lower()
+            if paper in {"58", "58mm", "58-mm"}:
+                width = 32
+            elif paper in {"80", "80mm", "80-mm"}:
+                width = 42
+        if not width:
+            width = 42
+        return max(24, min(width, 64))
+
+    def _receipt_paper_mm(self) -> int:
+        settings = self._company_settings_snapshot()
+        paper = (settings.get("receipt_paper") or "").strip().lower()
+        if not paper:
+            paper = os.getenv("RECEIPT_PAPER", "").strip().lower()
+        if paper in {"58", "58mm", "58-mm"}:
+            return 58
+        if paper in {"80", "80mm", "80-mm"}:
+            return 80
+        width = self._receipt_width()
+        return 58 if width <= 34 else 80
+
+    def _company_settings_snapshot(self) -> Dict[str, Any]:
         defaults = {
             "company_name": "",
             "ruc": "",
             "address": "",
             "phone": "",
             "footer_message": "",
+            "receipt_paper": "",
+            "receipt_width": "",
         }
         try:
             from sqlmodel import select
@@ -70,6 +134,12 @@ class MixinState:
             "address": settings.address or "",
             "phone": settings.phone or "",
             "footer_message": settings.footer_message or "",
+            "receipt_paper": settings.receipt_paper or "",
+            "receipt_width": (
+                settings.receipt_width
+                if settings.receipt_width is not None
+                else ""
+            ),
         }
 
     @rx.var

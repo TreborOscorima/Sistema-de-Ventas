@@ -23,6 +23,7 @@ class ReceiptService:
     def _wrap_receipt_lines(text: str, width: int) -> List[str]:
         if not text:
             return []
+        width = max(int(width), 1)
         parts = [part.strip() for part in text.splitlines() if part.strip()]
         if not parts:
             return []
@@ -31,15 +32,41 @@ class ReceiptService:
             words = part.split()
             if not words:
                 continue
-            current = words[0]
-            for word in words[1:]:
-                if len(current) + 1 + len(word) <= width:
+            current = ""
+            for word in words:
+                while len(word) > width:
+                    if current:
+                        lines.append(current)
+                        current = ""
+                    lines.append(word[:width])
+                    word = word[width:]
+                if not current:
+                    current = word
+                elif len(current) + 1 + len(word) <= width:
                     current = f"{current} {word}"
                 else:
                     lines.append(current)
                     current = word
             if current:
                 lines.append(current)
+        return lines
+
+    @staticmethod
+    def _wrap_receipt_label_value(label: str, value: str, width: int) -> List[str]:
+        label = (label or "").strip()
+        value = (value or "").strip()
+        if not label:
+            return ReceiptService._wrap_receipt_lines(value, width)
+        prefix = f"{label}: "
+        if not value:
+            return [prefix.rstrip()]
+        available = max(width - len(prefix), 1)
+        value_lines = ReceiptService._wrap_receipt_lines(value, available)
+        if not value_lines:
+            return [prefix.rstrip()]
+        lines = [prefix + value_lines[0]]
+        indent = " " * len(prefix)
+        lines.extend(f"{indent}{line}" for line in value_lines[1:])
         return lines
 
     @staticmethod
@@ -61,7 +88,17 @@ class ReceiptService:
     ) -> str:
         data = receipt_data or {}
         company = company_settings or {}
-        width = int(data.get("width", ReceiptService.DEFAULT_WIDTH))
+        try:
+            width = int(data.get("width", ReceiptService.DEFAULT_WIDTH))
+        except (TypeError, ValueError):
+            width = ReceiptService.DEFAULT_WIDTH
+        width = max(24, min(width, 64))
+        try:
+            paper_width_mm = int(data.get("paper_width_mm", 80))
+        except (TypeError, ValueError):
+            paper_width_mm = 80
+        if paper_width_mm < 40 or paper_width_mm > 90:
+            paper_width_mm = 80
         currency_symbol = data.get("currency_symbol") or "S/ "
 
         receipt_items = data.get("items") or []
@@ -80,7 +117,9 @@ class ReceiptService:
 
         receipt_lines: list[str] = [""]
         if company_name:
-            receipt_lines.append(ReceiptService._center(company_name, width))
+            name_lines = ReceiptService._wrap_receipt_lines(company_name, width)
+            for name_line in name_lines:
+                receipt_lines.append(ReceiptService._center(name_line, width))
             receipt_lines.append("")
         if ruc:
             receipt_lines.append(
@@ -117,7 +156,8 @@ class ReceiptService:
 
             if header:
                 receipt_lines.append("")
-                receipt_lines.append(ReceiptService._center(header, width))
+                for header_line in ReceiptService._wrap_receipt_lines(header, width):
+                    receipt_lines.append(ReceiptService._center(header_line, width))
                 receipt_lines.append("")
                 receipt_lines.append(ReceiptService._line(width))
 
@@ -177,7 +217,10 @@ class ReceiptService:
 
         for item in receipt_items:
             receipt_lines.append("")
-            receipt_lines.append(item["description"])
+            description = item.get("description", "")
+            description_lines = ReceiptService._wrap_receipt_lines(description, width)
+            for desc_line in description_lines:
+                receipt_lines.append(desc_line)
             receipt_lines.append(
                 (
                     f"{item['quantity']} {item['unit']} x "
@@ -188,25 +231,27 @@ class ReceiptService:
             receipt_lines.append("")
             receipt_lines.append(ReceiptService._line(width))
 
-        receipt_lines.extend(
-            [
-                "",
-                ReceiptService._row(
-                    "TOTAL A PAGAR:",
-                    ReceiptService._format_currency(total, currency_symbol),
-                    width,
-                ),
-                "",
-                f"Metodo de Pago: {payment_summary}",
-                "",
-                ReceiptService._line(width),
-                "",
-            ]
-        )
-        if footer_message:
-            receipt_lines.append(
-                ReceiptService._center(footer_message, width)
+        receipt_lines.append("")
+        receipt_lines.append(
+            ReceiptService._row(
+                "TOTAL A PAGAR:",
+                ReceiptService._format_currency(total, currency_symbol),
+                width,
             )
+        )
+        receipt_lines.append("")
+        receipt_lines.extend(
+            ReceiptService._wrap_receipt_label_value(
+                "Metodo de Pago", payment_summary, width
+            )
+        )
+        receipt_lines.append("")
+        receipt_lines.append(ReceiptService._line(width))
+        receipt_lines.append("")
+        if footer_message:
+            footer_lines = ReceiptService._wrap_receipt_lines(footer_message, width)
+            for footer_line in footer_lines:
+                receipt_lines.append(ReceiptService._center(footer_line, width))
         receipt_lines.extend([" ", " ", " "])
 
         receipt_text = chr(10).join(receipt_lines)
@@ -217,9 +262,9 @@ class ReceiptService:
 <meta charset='utf-8'/>
 <title>Comprobante de Pago</title>
 <style>
-@page {{ size: 80mm auto; margin: 0; }}
+@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
 body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
 </style>
 </head>
 <body>

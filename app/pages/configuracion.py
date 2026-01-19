@@ -272,6 +272,37 @@ def company_settings_section() -> rx.Component:
                     ),
                     class_name="flex flex-col gap-1 md:col-span-2",
                 ),
+                rx.el.div(
+                    rx.el.label("Papel de Impresion", class_name="text-sm font-medium"),
+                    rx.el.select(
+                        rx.el.option("80 mm (default)", value="80"),
+                        rx.el.option("58 mm", value="58"),
+                        value=State.receipt_paper,
+                        on_change=State.set_receipt_paper,
+                        class_name="w-full p-2 border rounded-md",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(
+                    rx.el.label(
+                        "Ancho de Recibo (opcional)", class_name="text-sm font-medium"
+                    ),
+                    rx.el.input(
+                        default_value=State.receipt_width,
+                        on_change=State.set_receipt_width,
+                        placeholder="Ej: 42",
+                        type_="number",
+                        min="24",
+                        max="64",
+                        key=State.company_form_key.to_string() + "-receipt_width",
+                        class_name="w-full p-2 border rounded-md",
+                    ),
+                    rx.el.p(
+                        "Deja en blanco para usar el ancho automatico.",
+                        class_name="text-xs text-gray-500",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
                 class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
             ),
             rx.el.div(
@@ -658,11 +689,9 @@ def unit_section() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.label("Permite decimales", class_name="text-sm font-medium"),
-                rx.el.input(
-                    type="checkbox",
+                rx.switch(
                     checked=State.new_unit_allows_decimal,
                     on_change=State.set_new_unit_allows_decimal,
-                    class_name="h-4 w-4",
                 ),
                 class_name="flex items-center gap-2 mt-1",
             ),
@@ -710,8 +739,7 @@ def unit_section() -> rx.Component:
                                             "Permitir decimales",
                                             class_name="text-xs text-gray-500",
                                         ),
-                                        rx.el.input(
-                                            type="checkbox",
+                                        rx.switch(
                                             checked=unit["allows_decimal"].bool(),
                                             on_change=lambda value,
                                             name=unit["name"]: State.set_unit_decimal(
@@ -860,14 +888,12 @@ def payment_methods_section() -> rx.Component:
                                             "Visible en Venta",
                                             class_name="text-xs text-gray-500",
                                         ),
-                                        rx.el.input(
-                                            type="checkbox",
+                                        rx.switch(
                                             checked=method["enabled"],
                                             on_change=lambda value,
                                             mid=method["id"]: State.toggle_payment_method_enabled(
                                                 mid, value
                                             ),
-                                            class_name="h-4 w-4",
                                         ),
                                         class_name="flex items-center gap-2",
                                     ),
