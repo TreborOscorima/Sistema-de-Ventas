@@ -2,6 +2,7 @@ import reflex as rx
 from app.state import State
 from app.components.ui import (
     INPUT_STYLES,
+    toggle_switch,
 )
 from app.pages.clientes import client_form_modal
 
@@ -552,7 +553,7 @@ def payment_sidebar() -> rx.Component:
                         rx.el.span("Configura cuotas y pago inicial", class_name="text-[11px] text-gray-400"),
                         class_name="flex flex-col",
                     ),
-                    rx.switch(
+                    toggle_switch(
                         checked=State.is_credit_mode,
                         on_change=State.toggle_credit_mode,
                     ),
@@ -983,7 +984,7 @@ def payment_mobile_section() -> rx.Component:
         rx.el.div(
             rx.hstack(
                 rx.el.span("Venta a Credito / Fiado", class_name="text-sm font-semibold text-gray-800"),
-                rx.switch(
+                toggle_switch(
                     checked=State.is_credit_mode,
                     on_change=State.toggle_credit_mode,
                 ),

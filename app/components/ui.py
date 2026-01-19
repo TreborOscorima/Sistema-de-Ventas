@@ -162,6 +162,42 @@ def form_field(
     )
 
 
+def toggle_switch(
+    checked: rx.Var | bool,
+    on_change: Callable,
+    class_name: str = "",
+) -> rx.Component:
+    track_base = (
+        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors "
+        "duration-200 ease-in-out"
+    )
+    thumb_base = (
+        "inline-block h-5 w-5 transform rounded-full bg-white shadow transition "
+        "duration-200 ease-in-out"
+    )
+    track_class = rx.cond(
+        checked,
+        f"{track_base} bg-indigo-600",
+        f"{track_base} bg-gray-200",
+    )
+    thumb_class = rx.cond(
+        checked,
+        f"{thumb_base} translate-x-5",
+        f"{thumb_base} translate-x-0",
+    )
+
+    return rx.el.label(
+        rx.el.input(
+            type="checkbox",
+            checked=checked,
+            on_change=on_change,
+            class_name="sr-only",
+        ),
+        rx.el.span(rx.el.span(class_name=thumb_class), class_name=track_class),
+        class_name=f"inline-flex items-center cursor-pointer {class_name}".strip(),
+    )
+
+
 def text_input(
     placeholder: str = "",
     value: rx.Var | str = "",

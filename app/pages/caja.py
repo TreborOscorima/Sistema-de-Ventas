@@ -12,6 +12,7 @@ from app.components.ui import (
     info_badge,
     form_textarea,
     INPUT_STYLES,
+    toggle_switch,
 )
 
 
@@ -30,7 +31,7 @@ def cashbox_filters() -> rx.Component:
         rx.el.div(
             rx.el.label("Mostrar adelantos", class_name="text-sm font-medium text-gray-600"),
             rx.el.div(
-                rx.switch(
+                toggle_switch(
                     checked=State.show_cashbox_advances,
                     on_change=State.set_show_cashbox_advances,
                 ),

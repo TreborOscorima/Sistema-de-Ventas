@@ -1,5 +1,6 @@
 import reflex as rx
 from app.state import State
+from app.components.ui import toggle_switch
 
 CONFIG_SECTIONS: list[dict[str, str]] = [
     {
@@ -113,23 +114,10 @@ def privilege_switch(label: str, privilege: str) -> rx.Component:
     return rx.el.div(
         rx.el.label(label, class_name="font-medium text-gray-700"),
         rx.el.div(
-            rx.el.button(
-                rx.el.span(
-                    class_name=rx.cond(
-                        State.new_user_data["privileges"][privilege],
-                        "translate-x-5",
-                        "translate-x-0",
-                    )
-                    + " pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out"
-                ),
-                on_click=lambda: State.toggle_privilege(privilege),
-                class_name=rx.cond(
-                    State.new_user_data["privileges"][privilege],
-                    "bg-indigo-600",
-                    "bg-gray-200",
-                )
-                + " relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
-            )
+            toggle_switch(
+                checked=State.new_user_data["privileges"][privilege],
+                on_change=lambda value: State.toggle_privilege(privilege),
+            ),
         ),
         class_name="flex items-center justify-between bg-gray-50 p-3 rounded-lg",
     )
@@ -689,7 +677,7 @@ def unit_section() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.label("Permite decimales", class_name="text-sm font-medium"),
-                rx.switch(
+                toggle_switch(
                     checked=State.new_unit_allows_decimal,
                     on_change=State.set_new_unit_allows_decimal,
                 ),
@@ -739,7 +727,7 @@ def unit_section() -> rx.Component:
                                             "Permitir decimales",
                                             class_name="text-xs text-gray-500",
                                         ),
-                                        rx.switch(
+                                        toggle_switch(
                                             checked=unit["allows_decimal"].bool(),
                                             on_change=lambda value,
                                             name=unit["name"]: State.set_unit_decimal(
@@ -888,7 +876,7 @@ def payment_methods_section() -> rx.Component:
                                             "Visible en Venta",
                                             class_name="text-xs text-gray-500",
                                         ),
-                                        rx.switch(
+                                        toggle_switch(
                                             checked=method["enabled"],
                                             on_change=lambda value,
                                             mid=method["id"]: State.toggle_payment_method_enabled(
