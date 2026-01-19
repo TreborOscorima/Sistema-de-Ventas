@@ -68,7 +68,7 @@ def cashbox_log_filters() -> rx.Component:
             on_search=State.apply_cashbox_log_filters,
             on_clear=State.reset_cashbox_log_filters,
             on_export=State.export_cashbox_sessions,
-            export_text="Exportar Excel",
+            export_text="Exportar",
         ),
         class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end",
     )
@@ -82,8 +82,8 @@ def cashbox_opening_card() -> rx.Component:
                     rx.cond(State.cashbox_is_open, "wallet-cards", "alarm-clock"),
                     class_name=rx.cond(
                         State.cashbox_is_open,
-                        "h-10 w-10 text-emerald-600",
-                        "h-10 w-10 text-indigo-600",
+                        "h-8 w-8 text-emerald-600",
+                        "h-8 w-8 text-indigo-600",
                     ),
                 ),
                 rx.el.div(
@@ -93,7 +93,7 @@ def cashbox_opening_card() -> rx.Component:
                             "Caja abierta",
                             "Apertura de caja requerida",
                         ),
-                        class_name="text-lg font-semibold text-gray-900",
+                        class_name="text-base font-semibold text-gray-900",
                     ),
                     rx.el.p(
                         rx.cond(
@@ -101,11 +101,11 @@ def cashbox_opening_card() -> rx.Component:
                             "La caja sigue abierta hasta que confirmes el cierre.",
                             "Ingresa el monto inicial para comenzar la jornada.",
                         ),
-                        class_name="text-sm text-gray-600",
+                        class_name="text-xs text-gray-600",
                     ),
                     class_name="flex flex-col",
                 ),
-                class_name="flex items-start gap-4",
+                class_name="flex items-start gap-3",
             ),
             rx.cond(
                 State.cashbox_is_open,
@@ -118,9 +118,9 @@ def cashbox_opening_card() -> rx.Component:
                         rx.el.span(
                             State.currency_symbol,
                             State.cashbox_opening_amount_display,
-                            class_name="text-xl font-semibold text-gray-900",
+                            class_name="text-lg font-semibold text-gray-900",
                         ),
-                        class_name="flex flex-col gap-1 bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3",
+                        class_name="flex flex-col gap-0.5 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2",
                     ),
                     rx.el.div(
                         rx.el.span(
@@ -135,13 +135,13 @@ def cashbox_opening_card() -> rx.Component:
                             ),
                             class_name="text-sm font-medium text-gray-800",
                         ),
-                        class_name="flex flex-col gap-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3",
+                        class_name="flex flex-col gap-0.5 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2",
                     ),
-                    class_name="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full md:w-auto",
+                    class_name="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full md:w-auto",
                 ),
                 rx.fragment(),
             ),
-            class_name="flex flex-col md:flex-row justify-between gap-4",
+            class_name="flex flex-col md:flex-row justify-between gap-2",
         ),
         rx.el.div(
             rx.el.label("Caja inicial", class_name="font-medium text-gray-800"),
@@ -181,15 +181,16 @@ def cashbox_opening_card() -> rx.Component:
                         BUTTON_STYLES["disabled"],
                     ),
                 ),
-                class_name="flex flex-col sm:flex-row gap-3",
+                class_name="flex flex-col sm:flex-row gap-2",
             ),
             rx.el.p(
                 "Consejo: registra el efectivo inicial real para un cuadre correcto al cierre.",
                 class_name="text-xs text-gray-500",
             ),
-            class_name="flex flex-col gap-2",
+            class_name="flex flex-col gap-1",
         ),
-        style="default",
+        style="compact",
+        gap="gap-2",
     )
 
 
@@ -303,9 +304,10 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
             rx.el.div(
                 rx.el.button(
                     rx.icon("printer", class_name="h-4 w-4"),
-                    "Reimprimir",
                     on_click=lambda _, sale_id=sale["sale_id"]: State.reprint_sale_receipt(sale_id),
                     disabled=sale["is_deleted"],
+                    title="Reimprimir",
+                    aria_label="Reimprimir",
                     class_name=rx.cond(
                         sale["is_deleted"],
                         BUTTON_STYLES["disabled_sm"],
@@ -314,9 +316,10 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
                 ),
                 rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
-                    "Eliminar",
                     on_click=lambda _, sale_id=sale["sale_id"]: State.open_sale_delete_modal(sale_id),
                     disabled=sale["is_deleted"] | ~State.current_user["privileges"]["delete_sales"],
+                    title="Eliminar",
+                    aria_label="Eliminar",
                     class_name=rx.cond(
                         sale["is_deleted"] | ~State.current_user["privileges"]["delete_sales"],
                         BUTTON_STYLES["disabled_sm"],
@@ -844,7 +847,7 @@ def petty_cash_view() -> rx.Component:
                     rx.el.div(
                         rx.el.button(
                             rx.icon("download", class_name="w-4 h-4 mr-2"),
-                            "Exportar Excel",
+                            "Exportar",
                             on_click=State.export_petty_cash_report,
                             class_name="flex items-center justify-center bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 font-semibold text-sm h-full w-full sm:w-auto shadow-sm transition-colors min-h-[42px]",
                         ),

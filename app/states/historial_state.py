@@ -791,6 +791,7 @@ class HistorialState(MixinState):
         if 1 <= page_num <= self.total_pages:
             self.current_page_history = page_num
 
+
     @rx.event
     def apply_history_filters(self):
         self.history_filter_type = self.staged_history_filter_type

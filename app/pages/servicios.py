@@ -1061,7 +1061,7 @@ def reservations_table() -> rx.Component:
             ),
             rx.el.button(
                 rx.icon("download", class_name="h-4 w-4"),
-                "Exportar Excel",
+                "Exportar",
                 on_click=State.export_reservations_excel,
                 class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 min-h-[42px]",
             ),

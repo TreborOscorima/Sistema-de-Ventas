@@ -17,16 +17,14 @@ REPORT_TABS = [
 
 def history_filters() -> rx.Component:
     """Filter section for the history page."""
-    start_filter, end_filter = date_range_filter(
-        start_value=State.staged_history_filter_start_date,
-        end_value=State.staged_history_filter_end_date,
-        on_start_change=State.set_staged_history_filter_start_date,
-        on_end_change=State.set_staged_history_filter_end_date,
-    )
-    
-    return rx.el.div(
-        # Primera fila: Filtros
-        rx.el.div(
+    def _build_filters() -> list[rx.Component]:
+        start_filter, end_filter = date_range_filter(
+            start_value=State.staged_history_filter_start_date,
+            end_value=State.staged_history_filter_end_date,
+            on_start_change=State.set_staged_history_filter_start_date,
+            on_end_change=State.set_staged_history_filter_end_date,
+        )
+        filters = [
             select_filter(
                 "Filtrar por tipo",
                 [("Todos", "Todos"), ("Venta", "Venta")],
@@ -66,10 +64,14 @@ def history_filters() -> rx.Component:
             ),
             start_filter,
             end_filter,
-            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end",
-        ),
-        # Segunda fila: Botones de acción
-        rx.el.div(
+        ]
+        return [
+            rx.el.div(filter_item, class_name="min-w-[160px] flex-1")
+            for filter_item in filters
+        ]
+
+    def _build_actions() -> list[rx.Component]:
+        return [
             rx.el.button(
                 rx.icon("search", class_name="h-4 w-4"),
                 "Buscar",
@@ -83,19 +85,22 @@ def history_filters() -> rx.Component:
             ),
             rx.el.button(
                 rx.icon("download", class_name="h-4 w-4"),
-                "Exportar a Excel",
+                "Exportar",
                 on_click=State.export_to_excel,
                 class_name=BUTTON_STYLES["success"],
             ),
-            rx.el.button(
-                rx.icon("refresh-cw", class_name="h-4 w-4"),
-                "Actualizar",
-                on_click=State.reload_history,
-                class_name="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md shadow-sm transition-colors",
-            ),
-            class_name="flex flex-wrap gap-3 mt-4 justify-start lg:justify-end",
+        ]
+
+    return rx.el.div(
+        rx.el.div(
+            *_build_filters(),
+            class_name="flex flex-wrap lg:flex-nowrap gap-3 items-end",
         ),
-        class_name="flex flex-col",
+        rx.el.div(
+            *_build_actions(),
+            class_name="flex flex-wrap gap-2 justify-end",
+        ),
+        class_name="flex flex-col gap-3 pb-4 border-b border-gray-200",
     )
 
 
@@ -700,9 +705,6 @@ def historial_page() -> rx.Component:
             ),
             rx.el.div(
                 history_filters(),
-                class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
-            ),
-            rx.el.div(
                 rx.el.table(
                     rx.el.thead(
                         rx.el.tr(

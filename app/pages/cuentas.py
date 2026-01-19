@@ -86,7 +86,7 @@ def stats_dashboard_component(
             ),
             rx.el.button(
                 rx.icon("download", class_name="h-4 w-4"),
-                "Exportar Reporte (Excel)",
+                "Exportar",
                 on_click=export_event,
                 class_name="w-full flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-3 text-white font-semibold hover:bg-indigo-700",
             ),

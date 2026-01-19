@@ -40,6 +40,7 @@ INPUT_STYLES = {
 CARD_STYLES = {
     "default": "bg-white p-4 sm:p-6 rounded-lg shadow-md",
     "bordered": "bg-white border border-gray-200 rounded-lg p-4 sm:p-5 shadow-sm",
+    "compact": "bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm",
 }
 
 # Table styles
@@ -629,6 +630,7 @@ def card_container(
     title: str | None = None,
     description: str | None = None,
     style: str = "bordered",
+    gap: str = "gap-4",
 ) -> rx.Component:
     """
     Creates a styled card container with optional header.
@@ -638,6 +640,7 @@ def card_container(
         title: Optional card title
         description: Optional card description
         style: Card style key from CARD_STYLES
+        gap: Tailwind gap classes for vertical spacing
     
     Returns:
         A styled card component
@@ -662,7 +665,7 @@ def card_container(
     
     return rx.el.div(
         *content_parts,
-        class_name=f"{CARD_STYLES.get(style, CARD_STYLES['bordered'])} flex flex-col gap-4",
+        class_name=f"{CARD_STYLES.get(style, CARD_STYLES['bordered'])} flex flex-col {gap}",
     )
 
 
