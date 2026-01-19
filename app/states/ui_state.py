@@ -76,7 +76,7 @@ class UIState(MixinState):
         previous_page = self.current_page
         self.current_page = page
         
-        # Cross-module logic (assumes methods/attrs exist on the main State)
+        # Logica entre modulos (asume metodos/attrs en el State principal)
         if page == "Punto de Venta" and previous_page != "Punto de Venta":
             if hasattr(self, "_reset_sale_form"):
                 self._reset_sale_form()
@@ -132,7 +132,7 @@ class UIState(MixinState):
         required = self._page_permission_map().get(page)
         if not required:
             return True
-        # Assumes current_user is available on self (from AuthState)
+        # Asume que current_user esta disponible en self (desde AuthState)
         if hasattr(self, "current_user"):
             return bool(self.current_user["privileges"].get(required))
         return False

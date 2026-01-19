@@ -1,11 +1,11 @@
 """
-Validation utilities for inputs.
+Utilidades de validacion para inputs.
 """
 import re
 
 def validate_positive_number(value: float | str) -> bool:
     """
-    Validate if a number is positive.
+    Valida si un numero es positivo.
     """
     try:
         return float(value) > 0
@@ -14,7 +14,7 @@ def validate_positive_number(value: float | str) -> bool:
 
 def validate_non_negative(value: float | str) -> bool:
     """
-    Validate if a number is non-negative.
+    Valida si un numero es no negativo.
     """
     try:
         return float(value) >= 0
@@ -23,13 +23,13 @@ def validate_non_negative(value: float | str) -> bool:
 
 def validate_email(email: str) -> bool:
     """
-    Validate email format.
+    Valida el formato de email.
     """
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return bool(re.match(pattern, email))
 
 def validate_required(value: str) -> bool:
     """
-    Validate if a string is not empty.
+    Valida si un string no esta vacio.
     """
     return bool(value and value.strip())

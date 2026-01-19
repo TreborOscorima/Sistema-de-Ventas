@@ -11,7 +11,7 @@ from app.utils.logger import get_logger
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
 
-# Constants
+# Constantes
 DEFAULT_USER_PRIVILEGES: Privileges = {
     "view_ingresos": True,
     "create_ingresos": True,
@@ -93,7 +93,7 @@ logger = get_logger("AuthState")
 
 class AuthState(MixinState):
     token: str = rx.LocalStorage("")
-    # users: Dict[str, User] = {} # Removed in favor of DB
+    # users: Dict[str, User] = {} # Eliminado a favor de la BD
     roles: List[str] = ["Superadmin", "Administrador", "Usuario", "Cajero"]
     role_privileges: Dict[str, Privileges] = DEFAULT_ROLE_TEMPLATES.copy()
     
@@ -513,7 +513,7 @@ class AuthState(MixinState):
                         return
 
                 if username == "admin" and raw_password == initial_password:
-                    # Create superadmin
+                    # Crear superadmin
                     password_hash = bcrypt.hashpw(
                         password, bcrypt.gensalt()
                     ).decode()
@@ -653,7 +653,7 @@ class AuthState(MixinState):
         merged_privileges = self._normalize_privileges(user.get("privileges", {}))
         role_key = self._find_role_key(user["role"]) or user["role"]
         
-        # Ensure role exists in our tracking
+        # Asegurar que el rol exista en nuestro registro
         if role_key not in self.role_privileges:
             self.role_privileges[role_key] = merged_privileges.copy()
             if role_key not in self.roles:
@@ -691,7 +691,7 @@ class AuthState(MixinState):
             if not user:
                 return rx.toast("Usuario a editar no encontrado.", duration=3000)
             
-            # Convert to dict
+            # Convertir a dict
             role_name = user.role.name if user.role else "Sin rol"
             user_dict = {
                 "username": user.username,
@@ -820,7 +820,7 @@ class AuthState(MixinState):
                     overwrite=True, # <--- La clave: fuerza la actualización en la DB
                 )
             if self.editing_user:
-                # Update existing user
+                # Actualizar usuario existente
                 user_to_update = session.exec(
                     select(UserModel).where(UserModel.username == self.editing_user["username"])
                 ).first()
@@ -859,7 +859,7 @@ class AuthState(MixinState):
                 self.load_users()
                 return rx.toast(f"Usuario {username} actualizado.", duration=3000)
             else:
-                # Create new user
+                # Crear nuevo usuario
                 existing_user = session.exec(
                     select(UserModel).where(UserModel.username == username)
                 ).first()

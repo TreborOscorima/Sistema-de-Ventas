@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 try:
     from pydantic import ConfigDict
-except ImportError:  # Pydantic v1
+except ImportError:  # Pydantic v1 (compatibilidad)
     ConfigDict = None
 
 

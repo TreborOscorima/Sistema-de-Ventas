@@ -1,5 +1,5 @@
 """
-Reusable components for the Sistema de Ventas application.
+Componentes reutilizables para la aplicacion Sistema de Ventas.
 """
 from app.components.sidebar import sidebar
 from app.components.notification import NotificationHolder

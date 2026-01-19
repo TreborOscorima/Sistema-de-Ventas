@@ -60,8 +60,8 @@ _class_dict = {
     "__module__": __name__,
     "__qualname__": "RootState",
     "__doc__": """
-    Root state that combines all modular states via multiple inheritance (Mixins).
-    All sub-states are now independent mixins inheriting from MixinState.
+    Estado raiz que combina todos los estados modulares via herencia multiple (Mixins).
+    Todos los sub-estados son mixins independientes que heredan de MixinState.
     """,
     "__annotations__": {},
 }
@@ -76,11 +76,11 @@ for _mixin in _mixins:
                     continue
                 _class_dict[_name] = _value
 
-    # Merge annotations
+    # Unir anotaciones
     if hasattr(_mixin, "__annotations__"):
         _class_dict["__annotations__"].update(_mixin.__annotations__)
     
-    # Merge attributes and methods
+    # Unir atributos y metodos
     for _name, _value in _mixin.__dict__.items():
         if _name.startswith("__"): continue
         _class_dict[_name] = _value
@@ -89,6 +89,6 @@ _class_dict["__annotations__"]["overdue_alerts_count"] = int
 _class_dict["overdue_alerts_count"] = 0
 _class_dict["check_overdue_alerts"] = check_overdue_alerts
 
-# Create RootState dynamically to ensure BaseStateMeta processes all mixin methods
+# Crear RootState dinamicamente para que BaseStateMeta procese todos los metodos mixin
 RootState = type("RootState", (*_mixins, rx.State), _class_dict)
 

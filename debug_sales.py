@@ -3,7 +3,7 @@ from app.models import Sale
 import os
 import sys
 
-# Add project root to path
+# Agregar ruta raiz del proyecto al path
 sys.path.append(os.getcwd())
 
 import rxconfig

@@ -12,15 +12,15 @@ from .mixin_state import MixinState
 from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
 
 class InventoryState(MixinState):
-    # inventory: Dict[str, Product] = {} # Removed in favor of DB
-    # categories: List[str] = ["General"] # Replaced by DB
+    # inventory: Dict[str, Product] = {} # Eliminado a favor de la BD
+    # categories: List[str] = ["General"] # Reemplazado por BD
     new_category_name: str = ""
     inventory_search_term: str = ""
     inventory_current_page: int = 1
     inventory_items_per_page: int = 10
     inventory_recent_limit: int = 100
     
-    editing_product: Dict[str, Any] = { # Changed type to Dict for form handling
+    editing_product: Dict[str, Any] = { # Tipo cambiado a Dict para manejo de formularios
         "id": None,
         "barcode": "",
         "description": "",
@@ -173,7 +173,7 @@ class InventoryState(MixinState):
     def open_edit_product(self, product: Product):
         if not self.current_user["privileges"]["edit_inventario"]:
             return rx.toast("No tiene permisos para editar el inventario.", duration=3000)
-        # Convert model to dict for editing
+        # Convertir modelo a dict para edicion
         self.editing_product = {
             "id": product.id,
             "barcode": product.barcode,
@@ -229,7 +229,7 @@ class InventoryState(MixinState):
              return rx.toast("El código de barras no puede estar vacío.", duration=3000)
 
         with rx.session() as session:
-            # Check for duplicate barcode
+            # Verificar codigo de barras duplicado
             existing = session.exec(
                 select(Product).where(Product.barcode == barcode)
             ).first()
@@ -238,7 +238,7 @@ class InventoryState(MixinState):
                 return rx.toast("Ya existe un producto con ese código de barras.", duration=3000)
 
             if product_id:
-                # Update
+                # Actualizar
                 product = session.get(Product, product_id)
                 if not product:
                     return rx.toast("Producto no encontrado.", duration=3000)
@@ -254,7 +254,7 @@ class InventoryState(MixinState):
                 session.add(product)
                 msg = "Producto actualizado correctamente."
             else:
-                # Create
+                # Crear
                 new_product = Product(
                     barcode=barcode,
                     description=description,
@@ -435,7 +435,7 @@ class InventoryState(MixinState):
             item_copy["adjust_quantity"] = self._normalize_quantity_value(
                 item_copy.get("adjust_quantity", 0), item_copy.get("unit", "")
             )
-            # Ensure unit is set from product if missing
+            # Asegurar que la unidad se tome del producto si falta
             if not item_copy.get("unit"):
                 item_copy["unit"] = product.unit
                 
@@ -490,11 +490,11 @@ class InventoryState(MixinState):
                     available = product.stock
                     qty = min(quantity, available)
                     
-                    # Update stock
+                    # Actualizar stock
                     product.stock = max(available - qty, 0)
                     session.add(product)
                     
-                    # Create StockMovement
+                    # Crear StockMovement
                     detail_parts = []
                     if item.get("reason"):
                         detail_parts.append(item["reason"])

@@ -1,8 +1,8 @@
 """
-Utility modules for Sistema de Ventas.
+Modulos de utilidades para Sistema de Ventas.
 
-This package contains pure utility functions extracted from State
-to improve code reusability and reduce duplication.
+Este paquete contiene funciones puras extraidas de State
+para mejorar la reutilizacion de codigo y reducir duplicacion.
 """
 from app.utils.formatting import (
     format_currency,
@@ -25,19 +25,19 @@ from app.utils.exports import (
 )
 
 __all__ = [
-    # formatting
+    # formateo
     "format_currency",
     "round_currency",
     "parse_float_safe",
     "normalize_quantity_value",
-    # dates
+    # fechas
     "get_current_timestamp",
     "parse_date",
     "format_datetime_display",
     "get_today_str",
     "get_current_month_str",
     "get_current_week_str",
-    # exports
+    # exportaciones
     "create_excel_workbook",
     "style_header_row",
     "add_data_rows",

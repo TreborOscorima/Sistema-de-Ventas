@@ -38,9 +38,9 @@ class CartMixin:
     def sale_total(self) -> float:
         reservation_balance = 0.0
         if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
-            # Fetch reservation from DB
+            # Traer reserva desde BD
             with rx.session() as session:
-                # Fix: Handle string UUIDs correctly
+                # Correccion: manejar UUIDs string correctamente
                 reservation = session.exec(
                     select(FieldReservation).where(
                         FieldReservation.id == self.reservation_payment_id
@@ -54,7 +54,7 @@ class CartMixin:
                     if reservation_balance < 0:
                         reservation_balance = 0.0
 
-        # Fallback: Si no se encontro en DB (ej. es UUID en memoria), usar el estado de Servicios
+        # Alternativa: si no se encontro en BD (ej. UUID en memoria), usar el estado de Servicios
         if reservation_balance == 0 and hasattr(self, "selected_reservation_balance"):
             reservation_balance = self.selected_reservation_balance
 
@@ -137,8 +137,8 @@ class CartMixin:
                 if value and len(str(value)) > 1:
                     with rx.session() as session:
                         search = str(value).lower()
-                        # Simple python filtering on a limited set or SQL LIKE
-                        # For better performance use SQL LIKE
+                        # Filtrado simple en Python sobre un conjunto limitado o SQL LIKE
+                        # Para mejor rendimiento usar SQL LIKE
                         products = session.exec(
                             select(Product)
                             .where(Product.description.ilike(f"%{search}%"))

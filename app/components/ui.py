@@ -1,14 +1,14 @@
 """
-Reusable UI components for the Sistema de Ventas application.
+Componentes de UI reutilizables para la aplicacion Sistema de Ventas.
 
-This module provides common UI components that follow the DRY principle
-to reduce code duplication across pages.
+Este modulo brinda componentes comunes que siguen el principio DRY
+para reducir duplicacion de codigo entre paginas.
 """
 import reflex as rx
 from typing import Callable
 
 
-# Button style variants - eliminates hardcoded CSS strings across files
+# Variantes de estilo de botones - evita CSS hardcodeado entre archivos
 BUTTON_STYLES = {
     "primary": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[44px]",
     "primary_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[40px]",
@@ -29,25 +29,25 @@ BUTTON_STYLES = {
     "icon_indigo": "p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
 }
 
-# Input style constants
+# Constantes de estilo de inputs
 INPUT_STYLES = {
     "default": "w-full p-2 border rounded-md",
     "disabled": "w-full p-2 border rounded-md bg-gray-100",
     "search": "w-full p-2 border rounded-md",
 }
 
-# Card style constants
+# Constantes de estilo de cards
 CARD_STYLES = {
     "default": "bg-white p-4 sm:p-6 rounded-lg shadow-md",
     "bordered": "bg-white border border-gray-200 rounded-lg p-4 sm:p-5 shadow-sm",
     "compact": "bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm",
 }
 
-# Table styles
+# Estilos de tabla
 TABLE_HEADER_STYLE = "bg-gray-100"
 TABLE_ROW_STYLE = "border-b"
 
-# Textarea row height (in pixels) for calculating min-height
+# Alto de fila de textarea (en pixeles) para calcular min-height
 TEXTAREA_ROW_HEIGHT = 24
 
 
@@ -62,20 +62,20 @@ def action_button(
     **kwargs,
 ) -> rx.Component:
     """
-    Creates a styled action button with consistent styling.
-    
-    Args:
-        text: Button text or component
-        on_click: Click handler
-        variant: Style variant key from BUTTON_STYLES
-        icon: Optional lucide icon name
-        disabled: Whether button is disabled (can be a reactive var)
-        disabled_variant: Style to use when disabled
-        class_name: Additional CSS classes
-        **kwargs: Additional arguments passed to the button component
-    
-    Returns:
-        A styled button component
+    Crea un boton de accion con estilo consistente.
+
+    Parametros:
+        text: Texto del boton o componente
+        on_click: Manejador de click
+        variant: Clave de estilo en BUTTON_STYLES
+        icon: Nombre de icono (lucide) opcional
+        disabled: Si el boton esta deshabilitado (puede ser var reactiva)
+        disabled_variant: Estilo cuando esta deshabilitado
+        class_name: Clases CSS adicionales
+        **kwargs: Argumentos adicionales para el boton
+
+    Retorna:
+        Componente de boton con estilo
     """
     content = []
     if icon:
@@ -122,14 +122,14 @@ def icon_button(
     aria_label: str = "",
 ) -> rx.Component:
     """
-    Creates a circular icon-only button.
-    
-    Args:
-        icon: Lucide icon name
-        on_click: Click handler
-        variant: Style variant from BUTTON_STYLES
-        disabled: Whether button is disabled
-        aria_label: Accessibility label
+    Crea un boton circular solo con icono.
+
+    Parametros:
+        icon: Nombre del icono (lucide)
+        on_click: Manejador de click
+        variant: Variante de estilo en BUTTON_STYLES
+        disabled: Si el boton esta deshabilitado
+        aria_label: Etiqueta de accesibilidad
     """
     return rx.el.button(
         rx.icon(icon, class_name="h-4 w-4"),
@@ -146,15 +146,15 @@ def form_field(
     label_style: str = "text-sm font-medium text-gray-700",
 ) -> rx.Component:
     """
-    Creates a labeled form field wrapper.
-    
-    Args:
-        label: Field label text
-        input_component: The input/select/textarea component
-        label_style: CSS class for the label
-    
-    Returns:
-        A div containing label and input
+    Crea un wrapper de campo con etiqueta.
+
+    Parametros:
+        label: Texto de la etiqueta
+        input_component: Componente input/select/textarea
+        label_style: Clase CSS para la etiqueta
+
+    Retorna:
+        Div con la etiqueta y el input
     """
     return rx.el.div(
         rx.el.label(label, class_name=label_style),
@@ -209,16 +209,16 @@ def text_input(
     debounce_timeout: int = 300,
 ) -> rx.Component:
     """
-    Creates a styled text input.
-    
-    Args:
-        placeholder: Placeholder text
-        value: Input value (can be reactive)
-        on_change: Change handler
-        input_type: HTML input type
-        disabled: Whether input is disabled
-        style: Style key from INPUT_STYLES
-        debounce_timeout: Debounce timeout in ms
+    Crea un input de texto con estilo.
+
+    Parametros:
+        placeholder: Texto placeholder
+        value: Valor del input (puede ser reactivo)
+        on_change: Manejador de cambio
+        input_type: Tipo de input HTML
+        disabled: Si el input esta deshabilitado
+        style: Clave de estilo en INPUT_STYLES
+        debounce_timeout: Tiempo de debounce en ms
     """
     return rx.el.input(
         type=input_type,
@@ -241,13 +241,13 @@ def section_card(
     style: str = "bordered",
 ) -> rx.Component:
     """
-    Creates a card section with title and optional description.
-    
-    Args:
-        title: Section title
-        description: Optional description text
-        children: Child components
-        style: Card style key from CARD_STYLES
+    Crea una seccion en formato card con titulo y descripcion opcional.
+
+    Parametros:
+        title: Titulo de la seccion
+        description: Texto de descripcion opcional
+        children: Componentes hijos
+        style: Clave de estilo en CARD_STYLES
     """
     header_parts = [
         rx.el.h3(title, class_name="text-lg font-semibold text-gray-800"),
@@ -274,12 +274,12 @@ def status_badge(
     status_colors: dict[str, tuple[str, str]] | None = None,
 ) -> rx.Component:
     """
-    Creates a status badge with appropriate coloring.
-    
-    Args:
-        status: Status value
-        status_colors: Dict mapping status to (bg_color, text_color) CSS classes.
-                      Defaults to common status colors.
+    Crea un badge de estado con el color correspondiente.
+
+    Parametros:
+        status: Valor del estado
+        status_colors: Dict que mapea estado a (bg_color, text_color).
+                      Por defecto usa colores comunes.
     """
     if status_colors is None:
         status_colors = {
@@ -289,7 +289,7 @@ def status_badge(
             "eliminado": ("bg-gray-200", "text-gray-700"),
         }
     
-    # For reactive status, we use rx.cond chains
+    # Para estado reactivo se usan cadenas de rx.cond
     if isinstance(status, rx.Var):
         return rx.cond(
             status == "pagado",
@@ -317,7 +317,7 @@ def status_badge(
             ),
         )
     
-    # For static status
+    # Para estado estatico
     colors = status_colors.get(status.lower(), ("bg-gray-100", "text-gray-700"))
     return rx.el.span(
         status.capitalize(),
@@ -327,10 +327,10 @@ def status_badge(
 
 def empty_state(message: str) -> rx.Component:
     """
-    Creates a centered empty state message.
-    
-    Args:
-        message: Message to display
+    Crea un mensaje de estado vacio centrado.
+
+    Parametros:
+        message: Mensaje a mostrar
     """
     return rx.el.p(
         message,
@@ -340,11 +340,11 @@ def empty_state(message: str) -> rx.Component:
 
 def page_title(title: str, subtitle: str = "") -> rx.Component:
     """
-    Creates a page title with optional subtitle.
-    
-    Args:
-        title: Main title
-        subtitle: Optional subtitle/description
+    Crea un titulo de pagina con subtitulo opcional.
+
+    Parametros:
+        title: Titulo principal
+        subtitle: Subtitulo o descripcion opcional
     """
     parts = [
         rx.el.h1(title, class_name="text-2xl font-bold text-gray-800"),
@@ -367,16 +367,16 @@ def modal_container(
     max_width: str = "max-w-lg",
 ) -> rx.Component:
     """
-    Creates a modal dialog container.
-    
-    Args:
-        is_open: Reactive var controlling visibility
-        on_close: Handler for closing the modal
-        title: Modal title
-        description: Optional description
-        children: Modal body content
-        footer: Footer content (usually buttons)
-        max_width: Tailwind max-width class
+    Crea un contenedor de modal.
+
+    Parametros:
+        is_open: Var reactiva que controla la visibilidad
+        on_close: Manejador para cerrar el modal
+        title: Titulo del modal
+        description: Descripcion opcional
+        children: Contenido del cuerpo del modal
+        footer: Contenido del footer (normalmente botones)
+        max_width: Clase Tailwind de max-width
     """
     header = rx.el.div(
         rx.el.h3(title, class_name="text-lg font-semibold text-gray-800"),
@@ -423,14 +423,14 @@ def filter_section(
     grid_cols: str = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
 ) -> rx.Component:
     """
-    Creates a standardized filter section.
-    
-    Args:
-        filters: List of filter input components
-        on_search: Handler for search button
-        on_reset: Handler for reset button
-        extra_buttons: Additional action buttons
-        grid_cols: Tailwind grid column classes
+    Crea una seccion de filtros estandarizada.
+
+    Parametros:
+        filters: Lista de componentes de filtro
+        on_search: Manejador del boton buscar
+        on_reset: Manejador del boton limpiar
+        extra_buttons: Botones de accion adicionales
+        grid_cols: Clases Tailwind para columnas del grid
     """
     buttons = [
         action_button("Buscar", on_search, variant="primary", icon="search"),
@@ -458,18 +458,18 @@ def date_range_filter(
     end_label: str = "Fecha Fin",
 ) -> tuple[rx.Component, rx.Component]:
     """
-    Creates a pair of date filter inputs.
-    
-    Args:
-        start_value: Start date value
-        end_value: End date value
-        on_start_change: Handler for start date change
-        on_end_change: Handler for end date change
-        start_label: Label for start date
-        end_label: Label for end date
-    
-    Returns:
-        Tuple of (start_input, end_input) components
+    Crea un par de inputs de fecha para filtros.
+
+    Parametros:
+        start_value: Valor de fecha inicio
+        end_value: Valor de fecha fin
+        on_start_change: Manejador para cambio de fecha inicio
+        on_end_change: Manejador para cambio de fecha fin
+        start_label: Etiqueta para fecha inicio
+        end_label: Etiqueta para fecha fin
+
+    Retorna:
+        Tupla (start_input, end_input)
     """
     return (
         form_field(
@@ -500,16 +500,16 @@ def stat_card(
     icon_color: str = "text-gray-600",
 ) -> rx.Component:
     """
-    Creates a statistics card with icon, title and value.
-    
-    Args:
-        icon: Lucide icon name
-        title: Card title/label
-        value: Value to display (can be reactive var or component)
-        icon_color: Tailwind color class for the icon
-    
-    Returns:
-        A styled stat card component
+    Crea una card de estadistica con icono, titulo y valor.
+
+    Parametros:
+        icon: Nombre del icono (lucide)
+        title: Titulo o etiqueta de la card
+        value: Valor a mostrar (puede ser var reactiva o componente)
+        icon_color: Clase Tailwind de color para el icono
+
+    Retorna:
+        Componente de card con estilo
     """
     return rx.el.div(
         rx.el.div(
@@ -532,16 +532,16 @@ def pagination_controls(
     on_next: Callable,
 ) -> rx.Component:
     """
-    Creates pagination controls with prev/next buttons and page info.
-    
-    Args:
-        current_page: Current page number (reactive var)
-        total_pages: Total number of pages (reactive var)
-        on_prev: Handler for previous page
-        on_next: Handler for next page
-    
-    Returns:
-        A pagination control component
+    Crea controles de paginacion con botones anterior/siguiente e info.
+
+    Parametros:
+        current_page: Numero de pagina actual (var reactiva)
+        total_pages: Total de paginas (var reactiva)
+        on_prev: Manejador para pagina anterior
+        on_next: Manejador para pagina siguiente
+
+    Retorna:
+        Componente de controles de paginacion
     """
     return rx.el.div(
         rx.el.button(
@@ -582,35 +582,35 @@ def data_table(
     has_data: rx.Var | bool = True,
 ) -> rx.Component:
     """
-    Creates a styled data table.
-    
-    Args:
-        headers: List of (header_text, alignment_class) tuples
-        rows: The tbody content (usually rx.foreach result)
-        empty_message: Message to show when table is empty
-        has_data: Whether there is data to display (reactive var for dynamic checking)
-    
-    Returns:
-        A styled table component
+    Crea una tabla de datos con estilo.
+
+    Parametros:
+        headers: Lista de tuplas (texto, clase de alineacion)
+        rows: Contenido de tbody (usualmente rx.foreach)
+        empty_message: Mensaje cuando la tabla esta vacia
+        has_data: Si hay datos para mostrar (puede ser var reactiva)
+
+    Retorna:
+        Componente de tabla con estilo
     """
     header_cells = [
         rx.el.th(text, class_name=f"py-3 px-4 {align}")
         for text, align in headers
     ]
     
-    # Build the empty state component
+    # Construir el componente de estado vacio
     empty_component = rx.el.p(empty_message, class_name="text-gray-500 text-center py-8")
     
-    # Handle both reactive and static has_data values
+    # Manejar has_data reactivo o estatico
     if isinstance(has_data, rx.Var):
-        # For reactive vars, use rx.cond
+        # Para vars reactivas, usar rx.cond
         empty_state_section = rx.cond(
             has_data,
             rx.fragment(),
             empty_component,
         )
     else:
-        # For static booleans, conditionally include the component
+        # Para booleanos estaticos, incluir condicionalmente el componente
         empty_state_section = rx.fragment() if has_data else empty_component
     
     return rx.el.div(
@@ -633,17 +633,17 @@ def card_container(
     gap: str = "gap-4",
 ) -> rx.Component:
     """
-    Creates a styled card container with optional header.
-    
-    Args:
-        *children: Child components to render inside the card
-        title: Optional card title
-        description: Optional card description
-        style: Card style key from CARD_STYLES
-        gap: Tailwind gap classes for vertical spacing
-    
-    Returns:
-        A styled card component
+    Crea un contenedor de card con header opcional.
+
+    Parametros:
+        *children: Componentes hijos a renderizar dentro de la card
+        title: Titulo opcional de la card
+        description: Descripcion opcional de la card
+        style: Clave de estilo en CARD_STYLES
+        gap: Clases Tailwind para espaciado vertical
+
+    Retorna:
+        Componente de card con estilo
     """
     content_parts = []
     
@@ -671,14 +671,14 @@ def card_container(
 
 def section_header(title: str, description: str = "") -> rx.Component:
     """
-    Creates a section header with title and optional description.
-    
-    Args:
-        title: Section title
-        description: Optional description text
-    
-    Returns:
-        A header component
+    Crea un encabezado de seccion con titulo y descripcion opcional.
+
+    Parametros:
+        title: Titulo de la seccion
+        description: Texto de descripcion opcional
+
+    Retorna:
+        Componente de encabezado
     """
     parts = [rx.el.h2(title, class_name="text-lg font-semibold text-gray-800")]
     if description:
@@ -692,14 +692,14 @@ def info_badge(
     variant: str = "default",
 ) -> rx.Component:
     """
-    Creates an info badge/tag.
-    
-    Args:
-        text: Badge text
-        variant: Color variant (default, success, warning, danger, info)
-    
-    Returns:
-        A styled badge component
+    Crea un badge informativo.
+
+    Parametros:
+        text: Texto del badge
+        variant: Variante de color (default, success, warning, danger, info)
+
+    Retorna:
+        Componente de badge con estilo
     """
     variant_styles = {
         "default": "bg-gray-100 text-gray-700",
@@ -726,19 +726,19 @@ def form_input(
     step: str | None = None,
 ) -> rx.Component:
     """
-    Creates a labeled form input field.
-    
-    Args:
-        label: Input label text
-        value: Input value (can be reactive)
-        on_change: Change handler
-        input_type: HTML input type (text, number, date, etc.)
-        placeholder: Placeholder text
-        disabled: Whether input is disabled
-        step: Step value for number inputs
-    
-    Returns:
-        A labeled input component
+    Crea un input con etiqueta.
+
+    Parametros:
+        label: Texto de la etiqueta
+        value: Valor del input (puede ser reactivo)
+        on_change: Manejador de cambio
+        input_type: Tipo de input HTML (text, number, date, etc.)
+        placeholder: Texto placeholder
+        disabled: Si el input esta deshabilitado
+        step: Step para inputs numericos
+
+    Retorna:
+        Componente de input con etiqueta
     """
     input_props = {
         "type": input_type,
@@ -766,23 +766,23 @@ def form_select(
     placeholder: str | None = None,
 ) -> rx.Component:
     """
-    Creates a labeled select dropdown.
-    
-    Args:
-        label: Select label text
-        options: List of (display_text, value) tuples or reactive var
-        value: Currently selected value
-        on_change: Change handler
-        placeholder: Optional placeholder option
-    
-    Returns:
-        A labeled select component
+    Crea un select con etiqueta.
+
+    Parametros:
+        label: Texto de la etiqueta del select
+        options: Lista de tuplas (texto, valor) o var reactiva
+        value: Valor seleccionado
+        on_change: Manejador de cambio
+        placeholder: Opcion placeholder opcional
+
+    Retorna:
+        Componente de select con etiqueta
     """
     option_elements = []
     if placeholder:
         option_elements.append(rx.el.option(placeholder, value=""))
     
-    # Handle both static list and reactive var for options
+    # Manejar lista estatica o var reactiva de opciones
     if isinstance(options, rx.Var):
         return rx.el.div(
             rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
@@ -822,17 +822,17 @@ def form_textarea(
     rows: int = 4,
 ) -> rx.Component:
     """
-    Creates a labeled textarea.
-    
-    Args:
-        label: Textarea label text
-        value: Textarea value
-        on_change: Change handler
-        placeholder: Placeholder text
-        rows: Number of visible rows
-    
-    Returns:
-        A labeled textarea component
+    Crea un textarea con etiqueta.
+
+    Parametros:
+        label: Texto de la etiqueta
+        value: Valor del textarea
+        on_change: Manejador de cambio
+        placeholder: Texto placeholder
+        rows: Numero de filas visibles
+
+    Retorna:
+        Componente de textarea con etiqueta
     """
     min_height = rows * TEXTAREA_ROW_HEIGHT
     return rx.el.div(
@@ -856,18 +856,18 @@ def filter_action_buttons(
     export_text: str = "Exportar",
 ) -> rx.Component:
     """
-    Creates a group of filter action buttons.
-    
-    Args:
-        on_search: Handler for search button
-        on_clear: Handler for clear/reset button
-        on_export: Optional handler for export button
-        search_text: Text for search button
-        clear_text: Text for clear button
-        export_text: Text for export button
-    
-    Returns:
-        A button group component
+    Crea un grupo de botones de accion para filtros.
+
+    Parametros:
+        on_search: Manejador del boton buscar
+        on_clear: Manejador del boton limpiar
+        on_export: Manejador opcional del boton exportar
+        search_text: Texto del boton buscar
+        clear_text: Texto del boton limpiar
+        export_text: Texto del boton exportar
+
+    Retorna:
+        Componente de grupo de botones
     """
     buttons = [
         rx.el.button(
@@ -906,16 +906,16 @@ def select_filter(
     on_change: Callable,
 ) -> rx.Component:
     """
-    Creates a filter select dropdown with label.
-    
-    Args:
-        label: Filter label
-        options: List of (display_text, value) tuples
-        value: Currently selected value
-        on_change: Change handler
-    
-    Returns:
-        A labeled select filter component
+    Crea un select de filtro con etiqueta.
+
+    Parametros:
+        label: Etiqueta del filtro
+        options: Lista de tuplas (texto, valor)
+        value: Valor seleccionado
+        on_change: Manejador de cambio
+
+    Retorna:
+        Componente de select de filtro con etiqueta
     """
     option_elements = [
         rx.el.option(display_text, value=opt_value)

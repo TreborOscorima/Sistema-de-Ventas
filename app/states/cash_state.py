@@ -47,7 +47,7 @@ CASHBOX_INCOME_ACTIONS = {
 CASHBOX_EXPENSE_ACTIONS = {"gasto_caja_chica"}
 
 class CashState(MixinState):
-    # cashbox_sales: List[CashboxSale] = [] # Removed in favor of DB
+    # cashbox_sales: List[CashboxSale] = [] # Eliminado a favor de la BD
     cashbox_filter_start_date: str = ""
     cashbox_filter_end_date: str = ""
     cashbox_staged_start_date: str = ""
@@ -227,7 +227,7 @@ class CashState(MixinState):
                 qty = log.quantity or 1.0
                 cost = log.cost or log.amount
 
-                # Format quantity: integer if no decimal part, else 2 decimals
+                # Formatear cantidad: entero si no hay decimales, si no 2 decimales
                 fmt_qty = f"{int(qty)}" if qty % 1 == 0 else f"{qty:.2f}"
 
                 entry: CashboxLogEntry = {
@@ -276,7 +276,7 @@ class CashState(MixinState):
 
     @rx.var
     def current_cashbox_session(self) -> CashboxSession:
-        # Dependency to force update
+        # Dependencia para forzar actualizacion
         _ = self._cashbox_update_trigger
         
         username = "guest"
@@ -1460,7 +1460,7 @@ class CashState(MixinState):
             if not log:
                 return rx.toast("Registro de caja no encontrado.", duration=3000)
             
-            # Get username via user_id
+            # Obtener username via user_id
             user = session.get(UserModel, log.user_id)
             username = user.username if user else "Unknown"
             
@@ -1540,12 +1540,12 @@ class CashState(MixinState):
             if not sale_db:
                 return rx.toast("Venta no encontrada en BD.", duration=3000)
             
-            # Mark as cancelled in DB
+            # Marcar como cancelado en BD
             sale_db.status = SaleStatus.cancelled
             sale_db.delete_reason = reason
             session.add(sale_db)
             
-            # Restore stock
+            # Restaurar stock
             for item in sale_db.items:
                 if item.product_id:
                     product = session.exec(select(Product).where(Product.id == item.product_id)).first()
@@ -1553,7 +1553,7 @@ class CashState(MixinState):
                         product.stock += item.quantity
                         session.add(product)
                         
-                        # Log stock movement
+                        # Registrar movimiento de stock
                         movement = StockMovement(
                             product_id=product.id,
                             user_id=self.current_user.get("id"),
@@ -1767,7 +1767,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         with rx.session() as session:
             user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
             if user:
-                # Close session
+                # Cerrar sesion
                 cashbox_session = session.exec(
                     select(CashboxSessionModel)
                     .where(CashboxSessionModel.user_id == user.id)
@@ -1780,7 +1780,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     cashbox_session.closing_amount = closing_total
                     session.add(cashbox_session)
                 
-                # Create Log
+                # Crear log
                 log = CashboxLogModel(
                     user_id=user.id,
                     action="cierre",
@@ -2092,7 +2092,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         
         with rx.session() as session:
             timestamp = datetime.datetime.now()
-            # Create Sale for advance
+            # Crear venta por adelanto
             new_sale = Sale(
                 timestamp=timestamp,
                 total_amount=amount,
@@ -2120,7 +2120,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     )
                 )
             
-            # Create SaleItem (Service)
+            # Crear SaleItem (Servicio)
             sale_item = SaleItem(
                 sale_id=new_sale.id,
                 product_id=None,

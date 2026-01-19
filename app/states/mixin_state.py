@@ -144,7 +144,7 @@ class MixinState:
 
     @rx.var
     def currency_symbol(self) -> str:
-        # Accessing available_currencies and selected_currency_code from RootState
+        # Accediendo a available_currencies y selected_currency_code desde RootState
         if not hasattr(self, "available_currencies") or not hasattr(self, "selected_currency_code"):
             return "S/ "
         match = next(
@@ -167,7 +167,7 @@ class MixinState:
         return f"{self.currency_symbol}{self._round_currency(value):.2f}"
 
     def _unit_allows_decimal(self, unit: str) -> bool:
-        # Accessing decimal_units from RootState
+        # Accediendo a decimal_units desde RootState
         if not hasattr(self, "decimal_units"):
             return False
         return unit and unit.lower() in self.decimal_units

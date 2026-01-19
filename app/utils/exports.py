@@ -1,7 +1,7 @@
 """
-Excel export utilities.
+Utilidades de exportacion a Excel.
 
-Functions to simplify Excel file creation and formatting.
+Funciones para simplificar la creacion y el formato de archivos Excel.
 """
 import io
 import openpyxl
@@ -15,7 +15,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from typing import Any
 
 
-# Default styles for Excel exports
+# Estilos por defecto para exportaciones Excel
 HEADER_FONT = Font(bold=True, color="FFFFFF")
 HEADER_FILL = PatternFill(start_color="4F46E5", end_color="4F46E5", fill_type="solid")
 HEADER_ALIGNMENT = Alignment(horizontal="center", vertical="center")
@@ -29,28 +29,28 @@ THIN_BORDER = Border(
 
 def create_excel_workbook(title: str) -> tuple[Workbook, Worksheet]:
     """
-    Create a new Excel workbook with a named sheet.
+    Crea un workbook de Excel con una hoja nombrada.
     
-    Args:
-        title: The title for the active sheet
+    Parametros:
+        title: Titulo de la hoja activa
         
-    Returns:
-        Tuple of (workbook, active_worksheet)
+    Retorna:
+        Tupla (workbook, hoja_activa)
     """
     workbook = openpyxl.Workbook()
     sheet = workbook.active
-    sheet.title = title[:31]  # Excel sheet names max 31 chars
+    sheet.title = title[:31]  # Nombres de hoja en Excel maximo 31 caracteres
     return workbook, sheet
 
 
 def style_header_row(ws: Worksheet, row: int, columns: list[str]) -> None:
     """
-    Add styled headers to a worksheet row.
+    Agrega encabezados con estilo a una fila de la hoja.
     
-    Args:
-        ws: The worksheet to modify
-        row: Row number (1-indexed)
-        columns: List of column header texts
+    Parametros:
+        ws: Hoja a modificar
+        row: Numero de fila (1-indexed)
+        columns: Lista de textos de encabezado
     """
     for col_idx, header in enumerate(columns, start=1):
         cell = ws.cell(row=row, column=col_idx, value=header)
@@ -67,16 +67,16 @@ def add_data_rows(
     apply_border: bool = True,
 ) -> int:
     """
-    Add multiple rows of data to a worksheet.
+    Agrega multiples filas de datos a una hoja.
     
-    Args:
-        ws: The worksheet to modify
-        data: List of row data (each row is a list of values)
-        start_row: Starting row number (1-indexed)
-        apply_border: Whether to apply borders to cells
+    Parametros:
+        ws: Hoja a modificar
+        data: Lista de filas (cada fila es una lista de valores)
+        start_row: Fila inicial (1-indexed)
+        apply_border: Si se aplican bordes a las celdas
         
-    Returns:
-        The row number after the last data row
+    Retorna:
+        Numero de fila despues de la ultima fila agregada
     """
     current_row = start_row
     for row_data in data:
@@ -90,23 +90,23 @@ def add_data_rows(
 
 def add_simple_headers(ws: Worksheet, headers: list[str]) -> None:
     """
-    Add simple headers to the first row of a worksheet (no styling).
+    Agrega encabezados simples a la primera fila (sin estilo).
     
-    Args:
-        ws: The worksheet to modify
-        headers: List of header texts
+    Parametros:
+        ws: Hoja a modificar
+        headers: Lista de encabezados
     """
     ws.append(headers)
 
 
 def auto_adjust_column_widths(ws: Worksheet, min_width: int = 10, max_width: int = 50) -> None:
     """
-    Auto-adjust column widths based on content.
+    Ajusta automaticamente el ancho de columnas segun el contenido.
     
-    Args:
-        ws: The worksheet to modify
-        min_width: Minimum column width
-        max_width: Maximum column width
+    Parametros:
+        ws: Hoja a modificar
+        min_width: Ancho minimo de columna
+        max_width: Ancho maximo de columna
     """
     for column in ws.columns:
         max_length = 0
@@ -133,14 +133,14 @@ def create_pdf_report(
     info_dict: dict[str, Any] | None = None,
 ) -> None:
     """
-    Create a PDF report (A4) with a title, optional metadata, and a data table.
+    Crea un reporte PDF (A4) con titulo, metadatos opcionales y una tabla de datos.
 
-    Args:
-        buffer: BytesIO buffer to write the PDF into
-        title: Report title
-        data: List of rows, each row is a list of values
-        headers: Column headers for the table
-        info_dict: Optional metadata (e.g., generated date, user)
+    Parametros:
+        buffer: Buffer BytesIO donde se escribe el PDF
+        title: Titulo del reporte
+        data: Lista de filas, cada fila es una lista de valores
+        headers: Encabezados de columnas de la tabla
+        info_dict: Metadatos opcionales (ej. fecha de generacion, usuario)
     """
     info_dict = info_dict or {}
     page_size = A4 if A4 else letter

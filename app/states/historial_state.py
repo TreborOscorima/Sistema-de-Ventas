@@ -47,7 +47,7 @@ REPORT_CASHBOX_ACTIONS = {
 }
 
 class HistorialState(MixinState):
-    # history: List[Movement] = [] # Removed in favor of DB
+    # history: List[Movement] = [] # Eliminado a favor de la BD
     history_filter_type: str = "Todos"
     history_filter_product: str = ""
     history_filter_category: str = "Todas"
@@ -670,7 +670,7 @@ class HistorialState(MixinState):
         if not self.current_user["privileges"]["view_historial"]:
             return []
         
-        # Dependency to force update
+        # Dependencia para forzar actualizacion
         _ = self._history_update_trigger
         offset = (self.current_page_history - 1) * self.items_per_page
         return self._fetch_sales_history(offset=offset, limit=self.items_per_page)
@@ -808,7 +808,7 @@ class HistorialState(MixinState):
         self._load_report_options()
         self._history_update_trigger += 1
         self._report_update_trigger += 1
-        # print("Reloading history...") # Debug
+        # print("Reloading history...") # Depuracion
 
     @rx.event
     def reset_history_filters(self):
@@ -1287,28 +1287,28 @@ class HistorialState(MixinState):
         return rx.download(data=output.getvalue(), filename="ingresos_por_metodo.xlsx")
 
     def _parse_payment_amount(self, text: str, keyword: str) -> Decimal:
-        """Extract amount for a keyword from a mixed payment string like 'Efectivo S/ 15.00'."""
+        """Extrae el monto de un keyword en un texto de pago mixto como 'Efectivo S/ 15.00'."""
         import re
         try:
-            # Normalize separators.
-            # DB format: "Pagos Mixtos - Efectivo S/ 15.00 / Plin S/ 20.00 / Montos completos."
+            # Normalizar separadores.
+            # Formato en BD: "Pagos Mixtos - Efectivo S/ 15.00 / Plin S/ 20.00 / Montos completos."
             
-            # Replace " / " (slash with spaces) with a pipe
+            # Reemplazar " / " (barra con espacios) por pipe
             text = text.replace(" / ", "|")
-            # Replace " - " (dash with spaces) with a pipe
+            # Reemplazar " - " (guion con espacios) por pipe
             text = text.replace(" - ", "|")
-            # Replace "/" (slash without spaces) just in case
+            # Reemplazar "/" (barra sin espacios) por si acaso
             text = text.replace("/", "|")
             
             parts = text.split("|")
             
             for part in parts:
                 part = part.strip()
-                # Check for keyword and "S/"
+                # Verificar keyword y "S/"
                 if keyword.lower() in part.lower() and "S/" in part:
                     try:
                         amount_str = part.split("S/")[1].strip()
-                        # Extract number (handle commas and decimals)
+                        # Extraer numero (maneja comas y decimales)
                         match = re.search(r"([0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)", amount_str)
                         if match:
                             num_str = match.group(1).replace(",", "")
@@ -1321,7 +1321,7 @@ class HistorialState(MixinState):
 
     @rx.var
     def payment_stats(self) -> Dict[str, float]:
-        # Dependency to force update
+        # Dependencia para forzar actualizacion
         _ = self._history_update_trigger
 
         stats = {

@@ -1,8 +1,8 @@
-"""add_company_receipt_settings
+"""agregar configuracion de comprobantes de empresa
 
-Revision ID: a1b2c3d4e5f6
-Revises: ed7b3c1a9f20
-Create Date: 2026-02-01 11:00:00.000000
+ID de revision: a1b2c3d4e5f6
+Revisa: ed7b3c1a9f20
+Fecha de creacion: 2026-02-01 11:00:00.000000
 
 """
 from typing import Sequence, Union
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-# revision identifiers, used by Alembic.
+# identificadores de revision, usados por Alembic.
 revision: str = "a1b2c3d4e5f6"
 down_revision: Union[str, Sequence[str], None] = "ed7b3c1a9f20"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
+    """Actualizar esquema."""
     op.add_column(
         "companysettings",
         sa.Column(
@@ -37,6 +37,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
+    """Revertir esquema."""
     op.drop_column("companysettings", "receipt_width")
     op.drop_column("companysettings", "receipt_paper")

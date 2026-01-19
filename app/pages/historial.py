@@ -16,7 +16,7 @@ REPORT_TABS = [
 
 
 def history_filters() -> rx.Component:
-    """Filter section for the history page."""
+    """Seccion de filtros para la pagina de historial."""
     def _build_filters() -> list[rx.Component]:
         start_filter, end_filter = date_range_filter(
             start_value=State.staged_history_filter_start_date,
@@ -441,7 +441,7 @@ def payment_method_badge(method: rx.Var[str]) -> rx.Component:
 
 
 def history_table_row(movement: rx.Var[dict]) -> rx.Component:
-    """Render a single row in the history table."""
+    """Renderiza una fila del listado de historial."""
     return rx.el.tr(
         rx.el.td(movement["timestamp"], class_name="py-3 px-4"),
         rx.el.td(

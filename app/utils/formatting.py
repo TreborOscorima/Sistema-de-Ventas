@@ -1,20 +1,20 @@
 """
-Formatting utilities for currency and numbers.
+Utilidades de formateo para moneda y numeros.
 
-Pure functions extracted from State for reusability.
+Funciones puras extraidas de State para reutilizacion.
 """
 from decimal import Decimal, ROUND_HALF_UP
 
 
 def round_currency(value: float) -> float:
     """
-    Round a value to 2 decimal places using ROUND_HALF_UP.
+    Redondea un valor a 2 decimales usando ROUND_HALF_UP.
     
-    Args:
-        value: The value to round
+    Parametros:
+        value: Valor a redondear
         
-    Returns:
-        The rounded value as a float with 2 decimal precision
+    Retorna:
+        Valor redondeado como float con 2 decimales
     """
     return float(
         Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -23,28 +23,28 @@ def round_currency(value: float) -> float:
 
 def format_currency(value: float, symbol: str) -> str:
     """
-    Format a value as currency with the given symbol.
+    Formatea un valor como moneda con el simbolo indicado.
     
-    Args:
-        value: The numeric value
-        symbol: The currency symbol (e.g., "S/ ", "$ ")
+    Parametros:
+        value: Valor numerico
+        symbol: Simbolo de moneda (ej. "S/ ", "$ ")
         
-    Returns:
-        Formatted string like "S/ 100.00"
+    Retorna:
+        Cadena formateada como "S/ 100.00"
     """
     return f"{symbol}{round_currency(value):.2f}"
 
 
 def parse_float_safe(value: str, default: float = 0.0) -> float:
     """
-    Safely parse a string to float, returning default on error.
+    Convierte un string a float de forma segura y retorna default en error.
     
-    Args:
-        value: The string to parse
-        default: Value to return if parsing fails
+    Parametros:
+        value: String a convertir
+        default: Valor a retornar si falla el parseo
         
-    Returns:
-        Parsed float or default value
+    Retorna:
+        Float parseado o valor default
     """
     try:
         return float(value) if value else default
@@ -54,19 +54,19 @@ def parse_float_safe(value: str, default: float = 0.0) -> float:
 
 def normalize_quantity_value(value: float, unit: str, decimal_units: set) -> float:
     """
-    Normalize a quantity value based on the unit type.
+    Normaliza una cantidad segun el tipo de unidad.
     
-    For decimal units (kg, litro, etc.), rounds to 2 decimal places.
-    For non-decimal units, rounds to integer.
+    Para unidades decimales (kg, litro, etc.), redondea a 2 decimales.
+    Para unidades no decimales, redondea a entero.
     
-    Args:
-        value: The quantity value
-        unit: The unit of measurement
-        decimal_units: Set of unit names in lowercase that allow decimal values
-                      (e.g., {'kg', 'litro', 'gramo'})
+    Parametros:
+        value: Valor de la cantidad
+        unit: Unidad de medida
+        decimal_units: Set de unidades en minuscula que permiten decimales
+                      (ej. {'kg', 'litro', 'gramo'})
         
-    Returns:
-        Normalized quantity value
+    Retorna:
+        Valor de cantidad normalizado
     """
     unit_lower = (unit or "").lower()
     if unit_lower in decimal_units:

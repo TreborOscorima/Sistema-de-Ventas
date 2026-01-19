@@ -1,7 +1,7 @@
 """
-Date and time utilities.
+Utilidades de fecha y hora.
 
-Pure functions for date/time operations extracted for reusability.
+Funciones puras de fecha/hora extraidas para reutilizacion.
 """
 import datetime
 import logging
@@ -9,54 +9,54 @@ import logging
 
 def get_current_timestamp() -> str:
     """
-    Get the current timestamp in YYYY-MM-DD HH:MM:SS format.
+    Obtiene el timestamp actual en formato YYYY-MM-DD HH:MM:SS.
     
-    Returns:
-        Current timestamp string
+    Retorna:
+        Timestamp actual como string
     """
     return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_today_str() -> str:
     """
-    Get today's date in YYYY-MM-DD format.
+    Obtiene la fecha de hoy en formato YYYY-MM-DD.
     
-    Returns:
-        Today's date string
+    Retorna:
+        Fecha de hoy como string
     """
     return datetime.date.today().strftime("%Y-%m-%d")
 
 
 def get_current_month_str() -> str:
     """
-    Get the current month in YYYY-MM format.
+    Obtiene el mes actual en formato YYYY-MM.
     
-    Returns:
-        Current month string
+    Retorna:
+        Mes actual como string
     """
     return datetime.date.today().strftime("%Y-%m")
 
 
 def get_current_week_str() -> str:
     """
-    Get the current ISO week in YYYY-WNN format.
+    Obtiene la semana ISO actual en formato YYYY-WNN.
     
-    Returns:
-        Current week string (e.g., "2024-W52")
+    Retorna:
+        Semana actual como string (ej. "2024-W52")
     """
     return datetime.date.today().strftime("%G-W%V")
 
 
 def parse_date(date_str: str, fmt: str = "%Y-%m-%d") -> datetime.datetime | None:
     """
-    Safely parse a date string.
+    Parseo seguro de una fecha en string.
     
-    Args:
-        date_str: The date string to parse
-        fmt: The format string (default: "%Y-%m-%d")
+    Parametros:
+        date_str: Fecha en string a parsear
+        fmt: Formato (default: "%Y-%m-%d")
         
-    Returns:
-        Parsed datetime object or None if parsing fails
+    Retorna:
+        Datetime parseado o None si falla el parseo
     """
     if not date_str:
         return None
@@ -69,13 +69,13 @@ def parse_date(date_str: str, fmt: str = "%Y-%m-%d") -> datetime.datetime | None
 
 def format_datetime_display(dt: datetime.datetime | None) -> str:
     """
-    Format a datetime for display.
+    Formatea un datetime para mostrarlo.
     
-    Args:
-        dt: The datetime to format
+    Parametros:
+        dt: Datetime a formatear
         
-    Returns:
-        Formatted string or empty string if dt is None
+    Retorna:
+        String formateado o vacio si dt es None
     """
     if dt is None:
         return ""
@@ -84,13 +84,13 @@ def format_datetime_display(dt: datetime.datetime | None) -> str:
 
 def parse_date_from_timestamp(timestamp: str) -> datetime.date | None:
     """
-    Extract date from a timestamp string (splits on space).
+    Extrae la fecha de un timestamp (separa por espacio).
     
-    Args:
-        timestamp: Timestamp string like "2024-01-15 14:30:00"
+    Parametros:
+        timestamp: Timestamp como "2024-01-15 14:30:00"
         
-    Returns:
-        Date object or None if parsing fails
+    Retorna:
+        Fecha o None si falla el parseo
     """
     if not timestamp:
         return None

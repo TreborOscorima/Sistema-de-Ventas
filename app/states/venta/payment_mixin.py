@@ -240,7 +240,7 @@ class PaymentMixin:
         if total_override is not None:
             effective_total = total_override
         else:
-            # Accessing selected_reservation_balance from ServicesState (via RootState)
+            # Accediendo a selected_reservation_balance desde ServicesState (via RootState)
             res_balance = 0
             if hasattr(self, "selected_reservation_balance"):
                 res_balance = self.selected_reservation_balance

@@ -95,7 +95,7 @@ class ReceiptMixin:
         return "No especificado"
 
     def _print_receipt_logic(self, receipt_id: str | None = None):
-        # Determine data source
+        # Determinar fuente de datos
         receipt_items = []
         total = 0.0
         timestamp = ""
@@ -104,7 +104,7 @@ class ReceiptMixin:
         reservation_context = None
 
         if receipt_id:
-            # Fetch from DB for reprint
+            # Traer desde BD para reimpresion
             with rx.session() as session:
                 try:
                     sale = session.exec(
@@ -144,7 +144,7 @@ class ReceiptMixin:
                 except ValueError:
                     return rx.toast("ID de venta inv lido.", duration=3000)
         else:
-            # Use current state
+            # Usar estado actual
             if not self.sale_receipt_ready or not self.last_sale_receipt:
                 return rx.toast(
                     "No hay comprobante disponible. Confirme una venta primero.",

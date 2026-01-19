@@ -1,5 +1,5 @@
 """
-Calculation utilities for sales and inventory.
+Utilidades de calculo para ventas e inventario.
 """
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any
@@ -13,7 +13,7 @@ def _to_decimal(value: Decimal | str | int | float) -> Decimal:
 
 def calculate_subtotal(quantity: Decimal, price: Decimal) -> Decimal:
     """
-    Calculate subtotal for a line item.
+    Calcula el subtotal de un item.
     """
     return (_to_decimal(quantity) * _to_decimal(price)).quantize(
         MONEY_QUANT, rounding=ROUND_HALF_UP
@@ -22,7 +22,7 @@ def calculate_subtotal(quantity: Decimal, price: Decimal) -> Decimal:
 
 def calculate_total(items: List[Dict[str, Any]], key: str = "subtotal") -> Decimal:
     """
-    Calculate total from a list of items.
+    Calcula el total desde una lista de items.
     """
     total = Decimal("0.00")
     for item in items:
@@ -33,7 +33,7 @@ def calculate_total(items: List[Dict[str, Any]], key: str = "subtotal") -> Decim
 
 def calculate_change(payment: Decimal, total: Decimal) -> Decimal:
     """
-    Calculate change to return to customer.
+    Calcula el vuelto a devolver al cliente.
     """
     change = _to_decimal(payment) - _to_decimal(total)
     if change <= 0:

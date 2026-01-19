@@ -1,8 +1,8 @@
-"""add_credit_and_reservation_indexes
+"""agregar indices de credito y reservas
 
-Revision ID: f2d3c4b5a6b7
-Revises: c41b78cb00e8
-Create Date: 2026-01-18 19:35:00.000000
+ID de revision: f2d3c4b5a6b7
+Revisa: c41b78cb00e8
+Fecha de creacion: 2026-01-18 19:35:00.000000
 
 """
 from typing import Sequence, Union
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-# revision identifiers, used by Alembic.
+# identificadores de revision, usados por Alembic.
 revision: str = "f2d3c4b5a6b7"
 down_revision: Union[str, Sequence[str], None] = "c41b78cb00e8"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
+    """Actualizar esquema."""
     op.create_index(
         op.f("ix_saleinstallment_status"),
         "saleinstallment",
@@ -41,7 +41,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Downgrade schema."""
+    """Revertir esquema."""
     op.drop_index(
         op.f("ix_fieldreservation_start_datetime"),
         table_name="fieldreservation",

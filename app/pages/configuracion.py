@@ -689,75 +689,62 @@ def unit_section() -> rx.Component:
                 on_click=State.add_unit,
                 class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
             ),
-            class_name="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white p-4 rounded-lg shadow-sm border items-end",
+            class_name="grid grid-cols-1 md:grid-cols-3 gap-2 bg-white p-3 rounded-lg shadow-sm border items-end",
         ),
         rx.el.div(
-            rx.el.table(
-                rx.el.thead(
-                    rx.el.tr(
-                        rx.el.th("Unidad", class_name="py-2 px-3 text-left"),
-                        rx.el.th("Decimales", class_name="py-2 px-3 text-left"),
-                        rx.el.th("Acciones", class_name="py-2 px-3 text-right"),
-                        class_name="bg-gray-100",
-                    )
-                ),
-                rx.el.tbody(
-                    rx.foreach(
-                        State.unit_rows,
-                        lambda unit: rx.el.tr(
-                            rx.el.td(unit["name"], class_name="py-2 px-3 font-semibold"),
-                            rx.el.td(
-                                rx.cond(
-                                    unit["allows_decimal"],
-                                    rx.el.span(
-                                        "Si",
-                                        class_name="px-2 py-1 text-xs rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
-                                    ),
-                                    rx.el.span(
-                                        "No",
-                                        class_name="px-2 py-1 text-xs rounded-md bg-gray-100 text-gray-600 border border-gray-200",
-                                    ),
-                                ),
-                                class_name="py-2 px-3",
+            rx.foreach(
+                State.unit_rows,
+                lambda unit: rx.el.div(
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.span(
+                                unit["name"],
+                                class_name="text-sm font-semibold text-gray-900",
                             ),
-                            rx.el.td(
-                                rx.el.div(
-                                    rx.el.div(
-                                        rx.el.label(
-                                            "Permitir decimales",
-                                            class_name="text-xs text-gray-500",
-                                        ),
-                                        toggle_switch(
-                                            checked=unit["allows_decimal"].bool(),
-                                            on_change=lambda value,
-                                            name=unit["name"]: State.set_unit_decimal(
-                                                name, value
-                                            ),
-                                        ),
-                                        class_name="flex items-center gap-2",
-                                    ),
-                                    rx.el.button(
-                                        rx.icon("trash-2", class_name="h-4 w-4"),
-                                        on_click=lambda _,
-                                        name=unit["name"]: State.remove_unit(name),
-                                        is_disabled=rx.cond(
-                                            unit["name"] == "Unidad", True, False
-                                        ),
-                                        class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
-                                    ),
-                                    class_name="flex items-center justify-end gap-3",
+                            rx.cond(
+                                unit["allows_decimal"],
+                                rx.el.span(
+                                    "Si",
+                                    class_name="px-2 py-0.5 text-[10px] rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
                                 ),
-                                class_name="py-2 px-3 text-right",
+                                rx.el.span(
+                                    "No",
+                                    class_name="px-2 py-0.5 text-[10px] rounded-md bg-gray-100 text-gray-600 border border-gray-200",
+                                ),
                             ),
-                            key=unit["name"],
-                            class_name="border-b",
+                            class_name="flex items-center gap-2",
                         ),
-                    )
+                        rx.el.div(
+                            rx.el.span(
+                                "Decimales",
+                                class_name="text-[10px] text-gray-500 hidden sm:inline",
+                            ),
+                            toggle_switch(
+                                checked=unit["allows_decimal"].bool(),
+                                on_change=lambda value,
+                                name=unit["name"]: State.set_unit_decimal(
+                                    name, value
+                                ),
+                            ),
+                            rx.el.button(
+                                rx.icon("trash-2", class_name="h-4 w-4"),
+                                on_click=lambda _,
+                                name=unit["name"]: State.remove_unit(name),
+                                is_disabled=rx.cond(
+                                    unit["name"] == "Unidad", True, False
+                                ),
+                                class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                            ),
+                            class_name="flex items-center gap-2",
+                        ),
+                        class_name="flex items-center justify-between gap-2",
+                    ),
+                    class_name="border border-gray-200 rounded-md p-2 shadow-sm",
                 ),
             ),
-            class_name="bg-white p-4 rounded-lg shadow-md overflow-x-auto",
+            class_name="bg-white p-2 sm:p-3 rounded-lg shadow-md grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2",
         ),
-        class_name="space-y-4",
+        class_name="space-y-3",
     )
 
 
@@ -1055,7 +1042,7 @@ def configuracion_page() -> rx.Component:
                         ),
                         class_name="space-y-4",
                     ),
-                class_name="p-4 sm:p-6 w-full max-w-6xl mx-auto flex flex-col gap-6",
+                class_name="p-4 sm:p-6 pb-4 w-full max-w-6xl mx-auto flex flex-col gap-5",
             ),
             rx.el.div(
                 rx.el.h1("Acceso Denegado", class_name="text-2xl font-bold text-red-600"),

@@ -1279,7 +1279,7 @@ def admin_log_row(entry: rx.Var[dict]) -> rx.Component:
 
 
 def admin_log_filters() -> rx.Component:
-    """Filter section for the admin log."""
+    """Seccion de filtros para el log administrativo."""
     start_filter, end_filter = date_range_filter(
         start_value=State.service_log_filter_start_date,
         end_value=State.service_log_filter_end_date,
@@ -1321,7 +1321,7 @@ def admin_log_filters() -> rx.Component:
 
 
 def admin_log_table() -> rx.Component:
-    """Table showing administrative log entries."""
+    """Tabla con entradas del log administrativo."""
     return rx.el.div(
         section_header(
             "Registro administrativo",

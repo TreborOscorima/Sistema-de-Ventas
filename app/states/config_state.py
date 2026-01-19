@@ -8,7 +8,7 @@ from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
 
 class ConfigState(MixinState):
-    # Company settings
+    # Configuracion de empresa
     company_name: str = ""
     ruc: str = ""
     address: str = ""
@@ -18,13 +18,13 @@ class ConfigState(MixinState):
     receipt_width: str = ""
     company_form_key: int = 0
 
-    # Currency
+    # Monedas
     selected_currency_code: str = "PEN"
     new_currency_name: str = ""
     new_currency_code: str = ""
     new_currency_symbol: str = ""
     
-    # Units
+    # Unidades
     new_unit_name: str = ""
     new_unit_allows_decimal: bool = False
     
@@ -45,14 +45,14 @@ class ConfigState(MixinState):
 
     def load_config_data(self):
         with rx.session() as session:
-            # Load Currencies
+            # Cargar monedas
             currencies = session.exec(select(Currency)).all()
             if not currencies:
                 self.available_currencies = [{"code": "PEN", "name": "Sol peruano (PEN)", "symbol": "S/"}]
             else:
                 self.available_currencies = [{"code": c.code, "name": c.name, "symbol": c.symbol} for c in currencies]
 
-            # Load Units
+            # Cargar unidades
             units_db = session.exec(select(Unit)).all()
             self.units = [u.name for u in units_db]
             self.decimal_units = {u.name for u in units_db if u.allows_decimal}
@@ -61,7 +61,7 @@ class ConfigState(MixinState):
                 for u in units_db
             ]
 
-            # Load Payment Methods
+            # Cargar metodos de pago
             methods = session.exec(select(PaymentMethod)).all()
             self.payment_methods = [
                 {
@@ -242,7 +242,7 @@ class ConfigState(MixinState):
 
     def ensure_default_data(self):
         with rx.session() as session:
-            # Units
+            # Unidades
             if not session.exec(select(Unit)).first():
                 defaults = ["unidad", "pieza", "kg", "g", "l", "ml", "m", "cm", "paquete", "caja", "docena", "bolsa", "botella", "lata"]
                 decimals = {"kg", "g", "l", "ml", "m", "cm"}
@@ -255,7 +255,7 @@ class ConfigState(MixinState):
                 session.add(Currency(code="ARS", name="Peso argentino (ARS)", symbol="$"))
                 session.add(Currency(code="USD", name="Dolar estadounidense (USD)", symbol="US$"))
 
-            # Payment Methods
+            # Metodos de pago
             existing_methods = {
                 method.method_id: method
                 for method in session.exec(select(PaymentMethod)).all()
@@ -480,7 +480,7 @@ class ConfigState(MixinState):
                 self.load_config_data()
                 return rx.toast(f"Unidad {unit} ya no permite decimales.", duration=2500)
 
-    # Payment Methods
+    # Metodos de pago
     def _payment_method_by_identifier(self, identifier: str) -> PaymentMethodConfig | None:
         target = (identifier or "").strip().lower()
         if not target:
@@ -502,7 +502,7 @@ class ConfigState(MixinState):
     def _ensure_payment_method_selected(self):
         available = self._enabled_payment_methods_list()
         if not available:
-            # Assuming these are on VentaState or similar, but we can set them if we are mixed in
+            # Se asume que estan en VentaState o similar, pero los seteamos si aplica el mixin
             if hasattr(self, "payment_method"):
                 self.payment_method = ""
             if hasattr(self, "payment_method_description"):
@@ -511,7 +511,7 @@ class ConfigState(MixinState):
                 self.payment_method_kind = "other"
             return
         
-        # Check if current selection is valid
+        # Verificar si la seleccion actual es valida
         current_name = getattr(self, "payment_method", "")
         if not any(m["name"] == current_name for m in available):
             if hasattr(self, "_set_payment_method"):

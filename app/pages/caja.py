@@ -17,7 +17,7 @@ from app.components.ui import (
 
 
 def cashbox_filters() -> rx.Component:
-    """Filter section for cashbox sales."""
+    """Seccion de filtros para ventas de caja."""
     start_filter, end_filter = date_range_filter(
         start_value=State.cashbox_staged_start_date,
         end_value=State.cashbox_staged_end_date,
@@ -53,7 +53,7 @@ def cashbox_filters() -> rx.Component:
 
 
 def cashbox_log_filters() -> rx.Component:
-    """Filter section for cashbox logs."""
+    """Seccion de filtros para movimientos de caja."""
     start_filter, end_filter = date_range_filter(
         start_value=State.cashbox_log_staged_start_date,
         end_value=State.cashbox_log_staged_end_date,

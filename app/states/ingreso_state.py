@@ -173,7 +173,7 @@ class IngresoState(MixinState):
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         with rx.session() as session:
-            # Get current user ID
+            # Obtener ID de usuario actual
             user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
             user_id = user.id if user else None
 
@@ -186,11 +186,11 @@ class IngresoState(MixinState):
                     product = session.exec(select(Product).where(Product.barcode == barcode)).first()
                 
                 if not product:
-                    # Try by description if no barcode
+                    # Probar por descripcion si no hay barcode
                     product = session.exec(select(Product).where(Product.description == description)).first()
 
                 if product:
-                    # Update
+                    # Actualizar
                     product.stock += item["quantity"]
                     product.purchase_price = item["price"]
                     if item["sale_price"] > 0:
@@ -198,7 +198,7 @@ class IngresoState(MixinState):
                     product.category = item["category"]
                     session.add(product)
                     
-                    # Log Movement
+                    # Registrar movimiento
                     movement = StockMovement(
                         type="Ingreso",
                         product_id=product.id,
@@ -208,7 +208,7 @@ class IngresoState(MixinState):
                     )
                     session.add(movement)
                 else:
-                    # Create
+                    # Crear
                     new_product = Product(
                         barcode=barcode or str(uuid.uuid4()),
                         description=description,
@@ -219,9 +219,9 @@ class IngresoState(MixinState):
                         sale_price=item["sale_price"]
                     )
                     session.add(new_product)
-                    session.flush() # Get ID
+                    session.flush() # Obtener ID
                     
-                    # Log Movement
+                    # Registrar movimiento
                     movement = StockMovement(
                         type="Ingreso",
                         product_id=new_product.id,

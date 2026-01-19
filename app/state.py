@@ -30,11 +30,11 @@ from app.states.auth_state import (
 from app.utils.db import AsyncSessionLocal
 from app.utils.db_seeds import init_payment_methods
 
-# Re-export State
+# Reexportar State
 class State(RootState):
     """
-    Main application state class.
-    Now inherits from RootState which combines all modular states.
+    Clase principal de estado de la aplicacion.
+    Ahora hereda de RootState, que combina todos los estados modulares.
     """
 
     notification_message: str = ""

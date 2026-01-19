@@ -369,7 +369,7 @@ class ServicesState(MixinState):
         self.reservation_filter_status = self.reservation_staged_status
         self.reservation_filter_start_date = self.reservation_staged_start_date
         self.reservation_filter_end_date = self.reservation_staged_end_date
-        self.reservation_current_page = 1  # Reset pagination
+        self.reservation_current_page = 1  # Reiniciar paginacion
         self.load_reservations()
 
     def reset_reservation_filters(self):
@@ -510,7 +510,7 @@ class ServicesState(MixinState):
                     session.add(price)
                     session.commit()
             
-            # Reset editing state
+            # Reiniciar estado de edicion
             self.editing_field_price_id = ""
             self.new_field_price_name = ""
             self.new_field_price_amount = ""
@@ -856,7 +856,7 @@ class ServicesState(MixinState):
         if normalized not in ["futbol", "voley"]:
             return
         self.field_rental_sport = normalized
-        self.reservation_current_page = 1  # Reset pagination
+        self.reservation_current_page = 1  # Reiniciar paginacion
         self.reservation_payment_id = ""
         self.reservation_payment_amount = ""
         self.reservation_cancel_selection = ""

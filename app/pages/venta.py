@@ -493,7 +493,7 @@ def reservation_info_card() -> rx.Component:
 
 
 def payment_sidebar() -> rx.Component:
-    """Sidebar derecho con m‚todo de pago y total."""
+    """Sidebar derecho con método de pago y total."""
     return rx.el.aside(
         # Header
         rx.el.div(
@@ -503,7 +503,7 @@ def payment_sidebar() -> rx.Component:
         ),
         # Contenido scrollable
         rx.el.div(
-            # M‚todos de pago
+            # Métodos de pago
             rx.el.div(
                 rx.el.p("M‚todo de pago", class_name="text-xs font-medium text-gray-500 uppercase mb-2"),
                 rx.el.div(
@@ -614,7 +614,7 @@ def payment_sidebar() -> rx.Component:
                 ),
                 class_name="p-4 border-b",
             ),
-            # Opciones seg£n m‚todo
+            # Opciones según método
             rx.el.div(
                 rx.cond(
                     State.payment_method_kind == "cash",
@@ -885,7 +885,7 @@ def payment_sidebar() -> rx.Component:
                 ),
                 class_name="p-3 bg-gray-50",
             ),
-            # Botones de acci¢n
+            # Botones de acción
             rx.el.div(
                 rx.el.button(
                     rx.cond(

@@ -68,7 +68,7 @@ def login_page() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.div(
-                    rx.el.span("Created by", class_name="text-gray-500"),
+                    rx.el.span("Creado por", class_name="text-gray-500"),
                     rx.el.a(
                         "Trebor Oscorima",
                         href="https://www.facebook.com/trebor.oscorima/?locale=es_LA",
