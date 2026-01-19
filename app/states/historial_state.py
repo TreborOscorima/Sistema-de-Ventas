@@ -15,9 +15,36 @@ from app.models import (
     Product,
     CashboxLog,
     PaymentMethod,
+    SalePayment,
+    User,
 )
 from .mixin_state import MixinState
 from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
+
+REPORT_METHOD_KEYS = [
+    "cash",
+    "debit",
+    "credit",
+    "yape",
+    "plin",
+    "transfer",
+    "mixed",
+    "other",
+]
+REPORT_SOURCE_OPTIONS = [
+    ["Todos", "Todos"],
+    ["Ventas", "Ventas"],
+    ["Cobranzas", "Cobranzas"],
+]
+REPORT_CASHBOX_ACTIONS = {
+    "Cobranza",
+    "Cobro de Cuota",
+    "Pago Cuota",
+    "Cobro Cuota",
+    "Ingreso Cuota",
+    "Amortizacion",
+    "Pago Credito",
+}
 
 class HistorialState(MixinState):
     # history: List[Movement] = [] # Removed in favor of DB
@@ -32,6 +59,25 @@ class HistorialState(MixinState):
     staged_history_filter_start_date: str = ""
     staged_history_filter_end_date: str = ""
     available_category_options: list[list[str]] = [["Todas", "Todas"]]
+    report_active_tab: str = "metodos"
+    report_filter_start_date: str = ""
+    report_filter_end_date: str = ""
+    report_filter_method: str = "Todos"
+    report_filter_source: str = "Todos"
+    report_filter_user: str = "Todos"
+    staged_report_filter_start_date: str = ""
+    staged_report_filter_end_date: str = ""
+    staged_report_filter_method: str = "Todos"
+    staged_report_filter_source: str = "Todos"
+    staged_report_filter_user: str = "Todos"
+    available_report_method_options: list[list[str]] = [["Todos", "Todos"]]
+    available_report_source_options: list[list[str]] = REPORT_SOURCE_OPTIONS
+    available_report_user_options: list[list[str]] = [["Todos", "Todos"]]
+    _report_update_trigger: int = 0
+    report_detail_current_page: int = 1
+    report_detail_items_per_page: int = 10
+    report_closing_current_page: int = 1
+    report_closing_items_per_page: int = 10
     current_page_history: int = 1
     items_per_page: int = 10
     _history_update_trigger: int = 0
@@ -88,6 +134,259 @@ class HistorialState(MixinState):
             self.history_filter_category = "Todas"
         if self.staged_history_filter_category not in valid_values:
             self.staged_history_filter_category = "Todas"
+
+    def _report_date_range(
+        self,
+    ) -> tuple[datetime.datetime | None, datetime.datetime | None]:
+        start_date = None
+        end_date = None
+        if self.report_filter_start_date:
+            try:
+                start_date = datetime.datetime.fromisoformat(
+                    self.report_filter_start_date
+                )
+            except ValueError:
+                start_date = None
+        if self.report_filter_end_date:
+            try:
+                end_date = datetime.datetime.fromisoformat(
+                    self.report_filter_end_date
+                )
+                end_date = end_date.replace(hour=23, minute=59, second=59)
+            except ValueError:
+                end_date = None
+        return start_date, end_date
+
+    def _method_key_from_label(self, label: str) -> str:
+        raw = (label or "").strip().lower()
+        if not raw:
+            return "other"
+        normalized = unicodedata.normalize("NFKD", raw)
+        normalized = "".join(
+            ch for ch in normalized if not unicodedata.combining(ch)
+        )
+        if "mixto" in normalized or "mixed" in normalized:
+            return "mixed"
+        if "yape" in normalized:
+            return "yape"
+        if "plin" in normalized:
+            return "plin"
+        if "transfer" in normalized or "banco" in normalized:
+            return "transfer"
+        if "debito" in normalized or "debit" in normalized:
+            return "debit"
+        if "credito" in normalized or "credit" in normalized or "tarjeta" in normalized:
+            return "credit"
+        if "efectivo" in normalized or normalized == "cash":
+            return "cash"
+        return "other"
+
+    def _load_report_options(self) -> None:
+        method_options = [["Todos", "Todos"]]
+        for key in REPORT_METHOD_KEYS:
+            method_options.append([self._payment_method_label(key), key])
+        self.available_report_method_options = method_options
+        self.available_report_source_options = [option[:] for option in REPORT_SOURCE_OPTIONS]
+
+        with rx.session() as session:
+            usernames = session.exec(select(User.username)).all()
+
+        user_values = sorted(
+            {
+                str(name).strip()
+                for name in usernames
+                if name and str(name).strip()
+            }
+        )
+        user_options = [["Todos", "Todos"]]
+        user_options.extend([[name, name] for name in user_values])
+        self.available_report_user_options = user_options
+
+        method_values = {option[1] for option in self.available_report_method_options}
+        if self.report_filter_method not in method_values:
+            self.report_filter_method = "Todos"
+        if self.staged_report_filter_method not in method_values:
+            self.staged_report_filter_method = "Todos"
+
+        source_values = {option[1] for option in self.available_report_source_options}
+        if self.report_filter_source not in source_values:
+            self.report_filter_source = "Todos"
+        if self.staged_report_filter_source not in source_values:
+            self.staged_report_filter_source = "Todos"
+
+        user_values_set = {option[1] for option in self.available_report_user_options}
+        if self.report_filter_user not in user_values_set:
+            self.report_filter_user = "Todos"
+        if self.staged_report_filter_user not in user_values_set:
+            self.staged_report_filter_user = "Todos"
+
+    def _build_report_entries(self) -> list[dict]:
+        start_date, end_date = self._report_date_range()
+        method_filter = self.report_filter_method or "Todos"
+        source_filter = self.report_filter_source or "Todos"
+        user_filter = self.report_filter_user or "Todos"
+
+        rows: list[dict] = []
+        with rx.session() as session:
+            if source_filter in {"Todos", "Ventas"}:
+                payment_query = select(SalePayment).options(
+                    selectinload(SalePayment.sale).selectinload(Sale.user)
+                )
+                if start_date:
+                    payment_query = payment_query.where(
+                        SalePayment.created_at >= start_date
+                    )
+                if end_date:
+                    payment_query = payment_query.where(
+                        SalePayment.created_at <= end_date
+                    )
+                payments = session.exec(payment_query).all()
+
+                for payment in payments:
+                    sale = payment.sale
+                    if sale and sale.status == SaleStatus.cancelled:
+                        continue
+                    user_name = (
+                        sale.user.username
+                        if sale and sale.user
+                        else "Desconocido"
+                    )
+                    if user_filter != "Todos" and user_name != user_filter:
+                        continue
+                    method_key = self._payment_method_key(
+                        getattr(payment, "method_type", None)
+                    )
+                    if not method_key:
+                        method_key = "other"
+                    if method_filter != "Todos" and method_key != method_filter:
+                        continue
+                    amount = Decimal(str(getattr(payment, "amount", 0) or 0))
+                    timestamp = (
+                        getattr(payment, "created_at", None)
+                        or (sale.timestamp if sale else None)
+                    )
+                    reference_code = getattr(payment, "reference_code", "") or ""
+                    sale_id = sale.id if sale else None
+                    reference = (
+                        reference_code
+                        or (f"Venta #{sale_id}" if sale_id else "-")
+                    )
+                    rows.append(
+                        {
+                            "timestamp": timestamp,
+                            "timestamp_display": timestamp.strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            )
+                            if timestamp
+                            else "",
+                            "source": "Venta",
+                            "method_key": method_key,
+                            "method_label": self._normalize_wallet_label(method_key),
+                            "amount": self._round_currency(float(amount)),
+                            "user": user_name,
+                            "reference": reference,
+                        }
+                    )
+
+            if source_filter in {"Todos", "Cobranzas"}:
+                log_query = (
+                    select(CashboxLog, User.username)
+                    .join(User, User.id == CashboxLog.user_id, isouter=True)
+                    .where(CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS))
+                )
+                if start_date:
+                    log_query = log_query.where(
+                        CashboxLog.timestamp >= start_date
+                    )
+                if end_date:
+                    log_query = log_query.where(CashboxLog.timestamp <= end_date)
+                logs = session.exec(log_query).all()
+
+                for log, username in logs:
+                    user_name = username or "Desconocido"
+                    if user_filter != "Todos" and user_name != user_filter:
+                        continue
+                    method_key = self._method_key_from_label(
+                        getattr(log, "payment_method", "")
+                    )
+                    if method_filter != "Todos" and method_key != method_filter:
+                        continue
+                    amount = Decimal(str(getattr(log, "amount", 0) or 0))
+                    timestamp = getattr(log, "timestamp", None)
+                    rows.append(
+                        {
+                            "timestamp": timestamp,
+                            "timestamp_display": timestamp.strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            )
+                            if timestamp
+                            else "",
+                            "source": "Cobranza",
+                            "method_key": method_key,
+                            "method_label": self._normalize_wallet_label(
+                                getattr(log, "payment_method", "") or method_key
+                            ),
+                            "amount": self._round_currency(float(amount)),
+                            "user": user_name,
+                            "reference": (log.notes or "").strip()
+                            or "Cobranza registrada",
+                        }
+                    )
+
+        rows.sort(
+            key=lambda item: item.get("timestamp") or datetime.datetime.min,
+            reverse=True,
+        )
+        return rows
+
+    def _build_report_closings(self) -> list[dict]:
+        start_date, end_date = self._report_date_range()
+        user_filter = self.report_filter_user or "Todos"
+
+        rows: list[dict] = []
+        with rx.session() as session:
+            log_query = (
+                select(CashboxLog, User.username)
+                .join(User, User.id == CashboxLog.user_id, isouter=True)
+                .where(CashboxLog.action.in_(["apertura", "cierre"]))
+            )
+            if start_date:
+                log_query = log_query.where(
+                    CashboxLog.timestamp >= start_date
+                )
+            if end_date:
+                log_query = log_query.where(CashboxLog.timestamp <= end_date)
+            logs = session.exec(log_query).all()
+
+            for log, username in logs:
+                user_name = username or "Desconocido"
+                if user_filter != "Todos" and user_name != user_filter:
+                    continue
+                action_label = (
+                    "Apertura" if log.action == "apertura" else "Cierre"
+                )
+                timestamp = getattr(log, "timestamp", None)
+                amount = Decimal(str(getattr(log, "amount", 0) or 0))
+                rows.append(
+                    {
+                        "timestamp": timestamp,
+                        "timestamp_display": timestamp.strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                        if timestamp
+                        else "",
+                        "action": action_label,
+                        "amount": self._round_currency(float(amount)),
+                        "user": user_name,
+                        "notes": (log.notes or "").strip(),
+                    }
+                )
+
+        rows.sort(
+            key=lambda item: item.get("timestamp") or datetime.datetime.min,
+            reverse=True,
+        )
+        return rows
 
     def _apply_sales_filters(self, query):
         start_date, end_date = self._history_date_range()
@@ -381,6 +680,105 @@ class HistorialState(MixinState):
         return self.filtered_history
 
     @rx.var
+    def report_method_summary(self) -> list[dict]:
+        _ = self._report_update_trigger
+        if not self.current_user["privileges"]["view_historial"]:
+            return []
+        entries = self._build_report_entries()
+        totals: dict[str, dict[str, Any]] = {}
+        for entry in entries:
+            key = entry.get("method_key") or "other"
+            if key not in totals:
+                totals[key] = {
+                    "method_label": self._payment_method_label(key),
+                    "count": 0,
+                    "total": Decimal("0.00"),
+                }
+            totals[key]["count"] += 1
+            totals[key]["total"] += Decimal(str(entry.get("amount", 0) or 0))
+        summary = []
+        for key in REPORT_METHOD_KEYS:
+            if key in totals:
+                item = totals[key]
+                summary.append(
+                    {
+                        "method_label": item["method_label"],
+                        "count": item["count"],
+                        "total": self._round_currency(float(item["total"])),
+                    }
+                )
+        for key, value in totals.items():
+            if key not in REPORT_METHOD_KEYS:
+                summary.append(
+                    {
+                        "method_label": value["method_label"],
+                        "count": value["count"],
+                        "total": self._round_currency(float(value["total"])),
+                    }
+                )
+        return summary
+
+    @rx.var
+    def report_detail_rows(self) -> list[dict]:
+        _ = self._report_update_trigger
+        if not self.current_user["privileges"]["view_historial"]:
+            return []
+        return self._build_report_entries()
+
+    @rx.var
+    def report_detail_total_pages(self) -> int:
+        _ = self._report_update_trigger
+        total_items = len(self.report_detail_rows)
+        if total_items == 0:
+            return 1
+        return (
+            total_items + self.report_detail_items_per_page - 1
+        ) // self.report_detail_items_per_page
+
+    @rx.var
+    def paginated_report_detail_rows(self) -> list[dict]:
+        _ = self._report_update_trigger
+        if not self.current_user["privileges"]["view_historial"]:
+            return []
+        total_pages = self.report_detail_total_pages
+        page = min(
+            max(self.report_detail_current_page, 1), total_pages
+        )
+        per_page = max(self.report_detail_items_per_page, 1)
+        offset = (page - 1) * per_page
+        return self.report_detail_rows[offset : offset + per_page]
+
+    @rx.var
+    def report_closing_rows(self) -> list[dict]:
+        _ = self._report_update_trigger
+        if not self.current_user["privileges"]["view_historial"]:
+            return []
+        return self._build_report_closings()
+
+    @rx.var
+    def report_closing_total_pages(self) -> int:
+        _ = self._report_update_trigger
+        total_items = len(self.report_closing_rows)
+        if total_items == 0:
+            return 1
+        return (
+            total_items + self.report_closing_items_per_page - 1
+        ) // self.report_closing_items_per_page
+
+    @rx.var
+    def paginated_report_closing_rows(self) -> list[dict]:
+        _ = self._report_update_trigger
+        if not self.current_user["privileges"]["view_historial"]:
+            return []
+        total_pages = self.report_closing_total_pages
+        page = min(
+            max(self.report_closing_current_page, 1), total_pages
+        )
+        per_page = max(self.report_closing_items_per_page, 1)
+        offset = (page - 1) * per_page
+        return self.report_closing_rows[offset : offset + per_page]
+
+    @rx.var
     def total_pages(self) -> int:
         _ = self._history_update_trigger
         total_items = self._sales_total_count()
@@ -406,7 +804,9 @@ class HistorialState(MixinState):
     @rx.event
     def reload_history(self):
         self._load_category_options()
+        self._load_report_options()
         self._history_update_trigger += 1
+        self._report_update_trigger += 1
         # print("Reloading history...") # Debug
 
     @rx.event
@@ -437,6 +837,84 @@ class HistorialState(MixinState):
     @rx.event
     def set_staged_history_filter_end_date(self, value: str):
         self.staged_history_filter_end_date = value or ""
+
+    @rx.event
+    def set_report_tab(self, value: str):
+        self.report_active_tab = value or "metodos"
+        self.report_detail_current_page = 1
+        self.report_closing_current_page = 1
+
+    @rx.event
+    def apply_report_filters(self):
+        self.report_filter_start_date = self.staged_report_filter_start_date
+        self.report_filter_end_date = self.staged_report_filter_end_date
+        self.report_filter_method = self.staged_report_filter_method
+        self.report_filter_source = self.staged_report_filter_source
+        self.report_filter_user = self.staged_report_filter_user
+        self.report_detail_current_page = 1
+        self.report_closing_current_page = 1
+        self._report_update_trigger += 1
+
+    @rx.event
+    def reset_report_filters(self):
+        self.staged_report_filter_start_date = ""
+        self.staged_report_filter_end_date = ""
+        self.staged_report_filter_method = "Todos"
+        self.staged_report_filter_source = "Todos"
+        self.staged_report_filter_user = "Todos"
+        self.report_detail_current_page = 1
+        self.report_closing_current_page = 1
+        self.apply_report_filters()
+
+    @rx.event
+    def set_staged_report_filter_start_date(self, value: str):
+        self.staged_report_filter_start_date = value or ""
+
+    @rx.event
+    def set_staged_report_filter_end_date(self, value: str):
+        self.staged_report_filter_end_date = value or ""
+
+    @rx.event
+    def set_staged_report_filter_method(self, value: str):
+        self.staged_report_filter_method = value or "Todos"
+
+    @rx.event
+    def set_staged_report_filter_source(self, value: str):
+        self.staged_report_filter_source = value or "Todos"
+
+    @rx.event
+    def set_staged_report_filter_user(self, value: str):
+        self.staged_report_filter_user = value or "Todos"
+
+    @rx.event
+    def set_report_detail_page(self, page_num: int):
+        if 1 <= page_num <= self.report_detail_total_pages:
+            self.report_detail_current_page = page_num
+
+    @rx.event
+    def next_report_detail_page(self):
+        if self.report_detail_current_page < self.report_detail_total_pages:
+            self.report_detail_current_page += 1
+
+    @rx.event
+    def prev_report_detail_page(self):
+        if self.report_detail_current_page > 1:
+            self.report_detail_current_page -= 1
+
+    @rx.event
+    def set_report_closing_page(self, page_num: int):
+        if 1 <= page_num <= self.report_closing_total_pages:
+            self.report_closing_current_page = page_num
+
+    @rx.event
+    def next_report_closing_page(self):
+        if self.report_closing_current_page < self.report_closing_total_pages:
+            self.report_closing_current_page += 1
+
+    @rx.event
+    def prev_report_closing_page(self):
+        if self.report_closing_current_page > 1:
+            self.report_closing_current_page -= 1
 
     @rx.event
     def open_sale_detail(self, sale_id: str):
@@ -670,6 +1148,143 @@ class HistorialState(MixinState):
 
         return rx.download(data=output.getvalue(), filename="historial_movimientos.xlsx")
 
+    @rx.event
+    def export_report_data(self):
+        if not self.current_user["privileges"]["export_data"]:
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+
+        active_tab = self.report_active_tab or "metodos"
+        if active_tab == "cierres":
+            rows = self._build_report_closings()
+            if not rows:
+                return rx.toast("No hay cierres para exportar.", duration=3000)
+
+            wb, ws = create_excel_workbook("Cierres de Caja")
+            headers = ["Fecha", "Tipo", "Usuario", "Monto", "Notas"]
+            style_header_row(ws, 1, headers)
+            data_rows = [
+                [
+                    row.get("timestamp_display", ""),
+                    row.get("action", ""),
+                    row.get("user", ""),
+                    row.get("amount", 0.0),
+                    row.get("notes", ""),
+                ]
+                for row in rows
+            ]
+            add_data_rows(ws, data_rows, 2)
+            auto_adjust_column_widths(ws)
+
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+            return rx.download(data=output.getvalue(), filename="cierres_caja.xlsx")
+
+        entries = self._build_report_entries()
+        if not entries:
+            return rx.toast("No hay ingresos para exportar.", duration=3000)
+
+        if active_tab == "detalle":
+            wb, ws = create_excel_workbook("Detalle de Cobros")
+            detail_headers = [
+                "Fecha",
+                "Origen",
+                "Metodo",
+                "Monto",
+                "Usuario",
+                "Referencia",
+            ]
+            style_header_row(ws, 1, detail_headers)
+            detail_rows = [
+                [
+                    entry.get("timestamp_display", ""),
+                    entry.get("source", ""),
+                    entry.get("method_label", ""),
+                    entry.get("amount", 0.0),
+                    entry.get("user", ""),
+                    entry.get("reference", ""),
+                ]
+                for entry in entries
+            ]
+            add_data_rows(ws, detail_rows, 2)
+            auto_adjust_column_widths(ws)
+
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+            return rx.download(data=output.getvalue(), filename="detalle_cobros.xlsx")
+
+        summary_totals: dict[str, dict[str, Any]] = {}
+        for entry in entries:
+            key = entry.get("method_key") or "other"
+            if key not in summary_totals:
+                summary_totals[key] = {
+                    "method_label": self._payment_method_label(key),
+                    "count": 0,
+                    "total": Decimal("0.00"),
+                }
+            summary_totals[key]["count"] += 1
+            summary_totals[key]["total"] += Decimal(
+                str(entry.get("amount", 0) or 0)
+            )
+
+        wb, ws = create_excel_workbook("Ingresos por Metodo")
+        summary_headers = ["Metodo", "Cantidad", "Total"]
+        style_header_row(ws, 1, summary_headers)
+
+        summary_rows = []
+        for key in REPORT_METHOD_KEYS:
+            if key in summary_totals:
+                summary = summary_totals[key]
+                summary_rows.append(
+                    [
+                        summary["method_label"],
+                        summary["count"],
+                        self._round_currency(float(summary["total"])),
+                    ]
+                )
+        for key, summary in summary_totals.items():
+            if key not in REPORT_METHOD_KEYS:
+                summary_rows.append(
+                    [
+                        summary["method_label"],
+                        summary["count"],
+                        self._round_currency(float(summary["total"])),
+                    ]
+                )
+
+        add_data_rows(ws, summary_rows, 2)
+        auto_adjust_column_widths(ws)
+
+        detail_ws = wb.create_sheet("Detalle de Cobros")
+        detail_headers = [
+            "Fecha",
+            "Origen",
+            "Metodo",
+            "Monto",
+            "Usuario",
+            "Referencia",
+        ]
+        style_header_row(detail_ws, 1, detail_headers)
+        detail_rows = [
+            [
+                entry.get("timestamp_display", ""),
+                entry.get("source", ""),
+                entry.get("method_label", ""),
+                entry.get("amount", 0.0),
+                entry.get("user", ""),
+                entry.get("reference", ""),
+            ]
+            for entry in entries
+        ]
+        add_data_rows(detail_ws, detail_rows, 2)
+        auto_adjust_column_widths(detail_ws)
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return rx.download(data=output.getvalue(), filename="ingresos_por_metodo.xlsx")
+
     def _parse_payment_amount(self, text: str, keyword: str) -> Decimal:
         """Extract amount for a keyword from a mixed payment string like 'Efectivo S/ 15.00'."""
         import re
@@ -722,105 +1337,51 @@ class HistorialState(MixinState):
 
         with rx.session() as session:
             # -------------------------------------------------------
-            # 1. SUMA DE VENTAS (Tabla Sale)
+            # 1. INGRESOS REALES (SalePayment)
             # -------------------------------------------------------
-            query = (
-                select(Sale)
-                .where(Sale.status != SaleStatus.cancelled)
-                .options(selectinload(Sale.payments))
+            payment_query = select(SalePayment).options(
+                selectinload(SalePayment.sale)
             )
             if start_date:
-                query = query.where(Sale.timestamp >= start_date)
+                payment_query = payment_query.where(
+                    SalePayment.created_at >= start_date
+                )
             if end_date:
-                query = query.where(Sale.timestamp <= end_date)
+                payment_query = payment_query.where(
+                    SalePayment.created_at <= end_date
+                )
 
-            sales = session.exec(query).all()
-
-            for sale in sales:
-                payments = sale.payments or []
-                method_keys: set[str] = set()
-                has_mixed = False
-                for payment in payments:
-                    key = self._payment_method_key(getattr(payment, "method_type", None))
-                    if not key:
-                        continue
-                    if key == PaymentMethodType.mixed.value:
-                        has_mixed = True
-                    method_keys.add(key)
-
-                total = sale.total_amount
-                if total is None:
-                    total = sum(
-                        Decimal(str(getattr(payment, "amount", 0) or 0))
-                        for payment in payments
-                    )
-                total_amount = Decimal(str(total or 0))
-
-                if not method_keys or has_mixed or len(method_keys) > 1:
-                    stats["mixto"] += total_amount
+            payments = session.exec(payment_query).all()
+            for payment in payments:
+                sale = payment.sale
+                if sale and sale.status == SaleStatus.cancelled:
                     continue
-
-                key = next(iter(method_keys))
-                self._add_to_stats(stats, key, total_amount)
+                key = self._payment_method_key(
+                    getattr(payment, "method_type", None)
+                )
+                if not key:
+                    continue
+                amount = Decimal(str(getattr(payment, "amount", 0) or 0))
+                self._add_to_stats(stats, key, amount)
 
             # -------------------------------------------------------
-            # 2. SUMA DE COBROS DE CUOTAS Y ADELANTOS (Tabla CashboxLog)
+            # 2. COBROS DE CUOTAS (CashboxLog)
             # -------------------------------------------------------
             query_log = select(CashboxLog).where(
-                CashboxLog.action.in_(
-                    [
-                        "Cobranza",
-                        "Cobro de Cuota",   
-                        "Adelanto",         
-                        "Pago Cuota",
-                        "Cobro Cuota",
-                        "Ingreso Cuota",
-                        "Amortizacion",
-                        "Pago Credito",
-                    ]
-                )
+                CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS)
             )
-            
             if start_date:
                 query_log = query_log.where(CashboxLog.timestamp >= start_date)
             if end_date:
                 query_log = query_log.where(CashboxLog.timestamp <= end_date)
 
             logs = session.exec(query_log).all()
-
             for log in logs:
                 amount = Decimal(str(log.amount or 0))
-                # Normalizar método: "T. Credito" -> "t. credito"
-                method_str = str(log.payment_method or "other").lower().strip()
-                
-                # --- LÓGICA DE CLASIFICACIÓN MEJORADA ---
-                
-                # 1. Efectivo
-                if "efectivo" in method_str:
-                    stats["efectivo"] += amount
-                
-                # 2. Billeteras Digitales
-                elif "yape" in method_str:
-                    stats["yape"] += amount
-                elif "plin" in method_str:
-                    stats["plin"] += amount
-                
-                # 3. Tarjetas (Detecta "T. Credito", "Crédito", "Visa", etc.)
-                elif "credito" in method_str or "crédito" in method_str:
-                    stats["credito"] += amount
-                elif "debito" in method_str or "débito" in method_str:
-                    stats["debito"] += amount
-                elif "tarjeta" in method_str or "card" in method_str:
-                    # Si dice "Tarjeta" genérico, lo asignamos a Débito por defecto
-                    stats["debito"] += amount
-                
-                # 4. Transferencias
-                elif "transfer" in method_str:
-                    stats["transferencia"] += amount
-                
-                # 5. Resto (Mixto / Otros)
-                else:
-                    stats["mixto"] += amount
+                method_key = self._method_key_from_label(
+                    getattr(log, "payment_method", "") or ""
+                )
+                self._add_to_stats(stats, method_key, amount)
 
         return {k: self._round_currency(v) for k, v in stats.items()}
 
@@ -873,12 +1434,61 @@ class HistorialState(MixinState):
         return self._round_currency(total_credit)
 
     @rx.var
+    def credit_outstanding(self) -> float:
+        _ = self._history_update_trigger
+        start_date, end_date = self._history_date_range()
+        pending_total = Decimal("0.00")
+
+        with rx.session() as session:
+            query = (
+                select(Sale)
+                .where(Sale.status != SaleStatus.cancelled)
+                .options(
+                    selectinload(Sale.payments),
+                    selectinload(Sale.installments),
+                )
+            )
+            if start_date:
+                query = query.where(Sale.timestamp >= start_date)
+            if end_date:
+                query = query.where(Sale.timestamp <= end_date)
+
+            sales = session.exec(query).all()
+            for sale in sales:
+                payment_condition = (sale.payment_condition or "").strip().lower()
+                payments = sale.payments or []
+                payment_method = self._payment_method_display(payments)
+                if payment_method.strip() in {"", "-"}:
+                    payment_method = "No especificado"
+                payment_method = self._sale_payment_method_label(
+                    sale, payments, payment_method
+                )
+                is_credit = payment_condition == "credito" or self._is_credit_label(
+                    payment_method
+                )
+                if not is_credit:
+                    continue
+                total_amount = Decimal(str(sale.total_amount or 0))
+                paid_initial = sum(
+                    Decimal(str(getattr(payment, "amount", 0) or 0))
+                    for payment in (sale.payments or [])
+                )
+                paid_installments = sum(
+                    Decimal(str(getattr(installment, "paid_amount", 0) or 0))
+                    for installment in (sale.installments or [])
+                )
+                pending = total_amount - paid_initial - paid_installments
+                if pending > 0:
+                    pending_total += pending
+
+        return self._round_currency(pending_total)
+
+    @rx.var
     def dynamic_payment_cards(self) -> list[dict]:
         stats = self.payment_stats
         styles = {
             "cash": {"icon": "coins", "color": "blue"},
             "debit": {"icon": "credit-card", "color": "indigo"},
-            "card": {"icon": "credit-card", "color": "indigo"},
             "credit": {"icon": "credit-card", "color": "violet"},
             "yape": {"icon": "qr-code", "color": "pink"},
             "plin": {"icon": "qr-code", "color": "cyan"},
@@ -886,28 +1496,33 @@ class HistorialState(MixinState):
             "mixed": {"icon": "layers", "color": "amber"},
             "other": {"icon": "circle-help", "color": "gray"},
         }
-        stats_key_map = {
-            "cash": "efectivo",
-            "debit": "debito",
-            "card": "credito",
-            "credit": "credito",
-            "yape": "yape",
-            "plin": "plin",
-            "wallet": "yape",
-            "transfer": "transferencia",
-            "mixed": "mixto",
-            "other": "mixto",
-        }
-
+        enabled_kinds: set[str] = set()
         with rx.session() as session:
             methods = session.exec(
                 select(PaymentMethod).where(PaymentMethod.enabled == True)
             ).all()
+        for method in methods:
+            kind = (method.kind or method.method_id or "other").strip().lower()
+            if kind == "card":
+                kind = "credit"
+            elif kind == "wallet":
+                kind = "yape"
+            enabled_kinds.add(kind)
 
-        order_alias = {
-            "card": "credit",
-            "wallet": "yape",
-        }
+        def _add_card(kind: str, label: str, stats_key: str) -> None:
+            amount = stats.get(stats_key, 0.0)
+            if amount == 0 and kind not in enabled_kinds:
+                return
+            style = styles.get(kind, styles["other"])
+            cards.append(
+                {
+                    "name": label,
+                    "amount": amount,
+                    "icon": style["icon"],
+                    "color": style["color"],
+                    "_sort_key": kind,
+                }
+            )
         order_index = {
             "cash": 0,
             "yape": 1,
@@ -920,22 +1535,15 @@ class HistorialState(MixinState):
         }
 
         cards: list[dict] = []
-        for method in methods:
-            kind = (method.kind or method.method_id or "other").strip().lower()
-            sort_kind = order_alias.get(kind, kind)
-            stats_key = stats_key_map.get(kind, "")
-            amount = stats.get(stats_key, 0.0) if stats_key else 0.0
-            style = styles.get(kind, styles["other"])
-            name = method.name or method.method_id or "Metodo"
-            cards.append(
-                {
-                    "name": name,
-                    "amount": amount,
-                    "icon": style["icon"],
-                    "color": style["color"],
-                    "_sort_key": sort_kind,
-                }
-            )
+        _add_card("cash", "Efectivo", "efectivo")
+        _add_card("yape", "Yape", "yape")
+        _add_card("plin", "Plin", "plin")
+        _add_card("credit", "T. Credito", "credito")
+        _add_card("debit", "T. Debito", "debito")
+        _add_card("transfer", "Transferencia", "transferencia")
+        mixed_label = "Pago Mixto" if "mixed" in enabled_kinds else "Otros"
+        if stats.get("mixto", 0) > 0:
+            _add_card("mixed", mixed_label, "mixto")
 
         def _sorter(card: dict) -> tuple[int, str]:
             name = (card.get("name") or "").strip().lower()

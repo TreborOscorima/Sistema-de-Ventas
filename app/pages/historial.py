@@ -8,6 +8,12 @@ from app.components.ui import (
     BUTTON_STYLES,
 )
 
+REPORT_TABS = [
+    ("metodos", "Ingresos por Metodo"),
+    ("detalle", "Detalle de Cobros"),
+    ("cierres", "Cierres de Caja"),
+]
+
 
 def history_filters() -> rx.Component:
     """Filter section for the history page."""
@@ -90,6 +96,280 @@ def history_filters() -> rx.Component:
             class_name="flex flex-wrap gap-3 mt-4 justify-start lg:justify-end",
         ),
         class_name="flex flex-col",
+    )
+
+
+def report_tab_button(key: str, label: str) -> rx.Component:
+    return rx.el.button(
+        label,
+        on_click=lambda _, tab_key=key: State.set_report_tab(tab_key),
+        class_name=rx.cond(
+            State.report_active_tab == key,
+            "px-4 py-2 rounded-md bg-indigo-600 text-white shadow-sm",
+            "px-4 py-2 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200",
+        ),
+    )
+
+
+def report_select(
+    label: str,
+    options: rx.Var | list,
+    value: rx.Var | str,
+    on_change,
+) -> rx.Component:
+    return rx.el.div(
+        rx.el.label(label, class_name="text-sm font-medium text-gray-600"),
+        rx.el.select(
+            rx.foreach(
+                options,
+                lambda option: rx.el.option(option[0], value=option[1]),
+            ),
+            value=value,
+            on_change=on_change,
+            class_name="w-full p-2 border rounded-md",
+        ),
+        class_name="flex flex-col gap-1",
+    )
+
+
+def report_filters() -> rx.Component:
+    start_filter, end_filter = date_range_filter(
+        start_value=State.staged_report_filter_start_date,
+        end_value=State.staged_report_filter_end_date,
+        on_start_change=State.set_staged_report_filter_start_date,
+        on_end_change=State.set_staged_report_filter_end_date,
+    )
+
+    method_filter = report_select(
+        "Metodo",
+        State.available_report_method_options,
+        State.staged_report_filter_method,
+        State.set_staged_report_filter_method,
+    )
+    source_filter = report_select(
+        "Origen",
+        State.available_report_source_options,
+        State.staged_report_filter_source,
+        State.set_staged_report_filter_source,
+    )
+    user_filter = report_select(
+        "Usuario",
+        State.available_report_user_options,
+        State.staged_report_filter_user,
+        State.set_staged_report_filter_user,
+    )
+
+    return rx.el.div(
+        rx.el.div(
+            rx.cond(
+                State.report_active_tab == "cierres",
+                rx.fragment(),
+                source_filter,
+            ),
+            rx.cond(
+                State.report_active_tab == "cierres",
+                rx.fragment(),
+                method_filter,
+            ),
+            user_filter,
+            start_filter,
+            end_filter,
+            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end",
+        ),
+        rx.el.div(
+            rx.el.button(
+                rx.icon("search", class_name="h-4 w-4"),
+                "Aplicar filtros",
+                on_click=State.apply_report_filters,
+                class_name=BUTTON_STYLES["primary"],
+            ),
+            rx.el.button(
+                "Limpiar",
+                on_click=State.reset_report_filters,
+                class_name=BUTTON_STYLES["secondary"],
+            ),
+            rx.el.button(
+                rx.icon("download", class_name="h-4 w-4"),
+                "Exportar",
+                on_click=State.export_report_data,
+                class_name=BUTTON_STYLES["success"],
+            ),
+            class_name="flex flex-wrap gap-3 mt-4 justify-start lg:justify-end",
+        ),
+        class_name="flex flex-col",
+    )
+
+
+def report_method_row(row: rx.Var[dict]) -> rx.Component:
+    return rx.el.tr(
+        rx.el.td(row["method_label"], class_name="py-3 px-4"),
+        rx.el.td(
+            row["count"].to_string(), class_name="py-3 px-4 text-center"
+        ),
+        rx.el.td(
+            State.currency_symbol,
+            row["total"].to_string(),
+            class_name="py-3 px-4 text-right font-semibold",
+        ),
+        class_name="border-b",
+    )
+
+
+def report_detail_row(row: rx.Var[dict]) -> rx.Component:
+    return rx.el.tr(
+        rx.el.td(row["timestamp_display"], class_name="py-3 px-4"),
+        rx.el.td(row["source"], class_name="py-3 px-4"),
+        rx.el.td(row["method_label"], class_name="py-3 px-4"),
+        rx.el.td(
+            State.currency_symbol,
+            row["amount"].to_string(),
+            class_name="py-3 px-4 text-right font-semibold",
+        ),
+        rx.el.td(row["user"], class_name="py-3 px-4"),
+        rx.el.td(row["reference"], class_name="py-3 px-4"),
+        class_name="border-b",
+    )
+
+
+def report_closing_row(row: rx.Var[dict]) -> rx.Component:
+    return rx.el.tr(
+        rx.el.td(row["timestamp_display"], class_name="py-3 px-4"),
+        rx.el.td(row["action"], class_name="py-3 px-4"),
+        rx.el.td(row["user"], class_name="py-3 px-4"),
+        rx.el.td(
+            State.currency_symbol,
+            row["amount"].to_string(),
+            class_name="py-3 px-4 text-right font-semibold",
+        ),
+        rx.el.td(row["notes"], class_name="py-3 px-4"),
+        class_name="border-b",
+    )
+
+
+def report_table() -> rx.Component:
+    return rx.match(
+        State.report_active_tab,
+        (
+            "metodos",
+            rx.el.div(
+                rx.el.table(
+                    rx.el.thead(
+                        rx.el.tr(
+                            rx.el.th("Metodo", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Cantidad", class_name="py-3 px-4 text-center"),
+                            rx.el.th("Total", class_name="py-3 px-4 text-right"),
+                            class_name="bg-gray-100",
+                        )
+                    ),
+                    rx.el.tbody(
+                        rx.foreach(State.report_method_summary, report_method_row)
+                    ),
+                ),
+                rx.cond(
+                    State.report_method_summary.length() == 0,
+                    empty_state("No hay ingresos para los filtros seleccionados."),
+                    rx.fragment(),
+                ),
+                class_name="bg-gray-50 border border-gray-200 rounded-lg p-4 sm:p-5 overflow-x-auto flex flex-col gap-4",
+            ),
+        ),
+        (
+            "detalle",
+            rx.el.div(
+                rx.el.table(
+                    rx.el.thead(
+                        rx.el.tr(
+                            rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Origen", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Metodo", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Monto", class_name="py-3 px-4 text-right"),
+                            rx.el.th("Usuario", class_name="py-3 px-4 text-left"),
+                            rx.el.th("Referencia", class_name="py-3 px-4 text-left"),
+                            class_name="bg-gray-100",
+                        )
+                    ),
+                    rx.el.tbody(
+                        rx.foreach(
+                            State.paginated_report_detail_rows, report_detail_row
+                        )
+                    ),
+                ),
+                rx.cond(
+                    State.report_detail_rows.length() == 0,
+                    empty_state("No hay cobros para los filtros seleccionados."),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    State.report_detail_rows.length() > 0,
+                    pagination_controls(
+                        current_page=State.report_detail_current_page,
+                        total_pages=State.report_detail_total_pages,
+                        on_prev=State.prev_report_detail_page,
+                        on_next=State.next_report_detail_page,
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="bg-gray-50 border border-gray-200 rounded-lg p-4 sm:p-5 overflow-x-auto flex flex-col gap-4",
+            ),
+        ),
+        rx.el.div(
+            rx.el.table(
+                rx.el.thead(
+                    rx.el.tr(
+                        rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left"),
+                        rx.el.th("Tipo", class_name="py-3 px-4 text-left"),
+                        rx.el.th("Usuario", class_name="py-3 px-4 text-left"),
+                        rx.el.th("Monto", class_name="py-3 px-4 text-right"),
+                        rx.el.th("Notas", class_name="py-3 px-4 text-left"),
+                        class_name="bg-gray-100",
+                    )
+                ),
+                rx.el.tbody(
+                    rx.foreach(
+                        State.paginated_report_closing_rows, report_closing_row
+                    )
+                ),
+            ),
+            rx.cond(
+                State.report_closing_rows.length() == 0,
+                empty_state("No hay aperturas o cierres para los filtros seleccionados."),
+                rx.fragment(),
+            ),
+            rx.cond(
+                State.report_closing_rows.length() > 0,
+                pagination_controls(
+                    current_page=State.report_closing_current_page,
+                    total_pages=State.report_closing_total_pages,
+                    on_prev=State.prev_report_closing_page,
+                    on_next=State.next_report_closing_page,
+                ),
+                rx.fragment(),
+            ),
+            class_name="bg-gray-50 border border-gray-200 rounded-lg p-4 sm:p-5 overflow-x-auto flex flex-col gap-4",
+        ),
+    )
+
+
+def reports_section() -> rx.Component:
+    return rx.el.div(
+        rx.el.div(
+            rx.el.h2(
+                "Reportes Financieros",
+                class_name="text-xl font-semibold text-gray-800",
+            ),
+            rx.el.p(
+                "Resumenes confiables por metodo de pago y detalle de cobros.",
+                class_name="text-sm text-gray-600",
+            ),
+            class_name="space-y-1",
+        ),
+        rx.el.div(
+            *[report_tab_button(key, label) for key, label in REPORT_TABS],
+            class_name="flex flex-wrap gap-2",
+        ),
+        report_filters(),
+        report_table(),
+        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col gap-4",
     )
 
 
@@ -331,10 +611,13 @@ def credit_sales_card() -> rx.Component:
                 class_name="p-3 rounded-lg bg-amber-100",
             ),
             rx.el.div(
-                rx.el.p("Ventas a Credito", class_name="text-sm font-medium text-gray-500"),
+                rx.el.p(
+                    "Saldo por cobrar (Credito)",
+                    class_name="text-sm font-medium text-gray-500",
+                ),
                 rx.el.p(
                     rx.el.span(
-                        State.currency_symbol, State.total_credit.to_string()
+                        State.currency_symbol, State.credit_outstanding.to_string()
                     ),
                     class_name="text-2xl font-bold text-gray-800",
                 ),
@@ -447,6 +730,7 @@ def historial_page() -> rx.Component:
                 on_prev=lambda: State.set_history_page(State.current_page_history - 1),
                 on_next=lambda: State.set_history_page(State.current_page_history + 1),
             ),
+            reports_section(),
             class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
         ),
         sale_detail_modal(),

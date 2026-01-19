@@ -453,13 +453,60 @@ def close_cashbox_modal() -> rx.Component:
         children=[
             rx.el.div(
                 rx.el.h4(
-                    "Totales por método",
+                    "Resumen de caja",
+                    class_name="text-sm font-semibold text-gray-700 mb-2",
+                ),
+                rx.el.table(
+                    rx.el.tbody(
+                        rx.el.tr(
+                            rx.el.td("Apertura", class_name="py-2 px-3 text-left text-sm"),
+                            rx.el.td(
+                                State.cashbox_close_opening_amount_display,
+                                class_name="py-2 px-3 text-right text-sm font-semibold",
+                            ),
+                            class_name="border-b",
+                        ),
+                        rx.el.tr(
+                            rx.el.td("Ingresos reales", class_name="py-2 px-3 text-left text-sm"),
+                            rx.el.td(
+                                State.cashbox_close_income_total_display,
+                                class_name="py-2 px-3 text-right text-sm font-semibold",
+                            ),
+                            class_name="border-b",
+                        ),
+                        rx.el.tr(
+                            rx.el.td("Egresos caja chica", class_name="py-2 px-3 text-left text-sm"),
+                            rx.el.td(
+                                State.cashbox_close_expense_total_display,
+                                class_name="py-2 px-3 text-right text-sm font-semibold",
+                            ),
+                            class_name="border-b",
+                        ),
+                        rx.el.tr(
+                            rx.el.td(
+                                rx.el.span("Saldo esperado", class_name="font-semibold"),
+                                class_name="py-2 px-3 text-left text-sm",
+                            ),
+                            rx.el.td(
+                                State.cashbox_close_expected_total_display,
+                                class_name="py-2 px-3 text-right text-sm font-bold",
+                            ),
+                            class_name="border-t border-gray-200 bg-gray-50",
+                        ),
+                    ),
+                    class_name="w-full text-sm border rounded-lg",
+                ),
+                class_name="mb-6",
+            ),
+            rx.el.div(
+                rx.el.h4(
+                    "Ingresos por metodo",
                     class_name="text-sm font-semibold text-gray-700 mb-2",
                 ),
                 rx.el.table(
                     rx.el.thead(
                         rx.el.tr(
-                            rx.el.th("Método", class_name="py-2 px-3 text-left"),
+                            rx.el.th("Metodo", class_name="py-2 px-3 text-left"),
                             rx.el.th("Movimientos", class_name="py-2 px-3 text-center"),
                             rx.el.th("Total", class_name="py-2 px-3 text-right"),
                             class_name="bg-gray-100 text-sm",
@@ -486,7 +533,7 @@ def close_cashbox_modal() -> rx.Component:
                         ),
                         rx.el.tr(
                             rx.el.td(
-                                rx.el.span("Total cierre", class_name="font-semibold"),
+                                rx.el.span("Total ingresos", class_name="font-semibold"),
                                 class_name="py-2 px-3 text-left text-sm",
                             ),
                             rx.el.td(
@@ -494,7 +541,7 @@ def close_cashbox_modal() -> rx.Component:
                                 class_name="py-2 px-3 text-center text-sm",
                             ),
                             rx.el.td(
-                                State.cashbox_close_total_amount,
+                                State.cashbox_close_income_total_display,
                                 class_name="py-2 px-3 text-right text-sm font-bold",
                             ),
                             class_name="border-t border-gray-200 bg-gray-50",
@@ -506,7 +553,7 @@ def close_cashbox_modal() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.h4(
-                    "Detalle de ventas",
+                    "Detalle de ingresos",
                     class_name="text-sm font-semibold text-gray-700 mb-2",
                 ),
                 rx.el.div(

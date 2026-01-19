@@ -31,6 +31,21 @@ from app.utils.exports import (
     create_pdf_report,
 )
 
+CASHBOX_INCOME_ACTIONS = {
+    "Venta",
+    "Inicial Credito",
+    "Reserva",
+    "Adelanto",
+    "Cobranza",
+    "Cobro de Cuota",
+    "Pago Cuota",
+    "Cobro Cuota",
+    "Ingreso Cuota",
+    "Amortizacion",
+    "Pago Credito",
+}
+CASHBOX_EXPENSE_ACTIONS = {"gasto_caja_chica"}
+
 class CashState(MixinState):
     # cashbox_sales: List[CashboxSale] = [] # Removed in favor of DB
     cashbox_filter_start_date: str = ""
@@ -47,6 +62,10 @@ class CashState(MixinState):
     summary_by_method: list[dict] = []
     cashbox_close_summary_sales: List[CashboxSale] = []
     cashbox_close_summary_date: str = ""
+    cashbox_close_opening_amount: float = 0.0
+    cashbox_close_income_total: float = 0.0
+    cashbox_close_expense_total: float = 0.0
+    cashbox_close_expected_total: float = 0.0
     cashbox_sessions: Dict[str, CashboxSession] = {}
     cashbox_open_amount_input: str = "0"
     cashbox_logs: List[CashboxLogEntry] = []
@@ -331,9 +350,9 @@ class CashState(MixinState):
                 CashboxLogModel.action == "gasto_caja_chica",
                 CashboxLogModel.timestamp >= opening_time
             )
-            expenses = session.exec(statement).one() or 0.0
-            
-            return opening_amount - expenses
+            expenses = session.exec(statement).one()
+            expenses_value = float(expenses or 0)
+            return opening_amount - expenses_value
 
     @rx.var
     def cashbox_opening_time(self) -> str:
@@ -353,6 +372,85 @@ class CashState(MixinState):
                 duration=3000,
             )
         return None
+
+    def _cashbox_time_range(
+        self, date: str
+    ) -> tuple[datetime.datetime, datetime.datetime, dict[str, Any] | None]:
+        session_info = self._active_cashbox_session_info()
+        if session_info:
+            start_dt = session_info.get("opening_time") or datetime.datetime.now()
+            end_dt = session_info.get("closing_time") or datetime.datetime.now()
+            return start_dt, end_dt, session_info
+        try:
+            target_date = datetime.datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            target_date = datetime.datetime.now()
+        start_dt = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_dt = target_date.replace(hour=23, minute=59, second=59, microsecond=0)
+        return start_dt, end_dt, None
+
+    def _cashbox_opening_amount_value(self, date: str) -> float:
+        session_info = self._active_cashbox_session_info()
+        if session_info:
+            with rx.session() as session:
+                cashbox_session = session.exec(
+                    select(CashboxSessionModel)
+                    .where(CashboxSessionModel.user_id == session_info["user_id"])
+                    .where(CashboxSessionModel.is_open == True)
+                ).first()
+                if cashbox_session:
+                    return float(cashbox_session.opening_amount or 0)
+        start_dt, end_dt, session_info = self._cashbox_time_range(date)
+        with rx.session() as session:
+            statement = (
+                select(CashboxLogModel)
+                .where(CashboxLogModel.action == "apertura")
+                .where(CashboxLogModel.timestamp >= start_dt)
+                .where(CashboxLogModel.timestamp <= end_dt)
+                .order_by(CashboxLogModel.timestamp.asc())
+            )
+            if session_info:
+                statement = statement.where(
+                    CashboxLogModel.user_id == session_info["user_id"]
+                )
+            log = session.exec(statement).first()
+            if log:
+                return float(log.amount or 0)
+        return 0.0
+
+    def _cashbox_expense_total(self, date: str) -> float:
+        start_dt, end_dt, session_info = self._cashbox_time_range(date)
+        with rx.session() as session:
+            statement = (
+                select(sqlalchemy.func.sum(CashboxLogModel.amount))
+                .where(CashboxLogModel.action.in_(CASHBOX_EXPENSE_ACTIONS))
+                .where(CashboxLogModel.timestamp >= start_dt)
+                .where(CashboxLogModel.timestamp <= end_dt)
+            )
+            if session_info:
+                statement = statement.where(
+                    CashboxLogModel.user_id == session_info["user_id"]
+                )
+            total = session.exec(statement).one()
+        return self._round_currency(float(total or 0))
+
+    def _build_cashbox_close_breakdown(self, date: str) -> dict[str, Any]:
+        summary = self._build_cashbox_summary(date)
+        opening_amount = self._cashbox_opening_amount_value(date)
+        income_total = self._round_currency(
+            sum(item.get("total", 0) for item in summary)
+        )
+        expense_total = self._cashbox_expense_total(date)
+        expected_total = self._round_currency(
+            opening_amount + income_total - expense_total
+        )
+        return {
+            "summary": summary,
+            "opening_amount": self._round_currency(opening_amount),
+            "income_total": income_total,
+            "expense_total": expense_total,
+            "expected_total": expected_total,
+        }
 
     def _active_cashbox_session_info(self) -> dict[str, Any] | None:
         if not hasattr(self, "current_user") or not self.current_user:
@@ -995,8 +1093,26 @@ class CashState(MixinState):
 
     @rx.var
     def cashbox_close_total_amount(self) -> str:
-        total_value = sum(item.get("total", 0) for item in self.summary_by_method)
+        total_value = self.cashbox_close_expected_total
+        if total_value == 0 and self.summary_by_method:
+            total_value = sum(item.get("total", 0) for item in self.summary_by_method)
         return self._format_currency(total_value)
+
+    @rx.var
+    def cashbox_close_opening_amount_display(self) -> str:
+        return self._format_currency(self.cashbox_close_opening_amount)
+
+    @rx.var
+    def cashbox_close_income_total_display(self) -> str:
+        return self._format_currency(self.cashbox_close_income_total)
+
+    @rx.var
+    def cashbox_close_expense_total_display(self) -> str:
+        return self._format_currency(self.cashbox_close_expense_total)
+
+    @rx.var
+    def cashbox_close_expected_total_display(self) -> str:
+        return self._format_currency(self.cashbox_close_expected_total)
 
     @rx.var
     def cashbox_close_sales(self) -> list[CashboxSale]:
@@ -1010,13 +1126,18 @@ class CashState(MixinState):
         if denial:
             return denial
         today = datetime.datetime.now().strftime("%Y-%m-%d")
+        breakdown = self._build_cashbox_close_breakdown(today)
         day_sales = self._get_day_sales(today)
-        summary = self._build_cashbox_summary(today)
-        if not day_sales and not summary:
+        summary = breakdown["summary"]
+        if not day_sales and not summary and breakdown["opening_amount"] == 0:
             return rx.toast("No hay movimientos de caja hoy.", duration=3000)
         self.summary_by_method = summary
         self.cashbox_close_summary_sales = day_sales
         self.cashbox_close_summary_date = today
+        self.cashbox_close_opening_amount = breakdown["opening_amount"]
+        self.cashbox_close_income_total = breakdown["income_total"]
+        self.cashbox_close_expense_total = breakdown["expense_total"]
+        self.cashbox_close_expected_total = breakdown["expected_total"]
         self.cashbox_close_modal_open = True
 
     @rx.event
@@ -1047,6 +1168,7 @@ class CashState(MixinState):
             "Metodo Detallado",
             "Detalle Pago",
             "Total",
+            "Cobrado Real",
             "Productos",
         ]
         style_header_row(ws, 1, headers)
@@ -1127,6 +1249,7 @@ class CashState(MixinState):
                 method_label,
                 payment_details,
                 sale["total"],
+                sale.get("amount", 0),
                 details,
             ])
             
@@ -1150,12 +1273,11 @@ class CashState(MixinState):
         report_date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
             "%Y-%m-%d"
         )
-        summary = self.summary_by_method or self._build_cashbox_summary(report_date)
-        day_sales = self.cashbox_close_summary_sales or self._get_day_sales(
-            report_date
-        )
+        breakdown = self._build_cashbox_close_breakdown(report_date)
+        summary = breakdown["summary"]
+        day_sales = self.cashbox_close_summary_sales or self._get_day_sales(report_date)
 
-        if not summary and not day_sales:
+        if not summary and not day_sales and breakdown["opening_amount"] == 0:
             return rx.toast("No hay movimientos de caja para exportar.", duration=3000)
 
         info_dict = {
@@ -1171,8 +1293,10 @@ class CashState(MixinState):
             info_dict[f"Total {method}"] = self._format_currency(total)
             total_value += float(total)
 
-        if total_value > 0:
-            info_dict["Total Cierre"] = self._format_currency(total_value)
+        info_dict["Apertura"] = self._format_currency(breakdown["opening_amount"])
+        info_dict["Ingresos reales"] = self._format_currency(breakdown["income_total"])
+        info_dict["Egresos caja chica"] = self._format_currency(breakdown["expense_total"])
+        info_dict["Saldo esperado"] = self._format_currency(breakdown["expected_total"])
 
         def _format_time(timestamp: str) -> str:
             if not timestamp:
@@ -1617,9 +1741,14 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
             "%Y-%m-%d"
         )
+        breakdown = self._build_cashbox_close_breakdown(date)
+        summary = breakdown["summary"]
         day_sales = self.cashbox_close_summary_sales or self._get_day_sales(date)
-        summary = self.summary_by_method or self._build_cashbox_summary(date)
-        if not day_sales and not summary:
+        if (
+            not day_sales
+            and not summary
+            and breakdown["opening_amount"] == 0
+        ):
             return rx.toast("No hay movimientos de caja hoy.", duration=3000)
         closing_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         totals_list = [
@@ -1630,9 +1759,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             for item in summary
             if item.get("total", 0) > 0
         ]
-        closing_total = self._round_currency(
-            sum(item.get("total", 0) for item in summary)
-        )
+        opening_amount = breakdown["opening_amount"]
+        income_total = breakdown["income_total"]
+        expense_total = breakdown["expense_total"]
+        closing_total = breakdown["expected_total"]
         
         with rx.session() as session:
             user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
@@ -1712,7 +1842,16 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 "",
                 line(),
                 "",
-                "TOTALES POR METODO",
+                "RESUMEN DE CAJA",
+                "",
+                row("Apertura:", self._format_currency(opening_amount)),
+                row("Ingresos:", self._format_currency(income_total)),
+                row("Egresos:", self._format_currency(expense_total)),
+                row("Saldo esperado:", self._format_currency(closing_total)),
+                "",
+                line(),
+                "",
+                "INGRESOS POR METODO",
                 "",
             ]
         )
@@ -1727,11 +1866,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 )
                 receipt_lines.append("")
         
-        receipt_lines.append(row("TOTAL CIERRE:", self._format_currency(closing_total)))
+        receipt_lines.append(
+            row("TOTAL CIERRE:", self._format_currency(closing_total))
+        )
         receipt_lines.append("")
         receipt_lines.append(line())
         receipt_lines.append("")
-        receipt_lines.append("DETALLE DE VENTAS")
+        receipt_lines.append("DETALLE DE INGRESOS")
         receipt_lines.append("")
         
         # Agregar detalle de ventas con método de pago completo
@@ -1796,23 +1937,14 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         return rx.call_script(script)
 
     def _get_day_sales(self, date: str) -> list[CashboxSale]:
-        session_info = self._active_cashbox_session_info()
-        if session_info:
-            start_dt = session_info.get("opening_time")
-            end_dt = session_info.get("closing_time") or datetime.datetime.now()
-        else:
-            try:
-                target_date = datetime.datetime.strptime(date, "%Y-%m-%d")
-                start_dt = target_date.replace(hour=0, minute=0, second=0)
-                end_dt = target_date.replace(hour=23, minute=59, second=59)
-            except ValueError:
-                return []
+        start_dt, end_dt, session_info = self._cashbox_time_range(date)
 
         with rx.session() as session:
             statement = (
                 select(CashboxLogModel, UserModel.username)
                 .join(UserModel, isouter=True)
                 .where(CashboxLogModel.amount > 0)
+                .where(CashboxLogModel.action.in_(CASHBOX_INCOME_ACTIONS))
                 .where(CashboxLogModel.timestamp >= start_dt)
                 .where(CashboxLogModel.timestamp <= end_dt)
                 .order_by(desc(CashboxLogModel.timestamp))
@@ -1867,18 +1999,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             return result
 
     def _build_cashbox_summary(self, date: str) -> list[dict]:
-        session_info = self._active_cashbox_session_info()
-        if session_info:
-            start_date = session_info.get("opening_time")
-            end_date = session_info.get("closing_time") or datetime.datetime.now()
-        else:
-            try:
-                start_date = datetime.datetime.strptime(date, "%Y-%m-%d")
-            except ValueError:
-                start_date = datetime.datetime.now().replace(
-                    hour=0, minute=0, second=0, microsecond=0
-                )
-            end_date = start_date + datetime.timedelta(days=1)
+        start_date, end_date, session_info = self._cashbox_time_range(date)
         method_col = sqlalchemy.func.coalesce(
             CashboxLogModel.payment_method, "No especificado"
         )
@@ -1889,15 +2010,14 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 sqlalchemy.func.sum(CashboxLogModel.amount),
             )
             .where(CashboxLogModel.amount > 0)
+            .where(CashboxLogModel.action.in_(CASHBOX_INCOME_ACTIONS))
             .where(CashboxLogModel.timestamp >= start_date)
+            .where(CashboxLogModel.timestamp <= end_date)
         )
         if session_info:
-            statement = (
-                statement.where(CashboxLogModel.user_id == session_info["user_id"])
-                .where(CashboxLogModel.timestamp <= end_date)
+            statement = statement.where(
+                CashboxLogModel.user_id == session_info["user_id"]
             )
-        else:
-            statement = statement.where(CashboxLogModel.timestamp < end_date)
         statement = (
             statement
             .group_by(method_col)
@@ -1922,6 +2042,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         self.summary_by_method = []
         self.cashbox_close_summary_sales = []
         self.cashbox_close_summary_date = ""
+        self.cashbox_close_opening_amount = 0.0
+        self.cashbox_close_income_total = 0.0
+        self.cashbox_close_expense_total = 0.0
+        self.cashbox_close_expected_total = 0.0
 
     def _sale_date(self, sale: CashboxSale):
         try:
