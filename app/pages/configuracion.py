@@ -441,7 +441,7 @@ def user_form() -> rx.Component:
                         ],
                         class_name="space-y-3",
                     ),
-                    class_name="max-h-[60vh] overflow-y-auto p-1",
+                    class_name="flex-1 overflow-y-auto min-h-0 p-1",
                 ),
                 rx.el.div(
                     rx.el.button(
@@ -454,9 +454,9 @@ def user_form() -> rx.Component:
                         on_click=State.save_user,
                         class_name="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 min-h-[44px]",
                     ),
-                    class_name="flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 sm:gap-4 mt-6",
+                    class_name="flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 sm:gap-4",
                 ),
-                class_name="fixed left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 sm:p-6 shadow-xl focus:outline-none max-h-[90vh] overflow-y-auto",
+                class_name="fixed left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 sm:p-6 shadow-xl focus:outline-none max-h-[90vh] overflow-hidden flex flex-col gap-4",
             ),
         ),
         open=State.show_user_form,

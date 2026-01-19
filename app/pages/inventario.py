@@ -110,7 +110,7 @@ def edit_product_modal() -> rx.Component:
                 ),
                 class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
             ),
-            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-y-auto",
+            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
         ),
         rx.fragment(),
     )
@@ -424,7 +424,7 @@ def inventory_adjustment_modal() -> rx.Component:
                 ),
                 class_name="relative z-10 w-full max-w-3xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto space-y-4",
             ),
-            class_name="fixed inset-0 z-50 flex items-start md:items-center justify-center px-4 py-6 overflow-y-auto",
+            class_name="fixed inset-0 z-50 flex items-start md:items-center justify-center px-4 py-6 overflow-hidden",
         ),
         rx.fragment(),
     )

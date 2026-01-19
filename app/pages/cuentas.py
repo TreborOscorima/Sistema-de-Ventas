@@ -339,75 +339,78 @@ def cuentas_detail_modal() -> rx.Component:
                     ),
                     class_name="flex items-start justify-between gap-4",
                 ),
-                stats_dashboard_component(
-                    pagadas=State.current_client_pagadas,
-                    pendientes=State.current_client_pendientes,
-                    export_event=State.export_cuentas_excel(
-                        State.selected_client_id
-                    ),
-                ),
                 rx.el.div(
-                    rx.el.h4(
-                        "Estado de Cuenta",
-                        class_name="text-lg font-semibold text-gray-800",
+                    stats_dashboard_component(
+                        pagadas=State.current_client_pagadas,
+                        pendientes=State.current_client_pendientes,
+                        export_event=State.export_cuentas_excel(
+                            State.selected_client_id
+                        ),
                     ),
                     rx.el.div(
-                        rx.el.table(
-                            rx.el.thead(
-                                rx.el.tr(
-                                    rx.el.th(
-                                        "Nro",
-                                        class_name="py-3 px-4 text-center",
-                                    ),
-                                    rx.el.th(
-                                        "Vencimiento",
-                                        class_name="py-3 px-4 text-left",
-                                    ),
-                                    rx.el.th(
-                                        "Total",
-                                        class_name="py-3 px-4 text-right",
-                                    ),
-                                    rx.el.th(
-                                        "Pagado",
-                                        class_name="py-3 px-4 text-right",
-                                    ),
-                                    rx.el.th(
-                                        "Pendiente",
-                                        class_name="py-3 px-4 text-right",
-                                    ),
-                                    rx.el.th(
-                                        "Estado",
-                                        class_name="py-3 px-4 text-left",
-                                    ),
-                                    rx.el.th(
-                                        "Acciones",
-                                        class_name="py-3 px-4 text-left",
-                                    ),
-                                    class_name="bg-gray-100",
-                                )
-                            ),
-                            rx.el.tbody(
-                                rx.foreach(
-                                    State.client_installments_view,
-                                    installment_row,
-                                )
-                            ),
-                            class_name="min-w-full text-sm",
+                        rx.el.h4(
+                            "Estado de Cuenta",
+                            class_name="text-lg font-semibold text-gray-800",
                         ),
-                        rx.cond(
-                            State.client_installments_view.length() == 0,
-                            empty_state(
-                                "Este cliente no tiene cuotas registradas."
+                        rx.el.div(
+                            rx.el.table(
+                                rx.el.thead(
+                                    rx.el.tr(
+                                        rx.el.th(
+                                            "Nro",
+                                            class_name="py-3 px-4 text-center",
+                                        ),
+                                        rx.el.th(
+                                            "Vencimiento",
+                                            class_name="py-3 px-4 text-left",
+                                        ),
+                                        rx.el.th(
+                                            "Total",
+                                            class_name="py-3 px-4 text-right",
+                                        ),
+                                        rx.el.th(
+                                            "Pagado",
+                                            class_name="py-3 px-4 text-right",
+                                        ),
+                                        rx.el.th(
+                                            "Pendiente",
+                                            class_name="py-3 px-4 text-right",
+                                        ),
+                                        rx.el.th(
+                                            "Estado",
+                                            class_name="py-3 px-4 text-left",
+                                        ),
+                                        rx.el.th(
+                                            "Acciones",
+                                            class_name="py-3 px-4 text-left",
+                                        ),
+                                        class_name="bg-gray-100",
+                                    )
+                                ),
+                                rx.el.tbody(
+                                    rx.foreach(
+                                        State.client_installments_view,
+                                        installment_row,
+                                    )
+                                ),
+                                class_name="min-w-full text-sm",
                             ),
-                            rx.fragment(),
+                            rx.cond(
+                                State.client_installments_view.length() == 0,
+                                empty_state(
+                                    "Este cliente no tiene cuotas registradas."
+                                ),
+                                rx.fragment(),
+                            ),
+                            class_name="overflow-x-auto rounded-lg border border-gray-200",
                         ),
-                        class_name="overflow-x-auto rounded-lg border border-gray-200",
+                        class_name="flex flex-col gap-4",
                     ),
-                    class_name="flex flex-col gap-4",
+                    class_name="flex-1 overflow-y-auto min-h-0 space-y-6",
                 ),
-                class_name="relative z-10 w-full max-w-5xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto space-y-6",
+                class_name="relative z-10 w-full max-w-5xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-hidden flex flex-col gap-6",
             ),
-            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-y-auto",
+            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
         ),
         rx.fragment(),
     )

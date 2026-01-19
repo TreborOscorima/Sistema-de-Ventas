@@ -377,19 +377,20 @@ def modal_container(
         footer: Footer content (usually buttons)
         max_width: Tailwind max-width class
     """
-    body_parts = [
+    header = rx.el.div(
         rx.el.h3(title, class_name="text-lg font-semibold text-gray-800"),
-    ]
-    if description:
-        body_parts.append(
-            rx.el.p(description, class_name="text-sm text-gray-600")
+        rx.el.p(description, class_name="text-sm text-gray-600") if description else rx.fragment(),
+        class_name="space-y-1",
+    )
+    body = (
+        rx.el.div(
+            *children,
+            class_name="flex-1 overflow-y-auto min-h-0 space-y-4",
         )
-    
-    if children:
-        body_parts.extend(children)
-    
-    if footer:
-        body_parts.append(footer)
+        if children
+        else rx.fragment()
+    )
+    footer_component = footer if footer else rx.fragment()
     
     return rx.cond(
         is_open,
@@ -399,10 +400,15 @@ def modal_container(
                 class_name="fixed inset-0 bg-black/40 modal-overlay",
             ),
             rx.el.div(
-                *body_parts,
-                class_name=f"relative z-10 w-full {max_width} rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto space-y-4",
+                header,
+                body,
+                footer_component,
+                class_name=(
+                    f"relative z-10 w-full {max_width} rounded-xl bg-white p-6 shadow-xl "
+                    "max-h-[90vh] overflow-hidden flex flex-col gap-4"
+                ),
             ),
-            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-y-auto",
+            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
         ),
         rx.fragment(),
     )
