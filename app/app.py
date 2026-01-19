@@ -8,6 +8,7 @@ from app.pages.inventario import inventario_page
 from app.pages.caja import cashbox_page
 from app.pages.historial import historial_page
 from app.pages.configuracion import configuracion_page
+from app.pages.cambiar_contrasena import cambiar_contrasena_page
 from app.pages.login import login_page
 from app.pages.servicios import servicios_page
 from app.pages.cuentas import cuentas_page
@@ -218,6 +219,9 @@ def page_servicios() -> rx.Component:
 def page_configuracion() -> rx.Component:
     return authenticated_layout(configuracion_page())
 
+def page_cambiar_contrasena() -> rx.Component:
+    return cambiar_contrasena_page()
+
 
 app = rx.App(
     theme=rx.theme(appearance="light"),
@@ -267,6 +271,7 @@ app = rx.App(
 # Eventos de carga comunes para todas las páginas
 _common_on_load = [
     State.ensure_roles_and_permissions,
+    State.ensure_password_change,
     State.ensure_default_data,
     State.ensure_payment_methods,
     State.load_categories,
@@ -277,6 +282,14 @@ _common_on_load = [
 
 # Página principal (redirige a ingreso)
 app.add_page(index, route="/", on_load=[State.sync_page_from_route] + _common_on_load)
+
+# Cambio de contrasena (solo cuando aplica)
+app.add_page(
+    page_cambiar_contrasena,
+    route="/cambiar-clave",
+    title="Cambiar Contrasena - TUWAYKIAPP",
+    on_load=[State.ensure_password_change],
+)
 
 # Páginas individuales con rutas separadas
 app.add_page(

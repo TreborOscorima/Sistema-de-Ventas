@@ -180,4 +180,5 @@ class User(TypedDict):
     username: str
     role: str
     privileges: Privileges
+    must_change_password: bool
 

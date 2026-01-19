@@ -45,6 +45,7 @@ class User(rx.Model, table=True):
     username: str = Field(unique=True, index=True, nullable=False)
     password_hash: str = Field(nullable=False)
     is_active: bool = Field(default=True)
+    must_change_password: bool = Field(default=False)
 
     role_id: int = Field(foreign_key="role.id")
 

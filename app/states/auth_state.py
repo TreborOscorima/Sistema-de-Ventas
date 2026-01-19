@@ -1,3 +1,4 @@
+import os
 import reflex as rx
 import bcrypt
 from typing import Dict, List, Optional, Any
@@ -6,6 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from app.models import Permission, Role, User as UserModel
 from app.utils.auth import create_access_token, verify_token
+from app.utils.logger import get_logger
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
 
@@ -87,6 +89,8 @@ DEFAULT_ROLE_TEMPLATES: Dict[str, Privileges] = {
     "Cajero": CASHIER_PRIVILEGES,
 }
 
+logger = get_logger("AuthState")
+
 class AuthState(MixinState):
     token: str = rx.LocalStorage("")
     # users: Dict[str, User] = {} # Removed in favor of DB
@@ -94,6 +98,7 @@ class AuthState(MixinState):
     role_privileges: Dict[str, Privileges] = DEFAULT_ROLE_TEMPLATES.copy()
     
     error_message: str = ""
+    password_change_error: str = ""
     needs_initial_admin: bool = False
     show_user_form: bool = False
     new_user_data: NewUser = {
@@ -132,6 +137,9 @@ class AuthState(MixinState):
                     "username": user.username,
                     "role": role_name,
                     "privileges": self._get_privileges_dict(user),
+                    "must_change_password": bool(
+                        getattr(user, "must_change_password", False)
+                    ),
                 }
         
         return self._guest_user()
@@ -156,6 +164,9 @@ class AuthState(MixinState):
                     "username": user.username,
                     "role": role_name,
                     "privileges": self._get_privileges_dict(user),
+                    "must_change_password": bool(
+                        getattr(user, "must_change_password", False)
+                    ),
                 })
             self.users_list = sorted(normalized_users, key=lambda u: u["username"])
 
@@ -165,6 +176,7 @@ class AuthState(MixinState):
             "username": "Invitado",
             "role": "Invitado",
             "privileges": EMPTY_PRIVILEGES.copy(),
+            "must_change_password": False,
         }
 
     def _normalize_privileges(self, privileges: Dict[str, bool]) -> Privileges:
@@ -299,6 +311,37 @@ class AuthState(MixinState):
         self.editing_user = None
         self.new_role_name = ""
 
+    def _resolve_env(self) -> str:
+        value = (os.getenv("ENV") or "dev").strip().lower()
+        if value in {"prod", "production"}:
+            return "prod"
+        return "dev"
+
+    def _initial_admin_password(self) -> str | None:
+        value = (os.getenv("INITIAL_ADMIN_PASSWORD") or "").strip()
+        return value or None
+
+    def _default_route_for_privileges(self, privileges: Dict[str, bool]) -> str:
+        if privileges.get("view_ingresos"):
+            return "/"
+        if privileges.get("view_ventas"):
+            return "/venta"
+        if privileges.get("view_cashbox"):
+            return "/caja"
+        if privileges.get("view_inventario"):
+            return "/inventario"
+        if privileges.get("view_historial"):
+            return "/historial"
+        if privileges.get("view_servicios"):
+            return "/servicios"
+        if privileges.get("view_clientes"):
+            return "/clientes"
+        if privileges.get("view_cuentas"):
+            return "/cuentas"
+        if privileges.get("manage_config"):
+            return "/configuracion"
+        return "/"
+
     @rx.event
     def ensure_roles_and_permissions(self):
         with rx.session() as session:
@@ -425,13 +468,51 @@ class AuthState(MixinState):
             )
 
     @rx.event
+    def ensure_password_change(self):
+        if not self.is_authenticated:
+            if self.router.url.path != "/":
+                return rx.redirect("/")
+            return
+        must_change = self.current_user.get("must_change_password", False)
+        current_path = self.router.url.path
+        if must_change and current_path != "/cambiar-clave":
+            return rx.redirect("/cambiar-clave")
+        if not must_change and current_path == "/cambiar-clave":
+            return rx.redirect(
+                self._default_route_for_privileges(
+                    self.current_user["privileges"]
+                )
+            )
+
+    @rx.event
     def login(self, form_data: dict):
-        username = form_data["username"].lower()
-        password = form_data["password"].encode("utf-8")
+        username = (form_data.get("username") or "").strip().lower()
+        raw_password = form_data.get("password") or ""
+        password = raw_password.encode("utf-8")
 
         with rx.session() as session:
-            if self.needs_initial_admin:
-                if username == "admin" and form_data["password"] == "admin":
+            admin_user = session.exec(
+                select(UserModel).where(UserModel.username == "admin")
+            ).first()
+            if admin_user and self.needs_initial_admin:
+                self.needs_initial_admin = False
+
+            if self.needs_initial_admin and not admin_user:
+                env = self._resolve_env()
+                initial_password = self._initial_admin_password()
+                if not initial_password:
+                    if env == "dev":
+                        initial_password = "admin"
+                        logger.warning(
+                            "WARNING: usando credenciales inseguras por defecto para desarrollo."
+                        )
+                    else:
+                        self.error_message = (
+                            "Sistema no inicializado. Configure INITIAL_ADMIN_PASSWORD."
+                        )
+                        return
+
+                if username == "admin" and raw_password == initial_password:
                     # Create superadmin
                     password_hash = bcrypt.hashpw(
                         password, bcrypt.gensalt()
@@ -444,26 +525,33 @@ class AuthState(MixinState):
                             self._normalize_privileges(SUPERADMIN_PRIVILEGES),
                             overwrite=True,
                         )
+                    must_change_password = env == "prod"
                     admin_user = UserModel(
                         username="admin",
                         password_hash=password_hash,
                         role_id=role.id,
+                        must_change_password=must_change_password,
                     )
                     session.add(admin_user)
                     session.commit()
 
                     self.token = create_access_token("admin")
                     self.error_message = ""
+                    self.password_change_error = ""
                     self.needs_initial_admin = False
+                    if must_change_password:
+                        return rx.redirect("/cambiar-clave")
                     return rx.redirect("/")
-                else:
-                    self.error_message = "Sistema no inicializado. Ingrese como admin/admin."
-                    return
+
+                self.error_message = (
+                    "Sistema no inicializado. Ingrese la contraseña inicial."
+                )
+                return
 
             user = session.exec(
                 select(UserModel).where(UserModel.username == username)
             ).first()
-            
+
             if user and bcrypt.checkpw(password, user.password_hash.encode("utf-8")):
                 if not user.is_active:
                     self.error_message = "Usuario inactivo. Contacte al administrador."
@@ -490,19 +578,68 @@ class AuthState(MixinState):
                     session.commit()
                 self.token = create_access_token(username)
                 self.error_message = ""
+                self.password_change_error = ""
                 self._load_roles_cache(session)
                 privileges = self._get_privileges_dict(user) or {}
-                if privileges.get("view_ingresos"):
-                    return rx.redirect("/")
-                if privileges.get("view_ventas"):
-                    return rx.redirect("/venta")
-                return rx.redirect("/")
-            
+                if getattr(user, "must_change_password", False):
+                    return rx.redirect("/cambiar-clave")
+                return rx.redirect(self._default_route_for_privileges(privileges))
+
         self.error_message = "Usuario o contraseña incorrectos."
 
     @rx.event
+    def change_password(self, form_data: dict):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        new_password = (form_data.get("password") or "").strip()
+        confirm_password = (form_data.get("confirm_password") or "").strip()
+        username = (self.current_user.get("username") or "").strip()
+
+        if not new_password:
+            self.password_change_error = "La contraseña no puede estar vacía."
+            return
+        if len(new_password) < 6:
+            self.password_change_error = (
+                "La contraseña debe tener al menos 6 caracteres."
+            )
+            return
+        if username and new_password.lower() == username.lower():
+            self.password_change_error = (
+                "La contraseña no puede ser igual al usuario."
+            )
+            return
+        if new_password != confirm_password:
+            self.password_change_error = "Las contraseñas no coinciden."
+            return
+
+        with rx.session() as session:
+            user = session.exec(
+                select(UserModel).where(UserModel.username == username)
+            ).first()
+            if not user:
+                self.password_change_error = "Usuario no encontrado."
+                return
+            password_hash = bcrypt.hashpw(
+                new_password.encode("utf-8"), bcrypt.gensalt()
+            ).decode()
+            user.password_hash = password_hash
+            user.must_change_password = False
+            session.add(user)
+            session.commit()
+
+        self.password_change_error = ""
+        return rx.chain(
+            rx.toast("Contraseña actualizada.", duration=3000),
+            rx.redirect(
+                self._default_route_for_privileges(
+                    self.current_user["privileges"]
+                )
+            ),
+        )
+    @rx.event
     def logout(self):
         self.token = ""
+        self.password_change_error = ""
         return rx.redirect("/")
 
     @rx.event
@@ -560,6 +697,9 @@ class AuthState(MixinState):
                 "username": user.username,
                 "role": role_name,
                 "privileges": self._get_privileges_dict(user),
+                "must_change_password": bool(
+                    getattr(user, "must_change_password", False)
+                ),
             }
             self._open_user_editor(user_dict)
 
