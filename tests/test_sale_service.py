@@ -241,6 +241,55 @@ async def test_process_sale_prefers_barcode_match(
 
 
 @pytest.mark.asyncio
+async def test_process_sale_ambiguous_description_requires_barcode(
+    session_mock,
+    exec_result,
+    unit_sample,
+):
+    product_a = Product(
+        id=1,
+        barcode="111",
+        description="Producto Duplicado",
+        stock=Decimal("5.0000"),
+        unit="Unidad",
+        sale_price=Decimal("5.00"),
+    )
+    product_b = Product(
+        id=2,
+        barcode="222",
+        description="Producto Duplicado",
+        stock=Decimal("5.0000"),
+        unit="Unidad",
+        sale_price=Decimal("5.00"),
+    )
+    item = SaleItemDTO(
+        description=product_a.description,
+        quantity=Decimal("1"),
+        unit=product_a.unit,
+        price=Decimal("5.00"),
+        barcode=None,
+    )
+    payment_data = PaymentInfoDTO(
+        method="cash",
+        method_kind="cash",
+        cash=PaymentCashDTO(amount=Decimal("5.00")),
+    )
+    session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
+        exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[product_a, product_b]),
+    ]
+
+    with pytest.raises(StockError):
+        await SaleService.process_sale(
+            session=session_mock,
+            user_id=1,
+            items=[item],
+            payment_data=payment_data,
+        )
+
+
+@pytest.mark.asyncio
 async def test_process_sale_credit_cashbox_uses_initial_payment(
     session_mock,
     exec_result,

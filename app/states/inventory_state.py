@@ -5,7 +5,7 @@ import uuid
 import logging
 import io
 from sqlmodel import select
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from app.models import Product, StockMovement, User as UserModel, Category, SaleItem
 from .types import InventoryAdjustment
 from .mixin_state import MixinState
@@ -424,6 +424,17 @@ class InventoryState(MixinState):
             return rx.toast("Seleccione un producto para ajustar.", duration=3000)
         
         with rx.session() as session:
+            if description and not barcode:
+                duplicate_count = session.exec(
+                    select(func.count(Product.id)).where(
+                        Product.description == description
+                    )
+                ).one()
+                if duplicate_count and duplicate_count > 1:
+                    return rx.toast(
+                        "Descripcion duplicada en inventario. Use codigo de barras.",
+                        duration=3000,
+                    )
             product = self._find_adjustment_product(session, barcode, description)
             if not product:
                 return rx.toast("Producto no encontrado en el inventario.", duration=3000)

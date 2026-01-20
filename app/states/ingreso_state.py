@@ -4,6 +4,7 @@ import datetime
 import uuid
 import logging
 from sqlmodel import select
+from sqlalchemy import func
 from app.models import Product, StockMovement, User as UserModel
 from .types import TransactionItem
 from .mixin_state import MixinState
@@ -176,6 +177,35 @@ class IngresoState(MixinState):
             # Obtener ID de usuario actual
             user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
             user_id = user.id if user else None
+
+            descriptions_missing_barcode = [
+                (item.get("description") or "").strip()
+                for item in self.new_entry_items
+                if not (item.get("barcode") or "").strip()
+            ]
+            if descriptions_missing_barcode:
+                unique_descriptions = list(
+                    dict.fromkeys(
+                        desc for desc in descriptions_missing_barcode if desc
+                    )
+                )
+                if unique_descriptions:
+                    duplicates = session.exec(
+                        select(
+                            Product.description,
+                            func.count(Product.id),
+                        )
+                        .where(Product.description.in_(unique_descriptions))
+                        .group_by(Product.description)
+                        .having(func.count(Product.id) > 1)
+                    ).all()
+                    if duplicates:
+                        duplicate_name = duplicates[0][0]
+                        return rx.toast(
+                            f"Descripcion duplicada en inventario: {duplicate_name}. "
+                            "Use codigo de barras.",
+                            duration=4000,
+                        )
 
             for item in self.new_entry_items:
                 barcode = (item.get("barcode") or "").strip()

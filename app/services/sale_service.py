@@ -350,6 +350,7 @@ class SaleService:
         unique_barcodes = list(dict.fromkeys(barcodes))
         products_by_description: dict[str, Product] = {}
         products_by_barcode: dict[str, Product] = {}
+        ambiguous_descriptions: set[str] = set()
         filters = []
         if unique_barcodes:
             filters.append(Product.barcode.in_(unique_barcodes))
@@ -361,9 +362,16 @@ class SaleService:
             else:
                 query = select(Product).where(or_(*filters))
             products = (await session.exec(query.with_for_update())).all()
-            products_by_description = {
-                product.description: product for product in products
-            }
+            for product in products:
+                description = (product.description or "").strip()
+                if not description:
+                    continue
+                if description in products_by_description:
+                    ambiguous_descriptions.add(description)
+                    continue
+                products_by_description[description] = product
+            for description in ambiguous_descriptions:
+                products_by_description.pop(description, None)
             products_by_barcode = {
                 product.barcode: product
                 for product in products
@@ -377,7 +385,13 @@ class SaleService:
             if barcode:
                 product = products_by_barcode.get(barcode)
             if not product:
-                product = products_by_description.get(item["description"])
+                description = item.get("description", "")
+                if description in ambiguous_descriptions:
+                    raise StockError(
+                        f"Producto '{description}' tiene multiples coincidencias en inventario. "
+                        "Use codigo de barras."
+                    )
+                product = products_by_description.get(description)
             if not product:
                 if barcode:
                     raise StockError(
