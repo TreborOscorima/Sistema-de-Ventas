@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 
 from app.enums import PaymentMethodType
-from app.models import Sale, SaleItem, SalePayment, Product
+from app.models import CashboxLog, Client, Sale, SaleItem, SalePayment, Product
 from app.schemas.sale_schemas import (
     PaymentCardDTO,
     PaymentCashDTO,
@@ -38,6 +38,35 @@ async def test_process_sale_cash_happy_path(
     assert isinstance(result, SaleProcessResult)
     assert result.sale_total == Decimal("5.00")
     assert any(isinstance(obj, Sale) for obj in session_mock.added)
+
+
+@pytest.mark.asyncio
+async def test_process_sale_cashbox_log_records_sale_id(
+    session_mock,
+    exec_result,
+    unit_sample,
+    product_sample,
+    sale_data_sample,
+):
+    session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
+        exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[product_sample]),
+    ]
+
+    result = await SaleService.process_sale(
+        session=session_mock,
+        user_id=sale_data_sample["user_id"],
+        items=sale_data_sample["items"],
+        payment_data=sale_data_sample["payment_data"],
+    )
+
+    logs = [obj for obj in session_mock.added if isinstance(obj, CashboxLog)]
+    log = next((entry for entry in logs if entry.action == "Venta"), None)
+
+    assert log is not None
+    assert log.sale_id == result.sale.id
+    assert log.amount == result.sale_total
 
 
 @pytest.mark.asyncio
@@ -209,3 +238,56 @@ async def test_process_sale_prefers_barcode_match(
         obj for obj in session_mock.added if isinstance(obj, SaleItem)
     ]
     assert any(sale_item.product_id == product_b.id for sale_item in sale_items)
+
+
+@pytest.mark.asyncio
+async def test_process_sale_credit_cashbox_uses_initial_payment(
+    session_mock,
+    exec_result,
+    unit_sample,
+    product_sample,
+):
+    product_sample.sale_price = Decimal("50.00")
+    item = SaleItemDTO(
+        description=product_sample.description,
+        quantity=Decimal("1"),
+        unit=product_sample.unit,
+        price=Decimal("50.00"),
+        barcode=product_sample.barcode,
+    )
+    payment_data = PaymentInfoDTO(
+        method="cash",
+        method_kind="cash",
+        is_credit=True,
+        client_id=1,
+        initial_payment=Decimal("10.00"),
+        installments=2,
+        interval_days=30,
+        cash=PaymentCashDTO(amount=Decimal("10.00")),
+    )
+    session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
+        exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[product_sample]),
+    ]
+    session_mock.get.return_value = Client(
+        id=1,
+        name="Cliente Test",
+        dni="00000000",
+        credit_limit=Decimal("100.00"),
+        current_debt=Decimal("0.00"),
+    )
+
+    result = await SaleService.process_sale(
+        session=session_mock,
+        user_id=1,
+        items=[item],
+        payment_data=payment_data,
+    )
+
+    logs = [obj for obj in session_mock.added if isinstance(obj, CashboxLog)]
+    log = next((entry for entry in logs if entry.action == "Inicial Credito"), None)
+
+    assert log is not None
+    assert log.sale_id == result.sale.id
+    assert log.amount == Decimal("10.00")
