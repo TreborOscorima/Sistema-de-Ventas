@@ -1495,14 +1495,18 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             session.add(new_sale)
             session.flush()
             
-            # Registrar el Pago real
-            payment = SalePayment(
-                sale_id=new_sale.id,
-                amount=applied_amount,
-                method_type=PaymentMethodType.CASH, # Por defecto efectivo en este flujo
-                reference_code=f"Reserva {reservation['id']}"
-            )
-            session.add(payment)
+            allocations = self._build_reservation_payments(applied_amount)
+            for method_type, amount in allocations:
+                if amount <= 0:
+                    continue
+                session.add(
+                    SalePayment(
+                        sale_id=new_sale.id,
+                        amount=amount,
+                        method_type=method_type,
+                        reference_code=f"Reserva {reservation['id']}",
+                    )
+                )
             
             reservation_model = session.exec(
                 select(FieldReservationModel)
@@ -1542,6 +1546,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     notes=log_notes,
                     timestamp=datetime.datetime.now(),
                     user_id=user_id,
+                    sale_id=new_sale.id,
                 )
             )
             session.commit()
@@ -1663,6 +1668,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     notes=log_notes,
                     timestamp=datetime.datetime.now(),
                     user_id=user_id,
+                    sale_id=new_sale.id,
                 )
             )
 

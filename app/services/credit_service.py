@@ -57,26 +57,45 @@ class CreditService:
 
         installment = (
             await session.exec(
-                select(SaleInstallment).where(
-                    SaleInstallment.id == installment_id
-                )
+                select(SaleInstallment)
+                .where(SaleInstallment.id == installment_id)
+                .with_for_update()
             )
         ).first()
         if not installment:
             raise ValueError("Cuota no encontrada.")
 
-        sale = await session.get(Sale, installment.sale_id)
+        sale = (
+            await session.exec(
+                select(Sale)
+                .where(Sale.id == installment.sale_id)
+                .with_for_update()
+            )
+        ).first()
         if not sale or sale.client_id is None:
             raise ValueError("Cliente no encontrado.")
 
-        client = await session.get(Client, sale.client_id)
+        client = (
+            await session.exec(
+                select(Client)
+                .where(Client.id == sale.client_id)
+                .with_for_update()
+            )
+        ).first()
         if not client:
             raise ValueError("Cliente no encontrado.")
 
-        installment.paid_amount = _round_money(
-            installment.paid_amount + payment_amount
-        )
-        if installment.paid_amount >= installment.amount:
+        amount_due = Decimal(str(installment.amount or 0))
+        paid_amount = Decimal(str(installment.paid_amount or 0))
+        pending_amount = _round_money(amount_due - paid_amount)
+        if payment_amount > pending_amount:
+            raise ValueError("El monto supera el saldo pendiente.")
+
+        new_paid_amount = _round_money(paid_amount + payment_amount)
+        if new_paid_amount > amount_due:
+            new_paid_amount = amount_due
+        installment.paid_amount = new_paid_amount
+        if installment.paid_amount >= amount_due:
             installment.status = "paid"
             installment.payment_date = datetime.datetime.now()
         else:
@@ -103,6 +122,7 @@ class CreditService:
                 payment_method=method_label,
                 notes=notes,
                 user_id=user_id,
+                sale_id=sale.id,
             )
         )
 

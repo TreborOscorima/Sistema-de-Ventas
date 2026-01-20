@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 
 from app.enums import PaymentMethodType
-from app.models import Sale, SalePayment
+from app.models import Sale, SaleItem, SalePayment, Product
 from app.schemas.sale_schemas import (
     PaymentCardDTO,
     PaymentCashDTO,
@@ -156,3 +156,56 @@ async def test_process_sale_mixed_payment(
     assert len(payments) == 2
     assert (PaymentMethodType.debit, Decimal("10.00")) in amounts
     assert (PaymentMethodType.cash, Decimal("10.00")) in amounts
+
+
+@pytest.mark.asyncio
+async def test_process_sale_prefers_barcode_match(
+    session_mock,
+    exec_result,
+    unit_sample,
+):
+    product_a = Product(
+        id=1,
+        barcode="111",
+        description="Producto Duplicado",
+        stock=Decimal("5.0000"),
+        unit="Unidad",
+        sale_price=Decimal("5.00"),
+    )
+    product_b = Product(
+        id=2,
+        barcode="222",
+        description="Producto Duplicado",
+        stock=Decimal("5.0000"),
+        unit="Unidad",
+        sale_price=Decimal("5.00"),
+    )
+    item = SaleItemDTO(
+        description=product_b.description,
+        quantity=Decimal("1"),
+        unit=product_b.unit,
+        price=Decimal("5.00"),
+        barcode=product_b.barcode,
+    )
+    payment_data = PaymentInfoDTO(
+        method="cash",
+        method_kind="cash",
+        cash=PaymentCashDTO(amount=Decimal("5.00")),
+    )
+    session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
+        exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[product_a, product_b]),
+    ]
+
+    await SaleService.process_sale(
+        session=session_mock,
+        user_id=1,
+        items=[item],
+        payment_data=payment_data,
+    )
+
+    sale_items = [
+        obj for obj in session_mock.added if isinstance(obj, SaleItem)
+    ]
+    assert any(sale_item.product_id == product_b.id for sale_item in sale_items)

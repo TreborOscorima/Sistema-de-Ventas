@@ -148,6 +148,8 @@ class CashState(MixinState):
 
     @rx.event
     def add_petty_cash_movement(self):
+        if not self.current_user["privileges"]["manage_cashbox"]:
+            return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
         if not self.cashbox_is_open:
             return rx.toast("Debe aperturar la caja para registrar movimientos.", duration=3000)
         
@@ -405,6 +407,7 @@ class CashState(MixinState):
             statement = (
                 select(CashboxLogModel)
                 .where(CashboxLogModel.action == "apertura")
+                .where(CashboxLogModel.is_voided == False)
                 .where(CashboxLogModel.timestamp >= start_dt)
                 .where(CashboxLogModel.timestamp <= end_dt)
                 .order_by(CashboxLogModel.timestamp.asc())
@@ -424,6 +427,7 @@ class CashState(MixinState):
             statement = (
                 select(sqlalchemy.func.sum(CashboxLogModel.amount))
                 .where(CashboxLogModel.action.in_(CASHBOX_EXPENSE_ACTIONS))
+                .where(CashboxLogModel.is_voided == False)
                 .where(CashboxLogModel.timestamp >= start_dt)
                 .where(CashboxLogModel.timestamp <= end_dt)
             )
@@ -1539,11 +1543,28 @@ class CashState(MixinState):
             
             if not sale_db:
                 return rx.toast("Venta no encontrada en BD.", duration=3000)
+            if sale_db.status == SaleStatus.cancelled:
+                return rx.toast("La venta ya fue anulada.", duration=3000)
             
             # Marcar como cancelado en BD
             sale_db.status = SaleStatus.cancelled
             sale_db.delete_reason = reason
             session.add(sale_db)
+
+            logs = session.exec(
+                select(CashboxLogModel).where(
+                    CashboxLogModel.sale_id == sale_db_id
+                )
+            ).all()
+            for log in logs:
+                if log.is_voided:
+                    continue
+                log.is_voided = True
+                if reason:
+                    suffix = f" | ANULADA: {reason}"
+                    if suffix not in (log.notes or ""):
+                        log.notes = f"{log.notes or ''}{suffix}".strip()
+                session.add(log)
             
             # Restaurar stock
             for item in sale_db.items:
@@ -1945,6 +1966,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .join(UserModel, isouter=True)
                 .where(CashboxLogModel.amount > 0)
                 .where(CashboxLogModel.action.in_(CASHBOX_INCOME_ACTIONS))
+                .where(CashboxLogModel.is_voided == False)
                 .where(CashboxLogModel.timestamp >= start_dt)
                 .where(CashboxLogModel.timestamp <= end_dt)
                 .order_by(desc(CashboxLogModel.timestamp))
@@ -2011,6 +2033,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             )
             .where(CashboxLogModel.amount > 0)
             .where(CashboxLogModel.action.in_(CASHBOX_INCOME_ACTIONS))
+            .where(CashboxLogModel.is_voided == False)
             .where(CashboxLogModel.timestamp >= start_date)
             .where(CashboxLogModel.timestamp <= end_date)
         )
@@ -2140,6 +2163,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     payment_method=payment_label,
                     notes=description,
                     timestamp=timestamp,
+                    sale_id=new_sale.id,
                 )
             )
             session.commit()

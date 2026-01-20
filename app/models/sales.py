@@ -176,6 +176,10 @@ class CashboxLog(rx.Model, table=True):
         default=None, foreign_key="paymentmethod.id", index=True
     )
     notes: str = Field(default="")
+    sale_id: Optional[int] = Field(
+        default=None, foreign_key="sale.id", index=True
+    )
+    is_voided: bool = Field(default=False, index=True)
 
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
 

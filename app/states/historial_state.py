@@ -293,6 +293,7 @@ class HistorialState(MixinState):
                     select(CashboxLog, User.username)
                     .join(User, User.id == CashboxLog.user_id, isouter=True)
                     .where(CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS))
+                    .where(CashboxLog.is_voided == False)
                 )
                 if start_date:
                     log_query = log_query.where(
@@ -349,6 +350,7 @@ class HistorialState(MixinState):
                 select(CashboxLog, User.username)
                 .join(User, User.id == CashboxLog.user_id, isouter=True)
                 .where(CashboxLog.action.in_(["apertura", "cierre"]))
+                .where(CashboxLog.is_voided == False)
             )
             if start_date:
                 log_query = log_query.where(
@@ -576,30 +578,33 @@ class HistorialState(MixinState):
     ) -> dict[int, dict[str, str]]:
         if not sale_ids:
             return {}
-        conditions = [
-            CashboxLog.notes.like(f"%Venta%{sale_id}%") for sale_id in sale_ids
-        ]
+        conditions = [CashboxLog.sale_id.in_(sale_ids)]
+        conditions.extend(
+            CashboxLog.notes.like(f"%Venta%{sale_id}%")
+            for sale_id in sale_ids
+        )
         if not conditions:
             return {}
         logs = session.exec(
             select(CashboxLog)
             .where(CashboxLog.action.in_(["Venta", "Inicial Credito"]))
+            .where(CashboxLog.is_voided == False)
             .where(sa.or_(*conditions))
         ).all()
         info: dict[int, dict[str, str]] = {}
         import re
         for log in logs:
             notes = log.notes or ""
-            match = re.search(r"Venta[^0-9]*(\d+)", notes, re.IGNORECASE)
-            if not match:
-                continue
-            try:
-                sale_id = int(match.group(1))
-            except ValueError:
-                continue
-            if sale_id not in sale_ids:
-                continue
-            if sale_id in info:
+            sale_id = getattr(log, "sale_id", None)
+            if sale_id is None:
+                match = re.search(r"Venta[^0-9]*(\d+)", notes, re.IGNORECASE)
+                if not match:
+                    continue
+                try:
+                    sale_id = int(match.group(1))
+                except ValueError:
+                    continue
+            if sale_id not in sale_ids or sale_id in info:
                 continue
             info[sale_id] = {
                 "payment_method": (log.payment_method or "No especificado").strip()
@@ -1371,6 +1376,7 @@ class HistorialState(MixinState):
             query_log = select(CashboxLog).where(
                 CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS)
             )
+            query_log = query_log.where(CashboxLog.is_voided == False)
             if start_date:
                 query_log = query_log.where(CashboxLog.timestamp >= start_date)
             if end_date:

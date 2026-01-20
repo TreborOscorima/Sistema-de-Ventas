@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List
 
 from sqlmodel import select
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.ext.asyncio import AsyncSession  # ✅ IMPORTANTE
 
 from app.enums import PaymentMethodType, ReservationStatus, SaleStatus
@@ -336,25 +336,53 @@ class SaleService:
                 }
             )
 
-        descriptions = [item["description"] for item in decimal_snapshot]
+        descriptions: list[str] = []
+        barcodes: list[str] = []
+        for item in decimal_snapshot:
+            description = (item.get("description") or "").strip()
+            if description:
+                descriptions.append(description)
+            barcode = (item.get("barcode") or "").strip()
+            if barcode:
+                barcodes.append(barcode)
+
+        unique_descriptions = list(dict.fromkeys(descriptions))
+        unique_barcodes = list(dict.fromkeys(barcodes))
         products_by_description: dict[str, Product] = {}
-        if descriptions:
-            unique_descriptions = list(dict.fromkeys(descriptions))
-            products = (
-                await session.exec(
-                    select(Product)
-                    .where(Product.description.in_(unique_descriptions))
-                    .with_for_update()
-                )
-            ).all()
+        products_by_barcode: dict[str, Product] = {}
+        filters = []
+        if unique_barcodes:
+            filters.append(Product.barcode.in_(unique_barcodes))
+        if unique_descriptions:
+            filters.append(Product.description.in_(unique_descriptions))
+        if filters:
+            if len(filters) == 1:
+                query = select(Product).where(filters[0])
+            else:
+                query = select(Product).where(or_(*filters))
+            products = (await session.exec(query.with_for_update())).all()
             products_by_description = {
                 product.description: product for product in products
+            }
+            products_by_barcode = {
+                product.barcode: product
+                for product in products
+                if product.barcode
             }
 
         locked_products: list[tuple[Dict[str, Any], Product]] = []
         for item in decimal_snapshot:
-            product = products_by_description.get(item["description"])
+            barcode = (item.get("barcode") or "").strip()
+            product = None
+            if barcode:
+                product = products_by_barcode.get(barcode)
             if not product:
+                product = products_by_description.get(item["description"])
+            if not product:
+                if barcode:
+                    raise StockError(
+                        f"Producto con codigo {barcode} no encontrado en inventario."
+                    )
                 raise StockError(
                     f"Producto {item['description']} no encontrado en inventario."
                 )
@@ -565,6 +593,7 @@ class SaleService:
                         notes=notes,
                         timestamp=timestamp,
                         user_id=user_id,
+                        sale_id=new_sale.id,
                     )
                 )
     

@@ -62,6 +62,10 @@ class InventoryState(MixinState):
         self.new_category_name = value
 
     def add_category(self):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return rx.toast(
+                "No tiene permisos para editar categorias.", duration=3000
+            )
         name = (self.new_category_name or "").strip()
         if not name:
             return
@@ -78,6 +82,10 @@ class InventoryState(MixinState):
                 return rx.toast("La categoría ya existe.", duration=2000)
 
     def remove_category(self, category: str):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return rx.toast(
+                "No tiene permisos para editar categorias.", duration=3000
+            )
         if category == "General":
             return rx.toast("No se puede eliminar la categoría General.", duration=3000)
             
