@@ -21,6 +21,15 @@ Esta versión **v2.0** marca un hito en la arquitectura del sistema al implement
 *   **Configuración Dinámica:** Gestión de monedas, unidades de medida y métodos de pago directamente desde la interfaz.
 *   **Seguridad RBAC:** Control de acceso basado en roles y privilegios granulares.
 
+### Novedades recientes (2026)
+
+*   **Trazabilidad de caja:** `CashboxLog` vincula cada movimiento con su venta (`sale_id`) y marca anulaciones con `is_voided` para excluirlas de reportes sin perder auditoría.
+*   **Ventas más precisas:** prioridad por código de barras ante descripciones duplicadas.
+*   **Créditos más seguros:** bloqueo de concurrencia y validación de sobrepago en cuotas.
+*   **Reservas con pagos mixtos:** desglose real por método y registro consistente en caja.
+*   **Permisos reforzados:** altas/bajas de categorías protegidas por `edit_inventario`.
+*   **QA automatizado:** tests con pytest + CI en GitHub Actions.
+
 ---
 
 ## 2. 🏗️ Arquitectura del Sistema
@@ -38,7 +47,7 @@ El proyecto sigue una arquitectura **Full-Stack en Python** utilizando el framew
 
 ### 📊 Modelo de Datos (E-R)
 
-La estructura de datos se define en `app/models.py` y se gestiona mediante migraciones automáticas:
+La estructura de datos se define en `app/models/` y se gestiona mediante migraciones automáticas:
 
 | Módulo | Entidades Principales | Descripción |
 | :--- | :--- | :--- |
@@ -55,11 +64,15 @@ La estructura de datos se define en `app/models.py` y se gestiona mediante migra
 
 ```text
 Sistema-de-Ventas/
+├── .github/             # Workflows de CI
+│   └── workflows/       # GitHub Actions
 ├── alembic/             # Historial de migraciones de base de datos
 ├── app/
 │   ├── components/      # Componentes UI reutilizables (Sidebar, Modales, Tablas)
-│   ├── models.py        # Definición de tablas y modelos SQLModel
+│   ├── models/          # Definición de tablas y modelos SQLModel
 │   ├── pages/           # Vistas de la aplicación (Frontend)
+│   ├── schemas/         # DTOs y validaciones
+│   ├── services/        # Servicios de negocio
 │   ├── states/          # Lógica de negocio y gestión de estado (Backend)
 │   │   ├── auth_state.py      # Autenticación y Usuarios
 │   │   ├── cash_state.py      # Gestión de Caja y Reportes
@@ -69,8 +82,10 @@ Sistema-de-Ventas/
 │   │   ├── historial_state.py # Estadísticas y desglose de ventas
 │   │   └── venta_state.py     # Lógica del POS e Impresión
 │   ├── utils/           # Utilidades (Formatos, Fechas, Exports)
+│   ├── enums.py         # Enums del dominio
 │   └── app.py           # Punto de entrada
 ├── assets/              # Recursos estáticos
+├── tests/               # Tests automatizados (pytest)
 ├── rxconfig.py          # Configuración del entorno y conexión BD
 └── requirements.txt     # Dependencias
 ```
@@ -135,19 +150,23 @@ Sistema-de-Ventas/
 
 ### 🛒 Punto de Venta (Ventas)
 *   **Interfaz Ágil:** Diseñada para registro rápido mediante códigos de barras o búsqueda manual.
+*   **Prioridad por código de barras:** evita colisiones cuando hay descripciones duplicadas.
 *   **Validación de Caja:** Impide realizar ventas si no existe una sesión de caja abierta.
 *   **Pagos Flexibles:** Soporta pagos mixtos (ej: parte efectivo, parte tarjeta) y registra el detalle exacto para el arqueo.
 *   **Impresión:** Generación automática de tickets de venta estandarizados.
+*   **Crédito controlado:** valida límites y evita sobrepagos en cuotas.
 
 ### 📦 Inventario
 *   **Gestión Persistente:** CRUD completo de productos conectado directamente a MySQL.
 *   **Categorización:** Creación dinámica de categorías que persisten entre sesiones.
+*   **Permisos:** crear/eliminar categorías requiere privilegio `edit_inventario`.
 *   **Reportes:** Exportación de inventario valorizado a Excel.
 
 ### 💵 Gestión de Caja e Historial
 *   **Sesiones:** Control estricto de turnos por usuario.
 *   **Arqueo:** Cierre de caja con cálculo automático de totales esperados vs. registrados.
 *   **Historial Detallado:** Consulta de movimientos históricos con desglose de ítems y estadísticas precisas por método de pago (Efectivo, Tarjeta, Yape/Plin).
+*   **Anulaciones seguras:** movimientos marcados como anulados y excluidos de totales/reportes.
 *   **Reimpresión:** Capacidad de reimprimir tickets de ventas pasadas.
 
 ### ⚽ Servicios (Reservas)
@@ -155,20 +174,43 @@ Sistema-de-Ventas/
 *   **Ciclo de Vida:** Controla el flujo completo: `Reserva` -> `Adelanto` -> `Pago Final`.
 *   **Constancias:** Emisión de "Constancia de Reserva" incluso para reservas sin pago inicial, con formato ticket profesional.
 *   **Integración Contable:** Los pagos de reservas se inyectan automáticamente en la caja activa.
+*   **Pagos mixtos:** desglose real por método y registro consistente en caja.
 
 ### 🔧 Configuración
 *   **Panel Administrativo:** Permite gestionar usuarios, roles, monedas, unidades y métodos de pago sin intervención técnica.
 
 ---
 
-## 6. Mantenimiento
+## 6. Pruebas Automatizadas y CI
+
+### Tests locales
+```bash
+python -m pytest -q
+```
+
+### Subconjuntos útiles
+```bash
+python -m pytest -q tests/test_sale_service.py tests/test_credit_service.py
+```
+
+### CI
+GitHub Actions ejecuta los tests en cada push/PR desde `.github/workflows/tests.yml`.
+
+---
+
+## 7. Mantenimiento
 
 ### Actualizaciones de Base de Datos
-Si se realizan cambios en `app/models.py`, se debe actualizar el esquema:
+Si se realizan cambios en `app/models/`, se debe actualizar el esquema:
 
 ```bash
 reflex db makemigrations --message "descripcion_cambio"
 reflex db migrate
+```
+
+Si usas Alembic directamente:
+```bash
+alembic upgrade head
 ```
 
 ---
