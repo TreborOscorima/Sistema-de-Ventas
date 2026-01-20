@@ -6,7 +6,7 @@ from sqlmodel import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from app.models import Permission, Role, User as UserModel
-from app.utils.auth import create_access_token, verify_token
+from app.utils.auth import create_access_token, decode_token
 from app.utils.logger import get_logger
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
@@ -119,9 +119,17 @@ class AuthState(MixinState):
 
     @rx.var
     def current_user(self) -> User:
-        username = verify_token(self.token)
+        payload = decode_token(self.token)
+        if not payload:
+            return self._guest_user()
+        username = str(payload.get("sub") or "")
         if not username:
             return self._guest_user()
+        token_version = payload.get("ver", 0)
+        try:
+            token_version = int(token_version or 0)
+        except (TypeError, ValueError):
+            token_version = 0
         
         with rx.session() as session:
             user = session.exec(
@@ -131,6 +139,8 @@ class AuthState(MixinState):
             ).first()
             
             if user and user.is_active:
+                if getattr(user, "token_version", 0) != token_version:
+                    return self._guest_user()
                 role_name = user.role.name if user.role else "Sin rol"
                 return {
                     "id": user.id,
@@ -539,7 +549,10 @@ class AuthState(MixinState):
                     session.add(admin_user)
                     session.commit()
 
-                    self.token = create_access_token("admin")
+                    self.token = create_access_token(
+                        "admin",
+                        token_version=getattr(admin_user, "token_version", 0),
+                    )
                     self.error_message = ""
                     self.password_change_error = ""
                     self.needs_initial_admin = False
@@ -580,7 +593,10 @@ class AuthState(MixinState):
                     user.role_id = role.id
                     session.add(user)
                     session.commit()
-                self.token = create_access_token(username)
+                self.token = create_access_token(
+                    username,
+                    token_version=getattr(user, "token_version", 0),
+                )
                 self.error_message = ""
                 self.password_change_error = ""
                 self._load_roles_cache(session)
@@ -628,6 +644,7 @@ class AuthState(MixinState):
             ).decode()
             user.password_hash = password_hash
             user.must_change_password = False
+            user.token_version = (getattr(user, "token_version", 0) or 0) + 1
             session.add(user)
             session.commit()
 
@@ -852,6 +869,9 @@ class AuthState(MixinState):
                         password.encode(), bcrypt.gensalt()
                     ).decode()
                     user_to_update.password_hash = password_hash
+                    user_to_update.token_version = (
+                        getattr(user_to_update, "token_version", 0) or 0
+                    ) + 1
                     
                 user_to_update.role_id = role.id
                 

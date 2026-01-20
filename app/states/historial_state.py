@@ -1345,8 +1345,13 @@ class HistorialState(MixinState):
             # -------------------------------------------------------
             # 1. INGRESOS REALES (SalePayment)
             # -------------------------------------------------------
-            payment_query = select(SalePayment).options(
-                selectinload(SalePayment.sale)
+            payment_query = (
+                select(
+                    SalePayment.method_type,
+                    sa.func.sum(SalePayment.amount),
+                )
+                .join(Sale, SalePayment.sale_id == Sale.id)
+                .where(Sale.status != SaleStatus.cancelled)
             )
             if start_date:
                 payment_query = payment_query.where(
@@ -1356,37 +1361,38 @@ class HistorialState(MixinState):
                 payment_query = payment_query.where(
                     SalePayment.created_at <= end_date
                 )
+            payment_query = payment_query.group_by(SalePayment.method_type)
 
-            payments = session.exec(payment_query).all()
-            for payment in payments:
-                sale = payment.sale
-                if sale and sale.status == SaleStatus.cancelled:
-                    continue
-                key = self._payment_method_key(
-                    getattr(payment, "method_type", None)
-                )
+            payment_rows = session.exec(payment_query).all()
+            for method_type, amount in payment_rows:
+                key = self._payment_method_key(method_type)
                 if not key:
                     continue
-                amount = Decimal(str(getattr(payment, "amount", 0) or 0))
+                amount = Decimal(str(amount or 0))
                 self._add_to_stats(stats, key, amount)
 
             # -------------------------------------------------------
             # 2. COBROS DE CUOTAS (CashboxLog)
             # -------------------------------------------------------
-            query_log = select(CashboxLog).where(
-                CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS)
+            query_log = (
+                select(
+                    CashboxLog.payment_method,
+                    sa.func.sum(CashboxLog.amount),
+                )
+                .where(CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS))
+                .where(CashboxLog.is_voided == False)
             )
-            query_log = query_log.where(CashboxLog.is_voided == False)
             if start_date:
                 query_log = query_log.where(CashboxLog.timestamp >= start_date)
             if end_date:
                 query_log = query_log.where(CashboxLog.timestamp <= end_date)
+            query_log = query_log.group_by(CashboxLog.payment_method)
 
-            logs = session.exec(query_log).all()
-            for log in logs:
-                amount = Decimal(str(log.amount or 0))
+            log_rows = session.exec(query_log).all()
+            for payment_label, amount in log_rows:
+                amount = Decimal(str(amount or 0))
                 method_key = self._method_key_from_label(
-                    getattr(log, "payment_method", "") or ""
+                    payment_label or ""
                 )
                 self._add_to_stats(stats, method_key, amount)
 
@@ -1598,13 +1604,18 @@ class HistorialState(MixinState):
 
     @rx.var
     def productos_mas_vendidos(self) -> list[dict]:
-        import sqlalchemy
-        from sqlmodel import desc
         with rx.session() as session:
             statement = select(
                 SaleItem.product_name_snapshot, 
-                sqlalchemy.func.sum(SaleItem.quantity).label("total_qty")
-            ).group_by(SaleItem.product_name_snapshot).order_by(desc("total_qty")).limit(5)
+                sa.func.sum(SaleItem.quantity).label("total_qty"),
+            ).join(Sale, SaleItem.sale_id == Sale.id)
+            statement = (
+                statement
+                .where(Sale.status != SaleStatus.cancelled)
+                .group_by(SaleItem.product_name_snapshot)
+                .order_by(sa.desc("total_qty"))
+                .limit(5)
+            )
             
             results = session.exec(statement).all()
             return [
@@ -1627,18 +1638,27 @@ class HistorialState(MixinState):
 
     @rx.var
     def sales_by_day(self) -> list[dict]:
-        from collections import defaultdict
         with rx.session() as session:
-            sales = session.exec(
-                select(Sale).where(Sale.status != SaleStatus.cancelled)
-            ).all()
-            daily_sales = defaultdict(Decimal)
-            for sale in sales:
-                date_str = sale.timestamp.strftime("%Y-%m-%d")
-                daily_sales[date_str] += sale.total_amount or Decimal("0.00")
-            
-            sorted_days = sorted(daily_sales.keys())[-7:]
-            return [
-                {"date": day, "total": self._round_currency(daily_sales[day])}
-                for day in sorted_days
-            ]
+            date_col = sa.func.date(Sale.timestamp)
+            query = (
+                select(date_col, sa.func.sum(Sale.total_amount))
+                .where(Sale.status != SaleStatus.cancelled)
+                .group_by(date_col)
+                .order_by(date_col.desc())
+                .limit(7)
+            )
+            rows = session.exec(query).all()
+            rows = list(reversed(rows))
+            result = []
+            for day, total in rows:
+                if hasattr(day, "strftime"):
+                    day_label = day.strftime("%Y-%m-%d")
+                else:
+                    day_label = str(day or "")
+                result.append(
+                    {
+                        "date": day_label,
+                        "total": self._round_currency(float(total or 0)),
+                    }
+                )
+            return result

@@ -22,25 +22,32 @@ SECRET_KEY = _require_env("AUTH_SECRET_KEY")
 ALGORITHM = "HS256"
 
 
-def create_access_token(subject: str | Any) -> str:
+def create_access_token(subject: str | Any, token_version: int | None = None) -> str:
     expire = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(hours=24)
     payload = {
         "sub": str(subject),
         "exp": expire,
     }
+    if token_version is not None:
+        payload["ver"] = int(token_version)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
-
-def verify_token(token: str) -> str | None:
+def decode_token(token: str) -> dict | None:
     if not token:
         return None
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        subject = payload.get("sub")
-        if not subject:
+        if not payload.get("sub"):
             return None
-        return str(subject)
+        return payload
     except ExpiredSignatureError:
         return None
     except PyJWTError:
         return None
+
+
+def verify_token(token: str) -> str | None:
+    payload = decode_token(token)
+    if not payload:
+        return None
+    return str(payload.get("sub"))

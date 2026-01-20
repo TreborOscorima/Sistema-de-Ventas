@@ -27,6 +27,15 @@ THIN_BORDER = Border(
 )
 
 
+def _sanitize_excel_value(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    stripped = value.lstrip()
+    if stripped.startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
+
+
 def create_excel_workbook(title: str) -> tuple[Workbook, Worksheet]:
     """
     Crea un workbook de Excel con una hoja nombrada.
@@ -81,7 +90,8 @@ def add_data_rows(
     current_row = start_row
     for row_data in data:
         for col_idx, value in enumerate(row_data, start=1):
-            cell = ws.cell(row=current_row, column=col_idx, value=value)
+            safe_value = _sanitize_excel_value(value)
+            cell = ws.cell(row=current_row, column=col_idx, value=safe_value)
             if apply_border:
                 cell.border = THIN_BORDER
         current_row += 1
