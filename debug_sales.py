@@ -1,6 +1,7 @@
 from sqlmodel import select, Session, create_engine
 from app.models import Sale
 import os
+import re
 import sys
 
 # Agregar ruta raiz del proyecto al path
@@ -8,7 +9,10 @@ sys.path.append(os.getcwd())
 
 import rxconfig
 
-print(f"DB URL: {rxconfig.config.db_url}")
+def _mask_db_url(url: str) -> str:
+    return re.sub(r":([^:@/]+)@", ":***@", url)
+
+print(f"DB URL: {_mask_db_url(rxconfig.config.db_url)}")
 
 from sqlalchemy import create_engine
 engine = create_engine(rxconfig.config.db_url)

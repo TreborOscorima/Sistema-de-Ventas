@@ -1270,7 +1270,7 @@ class CashState(MixinState):
     def export_cashbox_close_pdf(self):
         if not (
             self.current_user["privileges"]["view_cashbox"]
-            or self.current_user["privileges"]["export_data"]
+            and self.current_user["privileges"]["export_data"]
         ):
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
 
