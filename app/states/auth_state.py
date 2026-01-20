@@ -321,6 +321,10 @@ class AuthState(MixinState):
         value = (os.getenv("INITIAL_ADMIN_PASSWORD") or "").strip()
         return value or None
 
+    def _allow_default_admin(self) -> bool:
+        value = (os.getenv("ALLOW_DEFAULT_ADMIN") or "").strip().lower()
+        return value in {"1", "true", "yes", "on"}
+
     def _default_route_for_privileges(self, privileges: Dict[str, bool]) -> str:
         if privileges.get("view_ingresos"):
             return "/"
@@ -501,7 +505,7 @@ class AuthState(MixinState):
                 env = self._resolve_env()
                 initial_password = self._initial_admin_password()
                 if not initial_password:
-                    if env == "dev":
+                    if env == "dev" and self._allow_default_admin():
                         initial_password = "admin"
                         logger.warning(
                             "WARNING: usando credenciales inseguras por defecto para desarrollo."
