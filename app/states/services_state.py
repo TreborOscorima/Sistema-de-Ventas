@@ -10,6 +10,7 @@ from sqlmodel import select
 from sqlalchemy import func, or_
 from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel, SalePayment, CashboxLog
 from app.enums import SaleStatus, ReservationStatus, PaymentMethodType
+from app.utils.sanitization import sanitize_name, sanitize_dni, sanitize_phone
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice
 from .mixin_state import MixinState
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
@@ -1120,9 +1121,10 @@ class ServicesState(MixinState):
         if not self.current_user["privileges"]["manage_reservations"]:
             return rx.toast("No tiene permisos para gestionar reservas.", duration=3000)
         form = self.reservation_form
-        name = form.get("client_name", "").strip()
-        dni = form.get("dni", "").strip()
-        phone = form.get("phone", "").strip()
+        # Sanitizar inputs para prevenir XSS
+        name = sanitize_name(form.get("client_name", ""))
+        dni = sanitize_dni(form.get("dni", ""))
+        phone = sanitize_phone(form.get("phone", ""))
         field_name = form.get("field_name", "").strip() or f"Campo {self._sport_label(self.field_rental_sport)}"
         date = form.get("date", "").strip()
         start_time = form.get("start_time", "").strip()

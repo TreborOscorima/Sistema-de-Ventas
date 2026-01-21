@@ -5,6 +5,12 @@ from sqlmodel import select
 from sqlalchemy import or_
 
 from app.models import Client, Sale
+from app.utils.sanitization import (
+    sanitize_name,
+    sanitize_dni,
+    sanitize_phone,
+    sanitize_text,
+)
 from .mixin_state import MixinState
 
 
@@ -129,13 +135,15 @@ class ClientesState(MixinState):
     def save_client(self):
         if not self.current_user["privileges"].get("manage_clientes"):
             return rx.toast("No tiene permisos para gestionar clientes.", duration=3000)
-        name = (self.current_client.get("name") or "").strip()
-        dni = (self.current_client.get("dni") or "").strip()
+        
+        # Sanitizar inputs para prevenir XSS e inyecciones
+        name = sanitize_name((self.current_client.get("name") or ""))
+        dni = sanitize_dni((self.current_client.get("dni") or ""))
         if not name or not dni:
             return rx.toast("Nombre y DNI son obligatorios.", duration=3000)
 
-        phone = (self.current_client.get("phone") or "").strip()
-        address = (self.current_client.get("address") or "").strip()
+        phone = sanitize_phone((self.current_client.get("phone") or ""))
+        address = sanitize_text((self.current_client.get("address") or ""))
         credit_limit = self._parse_decimal(
             self.current_client.get("credit_limit", "0.00")
         )

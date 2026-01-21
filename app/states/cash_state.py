@@ -21,6 +21,7 @@ from app.models import (
     StockMovement,
     Product,
 )
+from app.utils.sanitization import sanitize_notes, sanitize_reason
 from .types import CashboxSale, CashboxSession, CashboxLogEntry, Movement
 from .mixin_state import MixinState
 from app.utils.exports import (
@@ -144,7 +145,7 @@ class CashState(MixinState):
 
     @rx.event
     def set_petty_cash_reason(self, value: str):
-        self.petty_cash_reason = value
+        self.petty_cash_reason = sanitize_notes(value)
 
     @rx.event
     def add_petty_cash_movement(self):
@@ -1515,7 +1516,7 @@ class CashState(MixinState):
         denial = self._cashbox_guard()
         if denial:
             return denial
-        self.sale_delete_reason = value
+        self.sale_delete_reason = sanitize_reason(value)
 
     @rx.event
     def delete_sale(self):

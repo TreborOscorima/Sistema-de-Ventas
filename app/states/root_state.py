@@ -1,17 +1,9 @@
-import reflex as rx
-from .auth_state import AuthState
-from .ui_state import UIState
-from .config_state import ConfigState
-from .inventory_state import InventoryState
-from .ingreso_state import IngresoState
-from .venta_state import VentaState
-from .cash_state import CashState
-from .historial_state import HistorialState
-from .services_state import ServicesState
-from .cuentas_state import CuentasState
-from .clientes_state import ClientesState
-from .venta import CartMixin, PaymentMixin, ReceiptMixin
+"""
+Estado raíz del sistema que combina todos los estados modulares.
 
+Este módulo utiliza herencia múltiple (Mixins) para componer el estado
+principal de la aplicación a partir de estados especializados.
+"""
 import datetime
 
 import reflex as rx
@@ -30,6 +22,7 @@ from .historial_state import HistorialState
 from .services_state import ServicesState
 from .cuentas_state import CuentasState
 from .clientes_state import ClientesState
+from .venta import CartMixin, PaymentMixin, ReceiptMixin
 
 _mixins = [
     ServicesState,

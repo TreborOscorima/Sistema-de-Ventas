@@ -1,4 +1,5 @@
 import reflex as rx
+import uuid
 from decimal import Decimal
 from typing import Any
 from sqlmodel import select
@@ -262,8 +263,17 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
             try:
                 item_dtos = [SaleItemDTO(**item) for item in self.new_sale_items]
                 payment_dto = PaymentInfoDTO(**payment_data)
-            except Exception:
-                yield rx.toast("Datos de venta invalidos.", duration=3000)
+            except Exception as exc:
+                error_id = uuid.uuid4().hex[:8]
+                logger.warning(
+                    "Datos de venta inválidos [%s]: %s",
+                    error_id,
+                    str(exc),
+                )
+                yield rx.toast(
+                    f"Datos de venta inválidos. Código: {error_id}",
+                    duration=4000,
+                )
                 return
 
             reservation_id = None
@@ -282,7 +292,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
                     )
                     await session.commit()
                     logger.info(
-                        "? Venta confirmada exitosamente. ID: %s",
+                        "Venta confirmada exitosamente. ID: %s",
                         result.sale.id,
                     )
                 except (ValueError, StockError) as exc:
@@ -290,10 +300,19 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
                     logger.warning("Validacion de venta fallida: %s", exc)
                     yield rx.toast(str(exc), duration=3000)
                     return
-                except Exception:
+                except Exception as exc:
                     await session.rollback()
-                    logger.error("Error critico al confirmar venta.", exc_info=True)
-                    yield rx.toast("No se pudo procesar la venta.", duration=3000)
+                    error_id = uuid.uuid4().hex[:8]
+                    logger.error(
+                        "Error critico [%s] al confirmar venta: %s",
+                        error_id,
+                        str(exc),
+                        exc_info=True,
+                    )
+                    yield rx.toast(
+                        f"Error al procesar la venta. Código: {error_id}",
+                        duration=5000,
+                    )
                     return
 
             # Actualizamos el estado visual (UI) de Reflex.

@@ -1,6 +1,8 @@
 import os
 import reflex as rx
 import bcrypt
+from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from sqlmodel import select
 from sqlalchemy import func
@@ -8,8 +10,72 @@ from sqlalchemy.orm import selectinload
 from app.models import Permission, Role, User as UserModel
 from app.utils.auth import create_access_token, decode_token
 from app.utils.logger import get_logger
+from app.constants import (
+    MAX_LOGIN_ATTEMPTS,
+    LOGIN_LOCKOUT_MINUTES,
+    PASSWORD_MIN_LENGTH,
+)
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
+
+# =============================================================================
+# RATE LIMITING PARA LOGIN
+# =============================================================================
+
+_login_attempts: Dict[str, List[datetime]] = defaultdict(list)
+
+
+def _is_rate_limited(username: str) -> bool:
+    """
+    Verifica si un usuario está bloqueado por demasiados intentos fallidos.
+    
+    Args:
+        username: Nombre de usuario a verificar
+        
+    Returns:
+        True si está bloqueado, False si puede intentar
+    """
+    now = datetime.now()
+    cutoff = now - timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+    
+    # Limpiar intentos antiguos
+    _login_attempts[username] = [
+        t for t in _login_attempts[username] if t > cutoff
+    ]
+    
+    return len(_login_attempts[username]) >= MAX_LOGIN_ATTEMPTS
+
+
+def _record_failed_attempt(username: str) -> None:
+    """Registra un intento de login fallido."""
+    _login_attempts[username].append(datetime.now())
+
+
+def _clear_login_attempts(username: str) -> None:
+    """Limpia los intentos fallidos tras login exitoso."""
+    _login_attempts.pop(username, None)
+
+
+def _remaining_lockout_time(username: str) -> int:
+    """
+    Calcula los minutos restantes de bloqueo.
+    
+    Returns:
+        Minutos restantes o 0 si no está bloqueado
+    """
+    if not _login_attempts.get(username):
+        return 0
+    
+    oldest_attempt = min(_login_attempts[username])
+    unlock_time = oldest_attempt + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+    remaining = (unlock_time - datetime.now()).total_seconds() / 60
+    
+    return max(0, int(remaining) + 1)
+
+
+# =============================================================================
+# CONSTANTES DE PRIVILEGIOS
+# =============================================================================
 
 # Constantes
 DEFAULT_USER_PRIVILEGES: Privileges = {
@@ -504,6 +570,18 @@ class AuthState(MixinState):
         raw_password = form_data.get("password") or ""
         password = raw_password.encode("utf-8")
 
+        # Rate limiting: verificar si el usuario está bloqueado
+        if _is_rate_limited(username):
+            remaining = _remaining_lockout_time(username)
+            self.error_message = (
+                f"Demasiados intentos fallidos. Espere {remaining} minuto(s)."
+            )
+            logger.warning(
+                "Login bloqueado por rate limit para usuario: %s",
+                username[:20],  # No logear username completo por seguridad
+            )
+            return
+
         with rx.session() as session:
             admin_user = session.exec(
                 select(UserModel).where(UserModel.username == "admin")
@@ -549,6 +627,7 @@ class AuthState(MixinState):
                     session.add(admin_user)
                     session.commit()
 
+                    _clear_login_attempts(username)
                     self.token = create_access_token(
                         "admin",
                         token_version=getattr(admin_user, "token_version", 0),
@@ -560,6 +639,7 @@ class AuthState(MixinState):
                         return rx.redirect("/cambiar-clave")
                     return rx.redirect("/")
 
+                _record_failed_attempt(username)
                 self.error_message = (
                     "Sistema no inicializado. Ingrese la contraseña inicial."
                 )
@@ -593,6 +673,9 @@ class AuthState(MixinState):
                     user.role_id = role.id
                     session.add(user)
                     session.commit()
+                
+                # Login exitoso: limpiar intentos fallidos
+                _clear_login_attempts(username)
                 self.token = create_access_token(
                     username,
                     token_version=getattr(user, "token_version", 0),
@@ -605,6 +688,8 @@ class AuthState(MixinState):
                     return rx.redirect("/cambiar-clave")
                 return rx.redirect(self._default_route_for_privileges(privileges))
 
+        # Login fallido: registrar intento
+        _record_failed_attempt(username)
         self.error_message = "Usuario o contraseña incorrectos."
 
     @rx.event
