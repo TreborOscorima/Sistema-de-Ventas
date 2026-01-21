@@ -14,6 +14,7 @@ from app.pages.servicios import servicios_page
 from app.pages.cuentas import cuentas_page
 from app.pages.clientes import clientes_page
 from app.pages.dashboard import dashboard_page
+from app.pages.reportes import reportes_page
 from app.components.notification import NotificationHolder
 
 
@@ -209,6 +210,10 @@ def page_dashboard() -> rx.Component:
     return authenticated_layout(dashboard_page())
 
 
+def page_reportes() -> rx.Component:
+    return authenticated_layout(reportes_page())
+
+
 def page_inventario() -> rx.Component:
     return authenticated_layout(inventario_page())
 
@@ -334,6 +339,12 @@ app.add_page(
     route="/historial",
     title="Historial - TUWAYKIAPP",
     on_load=[State.ensure_view_historial, State.sync_page_from_route] + _common_on_load,
+)
+app.add_page(
+    page_reportes,
+    route="/reportes",
+    title="Reportes - TUWAYKIAPP",
+    on_load=[State.ensure_export_data, State.sync_page_from_route] + _common_on_load,
 )
 app.add_page(
     page_servicios,

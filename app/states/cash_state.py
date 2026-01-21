@@ -30,6 +30,14 @@ from app.utils.exports import (
     add_data_rows,
     auto_adjust_column_widths,
     create_pdf_report,
+    add_company_header,
+    add_totals_row_with_formulas,
+    add_notes_section,
+    CURRENCY_FORMAT,
+    THIN_BORDER,
+    POSITIVE_FILL,
+    NEGATIVE_FILL,
+    WARNING_FILL,
 )
 
 CASHBOX_INCOME_ACTIONS = {
@@ -1164,21 +1172,29 @@ class CashState(MixinState):
         if not sales:
             return rx.toast("No hay ventas para exportar.", duration=3000)
         
-        wb, ws = create_excel_workbook("Gestion de Caja")
+        # Obtener nombre de empresa
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
+        wb, ws = create_excel_workbook("Resumen de Caja")
+        
+        # Agregar encabezado profesional
+        row = add_company_header(ws, company_name, "RESUMEN DE GESTIÓN DE CAJA", f"Fecha: {today}", columns=8)
         
         headers = [
             "Fecha y Hora",
-            "Usuario",
-            "Metodo",
-            "Metodo Detallado",
-            "Detalle Pago",
-            "Total",
-            "Cobrado Real",
-            "Productos",
+            "Vendedor",
+            "Método de Pago",
+            "Detalle del Método",
+            "Referencia/Descripción",
+            "Monto Total (S/)",
+            "Monto Cobrado (S/)",
+            "Productos Vendidos",
         ]
-        style_header_row(ws, 1, headers)
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
         
-        rows = []
         invalid_labels = {"", "-", "no especificado"}
         for sale in sales:
             if sale.get("is_deleted"):
@@ -1224,12 +1240,12 @@ class CashState(MixinState):
                     if (method_label or "").strip().lower() not in invalid_labels:
                         method_raw = method_label
                     else:
-                        method_raw = "Metodo no registrado"
+                        method_raw = "No especificado"
                 if (method_label or "").strip().lower() in invalid_labels:
                     if (method_raw or "").strip().lower() not in invalid_labels:
                         method_label = method_raw
                     else:
-                        method_label = "Metodo no registrado"
+                        method_label = "No especificado"
                 if (payment_details or "").strip().lower() in invalid_labels:
                     if (method_label or "").strip().lower() not in invalid_labels:
                         payment_details = f"Pago en {method_label}"
@@ -1246,26 +1262,50 @@ class CashState(MixinState):
                     unit_price = item.get("subtotal")
                 price_display = self._format_currency(unit_price or 0)
                 item_parts.append(f"{name} (x{quantity}) - {price_display}")
-            details = ", ".join(item_parts) if item_parts else ""
-            rows.append([
-                sale["timestamp"],
-                sale["user"],
-                method_raw,
-                method_label,
-                payment_details,
-                sale["total"],
-                sale.get("amount", 0),
-                details,
-            ])
+            details = ", ".join(item_parts) if item_parts else "Sin detalle"
             
-        add_data_rows(ws, rows, 2)
+            ws.cell(row=row, column=1, value=sale["timestamp"])
+            ws.cell(row=row, column=2, value=sale["user"])
+            ws.cell(row=row, column=3, value=method_raw)
+            ws.cell(row=row, column=4, value=method_label)
+            ws.cell(row=row, column=5, value=payment_details)
+            ws.cell(row=row, column=6, value=float(sale["total"] or 0)).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=7, value=float(sale.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=8, value=details)
+            
+            for col in range(1, 9):
+                ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        
+        # Fila de totales con fórmulas
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": ""},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(ws, totals_row, [
+            "Monto Total: Precio total de la venta según productos.",
+            "Monto Cobrado: Dinero efectivamente recibido (puede diferir en ventas a crédito).",
+            "Crédito (Completado): El cliente pagó la totalidad del crédito.",
+            "Crédito (Adelanto): El cliente realizó un pago parcial.",
+            "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
+        ], columns=8)
+        
         auto_adjust_column_widths(ws)
         
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
         
-        return rx.download(data=output.getvalue(), filename="gestion_caja.xlsx")
+        return rx.download(data=output.getvalue(), filename="resumen_gestion_caja.xlsx")
 
     @rx.event
     def export_cashbox_close_pdf(self):
@@ -1367,37 +1407,80 @@ class CashState(MixinState):
         if not logs:
             return rx.toast("No hay aperturas o cierres para exportar.", duration=3000)
         
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
         wb, ws = create_excel_workbook("Aperturas y Cierres")
+        
+        # Encabezado profesional
+        row = add_company_header(ws, company_name, "REGISTRO DE APERTURAS Y CIERRES DE CAJA", f"Generado: {today}", columns=7)
         
         headers = [
             "Fecha y Hora",
-            "Accion",
-            "Usuario",
-            "Monto Apertura",
-            "Monto Cierre",
-            "Totales por Metodo",
-            "Notas",
+            "Tipo de Operación",
+            "Responsable",
+            "Monto Apertura (S/)",
+            "Monto Cierre (S/)",
+            "Desglose por Método",
+            "Observaciones",
         ]
-        style_header_row(ws, 1, headers)
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
         
-        rows = []
+        total_aperturas = 0.0
+        total_cierres = 0.0
+        
         for log in logs:
+            action = (log.get("action") or "").lower()
+            action_display = "Apertura de Caja" if action == "apertura" else "Cierre de Caja" if action == "cierre" else action.capitalize()
+            
+            opening_amount = float(log.get("opening_amount", 0) or 0)
+            closing_amount = float(log.get("closing_total", 0) or 0)
+            
+            if action == "apertura":
+                total_aperturas += opening_amount
+            elif action == "cierre":
+                total_cierres += closing_amount
+            
             totals_detail = ", ".join(
-                f"{item.get('method', '')}: {self._round_currency(item.get('amount', 0))}"
+                f"{item.get('method', 'Otro')}: S/{self._round_currency(item.get('amount', 0))}"
                 for item in log.get("totals_by_method", [])
                 if item.get("amount", 0)
-            )
-            rows.append([
-                log.get("timestamp", ""),
-                (log.get("action") or "").capitalize(),
-                log.get("user", ""),
-                self._round_currency(log.get("opening_amount", 0)),
-                self._round_currency(log.get("closing_total", 0)),
-                totals_detail or "",
-                log.get("notes", ""),
-            ])
+            ) or "Sin desglose"
             
-        add_data_rows(ws, rows, 2)
+            ws.cell(row=row, column=1, value=log.get("timestamp", ""))
+            ws.cell(row=row, column=2, value=action_display)
+            ws.cell(row=row, column=3, value=log.get("user", "Desconocido"))
+            ws.cell(row=row, column=4, value=opening_amount).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=5, value=closing_amount).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=6, value=totals_detail)
+            ws.cell(row=row, column=7, value=log.get("notes", "") or "Sin observaciones")
+            
+            for col in range(1, 8):
+                ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        
+        # Fila de totales
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(ws, totals_row, [
+            "Apertura de Caja: Monto inicial con el que se inicia la jornada.",
+            "Cierre de Caja: Monto total contado al finalizar la jornada.",
+            "Desglose por Método: Distribución del dinero según forma de pago (solo en cierres).",
+            "La diferencia entre Cierres y Aperturas debe coincidir con las ventas del día.",
+        ], columns=7)
+        
         auto_adjust_column_widths(ws)
         
         output = io.BytesIO()
@@ -1419,32 +1502,75 @@ class CashState(MixinState):
         if not movements:
             return rx.toast("No hay movimientos para exportar.", duration=3000)
         
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
         wb, ws = create_excel_workbook("Caja Chica")
+        
+        # Encabezado profesional
+        row = add_company_header(ws, company_name, "MOVIMIENTOS DE CAJA CHICA", f"Generado: {today}", columns=7)
         
         headers = [
             "Fecha y Hora",
-            "Usuario",
-            "Motivo",
+            "Responsable",
+            "Concepto/Motivo",
             "Cantidad",
             "Unidad",
-            "Costo Unitario",
-            "Total",
+            "Costo Unitario (S/)",
+            "Total Egreso (S/)",
         ]
-        style_header_row(ws, 1, headers)
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
         
-        rows = []
         for item in movements:
-            rows.append([
-                item.get("timestamp", ""),
-                item.get("user", ""),
-                item.get("notes", ""),
-                item.get("formatted_quantity", ""),
-                item.get("unit", ""),
-                item.get("formatted_cost", ""),
-                item.get("formatted_amount", ""),
-            ])
+            # Extraer valores numéricos para las fórmulas
+            quantity_str = item.get("formatted_quantity", "0")
+            cost_str = item.get("formatted_cost", "0")
             
-        add_data_rows(ws, rows, 2)
+            # Limpiar strings de formato para obtener números
+            try:
+                quantity = float(str(quantity_str).replace(",", "").replace("S/", "").strip() or 0)
+            except:
+                quantity = 0
+            try:
+                cost = float(str(cost_str).replace(",", "").replace("S/", "").strip() or 0)
+            except:
+                cost = 0
+            
+            ws.cell(row=row, column=1, value=item.get("timestamp", ""))
+            ws.cell(row=row, column=2, value=item.get("user", "Desconocido"))
+            ws.cell(row=row, column=3, value=item.get("notes", "") or "Sin motivo especificado")
+            ws.cell(row=row, column=4, value=quantity)
+            ws.cell(row=row, column=5, value=item.get("unit", "Unid."))
+            ws.cell(row=row, column=6, value=cost).number_format = CURRENCY_FORMAT
+            # Total = Fórmula: Cantidad × Costo Unitario
+            ws.cell(row=row, column=7, value=f"=D{row}*F{row}").number_format = CURRENCY_FORMAT
+            
+            for col in range(1, 8):
+                ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        
+        # Fila de totales
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTAL EGRESOS"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "D"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(ws, totals_row, [
+            "Caja Chica: Fondo destinado a gastos menores del día a día.",
+            "Cada movimiento representa un egreso (salida de dinero).",
+            "Total Egreso = Cantidad × Costo Unitario (fórmula verificable).",
+            "Este monto se descuenta del efectivo al momento del cierre de caja.",
+        ], columns=7)
+        
         auto_adjust_column_widths(ws)
         
         output = io.BytesIO()

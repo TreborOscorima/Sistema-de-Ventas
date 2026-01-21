@@ -14,6 +14,14 @@ from app.utils.exports import (
     style_header_row,
     add_data_rows,
     auto_adjust_column_widths,
+    add_company_header,
+    add_totals_row_with_formulas,
+    add_notes_section,
+    CURRENCY_FORMAT,
+    THIN_BORDER,
+    POSITIVE_FILL,
+    NEGATIVE_FILL,
+    WARNING_FILL,
 )
 from .mixin_state import MixinState
 
@@ -206,35 +214,89 @@ class CuentasState(MixinState):
             result = await session.exec(query)
             rows = result.all()
 
-        workbook, sheet = create_excel_workbook("Cuentas")
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
+        workbook, sheet = create_excel_workbook("Cuentas por Cobrar")
+        
+        # Título según si es global o por cliente
+        title = f"ESTADO DE CUENTA - {report_client_name.upper()}" if report_client_name else "CUENTAS POR COBRAR - REPORTE GLOBAL"
+        
+        # Encabezado profesional
+        row = add_company_header(sheet, company_name, title, f"Generado: {today}", columns=7)
 
-        headers = ["Fecha", "Cliente", "Concepto", "Monto", "Estado"]
-        style_header_row(sheet, 1, headers)
+        headers = [
+            "Fecha Vencimiento",
+            "Cliente",
+            "Concepto",
+            "Monto Cuota (S/)",
+            "Monto Pagado (S/)",
+            "Saldo Pendiente (S/)",
+            "Estado",
+        ]
+        style_header_row(sheet, row, headers)
+        data_start = row + 1
+        row += 1
 
-        data_rows: list[list[object]] = []
         for installment, client in rows:
             due_date = (
-                installment.due_date.strftime("%Y-%m-%d")
+                installment.due_date.strftime("%d/%m/%Y")
                 if installment.due_date
-                else ""
+                else "Sin fecha"
             )
-            client_name = client.name if client else "Sin cliente"
+            client_name = client.name if client else "Cliente no registrado"
             concept = (
-                f"Venta #{installment.sale_id} / Cuota {installment.number}"
+                f"Venta #{installment.sale_id} - Cuota {installment.number}"
             )
-            amount = Decimal(str(installment.amount or 0))
+            amount = float(Decimal(str(installment.amount or 0)))
+            paid_amount = float(Decimal(str(installment.paid_amount or 0)))
             status_label = self._installment_status_label(installment.status)
-            data_rows.append(
-                [
-                    due_date,
-                    client_name,
-                    concept,
-                    self._round_currency(float(amount)),
-                    status_label,
-                ]
-            )
+            
+            sheet.cell(row=row, column=1, value=due_date)
+            sheet.cell(row=row, column=2, value=client_name)
+            sheet.cell(row=row, column=3, value=concept)
+            sheet.cell(row=row, column=4, value=amount).number_format = CURRENCY_FORMAT
+            sheet.cell(row=row, column=5, value=paid_amount).number_format = CURRENCY_FORMAT
+            # Saldo = Fórmula: Monto - Pagado
+            sheet.cell(row=row, column=6, value=f"=D{row}-E{row}").number_format = CURRENCY_FORMAT
+            sheet.cell(row=row, column=7, value=status_label)
+            
+            # Color según estado
+            status_cell = sheet.cell(row=row, column=7)
+            status_lower = status_label.lower()
+            if "pagad" in status_lower:
+                status_cell.fill = POSITIVE_FILL
+            elif "vencid" in status_lower:
+                status_cell.fill = NEGATIVE_FILL
+            elif "pendiente" in status_lower:
+                status_cell.fill = WARNING_FILL
+            
+            for col in range(1, 8):
+                sheet.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
 
-        add_data_rows(sheet, data_rows, 2)
+        # Fila de totales
+        totals_row = row
+        add_totals_row_with_formulas(sheet, totals_row, data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": ""},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(sheet, totals_row, [
+            "Monto Cuota: Valor original de la cuota a pagar.",
+            "Monto Pagado: Dinero recibido hasta la fecha.",
+            "Saldo Pendiente = Monto Cuota - Monto Pagado (fórmula verificable).",
+            "Pagada: Cuota completamente saldada.",
+            "Pendiente: Cuota vigente, aún no vencida.",
+            "Vencida: Cuota pasó su fecha de vencimiento sin pagarse.",
+        ], columns=7)
+        
         auto_adjust_column_widths(sheet)
 
         filename = "Reporte_Cuentas_Global.xlsx"
@@ -242,7 +304,7 @@ class CuentasState(MixinState):
             safe_name = self._sanitize_report_name(
                 report_client_name or f"Cliente_{normalized_client_id}"
             )
-            filename = f"Reporte_Cliente_{safe_name}.xlsx"
+            filename = f"Estado_Cuenta_{safe_name}.xlsx"
 
         output = io.BytesIO()
         workbook.save(output)

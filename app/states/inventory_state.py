@@ -9,7 +9,21 @@ from sqlalchemy import or_, func
 from app.models import Product, StockMovement, User as UserModel, Category, SaleItem
 from .types import InventoryAdjustment
 from .mixin_state import MixinState
-from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
+from app.utils.exports import (
+    create_excel_workbook,
+    style_header_row,
+    add_data_rows,
+    auto_adjust_column_widths,
+    add_company_header,
+    add_totals_row_with_formulas,
+    add_notes_section,
+    CURRENCY_FORMAT,
+    PERCENT_FORMAT,
+    THIN_BORDER,
+    POSITIVE_FILL,
+    NEGATIVE_FILL,
+    WARNING_FILL,
+)
 
 class InventoryState(MixinState):
     # inventory: Dict[str, Product] = {} # Eliminado a favor de la BD
@@ -557,59 +571,118 @@ class InventoryState(MixinState):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
         
-        wb, ws = create_excel_workbook("Inventario Actual")
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
+        wb, ws = create_excel_workbook("Inventario Valorizado")
+        
+        # Encabezado profesional
+        row = add_company_header(ws, company_name, "INVENTARIO VALORIZADO ACTUAL", f"Al {today}", columns=12)
         
         headers = [
-            "Código",
-            "Descripción",
+            "Código/SKU",
+            "Descripción del Producto",
             "Categoría",
-            "Stock",
+            "Stock Actual",
             "Unidad",
-            "Costo Unit.",
-            "Precio Venta",
-            "Inversión Total (Costo)",
-            "Venta Potencial Total",
-            "Margen Unitario",
+            "Costo Unitario (S/)",
+            "Precio Venta (S/)",
+            "Margen Unitario (S/)",
+            "Margen (%)",
+            "Valor al Costo (S/)",
+            "Valor a Venta (S/)",
+            "Estado Stock",
         ]
-        style_header_row(ws, 1, headers)
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
         
         with rx.session() as session:
             products = session.exec(select(Product).order_by(Product.description)).all()
         
-        rows = []
         for product in products:
-            barcode = product.barcode
-            description = product.description
-            category = product.category
-            unit = product.unit
+            barcode = product.barcode or "S/C"
+            description = product.description or "Sin descripción"
+            category = product.category or "Sin categoría"
+            unit = product.unit or "Unid."
             stock = product.stock or 0
-            purchase_price = product.purchase_price or 0
-            sale_price = product.sale_price or 0
-            investment_total = stock * purchase_price
-            potential_total = stock * sale_price
-            margin_unit = sale_price - purchase_price
+            purchase_price = float(product.purchase_price or 0)
+            sale_price = float(product.sale_price or 0)
             
-            rows.append([
-                barcode,
-                description,
-                category,
-                stock,
-                unit,
-                purchase_price,
-                sale_price,
-                investment_total,
-                potential_total,
-                margin_unit,
-            ])
+            # Estado del stock
+            if stock == 0:
+                status = "SIN STOCK"
+            elif stock <= 5:
+                status = "CRÍTICO"
+            elif stock <= 10:
+                status = "BAJO"
+            else:
+                status = "NORMAL"
             
-        add_data_rows(ws, rows, 2)
-        for row_idx in range(2, 2 + len(rows)):
-            for col_idx in (6, 7, 8, 9, 10):
-                ws.cell(row=row_idx, column=col_idx).number_format = "#,##0.00"
+            ws.cell(row=row, column=1, value=barcode)
+            ws.cell(row=row, column=2, value=description)
+            ws.cell(row=row, column=3, value=category)
+            ws.cell(row=row, column=4, value=stock)
+            ws.cell(row=row, column=5, value=unit)
+            ws.cell(row=row, column=6, value=purchase_price).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=7, value=sale_price).number_format = CURRENCY_FORMAT
+            # Margen Unitario = Fórmula: Precio - Costo
+            ws.cell(row=row, column=8, value=f"=G{row}-F{row}").number_format = CURRENCY_FORMAT
+            # Margen % = Fórmula: (Margen / Costo) si Costo > 0
+            ws.cell(row=row, column=9, value=f"=IF(F{row}>0,H{row}/F{row},0)").number_format = PERCENT_FORMAT
+            # Valor al Costo = Fórmula: Stock × Costo
+            ws.cell(row=row, column=10, value=f"=D{row}*F{row}").number_format = CURRENCY_FORMAT
+            # Valor a Venta = Fórmula: Stock × Precio
+            ws.cell(row=row, column=11, value=f"=D{row}*G{row}").number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=12, value=status)
+            
+            # Color según estado
+            status_cell = ws.cell(row=row, column=12)
+            if "SIN STOCK" in status:
+                status_cell.fill = NEGATIVE_FILL
+            elif "CRÍTICO" in status:
+                status_cell.fill = NEGATIVE_FILL
+            elif "BAJO" in status:
+                status_cell.fill = WARNING_FILL
+            else:
+                status_cell.fill = POSITIVE_FILL
+            
+            for col in range(1, 13):
+                ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        
+        # Fila de totales
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "D"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "J", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "K", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": ""},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(ws, totals_row, [
+            "Costo Unitario: Precio al que se compró el producto al proveedor.",
+            "Precio Venta: Precio de venta al público.",
+            "Margen Unitario = Precio Venta - Costo Unitario (ganancia por unidad).",
+            "Margen % = Margen Unitario ÷ Costo Unitario × 100.",
+            "Valor al Costo: Inversión total = Stock × Costo Unitario.",
+            "Valor a Venta: Potencial de ventas = Stock × Precio Venta.",
+            "SIN STOCK: Producto agotado. CRÍTICO: ≤5 unidades. BAJO: ≤10 unidades.",
+        ], columns=12)
+        
         auto_adjust_column_widths(ws)
         
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
         
-        return rx.download(data=output.getvalue(), filename="inventario_actual.xlsx")
+        return rx.download(data=output.getvalue(), filename="inventario_valorizado.xlsx")

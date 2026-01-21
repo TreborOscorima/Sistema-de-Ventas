@@ -495,6 +495,19 @@ class AuthState(MixinState):
             )
 
     @rx.event
+    def ensure_export_data(self):
+        if not self.is_authenticated:
+            return rx.redirect("/")
+        if not self.current_user["privileges"].get("export_data"):
+            return rx.chain(
+                rx.toast(
+                    "Acceso denegado: No tienes permiso para exportar reportes.",
+                    status="error",
+                ),
+                rx.redirect("/"),
+            )
+
+    @rx.event
     def ensure_view_servicios(self):
         if not self.is_authenticated:
             return rx.redirect("/")

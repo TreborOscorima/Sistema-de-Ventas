@@ -19,7 +19,20 @@ from app.models import (
     User,
 )
 from .mixin_state import MixinState
-from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
+from app.utils.exports import (
+    create_excel_workbook,
+    style_header_row,
+    add_data_rows,
+    auto_adjust_column_widths,
+    add_company_header,
+    add_totals_row_with_formulas,
+    add_notes_section,
+    CURRENCY_FORMAT,
+    THIN_BORDER,
+    POSITIVE_FILL,
+    NEGATIVE_FILL,
+    WARNING_FILL,
+)
 
 REPORT_METHOD_KEYS = [
     "cash",
@@ -1007,20 +1020,28 @@ class HistorialState(MixinState):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
         
-        wb, ws = create_excel_workbook("Historial Movimientos")
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
+        wb, ws = create_excel_workbook("Historial de Ventas")
+        
+        # Encabezado profesional
+        row = add_company_header(ws, company_name, "HISTORIAL DE MOVIMIENTOS Y VENTAS", f"Generado: {today}", columns=9)
         
         headers = [
-            "ID Venta",
-            "Fecha",
+            "Nº Venta",
+            "Fecha y Hora",
             "Cliente",
             "Productos Vendidos",
-            "Categorias",
-            "Total",
-            "Método Pago",
-            "Usuario",
-            "Notas",
+            "Categorías",
+            "Total Venta (S/)",
+            "Método de Pago",
+            "Vendedor",
+            "Observaciones/Detalle",
         ]
-        style_header_row(ws, 1, headers)
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
 
         def _format_quantity(value: Any) -> str:
             qty = Decimal(str(value or 0))
@@ -1048,7 +1069,6 @@ class HistorialState(MixinState):
             sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
 
-            rows = []
             invalid_labels = {"", "-", "no especificado"}
             for sale in sales:
                 payments = sale.payments or []
@@ -1096,7 +1116,7 @@ class HistorialState(MixinState):
                         payment_details = "Crédito (Pendiente Total)"
                 else:
                     if (payment_method or "").strip().lower() in invalid_labels:
-                        payment_method = "Metodo no registrado"
+                        payment_method = "No especificado"
                     if (payment_details or "").strip().lower() in invalid_labels:
                         if (payment_method or "").strip().lower() not in invalid_labels:
                             payment_details = f"Pago en {payment_method}"
@@ -1110,7 +1130,7 @@ class HistorialState(MixinState):
                     quantity = _format_quantity(item.quantity)
                     price_display = self._format_currency(item.unit_price or 0)
                     item_parts.append(f"{name} (x{quantity}) - {price_display}")
-                products_summary = ", ".join(item_parts) if item_parts else "-"
+                products_summary = ", ".join(item_parts) if item_parts else "Sin productos"
 
                 category_parts = []
                 for item in items:
@@ -1120,45 +1140,70 @@ class HistorialState(MixinState):
                     if category not in category_parts:
                         category_parts.append(category)
                 categories_summary = (
-                    ", ".join(category_parts) if category_parts else "-"
+                    ", ".join(category_parts) if category_parts else "Sin categoría"
                 )
 
-                client_name = sale.client.name if sale.client else "Sin cliente"
-                user_name = sale.user.username if sale.user else "Desconocido"
-                total_amount = self._round_currency(float(sale.total_amount or 0))
+                client_name = sale.client.name if sale.client else "Venta al contado"
+                user_name = sale.user.username if sale.user else "Sistema"
                 if is_credit:
                     method_display = payment_method
                 else:
                     method_display = self._normalize_wallet_label(payment_method)
 
-                rows.append([
-                    str(sale.id),
-                    sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-                    if sale.timestamp
-                    else "",
-                    client_name,
-                    products_summary,
-                    categories_summary,
-                    total_amount,
-                    method_display,
-                    user_name,
-                    self._payment_details_text(payment_details),
-                ])
+                ws.cell(row=row, column=1, value=str(sale.id))
+                ws.cell(row=row, column=2, value=sale.timestamp.strftime("%d/%m/%Y %H:%M") if sale.timestamp else "")
+                ws.cell(row=row, column=3, value=client_name)
+                ws.cell(row=row, column=4, value=products_summary)
+                ws.cell(row=row, column=5, value=categories_summary)
+                ws.cell(row=row, column=6, value=float(sale.total_amount or 0)).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=7, value=method_display)
+                ws.cell(row=row, column=8, value=user_name)
+                ws.cell(row=row, column=9, value=self._payment_details_text(payment_details))
+                
+                for col in range(1, 10):
+                    ws.cell(row=row, column=col).border = THIN_BORDER
+                row += 1
 
-        add_data_rows(ws, rows, 2)
+        # Fila de totales
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTAL VENTAS"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(ws, totals_row, [
+            "Nº Venta: Identificador único de la transacción en el sistema.",
+            "Total Venta: Monto total de la operación (fórmula =SUM verificable).",
+            "Crédito (Completado): El cliente pagó la totalidad del crédito.",
+            "Crédito (Adelanto): El cliente realizó un pago parcial.",
+            "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
+            "Venta al contado: Cliente no identificado, pago inmediato.",
+        ], columns=9)
+        
         auto_adjust_column_widths(ws)
 
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
 
-        return rx.download(data=output.getvalue(), filename="historial_movimientos.xlsx")
+        return rx.download(data=output.getvalue(), filename="historial_ventas.xlsx")
 
     @rx.event
     def export_report_data(self):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
 
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
         active_tab = self.report_active_tab or "metodos"
         if active_tab == "cierres":
             rows = self._build_report_closings()
@@ -1166,25 +1211,50 @@ class HistorialState(MixinState):
                 return rx.toast("No hay cierres para exportar.", duration=3000)
 
             wb, ws = create_excel_workbook("Cierres de Caja")
-            headers = ["Fecha", "Tipo", "Usuario", "Monto", "Notas"]
-            style_header_row(ws, 1, headers)
-            data_rows = [
-                [
-                    row.get("timestamp_display", ""),
-                    row.get("action", ""),
-                    row.get("user", ""),
-                    row.get("amount", 0.0),
-                    row.get("notes", ""),
-                ]
-                for row in rows
-            ]
-            add_data_rows(ws, data_rows, 2)
+            
+            # Encabezado profesional
+            row = add_company_header(ws, company_name, "HISTORIAL DE CIERRES DE CAJA", f"Generado: {today}", columns=5)
+            
+            headers = ["Fecha y Hora", "Tipo Operación", "Responsable", "Monto (S/)", "Observaciones"]
+            style_header_row(ws, row, headers)
+            data_start = row + 1
+            row += 1
+            
+            for item in rows:
+                action = item.get("action", "")
+                action_display = "Apertura de Caja" if action.lower() == "apertura" else "Cierre de Caja" if action.lower() == "cierre" else action.capitalize()
+                
+                ws.cell(row=row, column=1, value=item.get("timestamp_display", ""))
+                ws.cell(row=row, column=2, value=action_display)
+                ws.cell(row=row, column=3, value=item.get("user", "Desconocido"))
+                ws.cell(row=row, column=4, value=float(item.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=5, value=item.get("notes", "") or "Sin observaciones")
+                
+                for col in range(1, 6):
+                    ws.cell(row=row, column=col).border = THIN_BORDER
+                row += 1
+            
+            # Totales
+            totals_row = row
+            add_totals_row_with_formulas(ws, totals_row, data_start, [
+                {"type": "label", "value": "TOTAL"},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+                {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+                {"type": "text", "value": ""},
+            ])
+            
+            add_notes_section(ws, totals_row, [
+                "Apertura de Caja: Monto inicial del día.",
+                "Cierre de Caja: Monto contado al finalizar.",
+            ], columns=5)
+            
             auto_adjust_column_widths(ws)
 
             output = io.BytesIO()
             wb.save(output)
             output.seek(0)
-            return rx.download(data=output.getvalue(), filename="cierres_caja.xlsx")
+            return rx.download(data=output.getvalue(), filename="historial_cierres.xlsx")
 
         entries = self._build_report_entries()
         if not entries:
@@ -1192,27 +1262,50 @@ class HistorialState(MixinState):
 
         if active_tab == "detalle":
             wb, ws = create_excel_workbook("Detalle de Cobros")
+            
+            # Encabezado profesional
+            row = add_company_header(ws, company_name, "DETALLE DE COBROS E INGRESOS", f"Generado: {today}", columns=6)
+            
             detail_headers = [
-                "Fecha",
-                "Origen",
-                "Metodo",
-                "Monto",
-                "Usuario",
+                "Fecha y Hora",
+                "Origen/Tipo",
+                "Método de Pago",
+                "Monto (S/)",
+                "Responsable",
                 "Referencia",
             ]
-            style_header_row(ws, 1, detail_headers)
-            detail_rows = [
-                [
-                    entry.get("timestamp_display", ""),
-                    entry.get("source", ""),
-                    entry.get("method_label", ""),
-                    entry.get("amount", 0.0),
-                    entry.get("user", ""),
-                    entry.get("reference", ""),
-                ]
-                for entry in entries
-            ]
-            add_data_rows(ws, detail_rows, 2)
+            style_header_row(ws, row, detail_headers)
+            data_start = row + 1
+            row += 1
+            
+            for entry in entries:
+                ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
+                ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
+                ws.cell(row=row, column=3, value=entry.get("method_label", "No especificado"))
+                ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
+                ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
+                
+                for col in range(1, 7):
+                    ws.cell(row=row, column=col).border = THIN_BORDER
+                row += 1
+            
+            # Totales
+            totals_row = row
+            add_totals_row_with_formulas(ws, totals_row, data_start, [
+                {"type": "label", "value": "TOTAL INGRESOS"},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+                {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+            ])
+            
+            add_notes_section(ws, totals_row, [
+                "Origen: Tipo de transacción (Venta, Cobro de Cuota, Reserva, etc.).",
+                "Referencia: Información adicional del pago.",
+            ], columns=6)
+            
             auto_adjust_column_widths(ws)
 
             output = io.BytesIO()
@@ -1220,6 +1313,7 @@ class HistorialState(MixinState):
             output.seek(0)
             return rx.download(data=output.getvalue(), filename="detalle_cobros.xlsx")
 
+        # Tab por defecto: métodos de pago
         summary_totals: dict[str, dict[str, Any]] = {}
         for entry in entries:
             key = entry.get("method_key") or "other"
@@ -1234,56 +1328,101 @@ class HistorialState(MixinState):
                 str(entry.get("amount", 0) or 0)
             )
 
-        wb, ws = create_excel_workbook("Ingresos por Metodo")
-        summary_headers = ["Metodo", "Cantidad", "Total"]
-        style_header_row(ws, 1, summary_headers)
+        wb, ws = create_excel_workbook("Resumen por Método")
+        
+        # Encabezado profesional
+        row = add_company_header(ws, company_name, "INGRESOS POR MÉTODO DE PAGO", f"Generado: {today}", columns=4)
+        
+        summary_headers = ["Método de Pago", "Nº Operaciones", "Total Recaudado (S/)", "Participación (%)"]
+        style_header_row(ws, row, summary_headers)
+        data_start = row + 1
+        row += 1
 
-        summary_rows = []
         for key in REPORT_METHOD_KEYS:
             if key in summary_totals:
                 summary = summary_totals[key]
-                summary_rows.append(
-                    [
-                        summary["method_label"],
-                        summary["count"],
-                        self._round_currency(float(summary["total"])),
-                    ]
-                )
+                ws.cell(row=row, column=1, value=summary["method_label"])
+                ws.cell(row=row, column=2, value=summary["count"])
+                ws.cell(row=row, column=3, value=float(summary["total"])).number_format = CURRENCY_FORMAT
+                # Participación se calculará después
+                ws.cell(row=row, column=4, value=float(summary["total"])).number_format = CURRENCY_FORMAT
+                
+                for col in range(1, 5):
+                    ws.cell(row=row, column=col).border = THIN_BORDER
+                row += 1
+                
         for key, summary in summary_totals.items():
             if key not in REPORT_METHOD_KEYS:
-                summary_rows.append(
-                    [
-                        summary["method_label"],
-                        summary["count"],
-                        self._round_currency(float(summary["total"])),
-                    ]
-                )
+                ws.cell(row=row, column=1, value=summary["method_label"])
+                ws.cell(row=row, column=2, value=summary["count"])
+                ws.cell(row=row, column=3, value=float(summary["total"])).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=4, value=float(summary["total"])).number_format = CURRENCY_FORMAT
+                
+                for col in range(1, 5):
+                    ws.cell(row=row, column=col).border = THIN_BORDER
+                row += 1
 
-        add_data_rows(ws, summary_rows, 2)
+        # Totales
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTAL RECAUDADO"},
+            {"type": "sum", "col_letter": "B"},
+            {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": "100.00%"},
+        ])
+        
+        # Actualizar participación con fórmulas
+        from openpyxl.styles import Font
+        PERCENT_FORMAT_LOCAL = '0.00%'
+        for r in range(data_start, totals_row):
+            ws.cell(row=r, column=4, value=f"=IF($C${totals_row}>0,C{r}/$C${totals_row},0)").number_format = PERCENT_FORMAT_LOCAL
+        
+        add_notes_section(ws, totals_row, [
+            "Total Recaudado: Suma de todos los pagos por método.",
+            "Participación = Monto del Método ÷ Total General × 100.",
+        ], columns=4)
+        
         auto_adjust_column_widths(ws)
 
+        # Segunda hoja: Detalle
         detail_ws = wb.create_sheet("Detalle de Cobros")
+        row = add_company_header(detail_ws, company_name, "DETALLE DE COBROS E INGRESOS", f"Generado: {today}", columns=6)
+        
         detail_headers = [
-            "Fecha",
-            "Origen",
-            "Metodo",
-            "Monto",
-            "Usuario",
+            "Fecha y Hora",
+            "Origen/Tipo",
+            "Método de Pago",
+            "Monto (S/)",
+            "Responsable",
             "Referencia",
         ]
-        style_header_row(detail_ws, 1, detail_headers)
-        detail_rows = [
-            [
-                entry.get("timestamp_display", ""),
-                entry.get("source", ""),
-                entry.get("method_label", ""),
-                entry.get("amount", 0.0),
-                entry.get("user", ""),
-                entry.get("reference", ""),
-            ]
-            for entry in entries
-        ]
-        add_data_rows(detail_ws, detail_rows, 2)
+        style_header_row(detail_ws, row, detail_headers)
+        detail_data_start = row + 1
+        row += 1
+        
+        for entry in entries:
+            detail_ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
+            detail_ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
+            detail_ws.cell(row=row, column=3, value=entry.get("method_label", "No especificado"))
+            detail_ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+            detail_ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
+            detail_ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
+            
+            for col in range(1, 7):
+                detail_ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        
+        # Totales en detalle
+        detail_totals_row = row
+        add_totals_row_with_formulas(detail_ws, detail_totals_row, detail_data_start, [
+            {"type": "label", "value": "TOTAL"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+        ])
+        
         auto_adjust_column_widths(detail_ws)
 
         output = io.BytesIO()

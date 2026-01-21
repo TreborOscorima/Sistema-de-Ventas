@@ -23,9 +23,11 @@ from .services_state import ServicesState
 from .cuentas_state import CuentasState
 from .clientes_state import ClientesState
 from .dashboard_state import DashboardState
+from .report_state import ReportState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin
 
 _mixins = [
+    ReportState,
     DashboardState,
     ServicesState,
     CuentasState,

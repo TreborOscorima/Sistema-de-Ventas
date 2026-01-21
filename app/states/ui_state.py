@@ -4,7 +4,8 @@ from .mixin_state import MixinState
 
 # Mapeo de rutas a páginas
 ROUTE_TO_PAGE = {
-    "/": "Ingreso",
+    "/": "Dashboard",
+    "/dashboard": "Dashboard",
     "/ingreso": "Ingreso",
     "/venta": "Punto de Venta",
     "/caja": "Gestion de Caja",
@@ -12,11 +13,13 @@ ROUTE_TO_PAGE = {
     "/cuentas": "Cuentas Corrientes",
     "/inventario": "Inventario",
     "/historial": "Historial",
+    "/reportes": "Reportes",
     "/servicios": "Servicios",
     "/configuracion": "Configuracion",
 }
 
 PAGE_TO_ROUTE = {
+    "Dashboard": "/dashboard",
     "Ingreso": "/ingreso",
     "Punto de Venta": "/venta",
     "Gestion de Caja": "/caja",
@@ -24,6 +27,7 @@ PAGE_TO_ROUTE = {
     "Cuentas Corrientes": "/cuentas",
     "Inventario": "/inventario",
     "Historial": "/historial",
+    "Reportes": "/reportes",
     "Servicios": "/servicios",
     "Configuracion": "/configuracion",
 }
@@ -31,14 +35,14 @@ PAGE_TO_ROUTE = {
 
 class UIState(MixinState):
     sidebar_open: bool = True
-    current_page: str = "Ingreso"
+    current_page: str = "Dashboard"
     config_active_tab: str = "usuarios"
 
     @rx.event
     def sync_page_from_route(self):
         """Sincroniza current_page basándose en la ruta actual."""
         route = self.router.url.path
-        page = ROUTE_TO_PAGE.get(route, "Ingreso")
+        page = ROUTE_TO_PAGE.get(route, "Dashboard")
         if self._can_access_page(page):
             self.current_page = page
         elif self.allowed_pages:
@@ -112,6 +116,7 @@ class UIState(MixinState):
             {"label": "Cuentas", "icon": "banknote", "page": "Cuentas Corrientes", "route": "/cuentas"},
             {"label": "Inventario", "icon": "boxes", "page": "Inventario", "route": "/inventario"},
             {"label": "Historial", "icon": "history", "page": "Historial", "route": "/historial"},
+            {"label": "Reportes", "icon": "file-chart-column", "page": "Reportes", "route": "/reportes"},
             {"label": "Servicios", "icon": "briefcase", "page": "Servicios", "route": "/servicios"},
             {"label": "Configuracion", "icon": "settings", "page": "Configuracion", "route": "/configuracion"},
         ]
@@ -125,6 +130,7 @@ class UIState(MixinState):
             "Cuentas Corrientes": "view_cuentas",
             "Inventario": "view_inventario",
             "Historial": "view_historial",
+            "Reportes": "export_data",
             "Servicios": "view_servicios",
             "Configuracion": "manage_config",
         }
