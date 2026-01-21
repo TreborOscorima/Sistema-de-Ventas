@@ -186,12 +186,6 @@ class DashboardState(MixinState):
             self.month_sales_count = month_result[0] or 0
             self.month_sales = float(month_result[1] or 0)
             
-            # Ticket promedio del mes
-            if self.month_sales_count > 0:
-                self.avg_ticket = self.month_sales / self.month_sales_count
-            else:
-                self.avg_ticket = 0.0
-            
             # Ventas del período seleccionado y período anterior
             period_start, period_end, prev_start, prev_end = self._get_period_dates()
             
@@ -210,6 +204,12 @@ class DashboardState(MixinState):
             ).one()
             self.period_sales_count = period_result[0] or 0
             self.period_sales = float(period_result[1] or 0)
+            
+            # Ticket promedio del período seleccionado
+            if self.period_sales_count > 0:
+                self.avg_ticket = self.period_sales / self.period_sales_count
+            else:
+                self.avg_ticket = 0.0
             
             # Período anterior para comparación
             prev_result = session.exec(

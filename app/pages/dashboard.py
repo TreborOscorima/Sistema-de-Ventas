@@ -318,21 +318,47 @@ def _kpis_grid() -> rx.Component:
             ),
             class_name="bg-gradient-to-br from-white to-blue-50 rounded-xl border border-gray-200 shadow-sm col-span-1 sm:col-span-2",
         ),
-        _stat_card(
-            "Ticket Promedio",
-            State.formatted_avg_ticket,
-            "Este mes",
-            "receipt",
-            "amber",
-            link="/historial",
+        # Ticket Promedio con período dinámico
+        rx.link(
+            rx.el.div(
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("receipt", class_name="w-5 h-5"),
+                        class_name="p-2 rounded-lg bg-amber-50 text-amber-600",
+                    ),
+                    rx.el.div(
+                        rx.el.p("Ticket Promedio", class_name="text-sm text-gray-500"),
+                        rx.el.p(State.formatted_avg_ticket, class_name="text-2xl font-bold text-gray-900"),
+                        rx.el.p(State.period_label, class_name="text-xs text-gray-400"),
+                        class_name="ml-auto text-right",
+                    ),
+                    class_name="flex items-start justify-between",
+                ),
+                class_name="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300",
+            ),
+            href="/historial",
+            class_name="block",
         ),
-        _stat_card(
-            "Ventas Hoy",
-            State.formatted_today_sales,
-            f"{State.today_sales_count} ventas",
-            "shopping-cart",
-            "blue",
-            link="/historial",
+        # Cantidad de ventas del período
+        rx.link(
+            rx.el.div(
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("shopping-bag", class_name="w-5 h-5"),
+                        class_name="p-2 rounded-lg bg-emerald-50 text-emerald-600",
+                    ),
+                    rx.el.div(
+                        rx.el.p("Transacciones", class_name="text-sm text-gray-500"),
+                        rx.el.p(State.period_sales_count, class_name="text-2xl font-bold text-gray-900"),
+                        rx.el.p(State.period_label, class_name="text-xs text-gray-400"),
+                        class_name="ml-auto text-right",
+                    ),
+                    class_name="flex items-start justify-between",
+                ),
+                class_name="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300",
+            ),
+            href="/historial",
+            class_name="block",
         ),
         class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
     )
