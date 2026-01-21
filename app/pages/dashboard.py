@@ -196,47 +196,40 @@ def _category_chart() -> rx.Component:
         rx.el.div(
             rx.cond(
                 State.dash_sales_by_category.length() > 0,
-                rx.el.table(
-                    rx.el.thead(
-                        rx.el.tr(
-                            rx.el.th("Categoría", class_name="text-left text-xs font-medium text-gray-500 uppercase py-2"),
-                            rx.el.th("Ventas", class_name="text-right text-xs font-medium text-gray-500 uppercase py-2"),
-                            rx.el.th("%", class_name="text-right text-xs font-medium text-gray-500 uppercase py-2 w-16"),
-                        ),
+                rx.el.div(
+                    # Header
+                    rx.el.div(
+                        rx.el.span("Categoría", class_name="flex-1 text-left text-xs font-medium text-gray-500 uppercase"),
+                        rx.el.span("Ventas", class_name="w-28 text-right text-xs font-medium text-gray-500 uppercase"),
+                        rx.el.span("%", class_name="w-16 text-right text-xs font-medium text-gray-500 uppercase"),
+                        class_name="flex items-center py-2 px-2 border-b border-gray-200",
                     ),
-                    rx.el.tbody(
+                    # Body con scroll
+                    rx.el.div(
                         rx.foreach(
                             State.dash_sales_by_category,
-                            lambda cat: rx.el.tr(
-                                rx.el.td(
-                                    cat["category"],
-                                    class_name="py-2 text-sm text-gray-800",
-                                ),
-                                rx.el.td(
+                            lambda cat: rx.el.div(
+                                rx.el.span(cat["category"], class_name="flex-1 text-sm text-gray-800 truncate"),
+                                rx.el.span(
                                     rx.text(f"S/ {cat['total']:.2f}"),
-                                    class_name="py-2 text-sm text-gray-900 font-medium text-right",
+                                    class_name="w-28 text-sm text-gray-900 font-medium text-right",
                                 ),
-                                rx.el.td(
+                                rx.el.span(
                                     rx.text(f"{cat['percentage']}%"),
-                                    class_name="py-2 text-sm text-gray-500 text-right",
+                                    class_name="w-16 text-sm text-gray-500 text-right",
                                 ),
-                                class_name="border-b border-gray-100",
+                                class_name="flex items-center py-2 px-2 border-b border-gray-100",
                             ),
                         ),
-                        class_name="max-h-40 overflow-y-auto block",
+                        class_name="max-h-40 overflow-y-auto",
                     ),
-                    rx.el.tfoot(
-                        rx.el.tr(
-                            rx.el.td("Total", class_name="py-2 text-sm font-bold text-gray-900"),
-                            rx.el.td(
-                                State.formatted_category_total,
-                                class_name="py-2 text-sm font-bold text-gray-900 text-right",
-                            ),
-                            rx.el.td("100%", class_name="py-2 text-sm font-bold text-gray-500 text-right"),
-                            class_name="border-t-2 border-gray-200",
-                        ),
+                    # Footer
+                    rx.el.div(
+                        rx.el.span("Total", class_name="flex-1 text-sm font-bold text-gray-900"),
+                        rx.el.span(State.formatted_category_total, class_name="w-28 text-sm font-bold text-gray-900 text-right"),
+                        rx.el.span("100%", class_name="w-16 text-sm font-bold text-gray-500 text-right"),
+                        class_name="flex items-center py-2 px-2 border-t-2 border-gray-200",
                     ),
-                    class_name="w-full",
                 ),
                 rx.el.p("Sin datos para este período", class_name="text-gray-400 text-center py-4"),
             ),
