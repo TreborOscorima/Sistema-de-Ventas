@@ -212,3 +212,33 @@ def validate_positive_integer(value: Any) -> bool:
         return parsed >= 0
     except (ValueError, TypeError):
         return False
+
+
+def is_valid_phone(phone: str) -> bool:
+    """
+    Valida formato de teléfono (Perú: 9 dígitos o con código país).
+
+    Args:
+        phone: Número de teléfono a validar
+
+    Returns:
+        True si es un formato válido
+    """
+    digits = re.sub(r"\D", "", phone or "")
+    # Perú: 9 dígitos o 11 con código país (51)
+    return len(digits) in (9, 11)
+
+
+def is_valid_dni(dni: str) -> bool:
+    """
+    Valida formato de DNI (Perú: 8 dígitos).
+
+    Args:
+        dni: DNI a validar
+
+    Returns:
+        True si es un formato válido
+    """
+    cleaned = re.sub(r"[^A-Za-z0-9]", "", dni or "")
+    # Perú: 8 dígitos, otros países pueden tener letras
+    return len(cleaned) >= 6 and len(cleaned) <= 12
