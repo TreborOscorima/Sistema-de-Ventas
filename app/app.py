@@ -13,6 +13,7 @@ from app.pages.login import login_page
 from app.pages.servicios import servicios_page
 from app.pages.cuentas import cuentas_page
 from app.pages.clientes import clientes_page
+from app.pages.dashboard import dashboard_page
 from app.components.notification import NotificationHolder
 
 
@@ -204,6 +205,10 @@ def page_cuentas() -> rx.Component:
     return authenticated_layout(cuentas_page())
 
 
+def page_dashboard() -> rx.Component:
+    return authenticated_layout(dashboard_page())
+
+
 def page_inventario() -> rx.Component:
     return authenticated_layout(inventario_page())
 
@@ -312,6 +317,12 @@ app.add_page(
 )
 app.add_page(page_clientes, route="/clientes", title="Clientes | Sistema de Ventas", on_load=[State.ensure_view_clientes, State.sync_page_from_route] + _common_on_load)
 app.add_page(page_cuentas, route="/cuentas", title="Cuentas Corrientes | Sistema de Ventas", on_load=[State.ensure_view_cuentas, State.sync_page_from_route] + _common_on_load)
+app.add_page(
+    page_dashboard,
+    route="/dashboard",
+    title="Dashboard - TUWAYKIAPP",
+    on_load=[State.sync_page_from_route] + _common_on_load,
+)
 app.add_page(
     page_inventario,
     route="/inventario",

@@ -99,6 +99,7 @@ class UIState(MixinState):
 
     def _navigation_items_config(self) -> List[Dict[str, str]]:
         return [
+            {"label": "Dashboard", "icon": "layout-dashboard", "page": "Dashboard", "route": "/dashboard"},
             {"label": "Ingreso", "icon": "arrow-down-to-line", "page": "Ingreso", "route": "/ingreso"},
             {"label": "Punto de Venta", "icon": "arrow-up-from-line", "page": "Punto de Venta", "route": "/venta"},
             {
