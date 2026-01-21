@@ -2,6 +2,7 @@ import os
 import reflex as rx
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any
+from app.utils.payment import normalize_wallet_label, payment_category
 from .types import CashboxSale, PaymentBreakdownItem
 
 class MixinState:
@@ -184,75 +185,12 @@ class MixinState:
         )
 
     def _normalize_wallet_label(self, label: str) -> str:
-        value = (label or "").strip()
-        if not value:
-            return value
-        key = value.lower()
-        mapping = {
-            "cash": "Efectivo",
-            "debit": "Tarjeta de Débito",
-            "credit": "Tarjeta de Crédito",
-            "yape": "Billetera Digital (Yape)",
-            "plin": "Billetera Digital (Plin)",
-            "transfer": "Transferencia Bancaria",
-            "mixed": "Pago Mixto",
-            "other": "Otros",
-        }
-        if key in mapping:
-            return mapping[key]
-        if key == "card":
-            return mapping["credit"]
-        if key == "wallet":
-            return mapping["yape"]
-        if "mixto" in key and "(" in value and ")" in value:
-            suffix = value[value.find("("):].strip()
-            return f"{mapping['mixed']} {suffix}"
-        if "mixto" in key:
-            return mapping["mixed"]
-        if "debito" in key or "débito" in key:
-            return mapping["debit"]
-        if "credito" in key or "crédito" in key or "tarjeta" in key:
-            return mapping["credit"]
-        if "yape" in key:
-            return mapping["yape"]
-        if "plin" in key:
-            return mapping["plin"]
-        if "billetera" in key or "qr" in key:
-            return mapping["yape"]
-        if "transfer" in key or "banco" in key:
-            return mapping["transfer"]
-        if "efectivo" in key:
-            return mapping["cash"]
-        return value
+        """Delegación a utilidad centralizada."""
+        return normalize_wallet_label(label)
 
     def _payment_category(self, method: str, kind: str = "") -> str:
-        normalized_kind = (kind or "").lower()
-        label = method.lower() if method else ""
-        mapping = {
-            "cash": "Efectivo",
-            "debit": "Tarjeta de Débito",
-            "credit": "Tarjeta de Crédito",
-            "yape": "Billetera Digital (Yape)",
-            "plin": "Billetera Digital (Plin)",
-            "transfer": "Transferencia Bancaria",
-            "mixed": "Pago Mixto",
-            "other": "Otros",
-        }
-        if normalized_kind == "mixed" or "mixto" in label:
-            return mapping["mixed"]
-        if normalized_kind == "debit" or "debito" in label or "débito" in label:
-            return mapping["debit"]
-        if normalized_kind == "credit" or "credito" in label or "crédito" in label or "tarjeta" in label:
-            return mapping["credit"]
-        if normalized_kind == "yape" or "yape" in label:
-            return mapping["yape"]
-        if normalized_kind == "plin" or "plin" in label:
-            return mapping["plin"]
-        if normalized_kind == "transfer" or "transfer" in label or "banco" in label:
-            return mapping["transfer"]
-        if normalized_kind == "cash" or "efectivo" in label:
-            return mapping["cash"]
-        return mapping["other"]
+        """Delegación a utilidad centralizada."""
+        return payment_category(method, kind)
 
     def _ensure_sale_payment_fields(self, sale: CashboxSale):
         if "payment_label" not in sale or not sale.get("payment_label"):
