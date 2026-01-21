@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 import reflex as rx
@@ -26,9 +27,12 @@ db_host = _get_env("DB_HOST", "localhost")
 db_port = os.getenv("DB_PORT", "3306")
 db_name = _get_env("DB_NAME", "sistema_ventas")
 
+db_user_escaped = quote_plus(db_user or "")
+db_password_escaped = quote_plus(db_password or "")
+
 # URL sincronica para Reflex
 db_url = (
-    f"mysql+pymysql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    f"mysql+pymysql://{db_user_escaped}:{db_password_escaped}@{db_host}:{db_port}/{db_name}"
 )
 
 config = rx.Config(

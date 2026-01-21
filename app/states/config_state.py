@@ -269,15 +269,15 @@ class ConfigState(MixinState):
                     "kind": "cash",
                 },
                 {
-                    "method_id": "debit",
-                    "name": "T. Débito",
-                    "description": "Pago con tarjeta débito",
+                    "method_id": "debit_card",
+                    "name": "Tarjeta de Debito",
+                    "description": "Pago con tarjeta debito",
                     "kind": "debit",
                 },
                 {
-                    "method_id": "credit",
-                    "name": "T. Crédito",
-                    "description": "Pago con tarjeta crédito",
+                    "method_id": "credit_card",
+                    "name": "Tarjeta de Credito",
+                    "description": "Pago con tarjeta credito",
                     "kind": "credit",
                 },
                 {

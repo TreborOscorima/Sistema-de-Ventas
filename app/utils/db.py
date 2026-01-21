@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote_plus
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -26,8 +27,11 @@ DB_HOST = _require_env("DB_HOST")
 DB_PORT = os.getenv("DB_PORT", "3306")
 DB_NAME = _require_env("DB_NAME")
 
+DB_USER_ESCAPED = quote_plus(DB_USER or "")
+DB_PASSWORD_ESCAPED = quote_plus(DB_PASSWORD or "")
+
 ASYNC_DATABASE_URL = (
-    f"mysql+aiomysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"mysql+aiomysql://{DB_USER_ESCAPED}:{DB_PASSWORD_ESCAPED}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
 async_engine: AsyncEngine = create_async_engine(
