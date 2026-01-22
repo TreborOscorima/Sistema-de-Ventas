@@ -36,6 +36,49 @@ def soccer_ball_icon(class_name: str = "h-5 w-5") -> rx.Component:
     )
 
 
+def payment_method_selector_compact() -> rx.Component:
+    """
+    Selector de método de pago compacto para servicios/reservas.
+    Reutiliza State.enabled_payment_methods y State.select_payment_method.
+    """
+    return rx.el.div(
+        rx.el.label("Método de pago", class_name="text-sm font-medium text-gray-700"),
+        rx.el.div(
+            rx.foreach(
+                State.enabled_payment_methods,
+                lambda method: rx.el.button(
+                    rx.cond(
+                        method["kind"] == "cash",
+                        rx.icon("banknote", class_name="h-3 w-3"),
+                        rx.cond(
+                            (method["kind"] == "debit") | (method["kind"] == "credit") | (method["kind"] == "card"),
+                            rx.icon("credit-card", class_name="h-3 w-3"),
+                            rx.cond(
+                                (method["kind"] == "yape") | (method["kind"] == "plin") | (method["kind"] == "wallet"),
+                                rx.icon("smartphone", class_name="h-3 w-3"),
+                                rx.cond(
+                                    method["kind"] == "transfer",
+                                    rx.icon("arrow-left-right", class_name="h-3 w-3"),
+                                    rx.icon("layers", class_name="h-3 w-3"),
+                                ),
+                            ),
+                        ),
+                    ),
+                    rx.el.span(method["name"], class_name="text-xs font-medium"),
+                    on_click=lambda _, mid=method["id"]: State.select_payment_method(mid),
+                    class_name=rx.cond(
+                        State.payment_method == method["name"],
+                        "flex items-center gap-1 px-2 py-1.5 rounded-md bg-indigo-600 text-white text-xs",
+                        "flex items-center gap-1 px-2 py-1.5 rounded-md border bg-white text-gray-700 hover:bg-gray-50 text-xs",
+                    ),
+                ),
+            ),
+            class_name="flex flex-wrap gap-1.5",
+        ),
+        class_name="flex flex-col gap-1.5",
+    )
+
+
 def sport_selector() -> rx.Component:
     return rx.el.div(
         rx.el.div(
@@ -575,6 +618,12 @@ def reservation_modal() -> rx.Component:
                 ),
                 class_name="flex flex-col gap-1",
             ),
+            # Selector de método de pago (solo visible cuando hay adelanto)
+            rx.cond(
+                State.reservation_form["advance_amount"] != "",
+                payment_method_selector_compact(),
+                rx.fragment(),
+            ),
                         rx.el.div(
                             rx.el.label("Monto total", class_name="text-sm font-medium text-gray-700"),
                             rx.el.input(
@@ -748,6 +797,12 @@ def reservation_form_card() -> rx.Component:
                     class_name="w-full p-2 border rounded-md",
                 ),
                 class_name="flex flex-col gap-1",
+            ),
+            # Selector de método de pago (solo visible cuando hay adelanto)
+            rx.cond(
+                State.reservation_form["advance_amount"] != "",
+                payment_method_selector_compact(),
+                rx.fragment(),
             ),
             rx.el.div(
                 rx.el.label("Monto total", class_name="text-sm font-medium text-gray-700"),
@@ -1138,6 +1193,12 @@ def payments_card() -> rx.Component:
                 class_name="flex flex-col gap-1",
             ),
             class_name="grid grid-cols-1 lg:grid-cols-2 gap-4",
+        ),
+        # Selector de método de pago para pagos de reservas
+        rx.cond(
+            State.reservation_payment_id != "",
+            payment_method_selector_compact(),
+            rx.fragment(),
         ),
         rx.el.div(
             rx.el.button(

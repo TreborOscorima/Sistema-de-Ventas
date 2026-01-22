@@ -256,6 +256,86 @@ class ServicesState(MixinState):
             amount = total_value
         return [(method_type, self._round_currency(amount))]
 
+    def _register_reservation_advance_in_cashbox(
+        self, reservation: FieldReservation, advance_amount: float
+    ) -> None:
+        """
+        Registra el adelanto inicial de una reserva en CashboxLog y SalePayment.
+        
+        Se llama cuando se crea una nueva reserva con adelanto > 0.
+        Garantiza que todos los pagos queden registrados para reportes contables.
+        Usa el método de pago seleccionado en el formulario (payment_method/payment_method_kind).
+        """
+        if advance_amount <= 0:
+            return
+        
+        # Obtener método de pago seleccionado
+        payment_label = (getattr(self, "payment_method", "") or "").strip() or "Efectivo"
+        payment_kind = (getattr(self, "payment_method_kind", "") or "cash").lower()
+        
+        # Determinar el PaymentMethodType según el método seleccionado
+        payment_allocations = self._build_reservation_payments(advance_amount)
+            
+        with rx.session() as session:
+            user = session.exec(
+                select(UserModel).where(
+                    UserModel.username == self.current_user["username"]
+                )
+            ).first()
+            user_id = user.id if user else None
+            
+            # Crear venta para asociar el pago
+            new_sale = Sale(
+                timestamp=datetime.datetime.now(),
+                total_amount=self._round_currency(advance_amount),
+                status=SaleStatus.COMPLETED,
+                user_id=user_id,
+            )
+            session.add(new_sale)
+            session.flush()
+            
+            # Registrar SalePayment con el método de pago seleccionado
+            for method_type, amount in payment_allocations:
+                if amount <= 0:
+                    continue
+                session.add(
+                    SalePayment(
+                        sale_id=new_sale.id,
+                        amount=self._round_currency(amount),
+                        method_type=method_type,
+                        reference_code=f"Reserva {reservation['id']}",
+                    )
+                )
+            
+            # Crear SaleItem para el servicio
+            session.add(
+                SaleItem(
+                    sale_id=new_sale.id,
+                    product_id=None,
+                    quantity=1,
+                    unit_price=self._round_currency(advance_amount),
+                    subtotal=self._round_currency(advance_amount),
+                    product_name_snapshot=f"Adelanto reserva: {reservation.get('field_name', 'Campo')}",
+                    product_barcode_snapshot="RESERVA",
+                    product_category_snapshot="Servicios",
+                )
+            )
+            
+            # Registrar en CashboxLog para el flujo de caja
+            session.add(
+                CashboxLog(
+                    action="Adelanto",
+                    amount=self._round_currency(advance_amount),
+                    payment_method=payment_label,
+                    notes=f"Adelanto reserva {reservation.get('id', '')} - {reservation.get('field_name', '')}".strip(" -"),
+                    timestamp=datetime.datetime.now(),
+                    user_id=user_id,
+                    sale_id=new_sale.id,
+                )
+            )
+            
+            session.commit()
+
     def _apply_reservation_filters(self, query):
         # Convertir Enum a string para comparación si es necesario, o usar el valor directo
         query = query.where(FieldReservationModel.sport == self.field_rental_sport)

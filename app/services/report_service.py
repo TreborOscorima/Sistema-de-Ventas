@@ -255,27 +255,42 @@ def _translate_payment_method(method: str) -> str:
         Nombre en español del método de pago
     """
     translations = {
-        # Códigos comunes
+        # Códigos del enum PaymentMethodType
         "cash": "Efectivo",
         "efectivo": "Efectivo",
+        "debit": "Tarjeta de Débito",
+        "debito": "Tarjeta de Débito",
+        "tarjeta de débito": "Tarjeta de Débito",
+        "tarjeta de debito": "Tarjeta de Débito",
+        "credit": "Tarjeta de Crédito",
+        "credito": "Tarjeta de Crédito",
+        "tarjeta de crédito": "Tarjeta de Crédito",
+        "tarjeta de credito": "Tarjeta de Crédito",
         "card": "Tarjeta",
         "tarjeta": "Tarjeta",
-        "credit_card": "Tarjeta de Crédito",
-        "debit_card": "Tarjeta de Débito",
-        "transfer": "Transferencia Bancaria",
-        "transferencia": "Transferencia Bancaria",
-        "bank_transfer": "Transferencia Bancaria",
         "yape": "Yape",
         "plin": "Plin",
+        "transfer": "Transferencia Bancaria",
+        "transferencia": "Transferencia Bancaria",
+        "transferencia bancaria": "Transferencia Bancaria",
+        "bank_transfer": "Transferencia Bancaria",
         "wallet": "Billetera Digital",
-        "credit": "Crédito/Fiado",
-        "credito": "Crédito/Fiado",
-        "check": "Cheque",
-        "cheque": "Cheque",
+        "billetera": "Billetera Digital",
         "mixed": "Pago Mixto",
         "mixto": "Pago Mixto",
+        "pago mixto": "Pago Mixto",
         "other": "Otro",
         "otro": "Otro",
+        # Ventas a crédito/fiado (condición de pago, no método)
+        "fiado": "Venta a Crédito/Fiado",
+        "venta a credito": "Venta a Crédito/Fiado",
+        "venta a crédito": "Venta a Crédito/Fiado",
+        "credito_fiado": "Venta a Crédito/Fiado",
+        # Códigos legacy
+        "credit_card": "Tarjeta de Crédito",
+        "debit_card": "Tarjeta de Débito",
+        "check": "Cheque",
+        "cheque": "Cheque",
         "no especificado": "No Especificado",
         "": "No Especificado",
     }
@@ -586,13 +601,20 @@ def generate_sales_report(
     # HOJA 4: POR MÉTODO DE PAGO (con fórmulas)
     # =================
     ws_payment = wb.create_sheet("Por Método de Pago")
-    row = _add_company_header(ws_payment, company_name, "RECAUDACIÓN POR MÉTODO DE PAGO", period_str, columns=4)
+    row = _add_company_header(ws_payment, company_name, "ANÁLISIS POR MÉTODO DE PAGO", period_str, columns=5)
     
-    headers = ["Método de Pago", "Nº Operaciones", "Monto Recaudado (S/)", "Participación (%)"]
+    # ---- SECCIÓN 1: PAGOS RECIBIDOS ----
+    row += 1
+    ws_payment.cell(row=row, column=1, value="PAGOS RECIBIDOS EN EL PERÍODO").font = SUBTITLE_FONT
+    ws_payment.cell(row=row, column=2, value="(Dinero efectivamente cobrado)").font = Font(italic=True, size=9, color="6B7280")
+    row += 1
+    
+    headers = ["Método de Pago", "Nº Operaciones", "Monto Recaudado (S/)", "Participación (%)", "Observación"]
     _style_header_row(ws_payment, row, headers)
     pay_data_start = row + 1
     row += 1
     
+    # Ordenar métodos de pago por monto (mayor a menor)
     sorted_payments = sorted(by_payment.items(), key=lambda x: x[1]["total"], reverse=True)
     
     for method, method_data in sorted_payments:
@@ -603,7 +625,23 @@ def generate_sales_report(
         ws_payment.cell(row=row, column=3, value=float(method_data["total"])).number_format = CURRENCY_FORMAT
         ws_payment.cell(row=row, column=4, value=float(method_data["total"])).number_format = CURRENCY_FORMAT  # Temporal
         
-        for col in range(1, 5):
+        # Observación según tipo
+        method_lower = method.lower()
+        if method_lower == "cash":
+            obs = "Verificar con arqueo de caja"
+        elif method_lower in {"debit", "credit", "card"}:
+            obs = "Verificar con POS/banco"
+        elif method_lower in {"yape", "plin", "wallet"}:
+            obs = "Verificar en app billetera"
+        elif method_lower == "transfer":
+            obs = "Verificar en extracto bancario"
+        elif method_lower == "mixed":
+            obs = "Combina múltiples métodos"
+        else:
+            obs = ""
+        ws_payment.cell(row=row, column=5, value=obs)
+        
+        for col in range(1, 6):
             ws_payment.cell(row=row, column=col).border = THIN_BORDER
         row += 1
     
@@ -613,17 +651,70 @@ def generate_sales_report(
         {"type": "sum", "col_letter": "B"},
         {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
         {"type": "text", "value": "100.00%"},
+        {"type": "text", "value": ""},
     ])
     
     # Actualizar columna D con fórmulas de participación
     for r in range(pay_data_start, pay_totals_row):
         ws_payment.cell(row=r, column=4, value=f"=IF($C${pay_totals_row}>0,C{r}/$C${pay_totals_row},0)").number_format = PERCENT_FORMAT
     
-    _add_notes_section(ws_payment, pay_totals_row, [
-        "Nº Operaciones: Cantidad de pagos registrados con este método.",
-        "Monto Recaudado: Suma total de pagos recibidos por método.",
-        "Participación: Porcentaje del total recaudado que representa cada método.",
-    ], columns=4)
+    # ---- SECCIÓN 2: VENTAS A CRÉDITO/FIADO ----
+    row += 3
+    ws_payment.cell(row=row, column=1, value="VENTAS A CRÉDITO/FIADO").font = SUBTITLE_FONT
+    ws_payment.cell(row=row, column=2, value="(Pendiente de cobro)").font = Font(italic=True, size=9, color="6B7280")
+    row += 1
+    
+    headers_credit = ["Concepto", "Cantidad", "Monto (S/)", "% del Total Ventas", "Estado"]
+    _style_header_row(ws_payment, row, headers_credit)
+    credit_data_start = row + 1
+    row += 1
+    
+    # Calcular monto pendiente de créditos (total crédito - pagos recibidos de créditos)
+    # Nota: monto_credito es el total de ventas a crédito
+    total_pagos_recibidos = sum(d["total"] for d in by_payment.values())
+    
+    ws_payment.cell(row=row, column=1, value="Ventas a Crédito/Fiado")
+    ws_payment.cell(row=row, column=2, value=ventas_credito)
+    ws_payment.cell(row=row, column=3, value=float(monto_credito)).number_format = CURRENCY_FORMAT
+    if total_ventas > 0:
+        ws_payment.cell(row=row, column=4, value=float(monto_credito / total_ventas)).number_format = PERCENT_FORMAT
+    else:
+        ws_payment.cell(row=row, column=4, value=0).number_format = PERCENT_FORMAT
+    ws_payment.cell(row=row, column=5, value="Cuentas por cobrar")
+    ws_payment.cell(row=row, column=5).font = Font(color="B45309")  # Amber
+    ws_payment.cell(row=row, column=5).fill = WARNING_FILL
+    
+    for col in range(1, 6):
+        ws_payment.cell(row=row, column=col).border = THIN_BORDER
+    row += 1
+    
+    # ---- SECCIÓN 3: RESUMEN GENERAL ----
+    row += 2
+    ws_payment.cell(row=row, column=1, value="RESUMEN GENERAL DE VENTAS").font = SUBTITLE_FONT
+    row += 2
+    
+    ws_payment.cell(row=row, column=1, value="Total Ventas del Período:").font = Font(bold=True)
+    ws_payment.cell(row=row, column=2, value=float(total_ventas)).number_format = CURRENCY_FORMAT
+    row += 1
+    
+    ws_payment.cell(row=row, column=1, value="(-) Pagos Recibidos:").font = Font(bold=True)
+    ws_payment.cell(row=row, column=2, value=f"=C{pay_totals_row}").number_format = CURRENCY_FORMAT
+    row += 1
+    
+    ws_payment.cell(row=row, column=1, value="(=) Pendiente de Cobro:").font = Font(bold=True, color="B45309")
+    ws_payment.cell(row=row, column=2, value=f"={float(total_ventas)}-C{pay_totals_row}").number_format = CURRENCY_FORMAT
+    ws_payment.cell(row=row, column=2).fill = WARNING_FILL
+    
+    _add_notes_section(ws_payment, row, [
+        "PAGOS RECIBIDOS: Dinero efectivamente cobrado, clasificado por método de pago.",
+        "  • Efectivo: Billetes y monedas recibidos.",
+        "  • Tarjeta de Débito/Crédito: Pagos procesados por POS.",
+        "  • Yape/Plin: Pagos recibidos por billetera digital.",
+        "  • Transferencia: Depósitos bancarios confirmados.",
+        "  • Pago Mixto: Combinación de varios métodos en una sola venta.",
+        "VENTAS A CRÉDITO: Ventas fiadas, pendientes de cobro. Ver módulo Cuentas por Cobrar.",
+        "Pendiente de Cobro = Total Ventas - Pagos Recibidos.",
+    ], columns=5)
     
     _auto_adjust_columns(ws_payment)
     
@@ -1530,6 +1621,54 @@ def generate_receivables_report(
 # REPORTE DE CAJA CONSOLIDADO
 # =============================================================================
 
+# Acciones de cobranzas que representan ingresos de cuotas/créditos y servicios
+# IMPORTANTE: Mantener sincronizado con:
+#   - credit_service.py: pay_installment() usa "Cobranza"
+#   - sale_service.py: process_sale() usa "Inicial Credito"
+#   - services_state.py: apply_reservation_payment/pay_reservation_with_payment_method 
+#                        usan "Adelanto" y "Reserva"
+CASHBOX_COLLECTION_ACTIONS = {
+    # Cobranza de cuotas de crédito - SOLO estos porque NO crean SalePayment
+    # credit_service.py: pay_installment() crea CashboxLog pero NO SalePayment
+    # Por eso se deben sumar aparte de las ventas
+    "Cobranza",
+    "Cobro de Cuota",
+    "Pago Cuota",
+    "Cobro Cuota",
+    "Ingreso Cuota",
+    "Amortizacion",
+    "Pago Credito",
+    # NOTA: NO incluir "Inicial Credito", "Adelanto" ni "Reserva" porque
+    # esos flujos SÍ crean SalePayment y ya se cuentan en Sale.payments
+}
+
+
+def _normalize_payment_method(method_label: str) -> str:
+    """Normaliza el método de pago para agrupar correctamente."""
+    import unicodedata
+    raw = (method_label or "").strip().lower()
+    if not raw:
+        return "other"
+    normalized = unicodedata.normalize("NFKD", raw)
+    normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    
+    if "mixto" in normalized or "mixed" in normalized:
+        return "mixed"
+    if "yape" in normalized:
+        return "yape"
+    if "plin" in normalized:
+        return "plin"
+    if "transfer" in normalized or "banco" in normalized:
+        return "transfer"
+    if "debito" in normalized or "debit" in normalized:
+        return "debit"
+    if "credito" in normalized or "credit" in normalized or "tarjeta" in normalized:
+        return "credit"
+    if "efectivo" in normalized or normalized == "cash":
+        return "cash"
+    return "other"
+
+
 def generate_cashbox_report(
     session,
     start_date: datetime,
@@ -1537,13 +1676,14 @@ def generate_cashbox_report(
     company_name: str = "TUWAYKIAPP",
 ) -> io.BytesIO:
     """
-    Genera reporte de caja consolidado.
+    Genera reporte de caja consolidado con flujo de caja REAL.
     
     Incluye:
     - Resumen de movimientos
     - Detalle de aperturas y cierres
-    - Ingresos por método de pago
+    - Ingresos por método de pago (Ventas + Cobranzas de cuotas)
     - Diferencias detectadas
+    - Desglose de ingresos por origen (Ventas vs Cobranzas)
     """
     wb = Workbook()
     
@@ -1578,6 +1718,14 @@ def generate_cashbox_report(
     
     sales = session.exec(sales_query).all()
     
+    # =========================================================================
+    # NUEVO: Consultar cobros de cuotas/cobranzas para flujo de caja completo
+    # =========================================================================
+    collection_logs = [
+        log for log in logs 
+        if log.action in CASHBOX_COLLECTION_ACTIONS and not log.is_voided
+    ]
+    
     # Calcular métricas usando funciones seguras
     total_openings = sum(1 for log in logs if log.action == "apertura")
     total_closings = sum(1 for log in logs if log.action == "cierre")
@@ -1585,13 +1733,43 @@ def generate_cashbox_report(
     total_closing_amount = sum(_safe_decimal(log.amount) for log in logs if log.action == "cierre")
     
     total_sales = sum(_safe_decimal(s.total_amount) for s in sales)
+    total_collections = sum(_safe_decimal(log.amount) for log in collection_logs)
     
-    by_payment: dict[str, Decimal] = {}
+    # Ingresos por método de pago - VENTAS
+    by_payment_sales: dict[str, Decimal] = {}
+    by_payment_sales_count: dict[str, int] = {}
     for sale in sales:
         for payment in (sale.payments or []):
             method = payment.method_type.value if payment.method_type else "No especificado"
             amount = _safe_decimal(payment.amount)
-            by_payment[method] = by_payment.get(method, Decimal("0")) + amount
+            by_payment_sales[method] = by_payment_sales.get(method, Decimal("0")) + amount
+            by_payment_sales_count[method] = by_payment_sales_count.get(method, 0) + 1
+    
+    # Ingresos por método de pago - COBRANZAS (cuotas de crédito)
+    by_payment_collections: dict[str, Decimal] = {}
+    by_payment_collections_count: dict[str, int] = {}
+    for log in collection_logs:
+        method_raw = getattr(log, "payment_method", "") or "cash"
+        method = _normalize_payment_method(method_raw)
+        method_es = _translate_payment_method(method)
+        amount = _safe_decimal(log.amount)
+        by_payment_collections[method_es] = by_payment_collections.get(method_es, Decimal("0")) + amount
+        by_payment_collections_count[method_es] = by_payment_collections_count.get(method_es, 0) + 1
+    
+    # Consolidar TODO el flujo de caja (Ventas + Cobranzas)
+    by_payment: dict[str, Decimal] = {}
+    by_payment_count: dict[str, int] = {}
+    
+    # Agregar ventas
+    for method, amount in by_payment_sales.items():
+        method_es = _translate_payment_method(method)
+        by_payment[method_es] = by_payment.get(method_es, Decimal("0")) + amount
+        by_payment_count[method_es] = by_payment_count.get(method_es, 0) + by_payment_sales_count.get(method, 0)
+    
+    # Agregar cobranzas
+    for method_es, amount in by_payment_collections.items():
+        by_payment[method_es] = by_payment.get(method_es, Decimal("0")) + amount
+        by_payment_count[method_es] = by_payment_count.get(method_es, 0) + by_payment_collections_count.get(method_es, 0)
     
     # =================
     # HOJA 1: RESUMEN (mejorado)
@@ -1605,6 +1783,8 @@ def generate_cashbox_report(
     ws_summary.cell(row=row, column=1, value="MOVIMIENTOS DE CAJA EN EL PERÍODO").font = SUBTITLE_FONT
     row += 1
     
+    total_cash_flow = total_sales + total_collections
+    
     summary = [
         ("Número de Aperturas de Caja:", total_openings),
         ("Número de Cierres de Caja:", total_closings),
@@ -1612,20 +1792,32 @@ def generate_cashbox_report(
         ("Total Monto en Aperturas:", _format_currency(total_opening_amount)),
         ("Total Monto en Cierres:", _format_currency(total_closing_amount)),
         ("", ""),
-        ("Total Ventas Registradas:", _format_currency(total_sales)),
-        ("Número de Transacciones:", len(sales)),
+        ("FLUJO DE CAJA - INGRESOS:", ""),
+        ("  • Ventas del Período:", _format_currency(total_sales)),
+        ("  • Cobros de Cuotas/Créditos:", _format_currency(total_collections)),
+        ("  • TOTAL INGRESOS:", _format_currency(total_cash_flow)),
+        ("", ""),
+        ("Número de Transacciones de Venta:", len(sales)),
+        ("Número de Cobros de Cuotas:", len(collection_logs)),
     ]
     
     for label, value in summary:
-        ws_summary.cell(row=row, column=1, value=label).font = Font(bold=True)
+        cell = ws_summary.cell(row=row, column=1, value=label)
+        if "TOTAL INGRESOS" in label:
+            cell.font = Font(bold=True, color="4F46E5")
+        elif label.startswith("FLUJO"):
+            cell.font = SUBTITLE_FONT
+        else:
+            cell.font = Font(bold=True)
         ws_summary.cell(row=row, column=2, value=value)
         row += 1
     
     row += 2
-    ws_summary.cell(row=row, column=1, value="RECAUDACIÓN POR MÉTODO DE PAGO").font = SUBTITLE_FONT
+    ws_summary.cell(row=row, column=1, value="RECAUDACIÓN TOTAL POR MÉTODO DE PAGO").font = SUBTITLE_FONT
+    ws_summary.cell(row=row, column=2, value="(Ventas + Cobros de Cuotas)").font = Font(italic=True, size=9, color="6B7280")
     row += 1
     
-    headers = ["Método de Pago", "Monto Recaudado (S/)", "Participación (%)", "Observación"]
+    headers = ["Método de Pago", "Nº Operaciones", "Monto Recaudado (S/)", "Participación (%)"]
     _style_header_row(ws_summary, row, headers)
     caja_pay_start = row + 1
     row += 1
@@ -1633,16 +1825,14 @@ def generate_cashbox_report(
     sorted_payments = sorted(by_payment.items(), key=lambda x: x[1], reverse=True)
     total_payments = sum(by_payment.values())
     
-    for method, amount in sorted_payments:
-        method_es = _translate_payment_method(method)
+    for method_es, amount in sorted_payments:
+        count = by_payment_count.get(method_es, 0)
         
         ws_summary.cell(row=row, column=1, value=method_es)
-        ws_summary.cell(row=row, column=2, value=float(amount)).number_format = CURRENCY_FORMAT
-        # Participación - temporal
+        ws_summary.cell(row=row, column=2, value=count)
         ws_summary.cell(row=row, column=3, value=float(amount)).number_format = CURRENCY_FORMAT
-        # Observación según método
-        obs = "Debe cuadrar con caja física" if method_es.lower() == "efectivo" else "Verificar en extracto bancario"
-        ws_summary.cell(row=row, column=4, value=obs)
+        # Participación - temporal, se reemplazará con fórmula
+        ws_summary.cell(row=row, column=4, value=float(amount)).number_format = CURRENCY_FORMAT
         
         for col in range(1, 5):
             ws_summary.cell(row=row, column=col).border = THIN_BORDER
@@ -1651,14 +1841,14 @@ def generate_cashbox_report(
     caja_pay_totals = row
     _add_totals_row_with_formulas(ws_summary, caja_pay_totals, caja_pay_start, [
         {"type": "label", "value": "TOTAL RECAUDADO"},
-        {"type": "sum", "col_letter": "B", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "B"},
+        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
         {"type": "text", "value": "100.00%"},
-        {"type": "text", "value": ""},
     ])
     
     # Actualizar participación con fórmulas
     for r in range(caja_pay_start, caja_pay_totals):
-        ws_summary.cell(row=r, column=3, value=f"=IF($B${caja_pay_totals}>0,B{r}/$B${caja_pay_totals},0)").number_format = PERCENT_FORMAT
+        ws_summary.cell(row=r, column=4, value=f"=IF($C${caja_pay_totals}>0,C{r}/$C${caja_pay_totals},0)").number_format = PERCENT_FORMAT
     
     _auto_adjust_columns(ws_summary)
     
@@ -1692,7 +1882,119 @@ def generate_cashbox_report(
     _auto_adjust_columns(ws_logs)
     
     # =================
-    # HOJA 3: VENTAS POR DÍA (con fórmulas)
+    # HOJA 3: DESGLOSE POR ORIGEN (Ventas vs Cobranzas)
+    # =================
+    ws_origin = wb.create_sheet("Ingresos por Origen")
+    row = _add_company_header(ws_origin, company_name, "DESGLOSE DE INGRESOS POR ORIGEN", period_str, columns=5)
+    
+    row += 1
+    ws_origin.cell(row=row, column=1, value="INGRESOS POR VENTAS DIRECTAS").font = SUBTITLE_FONT
+    row += 1
+    
+    headers = ["Método de Pago", "Nº Operaciones", "Monto (S/)", "% del Total Ventas", "Observación"]
+    _style_header_row(ws_origin, row, headers)
+    ventas_start = row + 1
+    row += 1
+    
+    sorted_sales = sorted(by_payment_sales.items(), key=lambda x: x[1], reverse=True)
+    for method, amount in sorted_sales:
+        method_es = _translate_payment_method(method)
+        count = by_payment_sales_count.get(method, 0)
+        
+        ws_origin.cell(row=row, column=1, value=method_es)
+        ws_origin.cell(row=row, column=2, value=count)
+        ws_origin.cell(row=row, column=3, value=float(amount)).number_format = CURRENCY_FORMAT
+        ws_origin.cell(row=row, column=4, value=float(amount)).number_format = CURRENCY_FORMAT  # Temporal
+        ws_origin.cell(row=row, column=5, value="Pago de venta directa")
+        
+        for col in range(1, 6):
+            ws_origin.cell(row=row, column=col).border = THIN_BORDER
+        row += 1
+    
+    ventas_totals = row
+    _add_totals_row_with_formulas(ws_origin, ventas_totals, ventas_start, [
+        {"type": "label", "value": "SUBTOTAL VENTAS"},
+        {"type": "sum", "col_letter": "B"},
+        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+        {"type": "text", "value": "100.00%"},
+        {"type": "text", "value": ""},
+    ])
+    
+    # Participación ventas
+    for r in range(ventas_start, ventas_totals):
+        ws_origin.cell(row=r, column=4, value=f"=IF($C${ventas_totals}>0,C{r}/$C${ventas_totals},0)").number_format = PERCENT_FORMAT
+    
+    row += 3
+    ws_origin.cell(row=row, column=1, value="INGRESOS POR COBROS DE CUOTAS/CRÉDITOS").font = SUBTITLE_FONT
+    row += 1
+    
+    headers = ["Método de Pago", "Nº Operaciones", "Monto (S/)", "% del Total Cobros", "Observación"]
+    _style_header_row(ws_origin, row, headers)
+    cobros_start = row + 1
+    row += 1
+    
+    if by_payment_collections:
+        sorted_collections = sorted(by_payment_collections.items(), key=lambda x: x[1], reverse=True)
+        for method_es, amount in sorted_collections:
+            count = by_payment_collections_count.get(method_es, 0)
+            
+            ws_origin.cell(row=row, column=1, value=method_es)
+            ws_origin.cell(row=row, column=2, value=count)
+            ws_origin.cell(row=row, column=3, value=float(amount)).number_format = CURRENCY_FORMAT
+            ws_origin.cell(row=row, column=4, value=float(amount)).number_format = CURRENCY_FORMAT  # Temporal
+            ws_origin.cell(row=row, column=5, value="Pago de cuota de crédito")
+            
+            for col in range(1, 6):
+                ws_origin.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+    else:
+        ws_origin.cell(row=row, column=1, value="Sin cobros de cuotas en el período")
+        ws_origin.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        ws_origin.cell(row=row, column=1).font = Font(italic=True, color="6B7280")
+        row += 1
+    
+    cobros_totals = row
+    _add_totals_row_with_formulas(ws_origin, cobros_totals, cobros_start, [
+        {"type": "label", "value": "SUBTOTAL COBROS"},
+        {"type": "sum", "col_letter": "B"},
+        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+        {"type": "text", "value": "100.00%"},
+        {"type": "text", "value": ""},
+    ])
+    
+    # Participación cobros
+    for r in range(cobros_start, cobros_totals):
+        if ws_origin.cell(row=r, column=2).value is not None and isinstance(ws_origin.cell(row=r, column=2).value, int):
+            ws_origin.cell(row=r, column=4, value=f"=IF($C${cobros_totals}>0,C{r}/$C${cobros_totals},0)").number_format = PERCENT_FORMAT
+    
+    row += 3
+    ws_origin.cell(row=row, column=1, value="RESUMEN CONSOLIDADO").font = SUBTITLE_FONT
+    row += 2
+    
+    ws_origin.cell(row=row, column=1, value="Total Ingresos por Ventas:").font = Font(bold=True)
+    ws_origin.cell(row=row, column=2, value=f"=C{ventas_totals}").number_format = CURRENCY_FORMAT
+    row += 1
+    
+    ws_origin.cell(row=row, column=1, value="Total Ingresos por Cobros:").font = Font(bold=True)
+    ws_origin.cell(row=row, column=2, value=f"=C{cobros_totals}").number_format = CURRENCY_FORMAT
+    row += 1
+    
+    ws_origin.cell(row=row, column=1, value="TOTAL FLUJO DE CAJA:").font = Font(bold=True, color="4F46E5", size=11)
+    ws_origin.cell(row=row, column=2, value=f"=C{ventas_totals}+C{cobros_totals}").number_format = CURRENCY_FORMAT
+    ws_origin.cell(row=row, column=2).font = Font(bold=True, size=11)
+    ws_origin.cell(row=row, column=2).fill = POSITIVE_FILL
+    
+    _add_notes_section(ws_origin, row, [
+        "Ventas Directas: Ingresos por ventas del período (contado + inicial de créditos).",
+        "Cobros de Cuotas: Ingresos por pagos de cuotas de ventas a crédito anteriores.",
+        "Flujo de Caja Total: Suma de ambos conceptos = dinero real ingresado.",
+        "Este desglose es esencial para la conciliación contable y fiscal.",
+    ], columns=5)
+    
+    _auto_adjust_columns(ws_origin)
+    
+    # =================
+    # HOJA 4: VENTAS POR DÍA (con fórmulas)
     # =================
     ws_daily = wb.create_sheet("Ventas Diarias")
     row = _add_company_header(ws_daily, company_name, "RESUMEN DE VENTAS DIARIAS", period_str, columns=5)
@@ -1752,7 +2054,7 @@ def generate_cashbox_report(
     _auto_adjust_columns(ws_daily)
     
     # =================
-    # HOJA 4: CONCILIACIÓN DE CAJA (con fórmulas)
+    # HOJA 5: CONCILIACIÓN DE CAJA (con fórmulas)
     # =================
     ws_conciliation = wb.create_sheet("Conciliación")
     row = _add_company_header(ws_conciliation, company_name, "CUADRE Y CONCILIACIÓN DE CAJA", period_str, columns=4)
@@ -1761,8 +2063,16 @@ def generate_cashbox_report(
     ws_conciliation.cell(row=row, column=1, value="ANÁLISIS DE FLUJO DE EFECTIVO").font = SUBTITLE_FONT
     row += 2
     
-    # Calcular efectivo esperado
+    # Calcular efectivo esperado (ventas + cobros de cuotas en efectivo)
     cash_from_sales = sum(by_day[d]["cash"] for d in by_day)
+    
+    # Cobros en efectivo de cuotas
+    cash_from_collections = Decimal("0")
+    for log in collection_logs:
+        method_raw = getattr(log, "payment_method", "") or "cash"
+        method_key = _normalize_payment_method(method_raw)
+        if method_key == "cash":
+            cash_from_collections += _safe_decimal(log.amount)
     
     # Escribir datos con referencias para fórmulas
     data_start_row = row
@@ -1771,13 +2081,20 @@ def generate_cashbox_report(
     ws_conciliation.cell(row=row, column=3, value="Suma de todas las aperturas de caja")
     row += 1
     
-    ws_conciliation.cell(row=row, column=1, value="(+) Ingresos en Efectivo:").font = Font(bold=True)
+    ws_conciliation.cell(row=row, column=1, value="(+) Efectivo por Ventas:").font = Font(bold=True)
     ws_conciliation.cell(row=row, column=2, value=float(cash_from_sales)).number_format = CURRENCY_FORMAT
-    ws_conciliation.cell(row=row, column=3, value="Total de ventas cobradas en efectivo")
+    ws_conciliation.cell(row=row, column=3, value="Ventas cobradas en efectivo")
+    sales_cash_row = row
+    row += 1
+    
+    ws_conciliation.cell(row=row, column=1, value="(+) Efectivo por Cobros de Cuotas:").font = Font(bold=True)
+    ws_conciliation.cell(row=row, column=2, value=float(cash_from_collections)).number_format = CURRENCY_FORMAT
+    ws_conciliation.cell(row=row, column=3, value="Cuotas de créditos cobradas en efectivo")
+    collections_cash_row = row
     row += 1
     
     ws_conciliation.cell(row=row, column=1, value="(=) Efectivo Esperado al Cierre:").font = Font(bold=True, color="4F46E5")
-    ws_conciliation.cell(row=row, column=2, value=f"=B{data_start_row}+B{data_start_row+1}").number_format = CURRENCY_FORMAT
+    ws_conciliation.cell(row=row, column=2, value=f"=B{data_start_row}+B{sales_cash_row}+B{collections_cash_row}").number_format = CURRENCY_FORMAT
     ws_conciliation.cell(row=row, column=3, value="Monto que debería haber en caja")
     expected_row = row
     row += 2
@@ -1794,11 +2111,10 @@ def generate_cashbox_report(
     diff_cell.number_format = CURRENCY_FORMAT
     diff_cell.font = Font(bold=True, size=11)
     
-    # Resultado interpretativo con fórmula condicional
+    # Resultado interpretativo
     row += 1
     ws_conciliation.cell(row=row, column=1, value="Interpretación:").font = Font(bold=True)
-    # Nota: Excel no soporta emojis en fórmulas SI(), así que usamos texto
-    expected_total = total_opening_amount + cash_from_sales
+    expected_total = total_opening_amount + cash_from_sales + cash_from_collections
     actual_difference = Decimal(str(total_closing_amount)) - Decimal(str(expected_total))
     
     if actual_difference > 0:
@@ -1816,8 +2132,9 @@ def generate_cashbox_report(
     
     _add_notes_section(ws_conciliation, row, [
         "Monto Inicial: Efectivo con el que se abrió caja cada día.",
-        "Ingresos en Efectivo: Ventas cobradas en efectivo (no incluye tarjetas, transferencias, etc.).",
-        "Efectivo Esperado = Monto Inicial + Ingresos en Efectivo.",
+        "Efectivo por Ventas: Ventas del período cobradas en efectivo.",
+        "Efectivo por Cobros de Cuotas: Pagos de cuotas de créditos en efectivo.",
+        "Efectivo Esperado = Monto Inicial + Efectivo Ventas + Efectivo Cobros.",
         "Diferencia = Monto Real de Cierre - Efectivo Esperado.",
         "Diferencia positiva (Sobrante): Puede indicar ingresos no registrados.",
         "Diferencia negativa (Faltante): Puede indicar gastos no registrados o errores.",
