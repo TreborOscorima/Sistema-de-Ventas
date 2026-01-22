@@ -3,6 +3,7 @@ from app.state import State
 from app.components.ui import (
     INPUT_STYLES,
     toggle_switch,
+    permission_guard,
 )
 from app.pages.clientes import client_form_modal
 
@@ -1344,7 +1345,7 @@ def payment_mobile_section() -> rx.Component:
 
 
 def venta_page() -> rx.Component:
-    return rx.el.div(
+    content = rx.el.div(
         # Contenido principal
         rx.el.div(
             # Info de reserva/servicio prominente (si aplica)
@@ -1365,4 +1366,9 @@ def venta_page() -> rx.Component:
         ),
         client_form_modal(),
         class_name="flex min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)]",
+    )
+    return permission_guard(
+        has_permission=State.can_view_ventas,
+        content=content,
+        redirect_message="Acceso denegado a Ventas",
     )

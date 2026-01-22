@@ -7,6 +7,7 @@ para evaluaciones administrativas, contables y financieras.
 import reflex as rx
 
 from app.state import State
+from app.components.ui import permission_guard
 
 
 def _report_type_card(report_type: dict) -> rx.Component:
@@ -216,7 +217,7 @@ def _error_message() -> rx.Component:
 
 def reportes_page() -> rx.Component:
     """Página principal de reportes."""
-    return rx.el.div(
+    content = rx.el.div(
         # Header
         rx.el.div(
             rx.el.div(
@@ -335,4 +336,9 @@ def reportes_page() -> rx.Component:
         ),
         
         class_name="p-6",
+    )
+    return permission_guard(
+        has_permission=State.can_export_data,
+        content=content,
+        redirect_message="Acceso denegado a Reportes",
     )

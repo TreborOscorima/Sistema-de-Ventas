@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import toggle_switch
+from app.components.ui import toggle_switch, permission_guard
 
 CONFIG_SECTIONS: list[dict[str, str]] = [
     {
@@ -329,7 +329,8 @@ def user_form() -> rx.Component:
             ),
             rx.radix.primitives.dialog.content(
                 rx.radix.primitives.dialog.title(
-                    rx.cond(State.editing_user, "Editar Usuario", "Crear Nuevo Usuario")
+                    rx.cond(State.editing_user, "Editar Usuario", "Crear Nuevo Usuario"),
+                    class_name="text-xl font-semibold text-gray-800 pb-2 border-b border-gray-100 flex-shrink-0",
                 ),
                 rx.el.div(
                     rx.el.div(
@@ -441,7 +442,9 @@ def user_form() -> rx.Component:
                         ],
                         class_name="space-y-3",
                     ),
-                    class_name="flex-1 overflow-y-auto min-h-0 p-1",
+                    class_name="flex-1 overflow-y-auto min-h-0 p-1 scroll-smooth",
+                    style={"scroll-behavior": "auto"},
+                    id="user-form-content",
                 ),
                 rx.el.div(
                     rx.el.button(
@@ -454,9 +457,9 @@ def user_form() -> rx.Component:
                         on_click=State.save_user,
                         class_name="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 min-h-[44px]",
                     ),
-                    class_name="flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 sm:gap-4",
+                    class_name="flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-3 sm:gap-4 flex-shrink-0 pt-3 border-t border-gray-100",
                 ),
-                class_name="fixed left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 sm:p-6 shadow-xl focus:outline-none max-h-[90vh] overflow-hidden flex flex-col gap-4",
+                class_name="fixed left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 sm:p-6 shadow-xl focus:outline-none max-h-[90vh] flex flex-col gap-4",
             ),
         ),
         open=State.show_user_form,
@@ -1014,44 +1017,38 @@ def field_prices_section() -> rx.Component:
 
 
 def configuracion_page() -> rx.Component:
-    return rx.fragment(
-        rx.cond(
-            State.current_user["privileges"]["manage_config"],
+    content = rx.fragment(
+        rx.el.div(
             rx.el.div(
-                rx.el.div(
-                        rx.el.h1(
-                            "Configuracion del Sistema",
-                            class_name="text-2xl font-bold text-gray-800",
-                        ),
-                        rx.el.p(
-                            "Gestiona usuarios, monedas, unidades, metodos de pago y precios de campo desde un solo lugar.",
-                            class_name="text-sm text-gray-500",
-                        ),
-                        class_name="space-y-1",
+                    rx.el.h1(
+                        "Configuracion del Sistema",
+                        class_name="text-2xl font-bold text-gray-800",
                     ),
-                    rx.el.div(
-                        rx.match(
-                            State.config_active_tab,
-                            ("empresa", company_settings_section()),
-                            ("usuarios", user_section()),
-                            ("monedas", currency_section()),
-                            ("unidades", unit_section()),
-                            ("pagos", payment_methods_section()),
-                            ("precios_campo", field_prices_section()),
-                            user_section(),
-                        ),
-                        class_name="space-y-4",
+                    rx.el.p(
+                        "Gestiona usuarios, monedas, unidades, metodos de pago y precios de campo desde un solo lugar.",
+                        class_name="text-sm text-gray-500",
                     ),
-                class_name="p-4 sm:p-6 pb-4 w-full max-w-6xl mx-auto flex flex-col gap-5",
-            ),
-            rx.el.div(
-                rx.el.h1("Acceso Denegado", class_name="text-2xl font-bold text-red-600"),
-                rx.el.p(
-                    "No tienes los privilegios necesarios para acceder a esta seccion.",
-                    class_name="text-gray-600 mt-2",
+                    class_name="space-y-1",
                 ),
-                class_name="flex flex-col items-center justify-center h-full p-4 sm:p-6",
-            ),
+                rx.el.div(
+                    rx.match(
+                        State.config_active_tab,
+                        ("empresa", company_settings_section()),
+                        ("usuarios", user_section()),
+                        ("monedas", currency_section()),
+                        ("unidades", unit_section()),
+                        ("pagos", payment_methods_section()),
+                        ("precios_campo", field_prices_section()),
+                        user_section(),
+                    ),
+                    class_name="space-y-4",
+                ),
+            class_name="p-4 sm:p-6 pb-4 w-full max-w-6xl mx-auto flex flex-col gap-5",
         ),
         on_mount=State.load_settings,
+    )
+    return permission_guard(
+        has_permission=State.is_admin,
+        content=content,
+        redirect_message="Acceso denegado a Configuración",
     )

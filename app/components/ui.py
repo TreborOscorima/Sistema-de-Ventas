@@ -3,52 +3,453 @@ Componentes de UI reutilizables para la aplicacion Sistema de Ventas.
 
 Este modulo brinda componentes comunes que siguen el principio DRY
 para reducir duplicacion de codigo entre paginas.
+
+Design System v2.0 - Estandarización UI/UX:
+- Border radius: sm (inputs/botones), md (cards), lg (modales)
+- Espaciado: Escala de 4px (p-1, p-2, p-3, p-4, p-6, p-8)
+- Colores: indigo-600 (primario), green-600 (éxito), red-600 (peligro)
+- Tipografía: tabular-nums para valores monetarios
 """
 import reflex as rx
 from typing import Callable
 
 
-# Variantes de estilo de botones - evita CSS hardcodeado entre archivos
+# =============================================================================
+# DESIGN TOKENS - Valores centralizados para consistencia global
+# =============================================================================
+
+# Border radius estandarizados
+RADIUS = {
+    "sm": "rounded",           # 4px - Botones pequeños, badges
+    "md": "rounded-md",        # 6px - Inputs, botones normales  
+    "lg": "rounded-lg",        # 8px - Cards, dropdowns
+    "xl": "rounded-xl",        # 12px - Modales, cards destacadas
+    "full": "rounded-full",    # Círculos, avatares
+}
+
+# Sombras estandarizadas
+SHADOWS = {
+    "none": "",
+    "sm": "shadow-sm",
+    "md": "shadow-md",
+    "lg": "shadow-lg",
+    "xl": "shadow-xl",
+}
+
+# Transiciones suaves
+TRANSITIONS = {
+    "fast": "transition-all duration-150 ease-out",
+    "normal": "transition-all duration-200 ease-out", 
+    "slow": "transition-all duration-300 ease-out",
+}
+
+# Focus states para accesibilidad
+FOCUS_RING = "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+FOCUS_WITHIN = "focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500"
+
+
+# =============================================================================
+# BUTTON STYLES - Con focus states y transiciones mejoradas
+# =============================================================================
+
+_BTN_BASE = f"flex items-center justify-center gap-2 {RADIUS['md']} {TRANSITIONS['fast']} {FOCUS_RING} font-medium"
+
 BUTTON_STYLES = {
-    "primary": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[44px]",
-    "primary_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[40px]",
-    "secondary": "flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[44px]",
-    "secondary_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-gray-700 hover:bg-gray-50 min-h-[40px]",
-    "success": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 min-h-[44px]",
-    "success_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700 min-h-[40px]",
-    "danger": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 min-h-[44px]",
-    "danger_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 min-h-[40px]",
-    "warning": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-amber-600 text-white hover:bg-amber-700 min-h-[44px]",
-    "ghost": "flex items-center justify-center gap-2 px-4 py-2 rounded-md text-gray-600 hover:bg-gray-100 min-h-[44px]",
-    "link_primary": "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-blue-600 hover:bg-blue-50 min-h-[40px]",
-    "link_danger": "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-red-600 hover:bg-red-50 min-h-[40px]",
-    "disabled": "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[44px]",
-    "disabled_sm": "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-gray-200 text-gray-500 cursor-not-allowed min-h-[40px]",
-    "icon_danger": "p-2 text-red-500 hover:bg-red-100 rounded-full",
-    "icon_primary": "p-2 text-blue-500 hover:bg-blue-100 rounded-full",
-    "icon_indigo": "p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
+    "primary": f"{_BTN_BASE} px-4 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 min-h-[44px]",
+    "primary_sm": f"{_BTN_BASE} px-3 py-2 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 min-h-[40px] text-sm",
+    "secondary": f"{_BTN_BASE} px-4 py-2.5 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 active:bg-gray-100 min-h-[44px]",
+    "secondary_sm": f"{_BTN_BASE} px-3 py-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 active:bg-gray-100 min-h-[40px] text-sm",
+    "success": f"{_BTN_BASE} px-4 py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 min-h-[44px]",
+    "success_sm": f"{_BTN_BASE} px-3 py-2 bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 min-h-[40px] text-sm",
+    "danger": f"{_BTN_BASE} px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 min-h-[44px]",
+    "danger_sm": f"{_BTN_BASE} px-3 py-2 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 min-h-[40px] text-sm",
+    "warning": f"{_BTN_BASE} px-4 py-2.5 bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 min-h-[44px]",
+    "ghost": f"{_BTN_BASE} px-4 py-2.5 text-gray-600 hover:bg-gray-100 active:bg-gray-200 min-h-[44px]",
+    "ghost_sm": f"{_BTN_BASE} px-3 py-2 text-gray-600 hover:bg-gray-100 active:bg-gray-200 min-h-[40px] text-sm",
+    "link_primary": f"{_BTN_BASE} px-3 py-2 border border-gray-200 text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 min-h-[40px]",
+    "link_danger": f"{_BTN_BASE} px-3 py-2 border border-gray-200 text-red-600 hover:bg-red-50 active:bg-red-100 min-h-[40px]",
+    "disabled": f"flex items-center justify-center gap-2 px-4 py-2.5 {RADIUS['md']} bg-gray-100 text-gray-400 cursor-not-allowed min-h-[44px] opacity-60",
+    "disabled_sm": f"flex items-center justify-center gap-2 px-3 py-2 {RADIUS['md']} bg-gray-100 text-gray-400 cursor-not-allowed min-h-[40px] text-sm opacity-60",
+    "icon_danger": f"p-2 text-red-500 hover:bg-red-100 active:bg-red-200 {RADIUS['full']} {TRANSITIONS['fast']}",
+    "icon_primary": f"p-2 text-indigo-500 hover:bg-indigo-100 active:bg-indigo-200 {RADIUS['full']} {TRANSITIONS['fast']}",
+    "icon_indigo": f"p-2 text-indigo-500 hover:bg-indigo-100 active:bg-indigo-200 {RADIUS['full']} {TRANSITIONS['fast']}",
+    "icon_ghost": f"p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 {RADIUS['full']} {TRANSITIONS['fast']}",
 }
 
-# Constantes de estilo de inputs
+
+# =============================================================================
+# INPUT STYLES - Con focus states mejorados
+# =============================================================================
+
+_INPUT_BASE = f"w-full px-3 py-2.5 border border-gray-300 {RADIUS['md']} {TRANSITIONS['fast']} placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+
 INPUT_STYLES = {
-    "default": "w-full p-2 border rounded-md",
-    "disabled": "w-full p-2 border rounded-md bg-gray-100",
-    "search": "w-full p-2 border rounded-md",
+    "default": _INPUT_BASE,
+    "disabled": f"w-full px-3 py-2.5 border border-gray-200 {RADIUS['md']} bg-gray-50 text-gray-500 cursor-not-allowed",
+    "search": f"{_INPUT_BASE} pl-10",  # Espacio para icono de búsqueda
+    "error": f"w-full px-3 py-2.5 border-2 border-red-300 {RADIUS['md']} {TRANSITIONS['fast']} focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-red-50",
 }
 
-# Constantes de estilo de cards
+
+# =============================================================================
+# CARD STYLES - Estandarizados
+# =============================================================================
+
 CARD_STYLES = {
-    "default": "bg-white p-4 sm:p-6 rounded-lg shadow-md",
-    "bordered": "bg-white border border-gray-200 rounded-lg p-4 sm:p-5 shadow-sm",
-    "compact": "bg-white border border-gray-200 rounded-lg p-3 sm:p-4 shadow-sm",
+    "default": f"bg-white p-5 sm:p-6 {RADIUS['lg']} {SHADOWS['md']}",
+    "bordered": f"bg-white border border-gray-200 {RADIUS['lg']} p-5 sm:p-6 {SHADOWS['sm']}",
+    "compact": f"bg-white border border-gray-200 {RADIUS['lg']} p-4 {SHADOWS['sm']}",
+    "flat": f"bg-white border border-gray-200 {RADIUS['lg']} p-5 sm:p-6",
+    "highlight": f"bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 {RADIUS['lg']} p-5 sm:p-6 {SHADOWS['sm']}",
 }
 
-# Estilos de tabla
-TABLE_HEADER_STYLE = "bg-gray-100"
-TABLE_ROW_STYLE = "border-b"
+
+# =============================================================================
+# TABLE STYLES - Con más espaciado y hover mejorado
+# =============================================================================
+
+TABLE_STYLES = {
+    "wrapper": f"overflow-hidden {RADIUS['lg']} border border-gray-200",
+    "header": "bg-gray-50 border-b border-gray-200",
+    "header_cell": "py-3.5 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider",
+    "row": f"border-b border-gray-100 {TRANSITIONS['fast']} hover:bg-gray-50",
+    "cell": "py-4 px-4 text-sm text-gray-700",
+    "cell_mono": "py-4 px-4 text-sm text-gray-500 font-mono",
+    "cell_currency": "py-4 px-4 text-sm font-semibold text-gray-900 tabular-nums text-right",
+}
+
+# Alias para compatibilidad
+TABLE_HEADER_STYLE = TABLE_STYLES["header"]
+TABLE_ROW_STYLE = TABLE_STYLES["row"]
 
 # Alto de fila de textarea (en pixeles) para calcular min-height
 TEXTAREA_ROW_HEIGHT = 24
+
+
+# =============================================================================
+# REUSABLE COMPONENTS - Componentes con estilos consistentes
+# =============================================================================
+
+# Tamaños para currency_display
+_CURRENCY_SIZES = {
+    "sm": "text-sm font-medium",
+    "md": "text-base font-semibold", 
+    "lg": "text-lg font-bold",
+    "xl": "text-2xl font-bold",
+    "2xl": "text-3xl font-extrabold",
+}
+
+
+def currency_display(
+    value: rx.Var | str,
+    symbol: rx.Var | str = "S/",
+    size: str = "lg",
+    color: str = "text-gray-900",
+    show_symbol: bool = True,
+) -> rx.Component:
+    """
+    Muestra valores monetarios con formato consistente.
+    
+    Usa tabular-nums para alineación perfecta en columnas.
+    
+    Args:
+        value: Valor numérico formateado (ej: "1,234.56")
+        symbol: Símbolo de moneda (ej: "S/", "$", "€")
+        size: sm | md | lg | xl | 2xl
+        color: Clase de color Tailwind
+        show_symbol: Si mostrar el símbolo de moneda
+    
+    Returns:
+        Componente con valor monetario estilizado
+    """
+    size_class = _CURRENCY_SIZES.get(size, _CURRENCY_SIZES["lg"])
+    
+    return rx.el.span(
+        rx.cond(
+            show_symbol,
+            rx.el.span(symbol, class_name="text-gray-500 mr-0.5"),
+            rx.fragment(),
+        ),
+        rx.el.span(value),
+        class_name=f"{size_class} {color} tabular-nums tracking-tight",
+    )
+
+
+# Tamaños para loading_spinner
+_SPINNER_SIZES = {
+    "sm": "h-4 w-4",
+    "md": "h-6 w-6",
+    "lg": "h-8 w-8",
+    "xl": "h-12 w-12",
+}
+
+
+def loading_spinner(
+    size: str = "md",
+    color: str = "text-indigo-600",
+    label: str | None = None,
+) -> rx.Component:
+    """
+    Spinner de carga con animación suave.
+    
+    Args:
+        size: sm | md | lg | xl
+        color: Clase de color Tailwind
+        label: Texto opcional debajo del spinner
+    
+    Returns:
+        Componente de spinner animado
+    """
+    size_class = _SPINNER_SIZES.get(size, _SPINNER_SIZES["md"])
+    
+    spinner = rx.el.div(
+        rx.el.div(
+            class_name=f"{size_class} {color} animate-spin rounded-full border-2 border-current border-t-transparent",
+        ),
+        class_name="flex justify-center",
+    )
+    
+    if label:
+        return rx.el.div(
+            spinner,
+            rx.el.p(label, class_name="mt-2 text-sm text-gray-500 text-center"),
+            class_name="flex flex-col items-center",
+        )
+    
+    return spinner
+
+
+def permission_guard(
+    has_permission: rx.Var[bool],
+    content: rx.Component,
+    redirect_message: str = "Acceso denegado",
+) -> rx.Component:
+    """
+    Componente guard que muestra contenido solo si el usuario tiene permisos.
+    
+    Si no tiene permisos, muestra un mensaje de acceso denegado con animación
+    de fade mientras la redirección ocurre.
+    
+    Args:
+        has_permission: Variable reactiva booleana de permiso
+        content: Componente a mostrar si tiene permiso
+        redirect_message: Mensaje a mostrar si no tiene permiso
+    
+    Returns:
+        Componente condicional basado en permisos
+    """
+    access_denied = rx.el.div(
+        rx.el.div(
+            rx.icon("shield-x", class_name="h-16 w-16 text-red-400 mb-4"),
+            rx.el.h2(
+                redirect_message,
+                class_name="text-xl font-semibold text-gray-800 mb-2",
+            ),
+            rx.el.p(
+                "No tienes permisos para acceder a este módulo.",
+                class_name="text-gray-500 mb-4",
+            ),
+            rx.el.p(
+                "Redirigiendo al Dashboard...",
+                class_name="text-sm text-gray-400 animate-pulse",
+            ),
+            class_name="flex flex-col items-center text-center",
+        ),
+        class_name="flex items-center justify-center min-h-[60vh] animate-in fade-in duration-300",
+    )
+    
+    return rx.cond(
+        has_permission,
+        content,
+        access_denied,
+    )
+
+
+def page_header(
+    title: str | rx.Var,
+    subtitle: str | rx.Var | None = None,
+    actions: list[rx.Component] | None = None,
+    breadcrumb: str | None = None,
+) -> rx.Component:
+    """
+    Encabezado de página estandarizado.
+    
+    Args:
+        title: Título principal de la página
+        subtitle: Descripción opcional
+        actions: Lista de componentes de acción (botones)
+        breadcrumb: Texto de breadcrumb opcional
+    
+    Returns:
+        Componente de encabezado de página
+    """
+    header_content = []
+    
+    # Breadcrumb opcional
+    if breadcrumb:
+        header_content.append(
+            rx.el.nav(
+                rx.el.span(breadcrumb, class_name="text-sm text-gray-500"),
+                class_name="mb-2",
+            )
+        )
+    
+    # Título y subtítulo
+    title_section = [
+        rx.el.h1(
+            title,
+            class_name="text-2xl font-bold text-gray-900 tracking-tight",
+        )
+    ]
+    
+    if subtitle:
+        title_section.append(
+            rx.el.p(
+                subtitle,
+                class_name="mt-1 text-sm text-gray-500",
+            )
+        )
+    
+    # Layout con título y acciones
+    if actions:
+        header_content.append(
+            rx.el.div(
+                rx.el.div(*title_section),
+                rx.el.div(
+                    *actions,
+                    class_name="flex items-center gap-3",
+                ),
+                class_name="flex items-start justify-between",
+            )
+        )
+    else:
+        header_content.extend(title_section)
+    
+    return rx.el.header(
+        *header_content,
+        class_name="mb-6",
+    )
+
+
+def empty_state(
+    icon: str = "inbox",
+    title: str = "Sin datos",
+    description: str | None = None,
+    action: rx.Component | None = None,
+) -> rx.Component:
+    """
+    Estado vacío para listas y tablas sin datos.
+    
+    Args:
+        icon: Nombre del icono Lucide
+        title: Título del estado vacío
+        description: Descripción opcional
+        action: Botón de acción opcional
+    
+    Returns:
+        Componente de estado vacío centrado
+    """
+    content = [
+        rx.el.div(
+            rx.icon(icon, class_name="h-12 w-12 text-gray-300"),
+            class_name="mb-4",
+        ),
+        rx.el.h3(title, class_name="text-sm font-medium text-gray-900"),
+    ]
+    
+    if description:
+        content.append(
+            rx.el.p(description, class_name="mt-1 text-sm text-gray-500")
+        )
+    
+    if action:
+        content.append(
+            rx.el.div(action, class_name="mt-4")
+        )
+    
+    return rx.el.div(
+        *content,
+        class_name="flex flex-col items-center justify-center py-12 text-center",
+    )
+
+
+def stat_card(
+    label: str,
+    value: rx.Var | str,
+    icon: str | None = None,
+    trend: rx.Var | str | None = None,
+    trend_up: rx.Var | bool | None = None,
+    variant: str = "default",
+) -> rx.Component:
+    """
+    Tarjeta de estadística para dashboards.
+    
+    Args:
+        label: Etiqueta de la métrica
+        value: Valor principal
+        icon: Icono Lucide opcional
+        trend: Texto de tendencia (ej: "+12%")
+        trend_up: Si la tendencia es positiva
+        variant: default | highlight
+    
+    Returns:
+        Componente de tarjeta de estadística
+    """
+    card_class = CARD_STYLES.get(variant, CARD_STYLES["default"])
+    
+    header = []
+    if icon:
+        header.append(
+            rx.el.div(
+                rx.icon(icon, class_name="h-5 w-5 text-gray-400"),
+                class_name=f"p-2 bg-gray-100 {RADIUS['lg']}",
+            )
+        )
+    
+    header.append(
+        rx.el.span(label, class_name="text-sm font-medium text-gray-500")
+    )
+    
+    value_section = [
+        rx.el.span(value, class_name="text-2xl font-bold text-gray-900 tabular-nums")
+    ]
+    
+    if trend is not None and trend_up is not None:
+        trend_color = rx.cond(
+            trend_up,
+            "text-emerald-600 bg-emerald-50",
+            "text-red-600 bg-red-50",
+        ) if isinstance(trend_up, rx.Var) else (
+            "text-emerald-600 bg-emerald-50" if trend_up else "text-red-600 bg-red-50"
+        )
+        trend_icon = rx.cond(
+            trend_up,
+            rx.icon("trending-up", class_name="h-3 w-3"),
+            rx.icon("trending-down", class_name="h-3 w-3"),
+        ) if isinstance(trend_up, rx.Var) else (
+            rx.icon("trending-up", class_name="h-3 w-3") if trend_up 
+            else rx.icon("trending-down", class_name="h-3 w-3")
+        )
+        
+        value_section.append(
+            rx.el.span(
+                trend_icon,
+                rx.el.span(trend, class_name="ml-1"),
+                class_name=f"ml-2 inline-flex items-center px-2 py-0.5 text-xs font-medium {RADIUS['full']} {trend_color}",
+            )
+        )
+    
+    return rx.el.div(
+        rx.el.div(
+            *header,
+            class_name="flex items-center gap-3 mb-3",
+        ),
+        rx.el.div(
+            *value_section,
+            class_name="flex items-baseline",
+        ),
+        class_name=card_class,
+    )
 
 
 def action_button(

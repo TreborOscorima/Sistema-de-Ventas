@@ -6,6 +6,7 @@ from app.components.ui import (
     select_filter,
     date_range_filter,
     BUTTON_STYLES,
+    permission_guard,
 )
 
 
@@ -412,7 +413,7 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
 
 
 def historial_page() -> rx.Component:
-    return rx.fragment(
+    content = rx.fragment(
         rx.el.div(
             rx.el.div(
                 rx.el.h1(
@@ -482,4 +483,9 @@ def historial_page() -> rx.Component:
         ),
         sale_detail_modal(),
         on_mount=State.reload_history,
+    )
+    return permission_guard(
+        has_permission=State.can_view_historial,
+        content=content,
+        redirect_message="Acceso denegado a Historial",
     )

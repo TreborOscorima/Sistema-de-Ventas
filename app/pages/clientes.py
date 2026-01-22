@@ -1,7 +1,7 @@
 import reflex as rx
 
 from app.state import State
-from app.components.ui import BUTTON_STYLES, INPUT_STYLES, empty_state, modal_container
+from app.components.ui import BUTTON_STYLES, INPUT_STYLES, empty_state, modal_container, permission_guard
 
 
 def client_row(client: rx.Var[dict]) -> rx.Component:
@@ -140,7 +140,7 @@ def client_form_modal() -> rx.Component:
 
 
 def clientes_page() -> rx.Component:
-    return rx.fragment(
+    content = rx.fragment(
         rx.el.div(
             rx.el.div(
                 rx.el.div(
@@ -208,4 +208,9 @@ def clientes_page() -> rx.Component:
         ),
         client_form_modal(),
         on_mount=State.load_clients,
+    )
+    return permission_guard(
+        has_permission=State.can_view_clientes,
+        content=content,
+        redirect_message="Acceso denegado a Clientes",
     )

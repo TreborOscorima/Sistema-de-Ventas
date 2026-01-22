@@ -104,10 +104,10 @@ def require_permission(
                 
                 # Retornar toast y opcionalmente redirigir
                 if redirect_to:
-                    return rx.chain(
+                    return [
                         rx.toast(error_msg, duration=3000),
                         rx.redirect(redirect_to),
-                    )
+                    ]
                 return rx.toast(error_msg, duration=3000)
             
             # Tiene permiso, ejecutar método original

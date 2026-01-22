@@ -13,6 +13,7 @@ from app.components.ui import (
     form_textarea,
     INPUT_STYLES,
     toggle_switch,
+    permission_guard,
 )
 
 
@@ -929,72 +930,69 @@ def petty_cash_view() -> rx.Component:
     )
 
 def cashbox_page() -> rx.Component:
-    return rx.cond(
-        State.current_user["privileges"]["view_cashbox"],
-        rx.el.div(
-            rx.el.h1(
-                "Gestion de Caja",
-                class_name="text-2xl font-bold text-gray-800 mb-6",
-            ),
-            rx.cond(
-                State.cash_active_tab == "movimientos",
-                petty_cash_view(),
-                rx.el.div(
-                    cashbox_opening_card(),
-                    card_container(
-                        section_header(
-                            "Listado de Pagos",
-                        ),
-                        rx.el.div(
-                            cashbox_filters(),
-                            class_name="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4",
-                        ),
-                        rx.el.div(
-                            rx.el.table(
-                                rx.el.thead(
-                                    rx.el.tr(
-                                        rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
-                                        rx.el.th("Usuario", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
-                                        rx.el.th("Metodo", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
-                                        rx.el.th("Total", class_name="py-3 px-4 text-right font-semibold text-gray-700"),
-                                        rx.el.th("Detalle", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
-                                        rx.el.th("Acciones", class_name="py-3 px-4 text-center font-semibold text-gray-700"),
-                                        class_name="bg-gray-50 border-b",
-                                    )
-                                ),
-                                rx.el.tbody(
-                                    rx.foreach(State.paginated_cashbox_sales, sale_row),
-                                ),
-                                class_name="min-w-full",
+    content = rx.el.div(
+        rx.el.h1(
+            "Gestion de Caja",
+            class_name="text-2xl font-bold text-gray-800 mb-6",
+        ),
+        rx.cond(
+            State.cash_active_tab == "movimientos",
+            petty_cash_view(),
+            rx.el.div(
+                cashbox_opening_card(),
+                card_container(
+                    section_header(
+                        "Listado de Pagos",
+                    ),
+                    rx.el.div(
+                        cashbox_filters(),
+                        class_name="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4",
+                    ),
+                    rx.el.div(
+                        rx.el.table(
+                            rx.el.thead(
+                                rx.el.tr(
+                                    rx.el.th("Fecha y Hora", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
+                                    rx.el.th("Usuario", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
+                                    rx.el.th("Metodo", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
+                                    rx.el.th("Total", class_name="py-3 px-4 text-right font-semibold text-gray-700"),
+                                    rx.el.th("Detalle", class_name="py-3 px-4 text-left font-semibold text-gray-700"),
+                                    rx.el.th("Acciones", class_name="py-3 px-4 text-center font-semibold text-gray-700"),
+                                    class_name="bg-gray-50 border-b",
+                                )
                             ),
-                            class_name="overflow-x-auto rounded-lg border border-gray-200",
+                            rx.el.tbody(
+                                rx.foreach(State.paginated_cashbox_sales, sale_row),
+                            ),
+                            class_name="min-w-full",
                         ),
-                        rx.cond(
-                            State.filtered_cashbox_sales.length() == 0,
-                            rx.el.p(
-                                "Aun no hay ventas registradas.",
-                                class_name="text-center text-gray-500 py-8",
-                            ),
-                            pagination_controls(
-                                current_page=State.cashbox_current_page,
-                                total_pages=State.cashbox_total_pages,
-                                on_prev=State.prev_cashbox_page,
-                                on_next=State.next_cashbox_page,
-                            ),
+                        class_name="overflow-x-auto rounded-lg border border-gray-200",
+                    ),
+                    rx.cond(
+                        State.filtered_cashbox_sales.length() == 0,
+                        rx.el.p(
+                            "Aun no hay ventas registradas.",
+                            class_name="text-center text-gray-500 py-8",
+                        ),
+                        pagination_controls(
+                            current_page=State.cashbox_current_page,
+                            total_pages=State.cashbox_total_pages,
+                            on_prev=State.prev_cashbox_page,
+                            on_next=State.next_cashbox_page,
                         ),
                     ),
-                    cashbox_logs_section(),
-                    delete_sale_modal(),
-                    close_cashbox_modal(),
-                    cashbox_log_modal(),
-                    class_name="flex flex-col gap-6",
                 ),
+                cashbox_logs_section(),
+                delete_sale_modal(),
+                close_cashbox_modal(),
+                cashbox_log_modal(),
+                class_name="flex flex-col gap-6",
             ),
-            class_name="flex flex-col gap-6 p-4 sm:p-6 w-full max-w-7xl mx-auto",
         ),
-        rx.el.div(
-            rx.el.h1("Acceso denegado", class_name="text-2xl font-bold text-red-600"),
-            rx.el.p("No tienes permisos para ver esta pagina."),
-            class_name="p-8 text-center",
-        ),
+        class_name="flex flex-col gap-6 p-4 sm:p-6 w-full max-w-7xl mx-auto",
+    )
+    return permission_guard(
+        has_permission=State.can_view_cashbox,
+        content=content,
+        redirect_message="Acceso denegado a Gestión de Caja",
     )

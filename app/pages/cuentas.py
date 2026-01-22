@@ -1,7 +1,7 @@
 import reflex as rx
 
 from app.state import State
-from app.components.ui import BUTTON_STYLES, empty_state
+from app.components.ui import BUTTON_STYLES, empty_state, permission_guard
 
 PAYMENT_METHOD_OPTIONS = [
     "Efectivo",
@@ -417,7 +417,7 @@ def cuentas_detail_modal() -> rx.Component:
 
 
 def cuentas_page() -> rx.Component:
-    return rx.fragment(
+    content = rx.fragment(
         rx.el.div(
             rx.el.h1(
                 "Cuentas Corrientes",
@@ -470,4 +470,9 @@ def cuentas_page() -> rx.Component:
         ),
         cuentas_detail_modal(),
         on_mount=State.load_debtors,
+    )
+    return permission_guard(
+        has_permission=State.can_view_cuentas,
+        content=content,
+        redirect_message="Acceso denegado a Cuentas Corrientes",
     )

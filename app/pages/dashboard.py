@@ -4,6 +4,17 @@ Página de Dashboard con métricas y KPIs.
 import reflex as rx
 
 from app.state import State
+from app.components.ui import (
+    BUTTON_STYLES,
+    CARD_STYLES,
+    RADIUS,
+    SHADOWS,
+    TRANSITIONS,
+    page_header,
+    stat_card,
+    empty_state,
+    action_button,
+)
 
 
 def _stat_card(
@@ -28,11 +39,11 @@ def _stat_card(
         rx.el.div(
             rx.el.div(
                 rx.icon(icon, class_name="w-5 h-5"),
-                class_name=f"p-2 rounded-lg {icon_bg}",
+                class_name=f"p-2 {RADIUS['lg']} {icon_bg}",
             ),
             rx.el.div(
                 rx.el.p(title, class_name="text-sm text-gray-500"),
-                rx.el.p(value, class_name="text-2xl font-bold text-gray-900"),
+                rx.el.p(value, class_name="text-2xl font-bold text-gray-900 tabular-nums"),
                 rx.cond(
                     subtitle != "",
                     rx.el.p(subtitle, class_name="text-xs text-gray-400"),
@@ -42,7 +53,7 @@ def _stat_card(
             ),
             class_name="flex items-start justify-between",
         ),
-        class_name=f"bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow {'cursor-pointer hover:border-blue-300' if link else ''}",
+        class_name=f"bg-white {RADIUS['xl']} border border-gray-200 p-4 {SHADOWS['sm']} {TRANSITIONS['fast']} hover:shadow-md {'cursor-pointer hover:border-indigo-300' if link else ''}",
     )
     
     if link:
@@ -58,8 +69,8 @@ def _period_selector() -> rx.Component:
             on_click=lambda: State.set_period(period),
             class_name=rx.cond(
                 State.selected_period == period,
-                "px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white",
-                "px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200",
+                f"px-3 py-1.5 text-sm font-medium {RADIUS['lg']} bg-indigo-600 text-white {TRANSITIONS['fast']}",
+                f"px-3 py-1.5 text-sm font-medium {RADIUS['lg']} bg-gray-100 text-gray-600 hover:bg-gray-200 {TRANSITIONS['fast']}",
             ),
         )
     
@@ -74,7 +85,7 @@ def _period_selector() -> rx.Component:
 def _alert_item(alert: dict) -> rx.Component:
     """Item de alerta."""
     severity_styles = {
-        "critical": ("bg-red-100 border-red-300 text-red-800", "alert-circle", "text-red-600"),
+        "critical": ("bg-red-100 border-red-300 text-red-800", "circle-alert", "text-red-600"),
         "error": ("bg-red-50 border-red-200 text-red-700", "alert-triangle", "text-red-500"),
         "warning": ("bg-amber-50 border-amber-200 text-amber-700", "alert-triangle", "text-amber-500"),
         "info": ("bg-blue-50 border-blue-200 text-blue-700", "info", "text-blue-500"),
@@ -85,7 +96,7 @@ def _alert_item(alert: dict) -> rx.Component:
     
     return rx.el.div(
         rx.el.div(
-            rx.icon(styles[1], class_name=f"w-5 h-5 {styles[2]}"),
+            rx.icon(styles[1], class_name=f"w-5 h-5 {styles[2]} flex-shrink-0"),
             rx.el.div(
                 rx.el.p(alert.get("title", ""), class_name="font-medium"),
                 rx.el.p(alert.get("message", ""), class_name="text-sm opacity-80"),
@@ -93,19 +104,19 @@ def _alert_item(alert: dict) -> rx.Component:
             ),
             class_name="flex items-start",
         ),
-        class_name=f"p-3 rounded-lg border {styles[0]}",
+        class_name=f"p-3 {RADIUS['lg']} border {styles[0]}",
     )
 
 
 def _sales_chart() -> rx.Component:
     """Gráfico de ventas de los últimos 7 días."""
     return rx.el.div(
-        rx.el.h3("Ventas - Últimos 7 días", class_name="text-lg font-semibold text-gray-800 mb-4"),
+        rx.el.h3("Ventas - Últimos 7 días", class_name="text-lg font-semibold text-gray-900 mb-4"),
         rx.recharts.bar_chart(
             rx.recharts.bar(
                 data_key="total",
-                fill="#3b82f6",
-                radius=[4, 4, 0, 0],
+                fill="#4f46e5",
+                radius=[6, 6, 0, 0],
             ),
             rx.recharts.x_axis(data_key="day"),
             rx.recharts.y_axis(),
@@ -115,7 +126,7 @@ def _sales_chart() -> rx.Component:
             width="100%",
             height=250,
         ),
-        class_name="bg-white rounded-xl border border-gray-200 p-4 shadow-sm",
+        class_name=CARD_STYLES["bordered"],
     )
 
 
@@ -124,14 +135,14 @@ def _top_products_list() -> rx.Component:
     return rx.el.div(
         rx.el.h3(
             rx.text(f"Top Productos - {State.period_label}"),
-            class_name="text-lg font-semibold text-gray-800 mb-4",
+            class_name="text-lg font-semibold text-gray-900 mb-4",
         ),
         rx.el.div(
             rx.foreach(
                 State.dash_top_products,
                 lambda p: rx.el.div(
                     rx.el.div(
-                        rx.el.p(p["name"], class_name="font-medium text-gray-800 truncate"),
+                        rx.el.p(p["name"], class_name="font-medium text-gray-900 truncate"),
                         rx.el.p(
                             rx.text(f"{p['quantity']} vendidos"),
                             class_name="text-sm text-gray-500",
@@ -140,19 +151,23 @@ def _top_products_list() -> rx.Component:
                     ),
                     rx.el.p(
                         rx.text(f"S/ {p['revenue']:.2f}"),
-                        class_name="font-semibold text-gray-900",
+                        class_name="font-semibold text-gray-900 tabular-nums",
                     ),
-                    class_name="flex items-center justify-between py-2 border-b border-gray-100 last:border-0",
+                    class_name=f"flex items-center justify-between py-3 border-b border-gray-100 last:border-0 {TRANSITIONS['fast']} hover:bg-gray-50 px-2 -mx-2 {RADIUS['md']}",
                 ),
             ),
             class_name="space-y-1 max-h-64 overflow-y-auto",
         ),
         rx.cond(
             State.dash_top_products.length() == 0,
-            rx.el.p("Sin datos para este período", class_name="text-gray-400 text-center py-4"),
+            rx.el.div(
+                rx.icon("package", class_name="w-10 h-10 text-gray-300 mx-auto mb-2"),
+                rx.el.p("Sin datos para este período", class_name="text-gray-400 text-center"),
+                class_name="py-8",
+            ),
             rx.fragment(),
         ),
-        class_name="bg-white rounded-xl border border-gray-200 p-4 shadow-sm",
+        class_name=CARD_STYLES["bordered"],
     )
 
 
@@ -163,13 +178,13 @@ def _category_chart() -> rx.Component:
         rx.el.div(
             rx.el.h3(
                 rx.text(f"Ventas por Categoría - {State.period_label}"),
-                class_name="text-lg font-semibold text-gray-800",
+                class_name="text-lg font-semibold text-gray-900",
             ),
             rx.el.button(
-                rx.icon("file-spreadsheet", class_name="w-4 h-4 mr-1"),
+                rx.icon("file-spreadsheet", class_name="w-4 h-4 mr-1.5"),
                 "Exportar Excel",
                 on_click=State.export_categories_excel,
-                class_name="flex items-center px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700",
+                class_name=BUTTON_STYLES["success"] + " !py-1.5 !px-3 text-sm",
             ),
             class_name="flex items-center justify-between mb-4",
         ),
@@ -184,7 +199,7 @@ def _category_chart() -> rx.Component:
                 inner_radius=40,
                 outer_radius=80,
                 padding_angle=2,
-                fill="#8884d8",
+                fill="#6366f1",
                 label=True,
             ),
             rx.recharts.graphing_tooltip(),
@@ -199,26 +214,26 @@ def _category_chart() -> rx.Component:
                 rx.el.div(
                     # Header
                     rx.el.div(
-                        rx.el.span("Categoría", class_name="flex-1 text-left text-xs font-medium text-gray-500 uppercase"),
-                        rx.el.span("Ventas", class_name="w-28 text-right text-xs font-medium text-gray-500 uppercase"),
-                        rx.el.span("%", class_name="w-16 text-right text-xs font-medium text-gray-500 uppercase"),
-                        class_name="flex items-center py-2 px-2 border-b border-gray-200",
+                        rx.el.span("Categoría", class_name="flex-1 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"),
+                        rx.el.span("Ventas", class_name="w-28 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider"),
+                        rx.el.span("%", class_name="w-16 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider"),
+                        class_name="flex items-center py-2.5 px-3 border-b border-gray-200 bg-gray-50",
                     ),
                     # Body con scroll
                     rx.el.div(
                         rx.foreach(
                             State.dash_sales_by_category,
                             lambda cat: rx.el.div(
-                                rx.el.span(cat["category"], class_name="flex-1 text-sm text-gray-800 truncate"),
+                                rx.el.span(cat["category"], class_name="flex-1 text-sm text-gray-900 truncate"),
                                 rx.el.span(
                                     rx.text(f"S/ {cat['total']:.2f}"),
-                                    class_name="w-28 text-sm text-gray-900 font-medium text-right",
+                                    class_name="w-28 text-sm text-gray-900 font-medium text-right tabular-nums",
                                 ),
                                 rx.el.span(
                                     rx.text(f"{cat['percentage']}%"),
-                                    class_name="w-16 text-sm text-gray-500 text-right",
+                                    class_name="w-16 text-sm text-gray-500 text-right tabular-nums",
                                 ),
-                                class_name="flex items-center py-2 px-2 border-b border-gray-100",
+                                class_name=f"flex items-center py-2.5 px-3 border-b border-gray-100 {TRANSITIONS['fast']} hover:bg-gray-50",
                             ),
                         ),
                         class_name="max-h-40 overflow-y-auto",
@@ -226,16 +241,21 @@ def _category_chart() -> rx.Component:
                     # Footer
                     rx.el.div(
                         rx.el.span("Total", class_name="flex-1 text-sm font-bold text-gray-900"),
-                        rx.el.span(State.formatted_category_total, class_name="w-28 text-sm font-bold text-gray-900 text-right"),
+                        rx.el.span(State.formatted_category_total, class_name="w-28 text-sm font-bold text-gray-900 text-right tabular-nums"),
                         rx.el.span("100%", class_name="w-16 text-sm font-bold text-gray-500 text-right"),
-                        class_name="flex items-center py-2 px-2 border-t-2 border-gray-200",
+                        class_name="flex items-center py-2.5 px-3 border-t-2 border-gray-200 bg-gray-50",
                     ),
+                    class_name=f"overflow-hidden {RADIUS['lg']} border border-gray-200",
                 ),
-                rx.el.p("Sin datos para este período", class_name="text-gray-400 text-center py-4"),
+                rx.el.div(
+                    rx.icon("pie-chart", class_name="w-10 h-10 text-gray-300 mx-auto mb-2"),
+                    rx.el.p("Sin datos para este período", class_name="text-gray-400 text-center"),
+                    class_name="py-8",
+                ),
             ),
             class_name="mt-4",
         ),
-        class_name="bg-white rounded-xl border border-gray-200 p-4 shadow-sm",
+        class_name=CARD_STYLES["bordered"],
     )
 
 
@@ -243,12 +263,12 @@ def _alerts_panel() -> rx.Component:
     """Panel de alertas del sistema."""
     return rx.el.div(
         rx.el.div(
-            rx.el.h3("Alertas del Sistema", class_name="text-lg font-semibold text-gray-800"),
+            rx.el.h3("Alertas del Sistema", class_name="text-lg font-semibold text-gray-900"),
             rx.cond(
                 State.alert_count > 0,
                 rx.el.span(
                     State.alert_count,
-                    class_name="ml-2 px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 rounded-full",
+                    class_name=f"ml-2 px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 {RADIUS['full']}",
                 ),
                 rx.fragment(),
             ),
@@ -266,7 +286,7 @@ def _alerts_panel() -> rx.Component:
                 class_name="py-8",
             ),
         ),
-        class_name="bg-white rounded-xl border border-gray-200 p-4 shadow-sm",
+        class_name=CARD_STYLES["bordered"],
     )
 
 
@@ -279,11 +299,11 @@ def _kpis_grid() -> rx.Component:
                 rx.el.div(
                     rx.el.div(
                         rx.icon("trending-up", class_name="w-6 h-6"),
-                        class_name="p-3 rounded-lg bg-blue-100 text-blue-600",
+                        class_name=f"p-3 {RADIUS['lg']} bg-indigo-100 text-indigo-600",
                     ),
                     rx.el.div(
                         rx.el.p(State.period_label, class_name="text-sm text-gray-500"),
-                        rx.el.p(State.formatted_period_sales, class_name="text-3xl font-bold text-gray-900"),
+                        rx.el.p(State.formatted_period_sales, class_name="text-3xl font-bold text-gray-900 tabular-nums tracking-tight"),
                         rx.el.div(
                             rx.el.span(
                                 rx.cond(
@@ -309,7 +329,7 @@ def _kpis_grid() -> rx.Component:
                 ),
                 class_name="p-6",
             ),
-            class_name="bg-gradient-to-br from-white to-blue-50 rounded-xl border border-gray-200 shadow-sm col-span-1 sm:col-span-2",
+            class_name=f"bg-gradient-to-br from-white to-indigo-50 {RADIUS['xl']} border border-gray-200 {SHADOWS['sm']} col-span-1 sm:col-span-2",
         ),
         # Ticket Promedio con período dinámico
         rx.link(
@@ -317,17 +337,17 @@ def _kpis_grid() -> rx.Component:
                 rx.el.div(
                     rx.el.div(
                         rx.icon("receipt", class_name="w-5 h-5"),
-                        class_name="p-2 rounded-lg bg-amber-50 text-amber-600",
+                        class_name=f"p-2 {RADIUS['lg']} bg-amber-50 text-amber-600",
                     ),
                     rx.el.div(
                         rx.el.p("Ticket Promedio", class_name="text-sm text-gray-500"),
-                        rx.el.p(State.formatted_avg_ticket, class_name="text-2xl font-bold text-gray-900"),
+                        rx.el.p(State.formatted_avg_ticket, class_name="text-2xl font-bold text-gray-900 tabular-nums"),
                         rx.el.p(State.period_label, class_name="text-xs text-gray-400"),
                         class_name="ml-auto text-right",
                     ),
                     class_name="flex items-start justify-between",
                 ),
-                class_name="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300",
+                class_name=f"bg-white {RADIUS['xl']} border border-gray-200 p-4 {SHADOWS['sm']} {TRANSITIONS['fast']} hover:shadow-md cursor-pointer hover:border-indigo-300",
             ),
             href="/historial",
             class_name="block",
@@ -338,17 +358,17 @@ def _kpis_grid() -> rx.Component:
                 rx.el.div(
                     rx.el.div(
                         rx.icon("shopping-bag", class_name="w-5 h-5"),
-                        class_name="p-2 rounded-lg bg-emerald-50 text-emerald-600",
+                        class_name=f"p-2 {RADIUS['lg']} bg-emerald-50 text-emerald-600",
                     ),
                     rx.el.div(
                         rx.el.p("Transacciones", class_name="text-sm text-gray-500"),
-                        rx.el.p(State.period_sales_count, class_name="text-2xl font-bold text-gray-900"),
+                        rx.el.p(State.period_sales_count, class_name="text-2xl font-bold text-gray-900 tabular-nums"),
                         rx.el.p(State.period_label, class_name="text-xs text-gray-400"),
                         class_name="ml-auto text-right",
                     ),
                     class_name="flex items-start justify-between",
                 ),
-                class_name="bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer hover:border-blue-300",
+                class_name=f"bg-white {RADIUS['xl']} border border-gray-200 p-4 {SHADOWS['sm']} {TRANSITIONS['fast']} hover:shadow-md cursor-pointer hover:border-indigo-300",
             ),
             href="/historial",
             class_name="block",
@@ -402,7 +422,7 @@ def dashboard_page() -> rx.Component:
         # Header
         rx.el.div(
             rx.el.div(
-                rx.el.h1("Dashboard", class_name="text-2xl font-bold text-gray-900"),
+                rx.el.h1("Dashboard", class_name="text-2xl font-bold text-gray-900 tracking-tight"),
                 rx.el.p(
                     rx.cond(
                         State.last_refresh != "",
@@ -411,7 +431,6 @@ def dashboard_page() -> rx.Component:
                     ),
                     class_name="text-sm text-gray-500",
                 ),
-                class_name="",
             ),
             rx.el.div(
                 # Selector de período
@@ -426,7 +445,11 @@ def dashboard_page() -> rx.Component:
                     rx.el.span("Actualizar", class_name="ml-2"),
                     on_click=State.load_dashboard,
                     disabled=State.dashboard_loading,
-                    class_name="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50",
+                    class_name=rx.cond(
+                        State.dashboard_loading,
+                        BUTTON_STYLES["disabled"],
+                        BUTTON_STYLES["primary"],
+                    ),
                 ),
                 class_name="flex items-center gap-4",
             ),

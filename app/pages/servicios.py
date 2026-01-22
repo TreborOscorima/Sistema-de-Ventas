@@ -7,6 +7,7 @@ from app.components.ui import (
     card_container,
     BUTTON_STYLES,
     pagination_controls,
+    permission_guard,
 )
 
 
@@ -1451,7 +1452,7 @@ def servicio_card(title: str, description: str) -> rx.Component:
 
 
 def servicios_page() -> rx.Component:
-    return rx.el.div(
+    content = rx.el.div(
         rx.el.h1("Servicios", class_name="text-2xl font-bold text-gray-800"),
         rx.el.p(
             "Gestiona el alquiler de campo con reservas, adelantos, cancelaciones y registros administrativos.",
@@ -1464,5 +1465,10 @@ def servicios_page() -> rx.Component:
             servicio_card("Alquiler de Campo", "Reserva y control de alquiler de campo."),
         ),
         class_name="min-h-screen p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4",
+    )
+    return permission_guard(
+        has_permission=State.can_view_servicios,
+        content=content,
+        redirect_message="Acceso denegado a Servicios",
     )
 

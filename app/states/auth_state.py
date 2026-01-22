@@ -257,6 +257,54 @@ class AuthState(MixinState):
         self._cached_user = None
         self._cached_user_token = ""
         self._cached_user_time = 0.0
+
+    # =========================================================================
+    # COMPUTED VARS DE PERMISOS - Para renderizado condicional en páginas
+    # =========================================================================
+    
+    @rx.var
+    def can_view_ingresos(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_ingresos"))
+    
+    @rx.var
+    def can_view_ventas(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_ventas"))
+    
+    @rx.var
+    def can_view_cashbox(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_cashbox"))
+    
+    @rx.var
+    def can_view_inventario(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_inventario"))
+    
+    @rx.var
+    def can_view_historial(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_historial"))
+    
+    @rx.var
+    def can_export_data(self) -> bool:
+        return bool(self.current_user["privileges"].get("export_data"))
+    
+    @rx.var
+    def can_view_servicios(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_servicios"))
+    
+    @rx.var
+    def can_view_clientes(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_clientes"))
+    
+    @rx.var
+    def can_view_cuentas(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_cuentas"))
+    
+    @rx.var
+    def can_manage_config(self) -> bool:
+        return bool(self.current_user["privileges"].get("manage_config"))
+    
+    @rx.var
+    def is_admin(self) -> bool:
+        return self.current_user["role"] in ["Superadmin", "Administrador"]
     
     users_list: List[User] = []
 
@@ -440,8 +488,15 @@ class AuthState(MixinState):
         return value in {"1", "true", "yes", "on"}
 
     def _default_route_for_privileges(self, privileges: Dict[str, bool]) -> str:
+        """Determina la ruta inicial según los privilegios del usuario.
+        
+        El Dashboard es accesible para todos, por lo que siempre es una opción válida.
+        La prioridad es: Dashboard > Ingreso > Venta > Caja > etc.
+        """
+        # Dashboard siempre es accesible para todos
+        # Pero priorizamos la página que el usuario use más frecuentemente
         if privileges.get("view_ingresos"):
-            return "/"
+            return "/ingreso"
         if privileges.get("view_ventas"):
             return "/venta"
         if privileges.get("view_cashbox"):
@@ -458,7 +513,8 @@ class AuthState(MixinState):
             return "/cuentas"
         if privileges.get("manage_config"):
             return "/configuracion"
-        return "/"
+        # Fallback: Dashboard es accesible para todos
+        return "/dashboard"
 
     @rx.event
     def ensure_roles_and_permissions(self):
@@ -470,133 +526,123 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_ingresos(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("view_ingresos"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para ver Ingresos.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Ingresos.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_view_ventas(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("view_ventas"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para ver Ventas.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Ventas.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_view_cashbox(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("view_cashbox"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para ver Caja.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Caja.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_view_inventario(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("view_inventario"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para ver Inventario.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Inventario.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_view_historial(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("view_historial"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para ver Historial.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Historial.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_export_data(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("export_data"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para exportar reportes.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para exportar reportes.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_view_servicios(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("view_servicios"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para ver Servicios.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Servicios.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_view_clientes(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("view_clientes"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para ver Clientes.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Clientes.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_view_cuentas(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         if not self.current_user["privileges"].get("view_cuentas"):
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: No tienes permiso para ver Cuentas.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Cuentas.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_admin_access(self):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            yield rx.redirect("/")
+            return
         # Verifica roles exactos segun tu DB (Mayusculas importan)
         if self.current_user["role"] not in ["Superadmin", "Administrador"]:
-            return rx.chain(
-                rx.toast(
-                    "Acceso denegado: Se requiere nivel de Administrador.",
-                    status="error",
-                ),
-                rx.redirect("/"),
+            yield rx.toast(
+                "Acceso denegado: Se requiere nivel de Administrador.",
+                duration=3000,
             )
+            yield rx.redirect("/dashboard")
 
     @rx.event
     def ensure_password_change(self):
@@ -787,13 +833,11 @@ class AuthState(MixinState):
         # Invalidar cache para forzar recarga con nuevos datos
         self.invalidate_user_cache()
         self.password_change_error = ""
-        return rx.chain(
-            rx.toast("Contraseña actualizada.", duration=3000),
-            rx.redirect(
-                self._default_route_for_privileges(
-                    self.current_user["privileges"]
-                )
-            ),
+        yield rx.toast("Contraseña actualizada.", duration=3000)
+        yield rx.redirect(
+            self._default_route_for_privileges(
+                self.current_user["privileges"]
+            )
         )
 
     @rx.event

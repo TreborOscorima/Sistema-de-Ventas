@@ -4,7 +4,7 @@ from .mixin_state import MixinState
 
 # Mapeo de rutas a páginas
 ROUTE_TO_PAGE = {
-    "/": "Dashboard",
+    "/": "Ingreso",
     "/dashboard": "Dashboard",
     "/ingreso": "Ingreso",
     "/venta": "Punto de Venta",
@@ -35,18 +35,24 @@ PAGE_TO_ROUTE = {
 
 class UIState(MixinState):
     sidebar_open: bool = True
-    current_page: str = "Dashboard"
+    current_page: str = ""  # Vacío inicialmente, se setea según privilegios
     config_active_tab: str = "usuarios"
 
     @rx.event
     def sync_page_from_route(self):
-        """Sincroniza current_page basándose en la ruta actual."""
+        """Sincroniza current_page basándose en la ruta actual y privilegios."""
         route = self.router.url.path
-        page = ROUTE_TO_PAGE.get(route, "Dashboard")
-        if self._can_access_page(page):
+        page = ROUTE_TO_PAGE.get(route)
+        
+        # Si la ruta tiene una página mapeada y el usuario puede accederla
+        if page and self._can_access_page(page):
             self.current_page = page
+        # Si no, usar el primer módulo permitido
         elif self.allowed_pages:
             self.current_page = self.allowed_pages[0]
+        # Fallback si no hay páginas permitidas
+        else:
+            self.current_page = "Ingreso"
 
     @rx.var
     def navigation_items(self) -> List[Dict[str, str]]:
@@ -62,11 +68,14 @@ class UIState(MixinState):
 
     @rx.var
     def active_page(self) -> str:
+        # Si current_page está vacío o no es accesible, usar el primero permitido
+        if not self.current_page:
+            return self.allowed_pages[0] if self.allowed_pages else "Ingreso"
         if self._can_access_page(self.current_page):
             return self.current_page
         if self.allowed_pages:
             return self.allowed_pages[0]
-        return self.current_page
+        return "Ingreso"
 
     @rx.event
     def toggle_sidebar(self):
@@ -123,6 +132,7 @@ class UIState(MixinState):
 
     def _page_permission_map(self) -> Dict[str, str]:
         return {
+            "Dashboard": "",  # Accesible para todos
             "Ingreso": "view_ingresos",
             "Punto de Venta": "view_ventas",
             "Gestion de Caja": "view_cashbox",

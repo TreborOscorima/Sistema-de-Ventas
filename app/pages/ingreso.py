@@ -1,5 +1,6 @@
 import reflex as rx
 from app.state import State
+from app.components.ui import permission_guard
 
 
 def item_entry_row(item: rx.Var[dict]) -> rx.Component:
@@ -56,7 +57,7 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
 
 
 def ingreso_page() -> rx.Component:
-    return rx.el.div(
+    content = rx.el.div(
         rx.el.h1(
             "Control de Movimiento: Ingreso de Productos",
             class_name="text-2xl font-bold text-gray-800 mb-6",
@@ -255,4 +256,10 @@ def ingreso_page() -> rx.Component:
             class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4",
         ),
         class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
+    )
+    
+    return permission_guard(
+        has_permission=State.can_view_ingresos,
+        content=content,
+        redirect_message="Acceso denegado a Ingresos",
     )

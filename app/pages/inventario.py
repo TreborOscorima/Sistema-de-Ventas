@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import pagination_controls
+from app.components.ui import pagination_controls, permission_guard
 
 
 def edit_product_modal() -> rx.Component:
@@ -431,7 +431,7 @@ def inventory_adjustment_modal() -> rx.Component:
 
 
 def inventario_page() -> rx.Component:
-    return rx.el.div(
+    content = rx.el.div(
         rx.el.h1(
             "Inventario Actual", class_name="text-2xl font-bold text-gray-800 mb-6"
         ),
@@ -626,4 +626,9 @@ def inventario_page() -> rx.Component:
         inventory_adjustment_modal(),
         edit_product_modal(),
         class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
+    )
+    return permission_guard(
+        has_permission=State.can_view_inventario,
+        content=content,
+        redirect_message="Acceso denegado a Inventario",
     )

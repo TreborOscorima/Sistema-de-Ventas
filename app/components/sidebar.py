@@ -1,5 +1,6 @@
 import reflex as rx
 from app.state import State
+from app.components.ui import RADIUS, SHADOWS, TRANSITIONS
 
 CONFIG_SUBSECTIONS = [
     {"key": "empresa", "label": "Datos de Empresa", "icon": "building"},
@@ -22,36 +23,44 @@ CASH_SUBSECTIONS = [
 
 
 def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
+    """Item de navegación con indicador lateral activo."""
     show_badge = (
         (page == "Cuentas Corrientes")
         & (State.overdue_alerts_count > 0)
         & State.sidebar_open
     )
+    
+    # Estilos para item activo vs inactivo
+    active_class = f"relative flex items-center gap-3 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2.5 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
+    inactive_class = f"relative flex items-center gap-3 {RADIUS['lg']} px-3 py-2.5 text-gray-600 hover:bg-white/60 hover:text-gray-900 font-medium {TRANSITIONS['fast']}"
+    
     link = rx.link(
         rx.el.div(
-            rx.icon(icon, class_name="h-5 w-5"),
+            rx.icon(icon, class_name="h-5 w-5 flex-shrink-0"),
             rx.el.span(
-                text, class_name=rx.cond(State.sidebar_open, "opacity-100", "opacity-0")
+                text, 
+                class_name=rx.cond(
+                    State.sidebar_open, 
+                    "opacity-100 truncate", 
+                    "opacity-0 w-0"
+                )
             ),
             rx.cond(
                 show_badge,
-                rx.badge(
+                rx.el.span(
                     State.overdue_alerts_count.to_string(),
-                    color_scheme="red",
-                    variant="solid",
-                    size="1",
-                    class_name="ml-1",
+                    class_name=f"ml-auto px-2 py-0.5 text-xs font-bold bg-red-500 text-white {RADIUS['full']}",
                 ),
                 rx.fragment(),
             ),
             class_name=rx.cond(
                 State.active_page == page,
-                "flex items-center gap-3 rounded-lg bg-indigo-100 px-3 py-2 text-indigo-700 transition-all hover:text-indigo-900 font-semibold",
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-gray-500 transition-all hover:text-gray-900 font-medium",
+                active_class,
+                inactive_class,
             ),
         ),
         href=route,
-        class_name="w-full no-underline",
+        class_name="w-full no-underline block",
     )
     return rx.cond(
         page == "Clientes",
@@ -72,27 +81,59 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     )
 
 
+def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.Component:
+    """Botón de submenú con estilo mejorado."""
+    active_class = f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-2 {SHADOWS['sm']} border-l-2 border-indigo-500"
+    inactive_class = f"w-full text-left {RADIUS['lg']} px-3 py-2 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}"
+    
+    return rx.el.button(
+        rx.el.div(
+            rx.icon(section["icon"], class_name="h-4 w-4"),
+            rx.el.span(section["label"], class_name="text-sm"),
+            class_name="flex items-center gap-2",
+        ),
+        on_click=on_click_handler,
+        class_name=rx.cond(
+            active_key == section["key"],
+            active_class,
+            inactive_class,
+        ),
+    )
+
+
 def sidebar() -> rx.Component:
     return rx.fragment(
+        # Sidebar principal
         rx.el.div(
             rx.el.div(
+                # Header con logo
                 rx.el.div(
                     rx.el.div(
-                        rx.icon("box", class_name="h-8 w-8 text-indigo-600"),
+                        rx.el.div(
+                            rx.icon("box", class_name="h-6 w-6 text-white"),
+                            class_name=f"p-2 bg-indigo-600 {RADIUS['lg']} {SHADOWS['sm']}",
+                        ),
                         rx.cond(
                             State.sidebar_open,
-                            rx.el.span("TUWAYKIAPP", class_name="text-xl font-bold"),
+                            rx.el.div(
+                                rx.el.span("TUWAYKIAPP", class_name="text-lg font-bold text-gray-900 tracking-tight"),
+                                rx.el.span("Sistema de Ventas", class_name="text-[10px] text-gray-400 uppercase tracking-wider"),
+                                class_name="flex flex-col leading-tight",
+                            ),
                             rx.fragment(),
                         ),
-                        class_name="flex items-center gap-2 font-semibold",
+                        class_name="flex items-center gap-3",
                     ),
                     rx.el.button(
-                        rx.icon("panel-left-close", class_name="h-5 w-5"),
+                        rx.icon("panel-left-close", class_name="h-5 w-5 text-gray-400"),
                         on_click=State.toggle_sidebar,
-                        class_name="p-2 rounded-full hover:bg-gray-200",
+                        class_name=f"p-2 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
                     ),
-                    class_name="flex h-16 items-center justify-between border-b px-4",
+                    class_name="flex h-16 items-center justify-between px-4",
                 ),
+                # Separador con gradiente sutil
+                rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mx-4"),
+                # Navegación
                 rx.el.nav(
                     rx.cond(
                         State.navigation_items.length() == 0,
@@ -118,7 +159,7 @@ def sidebar() -> rx.Component:
                                                     rx.el.div(
                                                         rx.icon(
                                                             section["icon"],
-                                                            class_name="h-4 w-4 text-indigo-600",
+                                                            class_name="h-4 w-4",
                                                         ),
                                                         rx.el.span(
                                                             section["label"],
@@ -133,12 +174,12 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.config_active_tab
                                                         == section["key"],
-                                                        "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
-                                                        "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",
+                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-2 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-2 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-2 ml-4 flex flex-col gap-1",
+                                            class_name="mt-2 ml-3 pl-3 flex flex-col gap-1 border-l border-gray-200",
                                         ),
                                         rx.fragment(),
                                     ),
@@ -152,7 +193,7 @@ def sidebar() -> rx.Component:
                                                     rx.el.div(
                                                         rx.icon(
                                                             section["icon"],
-                                                            class_name="h-4 w-4 text-indigo-600",
+                                                            class_name="h-4 w-4",
                                                         ),
                                                         rx.el.span(
                                                             section["label"],
@@ -166,12 +207,12 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.cash_active_tab
                                                         == section["key"],
-                                                        "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
-                                                        "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",
+                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-2 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-2 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-2 ml-4 flex flex-col gap-1",
+                                            class_name="mt-2 ml-3 pl-3 flex flex-col gap-1 border-l border-gray-200",
                                         ),
                                         rx.fragment(),
                                     ),
@@ -185,7 +226,7 @@ def sidebar() -> rx.Component:
                                                     rx.el.div(
                                                         rx.icon(
                                                             section["icon"],
-                                                            class_name="h-4 w-4 text-indigo-600",
+                                                            class_name="h-4 w-4",
                                                         ),
                                                         rx.el.span(
                                                             section["label"],
@@ -199,75 +240,85 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.service_active_tab
                                                         == section["key"],
-                                                        "w-full text-left rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 border border-indigo-100",
-                                                        "w-full text-left rounded-md px-3 py-2 text-gray-600 hover:bg-gray-50",
+                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-2 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-2 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-2 ml-4 flex flex-col gap-1",
+                                            class_name="mt-2 ml-3 pl-3 flex flex-col gap-1 border-l border-gray-200",
                                         ),
                                         rx.fragment(),
                                     ),
-                                    class_name="flex flex-col gap-1",
-                                ),
-                            ),
-                            class_name="flex flex-col gap-2 p-4",
+                            class_name="flex flex-col gap-1 pt-3",
                         ),
                     ),
+                    class_name="flex flex-col gap-1 p-3",
                 ),
-                class_name="flex-1 overflow-auto",
             ),
+        ),
+        class_name="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent",
+    ),
+    # Footer con usuario
+    rx.el.div(
+        # Separador
+        rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mx-4"),
+        # Info del usuario
+        rx.el.div(
             rx.el.div(
-                rx.el.div(
-                    rx.image(
-                        src=f"https://api.dicebear.com/9.x/initials/svg?seed={State.current_user['username']}",
-                        class_name="h-10 w-10 rounded-full",
-                    ),
-                    rx.cond(
-                        State.sidebar_open,
-                        rx.el.div(
-                            rx.el.p(
-                                State.current_user["username"], class_name="font-semibold"
-                            ),
-                            rx.el.p(
-                                State.current_user["role"],
-                                class_name="text-xs text-gray-500",
-                            ),
-                            class_name="flex flex-col",
+                rx.image(
+                    src=f"https://api.dicebear.com/9.x/initials/svg?seed={State.current_user['username']}&backgroundColor=6366f1&textColor=ffffff",
+                    class_name=f"h-10 w-10 {RADIUS['full']} ring-2 ring-indigo-100",
+                ),
+                rx.cond(
+                    State.sidebar_open,
+                    rx.el.div(
+                        rx.el.p(
+                            State.current_user["username"], 
+                            class_name="font-semibold text-gray-900 text-sm"
                         ),
-                        rx.fragment(),
+                        rx.el.p(
+                            State.current_user["role"],
+                            class_name=f"text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 {RADIUS['full']} inline-block mt-0.5",
+                        ),
+                        class_name="flex flex-col",
                     ),
-                    class_name="flex items-center gap-3 p-4",
+                    rx.fragment(),
                 ),
-                rx.el.button(
-                    rx.icon("log-out", class_name="h-5 w-5"),
-                    rx.cond(State.sidebar_open, rx.el.span("Cerrar Sesión"), rx.fragment()),
-                    on_click=State.logout,
-                    class_name="flex items-center gap-3 w-full text-left px-4 py-2 text-red-500 hover:bg-red-100",
-                ),
-                class_name="border-t",
+                class_name="flex items-center gap-3",
             ),
-            class_name=rx.cond(
-                State.sidebar_open,
-                "fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen bg-gray-50 border-r transition-all duration-300 w-64 shadow-lg md:shadow-none",
-                "w-0 overflow-hidden transition-all duration-300",
-            ),
+            class_name="p-4",
         ),
-        rx.cond(
-            State.sidebar_open,
-            rx.el.div(
-                on_click=State.toggle_sidebar,
-                class_name="fixed inset-0 z-40 bg-black/40 md:hidden sidebar-overlay",
-            ),
-            rx.fragment(),
+        # Botón logout
+        rx.el.button(
+            rx.icon("log-out", class_name="h-5 w-5"),
+            rx.cond(State.sidebar_open, rx.el.span("Cerrar Sesión"), rx.fragment()),
+            on_click=State.logout,
+            class_name=f"flex items-center gap-3 w-full text-left px-4 py-3 text-red-500 hover:bg-red-50 {TRANSITIONS['fast']}",
         ),
-        rx.cond(
-            ~State.sidebar_open,
-            rx.el.button(
-                rx.icon("panel-left-open", class_name="h-6 w-6 text-indigo-600"),
-                on_click=State.toggle_sidebar,
-                class_name="fixed top-4 left-4 z-50 p-2 bg-white rounded-full shadow-md hover:bg-gray-100 border border-gray-200 cursor-pointer",
-            ),
-            rx.fragment(),
-        )
+    ),
+    class_name=rx.cond(
+        State.sidebar_open,
+        f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen bg-gradient-to-b from-gray-50 to-white/95 backdrop-blur-xl border-r border-gray-200/50 {TRANSITIONS['slow']} w-64 {SHADOWS['lg']} md:shadow-none",
+        f"w-0 overflow-hidden {TRANSITIONS['slow']}",
+    ),
+),
+# Overlay móvil con blur
+rx.cond(
+    State.sidebar_open,
+    rx.el.div(
+        on_click=State.toggle_sidebar,
+        class_name="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden",
+    ),
+    rx.fragment(),
+),
+# Botón flotante para abrir sidebar
+rx.cond(
+    ~State.sidebar_open,
+    rx.el.button(
+        rx.icon("menu", class_name="h-5 w-5 text-indigo-600"),
+        on_click=State.toggle_sidebar,
+        class_name=f"fixed top-4 left-4 z-50 p-2.5 bg-white/90 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['md']} hover:bg-white border border-gray-200/50 {TRANSITIONS['fast']} hover:scale-105",
+    ),
+    rx.fragment(),
+)
     )
