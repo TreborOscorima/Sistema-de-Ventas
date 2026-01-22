@@ -74,11 +74,11 @@ def client_form_modal() -> rx.Component:
                     class_name="flex flex-col gap-1",
                 ),
                 rx.el.div(
-                    rx.el.label("DNI", class_name="text-sm font-medium text-gray-700"),
+                    rx.el.label(State.personal_id_label, class_name="text-sm font-medium text-gray-700"),
                     rx.el.input(
                         value=State.current_client["dni"],
                         on_change=lambda v: State.update_current_client("dni", v),
-                        placeholder="Documento de identidad",
+                        placeholder=State.personal_id_placeholder,
                         class_name=INPUT_STYLES["default"],
                     ),
                     class_name="flex flex-col gap-1",
@@ -164,7 +164,11 @@ def clientes_page() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.input(
-                    placeholder="Buscar por nombre, DNI o telefono...",
+                    placeholder=rx.cond(
+                        State.personal_id_label == "DNI",
+                        "Buscar por nombre, DNI o teléfono...",
+                        "Buscar por nombre, documento o teléfono..."
+                    ),
                     value=State.search_query,
                     on_change=State.set_search_query,
                     class_name=INPUT_STYLES["search"],
@@ -176,8 +180,8 @@ def clientes_page() -> rx.Component:
                     rx.el.thead(
                         rx.el.tr(
                             rx.el.th("Nombre", class_name="py-3 px-4 text-left"),
-                            rx.el.th("DNI", class_name="py-3 px-4 text-left"),
-                            rx.el.th("Telefono", class_name="py-3 px-4 text-left"),
+                            rx.el.th(State.personal_id_label, class_name="py-3 px-4 text-left"),
+                            rx.el.th("Teléfono", class_name="py-3 px-4 text-left"),
                             rx.el.th("Direccion", class_name="py-3 px-4 text-left"),
                             rx.el.th(
                                 "Credito Disp.",

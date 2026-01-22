@@ -1,3 +1,22 @@
+"""Estado de Inventario - Gestión de productos y stock.
+
+Este módulo maneja toda la lógica relacionada con el inventario:
+
+Funcionalidades principales:
+- CRUD de productos (crear, leer, actualizar, eliminar)
+- Gestión de categorías
+- Ajustes de inventario con registro de movimientos
+- Búsqueda y filtrado de productos
+- Verificación de inventario físico
+- Exportación de reportes
+
+Permisos requeridos:
+- view_inventario: Ver listado de productos
+- edit_inventario: Crear, editar, eliminar productos y categorías
+
+Clases:
+    InventoryState: Estado principal del módulo de inventario
+"""
 import reflex as rx
 from typing import List, Dict, Any, Optional
 import datetime
@@ -25,7 +44,22 @@ from app.utils.exports import (
     WARNING_FILL,
 )
 
+
 class InventoryState(MixinState):
+    """Estado de gestión de inventario y productos.
+    
+    Maneja productos, categorías, ajustes de stock y reportes.
+    Los productos se persisten en BD, no en memoria de estado.
+    
+    Attributes:
+        new_category_name: Nombre para nueva categoría
+        inventory_search_term: Término de búsqueda actual
+        inventory_current_page: Página de paginación
+        editing_product: Producto en edición (dict temporal)
+        is_editing_product: True si hay modal de edición abierto
+        inventory_check_modal_open: Modal de verificación de inventario
+        inventory_adjustment_item: Item siendo ajustado
+    """
     # inventory: Dict[str, Product] = {} # Eliminado a favor de la BD
     # categories: List[str] = ["General"] # Reemplazado por BD
     new_category_name: str = ""

@@ -214,31 +214,97 @@ def validate_positive_integer(value: Any) -> bool:
         return False
 
 
-def is_valid_phone(phone: str) -> bool:
+def is_valid_phone(phone: str, country_code: str = "PE") -> bool:
     """
-    Valida formato de teléfono (Perú: 9 dígitos o con código país).
+    Valida formato de teléfono según el país.
 
     Args:
         phone: Número de teléfono a validar
+        country_code: Código ISO del país (default: PE)
 
     Returns:
-        True si es un formato válido
+        True si es un formato válido para el país
     """
+    from app.utils.db_seeds import get_country_config
+    
     digits = re.sub(r"\D", "", phone or "")
-    # Perú: 9 dígitos o 11 con código país (51)
-    return len(digits) in (9, 11)
+    if not digits:
+        return False
+    
+    config = get_country_config(country_code)
+    valid_lengths = config.get("phone_digits", [9, 11])
+    return len(digits) in valid_lengths
 
 
-def is_valid_dni(dni: str) -> bool:
+def is_valid_personal_id(id_value: str, country_code: str = "PE") -> bool:
     """
-    Valida formato de DNI (Perú: 8 dígitos).
+    Valida formato de documento de identidad personal según el país.
+    
+    - Perú: DNI (8 dígitos)
+    - Argentina: DNI (7-8 dígitos)
+    - Ecuador: Cédula (10 dígitos)
+    - Colombia: C.C. (6-10 dígitos)
+    - Chile: RUN (8-9 caracteres)
+    - México: CURP (18 caracteres)
 
     Args:
-        dni: DNI a validar
+        id_value: Documento a validar
+        country_code: Código ISO del país (default: PE)
+
+    Returns:
+        True si es un formato válido para el país
+    """
+    from app.utils.db_seeds import get_country_config
+    
+    cleaned = re.sub(r"[^A-Za-z0-9]", "", id_value or "")
+    if not cleaned:
+        return False
+    
+    config = get_country_config(country_code)
+    min_len, max_len = config.get("personal_id_length", (6, 12))
+    return min_len <= len(cleaned) <= max_len
+
+
+def is_valid_tax_id(tax_id: str, country_code: str = "PE") -> bool:
+    """
+    Valida formato de identificación tributaria según el país.
+    
+    - Perú: RUC (11 dígitos)
+    - Argentina: CUIT (11 dígitos)
+    - Ecuador: RUC (13 dígitos)
+    - Colombia: NIT (9-10 dígitos)
+    - Chile: RUT (8-9 caracteres)
+    - México: RFC (12-13 caracteres)
+
+    Args:
+        tax_id: Identificación tributaria a validar
+        country_code: Código ISO del país (default: PE)
+
+    Returns:
+        True si es un formato válido para el país
+    """
+    from app.utils.db_seeds import get_country_config
+    
+    cleaned = re.sub(r"[^A-Za-z0-9]", "", tax_id or "")
+    if not cleaned:
+        return True  # Campo opcional, vacío es válido
+    
+    config = get_country_config(country_code)
+    min_len, max_len = config.get("tax_id_length", (8, 13))
+    return min_len <= len(cleaned) <= max_len
+
+
+# Alias para compatibilidad con código existente
+def is_valid_dni(dni: str, country_code: str = "PE") -> bool:
+    """
+    Alias de is_valid_personal_id para compatibilidad.
+    
+    Args:
+        dni: Documento a validar
+        country_code: Código ISO del país (default: PE)
 
     Returns:
         True si es un formato válido
     """
-    cleaned = re.sub(r"[^A-Za-z0-9]", "", dni or "")
-    # Perú: 8 dígitos, otros países pueden tener letras
-    return len(cleaned) >= 6 and len(cleaned) <= 12
+    return is_valid_personal_id(dni, country_code)
+

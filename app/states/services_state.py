@@ -1364,6 +1364,7 @@ class ServicesState(MixinState):
         company = self._company_settings_snapshot()
         company_name = (company.get("company_name") or "").strip()
         ruc = (company.get("ruc") or "").strip()
+        tax_id_label = company.get("tax_id_label", "RUC")  # Dinámico por país
         address = (company.get("address") or "").strip()
         phone = (company.get("phone") or "").strip()
         footer_message = (company.get("footer_message") or "").strip()
@@ -1375,7 +1376,7 @@ class ServicesState(MixinState):
                 receipt_lines.append(center(name_line))
             receipt_lines.append("")
         if ruc:
-            receipt_lines.append(center(f"RUC: {ruc}"))
+            receipt_lines.append(center(f"{tax_id_label}: {ruc}"))
             receipt_lines.append("")
         for addr_line in address_lines:
             receipt_lines.append(center(addr_line))

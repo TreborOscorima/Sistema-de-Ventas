@@ -1,3 +1,37 @@
+"""Servicio de Ventas - Lógica de negocio principal.
+
+Este módulo contiene la lógica central para procesar ventas,
+incluyendo:
+
+- Validación de stock y productos
+- Cálculo de totales y redondeo monetario
+- Procesamiento de pagos (efectivo, tarjeta, billetera, mixto)
+- Ventas a crédito con plan de cuotas
+- Integración con reservas de canchas
+- Registro en caja (CashboxLog) y movimientos de stock
+
+Clases principales:
+    SaleService: Servicio estático con el método principal `process_sale`
+    SaleProcessResult: Dataclass con el resultado de una venta procesada
+    StockError: Excepción específica para errores de inventario
+
+Ejemplo de uso::
+
+    from app.services.sale_service import SaleService, StockError
+    
+    async with get_async_session() as session:
+        try:
+            result = await SaleService.process_sale(
+                session=session,
+                user_id=1,
+                items=[...],
+                payment_data=payment_info,
+            )
+            await session.commit()
+        except StockError as e:
+            await session.rollback()
+            # Manejar error de stock
+"""
 from __future__ import annotations
 
 import datetime
@@ -36,11 +70,39 @@ logger = get_logger("SaleService")
 
 
 class StockError(ValueError):
+    """Excepción para errores relacionados con inventario.
+    
+    Se lanza cuando:
+    - El producto no existe en inventario
+    - El stock es insuficiente para la cantidad solicitada
+    - Hay ambigüedad en la descripción del producto
+    
+    Attributes:
+        args: Mensaje descriptivo del error
+    """
     pass
 
 
 @dataclass
 class SaleProcessResult:
+    """Resultado de una venta procesada exitosamente.
+    
+    Contiene toda la información necesaria para generar el recibo
+    y actualizar la UI después de procesar una venta.
+    
+    Attributes:
+        sale: Objeto Sale persistido en base de datos
+        receipt_items: Lista de items formateados para el recibo
+            Cada item contiene: description, quantity, unit, price, subtotal
+        sale_total: Total de la venta en Decimal (precisión completa)
+        sale_total_display: Total redondeado para mostrar (float)
+        timestamp: Fecha/hora de la transacción
+        payment_summary: Resumen del pago para mostrar en recibo
+            Ej: "Efectivo S/ 50.00" o "Mixto: Efectivo + Yape"
+        reservation_context: Datos de reserva si aplica, None si es venta directa
+        reservation_balance: Saldo pendiente de reserva cobrado
+        reservation_balance_display: Saldo de reserva formateado (float)
+    """
     sale: Sale
     receipt_items: List[Dict[str, Any]]
     sale_total: Decimal
@@ -53,10 +115,28 @@ class SaleProcessResult:
 
 
 def _to_decimal(value: Any) -> Decimal:
+    """Convierte cualquier valor numérico a Decimal.
+    
+    Args:
+        value: Valor a convertir (int, float, str, None)
+        
+    Returns:
+        Decimal del valor, o Decimal(0) si es None/vacío
+    """
     return Decimal(str(value or 0))
 
 
 def _round_money(value: Any) -> Decimal:
+    """Redondea un valor monetario a 2 decimales.
+    
+    Usa ROUND_HALF_UP para consistencia contable.
+    
+    Args:
+        value: Monto a redondear
+        
+    Returns:
+        Decimal redondeado a centavos (0.01)
+    """
     return calculate_total([{"subtotal": value}], key="subtotal")
 
 
@@ -215,6 +295,22 @@ def _payment_method_code(method_type: PaymentMethodType) -> str | None:
 
 
 def _split_installments(total: Decimal, count: int) -> list[Decimal]:
+    """Divide un monto total en cuotas iguales.
+    
+    Distribuye cualquier diferencia por redondeo en las primeras cuotas
+    para garantizar que la suma exacta sea igual al total.
+    
+    Args:
+        total: Monto total a dividir
+        count: Número de cuotas
+        
+    Returns:
+        Lista de montos por cuota (Decimal)
+        
+    Example:
+        >>> _split_installments(Decimal("100.00"), 3)
+        [Decimal("33.34"), Decimal("33.33"), Decimal("33.33")]
+    """
     total = _round_money(total)
     if count <= 0:
         return []
@@ -234,14 +330,69 @@ def _split_installments(total: Decimal, count: int) -> list[Decimal]:
 
 
 class SaleService:
+    """Servicio para procesamiento de ventas.
+    
+    Proporciona métodos estáticos para procesar ventas completas,
+    incluyendo validación, descuento de stock, registro de pagos
+    y generación de datos para recibos.
+    
+    Todos los métodos son asíncronos y requieren una sesión de BD.
+    """
+    
     @staticmethod
     async def process_sale(
-        session: AsyncSession,  # ✅ AHORA SÍ ACEPTAMOS LA SESIÓN
+        session: AsyncSession,
         user_id: int | None,
         items: list[SaleItemDTO],
         payment_data: PaymentInfoDTO,
         reservation_id: str | None = None,
     ) -> SaleProcessResult:
+        """Procesa una venta completa de forma atómica.
+        
+        Este es el método principal del servicio. Realiza todas las
+        validaciones y operaciones necesarias para completar una venta:
+        
+        1. Valida método de pago seleccionado
+        2. Verifica reserva asociada (si aplica)
+        3. Valida existencia y stock de productos
+        4. Bloquea productos para evitar race conditions
+        5. Calcula totales con precisión decimal
+        6. Crea registro de venta (Sale)
+        7. Crea items de venta (SaleItem)
+        8. Registra pagos (SalePayment)
+        9. Descuenta stock y registra movimientos
+        10. Crea registro en caja (CashboxLog)
+        11. Para créditos: crea plan de cuotas (SaleInstallment)
+        
+        Args:
+            session: Sesión async de SQLAlchemy (debe manejarse externamente)
+            user_id: ID del usuario que realiza la venta (puede ser None)
+            items: Lista de productos a vender (SaleItemDTO)
+            payment_data: Información de pago (PaymentInfoDTO)
+            reservation_id: ID de reserva asociada (opcional)
+            
+        Returns:
+            SaleProcessResult con todos los datos de la venta procesada
+            
+        Raises:
+            ValueError: Para errores de validación (pago, cliente, montos)
+            StockError: Para errores de inventario (stock insuficiente, producto no encontrado)
+            
+        Note:
+            El commit/rollback debe manejarse externamente.
+            En caso de error, se recomienda hacer rollback de la sesión.
+            
+        Example::
+        
+            result = await SaleService.process_sale(
+                session=session,
+                user_id=current_user.id,
+                items=[SaleItemDTO(description="Producto", quantity=2, price=10.0, unit="Unidad")],
+                payment_data=PaymentInfoDTO(method="Efectivo", method_kind="cash"),
+            )
+            await session.commit()
+            print(f"Venta #{result.sale.id} - Total: {result.sale_total_display}")
+        """
         payment_method = (payment_data.method or "").strip()
         if not payment_method:
             raise ValueError("Seleccione un metodo de pago.")

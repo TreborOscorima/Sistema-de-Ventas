@@ -1,3 +1,25 @@
+"""Estado de Clientes - Gestión del padrón de clientes.
+
+Este módulo maneja el CRUD de clientes:
+
+Funcionalidades principales:
+- Listado con búsqueda por nombre/DNI
+- Crear nuevos clientes
+- Editar datos y límite de crédito
+- Eliminar clientes (solo sin deuda)
+
+Integración con ventas a crédito:
+- Los clientes pueden tener límite de crédito
+- Se rastrea deuda actual automáticamente
+- Solo clientes registrados pueden comprar a crédito
+
+Permisos requeridos:
+- view_clientes: Ver listado
+- manage_clientes: Crear, editar, eliminar
+
+Clases:
+    ClientesState: Estado principal del módulo de clientes
+"""
 from decimal import Decimal
 
 import reflex as rx
@@ -15,6 +37,18 @@ from .mixin_state import MixinState
 
 
 class ClientesState(MixinState):
+    """Estado de gestión de clientes.
+    
+    Maneja el padrón de clientes y su información crediticia.
+    Los clientes son requeridos para ventas a crédito.
+    
+    Attributes:
+        clients: Lista de clientes cargados
+        search_query: Término de búsqueda actual
+        show_modal: Estado del modal de edición
+        select_after_save: Si True, selecciona el cliente después de guardar
+        current_client: Cliente en edición (dict temporal)
+    """
     clients: list[Client] = []
     search_query: str = ""
     show_modal: bool = False
@@ -140,7 +174,7 @@ class ClientesState(MixinState):
         name = sanitize_name((self.current_client.get("name") or ""))
         dni = sanitize_dni((self.current_client.get("dni") or ""))
         if not name or not dni:
-            return rx.toast("Nombre y DNI son obligatorios.", duration=3000)
+            return rx.toast("Nombre y documento de identidad son obligatorios.", duration=3000)
 
         phone = sanitize_phone((self.current_client.get("phone") or ""))
         address = sanitize_text((self.current_client.get("address") or ""))
@@ -157,7 +191,7 @@ class ClientesState(MixinState):
         with rx.session() as session:
             existing = session.exec(select(Client).where(Client.dni == dni)).first()
             if existing and (not client_id or existing.id != client_id):
-                return rx.toast("El DNI ya esta registrado.", duration=3000)
+                return rx.toast("El documento ya está registrado.", duration=3000)
 
             if client_id:
                 payload = Client(

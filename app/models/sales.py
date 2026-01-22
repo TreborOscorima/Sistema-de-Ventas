@@ -250,7 +250,11 @@ class Currency(rx.Model, table=True):
 
 
 class CompanySettings(rx.Model, table=True):
-    """Configuracion de datos de empresa (singleton)."""
+    """Configuracion de datos de empresa (singleton).
+    
+    Almacena la configuración global del negocio incluyendo
+    país de operación, moneda y datos fiscales.
+    """
 
     company_name: str = Field(default="", nullable=False)
     ruc: str = Field(default="", nullable=False)
@@ -259,3 +263,5 @@ class CompanySettings(rx.Model, table=True):
     footer_message: Optional[str] = Field(default=None)
     receipt_paper: str = Field(default="80", nullable=False)
     receipt_width: Optional[int] = Field(default=None)
+    default_currency_code: str = Field(default="PEN", nullable=False)
+    country_code: str = Field(default="PE", nullable=False)

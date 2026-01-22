@@ -1,3 +1,25 @@
+"""Estado de Caja - Gestión de sesiones y movimientos de caja.
+
+Este módulo maneja toda la lógica relacionada con la caja registradora:
+
+Funcionalidades principales:
+- Apertura y cierre de sesiones de caja
+- Registro de movimientos (ventas, gastos, cobranzas)
+- Historial de ventas del día con filtros
+- Caja chica (gastos menores)
+- Anulación de ventas con restauración de stock
+- Exportación de reportes (Excel, PDF)
+- Resumen por método de pago
+
+Flujo típico:
+    1. open_cashbox_session() - Aperturar caja con monto inicial
+    2. Registrar ventas/cobranzas durante el día
+    3. open_cashbox_close_modal() - Ver resumen del día
+    4. close_cashbox_day() - Cerrar caja
+
+Clases:
+    CashState: Estado principal con toda la lógica de caja
+"""
 import reflex as rx
 from typing import List, Dict, Any
 import datetime
@@ -39,23 +61,25 @@ from app.utils.exports import (
     NEGATIVE_FILL,
     WARNING_FILL,
 )
+from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
 
-CASHBOX_INCOME_ACTIONS = {
-    "Venta",
-    "Inicial Credito",
-    "Reserva",
-    "Adelanto",
-    "Cobranza",
-    "Cobro de Cuota",
-    "Pago Cuota",
-    "Cobro Cuota",
-    "Ingreso Cuota",
-    "Amortizacion",
-    "Pago Credito",
-}
-CASHBOX_EXPENSE_ACTIONS = {"gasto_caja_chica"}
 
 class CashState(MixinState):
+    """Estado de gestión de caja registradora.
+    
+    Maneja sesiones de caja, movimientos, reportes y exportaciones.
+    Requiere permisos 'view_cashbox' y 'manage_cashbox' según la operación.
+    
+    Attributes:
+        cashbox_filter_start_date: Filtro de fecha inicio para ventas
+        cashbox_filter_end_date: Filtro de fecha fin para ventas
+        cashbox_current_page: Página actual de paginación
+        show_cashbox_advances: Mostrar adelantos en listado
+        sale_delete_modal_open: Estado del modal de anulación
+        cashbox_close_modal_open: Estado del modal de cierre
+        cash_active_tab: Tab activo (resumen/historial/caja_chica)
+        petty_cash_*: Campos para gastos de caja chica
+    """
     # cashbox_sales: List[CashboxSale] = [] # Eliminado a favor de la BD
     cashbox_filter_start_date: str = ""
     cashbox_filter_end_date: str = ""
@@ -1781,6 +1805,7 @@ class CashState(MixinState):
         company = self._company_settings_snapshot()
         company_name = (company.get("company_name") or "").strip()
         ruc = (company.get("ruc") or "").strip()
+        tax_id_label = company.get("tax_id_label", "RUC")  # Dinámico por país
         address = (company.get("address") or "").strip()
         phone = (company.get("phone") or "").strip()
         footer_message = (company.get("footer_message") or "").strip()
@@ -1798,7 +1823,7 @@ class CashState(MixinState):
                 receipt_lines.append(center(name_line))
             receipt_lines.append("")
         if ruc:
-            receipt_lines.append(center(f"RUC: {ruc}"))
+            receipt_lines.append(center(f"{tax_id_label}: {ruc}"))
             receipt_lines.append("")
         for addr_line in address_lines:
             receipt_lines.append(center(addr_line))
@@ -1957,6 +1982,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         company = self._company_settings_snapshot()
         company_name = (company.get("company_name") or "").strip()
         ruc = (company.get("ruc") or "").strip()
+        tax_id_label = company.get("tax_id_label", "RUC")  # Dinámico por país
         address = (company.get("address") or "").strip()
         phone = (company.get("phone") or "").strip()
         address_lines = self._wrap_receipt_lines(address, receipt_width)
@@ -1967,7 +1993,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 receipt_lines.append(center(name_line))
             receipt_lines.append("")
         if ruc:
-            receipt_lines.append(center(f"RUC: {ruc}"))
+            receipt_lines.append(center(f"{tax_id_label}: {ruc}"))
             receipt_lines.append("")
         for addr_line in address_lines:
             receipt_lines.append(center(addr_line))

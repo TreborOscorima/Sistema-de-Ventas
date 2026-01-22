@@ -4,6 +4,8 @@ from typing import List, Dict, Any, Set
 from decimal import Decimal, ROUND_HALF_UP
 from sqlmodel import select
 from app.models import Unit, PaymentMethod, Currency, CompanySettings
+from app.utils.db_seeds import SUPPORTED_COUNTRIES, get_payment_methods_for_country, get_country_config
+from app.enums import PaymentMethodType
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
 
@@ -17,6 +19,9 @@ class ConfigState(MixinState):
     receipt_paper: str = "80"
     receipt_width: str = ""
     company_form_key: int = 0
+    
+    # País de operación
+    selected_country_code: str = "PE"
 
     # Monedas
     selected_currency_code: str = "PEN"
@@ -33,6 +38,45 @@ class ConfigState(MixinState):
     decimal_units: Set[str] = set()
     unit_rows: List[Dict[str, Any]] = []
     payment_methods: List[PaymentMethodConfig] = []
+    
+    @rx.var
+    def available_countries(self) -> List[Dict[str, str]]:
+        """Lista de países soportados para el selector."""
+        return [
+            {"code": code, "name": info["name"], "currency": info["currency"]}
+            for code, info in SUPPORTED_COUNTRIES.items()
+        ]
+    
+    @rx.var
+    def country_config(self) -> Dict[str, Any]:
+        """Configuración completa del país actual."""
+        return get_country_config(self.selected_country_code)
+    
+    @rx.var
+    def tax_id_label(self) -> str:
+        """Label para identificación tributaria según el país.
+        
+        Perú/Ecuador: RUC, Argentina: CUIT, Colombia: NIT, Chile: RUT, México: RFC
+        """
+        return get_country_config(self.selected_country_code).get("tax_id_label", "ID Fiscal")
+    
+    @rx.var
+    def personal_id_label(self) -> str:
+        """Label para documento de identidad personal según el país.
+        
+        Perú/Argentina: DNI, Ecuador: Cédula, Colombia: C.C., Chile: RUN, México: CURP
+        """
+        return get_country_config(self.selected_country_code).get("personal_id_label", "Documento")
+    
+    @rx.var
+    def tax_id_placeholder(self) -> str:
+        """Placeholder para el campo de ID tributario."""
+        return get_country_config(self.selected_country_code).get("tax_id_placeholder", "")
+    
+    @rx.var
+    def personal_id_placeholder(self) -> str:
+        """Placeholder para el campo de documento personal."""
+        return get_country_config(self.selected_country_code).get("personal_id_placeholder", "")
 
     def _require_manage_config(self):
         if hasattr(self, "current_user") and not self.current_user["privileges"].get(
@@ -48,7 +92,13 @@ class ConfigState(MixinState):
             # Cargar monedas
             currencies = session.exec(select(Currency)).all()
             if not currencies:
-                self.available_currencies = [{"code": "PEN", "name": "Sol peruano (PEN)", "symbol": "S/"}]
+                # Fallback dinámico basado en el país configurado
+                config = get_country_config(self.selected_country_code)
+                self.available_currencies = [{
+                    "code": config["currency"],
+                    "name": f"{config['currency_name']} ({config['currency']})",
+                    "symbol": config["currency_symbol"]
+                }]
             else:
                 self.available_currencies = [{"code": c.code, "name": c.name, "symbol": c.symbol} for c in currencies]
 
@@ -76,6 +126,11 @@ class ConfigState(MixinState):
 
     @rx.event
     def load_settings(self):
+        """Carga la configuración de la empresa desde la base de datos.
+        
+        Incluye nombre, RUC, dirección, teléfono, mensaje de pie,
+        configuración de recibo y la moneda por defecto del negocio.
+        """
         self.company_name = ""
         self.ruc = ""
         self.address = ""
@@ -98,7 +153,79 @@ class ConfigState(MixinState):
                     if settings.receipt_width is not None
                     else ""
                 )
+                # Cargar la moneda persistida del negocio
+                if hasattr(settings, 'default_currency_code') and settings.default_currency_code:
+                    self.selected_currency_code = settings.default_currency_code
+                # Cargar el país de operación
+                if hasattr(settings, 'country_code') and settings.country_code:
+                    self.selected_country_code = settings.country_code
         self.company_form_key += 1
+
+    @rx.event
+    def set_country(self, code: str):
+        """Establece el país de operación y carga los métodos de pago correspondientes.
+        
+        Al cambiar de país:
+        1. Se actualiza el país en CompanySettings
+        2. Se actualiza la moneda por defecto del país
+        3. Se cargan los métodos de pago específicos del país
+        
+        Args:
+            code: Código ISO del país (ej: 'PE', 'AR', 'EC')
+        """
+        toast = self._require_manage_config()
+        if toast:
+            return toast
+            
+        code = (code or "PE").upper()
+        if code not in SUPPORTED_COUNTRIES:
+            return rx.toast("País no soportado.", duration=3000)
+        
+        country_info = SUPPORTED_COUNTRIES[code]
+        new_currency = country_info["currency"]
+        
+        with rx.session() as session:
+            # Actualizar CompanySettings
+            settings = session.exec(select(CompanySettings)).first()
+            if settings:
+                settings.country_code = code
+                settings.default_currency_code = new_currency
+                session.add(settings)
+            else:
+                settings = CompanySettings(country_code=code, default_currency_code=new_currency)
+                session.add(settings)
+            
+            # Limpiar métodos de pago existentes
+            existing_methods = session.exec(select(PaymentMethod)).all()
+            for method in existing_methods:
+                session.delete(method)
+            
+            # Insertar métodos de pago del nuevo país
+            new_methods = get_payment_methods_for_country(code)
+            for data in new_methods:
+                method = PaymentMethod(
+                    name=data["name"],
+                    code=data["code"],
+                    is_active=True,
+                    allows_change=data["allows_change"],
+                    method_id=data["method_id"],
+                    description=data["description"],
+                    kind=data["kind"],
+                    enabled=True,
+                )
+                session.add(method)
+            
+            session.commit()
+        
+        self.selected_country_code = code
+        self.selected_currency_code = new_currency
+        self.load_config_data()  # Recargar métodos de pago
+        
+        return rx.toast(
+            f"País cambiado a {country_info['name']}. Moneda: {new_currency}. "
+            f"Métodos de pago actualizados.",
+            duration=4000
+        )
 
     @rx.event
     def set_company_name(self, value: str):
@@ -241,19 +368,28 @@ class ConfigState(MixinState):
                 return rx.toast(f"Unidad '{unit_name}' eliminada.", duration=2000)
 
     def ensure_default_data(self):
+        """Inicializa datos por defecto basados en el país configurado."""
+        config = get_country_config(self.selected_country_code)
+        
         with rx.session() as session:
-            # Unidades
+            # Unidades (universales)
             if not session.exec(select(Unit)).first():
                 defaults = ["unidad", "pieza", "kg", "g", "l", "ml", "m", "cm", "paquete", "caja", "docena", "bolsa", "botella", "lata"]
                 decimals = {"kg", "g", "l", "ml", "m", "cm"}
                 for name in defaults:
                     session.add(Unit(name=name, allows_decimal=name in decimals))
             
-            # Currencies
+            # Currencies - basadas en el país configurado
             if not session.exec(select(Currency)).first():
-                session.add(Currency(code="PEN", name="Sol peruano (PEN)", symbol="S/"))
-                session.add(Currency(code="ARS", name="Peso argentino (ARS)", symbol="$"))
-                session.add(Currency(code="USD", name="Dolar estadounidense (USD)", symbol="US$"))
+                # Agregar moneda del país actual
+                session.add(Currency(
+                    code=config["currency"],
+                    name=f"{config['currency_name']} ({config['currency']})",
+                    symbol=config["currency_symbol"]
+                ))
+                # Agregar USD como moneda universal si no es la del país
+                if config["currency"] != "USD":
+                    session.add(Currency(code="USD", name="Dólar estadounidense (USD)", symbol="US$"))
 
             # Metodos de pago
             existing_methods = {
@@ -334,7 +470,11 @@ class ConfigState(MixinState):
             (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
             None,
         )
-        return f"{match['symbol']} " if match else "S/ "
+        if match:
+            return f"{match['symbol']} "
+        # Fallback dinámico basado en el país
+        config = get_country_config(self.selected_country_code)
+        return f"{config.get('currency_symbol', '$')} "
 
     @rx.var
     def currency_name(self) -> str:
@@ -342,17 +482,41 @@ class ConfigState(MixinState):
             (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
             None,
         )
-        return match["name"] if match else "Sol peruano (PEN)"
+        if match:
+            return match["name"]
+        # Fallback dinámico basado en el país
+        config = get_country_config(self.selected_country_code)
+        return f"{config.get('currency_name', 'Moneda')} ({config.get('currency', 'USD')})"
 
     def _format_currency(self, value: float) -> str:
         return f"{self.currency_symbol}{self._round_currency(value):.2f}"
 
     @rx.event
     def set_currency(self, code: str):
+        """Establece y persiste la moneda del negocio.
+        
+        La moneda se guarda en CompanySettings para que sea global
+        para todos los usuarios de la instalación.
+        
+        Args:
+            code: Código ISO de la moneda (ej: 'PEN', 'USD', 'ARS')
+        """
         code = (code or "").upper()
         match = next((c for c in self.available_currencies if c["code"] == code), None)
         if not match:
             return rx.toast("Moneda no soportada.", duration=3000)
+        
+        # Persistir la moneda en la base de datos
+        with rx.session() as session:
+            settings = session.exec(select(CompanySettings)).first()
+            if settings:
+                settings.default_currency_code = code
+                session.add(settings)
+            else:
+                settings = CompanySettings(default_currency_code=code)
+                session.add(settings)
+            session.commit()
+        
         self.selected_currency_code = code
         if hasattr(self, "_refresh_payment_feedback"):
             self._refresh_payment_feedback()

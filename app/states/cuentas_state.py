@@ -1,3 +1,27 @@
+"""Estado de Cuentas por Cobrar - Gestión de créditos y cobranzas.
+
+Este módulo maneja la vista de cuentas por cobrar:
+
+Funcionalidades principales:
+- Listado de clientes deudores
+- Detalle de cuotas por cliente
+- Registro de pagos de cuotas (parcial o total)
+- Historial de pagos
+- Exportación de reportes de deuda
+
+Flujo típico:
+    1. load_debtors() - Cargar clientes con deuda
+    2. select_debtor(client) - Ver detalle de cuotas
+    3. open_payment_modal(installment) - Iniciar pago
+    4. confirm_installment_payment() - Registrar pago
+
+Permisos requeridos:
+- view_cuentas: Ver listado de deudores
+- manage_cuentas: Registrar pagos
+
+Clases:
+    CuentasState: Estado principal del módulo de cobranzas
+"""
 import datetime
 import io
 from decimal import Decimal
@@ -27,6 +51,20 @@ from .mixin_state import MixinState
 
 
 class CuentasState(MixinState):
+    """Estado de gestión de cuentas por cobrar.
+    
+    Permite visualizar deudores, sus cuotas pendientes y
+    registrar pagos parciales o totales.
+    
+    Attributes:
+        debtors: Lista de clientes con deuda activa
+        selected_client: Cliente seleccionado para ver detalle
+        client_installments: Cuotas del cliente seleccionado
+        show_payment_modal: Estado del modal de pago
+        payment_amount: Monto a pagar (input string)
+        installment_payment_method: Método de pago seleccionado
+        selected_installment_id: ID de cuota a pagar
+    """
     debtors: list[dict] = []
     selected_client: dict | None = None
     client_installments: list[SaleInstallment] = []

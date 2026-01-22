@@ -1,3 +1,41 @@
+"""Servicio de Generación de Recibos.
+
+Este módulo genera recibos de venta en formato HTML optimizado
+para impresoras térmicas (POS) de 58mm y 80mm.
+
+Características principales:
+- Generación de HTML con estilos inline para compatibilidad
+- Soporte para anchos de papel configurables (58mm, 80mm)
+- Formateo de texto con word-wrap automático
+- Escape de caracteres HTML para seguridad
+- Secciones: encabezado empresa, items, totales, pie de página
+
+Clase principal:
+    ReceiptService: Métodos estáticos para generar recibos
+
+Ejemplo de uso::
+
+    from app.services.receipt_service import ReceiptService
+    
+    html = ReceiptService.generate_receipt_html(
+        receipt_data={
+            "items": [...],
+            "total": 150.00,
+            "timestamp": "2026-01-22 10:30:00",
+            "user_name": "admin",
+            "payment_summary": "Efectivo S/ 150.00",
+            "width": 42,
+            "paper_width_mm": 80,
+        },
+        company_settings={
+            "company_name": "Mi Empresa",
+            "ruc": "12345678901",
+            "address": "Av. Principal 123",
+            "phone": "999-888-777",
+            "footer_message": "¡Gracias por su compra!",
+        },
+    )
+"""
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -6,6 +44,15 @@ from typing import Any, Dict, List
 
 
 class ReceiptService:
+    """Servicio para generación de recibos de venta.
+    
+    Genera HTML formateado para impresión en impresoras térmicas POS.
+    Soporta anchos de 24 a 64 caracteres (58mm a 80mm de papel).
+    
+    Attributes:
+        DEFAULT_WIDTH: Ancho por defecto en caracteres (42 para 80mm)
+    """
+    
     DEFAULT_WIDTH = 42
 
     @staticmethod
@@ -21,6 +68,20 @@ class ReceiptService:
 
     @staticmethod
     def _wrap_receipt_lines(text: str, width: int) -> List[str]:
+        """Divide texto en líneas que caben en el ancho del recibo.
+        
+        Implementa word-wrap inteligente que:
+        - Respeta límites de palabras
+        - Corta palabras largas si exceden el ancho
+        - Elimina líneas vacías
+        
+        Args:
+            text: Texto a formatear
+            width: Ancho máximo en caracteres
+            
+        Returns:
+            Lista de líneas formateadas
+        """
         if not text:
             return []
         width = max(int(width), 1)
@@ -86,6 +147,37 @@ class ReceiptService:
     def generate_receipt_html(
         receipt_data: Dict[str, Any], company_settings: Dict[str, Any]
     ) -> str:
+        """Genera HTML del recibo para impresión térmica.
+        
+        Crea un documento HTML completo con estilos inline optimizados
+        para impresoras POS térmicas de 58mm u 80mm.
+        
+        Args:
+            receipt_data: Diccionario con datos de la venta:
+                - items (list): Productos vendidos [{description, quantity, unit, price, subtotal}]
+                - total (float): Total de la venta
+                - timestamp (str): Fecha/hora de la venta
+                - user_name (str): Nombre del vendedor
+                - payment_summary (str): Resumen del pago
+                - width (int): Ancho en caracteres (default 42)
+                - paper_width_mm (int): Ancho del papel en mm (58 o 80)
+                - currency_symbol (str): Símbolo de moneda (default "S/ ")
+                - reservation_context (dict): Datos de reserva (opcional)
+                
+            company_settings: Configuración de la empresa:
+                - company_name (str): Nombre de la empresa
+                - ruc (str): RUC o identificación fiscal
+                - address (str): Dirección
+                - phone (str): Teléfono
+                - footer_message (str): Mensaje de pie de página
+                
+        Returns:
+            String HTML completo listo para renderizar/imprimir
+            
+        Note:
+            El HTML usa fuente monoespaciada (Courier New) para
+            alineación consistente en impresoras térmicas.
+        """
         data = receipt_data or {}
         company = company_settings or {}
         try:
@@ -110,6 +202,7 @@ class ReceiptService:
 
         company_name = (company.get("company_name") or "").strip()
         ruc = (company.get("ruc") or "").strip()
+        tax_id_label = company.get("tax_id_label", "RUC")  # Dinámico por país
         address = (company.get("address") or "").strip()
         phone = (company.get("phone") or "").strip()
         footer_message = (company.get("footer_message") or "").strip()
@@ -123,7 +216,7 @@ class ReceiptService:
             receipt_lines.append("")
         if ruc:
             receipt_lines.append(
-                ReceiptService._center(f"RUC: {ruc}", width)
+                ReceiptService._center(f"{tax_id_label}: {ruc}", width)
             )
             receipt_lines.append("")
         for addr_line in address_lines:

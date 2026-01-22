@@ -203,7 +203,7 @@ def company_settings_section() -> rx.Component:
             rx.el.div(
                 rx.el.div(
                     rx.el.label(
-                        "Razon Social / Nombre", class_name="text-sm font-medium"
+                        "Razón Social / Nombre", class_name="text-sm font-medium"
                     ),
                     rx.el.input(
                         default_value=State.company_name,
@@ -215,18 +215,18 @@ def company_settings_section() -> rx.Component:
                     class_name="flex flex-col gap-1",
                 ),
                 rx.el.div(
-                    rx.el.label("RUC", class_name="text-sm font-medium"),
+                    rx.el.label(State.tax_id_label, class_name="text-sm font-medium"),
                     rx.el.input(
                         default_value=State.ruc,
                         on_change=State.set_ruc,
-                        placeholder="Ej: 20123456789",
+                        placeholder=State.tax_id_placeholder,
                         key=State.company_form_key.to_string() + "-ruc",
                         class_name="w-full p-2 border rounded-md",
                     ),
                     class_name="flex flex-col gap-1",
                 ),
                 rx.el.div(
-                    rx.el.label("Direccion Fiscal", class_name="text-sm font-medium"),
+                    rx.el.label("Dirección Fiscal", class_name="text-sm font-medium"),
                     rx.el.input(
                         default_value=State.address,
                         on_change=State.set_address,
@@ -237,7 +237,7 @@ def company_settings_section() -> rx.Component:
                     class_name="flex flex-col gap-1 md:col-span-2",
                 ),
                 rx.el.div(
-                    rx.el.label("Telefono / Celular", class_name="text-sm font-medium"),
+                    rx.el.label("Teléfono / Celular", class_name="text-sm font-medium"),
                     rx.el.input(
                         default_value=State.phone,
                         on_change=State.set_phone,

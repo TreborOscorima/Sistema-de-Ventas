@@ -1,3 +1,34 @@
+"""Servicio de Créditos y Cobranzas.
+
+Este módulo maneja toda la lógica relacionada con ventas a crédito:
+
+- Consulta de estado crediticio de clientes
+- Cobro de cuotas (parcial o total)
+- Actualización de deuda del cliente
+- Registro de cobranzas en caja
+
+Clases principales:
+    CreditService: Servicio estático para operaciones de crédito
+
+Ejemplo de uso::
+
+    from app.services.credit_service import CreditService
+    
+    async with get_async_session() as session:
+        # Consultar estado del cliente
+        status = await CreditService.get_client_status(session, client_id=1)
+        print(f"Deuda actual: {status['current_debt']}")
+        
+        # Pagar una cuota
+        installment = await CreditService.pay_installment(
+            session=session,
+            installment_id=5,
+            amount=Decimal("50.00"),
+            payment_method="Efectivo",
+            user_id=1,
+        )
+        await session.commit()
+"""
 from __future__ import annotations
 
 import datetime
@@ -16,10 +47,36 @@ def _round_money(value: Any) -> Decimal:
 
 
 class CreditService:
+    """Servicio para gestión de créditos y cobranzas.
+    
+    Proporciona métodos estáticos para consultar y gestionar
+    el estado crediticio de clientes y el cobro de cuotas.
+    
+    Todos los métodos son asíncronos y requieren una sesión de BD.
+    Las operaciones de cobro registran automáticamente en CashboxLog.
+    """
+    
     @staticmethod
     async def get_client_status(
         session: AsyncSession, client_id: int
     ) -> Dict[str, Any]:
+        """Obtiene el estado crediticio de un cliente.
+        
+        Consulta la deuda actual y las cuotas pendientes de pago
+        ordenadas por fecha de vencimiento.
+        
+        Args:
+            session: Sesión async de SQLAlchemy
+            client_id: ID del cliente a consultar
+            
+        Returns:
+            Dict con:
+                - current_debt: Deuda total actual (Decimal)
+                - pending_installments: Lista de SaleInstallment pendientes
+                
+        Raises:
+            ValueError: Si el cliente no existe
+        """
         client = await session.get(Client, client_id)
         if not client:
             raise ValueError("Cliente no encontrado.")
@@ -47,6 +104,52 @@ class CreditService:
         payment_method: str,
         user_id: int | None = None,
     ) -> SaleInstallment:
+        """Registra el pago de una cuota de crédito.
+        
+        Actualiza el estado de la cuota, reduce la deuda del cliente
+        y registra el cobro en el log de caja.
+        
+        Soporta pagos parciales: si el monto es menor al pendiente,
+        la cuota queda en estado 'partial'. Si cubre el total,
+        pasa a 'paid'.
+        
+        Args:
+            session: Sesión async de SQLAlchemy (con transacción activa)
+            installment_id: ID de la cuota a pagar
+            amount: Monto a pagar (Decimal, debe ser > 0)
+            payment_method: Etiqueta del método de pago ("Efectivo", "Yape", etc.)
+            user_id: ID del usuario que registra el pago (opcional)
+            
+        Returns:
+            SaleInstallment actualizada
+            
+        Raises:
+            ValueError: Si:
+                - El monto es <= 0
+                - El método de pago está vacío
+                - La cuota no existe
+                - El monto excede el saldo pendiente
+                - El cliente no existe
+                
+        Note:
+            - Usa WITH FOR UPDATE para evitar race conditions
+            - Registra automáticamente en CashboxLog con acción "Cobranza"
+            - El commit debe manejarse externamente
+            
+        Example::
+        
+            installment = await CreditService.pay_installment(
+                session=session,
+                installment_id=10,
+                amount=Decimal("150.00"),
+                payment_method="Yape",
+                user_id=1,
+            )
+            if installment.status == "paid":
+                print("Cuota pagada completamente")
+            else:
+                print(f"Pago parcial, pendiente: {installment.amount - installment.paid_amount}")
+        """
         payment_amount = _round_money(amount)
         if payment_amount <= 0:
             raise ValueError("Monto de pago invalido.")

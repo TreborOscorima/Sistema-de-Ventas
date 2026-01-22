@@ -1,3 +1,27 @@
+"""Estado de Ventas - Interfaz principal del punto de venta.
+
+Este módulo maneja el estado de la pantalla de ventas, incluyendo:
+
+- Carrito de compras (productos, cantidades, precios)
+- Selección de método de pago
+- Modo crédito con plan de cuotas
+- Búsqueda y selección de clientes
+- Procesamiento de la venta
+- Generación de recibos
+
+Clase principal:
+    VentaState: Estado compuesto usando mixins para separar responsabilidades
+        - CartMixin: Gestión del carrito
+        - PaymentMixin: Métodos de pago
+        - ReceiptMixin: Generación de recibos
+
+Flujo típico:
+    1. Usuario agrega productos al carrito (CartMixin)
+    2. Selecciona método de pago (PaymentMixin)
+    3. Opcionalmente selecciona cliente para crédito
+    4. Confirma venta -> process_sale()
+    5. Se genera recibo (ReceiptMixin)
+"""
 import reflex as rx
 import uuid
 from decimal import Decimal
@@ -14,9 +38,28 @@ from .mixin_state import MixinState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin
 
 
-
 logger = get_logger("VentaState")
+
+
 class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
+    """Estado principal de la pantalla de ventas.
+    
+    Combina múltiples mixins para separar responsabilidades:
+    - MixinState: Utilidades comunes (formateo, redondeo)
+    - CartMixin: Productos en carrito, agregar/quitar items
+    - PaymentMixin: Selección y validación de pagos
+    - ReceiptMixin: Generación de recibos HTML
+    
+    Attributes:
+        sale_form_key: Key para resetear formularios
+        client_search_query: Término de búsqueda de cliente
+        selected_client: Cliente seleccionado para crédito
+        is_credit_mode: True si la venta es a crédito
+        credit_installments: Número de cuotas
+        credit_interval_days: Días entre cuotas
+        credit_initial_payment: Pago inicial (adelanto)
+        is_processing_sale: Flag para evitar doble-submit
+    """
     sale_form_key: int = 0
     client_search_query: str = ""
     client_suggestions: list[dict] = []

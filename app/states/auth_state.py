@@ -1,7 +1,33 @@
+"""Estado de Autenticación - Gestión de usuarios, roles y permisos.
+
+Este módulo maneja toda la lógica de autenticación y autorización:
+
+Funcionalidades principales:
+- Login/logout con tokens JWT
+- Rate limiting para prevenir fuerza bruta
+- Gestión de usuarios (CRUD)
+- Gestión de roles y permisos (RBAC)
+- Cambio de contraseña obligatorio
+- Cache de usuario para optimizar renders
+
+Sistema de permisos:
+    Los permisos se definen por rol y se almacenan en BD.
+    Roles predefinidos: Superadmin, Administrador, Usuario, Cajero
+    Cada permiso controla acceso a funcionalidades específicas.
+
+Seguridad:
+- Contraseñas hasheadas con bcrypt
+- Tokens JWT con versionado para invalidación
+- Rate limiting con soporte Redis (multi-worker)
+- Sesiones con expiración configurable
+
+Clases:
+    AuthState: Estado principal de autenticación
+"""
 import os
+import time
 import reflex as rx
 import bcrypt
-from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from sqlmodel import select
@@ -10,6 +36,12 @@ from sqlalchemy.orm import selectinload
 from app.models import Permission, Role, User as UserModel
 from app.utils.auth import create_access_token, decode_token
 from app.utils.logger import get_logger
+from app.utils.rate_limit import (
+    is_rate_limited as _is_rate_limited,
+    record_failed_attempt as _record_failed_attempt,
+    clear_login_attempts as _clear_login_attempts,
+    remaining_lockout_time as _remaining_lockout_time,
+)
 from app.constants import (
     MAX_LOGIN_ATTEMPTS,
     LOGIN_LOCKOUT_MINUTES,
@@ -17,60 +49,6 @@ from app.constants import (
 )
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
-
-# =============================================================================
-# RATE LIMITING PARA LOGIN
-# =============================================================================
-
-_login_attempts: Dict[str, List[datetime]] = defaultdict(list)
-
-
-def _is_rate_limited(username: str) -> bool:
-    """
-    Verifica si un usuario está bloqueado por demasiados intentos fallidos.
-    
-    Args:
-        username: Nombre de usuario a verificar
-        
-    Returns:
-        True si está bloqueado, False si puede intentar
-    """
-    now = datetime.now()
-    cutoff = now - timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
-    
-    # Limpiar intentos antiguos
-    _login_attempts[username] = [
-        t for t in _login_attempts[username] if t > cutoff
-    ]
-    
-    return len(_login_attempts[username]) >= MAX_LOGIN_ATTEMPTS
-
-
-def _record_failed_attempt(username: str) -> None:
-    """Registra un intento de login fallido."""
-    _login_attempts[username].append(datetime.now())
-
-
-def _clear_login_attempts(username: str) -> None:
-    """Limpia los intentos fallidos tras login exitoso."""
-    _login_attempts.pop(username, None)
-
-
-def _remaining_lockout_time(username: str) -> int:
-    """
-    Calcula los minutos restantes de bloqueo.
-    
-    Returns:
-        Minutos restantes o 0 si no está bloqueado
-    """
-    if not _login_attempts.get(username):
-        return 0
-    
-    oldest_attempt = min(_login_attempts[username])
-    unlock_time = oldest_attempt + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
-    remaining = (unlock_time - datetime.now()).total_seconds() / 60
-    
-    return max(0, int(remaining) + 1)
 
 
 # =============================================================================
@@ -157,7 +135,33 @@ DEFAULT_ROLE_TEMPLATES: Dict[str, Privileges] = {
 
 logger = get_logger("AuthState")
 
+
 class AuthState(MixinState):
+    """Estado de autenticación y gestión de usuarios.
+    
+    Maneja login, logout, sesiones JWT y administración de usuarios.
+    Implementa RBAC (Role-Based Access Control) con permisos granulares.
+    
+    Attributes:
+        token: JWT almacenado en LocalStorage del navegador
+        roles: Lista de nombres de roles disponibles
+        role_privileges: Mapeo rol -> dict de permisos
+        error_message: Error de login para mostrar al usuario
+        show_user_form: Estado del modal de crear/editar usuario
+        new_user_data: Datos del formulario de usuario
+        editing_user: Usuario siendo editado (None = crear nuevo)
+        
+    Variables computadas (rx.var):
+        is_authenticated: True si hay sesión válida
+        current_user: Usuario actual con permisos (cacheado 30s)
+        
+    Eventos principales:
+        login(form_data): Inicia sesión
+        logout(): Cierra sesión
+        change_password(form_data): Cambia contraseña
+        save_user(): Crea o actualiza usuario
+        delete_user(username): Elimina usuario
+    """
     token: str = rx.LocalStorage("")
     # users: Dict[str, User] = {} # Eliminado a favor de la BD
     roles: List[str] = ["Superadmin", "Administrador", "Usuario", "Cajero"]
@@ -176,21 +180,44 @@ class AuthState(MixinState):
     }
     editing_user: Optional[Dict[str, Any]] = None
     new_role_name: str = ""
+    
+    # Cache de usuario para evitar consultas repetidas a BD
+    _cached_user: Optional[User] = None
+    _cached_user_token: str = ""
+    _cached_user_time: float = 0.0
+    _USER_CACHE_TTL: float = 30.0  # Segundos de validez del cache
 
     @rx.var
     def is_authenticated(self) -> bool:
         user = self.current_user
         return bool(user and user.get("username") != "Invitado")
 
-
     @rx.var
     def current_user(self) -> User:
+        # Verificar cache válido
+        now = time.time()
+        if (
+            self._cached_user is not None
+            and self._cached_user_token == self.token
+            and (now - self._cached_user_time) < self._USER_CACHE_TTL
+        ):
+            return self._cached_user
+        
+        # Cache inválido, recargar
         payload = decode_token(self.token)
         if not payload:
-            return self._guest_user()
+            self._cached_user = self._guest_user()
+            self._cached_user_token = self.token
+            self._cached_user_time = now
+            return self._cached_user
+        
         username = str(payload.get("sub") or "")
         if not username:
-            return self._guest_user()
+            self._cached_user = self._guest_user()
+            self._cached_user_token = self.token
+            self._cached_user_time = now
+            return self._cached_user
+        
         token_version = payload.get("ver", 0)
         try:
             token_version = int(token_version or 0)
@@ -206,19 +233,30 @@ class AuthState(MixinState):
             
             if user and user.is_active:
                 if getattr(user, "token_version", 0) != token_version:
-                    return self._guest_user()
-                role_name = user.role.name if user.role else "Sin rol"
-                return {
-                    "id": user.id,
-                    "username": user.username,
-                    "role": role_name,
-                    "privileges": self._get_privileges_dict(user),
-                    "must_change_password": bool(
-                        getattr(user, "must_change_password", False)
-                    ),
-                }
+                    self._cached_user = self._guest_user()
+                else:
+                    role_name = user.role.name if user.role else "Sin rol"
+                    self._cached_user = {
+                        "id": user.id,
+                        "username": user.username,
+                        "role": role_name,
+                        "privileges": self._get_privileges_dict(user),
+                        "must_change_password": bool(
+                            getattr(user, "must_change_password", False)
+                        ),
+                    }
+            else:
+                self._cached_user = self._guest_user()
         
-        return self._guest_user()
+        self._cached_user_token = self.token
+        self._cached_user_time = now
+        return self._cached_user
+    
+    def invalidate_user_cache(self) -> None:
+        """Invalida el cache de usuario (llamar tras cambios de permisos)."""
+        self._cached_user = None
+        self._cached_user_token = ""
+        self._cached_user_time = 0.0
     
     users_list: List[User] = []
 
@@ -746,6 +784,8 @@ class AuthState(MixinState):
             session.add(user)
             session.commit()
 
+        # Invalidar cache para forzar recarga con nuevos datos
+        self.invalidate_user_cache()
         self.password_change_error = ""
         return rx.chain(
             rx.toast("Contraseña actualizada.", duration=3000),
@@ -755,10 +795,12 @@ class AuthState(MixinState):
                 )
             ),
         )
+
     @rx.event
     def logout(self):
         self.token = ""
         self.password_change_error = ""
+        self.invalidate_user_cache()
         return rx.redirect("/")
 
     @rx.event
@@ -910,7 +952,7 @@ class AuthState(MixinState):
             
         username = self.new_user_data["username"].lower().strip()
         if not username:
-            return rx.toast("El nombre de usuario no puede estar vac¡o.", duration=3000)
+            return rx.toast("El nombre de usuario no puede estar vacío.", duration=3000)
         role_name = (self.new_user_data.get("role") or "").strip()
         if not role_name:
             return rx.toast("Debe asignar un rol al usuario.", duration=3000)
@@ -961,7 +1003,7 @@ class AuthState(MixinState):
                         )
                     if password != self.new_user_data["confirm_password"]:
                         return rx.toast(
-                            "Las contrase¤as no coinciden.", duration=3000
+                            "Las contraseñas no coinciden.", duration=3000
                         )
                     password_hash = bcrypt.hashpw(
                         password.encode(), bcrypt.gensalt()
@@ -991,7 +1033,7 @@ class AuthState(MixinState):
                 password = self.new_user_data["password"]
                 if not password:
                     return rx.toast(
-                        "La contrase¤a no puede estar vac¡a.", duration=3000
+                        "La contraseña no puede estar vacía.", duration=3000
                     )
                 if len(password) < 6:
                     return rx.toast(
@@ -1004,7 +1046,7 @@ class AuthState(MixinState):
                         duration=3000,
                     )
                 if password != self.new_user_data["confirm_password"]:
-                    return rx.toast("Las contrase¤as no coinciden.", duration=3000)
+                    return rx.toast("Las contraseñas no coinciden.", duration=3000)
 
                 password_hash = bcrypt.hashpw(
                     password.encode(), bcrypt.gensalt()
