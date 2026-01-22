@@ -66,6 +66,7 @@ MAX_INSTALLMENTS: int = 36
 # =============================================================================
 # CONFIGURACIÓN DE CONTRASEÑAS
 # =============================================================================
+import os
 
 # Longitud mínima de contraseña
 PASSWORD_MIN_LENGTH: int = 6
@@ -75,6 +76,12 @@ LOGIN_LOCKOUT_MINUTES: int = 15
 
 # Máximo de intentos de login antes de bloqueo
 MAX_LOGIN_ATTEMPTS: int = 5
+
+# Configuración de fortaleza de contraseña (activar en producción)
+# Controlado por variable de entorno para facilitar activación gradual
+PASSWORD_REQUIRE_UPPERCASE: bool = os.getenv("PASSWORD_REQUIRE_UPPERCASE", "").lower() == "true"
+PASSWORD_REQUIRE_DIGIT: bool = os.getenv("PASSWORD_REQUIRE_DIGIT", "").lower() == "true"
+PASSWORD_REQUIRE_SPECIAL: bool = os.getenv("PASSWORD_REQUIRE_SPECIAL", "").lower() == "true"
 
 
 # =============================================================================

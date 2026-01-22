@@ -35,6 +35,22 @@ db_url = (
     f"mysql+pymysql://{db_user_escaped}:{db_password_escaped}@{db_host}:{db_port}/{db_name}"
 )
 
+# =============================================================================
+# CONFIGURACIÓN DE SEGURIDAD (Producción)
+# =============================================================================
+# Los siguientes headers deben configurarse en el reverse proxy (nginx/Caddy):
+#
+# X-Content-Type-Options: nosniff
+# X-Frame-Options: DENY
+# X-XSS-Protection: 1; mode=block
+# Strict-Transport-Security: max-age=31536000; includeSubDomains
+# Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'
+#
+# Ejemplo nginx:
+#   add_header X-Content-Type-Options "nosniff" always;
+#   add_header X-Frame-Options "DENY" always;
+# =============================================================================
+
 config = rx.Config(
     app_name="app",
     db_url=db_url,

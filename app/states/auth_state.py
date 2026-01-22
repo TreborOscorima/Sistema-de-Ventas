@@ -800,9 +800,9 @@ class AuthState(MixinState):
         if not new_password:
             self.password_change_error = "La contraseña no puede estar vacía."
             return
-        if len(new_password) < 6:
+        if len(new_password) < PASSWORD_MIN_LENGTH:
             self.password_change_error = (
-                "La contraseña debe tener al menos 6 caracteres."
+                f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres."
             )
             return
         if username and new_password.lower() == username.lower():
@@ -1035,9 +1035,9 @@ class AuthState(MixinState):
                     
                 if self.new_user_data["password"]:
                     password = self.new_user_data["password"]
-                    if len(password) < 6:
+                    if len(password) < PASSWORD_MIN_LENGTH:
                         return rx.toast(
-                            "La contraseña debe tener al menos 6 caracteres.",
+                            f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres.",
                             duration=3000,
                         )
                     if password.lower() == username:
@@ -1079,9 +1079,9 @@ class AuthState(MixinState):
                     return rx.toast(
                         "La contraseña no puede estar vacía.", duration=3000
                     )
-                if len(password) < 6:
+                if len(password) < PASSWORD_MIN_LENGTH:
                     return rx.toast(
-                        "La contraseña debe tener al menos 6 caracteres.",
+                        f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres.",
                         duration=3000,
                     )
                 if password.lower() == username:

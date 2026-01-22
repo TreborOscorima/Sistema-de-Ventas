@@ -23,6 +23,20 @@ from app.utils.exports import (
     style_header_row,
     add_data_rows,
 )
+from app.utils.validators import (
+    validate_positive_number,
+    validate_non_negative,
+    validate_email,
+    validate_required,
+    validate_password_strength,
+    validate_password,
+)
+from app.utils.performance import (
+    log_slow_query,
+    query_timer,
+    timed_operation,
+    QueryStats,
+)
 
 __all__ = [
     # formateo
@@ -41,4 +55,16 @@ __all__ = [
     "create_excel_workbook",
     "style_header_row",
     "add_data_rows",
+    # validadores
+    "validate_positive_number",
+    "validate_non_negative",
+    "validate_email",
+    "validate_required",
+    "validate_password_strength",
+    "validate_password",
+    # performance
+    "log_slow_query",
+    "query_timer",
+    "timed_operation",
+    "QueryStats",
 ]
