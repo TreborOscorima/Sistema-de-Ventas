@@ -46,21 +46,29 @@ from app.models import (
 from app.utils.sanitization import sanitize_notes, sanitize_reason
 from .types import CashboxSale, CashboxSession, CashboxLogEntry, Movement
 from .mixin_state import MixinState
-from .cash import PaymentUtilsMixin, PettyCashMixin, CashExportMixin
+from app.utils.exports import (
+    create_excel_workbook,
+    style_header_row,
+    add_data_rows,
+    auto_adjust_column_widths,
+    create_pdf_report,
+    add_company_header,
+    add_totals_row_with_formulas,
+    add_notes_section,
+    CURRENCY_FORMAT,
+    THIN_BORDER,
+    POSITIVE_FILL,
+    NEGATIVE_FILL,
+    WARNING_FILL,
+)
 from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
 
 
-class CashState(CashExportMixin, PettyCashMixin, PaymentUtilsMixin, MixinState):
+class CashState(MixinState):
     """Estado de gestión de caja registradora.
     
     Maneja sesiones de caja, movimientos, reportes y exportaciones.
     Requiere permisos 'view_cashbox' y 'manage_cashbox' según la operación.
-    
-    Hereda de:
-        CashExportMixin: Exportación de reportes (Excel/PDF)
-        PettyCashMixin: Gestión de caja chica (gastos menores)
-        PaymentUtilsMixin: Utilidades de procesamiento de métodos de pago
-        MixinState: Utilidades base compartidas
     
     Attributes:
         cashbox_filter_start_date: Filtro de fecha inicio para ventas
@@ -114,18 +122,188 @@ class CashState(CashExportMixin, PettyCashMixin, PaymentUtilsMixin, MixinState):
     petty_cash_current_page: int = 1
     petty_cash_items_per_page: int = 10
 
-    # Métodos de caja chica movidos a PettyCashMixin:
-    # - set_petty_cash_page, prev_petty_cash_page, next_petty_cash_page
-    # - open_petty_cash_modal, close_petty_cash_modal
-    # - set_petty_cash_amount, set_petty_cash_quantity, set_petty_cash_unit
-    # - set_petty_cash_cost, set_petty_cash_reason
-    # - _calculate_petty_cash_total, add_petty_cash_movement
-    # - _petty_cash_query, _petty_cash_count, _fetch_petty_cash
-    # - petty_cash_movements, paginated_petty_cash_movements, petty_cash_total_pages
+    @rx.event
+    def set_petty_cash_page(self, page: int):
+        if 1 <= page <= self.petty_cash_total_pages:
+            self.petty_cash_current_page = page
+
+    @rx.event
+    def prev_petty_cash_page(self):
+        if self.petty_cash_current_page > 1:
+            self.petty_cash_current_page -= 1
+
+    @rx.event
+    def next_petty_cash_page(self):
+        if self.petty_cash_current_page < self.petty_cash_total_pages:
+            self.petty_cash_current_page += 1
+
+    @rx.event
+    def open_petty_cash_modal(self):
+        self.petty_cash_modal_open = True
+
+    @rx.event
+    def close_petty_cash_modal(self):
+        self.petty_cash_modal_open = False
 
     @rx.event
     def set_cash_tab(self, tab: str):
         self.cash_active_tab = tab
+
+    @rx.event
+    def set_petty_cash_amount(self, value: str | int | float):
+        self.petty_cash_amount = str(value)
+
+    @rx.event
+    def set_petty_cash_quantity(self, value: Any):
+        self.petty_cash_quantity = str(value)
+        self._calculate_petty_cash_total()
+
+    @rx.event
+    def set_petty_cash_unit(self, value: str):
+        self.petty_cash_unit = value
+
+    @rx.event
+    def set_petty_cash_cost(self, value: Any):
+        self.petty_cash_cost = str(value)
+        self._calculate_petty_cash_total()
+
+    def _calculate_petty_cash_total(self):
+        try:
+            qty = float(self.petty_cash_quantity) if self.petty_cash_quantity else 0
+            cost = float(self.petty_cash_cost) if self.petty_cash_cost else 0
+            self.petty_cash_amount = str(qty * cost)
+        except ValueError:
+            pass
+
+    @rx.event
+    def set_petty_cash_reason(self, value: str):
+        self.petty_cash_reason = sanitize_notes(value)
+
+    @rx.event
+    def add_petty_cash_movement(self):
+        if not self.current_user["privileges"]["manage_cashbox"]:
+            return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
+        if not self.cashbox_is_open:
+            return rx.toast("Debe aperturar la caja para registrar movimientos.", duration=3000)
+        
+        try:
+            amount = float(self.petty_cash_amount)
+            if amount <= 0:
+                return rx.toast("El monto total debe ser mayor a 0.", duration=3000)
+            
+            quantity = float(self.petty_cash_quantity) if self.petty_cash_quantity else 1.0
+            cost = float(self.petty_cash_cost) if self.petty_cash_cost else amount
+            
+        except ValueError:
+            return rx.toast("Valores numéricos inválidos.", duration=3000)
+            
+        if not self.petty_cash_reason:
+            return rx.toast("Ingrese un motivo.", duration=3000)
+            
+        username = self.current_user["username"]
+        
+        with rx.session() as session:
+            user = session.exec(select(UserModel).where(UserModel.username == username)).first()
+            if not user:
+                return rx.toast("Usuario no encontrado.", duration=3000)
+                
+            log = CashboxLogModel(
+                user_id=user.id,
+                action="gasto_caja_chica",
+                amount=amount,
+                quantity=quantity,
+                unit=self.petty_cash_unit,
+                cost=cost,
+                notes=self.petty_cash_reason,
+                timestamp=datetime.datetime.now()
+            )
+            session.add(log)
+            session.commit()
+            
+        self.petty_cash_amount = ""
+        self.petty_cash_quantity = "1"
+        self.petty_cash_cost = ""
+        self.petty_cash_unit = "Unidad"
+        self.petty_cash_reason = ""
+        self.petty_cash_modal_open = False
+        self._cashbox_update_trigger += 1
+        return rx.toast("Movimiento registrado correctamente.", duration=3000)
+
+    def _petty_cash_query(self):
+        return (
+            select(CashboxLogModel, UserModel.username)
+            .join(UserModel)
+            .where(CashboxLogModel.action == "gasto_caja_chica")
+            .order_by(desc(CashboxLogModel.timestamp))
+        )
+
+    def _petty_cash_count(self) -> int:
+        statement = (
+            select(sqlalchemy.func.count())
+            .select_from(CashboxLogModel)
+            .where(CashboxLogModel.action == "gasto_caja_chica")
+        )
+        with rx.session() as session:
+            return session.exec(statement).one()
+
+    def _fetch_petty_cash(
+        self, offset: int | None = None, limit: int | None = None
+    ) -> List[CashboxLogEntry]:
+        with rx.session() as session:
+            statement = self._petty_cash_query()
+            if offset is not None:
+                statement = statement.offset(offset)
+            if limit is not None:
+                statement = statement.limit(limit)
+            results = session.exec(statement).all()
+
+            filtered: List[CashboxLogEntry] = []
+            for log, username in results:
+                qty = log.quantity or 1.0
+                cost = log.cost or log.amount
+
+                # Formatear cantidad: entero si no hay decimales, si no 2 decimales
+                fmt_qty = f"{int(qty)}" if qty % 1 == 0 else f"{qty:.2f}"
+
+                entry: CashboxLogEntry = {
+                    "id": str(log.id),
+                    "action": log.action,
+                    "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    "user": username,
+                    "opening_amount": 0.0,
+                    "closing_total": 0.0,
+                    "totals_by_method": [],
+                    "notes": log.notes,
+                    "amount": log.amount,
+                    "quantity": qty,
+                    "unit": log.unit or "Unidad",
+                    "cost": cost,
+                    "formatted_amount": f"{log.amount:.2f}",
+                    "formatted_cost": f"{cost:.2f}",
+                    "formatted_quantity": fmt_qty,
+                }
+                filtered.append(entry)
+            return filtered
+
+    @rx.var
+    def petty_cash_movements(self) -> List[CashboxLogEntry]:
+        _ = self._cashbox_update_trigger
+        page = max(self.petty_cash_current_page, 1)
+        per_page = max(self.petty_cash_items_per_page, 1)
+        offset = (page - 1) * per_page
+        return self._fetch_petty_cash(offset=offset, limit=per_page)
+
+    @rx.var
+    def paginated_petty_cash_movements(self) -> List[CashboxLogEntry]:
+        return self.petty_cash_movements
+
+    @rx.var
+    def petty_cash_total_pages(self) -> int:
+        _ = self._cashbox_update_trigger
+        total = self._petty_cash_count()
+        if total == 0:
+            return 1
+        return (total + self.petty_cash_items_per_page - 1) // self.petty_cash_items_per_page
 
     @rx.var
     def cashbox_opening_amount_display(self) -> str:
@@ -727,15 +905,125 @@ class CashState(CashExportMixin, PettyCashMixin, PaymentUtilsMixin, MixinState):
         with rx.session() as session:
             return session.exec(query).one()
 
-    # Métodos de pago movidos a PaymentUtilsMixin:
-    # - _payment_method_key
-    # - _payment_method_label
-    # - _payment_method_abbrev
-    # - _sorted_payment_keys
-    # - _payment_summary_from_payments
-    # - _payment_method_display
-    # - _payment_breakdown_from_payments
-    # - _payment_kind_from_payments
+    def _payment_method_key(self, method_type: Any) -> str:
+        if isinstance(method_type, PaymentMethodType):
+            key = method_type.value
+        elif hasattr(method_type, "value"):
+            key = str(method_type.value).strip().lower()
+        else:
+            key = str(method_type or "").strip().lower()
+        if key == "card":
+            return "credit"
+        if key == "wallet":
+            return "yape"
+        return key
+
+    def _payment_method_label(self, method_key: str) -> str:
+        mapping = {
+            "cash": "Efectivo",
+            "debit": "Tarjeta de Débito",
+            "credit": "Tarjeta de Crédito",
+            "yape": "Billetera Digital (Yape)",
+            "plin": "Billetera Digital (Plin)",
+            "transfer": "Transferencia Bancaria",
+            "mixed": "Pago Mixto",
+            "other": "Otros",
+        }
+        return mapping.get(method_key, "Otros")
+
+    def _payment_method_abbrev(self, method_key: str) -> str:
+        mapping = {
+            "cash": "Efe",
+            "debit": "Deb",
+            "credit": "Cre",
+            "yape": "Yap",
+            "plin": "Plin",
+            "transfer": "Transf",
+            "mixed": "Mixto",
+            "other": "Otro",
+        }
+        return mapping.get(method_key, "Otro")
+
+    def _sorted_payment_keys(self, keys: list[str]) -> list[str]:
+        order = [
+            "cash",
+            "debit",
+            "credit",
+            "yape",
+            "plin",
+            "transfer",
+            "mixed",
+            "other",
+        ]
+        ordered = [key for key in order if key in keys]
+        for key in keys:
+            if key not in ordered:
+                ordered.append(key)
+        return ordered
+
+    def _payment_summary_from_payments(self, payments: list[Any]) -> str:
+        if not payments:
+            return "-"
+        totals: dict[str, float] = {}
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if not key:
+                continue
+            amount = float(getattr(payment, "amount", 0) or 0)
+            totals[key] = totals.get(key, 0.0) + amount
+        if not totals:
+            return "-"
+        parts = []
+        for key in self._sorted_payment_keys(list(totals.keys())):
+            label = self._payment_method_label(key)
+            parts.append(f"{label}: {self._format_currency(totals[key])}")
+        return ", ".join(parts)
+
+    def _payment_method_display(self, payments: list[Any]) -> str:
+        if not payments:
+            return "-"
+        keys: list[str] = []
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if key and key not in keys:
+                keys.append(key)
+        if not keys:
+            return "-"
+        if len(keys) == 1:
+            return self._payment_method_label(keys[0])
+        abbrevs = [
+            self._payment_method_abbrev(key)
+            for key in self._sorted_payment_keys(keys)
+        ]
+        return f"{self._payment_method_label('mixed')} ({'/'.join(abbrevs)})"
+
+    def _payment_breakdown_from_payments(self, payments: list[Any]) -> list[dict[str, float]]:
+        if not payments:
+            return []
+        totals: dict[str, float] = {}
+        for payment in payments:
+            key = self._payment_method_key(getattr(payment, "method_type", None))
+            if not key:
+                continue
+            amount = float(getattr(payment, "amount", 0) or 0)
+            totals[key] = totals.get(key, 0.0) + amount
+        breakdown = []
+        for key in self._sorted_payment_keys(list(totals.keys())):
+            label = self._payment_method_label(key)
+            breakdown.append({"label": label, "amount": self._round_currency(totals[key])})
+        return breakdown
+
+    def _payment_kind_from_payments(self, payments: list[Any]) -> str:
+        keys = {
+            self._payment_method_key(getattr(payment, "method_type", None))
+            for payment in payments
+        }
+        keys.discard("")
+        if len(keys) > 1:
+            return "mixed"
+        if len(keys) == 1:
+            return next(iter(keys))
+        return ""
 
     def _cashbox_sale_row(self, sale: Sale, user: UserModel | None) -> CashboxSale:
         payments = sale.payments or []
@@ -896,11 +1184,426 @@ class CashState(CashExportMixin, PettyCashMixin, PaymentUtilsMixin, MixinState):
             return denial
         self._reset_cashbox_close_summary()
 
-    # Métodos de exportación movidos a CashExportMixin:
-    # - export_cashbox_report (Excel de ventas)
-    # - export_cashbox_close_pdf (PDF de cierre)
-    # - export_cashbox_sessions (Excel de aperturas/cierres)
-    # - export_petty_cash_report (Excel de caja chica)
+    @rx.event
+    def export_cashbox_report(self):
+        denial = self._cashbox_guard()
+        if denial:
+            return denial
+        if not self.current_user["privileges"]["export_data"]:
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        
+        sales = self._fetch_cashbox_sales()
+        if not sales:
+            return rx.toast("No hay ventas para exportar.", duration=3000)
+        
+        # Obtener nombre de empresa
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
+        wb, ws = create_excel_workbook("Resumen de Caja")
+        
+        # Agregar encabezado profesional
+        row = add_company_header(ws, company_name, "RESUMEN DE GESTIÓN DE CAJA", f"Fecha: {today}", columns=8)
+        
+        headers = [
+            "Fecha y Hora",
+            "Vendedor",
+            "Método de Pago",
+            "Detalle del Método",
+            "Referencia/Descripción",
+            "Monto Total (S/)",
+            "Monto Cobrado (S/)",
+            "Productos Vendidos",
+        ]
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
+        
+        invalid_labels = {"", "-", "no especificado"}
+        for sale in sales:
+            if sale.get("is_deleted"):
+                continue
+            payment_condition = (sale.get("payment_condition") or "").strip().lower()
+            payment_type = (sale.get("payment_type") or "").strip().lower()
+            is_credit = (
+                bool(sale.get("is_credit"))
+                or payment_type == "credit"
+                or payment_condition in {"credito", "credit"}
+            )
+            method_raw = self._normalize_wallet_label(sale.get("payment_method", ""))
+            method_label = self._normalize_wallet_label(
+                sale.get("payment_label", sale.get("payment_method", ""))
+            )
+            payment_details = self._payment_details_text(
+                sale.get("payment_details", "")
+            ).strip()
+            if is_credit:
+                method_raw = "Venta a Crédito / Fiado"
+                method_label = method_raw
+                amount_paid = sale.get("amount_paid")
+                if amount_paid is None:
+                    amount_paid = sale.get("amount", 0)
+                try:
+                    amount_paid_value = float(amount_paid or 0)
+                except (TypeError, ValueError):
+                    amount_paid_value = 0.0
+                try:
+                    total_amount_value = float(sale.get("total", 0) or 0)
+                except (TypeError, ValueError):
+                    total_amount_value = 0.0
+                if total_amount_value > 0 and amount_paid_value >= total_amount_value:
+                    payment_details = "Crédito (Completado)"
+                elif amount_paid_value > 0:
+                    payment_details = (
+                        f"Crédito (Adelanto: {self._format_currency(amount_paid_value)})"
+                    )
+                else:
+                    payment_details = "Crédito (Pendiente Total)"
+            else:
+                if (method_raw or "").strip().lower() in invalid_labels:
+                    if (method_label or "").strip().lower() not in invalid_labels:
+                        method_raw = method_label
+                    else:
+                        method_raw = "No especificado"
+                if (method_label or "").strip().lower() in invalid_labels:
+                    if (method_raw or "").strip().lower() not in invalid_labels:
+                        method_label = method_raw
+                    else:
+                        method_label = "No especificado"
+                if (payment_details or "").strip().lower() in invalid_labels:
+                    if (method_label or "").strip().lower() not in invalid_labels:
+                        payment_details = f"Pago en {method_label}"
+                    else:
+                        payment_details = "Pago registrado"
+            item_parts = []
+            for item in sale.get("items", []):
+                name = (item.get("description") or "").strip() or "Producto"
+                quantity = item.get("quantity", 0)
+                unit_price = item.get("price")
+                if unit_price is None:
+                    unit_price = item.get("sale_price")
+                if unit_price is None:
+                    unit_price = item.get("subtotal")
+                price_display = self._format_currency(unit_price or 0)
+                item_parts.append(f"{name} (x{quantity}) - {price_display}")
+            details = ", ".join(item_parts) if item_parts else "Sin detalle"
+            
+            ws.cell(row=row, column=1, value=sale["timestamp"])
+            ws.cell(row=row, column=2, value=sale["user"])
+            ws.cell(row=row, column=3, value=method_raw)
+            ws.cell(row=row, column=4, value=method_label)
+            ws.cell(row=row, column=5, value=payment_details)
+            ws.cell(row=row, column=6, value=float(sale["total"] or 0)).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=7, value=float(sale.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=8, value=details)
+            
+            for col in range(1, 9):
+                ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        
+        # Fila de totales con fórmulas
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": ""},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(ws, totals_row, [
+            "Monto Total: Precio total de la venta según productos.",
+            "Monto Cobrado: Dinero efectivamente recibido (puede diferir en ventas a crédito).",
+            "Crédito (Completado): El cliente pagó la totalidad del crédito.",
+            "Crédito (Adelanto): El cliente realizó un pago parcial.",
+            "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
+        ], columns=8)
+        
+        auto_adjust_column_widths(ws)
+        
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        return rx.download(data=output.getvalue(), filename="resumen_gestion_caja.xlsx")
+
+    @rx.event
+    def export_cashbox_close_pdf(self):
+        if not (
+            self.current_user["privileges"]["view_cashbox"]
+            and self.current_user["privileges"]["export_data"]
+        ):
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+
+        report_date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
+            "%Y-%m-%d"
+        )
+        breakdown = self._build_cashbox_close_breakdown(report_date)
+        summary = breakdown["summary"]
+        day_sales = self.cashbox_close_summary_sales or self._get_day_sales(report_date)
+
+        if not summary and not day_sales and breakdown["opening_amount"] == 0:
+            return rx.toast("No hay movimientos de caja para exportar.", duration=3000)
+
+        info_dict = {
+            "Fecha Cierre": report_date,
+            "Responsable": self.current_user["username"],
+        }
+        total_value = 0.0
+        for item in summary:
+            total = item.get("total", 0) or 0
+            if total <= 0:
+                continue
+            method = (item.get("method", "No especificado") or "").strip() or "No especificado"
+            info_dict[f"Total {method}"] = self._format_currency(total)
+            total_value += float(total)
+
+        info_dict["Apertura"] = self._format_currency(breakdown["opening_amount"])
+        info_dict["Ingresos reales"] = self._format_currency(breakdown["income_total"])
+        info_dict["Egresos caja chica"] = self._format_currency(breakdown["expense_total"])
+        info_dict["Saldo esperado"] = self._format_currency(breakdown["expected_total"])
+
+        def _format_time(timestamp: str) -> str:
+            if not timestamp:
+                return ""
+            if " " in timestamp:
+                return timestamp.split(" ", 1)[1]
+            try:
+                parsed = datetime.datetime.fromisoformat(timestamp)
+                return parsed.strftime("%H:%M:%S")
+            except ValueError:
+                return timestamp
+
+        def _format_amount(value: Any) -> str:
+            try:
+                amount = float(value or 0)
+            except (TypeError, ValueError):
+                amount = 0.0
+            return self._format_currency(amount)
+
+        headers = ["Hora", "Operación", "Método", "Referencia", "Monto"]
+        data = []
+        for sale in day_sales:
+            if sale.get("is_deleted"):
+                continue
+            operation_raw = sale.get("action") or sale.get("type") or "Venta"
+            operation = str(operation_raw).replace("_", " ").strip().title() or "Venta"
+            method_raw = sale.get("payment_label") or sale.get("payment_method") or ""
+            method_label = (
+                self._normalize_wallet_label(method_raw) if method_raw else "No especificado"
+            )
+            reference = self._payment_details_text(sale.get("payment_details", ""))
+            amount = sale.get("total")
+            if amount is None:
+                amount = sale.get("amount", 0)
+            data.append(
+                [
+                    _format_time(sale.get("timestamp", "")),
+                    operation,
+                    method_label,
+                    reference,
+                    _format_amount(amount),
+                ]
+            )
+
+        output = io.BytesIO()
+        create_pdf_report(
+            output,
+            "Reporte de Cierre de Caja",
+            data,
+            headers,
+            info_dict,
+        )
+
+        return rx.download(data=output.getvalue(), filename="cierre_caja.pdf")
+
+    @rx.event
+    def export_cashbox_sessions(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        if not self.current_user["privileges"]["export_data"]:
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        logs = self._fetch_cashbox_logs()
+        if not logs:
+            return rx.toast("No hay aperturas o cierres para exportar.", duration=3000)
+        
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
+        wb, ws = create_excel_workbook("Aperturas y Cierres")
+        
+        # Encabezado profesional
+        row = add_company_header(ws, company_name, "REGISTRO DE APERTURAS Y CIERRES DE CAJA", f"Generado: {today}", columns=7)
+        
+        headers = [
+            "Fecha y Hora",
+            "Tipo de Operación",
+            "Responsable",
+            "Monto Apertura (S/)",
+            "Monto Cierre (S/)",
+            "Desglose por Método",
+            "Observaciones",
+        ]
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
+        
+        total_aperturas = 0.0
+        total_cierres = 0.0
+        
+        for log in logs:
+            action = (log.get("action") or "").lower()
+            action_display = "Apertura de Caja" if action == "apertura" else "Cierre de Caja" if action == "cierre" else action.capitalize()
+            
+            opening_amount = float(log.get("opening_amount", 0) or 0)
+            closing_amount = float(log.get("closing_total", 0) or 0)
+            
+            if action == "apertura":
+                total_aperturas += opening_amount
+            elif action == "cierre":
+                total_cierres += closing_amount
+            
+            totals_detail = ", ".join(
+                f"{item.get('method', 'Otro')}: S/{self._round_currency(item.get('amount', 0))}"
+                for item in log.get("totals_by_method", [])
+                if item.get("amount", 0)
+            ) or "Sin desglose"
+            
+            ws.cell(row=row, column=1, value=log.get("timestamp", ""))
+            ws.cell(row=row, column=2, value=action_display)
+            ws.cell(row=row, column=3, value=log.get("user", "Desconocido"))
+            ws.cell(row=row, column=4, value=opening_amount).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=5, value=closing_amount).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=6, value=totals_detail)
+            ws.cell(row=row, column=7, value=log.get("notes", "") or "Sin observaciones")
+            
+            for col in range(1, 8):
+                ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        
+        # Fila de totales
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(ws, totals_row, [
+            "Apertura de Caja: Monto inicial con el que se inicia la jornada.",
+            "Cierre de Caja: Monto total contado al finalizar la jornada.",
+            "Desglose por Método: Distribución del dinero según forma de pago (solo en cierres).",
+            "La diferencia entre Cierres y Aperturas debe coincidir con las ventas del día.",
+        ], columns=7)
+        
+        auto_adjust_column_widths(ws)
+        
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        return rx.download(
+            data=output.getvalue(), filename="aperturas_cierres_caja.xlsx"
+        )
+
+    @rx.event
+    def export_petty_cash_report(self):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        if not self.current_user["privileges"]["export_data"]:
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        
+        movements = self.petty_cash_movements
+        if not movements:
+            return rx.toast("No hay movimientos para exportar.", duration=3000)
+        
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        
+        wb, ws = create_excel_workbook("Caja Chica")
+        
+        # Encabezado profesional
+        row = add_company_header(ws, company_name, "MOVIMIENTOS DE CAJA CHICA", f"Generado: {today}", columns=7)
+        
+        headers = [
+            "Fecha y Hora",
+            "Responsable",
+            "Concepto/Motivo",
+            "Cantidad",
+            "Unidad",
+            "Costo Unitario (S/)",
+            "Total Egreso (S/)",
+        ]
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
+        
+        for item in movements:
+            # Extraer valores numéricos para las fórmulas
+            quantity_str = item.get("formatted_quantity", "0")
+            cost_str = item.get("formatted_cost", "0")
+            
+            # Limpiar strings de formato para obtener números
+            try:
+                quantity = float(str(quantity_str).replace(",", "").replace("S/", "").strip() or 0)
+            except:
+                quantity = 0
+            try:
+                cost = float(str(cost_str).replace(",", "").replace("S/", "").strip() or 0)
+            except:
+                cost = 0
+            
+            ws.cell(row=row, column=1, value=item.get("timestamp", ""))
+            ws.cell(row=row, column=2, value=item.get("user", "Desconocido"))
+            ws.cell(row=row, column=3, value=item.get("notes", "") or "Sin motivo especificado")
+            ws.cell(row=row, column=4, value=quantity)
+            ws.cell(row=row, column=5, value=item.get("unit", "Unid."))
+            ws.cell(row=row, column=6, value=cost).number_format = CURRENCY_FORMAT
+            # Total = Fórmula: Cantidad × Costo Unitario
+            ws.cell(row=row, column=7, value=f"=D{row}*F{row}").number_format = CURRENCY_FORMAT
+            
+            for col in range(1, 8):
+                ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+        
+        # Fila de totales
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTAL EGRESOS"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "D"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
+        ])
+        
+        # Notas explicativas
+        add_notes_section(ws, totals_row, [
+            "Caja Chica: Fondo destinado a gastos menores del día a día.",
+            "Cada movimiento representa un egreso (salida de dinero).",
+            "Total Egreso = Cantidad × Costo Unitario (fórmula verificable).",
+            "Este monto se descuenta del efectivo al momento del cierre de caja.",
+        ], columns=7)
+        
+        auto_adjust_column_widths(ws)
+        
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        return rx.download(
+            data=output.getvalue(), filename="movimientos_caja_chica.xlsx"
+        )
 
     @rx.event
     def show_cashbox_log(self, log_id: str):
