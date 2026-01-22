@@ -173,7 +173,7 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                     ),
                     class_name="flex-1 h-screen overflow-y-auto",
                 ),
-                class_name="flex min-h-screen w-full bg-gray-100",
+                class_name="flex h-screen w-full bg-gray-100 overflow-hidden",
             ),
             class_name="font-['Inter']",
         ),

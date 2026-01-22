@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 import datetime
 import uuid
 import logging
+from decimal import Decimal
 from sqlmodel import select
 from sqlalchemy import func
 from app.models import Product, StockMovement, User as UserModel
@@ -54,7 +55,7 @@ class IngresoState(MixinState):
                         self.new_entry_item["quantity"], value
                     )
             self.new_entry_item["subtotal"] = self._round_currency(
-                self.new_entry_item["quantity"] * self.new_entry_item["price"]
+                float(self.new_entry_item["quantity"]) * float(self.new_entry_item["price"])
             )
             if field == "description":
                 if value:
@@ -221,10 +222,10 @@ class IngresoState(MixinState):
 
                 if product:
                     # Actualizar
-                    product.stock += item["quantity"]
-                    product.purchase_price = item["price"]
+                    product.stock += Decimal(str(item["quantity"]))
+                    product.purchase_price = Decimal(str(item["price"]))
                     if item["sale_price"] > 0:
-                        product.sale_price = item["sale_price"]
+                        product.sale_price = Decimal(str(item["sale_price"]))
                     product.category = item["category"]
                     session.add(product)
                     
@@ -232,7 +233,7 @@ class IngresoState(MixinState):
                     movement = StockMovement(
                         type="Ingreso",
                         product_id=product.id,
-                        quantity=item["quantity"],
+                        quantity=Decimal(str(item["quantity"])),
                         description=f"Ingreso: {description}",
                         user_id=user_id
                     )
@@ -243,10 +244,10 @@ class IngresoState(MixinState):
                         barcode=barcode or str(uuid.uuid4()),
                         description=description,
                         category=item["category"],
-                        stock=item["quantity"],
+                        stock=Decimal(str(item["quantity"])),
                         unit=item["unit"],
-                        purchase_price=item["price"],
-                        sale_price=item["sale_price"]
+                        purchase_price=Decimal(str(item["price"])),
+                        sale_price=Decimal(str(item["sale_price"]))
                     )
                     session.add(new_product)
                     session.flush() # Obtener ID
@@ -255,7 +256,7 @@ class IngresoState(MixinState):
                     movement = StockMovement(
                         type="Ingreso",
                         product_id=new_product.id,
-                        quantity=item["quantity"],
+                        quantity=Decimal(str(item["quantity"])),
                         description=f"Ingreso (Nuevo): {description}",
                         user_id=user_id
                     )
@@ -316,7 +317,7 @@ class IngresoState(MixinState):
         self.new_entry_item["sale_price"] = product.get("sale_price", 0)
         self.new_entry_item["quantity"] = 1
         self.new_entry_item["subtotal"] = self._round_currency(
-            self.new_entry_item["quantity"] * self.new_entry_item["price"]
+            float(self.new_entry_item["quantity"]) * float(self.new_entry_item["price"])
         )
 
     @rx.event
