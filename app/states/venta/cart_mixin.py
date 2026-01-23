@@ -21,6 +21,7 @@ class CartMixin:
         "price": 0,
         "sale_price": 0,
         "subtotal": 0,
+        "product_id": None,
     }
     new_sale_items: List[Dict[str, Any]] = []
     autocomplete_suggestions: List[str] = []
@@ -78,6 +79,7 @@ class CartMixin:
             else 1
         )
 
+        self.new_sale_item["product_id"] = product.id
         self.new_sale_item["barcode"] = product_barcode
         self.new_sale_item["description"] = product.description
         self.new_sale_item["category"] = product.category
@@ -110,6 +112,7 @@ class CartMixin:
             "price": 0,
             "sale_price": 0,
             "subtotal": 0,
+            "product_id": None,
         }
         self.autocomplete_suggestions = []
 

@@ -32,6 +32,7 @@ class SaleItemDTO(BaseSchema):
     subtotal: Decimal | None = None
     barcode: str | None = None
     category: str | None = None
+    product_id: int | None = None
 
 
 class PaymentBreakdownItemDTO(BaseSchema):

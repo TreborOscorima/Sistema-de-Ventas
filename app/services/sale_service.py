@@ -484,12 +484,17 @@ class SaleService:
                     "price": price,
                     "subtotal": subtotal,
                     "barcode": item.barcode or "",
+                    "product_id": item.product_id,
                 }
             )
 
         descriptions: list[str] = []
         barcodes: list[str] = []
+        product_ids: list[int] = []
         for item in decimal_snapshot:
+            pid = item.get("product_id")
+            if pid:
+                product_ids.append(pid)
             description = (item.get("description") or "").strip()
             if description:
                 descriptions.append(description)
@@ -497,44 +502,68 @@ class SaleService:
             if barcode:
                 barcodes.append(barcode)
 
+        unique_product_ids = list(dict.fromkeys(product_ids))
         unique_descriptions = list(dict.fromkeys(descriptions))
         unique_barcodes = list(dict.fromkeys(barcodes))
+        
+        products_by_id: dict[int, Product] = {}
         products_by_description: dict[str, Product] = {}
         products_by_barcode: dict[str, Product] = {}
         ambiguous_descriptions: set[str] = set()
         filters = []
+        
+        if unique_product_ids:
+            filters.append(Product.id.in_(unique_product_ids))
         if unique_barcodes:
             filters.append(Product.barcode.in_(unique_barcodes))
         if unique_descriptions:
             filters.append(Product.description.in_(unique_descriptions))
+        
         if filters:
             if len(filters) == 1:
                 query = select(Product).where(filters[0])
             else:
                 query = select(Product).where(or_(*filters))
             products = (await session.exec(query.with_for_update())).all()
+            
+            # Map products by all possible keys
             for product in products:
+                # Map by ID
+                if product.id:
+                    products_by_id[product.id] = product
+                
+                # Map by Description
                 description = (product.description or "").strip()
-                if not description:
-                    continue
-                if description in products_by_description:
-                    ambiguous_descriptions.add(description)
-                    continue
-                products_by_description[description] = product
+                if description:
+                    if description in products_by_description:
+                        ambiguous_descriptions.add(description)
+                    else:
+                        products_by_description[description] = product
+                
+                # Map by Barcode
+                if product.barcode:
+                    products_by_barcode[product.barcode] = product
+
+            # Clean up ambiguous maps
             for description in ambiguous_descriptions:
                 products_by_description.pop(description, None)
-            products_by_barcode = {
-                product.barcode: product
-                for product in products
-                if product.barcode
-            }
 
         locked_products: list[tuple[Dict[str, Any], Product]] = []
         for item in decimal_snapshot:
-            barcode = (item.get("barcode") or "").strip()
             product = None
-            if barcode:
-                product = products_by_barcode.get(barcode)
+            
+            # 1. Try lookup by ID (Most Reliable)
+            pid = item.get("product_id")
+            if pid:
+                product = products_by_id.get(pid)
+            
+            # 2. Try lookup by Barcode
+            if not product:
+                barcode = (item.get("barcode") or "").strip()
+                if barcode:
+                    product = products_by_barcode.get(barcode)
+            
+            # 3. Try lookup by Description
             if not product:
                 description = item.get("description", "")
                 if description in ambiguous_descriptions:
@@ -543,13 +572,19 @@ class SaleService:
                         "Use codigo de barras."
                     )
                 product = products_by_description.get(description)
+            
+            # 4. Final validation
             if not product:
-                if barcode:
-                    raise StockError(
-                        f"Producto con codigo {barcode} no encontrado en inventario."
-                    )
+                identifier = ""
+                if item.get("barcode"):
+                    identifier = f"cÃ³digo {item['barcode']}"
+                elif item.get("description"):
+                    identifier = item['description']
+                else:
+                    identifier = "desconocido"
+                    
                 raise StockError(
-                    f"Producto {item['description']} no encontrado en inventario."
+                    f"Producto {identifier} no encontrado en inventario."
                 )
             if product.stock < item["quantity"]:
                 raise StockError(

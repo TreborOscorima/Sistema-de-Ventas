@@ -179,24 +179,43 @@ class InventoryState(MixinState):
             return []
 
         search = (self.inventory_search_term or "").strip().lower()
-
+        offset = (self.inventory_current_page - 1) * self.inventory_items_per_page
+        
         with rx.session() as session:
+            query = select(Product)
+            
             if search:
-                query = select(Product).where(
+                query = query.where(
                     or_(
                         Product.description.ilike(f"%{search}%"),
                         Product.barcode.ilike(f"%{search}%"),
                         Product.category.ilike(f"%{search}%"),
                     )
                 )
-            else:
-                query = select(Product).order_by(Product.id.desc()).limit(self.inventory_recent_limit)
-            products = session.exec(query).all()
-            return sorted(products, key=lambda p: p.description)
+            
+            # Ordenar por descripción de manera determinista
+            query = query.order_by(Product.description, Product.id)
+            
+            # Aplicar paginación SQL
+            query = query.offset(offset).limit(self.inventory_items_per_page)
+            
+            return session.exec(query).all()
 
     @rx.var
     def inventory_total_pages(self) -> int:
-        total_items = len(self.inventory_list)
+        search = (self.inventory_search_term or "").strip().lower()
+        with rx.session() as session:
+            query = select(func.count(Product.id))
+            if search:
+                query = query.where(
+                    or_(
+                        Product.description.ilike(f"%{search}%"),
+                        Product.barcode.ilike(f"%{search}%"),
+                        Product.category.ilike(f"%{search}%"),
+                    )
+                )
+            total_items = session.exec(query).one() or 0
+            
         if total_items == 0:
             return 1
         return (total_items + self.inventory_items_per_page - 1) // self.inventory_items_per_page
@@ -211,9 +230,8 @@ class InventoryState(MixinState):
 
     @rx.var
     def inventory_paginated_list(self) -> list[Product]:
-        start_index = (self.inventory_display_page - 1) * self.inventory_items_per_page
-        end_index = start_index + self.inventory_items_per_page
-        return self.inventory_list[start_index:end_index]
+        # Alias para compatibilidad con UI existente, ya que inventory_list ahora está paginado
+        return self.inventory_list
 
     @rx.event
     def set_inventory_search_term(self, value: str):

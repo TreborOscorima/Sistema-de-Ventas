@@ -28,8 +28,9 @@ def sanitize_text(value: Any, max_length: int = 500) -> str:
     # Convertir a string y limpiar espacios
     cleaned = str(value).strip()
     
-    # Escapar caracteres HTML peligrosos
-    cleaned = html.escape(cleaned)
+    # Eliminado html.escape para evitar doble codificación en BD y reportes.
+    # La protección XSS ocurren en la capa de renderizado (Reflex/React).
+    pass
     
     # Limitar longitud
     if len(cleaned) > max_length:

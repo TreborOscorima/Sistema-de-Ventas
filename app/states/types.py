@@ -20,6 +20,7 @@ class TransactionItem(TypedDict):
     price: float
     sale_price: float
     subtotal: float
+    product_id: int | None
 
 class Movement(TypedDict):
     id: str
