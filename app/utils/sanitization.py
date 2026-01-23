@@ -29,8 +29,9 @@ def sanitize_text(value: Any, max_length: int = 500) -> str:
     cleaned = str(value).strip()
     
     # Eliminado html.escape para evitar doble codificación en BD y reportes.
-    # La protección XSS ocurren en la capa de renderizado (Reflex/React).
-    pass
+    # En su lugar, removemos tags HTML para sanitización real (limpieza).
+    if "<" in cleaned and ">" in cleaned:
+        cleaned = re.sub(r"<[^>]*>", "", cleaned)
     
     # Limitar longitud
     if len(cleaned) > max_length:

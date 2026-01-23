@@ -15,14 +15,15 @@ from app.utils.sanitization import (
 
 class TestSanitizeText:
     def test_escapes_script_tags(self):
-        # Escapa los tags HTML para prevenir ejecución
+        # Remueve los tags HTML para prevenir ejecución
         result = sanitize_text("<script>alert('xss')</script>")
         assert "<script>" not in result
-        assert "&lt;" in result  # Escapado
-    
+        assert "alert('xss')" in result # Se mantiene el contenido, se quitan los tags
+
     def test_escapes_html_entities(self):
         result = sanitize_text("<div>test</div>")
-        assert "<" not in result or "&lt;" in result
+        assert "<" not in result
+        assert "test" in result
     
     def test_strips_whitespace(self):
         assert sanitize_text("  hello  ") == "hello"
