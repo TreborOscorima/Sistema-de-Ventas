@@ -12,8 +12,8 @@ CONFIG_SUBSECTIONS = [
 ]
 
 SERVICES_SUBSECTIONS = [
-    {"key": "campo", "label": "Alquiler de Campo", "icon": "trees"},
-    {"key": "piscina", "label": "Alquiler de Piscina", "icon": "waves"},
+    {"key": "campo", "label": "Alquiler de Campo", "icon": "trophy"},
+    # {"key": "piscina", "label": "Alquiler de Piscina", "icon": "waves"},
 ]
 
 CASH_SUBSECTIONS = [

@@ -23,6 +23,7 @@ class IngresoState(MixinState):
         "price": 0,
         "sale_price": 0,
         "subtotal": 0,
+        "product_id": None,
     }
     new_entry_items: List[TransactionItem] = []
     entry_autocomplete_suggestions: List[str] = []
@@ -284,6 +285,7 @@ class IngresoState(MixinState):
             "price": 0,
             "sale_price": 0,
             "subtotal": 0,
+            "product_id": None,
         }
         self.entry_autocomplete_suggestions = []
 

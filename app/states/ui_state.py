@@ -126,7 +126,7 @@ class UIState(MixinState):
             {"label": "Inventario", "icon": "boxes", "page": "Inventario", "route": "/inventario"},
             {"label": "Historial", "icon": "history", "page": "Historial", "route": "/historial"},
             {"label": "Reportes", "icon": "file-chart-column", "page": "Reportes", "route": "/reportes"},
-            {"label": "Servicios", "icon": "briefcase", "page": "Servicios", "route": "/servicios"},
+            {"label": "Servicios", "icon": "calendar-days", "page": "Servicios", "route": "/servicios"},
             {"label": "Configuracion", "icon": "settings", "page": "Configuracion", "route": "/configuracion"},
         ]
 

@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Union
 
 import reflex as rx
 from sqlmodel import select
+from decimal import Decimal
 
 from app.models import FieldReservation, Product
 from app.utils.barcode import clean_barcode, validate_barcode
@@ -264,8 +265,8 @@ class CartMixin:
                 return rx.toast(
                     "Producto no encontrado en el inventario.", duration=3000
                 )
-            if product.stock < total_qty:
-                remaining = max(product.stock - existing_qty, 0)
+            if product.stock < Decimal(str(total_qty)):
+                remaining = max(product.stock - Decimal(str(existing_qty)), Decimal("0"))
                 unit = product.unit or self.new_sale_item.get("unit", "")
                 in_cart_display = self._normalize_quantity_value(existing_qty, unit)
                 remaining_display = self._normalize_quantity_value(remaining, unit)
