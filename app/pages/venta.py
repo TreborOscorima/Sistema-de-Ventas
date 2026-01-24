@@ -1348,6 +1348,17 @@ def venta_page() -> rx.Component:
     content = rx.el.div(
         # Contenido principal
         rx.el.div(
+            rx.el.div(
+                rx.el.h1(
+                    "Punto de Venta",
+                    class_name="text-2xl font-bold text-gray-800",
+                ),
+                rx.el.p(
+                    "Realiza ventas directas, selecciona productos y gestiona el cobro.",
+                    class_name="text-sm text-gray-600",
+                ),
+                class_name="flex flex-col gap-1 mb-2",
+            ),
             # Info de reserva/servicio prominente (si aplica)
             reservation_info_card(),
             client_selector(),
