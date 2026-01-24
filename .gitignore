@@ -2,6 +2,7 @@
 .states
 *.py[cod]
 assets/external/
+assets/exports/
 .web
 .web/
 .states/

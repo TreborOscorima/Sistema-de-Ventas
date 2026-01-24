@@ -42,10 +42,10 @@ from app.utils.rate_limit import (
     clear_login_attempts as _clear_login_attempts,
     remaining_lockout_time as _remaining_lockout_time,
 )
+from app.utils.validators import validate_password
 from app.constants import (
     MAX_LOGIN_ATTEMPTS,
     LOGIN_LOCKOUT_MINUTES,
-    PASSWORD_MIN_LENGTH,
 )
 from .types import User, Privileges, NewUser
 from .mixin_state import MixinState
@@ -797,13 +797,9 @@ class AuthState(MixinState):
         confirm_password = (form_data.get("confirm_password") or "").strip()
         username = (self.current_user.get("username") or "").strip()
 
-        if not new_password:
-            self.password_change_error = "La contraseña no puede estar vacía."
-            return
-        if len(new_password) < PASSWORD_MIN_LENGTH:
-            self.password_change_error = (
-                f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres."
-            )
+        is_valid, error = validate_password(new_password)
+        if not is_valid:
+            self.password_change_error = error
             return
         if username and new_password.lower() == username.lower():
             self.password_change_error = (
@@ -1035,11 +1031,9 @@ class AuthState(MixinState):
                     
                 if self.new_user_data["password"]:
                     password = self.new_user_data["password"]
-                    if len(password) < PASSWORD_MIN_LENGTH:
-                        return rx.toast(
-                            f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres.",
-                            duration=3000,
-                        )
+                    is_valid, error = validate_password(password)
+                    if not is_valid:
+                        return rx.toast(error, duration=3000)
                     if password.lower() == username:
                         return rx.toast(
                             "La contraseña no puede ser igual al usuario.",
@@ -1079,11 +1073,9 @@ class AuthState(MixinState):
                     return rx.toast(
                         "La contraseña no puede estar vacía.", duration=3000
                     )
-                if len(password) < PASSWORD_MIN_LENGTH:
-                    return rx.toast(
-                        f"La contraseña debe tener al menos {PASSWORD_MIN_LENGTH} caracteres.",
-                        duration=3000,
-                    )
+                is_valid, error = validate_password(password)
+                if not is_valid:
+                    return rx.toast(error, duration=3000)
                 if password.lower() == username:
                     return rx.toast(
                         "La contraseña no puede ser igual al usuario.",
