@@ -272,7 +272,7 @@ def page_header(
     breadcrumb: str | None = None,
 ) -> rx.Component:
     """
-    Encabezado de página estandarizado.
+    Encabezado de página estandarizado con soporte para acciones y breadcrumbs.
     
     Args:
         title: Título principal de la página
@@ -283,50 +283,41 @@ def page_header(
     Returns:
         Componente de encabezado de página
     """
-    header_content = []
+    # Seccion de titulo y subtitulo (consistente con page_title)
+    title_section = rx.el.div(
+        rx.el.h1(title, class_name="text-2xl font-bold text-gray-900 tracking-tight"),
+        rx.el.p(subtitle, class_name="text-sm text-gray-500") if subtitle else rx.fragment(),
+        class_name="flex flex-col gap-1",
+    )
     
-    # Breadcrumb opcional
+    content = []
+    
+    # Breadcrumb
     if breadcrumb:
-        header_content.append(
+        content.append(
             rx.el.nav(
                 rx.el.span(breadcrumb, class_name="text-sm text-gray-500"),
                 class_name="mb-2",
             )
         )
     
-    # Título y subtítulo
-    title_section = [
-        rx.el.h1(
-            title,
-            class_name="text-2xl font-bold text-gray-900 tracking-tight",
-        )
-    ]
-    
-    if subtitle:
-        title_section.append(
-            rx.el.p(
-                subtitle,
-                class_name="mt-1 text-sm text-gray-500",
-            )
-        )
-    
-    # Layout con título y acciones
+    # Layout principal
     if actions:
-        header_content.append(
+        content.append(
             rx.el.div(
-                rx.el.div(*title_section),
+                title_section,
                 rx.el.div(
                     *actions,
                     class_name="flex items-center gap-3",
                 ),
-                class_name="flex items-start justify-between",
+                class_name="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4",
             )
         )
     else:
-        header_content.extend(title_section)
+        content.append(title_section)
     
     return rx.el.header(
-        *header_content,
+        *content,
         class_name="mb-6",
     )
 
@@ -747,15 +738,11 @@ def page_title(title: str, subtitle: str = "") -> rx.Component:
         title: Titulo principal
         subtitle: Subtitulo o descripcion opcional
     """
-    parts = [
-        rx.el.h1(title, class_name="text-2xl font-bold text-gray-800"),
-    ]
-    if subtitle:
-        parts.append(
-            rx.el.p(subtitle, class_name="text-sm text-gray-600")
-        )
-    
-    return rx.el.div(*parts, class_name="mb-6")
+    return rx.el.div(
+        rx.el.h1(title, class_name="text-2xl font-bold text-gray-900 tracking-tight"),
+        rx.el.p(subtitle, class_name="text-sm text-gray-500") if subtitle else rx.fragment(),
+        class_name="flex flex-col gap-1 mb-6",
+    )
 
 
 def modal_container(

@@ -6,6 +6,7 @@ from app.components.ui import (
     select_filter,
     date_range_filter,
     BUTTON_STYLES,
+    page_title,
     permission_guard,
 )
 
@@ -415,16 +416,9 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
 def historial_page() -> rx.Component:
     content = rx.fragment(
         rx.el.div(
-            rx.el.div(
-                rx.el.h1(
-                    "Historial de Ventas",
-                    class_name="text-2xl font-bold text-gray-800",
-                ),
-                rx.el.p(
-                    "Consulta y exporta el registro de todas las ventas realizadas.",
-                    class_name="text-sm text-gray-500 mt-1",
-                ),
-                class_name="mb-6",
+            page_title(
+                "Historial de Ventas",
+                "Consulta y exporta el registro de todas las ventas realizadas.",
             ),
             rx.el.div(
                 credit_sales_card(),

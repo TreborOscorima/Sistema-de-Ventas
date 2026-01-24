@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import toggle_switch, permission_guard
+from app.components.ui import toggle_switch, page_title, permission_guard
 
 CONFIG_SECTIONS: list[dict[str, str]] = [
     {
@@ -1019,18 +1019,11 @@ def field_prices_section() -> rx.Component:
 def configuracion_page() -> rx.Component:
     content = rx.fragment(
         rx.el.div(
+            page_title(
+                "Configuracion del Sistema",
+                "Gestiona usuarios, monedas, unidades, metodos de pago y precios de campo desde un solo lugar.",
+            ),
             rx.el.div(
-                    rx.el.h1(
-                        "Configuracion del Sistema",
-                        class_name="text-2xl font-bold text-gray-800",
-                    ),
-                    rx.el.p(
-                        "Gestiona usuarios, monedas, unidades, metodos de pago y precios de campo desde un solo lugar.",
-                        class_name="text-sm text-gray-500",
-                    ),
-                    class_name="space-y-1",
-                ),
-                rx.el.div(
                     rx.match(
                         State.config_active_tab,
                         ("empresa", company_settings_section()),

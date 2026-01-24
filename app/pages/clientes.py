@@ -1,7 +1,7 @@
 import reflex as rx
 
 from app.state import State
-from app.components.ui import BUTTON_STYLES, INPUT_STYLES, empty_state, modal_container, permission_guard
+from app.components.ui import BUTTON_STYLES, INPUT_STYLES, empty_state, modal_container, page_header, permission_guard
 
 
 def client_row(client: rx.Var[dict]) -> rx.Component:
@@ -142,25 +142,17 @@ def client_form_modal() -> rx.Component:
 def clientes_page() -> rx.Component:
     content = rx.fragment(
         rx.el.div(
-            rx.el.div(
-                rx.el.div(
-                    rx.el.h1(
-                        "Clientes",
-                        class_name="text-2xl font-bold text-gray-800",
-                    ),
-                    rx.el.p(
-                        "Administra los clientes y su linea de credito.",
-                        class_name="text-sm text-gray-600",
-                    ),
-                    class_name="flex flex-col gap-1",
-                ),
-                rx.el.button(
-                    rx.icon("plus", class_name="h-4 w-4"),
-                    "Nuevo Cliente",
-                    on_click=lambda: State.open_modal(None),
-                    class_name=BUTTON_STYLES["primary"],
-                ),
-                class_name="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+            page_header(
+                "Clientes",
+                "Administra los clientes y su linea de credito.",
+                actions=[
+                    rx.el.button(
+                        rx.icon("plus", class_name="h-4 w-4"),
+                        "Nuevo Cliente",
+                        on_click=lambda: State.open_modal(None),
+                        class_name=BUTTON_STYLES["primary"],
+                    )
+                ],
             ),
             rx.el.div(
                 rx.el.input(

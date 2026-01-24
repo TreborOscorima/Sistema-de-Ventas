@@ -7,7 +7,7 @@ para evaluaciones administrativas, contables y financieras.
 import reflex as rx
 
 from app.state import State
-from app.components.ui import permission_guard
+from app.components.ui import page_title, permission_guard
 
 
 def _report_type_card(report_type: dict) -> rx.Component:
@@ -219,19 +219,9 @@ def reportes_page() -> rx.Component:
     """Página principal de reportes."""
     content = rx.el.div(
         # Header
-        rx.el.div(
-            rx.el.div(
-                rx.el.h1(
-                    "Reportes Contables y Financieros",
-                    class_name="text-2xl font-bold text-gray-900",
-                ),
-                rx.el.p(
-                    "Genera reportes profesionales para evaluaciones administrativas",
-                    class_name="text-gray-500 mt-1",
-                ),
-                class_name="",
-            ),
-            class_name="mb-6",
+        page_title(
+            "Reportes Contables y Financieros",
+            "Genera reportes profesionales para evaluaciones administrativas",
         ),
         
         rx.el.div(

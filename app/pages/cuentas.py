@@ -1,7 +1,7 @@
 import reflex as rx
 
 from app.state import State
-from app.components.ui import BUTTON_STYLES, empty_state, permission_guard
+from app.components.ui import BUTTON_STYLES, empty_state, page_title, permission_guard
 
 PAYMENT_METHOD_OPTIONS = [
     "Efectivo",
@@ -419,13 +419,9 @@ def cuentas_detail_modal() -> rx.Component:
 def cuentas_page() -> rx.Component:
     content = rx.fragment(
         rx.el.div(
-            rx.el.h1(
+            page_title(
                 "Cuentas Corrientes",
-                class_name="text-2xl font-bold text-gray-800",
-            ),
-            rx.el.p(
                 "Gestiona clientes con saldo pendiente y registra pagos por cuota.",
-                class_name="text-sm text-gray-600",
             ),
             stats_dashboard_component(
                 pagadas=State.total_pagadas,

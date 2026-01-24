@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import permission_guard
+from app.components.ui import page_title, permission_guard
 
 
 def item_entry_row(item: rx.Var[dict]) -> rx.Component:
@@ -58,16 +58,9 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
 
 def ingreso_page() -> rx.Component:
     content = rx.el.div(
-        rx.el.div(
-            rx.el.h1(
-                "Control de Movimiento: Ingreso de Productos",
-                class_name="text-2xl font-bold text-gray-800",
-            ),
-            rx.el.p(
-                "Registra la entrada de nuevos productos al almacen para aumentar el stock disponible.",
-                class_name="text-sm text-gray-600",
-            ),
-            class_name="flex flex-col gap-1 mb-6",
+        page_title(
+            "Control de Movimiento: Ingreso de Productos",
+            "Registra la entrada de nuevos productos al almacen para aumentar el stock disponible.",
         ),
         rx.el.div(
             rx.el.h2(

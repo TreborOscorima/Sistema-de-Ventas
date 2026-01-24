@@ -7,6 +7,7 @@ from app.components.ui import (
     card_container,
     BUTTON_STYLES,
     pagination_controls,
+    page_title,
     permission_guard,
 )
 
@@ -1453,10 +1454,9 @@ def servicio_card(title: str, description: str) -> rx.Component:
 
 def servicios_page() -> rx.Component:
     content = rx.el.div(
-        rx.el.h1("Servicios", class_name="text-2xl font-bold text-gray-800"),
-        rx.el.p(
+        page_title(
+            "Servicios",
             "Gestiona el alquiler de campo con reservas, adelantos, cancelaciones y registros administrativos.",
-            class_name="text-sm text-gray-600",
         ),
         rx.match(
             State.service_active_tab,

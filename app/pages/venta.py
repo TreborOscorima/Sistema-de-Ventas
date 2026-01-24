@@ -3,6 +3,7 @@ from app.state import State
 from app.components.ui import (
     INPUT_STYLES,
     toggle_switch,
+    page_title,
     permission_guard,
 )
 from app.pages.clientes import client_form_modal
@@ -1348,16 +1349,9 @@ def venta_page() -> rx.Component:
     content = rx.el.div(
         # Contenido principal
         rx.el.div(
-            rx.el.div(
-                rx.el.h1(
-                    "Punto de Venta",
-                    class_name="text-2xl font-bold text-gray-800",
-                ),
-                rx.el.p(
-                    "Realiza ventas directas, selecciona productos y gestiona el cobro.",
-                    class_name="text-sm text-gray-600",
-                ),
-                class_name="flex flex-col gap-1 mb-2",
+            page_title(
+                "Punto de Venta",
+                "Realiza ventas directas, selecciona productos y gestiona el cobro.",
             ),
             # Info de reserva/servicio prominente (si aplica)
             reservation_info_card(),

@@ -420,19 +420,14 @@ def dashboard_page() -> rx.Component:
     """Página principal del dashboard."""
     return rx.el.div(
         # Header
-        rx.el.div(
-            rx.el.div(
-                rx.el.h1("Dashboard", class_name="text-2xl font-bold text-gray-900 tracking-tight"),
-                rx.el.p(
-                    rx.cond(
-                        State.last_refresh != "",
-                        rx.text(f"Última actualización: {State.last_refresh}"),
-                        rx.text("Cargando..."),
-                    ),
-                    class_name="text-sm text-gray-500",
-                ),
+        page_header(
+            "Dashboard",
+            rx.cond(
+                State.last_refresh != "",
+                rx.text(f"Última actualización: {State.last_refresh}"),
+                rx.text("Cargando..."),
             ),
-            rx.el.div(
+            actions=[
                 # Selector de período
                 _period_selector(),
                 # Botón actualizar
@@ -451,9 +446,7 @@ def dashboard_page() -> rx.Component:
                         BUTTON_STYLES["primary"],
                     ),
                 ),
-                class_name="flex items-center gap-4",
-            ),
-            class_name="flex items-center justify-between mb-6",
+            ],
         ),
         
         # KPIs principales

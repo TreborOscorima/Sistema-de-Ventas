@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import pagination_controls, permission_guard
+from app.components.ui import page_title, pagination_controls, permission_guard
 
 
 def edit_product_modal() -> rx.Component:
@@ -432,15 +432,9 @@ def inventory_adjustment_modal() -> rx.Component:
 
 def inventario_page() -> rx.Component:
     content = rx.el.div(
-        rx.el.div(
-            rx.el.h1(
-                "Inventario Actual", class_name="text-2xl font-bold text-gray-800"
-            ),
-            rx.el.p(
-                "Gestiona el stock de productos, realiza ajustes y visualiza el valor total del inventario.",
-                class_name="text-sm text-gray-600",
-            ),
-            class_name="flex flex-col gap-1 mb-6",
+        page_title(
+            "Inventario Actual",
+            "Gestiona el stock de productos, realiza ajustes y visualiza el valor total del inventario.",
         ),
         rx.el.div(
             rx.el.h2(

@@ -13,6 +13,7 @@ from app.components.ui import (
     form_textarea,
     INPUT_STYLES,
     toggle_switch,
+    page_title,
     permission_guard,
 )
 
@@ -931,16 +932,9 @@ def petty_cash_view() -> rx.Component:
 
 def cashbox_page() -> rx.Component:
     content = rx.el.div(
-        rx.el.div(
-            rx.el.h1(
-                "Gestion de Caja",
-                class_name="text-2xl font-bold text-gray-800",
-            ),
-            rx.el.p(
-                "Controla la apertura, cierre y movimientos de dinero en caja.",
-                class_name="text-sm text-gray-600",
-            ),
-            class_name="flex flex-col gap-1 mb-6",
+        page_title(
+            "Gestion de Caja",
+            "Controla la apertura, cierre y movimientos de dinero en caja.",
         ),
         rx.cond(
             State.cash_active_tab == "movimientos",
