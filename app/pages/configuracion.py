@@ -817,90 +817,90 @@ def payment_methods_section() -> rx.Component:
                 rx.icon("plus", class_name="h-4 w-4"),
                 "Agregar metodo",
                 on_click=State.add_payment_method,
-                class_name="w-full md:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center gap-2 min-h-[44px]",
+                class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
             ),
-            class_name="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-4 rounded-lg shadow-sm border items-end",
+            class_name="grid grid-cols-1 md:grid-cols-4 gap-2 bg-white p-3 rounded-lg shadow-sm border items-end",
         ),
         rx.el.div(
-            rx.el.table(
-                rx.el.thead(
-                    rx.el.tr(
-                        rx.el.th("Metodo", class_name="py-2 px-3 text-left"),
-                        rx.el.th("Tipo", class_name="py-2 px-3 text-left"),
-                        rx.el.th("Estado", class_name="py-2 px-3 text-left"),
-                        rx.el.th("Acciones", class_name="py-2 px-3 text-right"),
-                        class_name="bg-gray-100",
-                    )
-                ),
-                rx.el.tbody(
-                    rx.foreach(
-                        State.payment_methods,
-                        lambda method: rx.el.tr(
-                            rx.el.td(
-                                rx.el.div(
-                                    rx.el.span(method["name"], class_name="font-semibold"),
-                                    rx.cond(
-                                        State.payment_method == method["name"],
-                                        rx.el.span(
-                                            "En uso",
-                                            class_name="text-xs px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
-                                        ),
-                                        rx.fragment(),
-                                    ),
-                                    class_name="flex items-center gap-2",
-                                ),
-                                class_name="py-2 px-3",
-                            ),
-                            rx.el.td(
-                                PAYMENT_KIND_LABELS.get(method["kind"], "Otro"),
-                                class_name="py-2 px-3",
-                            ),
-                            rx.el.td(
+            rx.foreach(
+                State.payment_methods,
+                lambda method: rx.el.div(
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.div(
                                 rx.el.span(
-                                    rx.cond(
-                                        method["enabled"],
+                                    method["name"],
+                                    class_name="text-sm font-semibold text-gray-900",
+                                ),
+                                rx.cond(
+                                    State.payment_method == method["name"],
+                                    rx.el.span(
+                                        "En uso",
+                                        class_name="px-2 py-0.5 text-[10px] rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                class_name="flex items-center gap-2",
+                            ),
+                            rx.el.div(
+                                rx.el.span(
+                                    PAYMENT_KIND_LABELS.get(method["kind"], "Otro"),
+                                    class_name="px-2 py-0.5 text-[10px] rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
+                                ),
+                                rx.cond(
+                                    method["enabled"],
+                                    rx.el.span(
                                         "Activo",
+                                        class_name="px-2 py-0.5 text-[10px] rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100",
+                                    ),
+                                    rx.el.span(
                                         "Inactivo",
+                                        class_name="px-2 py-0.5 text-[10px] rounded-md bg-gray-100 text-gray-600 border border-gray-200",
                                     ),
-                                    class_name="text-sm font-medium",
                                 ),
-                                class_name="py-2 px-3",
+                                class_name="flex items-center gap-2",
                             ),
-                            rx.el.td(
-                                rx.el.div(
-                                    rx.el.div(
-                                        rx.el.label(
-                                            "Visible en Venta",
-                                            class_name="text-xs text-gray-500",
-                                        ),
-                                        toggle_switch(
-                                            checked=method["enabled"],
-                                            on_change=lambda value,
-                                            mid=method["id"]: State.toggle_payment_method_enabled(
-                                                mid, value
-                                            ),
-                                        ),
-                                        class_name="flex items-center gap-2",
-                                    ),
-                                    rx.el.button(
-                                        rx.icon("trash-2", class_name="h-4 w-4"),
-                                        on_click=lambda _,
-                                        mid=method["id"]: State.remove_payment_method(mid),
-                                        class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
-                                    ),
-                                    class_name="flex items-center justify-end gap-3",
+                            rx.cond(
+                                method["description"] != "Sin descripcion",
+                                rx.el.p(
+                                    method["description"],
+                                    class_name="text-xs text-gray-500",
                                 ),
-                                class_name="py-2 px-3 text-right",
+                                rx.fragment(),
                             ),
-                            key=method["id"],
-                            class_name="border-b",
+                            class_name="flex flex-col gap-1",
                         ),
-                    )
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.span(
+                                    "Visible en Venta",
+                                    class_name="text-[10px] text-gray-500 hidden sm:inline",
+                                ),
+                                toggle_switch(
+                                    checked=method["enabled"],
+                                    on_change=lambda value,
+                                    mid=method["id"]: State.toggle_payment_method_enabled(
+                                        mid, value
+                                    ),
+                                ),
+                                class_name="flex items-center gap-2",
+                            ),
+                            rx.el.button(
+                                rx.icon("trash-2", class_name="h-4 w-4"),
+                                on_click=lambda _,
+                                mid=method["id"]: State.remove_payment_method(mid),
+                                class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                            ),
+                            class_name="flex items-center gap-2",
+                        ),
+                        class_name="flex items-center justify-between gap-2",
+                    ),
+                    class_name="border border-gray-200 rounded-md p-2 shadow-sm",
                 ),
             ),
-            class_name="bg-white p-4 rounded-lg shadow-md overflow-x-auto",
+            class_name="bg-white p-2 sm:p-3 rounded-lg shadow-md grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2",
         ),
-        class_name="space-y-4",
+        class_name="space-y-3",
     )
 
 

@@ -229,7 +229,7 @@ def ingreso_page() -> rx.Component:
 
     content = rx.el.div(
         page_title(
-            "Control de Movimiento: Ingreso de Productos",
+            "Ingreso de Productos",
             "Registra la entrada de nuevos productos al almacen para aumentar el stock disponible.",
         ),
         purchase_card,

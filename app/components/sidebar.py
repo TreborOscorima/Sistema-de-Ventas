@@ -31,8 +31,8 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     )
     
     # Estilos para item activo vs inactivo
-    active_class = f"relative flex items-center gap-3 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2.5 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
-    inactive_class = f"relative flex items-center gap-3 {RADIUS['lg']} px-3 py-2.5 text-gray-600 hover:bg-white/60 hover:text-gray-900 font-medium {TRANSITIONS['fast']}"
+    active_class = f"relative flex items-center gap-3 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
+    inactive_class = f"relative flex items-center gap-3 {RADIUS['lg']} px-3 py-2 text-gray-600 hover:bg-white/60 hover:text-gray-900 font-medium {TRANSITIONS['fast']}"
     
     link = rx.link(
         rx.el.div(
@@ -83,8 +83,8 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
 
 def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.Component:
     """Botón de submenú con estilo mejorado."""
-    active_class = f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-2 {SHADOWS['sm']} border-l-2 border-indigo-500"
-    inactive_class = f"w-full text-left {RADIUS['lg']} px-3 py-2 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}"
+    active_class = f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500"
+    inactive_class = f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}"
     
     return rx.el.button(
         rx.el.div(
@@ -174,12 +174,12 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.config_active_tab
                                                         == section["key"],
-                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-2 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-2 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
+                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-2 ml-3 pl-3 flex flex-col gap-1 border-l border-gray-200",
+                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-gray-200",
                                         ),
                                         rx.fragment(),
                                     ),
@@ -207,12 +207,12 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.cash_active_tab
                                                         == section["key"],
-                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-2 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-2 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
+                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-2 ml-3 pl-3 flex flex-col gap-1 border-l border-gray-200",
+                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-gray-200",
                                         ),
                                         rx.fragment(),
                                     ),
@@ -240,19 +240,19 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.service_active_tab
                                                         == section["key"],
-                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-2 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-2 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
+                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-2 ml-3 pl-3 flex flex-col gap-1 border-l border-gray-200",
+                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-gray-200",
                                         ),
                                         rx.fragment(),
                                     ),
-                            class_name="flex flex-col gap-1 pt-3",
+                            class_name="flex flex-col gap-0.5 pt-2",
                         ),
                     ),
-                    class_name="flex flex-col gap-1 p-3",
+                    class_name="flex flex-col gap-0.5 p-2",
                 ),
             ),
         ),
