@@ -276,6 +276,10 @@ class AuthState(MixinState):
     def can_view_compras(self) -> bool:
         privileges = self.current_user["privileges"]
         return bool(privileges.get("view_compras") or privileges.get("view_ingresos"))
+
+    @rx.var
+    def can_manage_compras(self) -> bool:
+        return bool(self.current_user["privileges"].get("create_ingresos"))
     
     @rx.var
     def can_view_ventas(self) -> bool:

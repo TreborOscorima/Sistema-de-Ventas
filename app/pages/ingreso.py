@@ -221,27 +221,15 @@ def ingreso_page() -> rx.Component:
         class_name="grid grid-cols-1 lg:grid-cols-3 gap-6",
     )
 
-    purchase_card = rx.el.div(
-        purchase_header,
-        purchase_grid,
-        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
-    )
-
-    content = rx.el.div(
-        page_title(
-            "Ingreso de Productos",
-            "Registra la entrada de nuevos productos al almacen para aumentar el stock disponible.",
+    entry_item_form = rx.el.div(
+        rx.el.h2(
+            "Añadir Producto", class_name="text-lg font-semibold text-gray-700 mb-4"
         ),
-        purchase_card,
         rx.el.div(
-            rx.el.h2(
-                "Añadir Producto", class_name="text-lg font-semibold text-gray-700 mb-4"
-            ),
             rx.el.div(
-                rx.el.div(
-                    rx.el.label(
-                        "Codigo de Barra",
-                        class_name="block text-sm font-medium text-gray-600 mb-1",
+                rx.el.label(
+                    "Codigo de Barra",
+                    class_name="block text-sm font-medium text-gray-600 mb-1",
                     ),
                     rx.el.input(
                         id="barcode-input-entry",
@@ -370,8 +358,22 @@ def ingreso_page() -> rx.Component:
                 ),
                 class_name="flex flex-wrap items-start gap-4",
             ),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
+        class_name="mt-6 pt-6 border-t border-gray-100",
+    )
+
+    purchase_card = rx.el.div(
+        purchase_header,
+        purchase_grid,
+        entry_item_form,
+        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
+    )
+
+    content = rx.el.div(
+        page_title(
+            "Ingreso de Productos",
+            "Registra la entrada de nuevos productos al almacen para aumentar el stock disponible.",
         ),
+        purchase_card,
         rx.el.div(
             rx.el.h2(
                 "Productos a Ingresar",
@@ -407,24 +409,24 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col gap-4",
-        ),
-        rx.el.div(
             rx.el.div(
-                rx.el.span("Total General:", class_name="text-xl font-bold"),
-                rx.el.span(
-                    State.currency_symbol,
-                    State.entry_total.to_string(),
-                    class_name="text-xl font-bold text-indigo-700",
+                rx.el.div(
+                    rx.el.span("Total General:", class_name="text-xl font-bold"),
+                    rx.el.span(
+                        State.currency_symbol,
+                        State.entry_total.to_string(),
+                        class_name="text-xl font-bold text-indigo-700",
+                    ),
+                    class_name="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4",
                 ),
-                class_name="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4",
+                rx.el.button(
+                    "Confirmar Ingreso",
+                    on_click=State.confirm_entry,
+                    class_name="w-full sm:w-auto bg-green-600 text-white px-5 py-3 rounded-lg hover:bg-green-700 font-semibold min-h-[44px]",
+                ),
+                class_name="pt-4 mt-4 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4",
             ),
-            rx.el.button(
-                "Confirmar Ingreso",
-                on_click=State.confirm_entry,
-                class_name="w-full sm:w-auto bg-green-600 text-white px-5 py-3 rounded-lg hover:bg-green-700 font-semibold min-h-[44px]",
-            ),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col gap-4",
         ),
         class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4",
     )
