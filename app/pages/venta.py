@@ -308,9 +308,9 @@ def quick_add_bar() -> rx.Component:
     )
 
 
-def products_table() -> rx.Component:
+def products_table(embedded: bool = False) -> rx.Component:
     """Tabla de productos en la venta - responsive."""
-    return rx.el.div(
+    content = rx.el.div(
         # Header
         rx.el.div(
             rx.el.div(
@@ -369,6 +369,20 @@ def products_table() -> rx.Component:
             ),
             class_name="flex-1 overflow-y-auto px-3 py-2",
         ),
+        class_name="flex flex-col flex-1 min-h-[320px] sm:min-h-[360px]",
+    )
+    if embedded:
+        return content
+    return rx.el.div(
+        content,
+        class_name="flex flex-col bg-white rounded-lg border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
+    )
+
+
+def sale_products_card() -> rx.Component:
+    return rx.el.div(
+        quick_add_bar(),
+        products_table(embedded=True),
         class_name="flex flex-col bg-white rounded-lg border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
     )
 
@@ -1361,9 +1375,7 @@ def venta_page() -> rx.Component:
             reservation_info_card(),
             client_selector(),
             # Barra de entrada rápida
-            quick_add_bar(),
-            # Tabla de productos
-            products_table(),
+            sale_products_card(),
             # Pago móvil/tablet
             payment_mobile_section(),
             class_name="flex flex-col flex-1 min-h-0 gap-2 sm:gap-3 p-2.5 sm:p-3 lg:pr-0 overflow-y-auto lg:overflow-hidden",
