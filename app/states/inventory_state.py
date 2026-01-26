@@ -24,7 +24,7 @@ import uuid
 import logging
 import io
 from sqlmodel import select
-from sqlalchemy import or_, func
+from sqlalchemy import and_, or_, func
 from app.models import Product, StockMovement, User as UserModel, Category, SaleItem
 from .types import InventoryAdjustment
 from .mixin_state import MixinState
@@ -43,6 +43,9 @@ from app.utils.exports import (
     NEGATIVE_FILL,
     WARNING_FILL,
 )
+
+
+LOW_STOCK_THRESHOLD = 5
 
 
 class InventoryState(MixinState):
@@ -232,6 +235,50 @@ class InventoryState(MixinState):
     def inventory_paginated_list(self) -> list[Product]:
         # Alias para compatibilidad con UI existente, ya que inventory_list ahora está paginado
         return self.inventory_list
+
+    @rx.var
+    def inventory_total_products(self) -> int:
+        _ = self._inventory_update_trigger
+        if not self.current_user["privileges"]["view_inventario"]:
+            return 0
+        with rx.session() as session:
+            total = session.exec(select(func.count(Product.id))).one() or 0
+        return int(total)
+
+    @rx.var
+    def inventory_in_stock_count(self) -> int:
+        _ = self._inventory_update_trigger
+        if not self.current_user["privileges"]["view_inventario"]:
+            return 0
+        with rx.session() as session:
+            total = session.exec(
+                select(func.count(Product.id)).where(Product.stock > LOW_STOCK_THRESHOLD)
+            ).one() or 0
+        return int(total)
+
+    @rx.var
+    def inventory_low_stock_count(self) -> int:
+        _ = self._inventory_update_trigger
+        if not self.current_user["privileges"]["view_inventario"]:
+            return 0
+        with rx.session() as session:
+            total = session.exec(
+                select(func.count(Product.id)).where(
+                    and_(Product.stock > 0, Product.stock <= LOW_STOCK_THRESHOLD)
+                )
+            ).one() or 0
+        return int(total)
+
+    @rx.var
+    def inventory_out_of_stock_count(self) -> int:
+        _ = self._inventory_update_trigger
+        if not self.current_user["privileges"]["view_inventario"]:
+            return 0
+        with rx.session() as session:
+            total = session.exec(
+                select(func.count(Product.id)).where(Product.stock <= 0)
+            ).one() or 0
+        return int(total)
 
     @rx.event
     def set_inventory_search_term(self, value: str):

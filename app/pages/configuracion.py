@@ -588,77 +588,83 @@ def currency_section() -> rx.Component:
                 ),
                 class_name="flex flex-col gap-1",
             ),
-            class_name="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white p-4 rounded-lg shadow-sm border",
+            rx.el.button(
+                rx.icon("plus", class_name="h-4 w-4"),
+                "Agregar moneda",
+                on_click=State.add_currency,
+                class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
+            ),
+            class_name="grid grid-cols-1 md:grid-cols-4 gap-2 bg-white p-3 rounded-lg shadow-sm border items-end",
         ),
         rx.el.div(
-            rx.el.div(
-                rx.el.button(
-                    rx.icon("plus", class_name="h-4 w-4"),
-                    "Agregar moneda",
-                    on_click=State.add_currency,
-                    class_name="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 flex items-center justify-center gap-2 min-h-[44px]",
-                ),
-                class_name="flex items-center gap-3",
+            rx.el.span("Moneda activa:", class_name="text-xs text-gray-600"),
+            rx.el.span(
+                State.currency_name,
+                class_name="text-xs font-semibold text-indigo-700",
             ),
-            rx.el.div(
-                rx.el.span("Moneda activa:", class_name="text-sm text-gray-600"),
-                rx.el.span(
-                    State.currency_name,
-                    class_name="text-sm font-semibold text-indigo-700",
-                ),
-                class_name="flex items-center gap-2",
-            ),
-            class_name="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border rounded-lg p-4 shadow-sm",
+            class_name="flex flex-wrap items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-md px-3 py-2",
         ),
         rx.el.div(
-            rx.el.table(
-                rx.el.thead(
-                    rx.el.tr(
-                        rx.el.th("Codigo", class_name="py-2 px-4 text-left"),
-                        rx.el.th("Nombre", class_name="py-2 px-4 text-left"),
-                        rx.el.th("Simbolo", class_name="py-2 px-4 text-left"),
-                        rx.el.th("Acciones", class_name="py-2 px-4 text-right"),
-                        class_name="bg-gray-100",
-                    )
-                ),
-                rx.el.tbody(
-                    rx.foreach(
-                        State.available_currencies,
-                        lambda currency: rx.el.tr(
-                            rx.el.td(currency["code"], class_name="py-2 px-4 font-semibold"),
-                            rx.el.td(currency["name"], class_name="py-2 px-4"),
-                            rx.el.td(currency["symbol"], class_name="py-2 px-4"),
-                            rx.el.td(
-                                rx.el.div(
-                                    rx.el.button(
-                                        "Seleccionar",
-                                        on_click=lambda _,
-                                        code=currency["code"]: State.set_currency(code),
-                                        class_name="px-3 py-1 rounded-md border text-sm hover:bg-gray-50",
-                                    ),
-                                    rx.el.button(
-                                        rx.icon("trash-2", class_name="h-4 w-4"),
-                                        on_click=lambda _,
-                                        code=currency["code"]: State.remove_currency(code),
-                                        class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
-                                    ),
-                                    class_name="flex items-center justify-end gap-2",
+            rx.foreach(
+                State.available_currencies,
+                lambda currency: rx.el.div(
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.span(
+                                    currency["code"],
+                                    class_name="text-sm font-semibold text-gray-900",
                                 ),
-                                class_name="py-2 px-4 text-right",
+                                rx.cond(
+                                    State.selected_currency_code == currency["code"],
+                                    rx.el.span(
+                                        "Activa",
+                                        class_name="px-2 py-0.5 text-[10px] rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                class_name="flex items-center gap-2",
                             ),
-                            class_name=rx.cond(
-                                State.selected_currency_code == currency["code"],
-                                "bg-indigo-50",
-                                "bg-white",
+                            rx.el.p(
+                                currency["name"],
+                                class_name="text-xs text-gray-500",
                             ),
-                            key=currency["code"],
+                            class_name="flex flex-col gap-1",
                         ),
-                    )
+                        rx.el.div(
+                            rx.el.span(
+                                currency["symbol"],
+                                class_name="px-2 py-0.5 text-[10px] rounded-md bg-gray-100 text-gray-600 border border-gray-200",
+                            ),
+                            class_name="flex items-center gap-2",
+                        ),
+                        class_name="flex items-start justify-between gap-2",
+                    ),
+                    rx.el.div(
+                        rx.el.button(
+                            "Seleccionar",
+                            on_click=lambda _,
+                            code=currency["code"]: State.set_currency(code),
+                            class_name="px-3 py-1 rounded-md border text-xs hover:bg-gray-50",
+                        ),
+                        rx.el.button(
+                            rx.icon("trash-2", class_name="h-4 w-4"),
+                            on_click=lambda _,
+                            code=currency["code"]: State.remove_currency(code),
+                            class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                        ),
+                        class_name="flex items-center justify-end gap-2",
+                    ),
+                    class_name=rx.cond(
+                        State.selected_currency_code == currency["code"],
+                        "border border-indigo-200 bg-indigo-50 rounded-md p-2 shadow-sm",
+                        "border border-gray-200 rounded-md p-2 shadow-sm",
+                    ),
                 ),
             ),
-            class_name="bg-white p-4 rounded-lg shadow-md overflow-x-auto",
+            class_name="bg-white p-2 sm:p-3 rounded-lg shadow-md grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2",
         ),
-        class_name="space-y-4",
+        class_name="space-y-3",
     )
 
 

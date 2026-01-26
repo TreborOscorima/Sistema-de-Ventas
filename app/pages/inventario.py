@@ -430,11 +430,45 @@ def inventory_adjustment_modal() -> rx.Component:
     )
 
 
+def inventory_stat_card(title: str, value: rx.Var, value_class: str) -> rx.Component:
+    return rx.el.div(
+        rx.el.p(title, class_name="text-sm text-gray-500"),
+        rx.el.p(
+            value,
+            class_name=f"text-3xl font-semibold tracking-tight {value_class}",
+        ),
+        class_name="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sm:p-5",
+    )
+
+
 def inventario_page() -> rx.Component:
     content = rx.el.div(
         page_title(
             "Inventario Actual",
             "Gestiona el stock de productos, realiza ajustes y visualiza el valor total del inventario.",
+        ),
+        rx.el.div(
+            inventory_stat_card(
+                "Total Productos",
+                State.inventory_total_products.to_string(),
+                "text-slate-900",
+            ),
+            inventory_stat_card(
+                "Con Stock",
+                State.inventory_in_stock_count.to_string(),
+                "text-emerald-600",
+            ),
+            inventory_stat_card(
+                "Stock Bajo",
+                State.inventory_low_stock_count.to_string(),
+                "text-amber-600",
+            ),
+            inventory_stat_card(
+                "Agotados",
+                State.inventory_out_of_stock_count.to_string(),
+                "text-red-600",
+            ),
+            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
         ),
         rx.el.div(
             rx.el.h2(

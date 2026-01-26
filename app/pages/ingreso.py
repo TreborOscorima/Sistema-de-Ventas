@@ -224,7 +224,7 @@ def ingreso_page() -> rx.Component:
     purchase_card = rx.el.div(
         purchase_header,
         purchase_grid,
-        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
+        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
     )
 
     content = rx.el.div(
@@ -370,7 +370,7 @@ def ingreso_page() -> rx.Component:
                 ),
                 class_name="flex flex-wrap items-start gap-4",
             ),
-            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
+            class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md",
         ),
         rx.el.div(
             rx.el.h2(
@@ -426,7 +426,7 @@ def ingreso_page() -> rx.Component:
             ),
             class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4",
         ),
-        class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-6",
+        class_name="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4",
     )
     
     return permission_guard(
