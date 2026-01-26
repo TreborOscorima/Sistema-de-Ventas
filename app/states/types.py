@@ -150,6 +150,7 @@ class InventoryAdjustment(TypedDict):
 
 class Privileges(TypedDict):
     view_ingresos: bool
+    view_compras: bool
     create_ingresos: bool
     view_ventas: bool
     create_ventas: bool
@@ -166,6 +167,7 @@ class Privileges(TypedDict):
     manage_config: bool
     view_clientes: bool
     manage_clientes: bool
+    manage_proveedores: bool
     view_cuentas: bool
     manage_cuentas: bool
 

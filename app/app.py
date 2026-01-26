@@ -3,6 +3,7 @@ import app.models  # Importar modelos para que Reflex detecte las tablas
 from app.state import State
 from app.components.sidebar import sidebar
 from app.pages.ingreso import ingreso_page
+from app.pages.compras import compras_page
 from app.pages.venta import venta_page
 from app.pages.inventario import inventario_page
 from app.pages.caja import cashbox_page
@@ -113,6 +114,7 @@ def _toast_provider() -> rx.Component:
 ROUTE_TO_PAGE = {
     "/": "Ingreso",
     "/ingreso": "Ingreso",
+    "/compras": "Compras",
     "/venta": "Venta",
     "/caja": "Gestion de Caja",
     "/clientes": "Clientes",
@@ -125,6 +127,7 @@ ROUTE_TO_PAGE = {
 
 PAGE_TO_ROUTE = {
     "Ingreso": "/ingreso",
+    "Compras": "/compras",
     "Venta": "/venta",
     "Gestion de Caja": "/caja",
     "Clientes": "/clientes",
@@ -188,6 +191,10 @@ def index() -> rx.Component:
 
 def page_ingreso() -> rx.Component:
     return authenticated_layout(ingreso_page())
+
+
+def page_compras() -> rx.Component:
+    return authenticated_layout(compras_page())
 
 
 def page_venta() -> rx.Component:
@@ -307,6 +314,13 @@ app.add_page(
     route="/ingreso",
     title="Ingreso - TUWAYKIAPP",
     on_load=[State.ensure_view_ingresos, State.sync_page_from_route] + _common_on_load,
+)
+app.add_page(
+    page_compras,
+    route="/compras",
+    title="Compras - TUWAYKIAPP",
+    on_load=[State.ensure_view_compras, State.load_suppliers, State.sync_page_from_route]
+    + _common_on_load,
 )
 app.add_page(
     page_venta,

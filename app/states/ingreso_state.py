@@ -5,13 +5,30 @@ import uuid
 import logging
 from decimal import Decimal
 from sqlmodel import select
-from sqlalchemy import func
-from app.models import Product, StockMovement, User as UserModel
+from sqlalchemy import func, or_
+from app.models import (
+    Product,
+    StockMovement,
+    User as UserModel,
+    Supplier,
+    Purchase,
+    PurchaseItem,
+)
 from .types import TransactionItem
 from .mixin_state import MixinState
 from app.utils.barcode import clean_barcode, validate_barcode
+from app.utils.sanitization import sanitize_text
 
 class IngresoState(MixinState):
+    purchase_doc_type: str = "boleta"
+    purchase_series: str = ""
+    purchase_number: str = ""
+    purchase_issue_date: str = ""
+    purchase_notes: str = ""
+    purchase_supplier_query: str = ""
+    purchase_supplier_suggestions: List[Dict[str, Any]] = []
+    selected_supplier: Optional[Dict[str, Any]] = None
+
     entry_form_key: int = 0
     new_entry_item: TransactionItem = {
         "temp_id": "",
@@ -94,6 +111,87 @@ class IngresoState(MixinState):
             logging.exception(f"Error parsing entry value: {e}")
 
     @rx.event
+    def set_purchase_doc_type(self, value: str):
+        doc_type = (value or "").strip().lower()
+        if doc_type not in {"boleta", "factura"}:
+            return
+        self.purchase_doc_type = doc_type
+
+    @rx.event
+    def set_purchase_series(self, value: str):
+        self.purchase_series = value or ""
+
+    @rx.event
+    def set_purchase_number(self, value: str):
+        self.purchase_number = value or ""
+
+    @rx.event
+    def set_purchase_issue_date(self, value: str):
+        self.purchase_issue_date = value or ""
+
+    @rx.event
+    def set_purchase_notes(self, value: str):
+        self.purchase_notes = value or ""
+
+    @rx.event
+    def search_supplier_change(self, query: str):
+        self.purchase_supplier_query = query or ""
+        term = (query or "").strip()
+        if len(term) < 2:
+            self.purchase_supplier_suggestions = []
+            return
+        search = f"%{term}%"
+        with rx.session() as session:
+            suppliers = session.exec(
+                select(Supplier)
+                .where(
+                    or_(
+                        Supplier.name.ilike(search),
+                        Supplier.tax_id.ilike(search),
+                    )
+                )
+                .order_by(Supplier.name)
+                .limit(6)
+            ).all()
+        self.purchase_supplier_suggestions = [
+            {
+                "id": supplier.id,
+                "name": supplier.name,
+                "tax_id": supplier.tax_id,
+            }
+            for supplier in suppliers
+        ]
+
+    @rx.event
+    def select_supplier(self, supplier_data: dict | Supplier):
+        selected = None
+        if isinstance(supplier_data, Supplier):
+            selected = {
+                "id": supplier_data.id,
+                "name": supplier_data.name,
+                "tax_id": supplier_data.tax_id,
+            }
+        elif isinstance(supplier_data, dict) and supplier_data:
+            selected = dict(supplier_data)
+        self.selected_supplier = selected
+        self.purchase_supplier_query = ""
+        self.purchase_supplier_suggestions = []
+
+    @rx.event
+    def clear_selected_supplier(self):
+        self.selected_supplier = None
+
+    def _reset_purchase_form(self):
+        self.purchase_doc_type = "boleta"
+        self.purchase_series = ""
+        self.purchase_number = ""
+        self.purchase_issue_date = ""
+        self.purchase_notes = ""
+        self.purchase_supplier_query = ""
+        self.purchase_supplier_suggestions = []
+        self.selected_supplier = None
+
+    @rx.event
     def process_entry_barcode_from_input(self, barcode_value):
         """Procesa el barcode del input cuando pierde el foco"""
         # Actualizar el estado con el valor del input
@@ -174,103 +272,192 @@ class IngresoState(MixinState):
         if not self.new_entry_items:
             return rx.toast("No hay productos para ingresar.", duration=3000)
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
+
+        doc_type = (self.purchase_doc_type or "").strip().lower()
+        series = sanitize_text(self.purchase_series, max_length=20)
+        number = sanitize_text(self.purchase_number, max_length=30)
+        notes = sanitize_text(self.purchase_notes, max_length=500)
+        supplier_id = None
+        if isinstance(self.selected_supplier, dict):
+            supplier_id = self.selected_supplier.get("id")
+
+        if doc_type not in {"boleta", "factura"}:
+            return rx.toast("Seleccione tipo de documento valido.", duration=3000)
+        if not number:
+            return rx.toast("Ingrese numero de documento.", duration=3000)
+        if not supplier_id:
+            return rx.toast("Seleccione un proveedor.", duration=3000)
+
+        issue_date_raw = (self.purchase_issue_date or "").strip()
+        if not issue_date_raw:
+            issue_date_raw = datetime.datetime.now().strftime("%Y-%m-%d")
+        try:
+            issue_date = datetime.datetime.strptime(issue_date_raw, "%Y-%m-%d")
+        except ValueError:
+            return rx.toast("Fecha de documento invalida.", duration=3000)
+
         with rx.session() as session:
-            # Obtener ID de usuario actual
-            user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
-            user_id = user.id if user else None
-
-            descriptions_missing_barcode = [
-                (item.get("description") or "").strip()
-                for item in self.new_entry_items
-                if not (item.get("barcode") or "").strip()
-            ]
-            if descriptions_missing_barcode:
-                unique_descriptions = list(
-                    dict.fromkeys(
-                        desc for desc in descriptions_missing_barcode if desc
+            try:
+                existing_doc = session.exec(
+                    select(Purchase).where(
+                        Purchase.supplier_id == supplier_id,
+                        Purchase.doc_type == doc_type,
+                        Purchase.series == series,
+                        Purchase.number == number,
                     )
+                ).first()
+                if existing_doc:
+                    return rx.toast(
+                        "Documento ya registrado para este proveedor.",
+                        duration=3000,
+                    )
+
+                # Obtener ID de usuario actual
+                user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
+                user_id = user.id if user else None
+
+                descriptions_missing_barcode = [
+                    (item.get("description") or "").strip()
+                    for item in self.new_entry_items
+                    if not (item.get("barcode") or "").strip()
+                ]
+                if descriptions_missing_barcode:
+                    unique_descriptions = list(
+                        dict.fromkeys(
+                            desc for desc in descriptions_missing_barcode if desc
+                        )
+                    )
+                    if unique_descriptions:
+                        duplicates = session.exec(
+                            select(
+                                Product.description,
+                                func.count(Product.id),
+                            )
+                            .where(Product.description.in_(unique_descriptions))
+                            .group_by(Product.description)
+                            .having(func.count(Product.id) > 1)
+                        ).all()
+                        if duplicates:
+                            duplicate_name = duplicates[0][0]
+                            return rx.toast(
+                                f"Descripcion duplicada en inventario: {duplicate_name}. "
+                                "Use codigo de barras.",
+                                duration=4000,
+                            )
+
+                currency_code = getattr(self, "selected_currency_code", "PEN")
+                purchase = Purchase(
+                    doc_type=doc_type,
+                    series=series,
+                    number=number,
+                    issue_date=issue_date,
+                    total_amount=Decimal(str(self.entry_total or 0)),
+                    currency_code=str(currency_code or "PEN"),
+                    notes=notes,
+                    supplier_id=supplier_id,
+                    user_id=user_id,
                 )
-                if unique_descriptions:
-                    duplicates = session.exec(
-                        select(
-                            Product.description,
-                            func.count(Product.id),
-                        )
-                        .where(Product.description.in_(unique_descriptions))
-                        .group_by(Product.description)
-                        .having(func.count(Product.id) > 1)
-                    ).all()
-                    if duplicates:
-                        duplicate_name = duplicates[0][0]
-                        return rx.toast(
-                            f"Descripcion duplicada en inventario: {duplicate_name}. "
-                            "Use codigo de barras.",
-                            duration=4000,
-                        )
+                session.add(purchase)
+                session.flush()
 
-            for item in self.new_entry_items:
-                barcode = (item.get("barcode") or "").strip()
-                description = item["description"].strip()
-                
-                product = None
-                if barcode:
-                    product = session.exec(select(Product).where(Product.barcode == barcode)).first()
-                
-                if not product:
-                    # Probar por descripcion si no hay barcode
-                    product = session.exec(select(Product).where(Product.description == description)).first()
+                for item in self.new_entry_items:
+                    barcode = (item.get("barcode") or "").strip()
+                    description = item["description"].strip()
 
-                if product:
-                    # Actualizar
-                    product.stock += Decimal(str(item["quantity"]))
-                    product.purchase_price = Decimal(str(item["price"]))
-                    if item["sale_price"] > 0:
-                        product.sale_price = Decimal(str(item["sale_price"]))
-                    product.category = item["category"]
-                    session.add(product)
-                    
-                    # Registrar movimiento
-                    movement = StockMovement(
-                        type="Ingreso",
-                        product_id=product.id,
-                        quantity=Decimal(str(item["quantity"])),
-                        description=f"Ingreso: {description}",
-                        user_id=user_id
+                    product = None
+                    if barcode:
+                        product = session.exec(
+                            select(Product).where(Product.barcode == barcode)
+                        ).first()
+
+                    if not product:
+                        # Probar por descripcion si no hay barcode
+                        product = session.exec(
+                            select(Product).where(Product.description == description)
+                        ).first()
+
+                    quantity = Decimal(str(item["quantity"]))
+                    unit_cost = Decimal(str(item["price"]))
+                    subtotal = quantity * unit_cost
+
+                    if product:
+                        # Actualizar
+                        product.stock += quantity
+                        product.purchase_price = unit_cost
+                        if item["sale_price"] > 0:
+                            product.sale_price = Decimal(str(item["sale_price"]))
+                        product.category = item["category"]
+                        session.add(product)
+
+                        # Registrar movimiento
+                        movement = StockMovement(
+                            type="Ingreso",
+                            product_id=product.id,
+                            quantity=quantity,
+                            description=f"Ingreso: {description}",
+                            user_id=user_id,
+                        )
+                        session.add(movement)
+                        product_id = product.id
+                        product_barcode = product.barcode
+                        product_category = product.category
+                    else:
+                        # Crear
+                        new_product = Product(
+                            barcode=barcode or str(uuid.uuid4()),
+                            description=description,
+                            category=item["category"],
+                            stock=quantity,
+                            unit=item["unit"],
+                            purchase_price=unit_cost,
+                            sale_price=Decimal(str(item["sale_price"])),
+                        )
+                        session.add(new_product)
+                        session.flush()  # Obtener ID
+
+                        # Registrar movimiento
+                        movement = StockMovement(
+                            type="Ingreso",
+                            product_id=new_product.id,
+                            quantity=quantity,
+                            description=f"Ingreso (Nuevo): {description}",
+                            user_id=user_id,
+                        )
+                        session.add(movement)
+                        product_id = new_product.id
+                        product_barcode = new_product.barcode
+                        product_category = new_product.category
+
+                    purchase_item = PurchaseItem(
+                        purchase_id=purchase.id,
+                        product_id=product_id,
+                        description_snapshot=description,
+                        barcode_snapshot=product_barcode or barcode,
+                        category_snapshot=product_category or item.get("category", ""),
+                        quantity=quantity,
+                        unit=item.get("unit", "Unidad"),
+                        unit_cost=unit_cost,
+                        subtotal=subtotal,
                     )
-                    session.add(movement)
-                else:
-                    # Crear
-                    new_product = Product(
-                        barcode=barcode or str(uuid.uuid4()),
-                        description=description,
-                        category=item["category"],
-                        stock=Decimal(str(item["quantity"])),
-                        unit=item["unit"],
-                        purchase_price=Decimal(str(item["price"])),
-                        sale_price=Decimal(str(item["sale_price"]))
-                    )
-                    session.add(new_product)
-                    session.flush() # Obtener ID
-                    
-                    # Registrar movimiento
-                    movement = StockMovement(
-                        type="Ingreso",
-                        product_id=new_product.id,
-                        quantity=Decimal(str(item["quantity"])),
-                        description=f"Ingreso (Nuevo): {description}",
-                        user_id=user_id
-                    )
-                    session.add(movement)
-            
-            session.commit()
+                    session.add(purchase_item)
+
+                session.commit()
+            except Exception:
+                session.rollback()
+                return rx.toast(
+                    "Error al registrar el ingreso. Verifique los datos.",
+                    duration=4000,
+                )
         
         # Forzar actualización del inventario en la UI
         if hasattr(self, "_inventory_update_trigger"):
             self._inventory_update_trigger += 1
+        if hasattr(self, "_purchase_update_trigger"):
+            self._purchase_update_trigger += 1
             
         self.new_entry_items = []
         self._reset_entry_form()
+        self._reset_purchase_form()
         return rx.toast("Ingreso de productos confirmado.", duration=3000)
 
     def _reset_entry_form(self):

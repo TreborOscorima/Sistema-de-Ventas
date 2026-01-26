@@ -58,6 +58,7 @@ from .mixin_state import MixinState
 # Constantes
 DEFAULT_USER_PRIVILEGES: Privileges = {
     "view_ingresos": True,
+    "view_compras": True,
     "create_ingresos": True,
     "view_ventas": True,
     "create_ventas": True,
@@ -74,12 +75,14 @@ DEFAULT_USER_PRIVILEGES: Privileges = {
     "manage_config": False,
     "view_clientes": True,
     "manage_clientes": True,
+    "manage_proveedores": True,
     "view_cuentas": True,
     "manage_cuentas": False,
 }
 
 ADMIN_PRIVILEGES: Privileges = {
     "view_ingresos": True,
+    "view_compras": True,
     "create_ingresos": True,
     "view_ventas": True,
     "create_ventas": True,
@@ -96,12 +99,14 @@ ADMIN_PRIVILEGES: Privileges = {
     "manage_config": True,
     "view_clientes": True,
     "manage_clientes": True,
+    "manage_proveedores": True,
     "view_cuentas": True,
     "manage_cuentas": True,
 }
 
 CASHIER_PRIVILEGES: Privileges = {
     "view_ingresos": False,
+    "view_compras": False,
     "create_ingresos": False,
     "view_ventas": True,
     "create_ventas": True,
@@ -118,6 +123,7 @@ CASHIER_PRIVILEGES: Privileges = {
     "manage_config": False,
     "view_clientes": True,
     "manage_clientes": True,
+    "manage_proveedores": False,
     "view_cuentas": False,
     "manage_cuentas": False,
 }
@@ -265,6 +271,11 @@ class AuthState(MixinState):
     @rx.var
     def can_view_ingresos(self) -> bool:
         return bool(self.current_user["privileges"].get("view_ingresos"))
+
+    @rx.var
+    def can_view_compras(self) -> bool:
+        privileges = self.current_user["privileges"]
+        return bool(privileges.get("view_compras") or privileges.get("view_ingresos"))
     
     @rx.var
     def can_view_ventas(self) -> bool:
@@ -293,6 +304,13 @@ class AuthState(MixinState):
     @rx.var
     def can_view_clientes(self) -> bool:
         return bool(self.current_user["privileges"].get("view_clientes"))
+
+    @rx.var
+    def can_manage_proveedores(self) -> bool:
+        privileges = self.current_user["privileges"]
+        return bool(
+            privileges.get("manage_proveedores") or privileges.get("manage_clientes")
+        )
     
     @rx.var
     def can_view_cuentas(self) -> bool:
@@ -433,6 +451,8 @@ class AuthState(MixinState):
     def _bootstrap_default_roles(self, session):
         role_count = session.exec(select(func.count(Role.id))).one()
         if role_count and role_count > 0:
+            # Registrar permisos nuevos sin modificar roles existentes.
+            self._ensure_permissions(session, list(DEFAULT_USER_PRIVILEGES.keys()))
             self._load_roles_cache(session)
             return
         permission_map = self._ensure_permissions(
@@ -497,6 +517,8 @@ class AuthState(MixinState):
         # Pero priorizamos la página que el usuario use más frecuentemente
         if privileges.get("view_ingresos"):
             return "/ingreso"
+        if privileges.get("view_compras"):
+            return "/compras"
         if privileges.get("view_ventas"):
             return "/venta"
         if privileges.get("view_cashbox"):
@@ -531,6 +553,19 @@ class AuthState(MixinState):
         if not self.current_user["privileges"].get("view_ingresos"):
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Ingresos.",
+                duration=3000,
+            )
+            yield rx.redirect("/dashboard")
+
+    @rx.event
+    def ensure_view_compras(self):
+        if not self.is_authenticated:
+            yield rx.redirect("/")
+            return
+        privileges = self.current_user["privileges"]
+        if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Compras.",
                 duration=3000,
             )
             yield rx.redirect("/dashboard")

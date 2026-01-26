@@ -57,6 +57,13 @@ PRIVILEGE_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
         ],
     ),
     (
+        "Compras y Proveedores",
+        [
+            ("Ver Compras", "view_compras"),
+            ("Gestionar Proveedores", "manage_proveedores"),
+        ],
+    ),
+    (
         "Ventas y Caja",
         [
             ("Ver Ventas", "view_ventas"),

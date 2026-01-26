@@ -16,6 +16,8 @@ from .ui_state import UIState
 from .config_state import ConfigState
 from .inventory_state import InventoryState
 from .ingreso_state import IngresoState
+from .purchases_state import PurchasesState
+from .suppliers_state import SuppliersState
 from .venta_state import VentaState
 from .cash_state import CashState
 from .historial_state import HistorialState
@@ -32,6 +34,8 @@ _mixins = [
     ServicesState,
     CuentasState,
     ClientesState,
+    SuppliersState,
+    PurchasesState,
     HistorialState,
     CashState,
     VentaState,

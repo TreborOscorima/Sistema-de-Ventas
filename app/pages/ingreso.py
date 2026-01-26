@@ -57,11 +57,182 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
 
 
 def ingreso_page() -> rx.Component:
+    purchase_header = rx.el.div(
+        rx.el.h2(
+            "Datos del Documento de Compra",
+            class_name="text-lg font-semibold text-gray-700",
+        ),
+        rx.el.p(
+            "Completa la información básica del documento y selecciona el proveedor.",
+            class_name="text-sm text-gray-500",
+        ),
+        class_name="flex flex-col gap-1 mb-4",
+    )
+
+    purchase_fields = rx.el.div(
+        rx.el.div(
+            rx.el.label(
+                "Tipo de Documento",
+                class_name="block text-sm font-medium text-gray-600 mb-1",
+            ),
+            rx.el.select(
+                rx.el.option("Boleta", value="boleta"),
+                rx.el.option("Factura", value="factura"),
+                value=State.purchase_doc_type,
+                on_change=State.set_purchase_doc_type,
+                class_name="w-full p-2 border rounded-md bg-white",
+            ),
+            class_name="w-full",
+        ),
+        rx.el.div(
+            rx.el.label(
+                "Serie",
+                class_name="block text-sm font-medium text-gray-600 mb-1",
+            ),
+            rx.el.input(
+                placeholder="Ej: F001",
+                on_change=State.set_purchase_series,
+                value=State.purchase_series,
+                class_name="w-full p-2 border rounded-md",
+            ),
+            class_name="w-full",
+        ),
+        rx.el.div(
+            rx.el.label(
+                "Numero",
+                class_name="block text-sm font-medium text-gray-600 mb-1",
+            ),
+            rx.el.input(
+                placeholder="Ej: 000123",
+                on_change=State.set_purchase_number,
+                value=State.purchase_number,
+                class_name="w-full p-2 border rounded-md",
+            ),
+            class_name="w-full",
+        ),
+        rx.el.div(
+            rx.el.label(
+                "Fecha de Emision",
+                class_name="block text-sm font-medium text-gray-600 mb-1",
+            ),
+            rx.el.input(
+                type="date",
+                on_change=State.set_purchase_issue_date,
+                value=State.purchase_issue_date,
+                class_name="w-full p-2 border rounded-md",
+            ),
+            class_name="w-full",
+        ),
+        class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
+    )
+
+    purchase_notes = rx.el.div(
+        rx.el.label(
+            "Notas (opcional)",
+            class_name="block text-sm font-medium text-gray-600 mb-1",
+        ),
+        rx.el.textarea(
+            placeholder="Observaciones del documento o compra",
+            on_change=State.set_purchase_notes,
+            value=State.purchase_notes,
+            class_name="w-full p-2 border rounded-md min-h-[80px]",
+        ),
+        class_name="w-full",
+    )
+
+    purchase_left = rx.el.div(
+        purchase_fields,
+        purchase_notes,
+        class_name="flex flex-col gap-4 lg:col-span-2",
+    )
+
+    purchase_supplier = rx.el.div(
+        rx.el.label(
+            "Proveedor",
+            class_name="block text-sm font-medium text-gray-600",
+        ),
+        rx.el.input(
+            placeholder="Buscar por nombre o RUC/CUIT",
+            on_change=State.search_supplier_change,
+            value=State.purchase_supplier_query,
+            class_name="w-full p-2 border rounded-md",
+        ),
+        rx.cond(
+            State.purchase_supplier_suggestions.length() > 0,
+            rx.el.div(
+                rx.foreach(
+                    State.purchase_supplier_suggestions,
+                    lambda supplier: rx.el.button(
+                        rx.el.div(
+                            rx.el.span(
+                                supplier["name"],
+                                class_name="font-medium text-gray-800",
+                            ),
+                            rx.el.span(
+                                supplier["tax_id"],
+                                class_name="text-xs text-gray-500",
+                            ),
+                            class_name="flex flex-col text-left",
+                        ),
+                        on_click=lambda _,
+                        supplier=supplier: State.select_supplier(
+                            supplier
+                        ),
+                        class_name="w-full text-left p-2 hover:bg-gray-100",
+                    ),
+                ),
+                class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
+            ),
+            rx.fragment(),
+        ),
+        rx.cond(
+            State.selected_supplier != None,
+            rx.el.div(
+                rx.el.div(
+                    rx.el.span(
+                        State.selected_supplier["name"],
+                        class_name="font-medium text-gray-800",
+                    ),
+                    rx.el.span(
+                        State.selected_supplier["tax_id"],
+                        class_name="text-xs text-gray-500",
+                    ),
+                    class_name="flex flex-col",
+                ),
+                rx.el.button(
+                    rx.icon("x", class_name="h-4 w-4"),
+                    on_click=State.clear_selected_supplier,
+                    class_name="p-1 text-gray-500 hover:text-gray-800",
+                ),
+                class_name="flex items-center justify-between rounded-md border border-gray-200 bg-white p-2",
+            ),
+            rx.fragment(),
+        ),
+        rx.el.p(
+            "Si no existe el proveedor, gestionelo en Compras > Proveedores.",
+            class_name="text-xs text-gray-500",
+        ),
+        class_name="flex flex-col gap-2 bg-gray-50 border border-gray-200 rounded-lg p-4 relative",
+    )
+
+    purchase_grid = rx.el.div(
+        purchase_left,
+        purchase_supplier,
+        class_name="grid grid-cols-1 lg:grid-cols-3 gap-6",
+    )
+
+    purchase_card = rx.el.div(
+        purchase_header,
+        purchase_grid,
+        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6",
+    )
+
     content = rx.el.div(
         page_title(
             "Control de Movimiento: Ingreso de Productos",
             "Registra la entrada de nuevos productos al almacen para aumentar el stock disponible.",
         ),
+        purchase_card,
         rx.el.div(
             rx.el.h2(
                 "Añadir Producto", class_name="text-lg font-semibold text-gray-700 mb-4"

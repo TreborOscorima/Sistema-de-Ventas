@@ -7,6 +7,7 @@ ROUTE_TO_PAGE = {
     "/": "Ingreso",
     "/dashboard": "Dashboard",
     "/ingreso": "Ingreso",
+    "/compras": "Compras",
     "/venta": "Punto de Venta",
     "/caja": "Gestion de Caja",
     "/clientes": "Clientes",
@@ -21,6 +22,7 @@ ROUTE_TO_PAGE = {
 PAGE_TO_ROUTE = {
     "Dashboard": "/dashboard",
     "Ingreso": "/ingreso",
+    "Compras": "/compras",
     "Punto de Venta": "/venta",
     "Gestion de Caja": "/caja",
     "Clientes": "/clientes",
@@ -114,6 +116,7 @@ class UIState(MixinState):
         return [
             {"label": "Dashboard", "icon": "layout-dashboard", "page": "Dashboard", "route": "/dashboard"},
             {"label": "Ingreso", "icon": "arrow-down-to-line", "page": "Ingreso", "route": "/ingreso"},
+            {"label": "Compras", "icon": "file-text", "page": "Compras", "route": "/compras"},
             {"label": "Punto de Venta", "icon": "arrow-up-from-line", "page": "Punto de Venta", "route": "/venta"},
             {
                 "label": "Gestion de Caja",
@@ -134,6 +137,7 @@ class UIState(MixinState):
         return {
             "Dashboard": "",  # Accesible para todos
             "Ingreso": "view_ingresos",
+            "Compras": "view_compras",
             "Punto de Venta": "view_ventas",
             "Gestion de Caja": "view_cashbox",
             "Clientes": "view_clientes",
@@ -151,5 +155,8 @@ class UIState(MixinState):
             return True
         # Asume que current_user esta disponible en self (desde AuthState)
         if hasattr(self, "current_user"):
-            return bool(self.current_user["privileges"].get(required))
+            privileges = self.current_user["privileges"]
+            if required == "view_compras":
+                return bool(privileges.get("view_compras") or privileges.get("view_ingresos"))
+            return bool(privileges.get(required))
         return False
