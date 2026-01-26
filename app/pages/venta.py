@@ -1349,9 +1349,13 @@ def venta_page() -> rx.Component:
     content = rx.el.div(
         # Contenido principal
         rx.el.div(
-            page_title(
-                "Punto de Venta",
-                "Realiza ventas directas, selecciona productos y gestiona el cobro.",
+            rx.cond(
+                State.reservation_selected_for_payment != None,
+                rx.fragment(),
+                page_title(
+                    "Punto de Venta",
+                    "Realiza ventas directas, selecciona productos y gestiona el cobro.",
+                ),
             ),
             # Info de reserva/servicio prominente (si aplica)
             reservation_info_card(),
