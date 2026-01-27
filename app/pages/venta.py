@@ -944,7 +944,7 @@ def payment_sidebar() -> rx.Component:
             ),
             class_name="shrink-0 bg-white border-t",
         ),
-        class_name="w-80 bg-white border-l flex flex-col h-full",
+        class_name="w-80 bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col h-full",
     )
 
 def payment_mobile_section() -> rx.Component:
