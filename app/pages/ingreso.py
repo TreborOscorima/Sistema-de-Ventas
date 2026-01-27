@@ -398,6 +398,7 @@ def ingreso_page() -> rx.Component:
                         class_name="bg-gray-100",
                     ),
                     rx.el.tbody(rx.foreach(State.new_entry_items, item_entry_row)),
+                    class_name="w-full",
                 ),
                 class_name="overflow-x-auto",
             ),
