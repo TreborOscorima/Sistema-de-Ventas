@@ -316,7 +316,7 @@ def products_table(embedded: bool = False) -> rx.Component:
             rx.el.div(
                 rx.icon("shopping-cart", class_name="h-5 w-5 text-indigo-600"),
                 rx.el.span("Productos", class_name="font-semibold text-gray-800 sm:hidden"),
-                rx.el.span("Productos en Venta", class_name="font-semibold text-gray-800 hidden sm:inline"),
+                rx.el.span("PRODUCTOS EN VENTA", class_name="font-semibold text-gray-800 hidden sm:inline"),
                 rx.el.span(
                     "(", State.new_sale_items.length().to_string(), ")",
                     class_name="text-sm text-gray-500",
@@ -514,14 +514,14 @@ def payment_sidebar() -> rx.Component:
         # Header
         rx.el.div(
             rx.icon("wallet", class_name="h-5 w-5 text-indigo-600"),
-            rx.el.span("Cobro", class_name="font-bold text-gray-800"),
+            rx.el.span("COBRO", class_name="font-bold text-gray-800"),
             class_name="flex items-center gap-2 p-4 border-b shrink-0",
         ),
         # Contenido scrollable
         rx.el.div(
             # Métodos de pago
             rx.el.div(
-                rx.el.p("M‚todo de pago", class_name="text-xs font-medium text-gray-500 uppercase mb-2"),
+                rx.el.p("Método de pago", class_name="text-xs font-medium text-gray-500 uppercase mb-2"),
                 rx.el.div(
                     rx.foreach(
                         State.enabled_payment_methods,
@@ -565,8 +565,8 @@ def payment_sidebar() -> rx.Component:
             rx.el.div(
                 rx.hstack(
                     rx.el.div(
-                        rx.el.span("Venta a Credito / Fiado", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.span("Configura cuotas y pago inicial", class_name="text-[11px] text-gray-400"),
+                        rx.el.span("VENTA A CREDITO / FIADO", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.span("Configurar cuotas y pago inicial", class_name="text-[11px] text-gray-400"),
                         class_name="flex flex-col",
                     ),
                     toggle_switch(
@@ -681,7 +681,7 @@ def payment_sidebar() -> rx.Component:
                         rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
                         rx.el.div(
                             rx.el.button(
-                                "Cr‚dito",
+                                "Crédito",
                                 on_click=lambda: State.set_card_type("Credito"),
                                 class_name=rx.cond(
                                     State.payment_card_type == "Credito",
@@ -690,7 +690,7 @@ def payment_sidebar() -> rx.Component:
                                 ),
                             ),
                             rx.el.button(
-                                "D‚bito",
+                                "Débito",
                                 on_click=lambda: State.set_card_type("Debito"),
                                 class_name=rx.cond(
                                     State.payment_card_type == "Debito",
@@ -755,7 +755,7 @@ def payment_sidebar() -> rx.Component:
                             rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
                             rx.el.div(
                                 rx.el.button(
-                                    "T. D‚bito",
+                                    "T. Débito",
                                     on_click=lambda: State.set_mixed_non_cash_kind("debit"),
                                     class_name=rx.cond(
                                         State.payment_mixed_non_cash_kind == "debit",
@@ -764,7 +764,7 @@ def payment_sidebar() -> rx.Component:
                                     ),
                                 ),
                                 rx.el.button(
-                                    "T. Cr‚dito",
+                                    "T. Crédito",
                                     on_click=lambda: State.set_mixed_non_cash_kind("credit"),
                                     class_name=rx.cond(
                                         State.payment_mixed_non_cash_kind == "credit",
@@ -1367,7 +1367,7 @@ def venta_page() -> rx.Component:
                 State.reservation_selected_for_payment != None,
                 rx.fragment(),
                 page_title(
-                    "Punto de Venta",
+                    "PUNTO DE VENTA",
                     "Realiza ventas directas, selecciona productos y gestiona el cobro.",
                 ),
             ),

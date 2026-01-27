@@ -577,7 +577,7 @@ class SaleService:
             if not product:
                 identifier = ""
                 if item.get("barcode"):
-                    identifier = f"cÃ³digo {item['barcode']}"
+                    identifier = f"código {item['barcode']}"
                 elif item.get("description"):
                     identifier = item['description']
                 else:
