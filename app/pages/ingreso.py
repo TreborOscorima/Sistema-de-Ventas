@@ -358,7 +358,7 @@ def ingreso_page() -> rx.Component:
                 ),
                 class_name="flex flex-wrap items-start gap-4",
             ),
-        class_name="mt-6 pt-6 border-t border-gray-100",
+        class_name="mt-3 pt-3 border-t border-gray-100",
     )
 
     purchase_card = rx.el.div(
