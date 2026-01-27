@@ -132,11 +132,8 @@ def _sales_chart() -> rx.Component:
 
 def _top_products_list() -> rx.Component:
     """Lista de productos más vendidos."""
-    return rx.el.div(
-        rx.el.h3(
-            rx.text(f"Top Productos - {State.period_label}"),
-            class_name="text-lg font-semibold text-gray-900 mb-4",
-        ),
+    list_body = rx.cond(
+        State.dash_top_products.length() > 0,
         rx.el.div(
             rx.foreach(
                 State.dash_top_products,
@@ -156,18 +153,24 @@ def _top_products_list() -> rx.Component:
                     class_name=f"flex items-center justify-between py-3 border-b border-gray-100 last:border-0 {TRANSITIONS['fast']} hover:bg-gray-50 px-2 -mx-2 {RADIUS['md']}",
                 ),
             ),
-            class_name="space-y-1 max-h-64 overflow-y-auto",
+            class_name="space-y-1 pr-2",
         ),
-        rx.cond(
-            State.dash_top_products.length() == 0,
-            rx.el.div(
-                rx.icon("package", class_name="w-10 h-10 text-gray-300 mx-auto mb-2"),
-                rx.el.p("Sin datos para este período", class_name="text-gray-400 text-center"),
-                class_name="py-8",
-            ),
-            rx.fragment(),
+        rx.el.div(
+            rx.icon("package", class_name="w-10 h-10 text-gray-300 mx-auto mb-2"),
+            rx.el.p("Sin datos para este período", class_name="text-gray-400 text-center"),
+            class_name="py-8",
         ),
-        class_name=CARD_STYLES["bordered"],
+    )
+    return rx.el.div(
+        rx.el.h3(
+            rx.text(f"Top Productos - {State.period_label}"),
+            class_name="text-lg font-semibold text-gray-900 mb-4",
+        ),
+        rx.el.div(
+            list_body,
+            class_name="flex-1 overflow-y-auto",
+        ),
+        class_name=f"{CARD_STYLES['bordered']} flex flex-col h-full",
     )
 
 
@@ -255,7 +258,7 @@ def _category_chart() -> rx.Component:
             ),
             class_name="mt-4",
         ),
-        class_name=CARD_STYLES["bordered"],
+        class_name=f"{CARD_STYLES['bordered']} flex flex-col h-full",
     )
 
 
@@ -469,9 +472,9 @@ def dashboard_page() -> rx.Component:
         
         # Segunda fila de gráficos
         rx.el.div(
-            _top_products_list(),
-            _category_chart(),
-            class_name="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6",
+            rx.el.div(_top_products_list(), class_name="h-full"),
+            rx.el.div(_category_chart(), class_name="h-full"),
+            class_name="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6 items-stretch",
         ),
         
         on_mount=State.load_dashboard,

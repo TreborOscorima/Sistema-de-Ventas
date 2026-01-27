@@ -15,6 +15,7 @@ from sqlmodel import select, func
 from sqlalchemy import and_, or_, extract
 
 from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog
+from .inventory_state import LOW_STOCK_THRESHOLD
 from app.enums import SaleStatus
 from app.services.alert_service import get_alert_summary
 from .mixin_state import MixinState
@@ -252,11 +253,11 @@ class DashboardState(MixinState):
             ).one()
             self.pending_debt = float(pending or 0)
             
-            # Productos con stock bajo
+            # Productos con stock bajo (alineado con Inventario)
             self.low_stock_count = session.exec(
                 select(func.count())
                 .select_from(Product)
-                .where(Product.stock <= 10)
+                .where(and_(Product.stock > 0, Product.stock <= LOW_STOCK_THRESHOLD))
             ).one() or 0
     
     def _load_alerts(self):
