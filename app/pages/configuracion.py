@@ -198,7 +198,7 @@ def company_settings_section() -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.el.h2(
-                "Datos de mi Empresa", class_name="text-xl font-semibold text-gray-700"
+                "DATOS DE MI EMPRESA", class_name="text-xl font-semibold text-gray-700"
             ),
             rx.el.p(
                 "Actualiza la informacion que aparece en recibos y reportes.",
@@ -480,7 +480,7 @@ def user_section() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.h2(
-                    "Gestion de Usuarios", class_name="text-xl font-semibold text-gray-700"
+                    "GESTION DE USUARIOS", class_name="text-xl font-semibold text-gray-700"
                 ),
                 rx.el.p(
                     "Crea usuarios, roles y ajusta sus privilegios.",
@@ -549,7 +549,7 @@ def currency_section() -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.el.h2(
-                "Selector de Monedas", class_name="text-xl font-semibold text-gray-700"
+                "SELECTOR DE MONEDAS", class_name="text-xl font-semibold text-gray-700"
             ),
             rx.el.p(
                 "Configura las monedas disponibles y el simbolo que se muestra en los modulos.",
@@ -672,7 +672,7 @@ def unit_section() -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.el.h2(
-                "Unidades de Medida", class_name="text-xl font-semibold text-gray-700"
+                "UNIDADES DE MEDIDA", class_name="text-xl font-semibold text-gray-700"
             ),
             rx.el.p(
                 "Define las unidades que podras seleccionar en inventario, ingresos y ventas.",
@@ -768,7 +768,7 @@ def payment_methods_section() -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.el.h2(
-                "Metodos de Pago", class_name="text-xl font-semibold text-gray-700"
+                "METODOS DE PAGO", class_name="text-xl font-semibold text-gray-700"
             ),
             rx.el.p(
                 "Activa, crea o elimina los botones que veras en el modulo de Venta.",
@@ -914,7 +914,7 @@ def field_prices_section() -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.el.h2(
-                "Precios de Campo", class_name="text-xl font-semibold text-gray-700"
+                "PRECIOS DE CAMPO", class_name="text-xl font-semibold text-gray-700"
             ),
             rx.el.p(
                 "Configura los precios por deporte y modalidad (Futbol, Voley).",
@@ -1033,7 +1033,7 @@ def configuracion_page() -> rx.Component:
     content = rx.fragment(
         rx.el.div(
             page_title(
-                "Configuracion del Sistema",
+                "CONFIGURACION DEL SISTEMA",
                 "Gestiona usuarios, monedas, unidades, metodos de pago y precios de campo desde un solo lugar.",
             ),
             rx.el.div(

@@ -59,7 +59,7 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
 def ingreso_page() -> rx.Component:
     purchase_header = rx.el.div(
         rx.el.h2(
-            "Datos del Documento de Compra",
+            "DATOS DEL DOCUMENTO DE COMPRA",
             class_name="text-lg font-semibold text-gray-700",
         ),
         rx.el.p(
@@ -223,7 +223,7 @@ def ingreso_page() -> rx.Component:
 
     entry_item_form = rx.el.div(
         rx.el.h2(
-            "Añadir Producto", class_name="text-lg font-semibold text-gray-700 mb-4"
+            "AÑADIR PRODUCTOS", class_name="text-lg font-semibold text-gray-700 mb-4"
         ),
         rx.el.div(
             rx.el.div(
@@ -370,13 +370,13 @@ def ingreso_page() -> rx.Component:
 
     content = rx.el.div(
         page_title(
-            "Ingreso de Productos",
+            "INGRESO DE PRODUCTOS",
             "Registra la entrada de nuevos productos al almacen para aumentar el stock disponible.",
         ),
         purchase_card,
         rx.el.div(
             rx.el.h2(
-                "Productos a Ingresar",
+                "PRODUCTOS A INGRESAR",
                 class_name="text-lg font-semibold text-gray-700 mb-4",
             ),
             rx.el.div(

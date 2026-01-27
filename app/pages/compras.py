@@ -644,7 +644,7 @@ def supplier_modal() -> rx.Component:
 def compras_page() -> rx.Component:
     tab_button = "px-4 py-2 rounded-md text-sm font-semibold transition"
     registro_button = rx.el.button(
-        "Registro de Compras",
+        "REGISTRO DE COMPRAS",
         on_click=lambda _: State.set_purchases_tab("registro"),
         class_name=rx.cond(
             State.purchases_active_tab == "registro",
@@ -653,7 +653,7 @@ def compras_page() -> rx.Component:
         ),
     )
     proveedores_button = rx.el.button(
-        "Proveedores",
+        "PROVEEDORES",
         on_click=lambda _: State.set_purchases_tab("proveedores"),
         class_name=rx.cond(
             State.purchases_active_tab == "proveedores",
@@ -718,7 +718,7 @@ def compras_page() -> rx.Component:
     table_card = rx.el.div(
         rx.el.div(
             rx.el.div(
-                rx.el.h3("Compras registradas", class_name="text-base font-semibold text-gray-700"),
+                rx.el.h3("COMPRAS REGISTRADAS", class_name="text-base font-semibold text-gray-700"),
                 rx.el.p(
                     "Historial de documentos ingresados.",
                     class_name="text-sm text-gray-500",
@@ -837,7 +837,7 @@ def compras_page() -> rx.Component:
 
     content = rx.el.div(
         page_title(
-            "Registro de Compras",
+            "REGISTRO DE COMPRAS",
             "Consulta documentos de compra y gestiona proveedores.",
         ),
         rx.el.div(

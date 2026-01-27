@@ -143,7 +143,7 @@ def clientes_page() -> rx.Component:
     content = rx.fragment(
         rx.el.div(
             page_header(
-                "Clientes",
+                "CLIENTES",
                 "Administra los clientes y su linea de credito.",
                 actions=[
                     rx.el.button(

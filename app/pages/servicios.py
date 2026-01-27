@@ -84,7 +84,7 @@ def payment_method_selector_compact() -> rx.Component:
 def sport_selector() -> rx.Component:
     return rx.el.div(
         rx.el.div(
-            rx.el.p("Alquiler de campo", class_name="text-lg font-semibold text-gray-800"),
+            rx.el.p("ALQUILER DE CAMPOS DE FUTBOL Y VOLEY", class_name="text-lg font-semibold text-gray-800"),
             rx.el.p(
                 "Elige el deporte para gestionar reservas, pagos y cancelaciones.",
                 class_name="text-sm text-gray-600",
@@ -1068,7 +1068,7 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
 def reservations_table() -> rx.Component:
     return rx.el.div(
         rx.el.div(
-            rx.el.h3("Reservas registradas", class_name="text-lg font-semibold text-gray-800"),
+            rx.el.h3("RESERVAS REGISTRADAS", class_name="text-lg font-semibold text-gray-800"),
             rx.el.p(
                 "Revisa el estado de cada reserva por deporte.",
                 class_name="text-sm text-gray-600",
@@ -1455,7 +1455,7 @@ def servicio_card(title: str, description: str) -> rx.Component:
 def servicios_page() -> rx.Component:
     content = rx.el.div(
         page_title(
-            "Servicios",
+            "SERVICIOS",
             "Gestiona el alquiler de campo con reservas, adelantos, cancelaciones y registros administrativos.",
         ),
         rx.match(

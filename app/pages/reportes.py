@@ -220,7 +220,7 @@ def reportes_page() -> rx.Component:
     content = rx.el.div(
         # Header
         page_title(
-            "Reportes Contables y Financieros",
+            "REPORTES CONTABLES Y FINANCIEROS",
             "Genera reportes profesionales para evaluaciones administrativas",
         ),
         
@@ -229,7 +229,7 @@ def reportes_page() -> rx.Component:
             rx.el.div(
                 # Tipo de reporte
                 rx.el.div(
-                    rx.el.h3("1. Selecciona el tipo de reporte", class_name="text-lg font-semibold text-gray-800 mb-4"),
+                    rx.el.h3("1. SELECCIONA EL TIPO DE REPORTE", class_name="text-lg font-semibold text-gray-800 mb-4"),
                     rx.el.div(
                         rx.foreach(State.report_types, _report_type_card),
                         class_name="grid grid-cols-2 gap-3",
@@ -241,7 +241,7 @@ def reportes_page() -> rx.Component:
                 rx.cond(
                     (State.report_type == "ventas") | (State.report_type == "caja"),
                     rx.el.div(
-                        rx.el.h3("2. Selecciona el período", class_name="text-lg font-semibold text-gray-800 mb-4"),
+                        rx.el.h3("2. SELECCIONA EL PERIODO", class_name="text-lg font-semibold text-gray-800 mb-4"),
                         rx.el.div(
                             rx.foreach(State.period_options, _period_button),
                             class_name="flex flex-wrap gap-2",
@@ -259,8 +259,8 @@ def reportes_page() -> rx.Component:
                         rx.el.h3(
                             rx.cond(
                                 (State.report_type == "ventas") | (State.report_type == "caja"),
-                                "3. Opciones adicionales",
-                                "2. Opciones adicionales",
+                                "3. OPCIONES ADICIONALES",
+                                "2. OPCIONES ADICIONALES",
                             ),
                             class_name="text-lg font-semibold text-gray-800 mb-4",
                         ),
@@ -276,7 +276,7 @@ def reportes_page() -> rx.Component:
             # Columna derecha: Descripción y generar
             rx.el.div(
                 rx.el.div(
-                    rx.el.h3("Contenido del Reporte", class_name="text-lg font-semibold text-gray-800 mb-4"),
+                    rx.el.h3("CONTENIDO DEL REPORTE", class_name="text-lg font-semibold text-gray-800 mb-4"),
                     _report_description(),
                     rx.el.div(
                         rx.el.p(
@@ -291,7 +291,7 @@ def reportes_page() -> rx.Component:
                 
                 # Resumen de selección
                 rx.el.div(
-                    rx.el.h3("Resumen", class_name="text-lg font-semibold text-gray-800 mb-4"),
+                    rx.el.h3("RESUMEN", class_name="text-lg font-semibold text-gray-800 mb-4"),
                     rx.el.div(
                         rx.el.div(
                             rx.el.span("Reporte:", class_name="text-gray-500"),
@@ -302,7 +302,7 @@ def reportes_page() -> rx.Component:
                             (State.report_type == "ventas") | (State.report_type == "caja"),
                             rx.el.div(
                                 rx.el.span("Período:", class_name="text-gray-500"),
-                                rx.el.span(State.period_label, class_name="font-medium text-gray-800 ml-2"),
+                                rx.el.span(State.report_period_label, class_name="font-medium text-gray-800 ml-2"),
                                 class_name="flex justify-between py-2 border-b border-gray-100",
                             ),
                             rx.fragment(),

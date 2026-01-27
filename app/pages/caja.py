@@ -105,7 +105,7 @@ def cashbox_payments_header() -> rx.Component:
 
     return rx.el.div(
         rx.el.div(
-            rx.el.h2("Listado de Pagos", class_name="text-lg font-semibold text-gray-900"),
+            rx.el.h2("LISTADO DE PAGOS", class_name="text-lg font-semibold text-gray-900"),
             rx.el.p(
                 "Ventas registradas según el rango seleccionado.",
                 class_name="text-sm text-gray-500",
@@ -159,8 +159,8 @@ def cashbox_opening_card() -> rx.Component:
                     rx.el.p(
                         rx.cond(
                             State.cashbox_is_open,
-                            "Caja abierta",
-                            "Apertura de caja requerida",
+                            "CAJA ABIERTA",
+                            "APERTURA DE CAJA REQUIRIDA",
                         ),
                         class_name="text-sm font-semibold text-gray-900",
                     ),
@@ -478,7 +478,7 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
 def cashbox_logs_section() -> rx.Component:
     return card_container(
         section_header(
-            "Aperturas y cierres de caja",
+            "APERTURAS Y CIERRES DE CAJA",
             "Consulta quien abrio o cerro la caja y cuando lo hizo.",
         ),
         cashbox_log_filters(),
@@ -937,7 +937,7 @@ def petty_cash_view() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.div(
-                    rx.el.h2("Movimientos de Caja Chica", class_name="text-xl font-semibold text-gray-800"),
+                    rx.el.h2("MOVIMIENTOS DE CAJA CHICA", class_name="text-xl font-semibold text-gray-800"),
                     rx.el.p("Gestión de gastos y salidas de efectivo.", class_name="text-sm text-gray-500"),
                     class_name="flex flex-col mb-4 lg:mb-0",
                 ),
@@ -1037,7 +1037,7 @@ def petty_cash_view() -> rx.Component:
 def cashbox_page() -> rx.Component:
     content = rx.el.div(
         page_title(
-            "Gestion de Caja",
+            "GESTION DE CAJA",
             "Controla la apertura, cierre y movimientos de dinero en caja.",
         ),
         rx.cond(

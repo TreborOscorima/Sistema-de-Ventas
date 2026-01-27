@@ -420,7 +420,7 @@ def cuentas_page() -> rx.Component:
     content = rx.fragment(
         rx.el.div(
             page_title(
-                "Cuentas Corrientes",
+                "CUENTAS CORRIENTES",
                 "Gestiona clientes con saldo pendiente y registra pagos por cuota.",
             ),
             stats_dashboard_component(

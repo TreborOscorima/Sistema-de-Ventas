@@ -444,7 +444,7 @@ def inventory_stat_card(title: str, value: rx.Var, value_class: str) -> rx.Compo
 def inventario_page() -> rx.Component:
     content = rx.el.div(
         page_title(
-            "Inventario Actual",
+            "INVENTARIO ACTUAL",
             "Gestiona el stock de productos, realiza ajustes y visualiza el valor total del inventario.",
         ),
         rx.el.div(
@@ -472,7 +472,7 @@ def inventario_page() -> rx.Component:
         ),
         rx.el.div(
             rx.el.h2(
-                "Categorías",
+                "CATEGORIAS DE PRODUCTOS",
                 class_name="text-lg font-semibold text-gray-700 mb-4",
             ),
             rx.el.div(

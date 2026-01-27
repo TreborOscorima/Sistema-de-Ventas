@@ -111,7 +111,7 @@ def _alert_item(alert: dict) -> rx.Component:
 def _sales_chart() -> rx.Component:
     """Gráfico de ventas de los últimos 7 días."""
     return rx.el.div(
-        rx.el.h3("Ventas - Últimos 7 días", class_name="text-lg font-semibold text-gray-900 mb-4"),
+        rx.el.h3("VENTAS - ÚLTIMOS 7 DÍAS", class_name="text-lg font-semibold text-gray-900 mb-4"),
         rx.recharts.bar_chart(
             rx.recharts.bar(
                 data_key="total",
@@ -163,7 +163,7 @@ def _top_products_list() -> rx.Component:
     )
     return rx.el.div(
         rx.el.h3(
-            rx.text(f"Top Productos - {State.period_label}"),
+            rx.text(f"TOP PRODUCTOS - {State.period_label}"),
             class_name="text-lg font-semibold text-gray-900 mb-4",
         ),
         rx.el.div(
@@ -180,7 +180,7 @@ def _category_chart() -> rx.Component:
         # Header con título y botón exportar
         rx.el.div(
             rx.el.h3(
-                rx.text(f"Ventas por Categoría - {State.period_label}"),
+                rx.text(f"VENTAS POR CATEGORÍA - {State.period_label}"),
                 class_name="text-lg font-semibold text-gray-900",
             ),
             rx.el.button(
@@ -266,7 +266,7 @@ def _alerts_panel() -> rx.Component:
     """Panel de alertas del sistema."""
     return rx.el.div(
         rx.el.div(
-            rx.el.h3("Alertas del Sistema", class_name="text-lg font-semibold text-gray-900"),
+            rx.el.h3("ALERTAS DEL SISTEMA", class_name="text-lg font-semibold text-gray-900"),
             rx.cond(
                 State.alert_count > 0,
                 rx.el.span(
@@ -424,7 +424,7 @@ def dashboard_page() -> rx.Component:
     return rx.el.div(
         # Header
         page_header(
-            "Dashboard",
+            "DASHBOARD",
             rx.cond(
                 State.last_refresh != "",
                 rx.text(f"Última actualización: {State.last_refresh}"),

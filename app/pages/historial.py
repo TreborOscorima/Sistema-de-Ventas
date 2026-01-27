@@ -417,7 +417,7 @@ def historial_page() -> rx.Component:
     content = rx.fragment(
         rx.el.div(
             page_title(
-                "Historial de Ventas",
+                "HISTORIAL DE VENTAS",
                 "Consulta y exporta el registro de todas las ventas realizadas.",
             ),
             rx.el.div(

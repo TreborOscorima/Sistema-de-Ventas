@@ -84,6 +84,27 @@ class ReportState(MixinState):
             "custom": "Personalizado",
         }
         return labels.get(self.report_period, "Este Mes")
+
+    @rx.var
+    def report_period_label(self) -> str:
+        """Etiqueta del período para reportes (no colisiona con Dashboard)."""
+        if self.report_period == "custom":
+            if self.custom_start_date and self.custom_end_date:
+                try:
+                    start = datetime.strptime(self.custom_start_date, "%Y-%m-%d").strftime("%d/%m/%Y")
+                    end = datetime.strptime(self.custom_end_date, "%Y-%m-%d").strftime("%d/%m/%Y")
+                    return f"{start} - {end}"
+                except ValueError:
+                    return f"{self.custom_start_date} a {self.custom_end_date}"
+            return "Personalizado"
+        labels = {
+            "today": "Hoy",
+            "week": "Esta Semana",
+            "month": "Este Mes",
+            "quarter": "Este Trimestre",
+            "year": "Este Año",
+        }
+        return labels.get(self.report_period, "Este Mes")
     
     @rx.event
     def set_report_type(self, value: str):
