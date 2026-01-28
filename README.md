@@ -17,6 +17,9 @@ Esta versión **v2.0** marca un hito en la arquitectura del sistema al implement
 *   **Persistencia Total:** Almacenamiento seguro en base de datos relacional para todos los módulos.
 *   **Punto de Venta (POS):** Procesamiento de ventas con múltiples métodos de pago, control de stock en tiempo real y emisión de comprobantes térmicos estandarizados.
 *   **Gestión Financiera:** Control estricto de sesiones de caja (Apertura/Cierre), auditoría de movimientos y estadísticas detalladas por método de pago.
+*   **Compras y Proveedores:** Registro de documentos de compra, proveedores y trazabilidad de costos.
+*   **Clientes y Cuentas Corrientes:** Gestión de clientes, límites de crédito, cuotas y cobranza.
+*   **Reportes y Exportación:** Reportes consolidados y exportación a Excel por módulo.
 *   **Gestión de Servicios:** Módulo especializado para alquiler de canchas deportivas con agenda visual, control de estados (Reserva -> Adelanto -> Pago) y emisión de constancias.
 *   **Configuración Dinámica:** Gestión de monedas, unidades de medida y métodos de pago directamente desde la interfaz.
 *   **Seguridad RBAC:** Control de acceso basado en roles y privilegios granulares.
@@ -51,12 +54,13 @@ La estructura de datos se define en `app/models/` y se gestiona mediante migraci
 
 | Módulo | Entidades Principales | Descripción |
 | :--- | :--- | :--- |
-| **Auth** | `AuthUser` | Usuarios, contraseñas (hash bcrypt) y privilegios (JSON). |
-| **Inventario** | `Product`, `Category` | Catálogo de productos y categorización dinámica. |
-| **Ventas** | `Sale`, `SaleItem` | Cabecera y detalle de transacciones, vinculadas a la sesión de caja. |
-| **Caja** | `CashboxSession`, `CashboxLog` | Registro de turnos y auditoría de flujo de efectivo. |
-| **Servicios** | `FieldReservation`, `FieldPrice` | Reservas de canchas, configuración de tarifas y constancias. |
-| **Config** | `Currency`, `Unit`, `PaymentMethod` | Tablas maestras para personalización del sistema. |
+| **Auth/RBAC** | `User`, `Role`, `Permission` | Usuarios, roles y permisos con control granular. |
+| **Clientes & Crédito** | `Client`, `SaleInstallment` | Clientes, límites de crédito, cuotas y estado de deuda. |
+| **Inventario** | `Product`, `Category`, `StockMovement`, `Unit` | Catálogo, categorías, movimientos y unidades de medida. |
+| **Compras/Proveedores** | `Supplier`, `Purchase`, `PurchaseItem` | Documentos de compra y relación con proveedores. |
+| **Ventas & Caja** | `Sale`, `SaleItem`, `SalePayment`, `CashboxSession`, `CashboxLog` | Ventas, pagos y auditoría de caja. |
+| **Servicios** | `FieldReservation`, `FieldPrice` | Reservas de canchas y tarifas. |
+| **Configuración** | `Currency`, `PaymentMethod`, `CompanySettings` | Monedas, métodos de pago y datos del negocio. |
 
 ---
 
@@ -74,13 +78,24 @@ Sistema-de-Ventas/
 │   ├── schemas/         # DTOs y validaciones
 │   ├── services/        # Servicios de negocio
 │   ├── states/          # Lógica de negocio y gestión de estado (Backend)
-│   │   ├── auth_state.py      # Autenticación y Usuarios
-│   │   ├── cash_state.py      # Gestión de Caja y Reportes
-│   │   ├── config_state.py    # Configuración Global
-│   │   ├── inventory_state.py # CRUD de Productos
-│   │   ├── services_state.py  # Reservas y Servicios
-│   │   ├── historial_state.py # Estadísticas y desglose de ventas
-│   │   └── venta_state.py     # Lógica del POS e Impresión
+│   │   ├── auth_state.py       # Autenticación y RBAC
+│   │   ├── dashboard_state.py  # KPIs y alertas
+│   │   ├── clientes_state.py   # Clientes
+│   │   ├── cuentas_state.py    # Cuentas corrientes / cuotas
+│   │   ├── ingreso_state.py    # Ingreso de productos
+│   │   ├── purchases_state.py  # Compras
+│   │   ├── suppliers_state.py  # Proveedores
+│   │   ├── inventory_state.py  # Inventario
+│   │   ├── cash_state.py       # Caja y movimientos
+│   │   ├── historial_state.py  # Historial de ventas
+│   │   ├── services_state.py   # Reservas y servicios
+│   │   ├── report_state.py     # Reportes
+│   │   ├── venta_state.py      # POS e impresión
+│   │   ├── ui_state.py         # UI global
+│   │   ├── root_state.py       # Estado raíz
+│   │   ├── mixin_state.py      # Mixins compartidos
+│   │   ├── cash/               # Subestados de caja
+│   │   └── venta/              # Subestados de venta
 │   ├── utils/           # Utilidades (Formatos, Fechas, Exports)
 │   ├── enums.py         # Enums del dominio
 │   └── app.py           # Punto de entrada
@@ -148,6 +163,11 @@ Sistema-de-Ventas/
 
 ## 5. 📖 Manual de Módulos
 
+### 📊 Dashboard
+*   **KPIs en tiempo real:** ventas, caja, reservas y crédito.
+*   **Alertas operativas:** stock bajo, cuotas vencidas y caja abierta prolongada.
+*   **Gráficos y ranking:** tendencias por período y top productos.
+
 ### 🛒 Punto de Venta (Ventas)
 *   **Interfaz Ágil:** Diseñada para registro rápido mediante códigos de barras o búsqueda manual.
 *   **Prioridad por código de barras:** evita colisiones cuando hay descripciones duplicadas.
@@ -156,11 +176,29 @@ Sistema-de-Ventas/
 *   **Impresión:** Generación automática de tickets de venta estandarizados.
 *   **Crédito controlado:** valida límites y evita sobrepagos en cuotas.
 
+### 📥 Ingreso de Productos
+*   **Documento de compra:** registro de ingreso con series/número y proveedor.
+*   **Ajuste de stock:** actualiza existencias y costos de manera controlada.
+*   **Detalle de ítems:** cantidades, unidad, precio de compra y venta.
+
+### 🧾 Compras y Proveedores
+*   **Registro de compras:** historial de documentos, búsqueda y filtros.
+*   **Gestión de proveedores:** alta/edición/baja con validaciones de RUC/CUIT.
+*   **Detalle de compras:** ver ítems y totales con moneda.
+
 ### 📦 Inventario
 *   **Gestión Persistente:** CRUD completo de productos conectado directamente a MySQL.
 *   **Categorización:** Creación dinámica de categorías que persisten entre sesiones.
 *   **Permisos:** crear/eliminar categorías requiere privilegio `edit_inventario`.
 *   **Reportes:** Exportación de inventario valorizado a Excel.
+
+### 👥 Clientes
+*   **Gestión de clientes:** datos básicos, límites de crédito y validaciones.
+*   **Edición rápida:** actualización de datos desde la interfaz.
+
+### 💳 Cuentas Corrientes
+*   **Cuotas y pagos:** control de cuotas pendientes, pagadas y vencidas.
+*   **Cobranza:** registro de pagos parciales o totales por cuota.
 
 ### 💵 Gestión de Caja e Historial
 *   **Sesiones:** Control estricto de turnos por usuario.
@@ -168,6 +206,10 @@ Sistema-de-Ventas/
 *   **Historial Detallado:** Consulta de movimientos históricos con desglose de ítems y estadísticas precisas por método de pago (Efectivo, Tarjeta, Yape/Plin).
 *   **Anulaciones seguras:** movimientos marcados como anulados y excluidos de totales/reportes.
 *   **Reimpresión:** Capacidad de reimprimir tickets de ventas pasadas.
+
+### 📈 Reportes
+*   **Reportes consolidados:** ingresos por método de pago, cierres de caja y ventas.
+*   **Exportación:** descarga en Excel según módulo.
 
 ### ⚽ Servicios (Reservas)
 *   **Agenda Visual:** Planificador interactivo para canchas deportivas.
@@ -178,6 +220,11 @@ Sistema-de-Ventas/
 
 ### 🔧 Configuración
 *   **Panel Administrativo:** Permite gestionar usuarios, roles, monedas, unidades y métodos de pago sin intervención técnica.
+*   **Seguridad:** gestión de roles/privilegios con RBAC.
+
+### 🔐 Acceso y Seguridad
+*   **Login y cambio de contraseña:** flujo seguro de autenticación.
+*   **Bloqueo por sesión:** tokens versionados para invalidación controlada.
 
 ---
 
