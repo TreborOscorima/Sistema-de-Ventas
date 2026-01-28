@@ -47,19 +47,19 @@ def cashbox_banner() -> rx.Component:
                         placeholder="Caja inicial (ej: 150.00)",
                         value=State.cashbox_open_amount_input,
                         on_change=State.set_cashbox_open_amount_input,
-                        class_name="w-full md:w-52 p-2 border rounded-md shadow-sm focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400",
+                        class_name="w-full md:w-52 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     ),
                     rx.el.button(
                         rx.icon("play", class_name="h-4 w-4"),
                         "Aperturar caja",
                         on_click=State.open_cashbox_session,
-                        class_name="flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 shadow min-h-[42px]",
+                        class_name="flex items-center gap-2 h-10 px-4 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700",
                     ),
                     class_name="flex flex-col md:flex-row items-stretch md:items-center gap-3",
                 ),
                 class_name="flex flex-col md:flex-row justify-between gap-4",
             ),
-            class_name="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg shadow-sm",
+            class_name="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-xl shadow-sm",
         ),
     )
 
@@ -68,7 +68,7 @@ def currency_selector() -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.icon("coins", class_name="h-5 w-5 text-amber-600"),
-            rx.el.span("Moneda de trabajo", class_name="text-sm font-semibold text-gray-800"),
+            rx.el.span("Moneda de trabajo", class_name="text-sm font-semibold text-slate-800"),
             class_name="flex items-center gap-2",
         ),
         rx.el.select(
@@ -78,14 +78,14 @@ def currency_selector() -> rx.Component:
             ),
             value=State.selected_currency_code,
             on_change=State.set_currency,
-            class_name="w-full sm:w-auto p-2 border rounded-md bg-white",
+            class_name="w-full sm:w-auto h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
         ),
         rx.el.span(
             "Mostrando importes en ",
             rx.el.span(State.currency_name, class_name="font-semibold"),
-            class_name="text-sm text-gray-600",
+            class_name="text-sm text-slate-600",
         ),
-        class_name="flex flex-col sm:flex-row sm:items-center gap-3 bg-white border rounded-lg shadow-sm p-4",
+        class_name="flex flex-col sm:flex-row sm:items-center gap-3 bg-white border border-slate-200 rounded-xl shadow-sm p-4",
     )
 
 
@@ -166,19 +166,20 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                                 ),
                                 rx.el.p(
                                     "Tu usuario no tiene modulos habilitados. Solicita permisos al administrador.",
-                                    class_name="text-gray-600 mt-2 text-center",
+                                    class_name="text-slate-600 mt-2 text-center",
                                 ),
                                 class_name="flex flex-col items-center justify-center h-full p-6",
                             ),
                             page_content,
                         ),
-                        class_name="w-full max-w-7xl mx-auto flex flex-col gap-4 p-4 sm:p-6",
+                        class_name="w-full h-full flex flex-col gap-4 p-4 sm:p-6",
                     ),
-                    class_name="flex-1 h-screen overflow-y-auto",
+                    class_name="flex-1 h-full overflow-y-auto",
                 ),
-                class_name="flex h-screen w-full bg-gray-100 overflow-hidden",
+                class_name="flex h-screen w-full bg-slate-50 overflow-hidden",
             ),
-            class_name="font-['Inter']",
+            class_name="text-slate-900 w-full h-screen",
+            style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
         ),
         rx.fragment(NotificationHolder(), login_page()),
     )
@@ -246,7 +247,7 @@ app = rx.App(
         rx.el.link(rel="preconnect", href="https://fonts.googleapis.com"),
         rx.el.link(rel="preconnect", href="https://fonts.gstatic.com", cross_origin=""),
         rx.el.link(
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
+            href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap",
             rel="stylesheet",
         ),
         rx.el.style(

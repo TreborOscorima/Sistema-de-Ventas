@@ -29,11 +29,11 @@ def login_page() -> rx.Component:
                 rx.el.div(
                     rx.el.h1(
                         "TUWAYKIAPP",
-                        class_name="text-2xl font-bold text-gray-900 tracking-tight",
+                        class_name="text-2xl font-bold text-slate-900 tracking-tight",
                     ),
                     rx.el.p(
                         "Tu socio en el Negocio",
-                        class_name="text-xs text-gray-500",
+                        class_name="text-xs text-slate-500",
                     ),
                     class_name="text-center",
                 ),
@@ -44,7 +44,7 @@ def login_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Usuario", 
-                        class_name="block text-sm font-medium text-gray-700 mb-1.5",
+                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
                     rx.el.input(
                         placeholder="admin",
@@ -57,7 +57,7 @@ def login_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Contraseña",
-                        class_name="block text-sm font-medium text-gray-700 mb-1.5",
+                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
                     rx.el.input(
                         placeholder="••••••••",
@@ -89,7 +89,7 @@ def login_page() -> rx.Component:
             # Footer
             rx.el.div(
                 rx.el.div(
-                    rx.el.span("Creado por", class_name="text-gray-400"),
+                    rx.el.span("Creado por", class_name="text-slate-400"),
                     rx.el.a(
                         "Trebor Oscorima",
                         href="https://www.facebook.com/trebor.oscorima/?locale=es_LA",
@@ -105,11 +105,12 @@ def login_page() -> rx.Component:
                     href="https://wa.me/5491168376517",
                     target="_blank",
                     rel="noopener noreferrer",
-                    class_name=f"text-gray-400 hover:text-emerald-600 {TRANSITIONS['fast']}",
+                    class_name=f"text-slate-400 hover:text-emerald-600 {TRANSITIONS['fast']}",
                 ),
-                class_name="mt-8 pt-6 border-t border-gray-100 flex flex-col items-center gap-2 text-xs",
+                class_name="mt-8 pt-6 border-t border-slate-100 flex flex-col items-center gap-2 text-xs",
             ),
-            class_name=f"w-full max-w-md p-8 bg-white {RADIUS['xl']} {SHADOWS['xl']} border border-gray-100",
+            class_name=f"w-full max-w-md p-8 bg-white {RADIUS['xl']} {SHADOWS['xl']} border border-slate-100",
         ),
-        class_name="flex items-center justify-center min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 px-4",
+        class_name="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4",
+        style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
     )

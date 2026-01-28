@@ -21,9 +21,9 @@ from typing import Callable
 # Border radius estandarizados
 RADIUS = {
     "sm": "rounded",           # 4px - Botones pequeños, badges
-    "md": "rounded-md",        # 6px - Inputs, botones normales  
-    "lg": "rounded-lg",        # 8px - Cards, dropdowns
-    "xl": "rounded-xl",        # 12px - Modales, cards destacadas
+    "md": "rounded-md",        # 8px - Inputs, botones normales
+    "lg": "rounded-xl",        # 12px - Cards, dropdowns
+    "xl": "rounded-2xl",       # 16px - Modales destacados
     "full": "rounded-full",    # Círculos, avatares
 }
 
@@ -31,9 +31,9 @@ RADIUS = {
 SHADOWS = {
     "none": "",
     "sm": "shadow-sm",
-    "md": "shadow-md",
-    "lg": "shadow-lg",
-    "xl": "shadow-xl",
+    "md": "shadow-sm",
+    "lg": "shadow-md",
+    "xl": "shadow-lg",
 }
 
 # Transiciones suaves
@@ -44,36 +44,36 @@ TRANSITIONS = {
 }
 
 # Focus states para accesibilidad
-FOCUS_RING = "focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-FOCUS_WITHIN = "focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500"
+FOCUS_RING = "focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+FOCUS_WITHIN = "focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500"
 
 
 # =============================================================================
 # BUTTON STYLES - Con focus states y transiciones mejoradas
 # =============================================================================
 
-_BTN_BASE = f"flex items-center justify-center gap-2 {RADIUS['md']} {TRANSITIONS['fast']} {FOCUS_RING} font-medium"
+_BTN_BASE = f"flex items-center justify-center gap-2 {RADIUS['md']} {TRANSITIONS['fast']} {FOCUS_RING} text-sm font-medium"
 
 BUTTON_STYLES = {
-    "primary": f"{_BTN_BASE} px-4 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 min-h-[44px]",
-    "primary_sm": f"{_BTN_BASE} px-3 py-2 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 min-h-[40px] text-sm",
-    "secondary": f"{_BTN_BASE} px-4 py-2.5 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 active:bg-gray-100 min-h-[44px]",
-    "secondary_sm": f"{_BTN_BASE} px-3 py-2 border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 active:bg-gray-100 min-h-[40px] text-sm",
-    "success": f"{_BTN_BASE} px-4 py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 min-h-[44px]",
-    "success_sm": f"{_BTN_BASE} px-3 py-2 bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 min-h-[40px] text-sm",
-    "danger": f"{_BTN_BASE} px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 min-h-[44px]",
-    "danger_sm": f"{_BTN_BASE} px-3 py-2 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 min-h-[40px] text-sm",
-    "warning": f"{_BTN_BASE} px-4 py-2.5 bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 min-h-[44px]",
-    "ghost": f"{_BTN_BASE} px-4 py-2.5 text-gray-600 hover:bg-gray-100 active:bg-gray-200 min-h-[44px]",
-    "ghost_sm": f"{_BTN_BASE} px-3 py-2 text-gray-600 hover:bg-gray-100 active:bg-gray-200 min-h-[40px] text-sm",
-    "link_primary": f"{_BTN_BASE} px-3 py-2 border border-gray-200 text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 min-h-[40px]",
-    "link_danger": f"{_BTN_BASE} px-3 py-2 border border-gray-200 text-red-600 hover:bg-red-50 active:bg-red-100 min-h-[40px]",
-    "disabled": f"flex items-center justify-center gap-2 px-4 py-2.5 {RADIUS['md']} bg-gray-100 text-gray-400 cursor-not-allowed min-h-[44px] opacity-60",
-    "disabled_sm": f"flex items-center justify-center gap-2 px-3 py-2 {RADIUS['md']} bg-gray-100 text-gray-400 cursor-not-allowed min-h-[40px] text-sm opacity-60",
+    "primary": f"{_BTN_BASE} h-10 px-4 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800",
+    "primary_sm": f"{_BTN_BASE} h-9 px-3 bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 text-sm",
+    "secondary": f"{_BTN_BASE} h-10 px-4 border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 active:bg-slate-100",
+    "secondary_sm": f"{_BTN_BASE} h-9 px-3 border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 active:bg-slate-100 text-sm",
+    "success": f"{_BTN_BASE} h-10 px-4 bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800",
+    "success_sm": f"{_BTN_BASE} h-9 px-3 bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 text-sm",
+    "danger": f"{_BTN_BASE} h-10 px-4 bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
+    "danger_sm": f"{_BTN_BASE} h-9 px-3 bg-red-600 text-white hover:bg-red-700 active:bg-red-800 text-sm",
+    "warning": f"{_BTN_BASE} h-10 px-4 bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700",
+    "ghost": f"{_BTN_BASE} h-10 px-4 text-slate-600 hover:bg-slate-100 active:bg-slate-200",
+    "ghost_sm": f"{_BTN_BASE} h-9 px-3 text-slate-600 hover:bg-slate-100 active:bg-slate-200 text-sm",
+    "link_primary": f"{_BTN_BASE} h-9 px-3 border border-slate-200 text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100",
+    "link_danger": f"{_BTN_BASE} h-9 px-3 border border-slate-200 text-red-600 hover:bg-red-50 active:bg-red-100",
+    "disabled": f"flex items-center justify-center gap-2 h-10 px-4 {RADIUS['md']} bg-slate-100 text-slate-400 cursor-not-allowed opacity-60",
+    "disabled_sm": f"flex items-center justify-center gap-2 h-9 px-3 {RADIUS['md']} bg-slate-100 text-slate-400 cursor-not-allowed text-sm opacity-60",
     "icon_danger": f"p-2 text-red-500 hover:bg-red-100 active:bg-red-200 {RADIUS['full']} {TRANSITIONS['fast']}",
     "icon_primary": f"p-2 text-indigo-500 hover:bg-indigo-100 active:bg-indigo-200 {RADIUS['full']} {TRANSITIONS['fast']}",
     "icon_indigo": f"p-2 text-indigo-500 hover:bg-indigo-100 active:bg-indigo-200 {RADIUS['full']} {TRANSITIONS['fast']}",
-    "icon_ghost": f"p-2 text-gray-500 hover:bg-gray-100 active:bg-gray-200 {RADIUS['full']} {TRANSITIONS['fast']}",
+    "icon_ghost": f"p-2 text-slate-500 hover:bg-slate-100 active:bg-slate-200 {RADIUS['full']} {TRANSITIONS['fast']}",
 }
 
 
@@ -81,13 +81,13 @@ BUTTON_STYLES = {
 # INPUT STYLES - Con focus states mejorados
 # =============================================================================
 
-_INPUT_BASE = f"w-full px-3 py-2.5 border border-gray-300 {RADIUS['md']} {TRANSITIONS['fast']} placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+_INPUT_BASE = f"w-full h-10 px-3 text-sm bg-white border border-slate-200 {RADIUS['md']} {TRANSITIONS['fast']} placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
 
 INPUT_STYLES = {
     "default": _INPUT_BASE,
-    "disabled": f"w-full px-3 py-2.5 border border-gray-200 {RADIUS['md']} bg-gray-50 text-gray-500 cursor-not-allowed",
+    "disabled": f"w-full h-10 px-3 text-sm border border-slate-200 {RADIUS['md']} bg-slate-50 text-slate-500 cursor-not-allowed",
     "search": f"{_INPUT_BASE} pl-10",  # Espacio para icono de búsqueda
-    "error": f"w-full px-3 py-2.5 border-2 border-red-300 {RADIUS['md']} {TRANSITIONS['fast']} focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-red-50",
+    "error": f"w-full h-10 px-3 text-sm border-2 border-red-300 {RADIUS['md']} {TRANSITIONS['fast']} focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 bg-red-50",
 }
 
 
@@ -96,10 +96,10 @@ INPUT_STYLES = {
 # =============================================================================
 
 CARD_STYLES = {
-    "default": f"bg-white p-5 sm:p-6 {RADIUS['lg']} {SHADOWS['md']}",
-    "bordered": f"bg-white border border-gray-200 {RADIUS['lg']} p-5 sm:p-6 {SHADOWS['sm']}",
-    "compact": f"bg-white border border-gray-200 {RADIUS['lg']} p-4 {SHADOWS['sm']}",
-    "flat": f"bg-white border border-gray-200 {RADIUS['lg']} p-5 sm:p-6",
+    "default": f"bg-white border border-slate-200 {RADIUS['lg']} p-5 sm:p-6 {SHADOWS['sm']}",
+    "bordered": f"bg-white border border-slate-200 {RADIUS['lg']} p-5 sm:p-6 {SHADOWS['sm']}",
+    "compact": f"bg-white border border-slate-200 {RADIUS['lg']} p-4 {SHADOWS['sm']}",
+    "flat": f"bg-white border border-slate-200 {RADIUS['lg']} p-5 sm:p-6",
     "highlight": f"bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 {RADIUS['lg']} p-5 sm:p-6 {SHADOWS['sm']}",
 }
 
@@ -109,13 +109,13 @@ CARD_STYLES = {
 # =============================================================================
 
 TABLE_STYLES = {
-    "wrapper": f"overflow-hidden {RADIUS['lg']} border border-gray-200",
-    "header": "bg-gray-50 border-b border-gray-200",
-    "header_cell": "py-3.5 px-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider",
-    "row": f"border-b border-gray-100 {TRANSITIONS['fast']} hover:bg-gray-50",
-    "cell": "py-4 px-4 text-sm text-gray-700",
-    "cell_mono": "py-4 px-4 text-sm text-gray-500 font-mono",
-    "cell_currency": "py-4 px-4 text-sm font-semibold text-gray-900 tabular-nums text-right",
+    "wrapper": f"overflow-hidden {RADIUS['lg']} border border-slate-200",
+    "header": "bg-slate-50/50 border-b border-slate-200",
+    "header_cell": "py-3.5 px-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider",
+    "row": f"border-b border-slate-100 {TRANSITIONS['fast']} hover:bg-slate-50/80",
+    "cell": "py-4 px-4 text-sm text-slate-700",
+    "cell_mono": "py-4 px-4 text-sm text-slate-500 font-mono",
+    "cell_currency": "py-4 px-4 text-sm font-semibold text-slate-900 tabular-nums text-right",
 }
 
 # Alias para compatibilidad
@@ -144,7 +144,7 @@ def currency_display(
     value: rx.Var | str,
     symbol: rx.Var | str = "S/",
     size: str = "lg",
-    color: str = "text-gray-900",
+    color: str = "text-slate-900",
     show_symbol: bool = True,
 ) -> rx.Component:
     """
@@ -167,7 +167,7 @@ def currency_display(
     return rx.el.span(
         rx.cond(
             show_symbol,
-            rx.el.span(symbol, class_name="text-gray-500 mr-0.5"),
+            rx.el.span(symbol, class_name="text-slate-500 mr-0.5"),
             rx.fragment(),
         ),
         rx.el.span(value),
@@ -212,7 +212,7 @@ def loading_spinner(
     if label:
         return rx.el.div(
             spinner,
-            rx.el.p(label, class_name="mt-2 text-sm text-gray-500 text-center"),
+            rx.el.p(label, class_name="mt-2 text-sm text-slate-500 text-center"),
             class_name="flex flex-col items-center",
         )
     
@@ -243,15 +243,15 @@ def permission_guard(
             rx.icon("shield-x", class_name="h-16 w-16 text-red-400 mb-4"),
             rx.el.h2(
                 redirect_message,
-                class_name="text-xl font-semibold text-gray-800 mb-2",
+                class_name="text-xl font-semibold text-slate-800 mb-2",
             ),
             rx.el.p(
                 "No tienes permisos para acceder a este módulo.",
-                class_name="text-gray-500 mb-4",
+                class_name="text-slate-500 mb-4",
             ),
             rx.el.p(
                 "Redirigiendo al Dashboard...",
-                class_name="text-sm text-gray-400 animate-pulse",
+                class_name="text-sm text-slate-400 animate-pulse",
             ),
             class_name="flex flex-col items-center text-center",
         ),
@@ -285,8 +285,8 @@ def page_header(
     """
     # Seccion de titulo y subtitulo (consistente con page_title)
     title_section = rx.el.div(
-        rx.el.h1(title, class_name="text-2xl font-bold text-gray-900 tracking-tight"),
-        rx.el.p(subtitle, class_name="text-sm text-gray-500") if subtitle else rx.fragment(),
+        rx.el.h1(title, class_name="text-2xl font-bold text-slate-900 tracking-tight"),
+        rx.el.p(subtitle, class_name="text-sm text-slate-500") if subtitle else rx.fragment(),
         class_name="flex flex-col gap-1",
     )
     
@@ -296,7 +296,7 @@ def page_header(
     if breadcrumb:
         content.append(
             rx.el.nav(
-                rx.el.span(breadcrumb, class_name="text-sm text-gray-500"),
+                rx.el.span(breadcrumb, class_name="text-sm text-slate-500"),
                 class_name="mb-2",
             )
         )
@@ -342,15 +342,15 @@ def empty_state(
     """
     content = [
         rx.el.div(
-            rx.icon(icon, class_name="h-12 w-12 text-gray-300"),
+            rx.icon(icon, class_name="h-12 w-12 text-slate-300"),
             class_name="mb-4",
         ),
-        rx.el.h3(title, class_name="text-sm font-medium text-gray-900"),
+        rx.el.h3(title, class_name="text-sm font-medium text-slate-900"),
     ]
     
     if description:
         content.append(
-            rx.el.p(description, class_name="mt-1 text-sm text-gray-500")
+            rx.el.p(description, class_name="mt-1 text-sm text-slate-500")
         )
     
     if action:
@@ -392,17 +392,17 @@ def stat_card(
     if icon:
         header.append(
             rx.el.div(
-                rx.icon(icon, class_name="h-5 w-5 text-gray-400"),
-                class_name=f"p-2 bg-gray-100 {RADIUS['lg']}",
+                rx.icon(icon, class_name="h-5 w-5 text-slate-400"),
+                class_name=f"p-2 bg-slate-100 {RADIUS['lg']}",
             )
         )
     
     header.append(
-        rx.el.span(label, class_name="text-sm font-medium text-gray-500")
+        rx.el.span(label, class_name="text-sm font-medium text-slate-500")
     )
     
     value_section = [
-        rx.el.span(value, class_name="text-2xl font-bold text-gray-900 tabular-nums")
+        rx.el.span(value, class_name="text-2xl font-bold text-slate-900 tabular-nums")
     ]
     
     if trend is not None and trend_up is not None:
@@ -535,7 +535,7 @@ def icon_button(
 def form_field(
     label: str,
     input_component: rx.Component,
-    label_style: str = "text-sm font-medium text-gray-700",
+    label_style: str = "text-sm font-medium text-slate-700",
 ) -> rx.Component:
     """
     Crea un wrapper de campo con etiqueta.
@@ -571,7 +571,7 @@ def toggle_switch(
     track_class = rx.cond(
         checked,
         f"{track_base} bg-indigo-600",
-        f"{track_base} bg-gray-200",
+        f"{track_base} bg-slate-200",
     )
     thumb_class = rx.cond(
         checked,
@@ -642,11 +642,11 @@ def section_card(
         style: Clave de estilo en CARD_STYLES
     """
     header_parts = [
-        rx.el.h3(title, class_name="text-lg font-semibold text-gray-800"),
+        rx.el.h3(title, class_name="text-lg font-semibold text-slate-800"),
     ]
     if description:
         header_parts.append(
-            rx.el.p(description, class_name="text-sm text-gray-600")
+            rx.el.p(description, class_name="text-sm text-slate-600")
         )
     
     content_parts = [
@@ -678,7 +678,7 @@ def status_badge(
             "pagado": ("bg-emerald-100", "text-emerald-700"),
             "pendiente": ("bg-amber-100", "text-amber-700"),
             "cancelado": ("bg-red-100", "text-red-700"),
-            "eliminado": ("bg-gray-200", "text-gray-700"),
+            "eliminado": ("bg-slate-200", "text-slate-700"),
         }
     
     # Para estado reactivo se usan cadenas de rx.cond
@@ -699,7 +699,7 @@ def status_badge(
                     status == "eliminado",
                     rx.el.span(
                         "Eliminado",
-                        class_name="px-2 py-1 text-xs font-semibold rounded-full bg-gray-200 text-gray-700",
+                        class_name="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 text-slate-700",
                     ),
                     rx.el.span(
                         "Pendiente",
@@ -710,7 +710,7 @@ def status_badge(
         )
     
     # Para estado estatico
-    colors = status_colors.get(status.lower(), ("bg-gray-100", "text-gray-700"))
+    colors = status_colors.get(status.lower(), ("bg-slate-100", "text-slate-700"))
     return rx.el.span(
         status.capitalize(),
         class_name=f"px-2 py-1 text-xs font-semibold rounded-full {colors[0]} {colors[1]}",
@@ -726,7 +726,7 @@ def empty_state(message: str) -> rx.Component:
     """
     return rx.el.p(
         message,
-        class_name="text-gray-500 text-center py-8",
+        class_name="text-slate-500 text-center py-8",
     )
 
 
@@ -739,8 +739,8 @@ def page_title(title: str, subtitle: str = "") -> rx.Component:
         subtitle: Subtitulo o descripcion opcional
     """
     return rx.el.div(
-        rx.el.h1(title, class_name="text-2xl font-bold text-gray-900 tracking-tight"),
-        rx.el.p(subtitle, class_name="text-sm text-gray-500") if subtitle else rx.fragment(),
+        rx.el.h1(title, class_name="text-2xl font-bold text-slate-900 tracking-tight"),
+        rx.el.p(subtitle, class_name="text-sm text-slate-500") if subtitle else rx.fragment(),
         class_name="flex flex-col gap-1 mb-6",
     )
 
@@ -767,8 +767,8 @@ def modal_container(
         max_width: Clase Tailwind de max-width
     """
     header = rx.el.div(
-        rx.el.h3(title, class_name="text-lg font-semibold text-gray-800"),
-        rx.el.p(description, class_name="text-sm text-gray-600") if description else rx.fragment(),
+        rx.el.h3(title, class_name="text-lg font-semibold text-slate-800"),
+        rx.el.p(description, class_name="text-sm text-slate-600") if description else rx.fragment(),
         class_name="space-y-1",
     )
     body = (
@@ -780,18 +780,21 @@ def modal_container(
         else rx.fragment()
     )
     footer_component = footer if footer else rx.fragment()
+    modal_sections = [header]
+    if children:
+        modal_sections.extend([rx.divider(color="slate-100"), body])
+    if footer:
+        modal_sections.extend([rx.divider(color="slate-100"), footer_component])
     
     return rx.cond(
         is_open,
         rx.el.div(
             rx.el.div(
                 on_click=on_close,
-                class_name="fixed inset-0 bg-black/40 modal-overlay",
+                class_name="fixed inset-0 bg-black/40 backdrop-blur-sm modal-overlay",
             ),
             rx.el.div(
-                header,
-                body,
-                footer_component,
+                *modal_sections,
                 class_name=(
                     f"relative z-10 w-full {max_width} rounded-xl bg-white p-6 shadow-xl "
                     "max-h-[90vh] overflow-hidden flex flex-col gap-4"
@@ -885,7 +888,7 @@ def stat_card(
     icon: str,
     title: str,
     value: rx.Var | rx.Component,
-    icon_color: str = "text-gray-600",
+    icon_color: str = "text-slate-600",
 ) -> rx.Component:
     """
     Crea una card de estadistica con icono, titulo y valor.
@@ -902,11 +905,11 @@ def stat_card(
     return rx.el.div(
         rx.el.div(
             rx.icon(icon, class_name=f"h-6 w-6 {icon_color}"),
-            class_name="p-3 bg-gray-100 rounded-lg",
+            class_name="p-3 bg-slate-100 rounded-lg",
         ),
         rx.el.div(
-            rx.el.p(title, class_name="text-sm font-medium text-gray-500"),
-            rx.el.p(value, class_name="text-2xl font-bold text-gray-800"),
+            rx.el.p(title, class_name="text-sm font-medium text-slate-500"),
+            rx.el.p(value, class_name="text-2xl font-bold text-slate-800"),
             class_name="flex-grow",
         ),
         class_name="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border",
@@ -938,8 +941,8 @@ def pagination_controls(
             disabled=current_page <= 1,
             class_name=rx.cond(
                 current_page <= 1,
-                "px-4 py-2 bg-gray-200 text-gray-500 rounded-md cursor-not-allowed min-h-[40px]",
-                "px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300 min-h-[40px]",
+                "px-4 py-2 bg-slate-200 text-slate-500 rounded-md cursor-not-allowed min-h-[40px]",
+                "px-4 py-2 bg-slate-200 rounded-md hover:bg-slate-300 min-h-[40px]",
             ),
         ),
         rx.el.span(
@@ -947,7 +950,7 @@ def pagination_controls(
             current_page.to_string(),
             " de ",
             total_pages.to_string(),
-            class_name="text-sm text-gray-600",
+            class_name="text-sm text-slate-600",
         ),
         rx.el.button(
             "Siguiente",
@@ -955,8 +958,8 @@ def pagination_controls(
             disabled=current_page >= total_pages,
             class_name=rx.cond(
                 current_page >= total_pages,
-                "px-4 py-2 bg-gray-200 text-gray-500 rounded-md cursor-not-allowed min-h-[40px]",
-                "px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300 min-h-[40px]",
+                "px-4 py-2 bg-slate-200 text-slate-500 rounded-md cursor-not-allowed min-h-[40px]",
+                "px-4 py-2 bg-slate-200 rounded-md hover:bg-slate-300 min-h-[40px]",
             ),
         ),
         class_name="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 mt-6",
@@ -982,12 +985,12 @@ def data_table(
         Componente de tabla con estilo
     """
     header_cells = [
-        rx.el.th(text, class_name=f"py-3 px-4 {align}")
+        rx.el.th(text, class_name=f"{TABLE_STYLES['header_cell']} {align}")
         for text, align in headers
     ]
     
     # Construir el componente de estado vacio
-    empty_component = rx.el.p(empty_message, class_name="text-gray-500 text-center py-8")
+    empty_component = rx.el.p(empty_message, class_name="text-slate-500 text-center py-8")
     
     # Manejar has_data reactivo o estatico
     if isinstance(has_data, rx.Var):
@@ -1009,7 +1012,7 @@ def data_table(
             rx.el.tbody(rows),
         ),
         empty_state_section,
-        class_name="bg-white p-4 sm:p-6 rounded-lg shadow-md overflow-x-auto flex flex-col gap-4",
+        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto flex flex-col gap-4",
     )
 
 
@@ -1039,11 +1042,11 @@ def card_container(
         header_parts = []
         if title:
             header_parts.append(
-                rx.el.h3(title, class_name="text-lg font-semibold text-gray-800")
+                rx.el.h3(title, class_name="text-lg font-semibold text-slate-800")
             )
         if description:
             header_parts.append(
-                rx.el.p(description, class_name="text-sm text-gray-600")
+                rx.el.p(description, class_name="text-sm text-slate-600")
             )
         content_parts.append(
             rx.el.div(*header_parts, class_name="flex flex-col gap-1")
@@ -1068,9 +1071,9 @@ def section_header(title: str, description: str = "") -> rx.Component:
     Retorna:
         Componente de encabezado
     """
-    parts = [rx.el.h2(title, class_name="text-lg font-semibold text-gray-800")]
+    parts = [rx.el.h2(title, class_name="text-lg font-semibold text-slate-800")]
     if description:
-        parts.append(rx.el.p(description, class_name="text-sm text-gray-600"))
+        parts.append(rx.el.p(description, class_name="text-sm text-slate-600"))
     
     return rx.el.div(*parts, class_name="flex flex-col gap-1")
 
@@ -1090,7 +1093,7 @@ def info_badge(
         Componente de badge con estilo
     """
     variant_styles = {
-        "default": "bg-gray-100 text-gray-700",
+        "default": "bg-slate-100 text-slate-700",
         "success": "bg-emerald-100 text-emerald-700",
         "warning": "bg-amber-100 text-amber-700",
         "danger": "bg-red-100 text-red-700",
@@ -1140,7 +1143,7 @@ def form_input(
         input_props["step"] = step
     
     return rx.el.div(
-        rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
+        rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
         rx.el.input(**input_props),
         class_name="flex flex-col gap-1",
     )
@@ -1173,7 +1176,7 @@ def form_select(
     # Manejar lista estatica o var reactiva de opciones
     if isinstance(options, rx.Var):
         return rx.el.div(
-            rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
+            rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
             rx.el.select(
                 rx.el.option(placeholder, value="") if placeholder else rx.fragment(),
                 rx.foreach(
@@ -1182,7 +1185,7 @@ def form_select(
                 ),
                 value=value,
                 on_change=on_change,
-                class_name="w-full p-2 border rounded-md bg-white",
+                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
             class_name="flex flex-col gap-1",
         )
@@ -1191,12 +1194,12 @@ def form_select(
         option_elements.append(rx.el.option(display_text, value=opt_value))
     
     return rx.el.div(
-        rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
+        rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
         rx.el.select(
             *option_elements,
             value=value,
             on_change=on_change,
-            class_name="w-full p-2 border rounded-md bg-white",
+            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
         ),
         class_name="flex flex-col gap-1",
     )
@@ -1224,12 +1227,12 @@ def form_textarea(
     """
     min_height = rows * TEXTAREA_ROW_HEIGHT
     return rx.el.div(
-        rx.el.label(label, class_name="text-sm font-medium text-gray-700"),
+        rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
         rx.el.textarea(
             placeholder=placeholder,
             value=value,
             on_change=on_change,
-            class_name=f"w-full p-2 border rounded-md min-h-[{min_height}px]",
+            class_name=f"w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[{min_height}px]",
         ),
         class_name="flex flex-col gap-1",
     )
@@ -1311,12 +1314,12 @@ def select_filter(
     ]
     
     return rx.el.div(
-        rx.el.label(label, class_name="text-sm font-medium text-gray-600"),
+        rx.el.label(label, class_name="text-sm font-medium text-slate-600"),
         rx.el.select(
             *option_elements,
             value=value,
             on_change=on_change,
-            class_name="w-full p-2 border rounded-md",
+            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
         ),
         class_name="flex flex-col gap-1",
     )

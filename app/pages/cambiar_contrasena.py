@@ -16,11 +16,11 @@ def cambiar_contrasena_page() -> rx.Component:
                 rx.el.div(
                     rx.el.h1(
                         "Actualizar Contrasena",
-                        class_name="text-2xl font-bold text-gray-800 text-center",
+                        class_name="text-2xl font-bold text-slate-800 text-center",
                     ),
                     rx.el.p(
                         "Por seguridad debes cambiar tu clave inicial.",
-                        class_name="text-xs text-gray-500 text-center",
+                        class_name="text-xs text-slate-500 text-center",
                     ),
                     class_name="flex flex-col items-center leading-tight",
                 ),
@@ -30,33 +30,33 @@ def cambiar_contrasena_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Nueva Contrasena",
-                        class_name="block text-sm font-medium text-gray-700",
+                        class_name="block text-sm font-medium text-slate-700",
                     ),
                     rx.el.input(
                         placeholder="Minimo 6 caracteres",
                         name="password",
                         type="password",
-                        class_name="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                        class_name="mt-1 block w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     ),
                     class_name="mb-4",
                 ),
                 rx.el.div(
                     rx.el.label(
                         "Confirmar Contrasena",
-                        class_name="block text-sm font-medium text-gray-700",
+                        class_name="block text-sm font-medium text-slate-700",
                     ),
                     rx.el.input(
                         placeholder="Repite la contrasena",
                         name="confirm_password",
                         type="password",
-                        class_name="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                        class_name="mt-1 block w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     ),
                     class_name="mb-6",
                 ),
                 rx.el.button(
                     "Actualizar",
                     type="submit",
-                    class_name="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 min-h-[44px]",
+                    class_name="w-full h-10 flex justify-center items-center px-4 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20",
                 ),
                 on_submit=State.change_password,
             ),
@@ -73,7 +73,7 @@ def cambiar_contrasena_page() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.div(
-                    rx.el.span("Creado por", class_name="text-gray-500"),
+                    rx.el.span("Creado por", class_name="text-slate-500"),
                     rx.el.a(
                         "Trebor Oscorima",
                         href="https://www.facebook.com/trebor.oscorima/?locale=es_LA",
@@ -81,7 +81,7 @@ def cambiar_contrasena_page() -> rx.Component:
                         rel="noopener noreferrer",
                         class_name="text-indigo-600 hover:text-indigo-700 transition-colors",
                     ),
-                    rx.el.span("-", class_name="text-gray-500"),
+                    rx.el.span("-", class_name="text-slate-500"),
                     class_name="flex items-center gap-1",
                 ),
                 rx.el.a(
@@ -89,11 +89,12 @@ def cambiar_contrasena_page() -> rx.Component:
                     href="https://wa.me/5491168376517",
                     target="_blank",
                     rel="noopener noreferrer",
-                    class_name="text-gray-500 hover:text-emerald-600 transition-colors",
+                    class_name="text-slate-500 hover:text-emerald-600 transition-colors",
                 ),
                 class_name="mt-6 flex flex-col items-center gap-1 text-xs",
             ),
-            class_name="w-full max-w-md p-6 sm:p-8 bg-white rounded-2xl shadow-lg border",
+            class_name="w-full max-w-md p-6 sm:p-8 bg-white rounded-xl shadow-sm border border-slate-200",
         ),
-        class_name="flex items-center justify-center min-h-screen bg-gray-100 px-4",
+        class_name="flex items-center justify-center min-h-screen bg-slate-50 px-4",
+        style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
     )

@@ -2,6 +2,7 @@ import reflex as rx
 from app.state import State
 from app.components.ui import (
     INPUT_STYLES,
+    TABLE_STYLES,
     toggle_switch,
     page_title,
     permission_guard,
@@ -14,11 +15,11 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
         rx.el.td(
             item["barcode"],
-            class_name="py-2 px-3 text-xs text-gray-500 font-mono hidden md:table-cell",
+            class_name="py-2 px-3 text-xs text-slate-500 font-mono hidden md:table-cell",
         ),
         rx.el.td(
             item["description"],
-            class_name="py-2 px-3 text-sm font-medium text-gray-800",
+            class_name="py-2 px-3 text-sm font-medium text-slate-800",
         ),
         rx.el.td(
             item["quantity"].to_string(),
@@ -44,7 +45,7 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
             ),
             class_name="py-2 px-2 text-center",
         ),
-        class_name="border-b border-gray-100 hover:bg-gray-50 transition-colors",
+        class_name="border-b border-slate-100 hover:bg-slate-50 transition-colors",
     )
 
 
@@ -53,8 +54,8 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.el.div(
-                rx.el.span(item["description"], class_name="font-medium text-gray-800"),
-                rx.el.span(item["barcode"], class_name="text-xs text-gray-400 font-mono"),
+                rx.el.span(item["description"], class_name="font-medium text-slate-800"),
+                rx.el.span(item["barcode"], class_name="text-xs text-slate-400 font-mono"),
                 class_name="flex flex-col",
             ),
             rx.el.button(
@@ -66,12 +67,12 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
         ),
         rx.el.div(
             rx.el.div(
-                rx.el.span("Cant:", class_name="text-xs text-gray-500"),
+                rx.el.span("Cant:", class_name="text-xs text-slate-500"),
                 rx.el.span(item["quantity"].to_string(), class_name="font-medium"),
                 class_name="flex items-center gap-1",
             ),
             rx.el.div(
-                rx.el.span("Precio:", class_name="text-xs text-gray-500"),
+                rx.el.span("Precio:", class_name="text-xs text-slate-500"),
                 rx.el.span(State.currency_symbol, item["price"].to_string(), class_name="font-medium"),
                 class_name="flex items-center gap-1",
             ),
@@ -85,7 +86,7 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
             ),
             class_name="flex items-center gap-4 mt-2",
         ),
-        class_name="p-3 bg-white border-b border-gray-100",
+        class_name="p-3 bg-white border-b border-slate-100",
     )
 
 
@@ -99,12 +100,12 @@ def client_selector() -> rx.Component:
                     rx.vstack(
                         rx.el.span(
                             State.selected_client["name"],
-                            class_name="text-sm font-semibold text-gray-900",
+                            class_name="text-sm font-semibold text-slate-900",
                         ),
                         rx.el.span(
                             "DNI: ",
                             State.selected_client["dni"],
-                            class_name="text-xs text-gray-500 font-mono",
+                            class_name="text-xs text-slate-500 font-mono",
                         ),
                         spacing="1",
                         align="start",
@@ -164,12 +165,12 @@ def client_selector() -> rx.Component:
                                 rx.vstack(
                                     rx.el.span(
                                         client["name"],
-                                        class_name="font-medium text-gray-900",
+                                        class_name="font-medium text-slate-900",
                                     ),
                                     rx.el.span(
                                         "DNI: ",
                                         client["dni"],
-                                        class_name="text-xs text-gray-500 font-mono",
+                                        class_name="text-xs text-slate-500 font-mono",
                                     ),
                                     spacing="1",
                                     align="start",
@@ -189,7 +190,7 @@ def client_selector() -> rx.Component:
                 class_name="w-full",
             ),
         ),
-        class_name="w-full p-2.5 bg-white rounded-lg border shadow-sm",
+        class_name="w-full p-2.5 bg-white rounded-xl border shadow-sm",
     )
 
 
@@ -200,7 +201,7 @@ def quick_add_bar() -> rx.Component:
         rx.el.div(
             # Código de barra
             rx.el.div(
-                rx.icon("scan-barcode", class_name="h-5 w-5 text-gray-400 flex-shrink-0"),
+                rx.icon("scan-barcode", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
                 rx.el.input(
                     id="venta_barcode_input",
                     key=State.sale_form_key.to_string(),
@@ -218,7 +219,7 @@ def quick_add_bar() -> rx.Component:
             # Búsqueda de producto
             rx.el.div(
                 rx.el.div(
-                    rx.icon("search", class_name="h-5 w-5 text-gray-400 flex-shrink-0"),
+                    rx.icon("search", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
                     rx.debounce_input(
                         rx.input(
                             value=State.new_sale_item["description"],
@@ -238,7 +239,7 @@ def quick_add_bar() -> rx.Component:
                             lambda suggestion: rx.el.button(
                                 suggestion,
                                 on_click=lambda _, s=suggestion: State.select_product_for_sale(s),
-                                class_name="w-full text-left px-3 py-2.5 hover:bg-indigo-50 text-sm border-b border-gray-100 last:border-0",
+                                class_name="w-full text-left px-3 py-2.5 hover:bg-indigo-50 text-sm border-b border-slate-100 last:border-0",
                             ),
                         ),
                         class_name="absolute z-20 left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto",
@@ -253,7 +254,7 @@ def quick_add_bar() -> rx.Component:
         rx.el.div(
             # Cantidad
             rx.el.div(
-                rx.el.label("Cant.", class_name="text-xs text-gray-500 sm:hidden"),
+                rx.el.label("Cant.", class_name="text-xs text-slate-500 sm:hidden"),
                 rx.el.input(
                     type="number",
                     min="0.01",
@@ -267,9 +268,9 @@ def quick_add_bar() -> rx.Component:
             ),
             # Precio
             rx.el.div(
-                rx.el.label("Precio", class_name="text-xs text-gray-500 sm:hidden"),
+                rx.el.label("Precio", class_name="text-xs text-slate-500 sm:hidden"),
                 rx.el.div(
-                    rx.el.span(State.currency_symbol, class_name="text-gray-400 text-sm"),
+                    rx.el.span(State.currency_symbol, class_name="text-slate-400 text-sm"),
                     rx.el.input(
                         type="number",
                         min="0",
@@ -284,14 +285,14 @@ def quick_add_bar() -> rx.Component:
             ),
             # Subtotal
             rx.el.div(
-                rx.el.label("Subtotal", class_name="text-xs text-gray-500 sm:hidden"),
+                rx.el.label("Subtotal", class_name="text-xs text-slate-500 sm:hidden"),
                 rx.el.div(
                     rx.el.span(
                         State.currency_symbol,
                         State.sale_subtotal.to_string(),
                         class_name="text-sm font-semibold text-indigo-600",
                     ),
-                    class_name="px-3 py-2 bg-gray-100 rounded-lg text-right h-[42px] flex items-center justify-end",
+                    class_name="px-3 py-2 bg-slate-100 rounded-lg text-right h-[42px] flex items-center justify-end",
                 ),
                 class_name="flex flex-col gap-1 w-20 sm:w-24",
             ),
@@ -304,7 +305,7 @@ def quick_add_bar() -> rx.Component:
             ),
             class_name="flex items-end gap-1",
         ),
-        class_name="flex flex-col gap-2 p-2.5 bg-gray-50 border-b",
+        class_name="flex flex-col gap-2 p-2.5 bg-slate-50 border-b",
     )
 
 
@@ -315,11 +316,11 @@ def products_table(embedded: bool = False) -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.icon("shopping-cart", class_name="h-5 w-5 text-indigo-600"),
-                rx.el.span("Productos", class_name="font-semibold text-gray-800 sm:hidden"),
-                rx.el.span("PRODUCTOS EN VENTA", class_name="font-semibold text-gray-800 hidden sm:inline"),
+                rx.el.span("Productos", class_name="font-semibold text-slate-800 sm:hidden"),
+                rx.el.span("PRODUCTOS EN VENTA", class_name="font-semibold text-slate-800 hidden sm:inline"),
                 rx.el.span(
                     "(", State.new_sale_items.length().to_string(), ")",
-                    class_name="text-sm text-gray-500",
+                    class_name="text-sm text-slate-500",
                 ),
                 class_name="flex items-center gap-1",
             ),
@@ -345,13 +346,29 @@ def products_table(embedded: bool = False) -> rx.Component:
                     rx.el.table(
                         rx.el.thead(
                             rx.el.tr(
-                                rx.el.th("Código", class_name="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell"),
-                                rx.el.th("Producto", class_name="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase"),
-                                rx.el.th("Cant.", class_name="py-2 px-3 text-center text-xs font-medium text-gray-500 uppercase"),
-                                rx.el.th("Precio", class_name="py-2 px-3 text-right text-xs font-medium text-gray-500 uppercase hidden sm:table-cell"),
-                                rx.el.th("Subtotal", class_name="py-2 px-3 text-right text-xs font-medium text-gray-500 uppercase"),
-                                rx.el.th("", class_name="py-2 px-3 w-10"),
-                                class_name="bg-gray-50 border-b",
+                                rx.el.th(
+                                    "Código",
+                                    class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell",
+                                ),
+                                rx.el.th(
+                                    "Producto", class_name=TABLE_STYLES["header_cell"]
+                                ),
+                                rx.el.th(
+                                    "Cant.",
+                                    class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                                ),
+                                rx.el.th(
+                                    "Precio",
+                                    class_name=f"{TABLE_STYLES['header_cell']} text-right hidden sm:table-cell",
+                                ),
+                                rx.el.th(
+                                    "Subtotal",
+                                    class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                ),
+                                rx.el.th(
+                                    "", class_name=f"{TABLE_STYLES['header_cell']} w-10"
+                                ),
+                                class_name=TABLE_STYLES["header"],
                             ),
                         ),
                         rx.el.tbody(
@@ -361,9 +378,9 @@ def products_table(embedded: bool = False) -> rx.Component:
                     ),
                 ),
                 rx.el.div(
-                    rx.icon("package-open", class_name="h-10 w-10 sm:h-12 sm:w-12 text-gray-300"),
-                    rx.el.p("No hay productos", class_name="text-gray-500 font-medium"),
-                    rx.el.p("Escanea un código o busca un producto", class_name="text-xs sm:text-sm text-gray-400"),
+                    rx.icon("package-open", class_name="h-10 w-10 sm:h-12 sm:w-12 text-slate-300"),
+                    rx.el.p("No hay productos", class_name="text-slate-500 font-medium"),
+                    rx.el.p("Escanea un código o busca un producto", class_name="text-xs sm:text-sm text-slate-400"),
                     class_name="flex flex-col items-center justify-center py-8 sm:py-12 text-center",
                 ),
             ),
@@ -375,7 +392,7 @@ def products_table(embedded: bool = False) -> rx.Component:
         return content
     return rx.el.div(
         content,
-        class_name="flex flex-col bg-white rounded-lg border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
+        class_name="flex flex-col bg-white rounded-xl border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
     )
 
 
@@ -383,7 +400,7 @@ def sale_products_card() -> rx.Component:
     return rx.el.div(
         quick_add_bar(),
         products_table(embedded=True),
-        class_name="flex flex-col bg-white rounded-lg border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
+        class_name="flex flex-col bg-white rounded-xl border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
     )
 
 
@@ -400,8 +417,8 @@ def reservation_info_card() -> rx.Component:
                         class_name="p-2 bg-emerald-600 rounded-lg",
                     ),
                     rx.el.div(
-                        rx.el.span("Cobro de Servicio", class_name="font-bold text-gray-800"),
-                        rx.el.span("Alquiler de Campo", class_name="text-sm text-gray-500"),
+                        rx.el.span("Cobro de Servicio", class_name="font-bold text-slate-800"),
+                        rx.el.span("Alquiler de Campo", class_name="text-sm text-slate-500"),
                         class_name="flex flex-col",
                     ),
                     class_name="flex items-center gap-2",
@@ -411,7 +428,7 @@ def reservation_info_card() -> rx.Component:
                     rx.icon("x", class_name="h-5 w-5"),
                     on_click=State.clear_pending_reservation,
                     title="Cerrar cobro de servicio",
-                    class_name="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors",
+                    class_name="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors",
                 ),
                 class_name="flex items-center justify-between",
             ),
@@ -420,52 +437,52 @@ def reservation_info_card() -> rx.Component:
                 # Columna 1: Cliente
                 rx.el.div(
                     rx.el.div(
-                        rx.icon("user", class_name="h-4 w-4 text-gray-400"),
-                        rx.el.span("Cliente", class_name="text-xs text-gray-500 uppercase"),
+                        rx.icon("user", class_name="h-4 w-4 text-slate-400"),
+                        rx.el.span("Cliente", class_name="text-xs text-slate-500 uppercase"),
                         class_name="flex items-center gap-1",
                     ),
                     rx.el.span(
                         State.reservation_selected_for_payment["client_name"],
-                        class_name="font-semibold text-gray-800",
+                        class_name="font-semibold text-slate-800",
                     ),
                     class_name="flex flex-col gap-1",
                 ),
                 # Columna 2: Campo
                 rx.el.div(
                     rx.el.div(
-                        rx.icon("map-pin", class_name="h-4 w-4 text-gray-400"),
-                        rx.el.span("Campo", class_name="text-xs text-gray-500 uppercase"),
+                        rx.icon("map-pin", class_name="h-4 w-4 text-slate-400"),
+                        rx.el.span("Campo", class_name="text-xs text-slate-500 uppercase"),
                         class_name="flex items-center gap-1",
                     ),
                     rx.el.span(
                         State.reservation_selected_for_payment["field_name"],
-                        class_name="font-semibold text-gray-800",
+                        class_name="font-semibold text-slate-800",
                     ),
                     class_name="flex flex-col gap-1",
                 ),
                 # Columna 3: Horario
                 rx.el.div(
                     rx.el.div(
-                        rx.icon("clock", class_name="h-4 w-4 text-gray-400"),
-                        rx.el.span("Horario", class_name="text-xs text-gray-500 uppercase"),
+                        rx.icon("clock", class_name="h-4 w-4 text-slate-400"),
+                        rx.el.span("Horario", class_name="text-xs text-slate-500 uppercase"),
                         class_name="flex items-center gap-1",
                     ),
                     rx.el.span(
                         State.reservation_selected_for_payment["start_datetime"],
-                        class_name="font-semibold text-gray-800 text-sm",
+                        class_name="font-semibold text-slate-800 text-sm",
                     ),
                     class_name="flex flex-col gap-1",
                 ),
                 # Columna 4: Teléfono
                 rx.el.div(
                     rx.el.div(
-                        rx.icon("phone", class_name="h-4 w-4 text-gray-400"),
-                        rx.el.span("Teléfono", class_name="text-xs text-gray-500 uppercase"),
+                        rx.icon("phone", class_name="h-4 w-4 text-slate-400"),
+                        rx.el.span("Teléfono", class_name="text-xs text-slate-500 uppercase"),
                         class_name="flex items-center gap-1",
                     ),
                     rx.el.span(
                         State.reservation_selected_for_payment["phone"],
-                        class_name="font-semibold text-gray-800",
+                        class_name="font-semibold text-slate-800",
                     ),
                     class_name="flex flex-col gap-1",
                 ),
@@ -474,16 +491,16 @@ def reservation_info_card() -> rx.Component:
             # Resumen de montos
             rx.el.div(
                 rx.el.div(
-                    rx.el.span("Total Reserva", class_name="text-sm text-gray-600"),
+                    rx.el.span("Total Reserva", class_name="text-sm text-slate-600"),
                     rx.el.span(
                         State.currency_symbol,
                         State.reservation_selected_for_payment["total_amount"].to_string(),
-                        class_name="text-lg font-bold text-gray-800",
+                        class_name="text-lg font-bold text-slate-800",
                     ),
-                    class_name="flex flex-col items-center p-2 bg-gray-50 rounded-lg",
+                    class_name="flex flex-col items-center p-2 bg-slate-50 rounded-lg",
                 ),
                 rx.el.div(
-                    rx.el.span("Adelanto Pagado", class_name="text-sm text-gray-600"),
+                    rx.el.span("Adelanto Pagado", class_name="text-sm text-slate-600"),
                     rx.el.span(
                         State.currency_symbol,
                         State.reservation_selected_for_payment["advance_amount"].to_string(),
@@ -492,7 +509,7 @@ def reservation_info_card() -> rx.Component:
                     class_name="flex flex-col items-center p-2 bg-emerald-50 rounded-lg",
                 ),
                 rx.el.div(
-                    rx.el.span("Saldo a Cobrar", class_name="text-sm text-gray-600"),
+                    rx.el.span("Saldo a Cobrar", class_name="text-sm text-slate-600"),
                     rx.el.span(
                         State.currency_symbol,
                         State.selected_reservation_balance.to_string(),
@@ -514,14 +531,14 @@ def payment_sidebar() -> rx.Component:
         # Header
         rx.el.div(
             rx.icon("wallet", class_name="h-5 w-5 text-indigo-600"),
-            rx.el.span("COBRO", class_name="font-bold text-gray-800"),
+            rx.el.span("COBRO", class_name="font-bold text-slate-800"),
             class_name="flex items-center gap-2 p-4 border-b shrink-0",
         ),
         # Contenido scrollable
         rx.el.div(
             # Métodos de pago
             rx.el.div(
-                rx.el.p("Método de pago", class_name="text-xs font-medium text-gray-500 uppercase mb-2"),
+                rx.el.p("Método de pago", class_name="text-xs font-medium text-slate-500 uppercase mb-2"),
                 rx.el.div(
                     rx.foreach(
                         State.enabled_payment_methods,
@@ -552,7 +569,7 @@ def payment_sidebar() -> rx.Component:
                             class_name=rx.cond(
                                 State.payment_method == method["name"],
                                 "flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white w-full justify-center",
-                                "flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-gray-700 hover:bg-gray-50 w-full justify-center",
+                                "flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-slate-700 hover:bg-slate-50 w-full justify-center",
                             ),
                         ),
                     ),
@@ -565,8 +582,8 @@ def payment_sidebar() -> rx.Component:
             rx.el.div(
                 rx.hstack(
                     rx.el.div(
-                        rx.el.span("VENTA A CREDITO / FIADO", class_name="text-xs font-medium text-gray-600"),
-                        rx.el.span("Configurar cuotas y pago inicial", class_name="text-[11px] text-gray-400"),
+                        rx.el.span("VENTA A CREDITO / FIADO", class_name="text-xs font-medium text-slate-600"),
+                        rx.el.span("Configurar cuotas y pago inicial", class_name="text-[11px] text-slate-400"),
                         class_name="flex flex-col",
                     ),
                     toggle_switch(
@@ -579,7 +596,7 @@ def payment_sidebar() -> rx.Component:
                     State.is_credit_mode,
                     rx.el.div(
                         rx.el.div(
-                            rx.el.label("Cuotas", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.label("Cuotas", class_name="text-xs font-medium text-slate-600"),
                             rx.el.input(
                                 type="number",
                                 min="1",
@@ -590,7 +607,7 @@ def payment_sidebar() -> rx.Component:
                             class_name="flex flex-col gap-1",
                         ),
                         rx.el.div(
-                            rx.el.label("Frecuencia (Dias)", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.label("Frecuencia (Dias)", class_name="text-xs font-medium text-slate-600"),
                             rx.el.input(
                                 type="number",
                                 min="1",
@@ -601,7 +618,7 @@ def payment_sidebar() -> rx.Component:
                             class_name="flex flex-col gap-1",
                         ),
                         rx.el.div(
-                            rx.el.label("Pago Inicial", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.label("Pago Inicial", class_name="text-xs font-medium text-slate-600"),
                             rx.el.input(
                                 type="number",
                                 min="0",
@@ -620,9 +637,9 @@ def payment_sidebar() -> rx.Component:
                                 " en ",
                                 State.credit_installments.to_string(),
                                 " cuotas",
-                                class_name="text-xs text-gray-600",
+                                class_name="text-xs text-slate-600",
                             ),
-                            class_name="px-3 py-2 rounded-lg bg-gray-50 border",
+                            class_name="px-3 py-2 rounded-lg bg-slate-50 border",
                         ),
                         class_name="flex flex-col gap-3 mt-3",
                     ),
@@ -635,9 +652,9 @@ def payment_sidebar() -> rx.Component:
                 rx.cond(
                     State.payment_method_kind == "cash",
                     rx.el.div(
-                        rx.el.label("Monto recibido", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Monto recibido", class_name="text-xs font-medium text-slate-600"),
                         rx.el.div(
-                            rx.el.span(State.currency_symbol, class_name="text-gray-400"),
+                            rx.el.span(State.currency_symbol, class_name="text-slate-400"),
                             rx.el.input(
                                 type="number",
                                 value=rx.cond(
@@ -664,7 +681,7 @@ def payment_sidebar() -> rx.Component:
                                         rx.cond(
                                             State.payment_cash_status == "due",
                                             "text-sm font-semibold text-red-600 mt-2",
-                                            "text-sm text-gray-500 mt-2",
+                                            "text-sm text-slate-500 mt-2",
                                         ),
                                     ),
                                 ),
@@ -678,7 +695,7 @@ def payment_sidebar() -> rx.Component:
                 rx.cond(
                     State.payment_method_kind == "card",
                     rx.el.div(
-                        rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-slate-600"),
                         rx.el.div(
                             rx.el.button(
                                 "Crédito",
@@ -686,7 +703,7 @@ def payment_sidebar() -> rx.Component:
                                 class_name=rx.cond(
                                     State.payment_card_type == "Credito",
                                     "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                 ),
                             ),
                             rx.el.button(
@@ -695,7 +712,7 @@ def payment_sidebar() -> rx.Component:
                                 class_name=rx.cond(
                                     State.payment_card_type == "Debito",
                                     "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                 ),
                             ),
                             class_name="flex gap-2",
@@ -707,7 +724,7 @@ def payment_sidebar() -> rx.Component:
                 rx.cond(
                     State.payment_method_kind == "wallet",
                     rx.el.div(
-                        rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Billetera", class_name="text-xs font-medium text-slate-600"),
                         rx.el.div(
                             rx.el.button(
                                 "Yape",
@@ -715,7 +732,7 @@ def payment_sidebar() -> rx.Component:
                                 class_name=rx.cond(
                                     State.payment_wallet_choice == "Yape",
                                     "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium",
-                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                 ),
                             ),
                             rx.el.button(
@@ -724,7 +741,7 @@ def payment_sidebar() -> rx.Component:
                                 class_name=rx.cond(
                                     State.payment_wallet_choice == "Plin",
                                     "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium",
-                                    "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                    "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                 ),
                             ),
                             class_name="flex gap-2",
@@ -737,7 +754,7 @@ def payment_sidebar() -> rx.Component:
                     State.payment_method_kind == "mixed",
                     rx.el.div(
                         rx.el.div(
-                            rx.el.label("Efectivo", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.label("Efectivo", class_name="text-xs font-medium text-slate-600"),
                             rx.el.input(
                                 type="number",
                                 value=rx.cond(
@@ -752,7 +769,7 @@ def payment_sidebar() -> rx.Component:
                             class_name="flex flex-col gap-1",
                         ),
                         rx.el.div(
-                            rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.label("Complemento", class_name="text-xs font-medium text-slate-600"),
                             rx.el.div(
                                 rx.el.button(
                                     "T. Débito",
@@ -760,7 +777,7 @@ def payment_sidebar() -> rx.Component:
                                     class_name=rx.cond(
                                         State.payment_mixed_non_cash_kind == "debit",
                                         "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                     ),
                                 ),
                                 rx.el.button(
@@ -769,7 +786,7 @@ def payment_sidebar() -> rx.Component:
                                     class_name=rx.cond(
                                         State.payment_mixed_non_cash_kind == "credit",
                                         "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                     ),
                                 ),
                                 rx.el.button(
@@ -778,7 +795,7 @@ def payment_sidebar() -> rx.Component:
                                     class_name=rx.cond(
                                         State.payment_mixed_non_cash_kind == "yape",
                                         "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                     ),
                                 ),
                                 rx.el.button(
@@ -787,7 +804,7 @@ def payment_sidebar() -> rx.Component:
                                     class_name=rx.cond(
                                         State.payment_mixed_non_cash_kind == "plin",
                                         "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                     ),
                                 ),
                                 rx.el.button(
@@ -796,7 +813,7 @@ def payment_sidebar() -> rx.Component:
                                     class_name=rx.cond(
                                         State.payment_mixed_non_cash_kind == "transfer",
                                         "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                        "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                        "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                     ),
                                 ),
                                 class_name="grid grid-cols-2 gap-2",
@@ -804,23 +821,23 @@ def payment_sidebar() -> rx.Component:
                             class_name="flex flex-col gap-2",
                         ),
                         rx.el.div(
-                            rx.el.label("Monto complemento", class_name="text-xs font-medium text-gray-600"),
+                            rx.el.label("Monto complemento", class_name="text-xs font-medium text-slate-600"),
                             rx.el.div(
-                                rx.el.span(State.currency_symbol, class_name="text-gray-400"),
+                                rx.el.span(State.currency_symbol, class_name="text-slate-400"),
                                 rx.el.input(
                                     type="number",
                                     value=State.payment_mixed_complement,
                                     is_disabled=True,
                                     class_name="flex-1 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
                                 ),
-                                class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50",
+                                class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-slate-50",
                             ),
                             class_name="flex flex-col gap-1",
                         ),
                         rx.cond(
                             State.payment_mixed_non_cash_kind == "card",
                             rx.el.div(
-                                rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
+                                rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-slate-600"),
                                 rx.el.div(
                                     rx.el.button(
                                         "Credito",
@@ -828,7 +845,7 @@ def payment_sidebar() -> rx.Component:
                                         class_name=rx.cond(
                                             State.payment_card_type == "Credito",
                                             "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                            "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                            "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                         ),
                                     ),
                                     rx.el.button(
@@ -837,7 +854,7 @@ def payment_sidebar() -> rx.Component:
                                         class_name=rx.cond(
                                             State.payment_card_type == "Debito",
                                             "flex-1 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium",
-                                            "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                            "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                         ),
                                     ),
                                     class_name="flex gap-2",
@@ -849,7 +866,7 @@ def payment_sidebar() -> rx.Component:
                         rx.cond(
                             State.payment_mixed_non_cash_kind == "wallet",
                             rx.el.div(
-                                rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
+                                rx.el.label("Billetera", class_name="text-xs font-medium text-slate-600"),
                                 rx.el.div(
                                     rx.el.button(
                                         "Yape",
@@ -857,7 +874,7 @@ def payment_sidebar() -> rx.Component:
                                         class_name=rx.cond(
                                             State.payment_wallet_choice == "Yape",
                                             "flex-1 px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium",
-                                            "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                            "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                         ),
                                     ),
                                     rx.el.button(
@@ -866,7 +883,7 @@ def payment_sidebar() -> rx.Component:
                                         class_name=rx.cond(
                                             State.payment_wallet_choice == "Plin",
                                             "flex-1 px-3 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium",
-                                            "flex-1 px-3 py-2 rounded-lg border text-gray-700 text-sm hover:bg-gray-50",
+                                            "flex-1 px-3 py-2 rounded-lg border text-slate-700 text-sm hover:bg-slate-50",
                                         ),
                                     ),
                                     class_name="flex gap-2",
@@ -888,7 +905,7 @@ def payment_sidebar() -> rx.Component:
             # Total
             rx.el.div(
                 rx.el.div(
-                    rx.el.span("TOTAL", class_name="text-xs font-medium text-gray-500"),
+                    rx.el.span("TOTAL", class_name="text-xs font-medium text-slate-500"),
                     rx.el.div(
                         rx.el.span(State.currency_symbol, class_name="text-xl text-indigo-600"),
                         rx.el.span(
@@ -899,7 +916,7 @@ def payment_sidebar() -> rx.Component:
                     ),
                     class_name="flex flex-col items-center py-3",
                 ),
-                class_name="p-3 bg-gray-50",
+                class_name="p-3 bg-slate-50",
             ),
             # Botones de acción
             rx.el.div(
@@ -937,7 +954,7 @@ def payment_sidebar() -> rx.Component:
                         rx.icon("printer", class_name="h-4 w-4"),
                         "Imprimir",
                         disabled=True,
-                        class_name="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 text-gray-400 rounded-lg cursor-not-allowed",
+                        class_name="w-full flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 text-slate-400 rounded-lg cursor-not-allowed",
                     ),
                 ),
                 class_name="p-4 flex flex-col gap-2",
@@ -954,7 +971,7 @@ def payment_mobile_section() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.icon("wallet", class_name="h-5 w-5 text-indigo-600"),
-                rx.el.span("Cobro", class_name="font-bold text-gray-800"),
+                rx.el.span("Cobro", class_name="font-bold text-slate-800"),
                 class_name="flex items-center gap-2",
             ),
             class_name="p-3 sm:p-4 border-b",
@@ -990,7 +1007,7 @@ def payment_mobile_section() -> rx.Component:
                     class_name=rx.cond(
                         State.payment_method == method["name"],
                         "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-600 text-white",
-                        "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                        "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                     ),
                 ),
             ),
@@ -999,7 +1016,7 @@ def payment_mobile_section() -> rx.Component:
         # Venta a credito
         rx.el.div(
             rx.hstack(
-                rx.el.span("Venta a Credito / Fiado", class_name="text-sm font-semibold text-gray-800"),
+                rx.el.span("Venta a Credito / Fiado", class_name="text-sm font-semibold text-slate-800"),
                 toggle_switch(
                     checked=State.is_credit_mode,
                     on_change=State.toggle_credit_mode,
@@ -1010,7 +1027,7 @@ def payment_mobile_section() -> rx.Component:
                 State.is_credit_mode,
                 rx.el.div(
                     rx.el.div(
-                        rx.el.label("Cuotas", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Cuotas", class_name="text-xs font-medium text-slate-600"),
                         rx.el.input(
                             type="number",
                             min="1",
@@ -1021,7 +1038,7 @@ def payment_mobile_section() -> rx.Component:
                         class_name="flex flex-col gap-1",
                     ),
                     rx.el.div(
-                        rx.el.label("Frecuencia (Dias)", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Frecuencia (Dias)", class_name="text-xs font-medium text-slate-600"),
                         rx.el.input(
                             type="number",
                             min="1",
@@ -1032,7 +1049,7 @@ def payment_mobile_section() -> rx.Component:
                         class_name="flex flex-col gap-1",
                     ),
                     rx.el.div(
-                        rx.el.label("Pago Inicial", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Pago Inicial", class_name="text-xs font-medium text-slate-600"),
                         rx.el.input(
                             type="number",
                             min="0",
@@ -1051,9 +1068,9 @@ def payment_mobile_section() -> rx.Component:
                             " en ",
                             State.credit_installments.to_string(),
                             " cuotas",
-                            class_name="text-xs text-gray-600",
+                            class_name="text-xs text-slate-600",
                         ),
-                        class_name="px-3 py-2 rounded-lg bg-gray-50 border",
+                        class_name="px-3 py-2 rounded-lg bg-slate-50 border",
                     ),
                     class_name="flex flex-col gap-3 mt-3",
                 ),
@@ -1065,9 +1082,9 @@ def payment_mobile_section() -> rx.Component:
         rx.cond(
             State.payment_method_kind == "cash",
             rx.el.div(
-                rx.el.label("Monto recibido", class_name="text-sm font-medium text-gray-700"),
+                rx.el.label("Monto recibido", class_name="text-sm font-medium text-slate-700"),
                 rx.el.div(
-                    rx.el.span(State.currency_symbol, class_name="text-gray-400 text-lg"),
+                    rx.el.span(State.currency_symbol, class_name="text-slate-400 text-lg"),
                     rx.el.input(
                         type="number",
                         value=rx.cond(
@@ -1104,7 +1121,7 @@ def payment_mobile_section() -> rx.Component:
         rx.cond(
             State.payment_method_kind == "card",
             rx.el.div(
-                rx.el.label("Tipo de tarjeta", class_name="text-sm font-medium text-gray-700"),
+                rx.el.label("Tipo de tarjeta", class_name="text-sm font-medium text-slate-700"),
                 rx.el.div(
                     rx.el.button(
                         "Crédito",
@@ -1112,7 +1129,7 @@ def payment_mobile_section() -> rx.Component:
                         class_name=rx.cond(
                             State.payment_card_type == "Credito",
                             "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                            "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                         ),
                     ),
                     rx.el.button(
@@ -1121,7 +1138,7 @@ def payment_mobile_section() -> rx.Component:
                         class_name=rx.cond(
                             State.payment_card_type == "Debito",
                             "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                            "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                         ),
                     ),
                     class_name="flex gap-2",
@@ -1133,7 +1150,7 @@ def payment_mobile_section() -> rx.Component:
         rx.cond(
             State.payment_method_kind == "wallet",
             rx.el.div(
-                rx.el.label("Billetera digital", class_name="text-sm font-medium text-gray-700"),
+                rx.el.label("Billetera digital", class_name="text-sm font-medium text-slate-700"),
                 rx.el.div(
                     rx.el.button(
                         "Yape",
@@ -1141,7 +1158,7 @@ def payment_mobile_section() -> rx.Component:
                         class_name=rx.cond(
                             State.payment_wallet_choice == "Yape",
                             "flex-1 px-3 py-2.5 rounded-lg bg-purple-600 text-white font-medium",
-                            "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                         ),
                     ),
                     rx.el.button(
@@ -1150,7 +1167,7 @@ def payment_mobile_section() -> rx.Component:
                         class_name=rx.cond(
                             State.payment_wallet_choice == "Plin",
                             "flex-1 px-3 py-2.5 rounded-lg bg-teal-600 text-white font-medium",
-                            "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                            "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                         ),
                     ),
                     class_name="flex gap-2",
@@ -1163,7 +1180,7 @@ def payment_mobile_section() -> rx.Component:
             State.payment_method_kind == "mixed",
             rx.el.div(
                 rx.el.div(
-                    rx.el.label("Efectivo", class_name="text-xs font-medium text-gray-600"),
+                    rx.el.label("Efectivo", class_name="text-xs font-medium text-slate-600"),
                     rx.el.input(
                         type="number",
                         value=rx.cond(
@@ -1178,7 +1195,7 @@ def payment_mobile_section() -> rx.Component:
                     class_name="flex flex-col gap-1",
                 ),
                 rx.el.div(
-                    rx.el.label("Complemento", class_name="text-xs font-medium text-gray-600"),
+                    rx.el.label("Complemento", class_name="text-xs font-medium text-slate-600"),
                     rx.el.div(
                         rx.el.button(
                             "T. Débito",
@@ -1186,7 +1203,7 @@ def payment_mobile_section() -> rx.Component:
                             class_name=rx.cond(
                                 State.payment_mixed_non_cash_kind == "debit",
                                 "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                             ),
                         ),
                         rx.el.button(
@@ -1195,7 +1212,7 @@ def payment_mobile_section() -> rx.Component:
                             class_name=rx.cond(
                                 State.payment_mixed_non_cash_kind == "credit",
                                 "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                             ),
                         ),
                         rx.el.button(
@@ -1204,7 +1221,7 @@ def payment_mobile_section() -> rx.Component:
                             class_name=rx.cond(
                                 State.payment_mixed_non_cash_kind == "yape",
                                 "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                             ),
                         ),
                         rx.el.button(
@@ -1213,7 +1230,7 @@ def payment_mobile_section() -> rx.Component:
                             class_name=rx.cond(
                                 State.payment_mixed_non_cash_kind == "plin",
                                 "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                             ),
                         ),
                         rx.el.button(
@@ -1222,7 +1239,7 @@ def payment_mobile_section() -> rx.Component:
                             class_name=rx.cond(
                                 State.payment_mixed_non_cash_kind == "transfer",
                                 "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                                "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                             ),
                         ),
                         class_name="grid grid-cols-2 gap-2",
@@ -1230,23 +1247,23 @@ def payment_mobile_section() -> rx.Component:
                     class_name="flex flex-col gap-2",
                 ),
                 rx.el.div(
-                    rx.el.label("Monto complemento", class_name="text-xs font-medium text-gray-600"),
+                    rx.el.label("Monto complemento", class_name="text-xs font-medium text-slate-600"),
                     rx.el.div(
-                        rx.el.span(State.currency_symbol, class_name="text-gray-400"),
+                        rx.el.span(State.currency_symbol, class_name="text-slate-400"),
                         rx.el.input(
                             type="number",
                             value=State.payment_mixed_complement,
                             is_disabled=True,
                             class_name="flex-1 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
                         ),
-                        class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-gray-50",
+                        class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-slate-50",
                     ),
                     class_name="flex flex-col gap-1",
                 ),
                 rx.cond(
                     State.payment_mixed_non_cash_kind == "card",
                     rx.el.div(
-                        rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-slate-600"),
                         rx.el.div(
                             rx.el.button(
                                 "Credito",
@@ -1254,7 +1271,7 @@ def payment_mobile_section() -> rx.Component:
                                 class_name=rx.cond(
                                     State.payment_card_type == "Credito",
                                     "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                                    "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                    "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                                 ),
                             ),
                             rx.el.button(
@@ -1263,7 +1280,7 @@ def payment_mobile_section() -> rx.Component:
                                 class_name=rx.cond(
                                     State.payment_card_type == "Debito",
                                     "flex-1 px-3 py-2.5 rounded-lg bg-indigo-600 text-white font-medium",
-                                    "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                    "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                                 ),
                             ),
                             class_name="flex gap-2",
@@ -1275,7 +1292,7 @@ def payment_mobile_section() -> rx.Component:
                 rx.cond(
                     State.payment_mixed_non_cash_kind == "wallet",
                     rx.el.div(
-                        rx.el.label("Billetera", class_name="text-xs font-medium text-gray-600"),
+                        rx.el.label("Billetera", class_name="text-xs font-medium text-slate-600"),
                         rx.el.div(
                             rx.el.button(
                                 "Yape",
@@ -1283,7 +1300,7 @@ def payment_mobile_section() -> rx.Component:
                                 class_name=rx.cond(
                                     State.payment_wallet_choice == "Yape",
                                     "flex-1 px-3 py-2.5 rounded-lg bg-purple-600 text-white font-medium",
-                                    "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                    "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                                 ),
                             ),
                             rx.el.button(
@@ -1292,7 +1309,7 @@ def payment_mobile_section() -> rx.Component:
                                 class_name=rx.cond(
                                     State.payment_wallet_choice == "Plin",
                                     "flex-1 px-3 py-2.5 rounded-lg bg-teal-600 text-white font-medium",
-                                    "flex-1 px-3 py-2.5 rounded-lg border text-gray-700 hover:bg-gray-50",
+                                    "flex-1 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50",
                                 ),
                             ),
                             class_name="flex gap-2",
@@ -1308,7 +1325,7 @@ def payment_mobile_section() -> rx.Component:
         # Total y botones
         rx.el.div(
             rx.el.div(
-                rx.el.span("TOTAL", class_name="text-sm font-medium text-gray-500"),
+                rx.el.span("TOTAL", class_name="text-sm font-medium text-slate-500"),
                 rx.el.div(
                     rx.el.span(State.currency_symbol, class_name="text-xl text-indigo-600"),
                     rx.el.span(
@@ -1353,9 +1370,9 @@ def payment_mobile_section() -> rx.Component:
                 ),
                 class_name="flex gap-2 mt-3",
             ),
-            class_name="p-3 sm:p-4 bg-gray-50 border-t",
+            class_name="p-3 sm:p-4 bg-slate-50 border-t",
         ),
-        class_name="bg-white rounded-lg border shadow-sm lg:hidden",
+        class_name="bg-white rounded-xl border shadow-sm lg:hidden",
     )
 
 

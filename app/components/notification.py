@@ -4,7 +4,7 @@ from app.state import State
 
 
 def NotificationHolder() -> rx.Component:
-    base_classes = "flex items-start gap-3 border rounded-lg shadow-lg p-4"
+    base_classes = "flex items-start gap-3 border border-slate-200 rounded-xl shadow-sm p-4"
     container_classes = rx.cond(
         State.notification_type == "success",
         f"{base_classes} bg-emerald-50 border-emerald-300 text-emerald-900",
@@ -45,7 +45,7 @@ def NotificationHolder() -> rx.Component:
         rx.el.button(
             rx.icon("x", class_name="h-4 w-4"),
             on_click=State.close_notification,
-            class_name="p-1 rounded-md hover:bg-black/5",
+            class_name="p-1 rounded-md hover:bg-slate-900/5",
         ),
         class_name=container_classes,
     )

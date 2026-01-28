@@ -32,7 +32,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     
     # Estilos para item activo vs inactivo
     active_class = f"relative flex items-center gap-3 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
-    inactive_class = f"relative flex items-center gap-3 {RADIUS['lg']} px-3 py-2 text-gray-600 hover:bg-white/60 hover:text-gray-900 font-medium {TRANSITIONS['fast']}"
+    inactive_class = f"relative flex items-center gap-3 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}"
     
     link = rx.link(
         rx.el.div(
@@ -84,7 +84,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
 def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.Component:
     """Botón de submenú con estilo mejorado."""
     active_class = f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500"
-    inactive_class = f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}"
+    inactive_class = f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}"
     
     return rx.el.button(
         rx.el.div(
@@ -116,8 +116,8 @@ def sidebar() -> rx.Component:
                         rx.cond(
                             State.sidebar_open,
                             rx.el.div(
-                                rx.el.span("TUWAYKIAPP", class_name="text-lg font-bold text-gray-900 tracking-tight"),
-                                rx.el.span("Sistema de Ventas", class_name="text-[10px] text-gray-400 uppercase tracking-wider"),
+                                rx.el.span("TUWAYKIAPP", class_name="text-lg font-bold text-slate-900 tracking-tight"),
+                                rx.el.span("Sistema de Ventas", class_name="text-[10px] text-slate-400 uppercase tracking-wider"),
                                 class_name="flex flex-col leading-tight",
                             ),
                             rx.fragment(),
@@ -125,14 +125,14 @@ def sidebar() -> rx.Component:
                         class_name="flex items-center gap-3",
                     ),
                     rx.el.button(
-                        rx.icon("panel-left-close", class_name="h-5 w-5 text-gray-400"),
+                        rx.icon("panel-left-close", class_name="h-5 w-5 text-slate-400"),
                         on_click=State.toggle_sidebar,
                         class_name=f"p-2 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
                     ),
                     class_name="flex h-16 items-center justify-between px-4",
                 ),
                 # Separador con gradiente sutil
-                rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mx-4"),
+                rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4"),
                 # Navegación
                 rx.el.nav(
                     rx.cond(
@@ -140,7 +140,7 @@ def sidebar() -> rx.Component:
                         rx.el.div(
                             rx.el.p(
                                 "Sin modulos disponibles",
-                                class_name="text-sm text-gray-500 px-3",
+                                class_name="text-sm text-slate-500 px-3",
                             ),
                             class_name="py-2",
                         ),
@@ -175,11 +175,11 @@ def sidebar() -> rx.Component:
                                                         State.config_active_tab
                                                         == section["key"],
                                                         f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-gray-200",
+                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-slate-200",
                                         ),
                                         rx.fragment(),
                                     ),
@@ -208,11 +208,11 @@ def sidebar() -> rx.Component:
                                                         State.cash_active_tab
                                                         == section["key"],
                                                         f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-gray-200",
+                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-slate-200",
                                         ),
                                         rx.fragment(),
                                     ),
@@ -241,11 +241,11 @@ def sidebar() -> rx.Component:
                                                         State.service_active_tab
                                                         == section["key"],
                                                         f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-gray-500 hover:bg-white/60 hover:text-gray-700 {TRANSITIONS['fast']}",
+                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
-                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-gray-200",
+                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-slate-200",
                                         ),
                                         rx.fragment(),
                                     ),
@@ -256,12 +256,12 @@ def sidebar() -> rx.Component:
                 ),
             ),
         ),
-        class_name="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent",
+        class_name="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
     ),
     # Footer con usuario
     rx.el.div(
         # Separador
-        rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent mx-4"),
+        rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4"),
         # Info del usuario
         rx.el.div(
             rx.el.div(
@@ -274,7 +274,7 @@ def sidebar() -> rx.Component:
                     rx.el.div(
                         rx.el.p(
                             State.current_user["username"], 
-                            class_name="font-semibold text-gray-900 text-sm"
+                            class_name="font-semibold text-slate-900 text-sm"
                         ),
                         rx.el.p(
                             State.current_user["role"],
@@ -298,7 +298,7 @@ def sidebar() -> rx.Component:
     ),
     class_name=rx.cond(
         State.sidebar_open,
-        f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen bg-gradient-to-b from-gray-50 to-white/95 backdrop-blur-xl border-r border-gray-200/50 {TRANSITIONS['slow']} w-64 {SHADOWS['lg']} md:shadow-none",
+        f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-64 {SHADOWS['lg']} md:shadow-none",
         f"w-0 overflow-hidden {TRANSITIONS['slow']}",
     ),
 ),
@@ -317,7 +317,7 @@ rx.cond(
     rx.el.button(
         rx.icon("menu", class_name="h-5 w-5 text-indigo-600"),
         on_click=State.toggle_sidebar,
-        class_name=f"fixed top-4 left-4 z-50 p-2.5 bg-white/90 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['md']} hover:bg-white border border-gray-200/50 {TRANSITIONS['fast']} hover:scale-105",
+        class_name=f"fixed top-4 left-4 z-50 p-2.5 bg-white/90 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['md']} hover:bg-white border border-slate-200/50 {TRANSITIONS['fast']} hover:scale-105",
     ),
     rx.fragment(),
 )
