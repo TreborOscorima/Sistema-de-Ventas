@@ -147,7 +147,10 @@ def _top_products_list() -> rx.Component:
             class_name="flex-1 min-w-0",
           ),
           rx.el.p(
-            rx.text(f"S/ {p['revenue']:.2f}"),
+            rx.el.span(
+              State.currency_symbol,
+              rx.text(f"{p['revenue']:.2f}"),
+            ),
             class_name="font-semibold text-slate-900 tabular-nums",
           ),
           class_name=f"flex items-center justify-between py-3 border-b border-slate-100 last:border-0 {TRANSITIONS['fast']} hover:bg-slate-50 px-2 -mx-2 {RADIUS['md']}",
@@ -229,7 +232,8 @@ def _category_chart() -> rx.Component:
               lambda cat: rx.el.div(
                 rx.el.span(cat["category"], class_name="flex-1 text-sm text-slate-900 truncate"),
                 rx.el.span(
-                  rx.text(f"S/ {cat['total']:.2f}"),
+                  State.currency_symbol,
+                  rx.text(f"{cat['total']:.2f}"),
                   class_name="w-28 text-sm text-slate-900 font-medium text-right tabular-nums",
                 ),
                 rx.el.span(

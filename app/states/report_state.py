@@ -199,6 +199,7 @@ class ReportState(MixinState):
                         end_date,
                         company_name=self.company_name,
                         include_cancelled=self.include_cancelled,
+                        currency_symbol=self.currency_symbol,
                     )
                     filename = f"Reporte_Ventas_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
                 
@@ -207,6 +208,7 @@ class ReportState(MixinState):
                         session,
                         company_name=self.company_name,
                         include_zero_stock=self.include_zero_stock,
+                        currency_symbol=self.currency_symbol,
                     )
                     filename = f"Inventario_Valorizado_{datetime.now().strftime('%Y%m%d')}.xlsx"
                 
@@ -214,6 +216,7 @@ class ReportState(MixinState):
                     output = generate_receivables_report(
                         session,
                         company_name=self.company_name,
+                        currency_symbol=self.currency_symbol,
                     )
                     filename = f"Cuentas_por_Cobrar_{datetime.now().strftime('%Y%m%d')}.xlsx"
                 
@@ -223,6 +226,7 @@ class ReportState(MixinState):
                         start_date,
                         end_date,
                         company_name=self.company_name,
+                        currency_symbol=self.currency_symbol,
                     )
                     filename = f"Reporte_Caja_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
                 

@@ -225,6 +225,8 @@ class CuentasState(MixinState):
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
         if not self.current_user["privileges"].get("view_cuentas"):
             return rx.toast("No tiene permisos para ver cuentas.", duration=3000)
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
         normalized_client_id: int | None = None
         if isinstance(client_id, str):
             normalized_client_id = (
@@ -267,9 +269,9 @@ class CuentasState(MixinState):
             "Fecha Vencimiento",
             "Cliente",
             "Concepto",
-            "Monto Cuota (S/)",
-            "Monto Pagado (S/)",
-            "Saldo Pendiente (S/)",
+            f"Monto Cuota ({currency_label})",
+            f"Monto Pagado ({currency_label})",
+            f"Saldo Pendiente ({currency_label})",
             "Estado",
         ]
         style_header_row(sheet, row, headers)
@@ -293,10 +295,10 @@ class CuentasState(MixinState):
             sheet.cell(row=row, column=1, value=due_date)
             sheet.cell(row=row, column=2, value=client_name)
             sheet.cell(row=row, column=3, value=concept)
-            sheet.cell(row=row, column=4, value=amount).number_format = CURRENCY_FORMAT
-            sheet.cell(row=row, column=5, value=paid_amount).number_format = CURRENCY_FORMAT
+            sheet.cell(row=row, column=4, value=amount).number_format = currency_format
+            sheet.cell(row=row, column=5, value=paid_amount).number_format = currency_format
             # Saldo = Fórmula: Monto - Pagado
-            sheet.cell(row=row, column=6, value=f"=D{row}-E{row}").number_format = CURRENCY_FORMAT
+            sheet.cell(row=row, column=6, value=f"=D{row}-E{row}").number_format = currency_format
             sheet.cell(row=row, column=7, value=status_label)
             
             # Color según estado
@@ -319,9 +321,9 @@ class CuentasState(MixinState):
             {"type": "label", "value": "TOTALES"},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
-            {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
-            {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "D", "number_format": currency_format},
+            {"type": "sum", "col_letter": "E", "number_format": currency_format},
+            {"type": "sum", "col_letter": "F", "number_format": currency_format},
             {"type": "text", "value": ""},
         ])
         

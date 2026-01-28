@@ -159,8 +159,13 @@ def _money_to_float(value: Decimal) -> float:
     return float(_round_money(value))
 
 
-def _money_display(value: Decimal) -> str:
-    return f"S/ {float(_round_money(value)):.2f}"
+def _money_display(value: Decimal, currency_symbol: str | None = None) -> str:
+    symbol = (currency_symbol or "").strip()
+    if symbol:
+        symbol = f"{symbol} "
+    else:
+        symbol = "S/ "
+    return f"{symbol}{float(_round_money(value)):.2f}"
 
 
 def _reservation_status_value(status: Any) -> str:
@@ -346,6 +351,7 @@ class SaleService:
         items: list[SaleItemDTO],
         payment_data: PaymentInfoDTO,
         reservation_id: str | None = None,
+        currency_symbol: str | None = None,
     ) -> SaleProcessResult:
         """Procesa una venta completa de forma atómica.
         
@@ -394,6 +400,11 @@ class SaleService:
             print(f"Venta #{result.sale.id} - Total: {result.sale_total_display}")
         """
         payment_method = (payment_data.method or "").strip()
+        symbol = (currency_symbol or "").strip()
+        if symbol:
+            symbol = f"{symbol} "
+        else:
+            symbol = "S/ "
         if not payment_method:
             raise ValueError("Seleccione un metodo de pago.")
 
@@ -915,14 +926,14 @@ class SaleService:
             if is_credit:
                 credit_lines = [
                     "CONDICION: CREDITO",
-                    f"Pago Inicial: {_money_display(_round_money(initial_payment))}",
-                    f"Saldo a Financiar: {_money_display(_round_money(financed_amount))}",
+                    f"Pago Inicial: {_money_display(_round_money(initial_payment), symbol)}",
+                    f"Saldo a Financiar: {_money_display(_round_money(financed_amount), symbol)}",
                     "Plan de Pagos:",
                 ]
                 if installments_plan:
                     for due_date, amount in installments_plan:
                         credit_lines.append(
-                            f"- {due_date.strftime('%Y-%m-%d')}: {_money_display(amount)}"
+                            f"- {due_date.strftime('%Y-%m-%d')}: {_money_display(amount, symbol)}"
                         )
                 credit_lines.append("_____________________")
                 credit_block = "\n".join(credit_lines)

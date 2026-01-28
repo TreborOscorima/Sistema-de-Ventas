@@ -63,9 +63,24 @@ def _round_currency(value: float | Decimal) -> Decimal:
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _format_currency(value: float | Decimal) -> str:
+def _format_currency(value: float | Decimal, currency_symbol: str | None = None) -> str:
     """Formatea valor como moneda."""
-    return f"S/ {_round_currency(value):,.2f}"
+    symbol = (currency_symbol or "").strip()
+    if symbol:
+        symbol = f"{symbol} "
+    else:
+        symbol = "S/ "
+    return f"{symbol}{_round_currency(value):,.2f}"
+
+
+def _currency_label(currency_symbol: str | None) -> str:
+    symbol = (currency_symbol or "").strip()
+    return symbol or "S/"
+
+
+def _currency_format(currency_symbol: str | None) -> str:
+    symbol = _currency_label(currency_symbol).replace('"', "")
+    return f'"{symbol}"#,##0.00'
 
 
 def _add_company_header(ws: Worksheet, company_name: str, report_title: str, period: str, columns: int = 8) -> int:
@@ -358,6 +373,7 @@ def generate_sales_report(
     end_date: datetime,
     company_name: str = "TUWAYKIAPP",
     include_cancelled: bool = False,
+    currency_symbol: str | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de ventas consolidado con detalles contables.
@@ -371,6 +387,8 @@ def generate_sales_report(
     - Listado detallado de transacciones
     """
     wb = Workbook()
+    currency_label = _currency_label(currency_symbol)
+    currency_format = _currency_format(currency_symbol)
     
     # Consultar ventas del período
     query = (
@@ -490,16 +508,16 @@ def generate_sales_report(
     row += 1
     
     indicators = [
-        ("Total Ventas Brutas:", _format_currency(total_ventas)),
-        ("(-) Costo de Ventas:", _format_currency(total_costo)),
-        ("(=) Utilidad Bruta:", _format_currency(utilidad_bruta)),
+        ("Total Ventas Brutas:", _format_currency(total_ventas, currency_symbol)),
+        ("(-) Costo de Ventas:", _format_currency(total_costo, currency_symbol)),
+        ("(=) Utilidad Bruta:", _format_currency(utilidad_bruta, currency_symbol)),
         ("Margen Bruto:", f"{margen_bruto:.2f}%"),
         ("", ""),
         ("Número de Transacciones:", ventas_count),
-        ("Ticket Promedio:", _format_currency(ticket_promedio)),
+        ("Ticket Promedio:", _format_currency(ticket_promedio, currency_symbol)),
         ("", ""),
-        ("Ventas al Contado:", f"{ventas_contado} ({_format_currency(monto_contado)})"),
-        ("Ventas a Crédito:", f"{ventas_credito} ({_format_currency(monto_credito)})"),
+        ("Ventas al Contado:", f"{ventas_contado} ({_format_currency(monto_contado, currency_symbol)})"),
+        ("Ventas a Crédito:", f"{ventas_credito} ({_format_currency(monto_credito, currency_symbol)})"),
     ]
     
     for label, value in indicators:
@@ -513,7 +531,14 @@ def generate_sales_report(
     ws_daily = wb.create_sheet("Ventas por Día")
     row = _add_company_header(ws_daily, company_name, "VENTAS DIARIAS DETALLADAS", period_str, columns=6)
     
-    headers = ["Fecha", "Nº Transacciones", "Venta Bruta (S/)", "Costo (S/)", "Utilidad (S/)", "Margen (%)"]
+    headers = [
+        "Fecha",
+        "Nº Transacciones",
+        f"Venta Bruta ({currency_label})",
+        f"Costo ({currency_label})",
+        f"Utilidad ({currency_label})",
+        "Margen (%)",
+    ]
     _style_header_row(ws_daily, row, headers)
     data_start_row = row + 1
     row += 1
@@ -523,10 +548,10 @@ def generate_sales_report(
         
         ws_daily.cell(row=row, column=1, value=_safe_string(day_key))
         ws_daily.cell(row=row, column=2, value=day_data["count"])
-        ws_daily.cell(row=row, column=3, value=float(day_data["total"])).number_format = CURRENCY_FORMAT
-        ws_daily.cell(row=row, column=4, value=float(day_data["cost"])).number_format = CURRENCY_FORMAT
+        ws_daily.cell(row=row, column=3, value=float(day_data["total"])).number_format = currency_format
+        ws_daily.cell(row=row, column=4, value=float(day_data["cost"])).number_format = currency_format
         # Utilidad = Fórmula Excel: Venta - Costo
-        ws_daily.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = CURRENCY_FORMAT
+        ws_daily.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = currency_format
         # Margen % = Fórmula Excel: (Utilidad / Venta) * 100
         ws_daily.cell(row=row, column=6, value=f"=IF(C{row}>0,E{row}/C{row},0)").number_format = PERCENT_FORMAT
         
@@ -539,9 +564,9 @@ def generate_sales_report(
     _add_totals_row_with_formulas(ws_daily, totals_row, data_start_row, [
         {"type": "label", "value": "TOTALES"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
+        {"type": "sum", "col_letter": "D", "number_format": currency_format},
+        {"type": "sum", "col_letter": "E", "number_format": currency_format},
         {"type": "formula", "value": f"=IF(C{totals_row}>0,E{totals_row}/C{totals_row},0)", "number_format": PERCENT_FORMAT},
     ])
     
@@ -561,7 +586,15 @@ def generate_sales_report(
     ws_category = wb.create_sheet("Por Categoría")
     row = _add_company_header(ws_category, company_name, "ANÁLISIS DE VENTAS POR CATEGORÍA", period_str, columns=7)
     
-    headers = ["Categoría", "Unidades Vendidas", "Venta Bruta (S/)", "Costo (S/)", "Utilidad (S/)", "Margen (%)", "Participación (%)"]
+    headers = [
+        "Categoría",
+        "Unidades Vendidas",
+        f"Venta Bruta ({currency_label})",
+        f"Costo ({currency_label})",
+        f"Utilidad ({currency_label})",
+        "Margen (%)",
+        "Participación (%)",
+    ]
     _style_header_row(ws_category, row, headers)
     cat_data_start = row + 1
     row += 1
@@ -571,14 +604,14 @@ def generate_sales_report(
     for cat_name, cat_data in sorted_categories:
         ws_category.cell(row=row, column=1, value=_safe_string(cat_name))
         ws_category.cell(row=row, column=2, value=cat_data["qty"])
-        ws_category.cell(row=row, column=3, value=float(cat_data["total"])).number_format = CURRENCY_FORMAT
-        ws_category.cell(row=row, column=4, value=float(cat_data["cost"])).number_format = CURRENCY_FORMAT
+        ws_category.cell(row=row, column=3, value=float(cat_data["total"])).number_format = currency_format
+        ws_category.cell(row=row, column=4, value=float(cat_data["cost"])).number_format = currency_format
         # Utilidad = Fórmula: Venta - Costo
-        ws_category.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = CURRENCY_FORMAT
+        ws_category.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = currency_format
         # Margen % = Fórmula: Utilidad / Venta
         ws_category.cell(row=row, column=6, value=f"=IF(C{row}>0,E{row}/C{row},0)").number_format = PERCENT_FORMAT
         # % del Total = se calculará con referencia al total
-        ws_category.cell(row=row, column=7, value=float(cat_data["total"])).number_format = CURRENCY_FORMAT  # Temporal
+        ws_category.cell(row=row, column=7, value=float(cat_data["total"])).number_format = currency_format  # Temporal
         
         for col in range(1, 8):
             ws_category.cell(row=row, column=col).border = THIN_BORDER
@@ -588,9 +621,9 @@ def generate_sales_report(
     _add_totals_row_with_formulas(ws_category, cat_totals_row, cat_data_start, [
         {"type": "label", "value": "TOTALES"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
+        {"type": "sum", "col_letter": "D", "number_format": currency_format},
+        {"type": "sum", "col_letter": "E", "number_format": currency_format},
         {"type": "formula", "value": f"=IF(C{cat_totals_row}>0,E{cat_totals_row}/C{cat_totals_row},0)", "number_format": PERCENT_FORMAT},
         {"type": "text", "value": "100.00%"},
     ])
@@ -620,7 +653,13 @@ def generate_sales_report(
     ws_payment.cell(row=row, column=2, value="(Dinero efectivamente cobrado)").font = Font(italic=True, size=9, color="6B7280")
     row += 1
     
-    headers = ["Método de Pago", "Nº Operaciones", "Monto Recaudado (S/)", "Participación (%)", "Observación"]
+    headers = [
+        "Método de Pago",
+        "Nº Operaciones",
+        f"Monto Recaudado ({currency_label})",
+        "Participación (%)",
+        "Observación",
+    ]
     _style_header_row(ws_payment, row, headers)
     pay_data_start = row + 1
     row += 1
@@ -633,8 +672,8 @@ def generate_sales_report(
         method_es = _translate_payment_method(method)
         ws_payment.cell(row=row, column=1, value=_safe_string(method_es))
         ws_payment.cell(row=row, column=2, value=method_data["count"])
-        ws_payment.cell(row=row, column=3, value=float(method_data["total"])).number_format = CURRENCY_FORMAT
-        ws_payment.cell(row=row, column=4, value=float(method_data["total"])).number_format = CURRENCY_FORMAT  # Temporal
+        ws_payment.cell(row=row, column=3, value=float(method_data["total"])).number_format = currency_format
+        ws_payment.cell(row=row, column=4, value=float(method_data["total"])).number_format = currency_format  # Temporal
         
         # Observación según tipo
         method_lower = method.lower()
@@ -660,7 +699,7 @@ def generate_sales_report(
     _add_totals_row_with_formulas(ws_payment, pay_totals_row, pay_data_start, [
         {"type": "label", "value": "TOTAL RECAUDADO"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "text", "value": "100.00%"},
         {"type": "text", "value": ""},
     ])
@@ -675,7 +714,13 @@ def generate_sales_report(
     ws_payment.cell(row=row, column=2, value="(Pendiente de cobro)").font = Font(italic=True, size=9, color="6B7280")
     row += 1
     
-    headers_credit = ["Concepto", "Cantidad", "Monto (S/)", "% del Total Ventas", "Estado"]
+    headers_credit = [
+        "Concepto",
+        "Cantidad",
+        f"Monto ({currency_label})",
+        "% del Total Ventas",
+        "Estado",
+    ]
     _style_header_row(ws_payment, row, headers_credit)
     credit_data_start = row + 1
     row += 1
@@ -686,7 +731,7 @@ def generate_sales_report(
     
     ws_payment.cell(row=row, column=1, value="Ventas a Crédito/Fiado")
     ws_payment.cell(row=row, column=2, value=ventas_credito)
-    ws_payment.cell(row=row, column=3, value=float(monto_credito)).number_format = CURRENCY_FORMAT
+    ws_payment.cell(row=row, column=3, value=float(monto_credito)).number_format = currency_format
     if total_ventas > 0:
         ws_payment.cell(row=row, column=4, value=float(monto_credito / total_ventas)).number_format = PERCENT_FORMAT
     else:
@@ -705,15 +750,15 @@ def generate_sales_report(
     row += 2
     
     ws_payment.cell(row=row, column=1, value="Total Ventas del Período:").font = Font(bold=True)
-    ws_payment.cell(row=row, column=2, value=float(total_ventas)).number_format = CURRENCY_FORMAT
+    ws_payment.cell(row=row, column=2, value=float(total_ventas)).number_format = currency_format
     row += 1
     
     ws_payment.cell(row=row, column=1, value="(-) Pagos Recibidos:").font = Font(bold=True)
-    ws_payment.cell(row=row, column=2, value=f"=C{pay_totals_row}").number_format = CURRENCY_FORMAT
+    ws_payment.cell(row=row, column=2, value=f"=C{pay_totals_row}").number_format = currency_format
     row += 1
     
     ws_payment.cell(row=row, column=1, value="(=) Pendiente de Cobro:").font = Font(bold=True, color="B45309")
-    ws_payment.cell(row=row, column=2, value=f"={float(total_ventas)}-C{pay_totals_row}").number_format = CURRENCY_FORMAT
+    ws_payment.cell(row=row, column=2, value=f"={float(total_ventas)}-C{pay_totals_row}").number_format = currency_format
     ws_payment.cell(row=row, column=2).fill = WARNING_FILL
     
     _add_notes_section(ws_payment, row, [
@@ -735,7 +780,13 @@ def generate_sales_report(
     ws_user = wb.create_sheet("Por Vendedor")
     row = _add_company_header(ws_user, company_name, "RENDIMIENTO POR VENDEDOR", period_str, columns=5)
     
-    headers = ["Vendedor", "Nº Transacciones", "Venta Total (S/)", "Ticket Promedio (S/)", "Participación (%)"]
+    headers = [
+        "Vendedor",
+        "Nº Transacciones",
+        f"Venta Total ({currency_label})",
+        f"Ticket Promedio ({currency_label})",
+        "Participación (%)",
+    ]
     _style_header_row(ws_user, row, headers)
     user_data_start = row + 1
     row += 1
@@ -745,11 +796,11 @@ def generate_sales_report(
     for user_name, user_data in sorted_users:
         ws_user.cell(row=row, column=1, value=_safe_string(user_name))
         ws_user.cell(row=row, column=2, value=user_data["count"])
-        ws_user.cell(row=row, column=3, value=float(user_data["total"])).number_format = CURRENCY_FORMAT
+        ws_user.cell(row=row, column=3, value=float(user_data["total"])).number_format = currency_format
         # Ticket Promedio = Fórmula: Venta Total / Nº Transacciones
-        ws_user.cell(row=row, column=4, value=f"=IF(B{row}>0,C{row}/B{row},0)").number_format = CURRENCY_FORMAT
+        ws_user.cell(row=row, column=4, value=f"=IF(B{row}>0,C{row}/B{row},0)").number_format = currency_format
         # Participación - se calculará con referencia al total
-        ws_user.cell(row=row, column=5, value=float(user_data["total"])).number_format = CURRENCY_FORMAT  # Temporal
+        ws_user.cell(row=row, column=5, value=float(user_data["total"])).number_format = currency_format  # Temporal
         
         for col in range(1, 6):
             ws_user.cell(row=row, column=col).border = THIN_BORDER
@@ -759,8 +810,8 @@ def generate_sales_report(
     _add_totals_row_with_formulas(ws_user, user_totals_row, user_data_start, [
         {"type": "label", "value": "TOTAL EQUIPO"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
-        {"type": "formula", "value": f"=IF(B{user_totals_row}>0,C{user_totals_row}/B{user_totals_row},0)", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
+        {"type": "formula", "value": f"=IF(B{user_totals_row}>0,C{user_totals_row}/B{user_totals_row},0)", "number_format": currency_format},
         {"type": "text", "value": "100.00%"},
     ])
     
@@ -784,7 +835,7 @@ def generate_sales_report(
     
     headers = [
         "Nº Venta", "Fecha y Hora", "Cliente", "Vendedor", "Productos Vendidos",
-        "Venta (S/)", "Costo (S/)", "Utilidad (S/)", "Forma de Pago", "Estado"
+        f"Venta ({currency_label})", f"Costo ({currency_label})", f"Utilidad ({currency_label})", "Forma de Pago", "Estado"
     ]
     _style_header_row(ws_detail, row, headers)
     detail_data_start = row + 1
@@ -842,10 +893,10 @@ def generate_sales_report(
             ),
         )
         ws_detail.cell(row=row, column=5, value=_safe_string(products_str[:80]))  # Limitar longitud
-        ws_detail.cell(row=row, column=6, value=float(sale_total)).number_format = CURRENCY_FORMAT
-        ws_detail.cell(row=row, column=7, value=float(sale_cost)).number_format = CURRENCY_FORMAT
+        ws_detail.cell(row=row, column=6, value=float(sale_total)).number_format = currency_format
+        ws_detail.cell(row=row, column=7, value=float(sale_cost)).number_format = currency_format
         # Utilidad = Fórmula: Venta - Costo
-        ws_detail.cell(row=row, column=8, value=f"=F{row}-G{row}").number_format = CURRENCY_FORMAT
+        ws_detail.cell(row=row, column=8, value=f"=F{row}-G{row}").number_format = currency_format
         ws_detail.cell(row=row, column=9, value=_safe_string(payment_method))
         ws_detail.cell(row=row, column=10, value=_safe_string(status_es))
         
@@ -861,9 +912,9 @@ def generate_sales_report(
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "H", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
+        {"type": "sum", "col_letter": "G", "number_format": currency_format},
+        {"type": "sum", "col_letter": "H", "number_format": currency_format},
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
     ])
@@ -906,7 +957,7 @@ def generate_sales_report(
     
     headers = [
         "Producto", "Categoría", "Unidades Vendidas", "Nº Ventas",
-        "Ingresos (S/)", "Costo (S/)", "Utilidad (S/)", "Margen (%)"
+        f"Ingresos ({currency_label})", f"Costo ({currency_label})", f"Utilidad ({currency_label})", "Margen (%)"
     ]
     _style_header_row(ws_top_products, row, headers)
     top_data_start = row + 1
@@ -920,10 +971,10 @@ def generate_sales_report(
         ws_top_products.cell(row=row, column=2, value=_safe_string(prod["category"]))
         ws_top_products.cell(row=row, column=3, value=prod["qty"])
         ws_top_products.cell(row=row, column=4, value=prod["transactions"])
-        ws_top_products.cell(row=row, column=5, value=float(prod["total"])).number_format = CURRENCY_FORMAT
-        ws_top_products.cell(row=row, column=6, value=float(prod["cost"])).number_format = CURRENCY_FORMAT
+        ws_top_products.cell(row=row, column=5, value=float(prod["total"])).number_format = currency_format
+        ws_top_products.cell(row=row, column=6, value=float(prod["cost"])).number_format = currency_format
         # Utilidad = Fórmula: Ingresos - Costo
-        ws_top_products.cell(row=row, column=7, value=f"=E{row}-F{row}").number_format = CURRENCY_FORMAT
+        ws_top_products.cell(row=row, column=7, value=f"=E{row}-F{row}").number_format = currency_format
         # Margen = Fórmula: Utilidad / Ingresos
         ws_top_products.cell(row=row, column=8, value=f"=IF(E{row}>0,G{row}/E{row},0)").number_format = PERCENT_FORMAT
         
@@ -938,9 +989,9 @@ def generate_sales_report(
         {"type": "text", "value": ""},
         {"type": "sum", "col_letter": "C"},
         {"type": "sum", "col_letter": "D"},
-        {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "E", "number_format": currency_format},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
+        {"type": "sum", "col_letter": "G", "number_format": currency_format},
         {"type": "formula", "value": f"=IF(E{top_totals_row}>0,G{top_totals_row}/E{top_totals_row},0)", "number_format": PERCENT_FORMAT},
     ])
     
@@ -970,7 +1021,13 @@ def generate_sales_report(
             by_hour[hour]["count"] += 1
             by_hour[hour]["total"] += _safe_decimal(sale.total_amount)
     
-    headers = ["Franja Horaria", "Nº Transacciones", "Venta Total (S/)", "Participación (%)", "Ticket Promedio (S/)"]
+    headers = [
+        "Franja Horaria",
+        "Nº Transacciones",
+        f"Venta Total ({currency_label})",
+        "Participación (%)",
+        f"Ticket Promedio ({currency_label})",
+    ]
     _style_header_row(ws_hourly, row, headers)
     hourly_data_start = row + 1
     row += 1
@@ -980,11 +1037,11 @@ def generate_sales_report(
         
         ws_hourly.cell(row=row, column=1, value=f"{hour:02d}:00 - {hour:02d}:59")
         ws_hourly.cell(row=row, column=2, value=hour_data["count"])
-        ws_hourly.cell(row=row, column=3, value=float(hour_data["total"])).number_format = CURRENCY_FORMAT
+        ws_hourly.cell(row=row, column=3, value=float(hour_data["total"])).number_format = currency_format
         # Participación - se calculará con referencia al total
-        ws_hourly.cell(row=row, column=4, value=float(hour_data["total"])).number_format = CURRENCY_FORMAT  # Temporal
+        ws_hourly.cell(row=row, column=4, value=float(hour_data["total"])).number_format = currency_format  # Temporal
         # Ticket Promedio = Fórmula: Venta / Transacciones
-        ws_hourly.cell(row=row, column=5, value=f"=IF(B{row}>0,C{row}/B{row},0)").number_format = CURRENCY_FORMAT
+        ws_hourly.cell(row=row, column=5, value=f"=IF(B{row}>0,C{row}/B{row},0)").number_format = currency_format
         
         for col in range(1, 6):
             ws_hourly.cell(row=row, column=col).border = THIN_BORDER
@@ -994,9 +1051,9 @@ def generate_sales_report(
     _add_totals_row_with_formulas(ws_hourly, hourly_totals_row, hourly_data_start, [
         {"type": "label", "value": "TOTAL DÍA"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "text", "value": "100.00%"},
-        {"type": "formula", "value": f"=IF(B{hourly_totals_row}>0,C{hourly_totals_row}/B{hourly_totals_row},0)", "number_format": CURRENCY_FORMAT},
+        {"type": "formula", "value": f"=IF(B{hourly_totals_row}>0,C{hourly_totals_row}/B{hourly_totals_row},0)", "number_format": currency_format},
     ])
     
     # Actualizar columna D con fórmulas de participación
@@ -1027,6 +1084,7 @@ def generate_inventory_report(
     session,
     company_name: str = "TUWAYKIAPP",
     include_zero_stock: bool = True,
+    currency_symbol: str | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de inventario valorizado profesional.
@@ -1039,6 +1097,8 @@ def generate_inventory_report(
     - Rotación estimada
     """
     wb = Workbook()
+    currency_label = _currency_label(currency_symbol)
+    currency_format = _currency_format(currency_symbol)
     
     # Consultar productos
     query = select(Product).order_by(Product.category, Product.description)
@@ -1087,9 +1147,9 @@ def generate_inventory_report(
         ("Total de Productos (SKU):", total_items),
         ("Total de Unidades en Stock:", total_units),
         ("", ""),
-        ("Valor al Costo:", _format_currency(total_cost_value)),
-        ("Valor a Precio Venta:", _format_currency(total_sale_value)),
-        ("Utilidad Potencial:", _format_currency(potential_profit)),
+        ("Valor al Costo:", _format_currency(total_cost_value, currency_symbol)),
+        ("Valor a Precio Venta:", _format_currency(total_sale_value, currency_symbol)),
+        ("Utilidad Potencial:", _format_currency(potential_profit, currency_symbol)),
         ("", ""),
         ("ESTADO DEL STOCK:", ""),
         ("   Sin stock (0 unidades):", stock_zero),
@@ -1111,7 +1171,15 @@ def generate_inventory_report(
     ws_category = wb.create_sheet("Por Categoría")
     row = _add_company_header(ws_category, company_name, "VALORIZACIÓN POR CATEGORÍA DE PRODUCTO", f"Al {today}", columns=7)
     
-    headers = ["Categoría", "Nº Productos", "Unidades en Stock", "Valor al Costo (S/)", "Valor a Venta (S/)", "Utilidad Potencial (S/)", "Participación (%)"]
+    headers = [
+        "Categoría",
+        "Nº Productos",
+        "Unidades en Stock",
+        f"Valor al Costo ({currency_label})",
+        f"Valor a Venta ({currency_label})",
+        f"Utilidad Potencial ({currency_label})",
+        "Participación (%)",
+    ]
     _style_header_row(ws_category, row, headers)
     inv_cat_data_start = row + 1
     row += 1
@@ -1122,12 +1190,12 @@ def generate_inventory_report(
         ws_category.cell(row=row, column=1, value=_safe_string(cat_name))
         ws_category.cell(row=row, column=2, value=cat_data["items"])
         ws_category.cell(row=row, column=3, value=cat_data["units"])
-        ws_category.cell(row=row, column=4, value=float(cat_data["cost"])).number_format = CURRENCY_FORMAT
-        ws_category.cell(row=row, column=5, value=float(cat_data["sale"])).number_format = CURRENCY_FORMAT
+        ws_category.cell(row=row, column=4, value=float(cat_data["cost"])).number_format = currency_format
+        ws_category.cell(row=row, column=5, value=float(cat_data["sale"])).number_format = currency_format
         # Utilidad Potencial = Fórmula: Valor Venta - Valor Costo
-        ws_category.cell(row=row, column=6, value=f"=E{row}-D{row}").number_format = CURRENCY_FORMAT
+        ws_category.cell(row=row, column=6, value=f"=E{row}-D{row}").number_format = currency_format
         # Participación - temporal, se actualizará con fórmula
-        ws_category.cell(row=row, column=7, value=float(cat_data["cost"])).number_format = CURRENCY_FORMAT
+        ws_category.cell(row=row, column=7, value=float(cat_data["cost"])).number_format = currency_format
         
         for col in range(1, 8):
             ws_category.cell(row=row, column=col).border = THIN_BORDER
@@ -1138,9 +1206,9 @@ def generate_inventory_report(
         {"type": "label", "value": "TOTAL INVENTARIO"},
         {"type": "sum", "col_letter": "B"},
         {"type": "sum", "col_letter": "C"},
-        {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "D", "number_format": currency_format},
+        {"type": "sum", "col_letter": "E", "number_format": currency_format},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
         {"type": "text", "value": "100.00%"},
     ])
     
@@ -1165,8 +1233,8 @@ def generate_inventory_report(
     
     headers = [
         "Código/SKU", "Descripción del Producto", "Categoría", "Stock Actual", "Unidad de Medida",
-        "Costo Unitario (S/)", "Precio Venta (S/)", "Margen Unitario (S/)", "Margen (%)",
-        "Valor en Costo (S/)", "Valor en Venta (S/)", "Estado Stock"
+        f"Costo Unitario ({currency_label})", f"Precio Venta ({currency_label})", f"Margen Unitario ({currency_label})", "Margen (%)",
+        f"Valor en Costo ({currency_label})", f"Valor en Venta ({currency_label})", "Estado Stock"
     ]
     _style_header_row(ws_detail, row, headers)
     inv_detail_start = row + 1
@@ -1192,16 +1260,16 @@ def generate_inventory_report(
         ws_detail.cell(row=row, column=3, value=_safe_string(product.category, "Sin categoría"))
         ws_detail.cell(row=row, column=4, value=stock)
         ws_detail.cell(row=row, column=5, value=_safe_string(product.unit, "Unid."))
-        ws_detail.cell(row=row, column=6, value=float(cost)).number_format = CURRENCY_FORMAT
-        ws_detail.cell(row=row, column=7, value=float(price)).number_format = CURRENCY_FORMAT
+        ws_detail.cell(row=row, column=6, value=float(cost)).number_format = currency_format
+        ws_detail.cell(row=row, column=7, value=float(price)).number_format = currency_format
         # Margen Unitario = Fórmula: Precio - Costo
-        ws_detail.cell(row=row, column=8, value=f"=G{row}-F{row}").number_format = CURRENCY_FORMAT
+        ws_detail.cell(row=row, column=8, value=f"=G{row}-F{row}").number_format = currency_format
         # Margen % = Fórmula: Margen / Costo (si costo > 0)
         ws_detail.cell(row=row, column=9, value=f"=IF(F{row}>0,H{row}/F{row},0)").number_format = PERCENT_FORMAT
         # Valor en Costo = Fórmula: Stock × Costo
-        ws_detail.cell(row=row, column=10, value=f"=D{row}*F{row}").number_format = CURRENCY_FORMAT
+        ws_detail.cell(row=row, column=10, value=f"=D{row}*F{row}").number_format = currency_format
         # Valor en Venta = Fórmula: Stock × Precio
-        ws_detail.cell(row=row, column=11, value=f"=D{row}*G{row}").number_format = CURRENCY_FORMAT
+        ws_detail.cell(row=row, column=11, value=f"=D{row}*G{row}").number_format = currency_format
         ws_detail.cell(row=row, column=12, value=_safe_string(status))
         
         # Color según estado
@@ -1231,8 +1299,8 @@ def generate_inventory_report(
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "J", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "K", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "J", "number_format": currency_format},
+        {"type": "sum", "col_letter": "K", "number_format": currency_format},
         {"type": "text", "value": ""},
     ])
     
@@ -1253,7 +1321,14 @@ def generate_inventory_report(
     ws_critical = wb.create_sheet("Productos a Reponer")
     row = _add_company_header(ws_critical, company_name, "PRODUCTOS CON STOCK CRÍTICO - REQUIEREN REPOSICIÓN", f"Al {today}", columns=6)
     
-    headers = ["Código/SKU", "Descripción", "Categoría", "Stock Actual", "Precio Venta (S/)", "Valor Disponible (S/)"]
+    headers = [
+        "Código/SKU",
+        "Descripción",
+        "Categoría",
+        "Stock Actual",
+        f"Precio Venta ({currency_label})",
+        f"Valor Disponible ({currency_label})",
+    ]
     _style_header_row(ws_critical, row, headers)
     critical_data_start = row + 1
     row += 1
@@ -1268,9 +1343,9 @@ def generate_inventory_report(
         ws_critical.cell(row=row, column=2, value=_safe_string(product.description, "Sin descripción"))
         ws_critical.cell(row=row, column=3, value=_safe_string(product.category, "Sin categoría"))
         ws_critical.cell(row=row, column=4, value=stock)
-        ws_critical.cell(row=row, column=5, value=float(_safe_decimal(product.sale_price))).number_format = CURRENCY_FORMAT
+        ws_critical.cell(row=row, column=5, value=float(_safe_decimal(product.sale_price))).number_format = currency_format
         # Valor Disponible = Fórmula: Stock × Precio
-        ws_critical.cell(row=row, column=6, value=f"=D{row}*E{row}").number_format = CURRENCY_FORMAT
+        ws_critical.cell(row=row, column=6, value=f"=D{row}*E{row}").number_format = currency_format
         
         for col in range(1, 7):
             ws_critical.cell(row=row, column=col).border = THIN_BORDER
@@ -1292,7 +1367,7 @@ def generate_inventory_report(
         {"type": "text", "value": ""},
         {"type": "sum", "col_letter": "D"},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
     ])
     
     _add_notes_section(ws_critical, critical_totals_row, [
@@ -1319,6 +1394,7 @@ def generate_inventory_report(
 def generate_receivables_report(
     session,
     company_name: str = "TUWAYKIAPP",
+    currency_symbol: str | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de cuentas por cobrar con análisis de antigüedad.
@@ -1330,6 +1406,8 @@ def generate_receivables_report(
     - Provisión sugerida para cobranza dudosa
     """
     wb = Workbook()
+    currency_label = _currency_label(currency_symbol)
+    currency_format = _currency_format(currency_symbol)
     
     # Consultar cuotas pendientes
     query = (
@@ -1458,12 +1536,12 @@ def generate_receivables_report(
     row += 1
     
     summary = [
-        ("Total Cuentas por Cobrar:", _format_currency(total_receivables)),
+        ("Total Cuentas por Cobrar:", _format_currency(total_receivables, currency_symbol)),
         ("Número de Cuotas Pendientes:", sum(b["count"] for b in aging_buckets.values())),
         ("Clientes con Deuda Activa:", len(by_client)),
         ("", ""),
-        ("Provisión Sugerida (Cobranza Dudosa):", _format_currency(total_provision)),
-        ("Cartera Neta Estimada:", _format_currency(total_receivables - total_provision)),
+        ("Provisión Sugerida (Cobranza Dudosa):", _format_currency(total_provision, currency_symbol)),
+        ("Cartera Neta Estimada:", _format_currency(total_receivables - total_provision, currency_symbol)),
     ]
     
     for label, value in summary:
@@ -1475,7 +1553,14 @@ def generate_receivables_report(
     ws_summary.cell(row=row, column=1, value="ANTIGÜEDAD DE CARTERA (Análisis de Vencimiento)").font = SUBTITLE_FONT
     row += 1
     
-    headers = ["Período de Vencimiento", "Nº Cuotas", "Monto Pendiente (S/)", "Participación (%)", "Tasa Provisión", "Provisión (S/)"]
+    headers = [
+        "Período de Vencimiento",
+        "Nº Cuotas",
+        f"Monto Pendiente ({currency_label})",
+        "Participación (%)",
+        "Tasa Provisión",
+        f"Provisión ({currency_label})",
+    ]
     _style_header_row(ws_summary, row, headers)
     aging_data_start = row + 1
     row += 1
@@ -1486,12 +1571,12 @@ def generate_receivables_report(
         
         ws_summary.cell(row=row, column=1, value=bucket["label"])
         ws_summary.cell(row=row, column=2, value=bucket["count"])
-        ws_summary.cell(row=row, column=3, value=float(bucket["amount"])).number_format = CURRENCY_FORMAT
+        ws_summary.cell(row=row, column=3, value=float(bucket["amount"])).number_format = currency_format
         # Participación - temporal
-        ws_summary.cell(row=row, column=4, value=float(bucket["amount"])).number_format = CURRENCY_FORMAT
+        ws_summary.cell(row=row, column=4, value=float(bucket["amount"])).number_format = currency_format
         ws_summary.cell(row=row, column=5, value=float(prov_rate)).number_format = PERCENT_FORMAT
         # Provisión = Fórmula: Monto × Tasa
-        ws_summary.cell(row=row, column=6, value=f"=C{row}*E{row}").number_format = CURRENCY_FORMAT
+        ws_summary.cell(row=row, column=6, value=f"=C{row}*E{row}").number_format = currency_format
         
         for col in range(1, 7):
             ws_summary.cell(row=row, column=col).border = THIN_BORDER
@@ -1501,10 +1586,10 @@ def generate_receivables_report(
     _add_totals_row_with_formulas(ws_summary, aging_totals_row, aging_data_start, [
         {"type": "label", "value": "TOTAL CARTERA"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "text", "value": "100.00%"},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
     ])
     
     # Actualizar participación con fórmulas
@@ -1526,7 +1611,15 @@ def generate_receivables_report(
     ws_client = wb.create_sheet("Por Cliente")
     row = _add_company_header(ws_client, company_name, "DEUDA DETALLADA POR CLIENTE", f"Al {today_str}", columns=7)
     
-    headers = ["Cliente", "Vigente (S/)", "1-30 días (S/)", "31-60 días (S/)", "61-90 días (S/)", ">90 días (S/)", "Total Deuda (S/)"]
+    headers = [
+        "Cliente",
+        f"Vigente ({currency_label})",
+        f"1-30 días ({currency_label})",
+        f"31-60 días ({currency_label})",
+        f"61-90 días ({currency_label})",
+        f">90 días ({currency_label})",
+        f"Total Deuda ({currency_label})",
+    ]
     _style_header_row(ws_client, row, headers)
     client_data_start = row + 1
     row += 1
@@ -1535,13 +1628,13 @@ def generate_receivables_report(
     
     for client_name, client_data in sorted_clients:
         ws_client.cell(row=row, column=1, value=_safe_string(client_name))
-        ws_client.cell(row=row, column=2, value=float(client_data["current"])).number_format = CURRENCY_FORMAT
-        ws_client.cell(row=row, column=3, value=float(client_data["0-30"])).number_format = CURRENCY_FORMAT
-        ws_client.cell(row=row, column=4, value=float(client_data["31-60"])).number_format = CURRENCY_FORMAT
-        ws_client.cell(row=row, column=5, value=float(client_data["61-90"])).number_format = CURRENCY_FORMAT
-        ws_client.cell(row=row, column=6, value=float(client_data["90+"])).number_format = CURRENCY_FORMAT
+        ws_client.cell(row=row, column=2, value=float(client_data["current"])).number_format = currency_format
+        ws_client.cell(row=row, column=3, value=float(client_data["0-30"])).number_format = currency_format
+        ws_client.cell(row=row, column=4, value=float(client_data["31-60"])).number_format = currency_format
+        ws_client.cell(row=row, column=5, value=float(client_data["61-90"])).number_format = currency_format
+        ws_client.cell(row=row, column=6, value=float(client_data["90+"])).number_format = currency_format
         # Total = Fórmula: Suma de columnas B a F
-        ws_client.cell(row=row, column=7, value=f"=SUM(B{row}:F{row})").number_format = CURRENCY_FORMAT
+        ws_client.cell(row=row, column=7, value=f"=SUM(B{row}:F{row})").number_format = currency_format
         
         for col in range(1, 8):
             ws_client.cell(row=row, column=col).border = THIN_BORDER
@@ -1550,12 +1643,12 @@ def generate_receivables_report(
     client_totals_row = row
     _add_totals_row_with_formulas(ws_client, client_totals_row, client_data_start, [
         {"type": "label", "value": "TOTAL CLIENTES"},
-        {"type": "sum", "col_letter": "B", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "B", "number_format": currency_format},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
+        {"type": "sum", "col_letter": "D", "number_format": currency_format},
+        {"type": "sum", "col_letter": "E", "number_format": currency_format},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
+        {"type": "sum", "col_letter": "G", "number_format": currency_format},
     ])
     
     _add_notes_section(ws_client, client_totals_row, [
@@ -1572,7 +1665,17 @@ def generate_receivables_report(
     ws_detail = wb.create_sheet("Detalle Cuotas")
     row = _add_company_header(ws_detail, company_name, "LISTADO DETALLADO DE CUOTAS PENDIENTES", f"Al {today_str}", columns=9)
     
-    headers = ["Cliente", "Nº Venta", "Nº Cuota", "Fecha Vencimiento", "Días Vencido", "Monto Cuota (S/)", "Abonado (S/)", "Pendiente (S/)", "Estado"]
+    headers = [
+        "Cliente",
+        "Nº Venta",
+        "Nº Cuota",
+        "Fecha Vencimiento",
+        "Días Vencido",
+        f"Monto Cuota ({currency_label})",
+        f"Abonado ({currency_label})",
+        f"Pendiente ({currency_label})",
+        "Estado",
+    ]
     _style_header_row(ws_detail, row, headers)
     cuota_data_start = row + 1
     row += 1
@@ -1586,10 +1689,10 @@ def generate_receivables_report(
         ws_detail.cell(row=row, column=3, value=inst["installment_num"])
         ws_detail.cell(row=row, column=4, value=inst["due_date"])
         ws_detail.cell(row=row, column=5, value=inst["days_overdue"])
-        ws_detail.cell(row=row, column=6, value=float(inst["amount"])).number_format = CURRENCY_FORMAT
-        ws_detail.cell(row=row, column=7, value=float(inst["paid"])).number_format = CURRENCY_FORMAT
+        ws_detail.cell(row=row, column=6, value=float(inst["amount"])).number_format = currency_format
+        ws_detail.cell(row=row, column=7, value=float(inst["paid"])).number_format = currency_format
         # Pendiente = Fórmula: Monto - Abonado
-        ws_detail.cell(row=row, column=8, value=f"=F{row}-G{row}").number_format = CURRENCY_FORMAT
+        ws_detail.cell(row=row, column=8, value=f"=F{row}-G{row}").number_format = currency_format
         ws_detail.cell(row=row, column=9, value=aging_buckets[inst["bucket"]]["label"])
         
         # Color según antigüedad
@@ -1618,9 +1721,9 @@ def generate_receivables_report(
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "H", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
+        {"type": "sum", "col_letter": "G", "number_format": currency_format},
+        {"type": "sum", "col_letter": "H", "number_format": currency_format},
         {"type": "text", "value": ""},
     ])
     
@@ -1699,6 +1802,7 @@ def generate_cashbox_report(
     start_date: datetime,
     end_date: datetime,
     company_name: str = "TUWAYKIAPP",
+    currency_symbol: str | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de caja consolidado con flujo de caja REAL.
@@ -1711,6 +1815,8 @@ def generate_cashbox_report(
     - Desglose de ingresos por origen (Ventas vs Cobranzas)
     """
     wb = Workbook()
+    currency_label = _currency_label(currency_symbol)
+    currency_format = _currency_format(currency_symbol)
     
     period_str = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
     
@@ -1814,13 +1920,13 @@ def generate_cashbox_report(
         ("Número de Aperturas de Caja:", total_openings),
         ("Número de Cierres de Caja:", total_closings),
         ("", ""),
-        ("Total Monto en Aperturas:", _format_currency(total_opening_amount)),
-        ("Total Monto en Cierres:", _format_currency(total_closing_amount)),
+        ("Total Monto en Aperturas:", _format_currency(total_opening_amount, currency_symbol)),
+        ("Total Monto en Cierres:", _format_currency(total_closing_amount, currency_symbol)),
         ("", ""),
         ("FLUJO DE CAJA - INGRESOS:", ""),
-        ("  • Ventas del Período:", _format_currency(total_sales)),
-        ("  • Cobros de Cuotas/Créditos:", _format_currency(total_collections)),
-        ("  • TOTAL INGRESOS:", _format_currency(total_cash_flow)),
+        ("  • Ventas del Período:", _format_currency(total_sales, currency_symbol)),
+        ("  • Cobros de Cuotas/Créditos:", _format_currency(total_collections, currency_symbol)),
+        ("  • TOTAL INGRESOS:", _format_currency(total_cash_flow, currency_symbol)),
         ("", ""),
         ("Número de Transacciones de Venta:", len(sales)),
         ("Número de Cobros de Cuotas:", len(collection_logs)),
@@ -1842,7 +1948,12 @@ def generate_cashbox_report(
     ws_summary.cell(row=row, column=2, value="(Ventas + Cobros de Cuotas)").font = Font(italic=True, size=9, color="6B7280")
     row += 1
     
-    headers = ["Método de Pago", "Nº Operaciones", "Monto Recaudado (S/)", "Participación (%)"]
+    headers = [
+        "Método de Pago",
+        "Nº Operaciones",
+        f"Monto Recaudado ({currency_label})",
+        "Participación (%)",
+    ]
     _style_header_row(ws_summary, row, headers)
     caja_pay_start = row + 1
     row += 1
@@ -1855,9 +1966,9 @@ def generate_cashbox_report(
         
         ws_summary.cell(row=row, column=1, value=_safe_string(method_es))
         ws_summary.cell(row=row, column=2, value=count)
-        ws_summary.cell(row=row, column=3, value=float(amount)).number_format = CURRENCY_FORMAT
+        ws_summary.cell(row=row, column=3, value=float(amount)).number_format = currency_format
         # Participación - temporal, se reemplazará con fórmula
-        ws_summary.cell(row=row, column=4, value=float(amount)).number_format = CURRENCY_FORMAT
+        ws_summary.cell(row=row, column=4, value=float(amount)).number_format = currency_format
         
         for col in range(1, 5):
             ws_summary.cell(row=row, column=col).border = THIN_BORDER
@@ -1867,7 +1978,7 @@ def generate_cashbox_report(
     _add_totals_row_with_formulas(ws_summary, caja_pay_totals, caja_pay_start, [
         {"type": "label", "value": "TOTAL RECAUDADO"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "text", "value": "100.00%"},
     ])
     
@@ -1892,7 +2003,7 @@ def generate_cashbox_report(
         # Traducir acción a español
         action_es = "Apertura de Caja" if log.action == "apertura" else "Cierre de Caja" if log.action == "cierre" else (log.action or "").capitalize()
         ws_logs.cell(row=row, column=2, value=_safe_string(action_es))
-        ws_logs.cell(row=row, column=3, value=float(_safe_decimal(log.amount))).number_format = CURRENCY_FORMAT
+        ws_logs.cell(row=row, column=3, value=float(_safe_decimal(log.amount))).number_format = currency_format
         ws_logs.cell(row=row, column=4, value=_safe_string(log.notes, "Sin observaciones"))
         
         for col in range(1, 5):
@@ -1916,7 +2027,13 @@ def generate_cashbox_report(
     ws_origin.cell(row=row, column=1, value="INGRESOS POR VENTAS DIRECTAS").font = SUBTITLE_FONT
     row += 1
     
-    headers = ["Método de Pago", "Nº Operaciones", "Monto (S/)", "% del Total Ventas", "Observación"]
+    headers = [
+        "Método de Pago",
+        "Nº Operaciones",
+        f"Monto ({currency_label})",
+        "% del Total Ventas",
+        "Observación",
+    ]
     _style_header_row(ws_origin, row, headers)
     ventas_start = row + 1
     row += 1
@@ -1928,8 +2045,8 @@ def generate_cashbox_report(
         
         ws_origin.cell(row=row, column=1, value=_safe_string(method_es))
         ws_origin.cell(row=row, column=2, value=count)
-        ws_origin.cell(row=row, column=3, value=float(amount)).number_format = CURRENCY_FORMAT
-        ws_origin.cell(row=row, column=4, value=float(amount)).number_format = CURRENCY_FORMAT  # Temporal
+        ws_origin.cell(row=row, column=3, value=float(amount)).number_format = currency_format
+        ws_origin.cell(row=row, column=4, value=float(amount)).number_format = currency_format  # Temporal
         ws_origin.cell(row=row, column=5, value="Pago de venta directa")
         
         for col in range(1, 6):
@@ -1940,7 +2057,7 @@ def generate_cashbox_report(
     _add_totals_row_with_formulas(ws_origin, ventas_totals, ventas_start, [
         {"type": "label", "value": "SUBTOTAL VENTAS"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "text", "value": "100.00%"},
         {"type": "text", "value": ""},
     ])
@@ -1953,7 +2070,13 @@ def generate_cashbox_report(
     ws_origin.cell(row=row, column=1, value="INGRESOS POR COBROS DE CUOTAS/CRÉDITOS").font = SUBTITLE_FONT
     row += 1
     
-    headers = ["Método de Pago", "Nº Operaciones", "Monto (S/)", "% del Total Cobros", "Observación"]
+    headers = [
+        "Método de Pago",
+        "Nº Operaciones",
+        f"Monto ({currency_label})",
+        "% del Total Cobros",
+        "Observación",
+    ]
     _style_header_row(ws_origin, row, headers)
     cobros_start = row + 1
     row += 1
@@ -1965,8 +2088,8 @@ def generate_cashbox_report(
             
             ws_origin.cell(row=row, column=1, value=_safe_string(method_es))
             ws_origin.cell(row=row, column=2, value=count)
-            ws_origin.cell(row=row, column=3, value=float(amount)).number_format = CURRENCY_FORMAT
-            ws_origin.cell(row=row, column=4, value=float(amount)).number_format = CURRENCY_FORMAT  # Temporal
+            ws_origin.cell(row=row, column=3, value=float(amount)).number_format = currency_format
+            ws_origin.cell(row=row, column=4, value=float(amount)).number_format = currency_format  # Temporal
             ws_origin.cell(row=row, column=5, value="Pago de cuota de crédito")
             
             for col in range(1, 6):
@@ -1982,7 +2105,7 @@ def generate_cashbox_report(
     _add_totals_row_with_formulas(ws_origin, cobros_totals, cobros_start, [
         {"type": "label", "value": "SUBTOTAL COBROS"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "text", "value": "100.00%"},
         {"type": "text", "value": ""},
     ])
@@ -1997,15 +2120,15 @@ def generate_cashbox_report(
     row += 2
     
     ws_origin.cell(row=row, column=1, value="Total Ingresos por Ventas:").font = Font(bold=True)
-    ws_origin.cell(row=row, column=2, value=f"=C{ventas_totals}").number_format = CURRENCY_FORMAT
+    ws_origin.cell(row=row, column=2, value=f"=C{ventas_totals}").number_format = currency_format
     row += 1
     
     ws_origin.cell(row=row, column=1, value="Total Ingresos por Cobros:").font = Font(bold=True)
-    ws_origin.cell(row=row, column=2, value=f"=C{cobros_totals}").number_format = CURRENCY_FORMAT
+    ws_origin.cell(row=row, column=2, value=f"=C{cobros_totals}").number_format = currency_format
     row += 1
     
     ws_origin.cell(row=row, column=1, value="TOTAL FLUJO DE CAJA:").font = Font(bold=True, color="4F46E5", size=11)
-    ws_origin.cell(row=row, column=2, value=f"=C{ventas_totals}+C{cobros_totals}").number_format = CURRENCY_FORMAT
+    ws_origin.cell(row=row, column=2, value=f"=C{ventas_totals}+C{cobros_totals}").number_format = currency_format
     ws_origin.cell(row=row, column=2).font = Font(bold=True, size=11)
     ws_origin.cell(row=row, column=2).fill = POSITIVE_FILL
     
@@ -2042,7 +2165,13 @@ def generate_cashbox_report(
                 else:
                     by_day[day_key]["other"] += amount
     
-    headers = ["Fecha", "Nº Transacciones", "Efectivo (S/)", "Otros Medios (S/)", "Total del Día (S/)"]
+    headers = [
+        "Fecha",
+        "Nº Transacciones",
+        f"Efectivo ({currency_label})",
+        f"Otros Medios ({currency_label})",
+        f"Total del Día ({currency_label})",
+    ]
     _style_header_row(ws_daily, row, headers)
     caja_daily_start = row + 1
     row += 1
@@ -2052,10 +2181,10 @@ def generate_cashbox_report(
         
         ws_daily.cell(row=row, column=1, value=_safe_string(day_key))
         ws_daily.cell(row=row, column=2, value=day_data["count"])
-        ws_daily.cell(row=row, column=3, value=float(day_data["cash"])).number_format = CURRENCY_FORMAT
-        ws_daily.cell(row=row, column=4, value=float(day_data["other"])).number_format = CURRENCY_FORMAT
+        ws_daily.cell(row=row, column=3, value=float(day_data["cash"])).number_format = currency_format
+        ws_daily.cell(row=row, column=4, value=float(day_data["other"])).number_format = currency_format
         # Total = Fórmula: Efectivo + Otros
-        ws_daily.cell(row=row, column=5, value=f"=C{row}+D{row}").number_format = CURRENCY_FORMAT
+        ws_daily.cell(row=row, column=5, value=f"=C{row}+D{row}").number_format = currency_format
         
         for col in range(1, 6):
             ws_daily.cell(row=row, column=col).border = THIN_BORDER
@@ -2065,9 +2194,9 @@ def generate_cashbox_report(
     _add_totals_row_with_formulas(ws_daily, caja_daily_totals, caja_daily_start, [
         {"type": "label", "value": "TOTALES"},
         {"type": "sum", "col_letter": "B"},
-        {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
-        {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
+        {"type": "sum", "col_letter": "C", "number_format": currency_format},
+        {"type": "sum", "col_letter": "D", "number_format": currency_format},
+        {"type": "sum", "col_letter": "E", "number_format": currency_format},
     ])
     
     _add_notes_section(ws_daily, caja_daily_totals, [
@@ -2102,30 +2231,30 @@ def generate_cashbox_report(
     # Escribir datos con referencias para fórmulas
     data_start_row = row
     ws_conciliation.cell(row=row, column=1, value="(+) Monto Inicial (Aperturas):").font = Font(bold=True)
-    ws_conciliation.cell(row=row, column=2, value=float(total_opening_amount)).number_format = CURRENCY_FORMAT
+    ws_conciliation.cell(row=row, column=2, value=float(total_opening_amount)).number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Suma de todas las aperturas de caja")
     row += 1
     
     ws_conciliation.cell(row=row, column=1, value="(+) Efectivo por Ventas:").font = Font(bold=True)
-    ws_conciliation.cell(row=row, column=2, value=float(cash_from_sales)).number_format = CURRENCY_FORMAT
+    ws_conciliation.cell(row=row, column=2, value=float(cash_from_sales)).number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Ventas cobradas en efectivo")
     sales_cash_row = row
     row += 1
     
     ws_conciliation.cell(row=row, column=1, value="(+) Efectivo por Cobros de Cuotas:").font = Font(bold=True)
-    ws_conciliation.cell(row=row, column=2, value=float(cash_from_collections)).number_format = CURRENCY_FORMAT
+    ws_conciliation.cell(row=row, column=2, value=float(cash_from_collections)).number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Cuotas de créditos cobradas en efectivo")
     collections_cash_row = row
     row += 1
     
     ws_conciliation.cell(row=row, column=1, value="(=) Efectivo Esperado al Cierre:").font = Font(bold=True, color="4F46E5")
-    ws_conciliation.cell(row=row, column=2, value=f"=B{data_start_row}+B{sales_cash_row}+B{collections_cash_row}").number_format = CURRENCY_FORMAT
+    ws_conciliation.cell(row=row, column=2, value=f"=B{data_start_row}+B{sales_cash_row}+B{collections_cash_row}").number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Monto que debería haber en caja")
     expected_row = row
     row += 2
     
     ws_conciliation.cell(row=row, column=1, value="(-) Monto Real (Cierres):").font = Font(bold=True)
-    ws_conciliation.cell(row=row, column=2, value=float(total_closing_amount)).number_format = CURRENCY_FORMAT
+    ws_conciliation.cell(row=row, column=2, value=float(total_closing_amount)).number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Suma de todos los cierres de caja")
     actual_row = row
     row += 2
@@ -2133,7 +2262,7 @@ def generate_cashbox_report(
     # Diferencia con fórmula
     ws_conciliation.cell(row=row, column=1, value="DIFERENCIA (Real - Esperado):").font = Font(bold=True, size=11)
     diff_cell = ws_conciliation.cell(row=row, column=2, value=f"=B{actual_row}-B{expected_row}")
-    diff_cell.number_format = CURRENCY_FORMAT
+    diff_cell.number_format = currency_format
     diff_cell.font = Font(bold=True, size=11)
     
     # Resultado interpretativo

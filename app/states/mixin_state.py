@@ -343,6 +343,16 @@ class MixinState:
     def _format_currency(self, value: float) -> str:
         return f"{self.currency_symbol}{self._round_currency(value):.2f}"
 
+    def _currency_symbol_clean(self) -> str:
+        """Símbolo de moneda sin espacios para headers/formatos."""
+        symbol = (self.currency_symbol or "").strip()
+        return symbol or "$"
+
+    def _currency_excel_format(self) -> str:
+        """Formato de moneda para Excel usando el símbolo activo."""
+        symbol = self._currency_symbol_clean().replace('"', "")
+        return f'"{symbol}"#,##0.00'
+
     def _unit_allows_decimal(self, unit: str) -> bool:
         # Accediendo a decimal_units desde RootState
         if not hasattr(self, "decimal_units"):

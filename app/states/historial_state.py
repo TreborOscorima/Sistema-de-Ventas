@@ -1019,7 +1019,9 @@ class HistorialState(MixinState):
     def export_to_excel(self):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
-        
+
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
         
@@ -1034,7 +1036,7 @@ class HistorialState(MixinState):
             "Cliente",
             "Productos Vendidos",
             "Categorías",
-            "Total Venta (S/)",
+            f"Total Venta ({currency_label})",
             "Método de Pago",
             "Vendedor",
             "Observaciones/Detalle",
@@ -1155,7 +1157,7 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=3, value=client_name)
                 ws.cell(row=row, column=4, value=products_summary)
                 ws.cell(row=row, column=5, value=categories_summary)
-                ws.cell(row=row, column=6, value=float(sale.total_amount or 0)).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=6, value=float(sale.total_amount or 0)).number_format = currency_format
                 ws.cell(row=row, column=7, value=method_display)
                 ws.cell(row=row, column=8, value=user_name)
                 ws.cell(row=row, column=9, value=self._payment_details_text(payment_details))
@@ -1172,7 +1174,7 @@ class HistorialState(MixinState):
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "F", "number_format": currency_format},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
@@ -1201,6 +1203,8 @@ class HistorialState(MixinState):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
 
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
         
@@ -1215,7 +1219,13 @@ class HistorialState(MixinState):
             # Encabezado profesional
             row = add_company_header(ws, company_name, "HISTORIAL DE CIERRES DE CAJA", f"Generado: {today}", columns=5)
             
-            headers = ["Fecha y Hora", "Tipo Operación", "Responsable", "Monto (S/)", "Observaciones"]
+            headers = [
+                "Fecha y Hora",
+                "Tipo Operación",
+                "Responsable",
+                f"Monto ({currency_label})",
+                "Observaciones",
+            ]
             style_header_row(ws, row, headers)
             data_start = row + 1
             row += 1
@@ -1227,7 +1237,7 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=1, value=item.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=action_display)
                 ws.cell(row=row, column=3, value=item.get("user", "Desconocido"))
-                ws.cell(row=row, column=4, value=float(item.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=4, value=float(item.get("amount", 0) or 0)).number_format = currency_format
                 ws.cell(row=row, column=5, value=item.get("notes", "") or "Sin observaciones")
                 
                 for col in range(1, 6):
@@ -1240,7 +1250,7 @@ class HistorialState(MixinState):
                 {"type": "label", "value": "TOTAL"},
                 {"type": "text", "value": ""},
                 {"type": "text", "value": ""},
-                {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+                {"type": "sum", "col_letter": "D", "number_format": currency_format},
                 {"type": "text", "value": ""},
             ])
             
@@ -1270,7 +1280,7 @@ class HistorialState(MixinState):
                 "Fecha y Hora",
                 "Origen/Tipo",
                 "Método de Pago",
-                "Monto (S/)",
+                f"Monto ({currency_label})",
                 "Responsable",
                 "Referencia",
             ]
@@ -1282,7 +1292,7 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
                 ws.cell(row=row, column=3, value=entry.get("method_label", "No especificado"))
-                ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = currency_format
                 ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
                 ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
                 
@@ -1296,7 +1306,7 @@ class HistorialState(MixinState):
                 {"type": "label", "value": "TOTAL INGRESOS"},
                 {"type": "text", "value": ""},
                 {"type": "text", "value": ""},
-                {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+                {"type": "sum", "col_letter": "D", "number_format": currency_format},
                 {"type": "text", "value": ""},
                 {"type": "text", "value": ""},
             ])
@@ -1333,7 +1343,12 @@ class HistorialState(MixinState):
         # Encabezado profesional
         row = add_company_header(ws, company_name, "INGRESOS POR MÉTODO DE PAGO", f"Generado: {today}", columns=4)
         
-        summary_headers = ["Método de Pago", "Nº Operaciones", "Total Recaudado (S/)", "Participación (%)"]
+        summary_headers = [
+            "Método de Pago",
+            "Nº Operaciones",
+            f"Total Recaudado ({currency_label})",
+            "Participación (%)",
+        ]
         style_header_row(ws, row, summary_headers)
         data_start = row + 1
         row += 1
@@ -1343,9 +1358,9 @@ class HistorialState(MixinState):
                 summary = summary_totals[key]
                 ws.cell(row=row, column=1, value=summary["method_label"])
                 ws.cell(row=row, column=2, value=summary["count"])
-                ws.cell(row=row, column=3, value=float(summary["total"])).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=3, value=float(summary["total"])).number_format = currency_format
                 # Participación se calculará después
-                ws.cell(row=row, column=4, value=float(summary["total"])).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=4, value=float(summary["total"])).number_format = currency_format
                 
                 for col in range(1, 5):
                     ws.cell(row=row, column=col).border = THIN_BORDER
@@ -1355,8 +1370,8 @@ class HistorialState(MixinState):
             if key not in REPORT_METHOD_KEYS:
                 ws.cell(row=row, column=1, value=summary["method_label"])
                 ws.cell(row=row, column=2, value=summary["count"])
-                ws.cell(row=row, column=3, value=float(summary["total"])).number_format = CURRENCY_FORMAT
-                ws.cell(row=row, column=4, value=float(summary["total"])).number_format = CURRENCY_FORMAT
+                ws.cell(row=row, column=3, value=float(summary["total"])).number_format = currency_format
+                ws.cell(row=row, column=4, value=float(summary["total"])).number_format = currency_format
                 
                 for col in range(1, 5):
                     ws.cell(row=row, column=col).border = THIN_BORDER
@@ -1367,7 +1382,7 @@ class HistorialState(MixinState):
         add_totals_row_with_formulas(ws, totals_row, data_start, [
             {"type": "label", "value": "TOTAL RECAUDADO"},
             {"type": "sum", "col_letter": "B"},
-            {"type": "sum", "col_letter": "C", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "C", "number_format": currency_format},
             {"type": "text", "value": "100.00%"},
         ])
         
@@ -1392,7 +1407,7 @@ class HistorialState(MixinState):
             "Fecha y Hora",
             "Origen/Tipo",
             "Método de Pago",
-            "Monto (S/)",
+            f"Monto ({currency_label})",
             "Responsable",
             "Referencia",
         ]
@@ -1404,7 +1419,7 @@ class HistorialState(MixinState):
             detail_ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
             detail_ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
             detail_ws.cell(row=row, column=3, value=entry.get("method_label", "No especificado"))
-            detail_ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+            detail_ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = currency_format
             detail_ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
             detail_ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
             
@@ -1418,7 +1433,7 @@ class HistorialState(MixinState):
             {"type": "label", "value": "TOTAL"},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "D", "number_format": currency_format},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
         ])
@@ -1448,14 +1463,16 @@ class HistorialState(MixinState):
             
             for part in parts:
                 part = part.strip()
-                # Verificar keyword y "S/"
-                if keyword.lower() in part.lower() and "S/" in part:
+                if keyword.lower() in part.lower():
                     try:
-                        amount_str = part.split("S/")[1].strip()
                         # Extraer numero (maneja comas y decimales)
-                        match = re.search(r"([0-9]+(?:,[0-9]{3})*(?:\.[0-9]+)?)", amount_str)
+                        match = re.search(r"([0-9]+(?:[.,][0-9]{3})*(?:[.,][0-9]+)?)", part)
                         if match:
-                            num_str = match.group(1).replace(",", "")
+                            num_str = match.group(1)
+                            if "," in num_str and "." in num_str:
+                                num_str = num_str.replace(",", "")
+                            elif "," in num_str and "." not in num_str:
+                                num_str = num_str.replace(",", ".")
                             return Decimal(num_str)
                     except IndexError:
                         continue

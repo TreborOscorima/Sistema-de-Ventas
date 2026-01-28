@@ -20,6 +20,7 @@ from sqlalchemy import and_, or_
 
 from app.models import Product, SaleInstallment, Sale, CashboxSession
 from app.enums import SaleStatus
+from app.utils.formatting import format_currency
 
 
 class AlertType(str, Enum):
@@ -161,7 +162,14 @@ def get_low_stock_alerts() -> List[Alert]:
     return alerts
 
 
-def get_installment_alerts() -> List[Alert]:
+def _format_alert_currency(amount: Decimal, currency_symbol: str | None) -> str:
+    symbol = (currency_symbol or "").strip()
+    if symbol:
+        symbol = f"{symbol} "
+    return format_currency(float(amount or 0), symbol or "S/ ")
+
+
+def get_installment_alerts(currency_symbol: str | None = None) -> List[Alert]:
     """
     Obtiene alertas de cuotas próximas a vencer o vencidas.
     
@@ -201,7 +209,10 @@ def get_installment_alerts() -> List[Alert]:
                 type=AlertType.INSTALLMENT_OVERDUE,
                 severity=AlertSeverity.ERROR,
                 title="Cuotas Vencidas",
-                message=f"{overdue_count} cuota(s) vencida(s) por S/ {float(overdue_amount):.2f}",
+                message=(
+                    f"{overdue_count} cuota(s) vencida(s) por "
+                    f"{_format_alert_currency(overdue_amount, currency_symbol)}"
+                ),
                 count=overdue_count,
                 details={"total_amount": float(overdue_amount)}
             ))
@@ -235,7 +246,11 @@ def get_installment_alerts() -> List[Alert]:
                 type=AlertType.INSTALLMENT_DUE,
                 severity=AlertSeverity.WARNING,
                 title="Cuotas por Vencer",
-                message=f"{due_soon_count} cuota(s) vence(n) en los próximos {INSTALLMENT_DUE_DAYS} días (S/ {float(due_soon_amount):.2f})",
+                message=(
+                    f"{due_soon_count} cuota(s) vence(n) en los próximos "
+                    f"{INSTALLMENT_DUE_DAYS} días "
+                    f"({_format_alert_currency(due_soon_amount, currency_symbol)})"
+                ),
                 count=due_soon_count,
                 details={"total_amount": float(due_soon_amount)}
             ))
@@ -287,7 +302,7 @@ def get_cashbox_alerts() -> List[Alert]:
     return alerts
 
 
-def get_all_alerts() -> List[Alert]:
+def get_all_alerts(currency_symbol: str | None = None) -> List[Alert]:
     """
     Obtiene todas las alertas del sistema.
     
@@ -302,7 +317,7 @@ def get_all_alerts() -> List[Alert]:
         pass  # No interrumpir si falla una categoría
     
     try:
-        alerts.extend(get_installment_alerts())
+        alerts.extend(get_installment_alerts(currency_symbol))
     except Exception:
         pass
     
@@ -324,14 +339,14 @@ def get_all_alerts() -> List[Alert]:
     return alerts
 
 
-def get_alert_summary() -> dict:
+def get_alert_summary(currency_symbol: str | None = None) -> dict:
     """
     Obtiene un resumen de alertas para mostrar en el dashboard.
     
     Returns:
         Dict con conteos por severidad
     """
-    alerts = get_all_alerts()
+    alerts = get_all_alerts(currency_symbol)
     
     summary = {
         "total": len(alerts),

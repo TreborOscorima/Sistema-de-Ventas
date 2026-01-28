@@ -262,7 +262,7 @@ class DashboardState(MixinState):
     
     def _load_alerts(self):
         """Carga alertas del sistema."""
-        summary = get_alert_summary()
+        summary = get_alert_summary(self.currency_symbol)
         self.alerts = summary.get("alerts", [])
         self.alert_count = summary.get("total", 0)
     
@@ -436,27 +436,27 @@ class DashboardState(MixinState):
     
     @rx.var
     def formatted_today_sales(self) -> str:
-        return f"S/ {self.today_sales:,.2f}"
+        return f"{self.currency_symbol}{self.today_sales:,.2f}"
     
     @rx.var
     def formatted_week_sales(self) -> str:
-        return f"S/ {self.week_sales:,.2f}"
+        return f"{self.currency_symbol}{self.week_sales:,.2f}"
     
     @rx.var
     def formatted_month_sales(self) -> str:
-        return f"S/ {self.month_sales:,.2f}"
+        return f"{self.currency_symbol}{self.month_sales:,.2f}"
     
     @rx.var
     def formatted_avg_ticket(self) -> str:
-        return f"S/ {self.avg_ticket:,.2f}"
+        return f"{self.currency_symbol}{self.avg_ticket:,.2f}"
     
     @rx.var
     def formatted_pending_debt(self) -> str:
-        return f"S/ {self.pending_debt:,.2f}"
+        return f"{self.currency_symbol}{self.pending_debt:,.2f}"
     
     @rx.var
     def formatted_period_sales(self) -> str:
-        return f"S/ {self.period_sales:,.2f}"
+        return f"{self.currency_symbol}{self.period_sales:,.2f}"
     
     @rx.var
     def category_total_sales(self) -> float:
@@ -465,7 +465,7 @@ class DashboardState(MixinState):
     
     @rx.var
     def formatted_category_total(self) -> str:
-        return f"S/ {self.category_total_sales:,.2f}"
+        return f"{self.currency_symbol}{self.category_total_sales:,.2f}"
     
     @rx.event
     def export_categories_excel(self):
@@ -485,7 +485,8 @@ class DashboardState(MixinState):
         header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
         total_font = Font(bold=True, size=11)
         total_fill = PatternFill(start_color="E5E7EB", end_color="E5E7EB", fill_type="solid")
-        currency_format = '"S/"#,##0.00'
+        currency_symbol = (self.currency_symbol or "$").strip()
+        currency_format = f'"{currency_symbol}"#,##0.00'
         percent_format = '0.0%'
         thin_border = Border(
             left=Side(style='thin'),

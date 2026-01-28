@@ -669,7 +669,10 @@ class InventoryState(MixinState):
     def export_inventory_to_excel(self):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
-        
+
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
+
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
         
@@ -684,12 +687,12 @@ class InventoryState(MixinState):
             "Categoría",
             "Stock Actual",
             "Unidad",
-            "Costo Unitario (S/)",
-            "Precio Venta (S/)",
-            "Margen Unitario (S/)",
+            f"Costo Unitario ({currency_label})",
+            f"Precio Venta ({currency_label})",
+            f"Margen Unitario ({currency_label})",
             "Margen (%)",
-            "Valor al Costo (S/)",
-            "Valor a Venta (S/)",
+            f"Valor al Costo ({currency_label})",
+            f"Valor a Venta ({currency_label})",
             "Estado Stock",
         ]
         style_header_row(ws, row, headers)
@@ -723,16 +726,16 @@ class InventoryState(MixinState):
             ws.cell(row=row, column=3, value=category)
             ws.cell(row=row, column=4, value=stock)
             ws.cell(row=row, column=5, value=unit)
-            ws.cell(row=row, column=6, value=purchase_price).number_format = CURRENCY_FORMAT
-            ws.cell(row=row, column=7, value=sale_price).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=6, value=purchase_price).number_format = currency_format
+            ws.cell(row=row, column=7, value=sale_price).number_format = currency_format
             # Margen Unitario = Fórmula: Precio - Costo
-            ws.cell(row=row, column=8, value=f"=G{row}-F{row}").number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=8, value=f"=G{row}-F{row}").number_format = currency_format
             # Margen % = Fórmula: (Margen / Costo) si Costo > 0
             ws.cell(row=row, column=9, value=f"=IF(F{row}>0,H{row}/F{row},0)").number_format = PERCENT_FORMAT
             # Valor al Costo = Fórmula: Stock × Costo
-            ws.cell(row=row, column=10, value=f"=D{row}*F{row}").number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=10, value=f"=D{row}*F{row}").number_format = currency_format
             # Valor a Venta = Fórmula: Stock × Precio
-            ws.cell(row=row, column=11, value=f"=D{row}*G{row}").number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=11, value=f"=D{row}*G{row}").number_format = currency_format
             ws.cell(row=row, column=12, value=status)
             
             # Color según estado
@@ -762,8 +765,8 @@ class InventoryState(MixinState):
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "J", "number_format": CURRENCY_FORMAT},
-            {"type": "sum", "col_letter": "K", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "J", "number_format": currency_format},
+            {"type": "sum", "col_letter": "K", "number_format": currency_format},
             {"type": "text", "value": ""},
         ])
         

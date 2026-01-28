@@ -332,6 +332,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
                         items=item_dtos,
                         payment_data=payment_dto,
                         reservation_id=reservation_id,
+                        currency_symbol=self.currency_symbol,
                     )
                     await session.commit()
                     logger.info(

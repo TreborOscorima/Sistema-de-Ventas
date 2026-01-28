@@ -1191,11 +1191,13 @@ class CashState(MixinState):
             return denial
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
-        
+
         sales = self._fetch_cashbox_sales()
         if not sales:
             return rx.toast("No hay ventas para exportar.", duration=3000)
-        
+
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
         # Obtener nombre de empresa
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
@@ -1211,8 +1213,8 @@ class CashState(MixinState):
             "Método de Pago",
             "Detalle del Método",
             "Referencia/Descripción",
-            "Monto Total (S/)",
-            "Monto Cobrado (S/)",
+            f"Monto Total ({currency_label})",
+            f"Monto Cobrado ({currency_label})",
             "Productos Vendidos",
         ]
         style_header_row(ws, row, headers)
@@ -1293,8 +1295,8 @@ class CashState(MixinState):
             ws.cell(row=row, column=3, value=method_raw)
             ws.cell(row=row, column=4, value=method_label)
             ws.cell(row=row, column=5, value=payment_details)
-            ws.cell(row=row, column=6, value=float(sale["total"] or 0)).number_format = CURRENCY_FORMAT
-            ws.cell(row=row, column=7, value=float(sale.get("amount", 0) or 0)).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=6, value=float(sale["total"] or 0)).number_format = currency_format
+            ws.cell(row=row, column=7, value=float(sale.get("amount", 0) or 0)).number_format = currency_format
             ws.cell(row=row, column=8, value=details)
             
             for col in range(1, 9):
@@ -1309,8 +1311,8 @@ class CashState(MixinState):
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "F", "number_format": CURRENCY_FORMAT},
-            {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "F", "number_format": currency_format},
+            {"type": "sum", "col_letter": "G", "number_format": currency_format},
             {"type": "text", "value": ""},
         ])
         
@@ -1430,7 +1432,9 @@ class CashState(MixinState):
         logs = self._fetch_cashbox_logs()
         if not logs:
             return rx.toast("No hay aperturas o cierres para exportar.", duration=3000)
-        
+
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
         
@@ -1443,8 +1447,8 @@ class CashState(MixinState):
             "Fecha y Hora",
             "Tipo de Operación",
             "Responsable",
-            "Monto Apertura (S/)",
-            "Monto Cierre (S/)",
+            f"Monto Apertura ({currency_label})",
+            f"Monto Cierre ({currency_label})",
             "Desglose por Método",
             "Observaciones",
         ]
@@ -1468,7 +1472,7 @@ class CashState(MixinState):
                 total_cierres += closing_amount
             
             totals_detail = ", ".join(
-                f"{item.get('method', 'Otro')}: S/{self._round_currency(item.get('amount', 0))}"
+                f"{item.get('method', 'Otro')}: {self._format_currency(item.get('amount', 0))}"
                 for item in log.get("totals_by_method", [])
                 if item.get("amount", 0)
             ) or "Sin desglose"
@@ -1476,8 +1480,8 @@ class CashState(MixinState):
             ws.cell(row=row, column=1, value=log.get("timestamp", ""))
             ws.cell(row=row, column=2, value=action_display)
             ws.cell(row=row, column=3, value=log.get("user", "Desconocido"))
-            ws.cell(row=row, column=4, value=opening_amount).number_format = CURRENCY_FORMAT
-            ws.cell(row=row, column=5, value=closing_amount).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=4, value=opening_amount).number_format = currency_format
+            ws.cell(row=row, column=5, value=closing_amount).number_format = currency_format
             ws.cell(row=row, column=6, value=totals_detail)
             ws.cell(row=row, column=7, value=log.get("notes", "") or "Sin observaciones")
             
@@ -1491,8 +1495,8 @@ class CashState(MixinState):
             {"type": "label", "value": "TOTALES"},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "D", "number_format": CURRENCY_FORMAT},
-            {"type": "sum", "col_letter": "E", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "D", "number_format": currency_format},
+            {"type": "sum", "col_letter": "E", "number_format": currency_format},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
         ])
@@ -1521,11 +1525,13 @@ class CashState(MixinState):
             return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
-        
+
         movements = self.petty_cash_movements
         if not movements:
             return rx.toast("No hay movimientos para exportar.", duration=3000)
-        
+
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
         
@@ -1540,36 +1546,45 @@ class CashState(MixinState):
             "Concepto/Motivo",
             "Cantidad",
             "Unidad",
-            "Costo Unitario (S/)",
-            "Total Egreso (S/)",
+            f"Costo Unitario ({currency_label})",
+            f"Total Egreso ({currency_label})",
         ]
         style_header_row(ws, row, headers)
         data_start = row + 1
         row += 1
         
+        def _parse_numeric(value: Any) -> float:
+            if value is None:
+                return 0.0
+            raw = str(value)
+            # Extrae el primer número del string, ignorando símbolos
+            import re
+            match = re.search(r"([0-9]+(?:[.,][0-9]{3})*(?:[.,][0-9]+)?)", raw)
+            if not match:
+                return 0.0
+            num = match.group(1)
+            if "," in num and "." in num:
+                num = num.replace(",", "")
+            elif "," in num and "." not in num:
+                num = num.replace(",", ".")
+            try:
+                return float(num)
+            except ValueError:
+                return 0.0
+
         for item in movements:
             # Extraer valores numéricos para las fórmulas
-            quantity_str = item.get("formatted_quantity", "0")
-            cost_str = item.get("formatted_cost", "0")
-            
-            # Limpiar strings de formato para obtener números
-            try:
-                quantity = float(str(quantity_str).replace(",", "").replace("S/", "").strip() or 0)
-            except:
-                quantity = 0
-            try:
-                cost = float(str(cost_str).replace(",", "").replace("S/", "").strip() or 0)
-            except:
-                cost = 0
+            quantity = _parse_numeric(item.get("formatted_quantity", "0"))
+            cost = _parse_numeric(item.get("formatted_cost", "0"))
             
             ws.cell(row=row, column=1, value=item.get("timestamp", ""))
             ws.cell(row=row, column=2, value=item.get("user", "Desconocido"))
             ws.cell(row=row, column=3, value=item.get("notes", "") or "Sin motivo especificado")
             ws.cell(row=row, column=4, value=quantity)
             ws.cell(row=row, column=5, value=item.get("unit", "Unid."))
-            ws.cell(row=row, column=6, value=cost).number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=6, value=cost).number_format = currency_format
             # Total = Fórmula: Cantidad × Costo Unitario
-            ws.cell(row=row, column=7, value=f"=D{row}*F{row}").number_format = CURRENCY_FORMAT
+            ws.cell(row=row, column=7, value=f"=D{row}*F{row}").number_format = currency_format
             
             for col in range(1, 8):
                 ws.cell(row=row, column=col).border = THIN_BORDER
@@ -1584,7 +1599,7 @@ class CashState(MixinState):
             {"type": "sum", "col_letter": "D"},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "G", "number_format": CURRENCY_FORMAT},
+            {"type": "sum", "col_letter": "G", "number_format": currency_format},
         ])
         
         # Notas explicativas
