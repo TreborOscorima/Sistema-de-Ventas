@@ -51,9 +51,12 @@ class FakeSession:
 def test_apply_reservation_payment_partial_creates_logs(monkeypatch):
     state = ServicesState()
     state.current_user = {
+        "id": 1,
         "username": "alice",
+        "company_id": 1,
         "privileges": {"manage_reservations": True},
     }
+    state.selected_branch_id = "1"
     state.reservation_payment_id = "1"
     state.reservation_payment_amount = "50"
     state.payment_method = "Efectivo"
@@ -114,9 +117,12 @@ def test_apply_reservation_payment_partial_creates_logs(monkeypatch):
 def test_pay_reservation_with_payment_method_full_payment(monkeypatch):
     state = ServicesState()
     state.current_user = {
+        "id": 2,
         "username": "bob",
+        "company_id": 1,
         "privileges": {"manage_reservations": True},
     }
+    state.selected_branch_id = "1"
     state.reservation_payment_id = "2"
     state.payment_method = "Efectivo"
     state.payment_method_kind = "cash"

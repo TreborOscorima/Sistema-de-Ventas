@@ -49,6 +49,8 @@ class TestCreditServiceGetClientStatus:
     def sample_client(self):
         client = MagicMock(spec=Client)
         client.id = 1
+        client.company_id = 1
+        client.branch_id = 1
         client.name = "Juan Pérez"
         client.dni = "12345678"
         client.credit_limit = Decimal("1000.00")
@@ -58,22 +60,30 @@ class TestCreditServiceGetClientStatus:
     @pytest.mark.asyncio
     async def test_client_not_found_raises_error(self, mock_session):
         """Cliente inexistente debe lanzar error."""
-        mock_session.get.return_value = None
+        client_result = MagicMock()
+        client_result.first.return_value = None
+        mock_session.exec.return_value = client_result
 
         with pytest.raises(ValueError, match="Cliente no encontrado"):
-            await CreditService.get_client_status(mock_session, client_id=999)
+            await CreditService.get_client_status(
+                mock_session,
+                client_id=999,
+                company_id=1,
+                branch_id=1,
+            )
 
     @pytest.mark.asyncio
     async def test_returns_current_debt(self, mock_session, sample_client):
         """Debe retornar deuda actual del cliente."""
-        mock_session.get.return_value = sample_client
-        
-        # Mock para cuotas pendientes
-        mock_result = MagicMock()
-        mock_result.all.return_value = []
-        mock_session.exec.return_value = mock_result
+        client_result = MagicMock()
+        client_result.first.return_value = sample_client
+        installments_result = MagicMock()
+        installments_result.all.return_value = []
+        mock_session.exec.side_effect = [client_result, installments_result]
 
-        result = await CreditService.get_client_status(mock_session, client_id=1)
+        result = await CreditService.get_client_status(
+            mock_session, client_id=1, company_id=1, branch_id=1
+        )
 
         assert result["current_debt"] == Decimal("250.00")
         assert "pending_installments" in result
@@ -81,7 +91,8 @@ class TestCreditServiceGetClientStatus:
     @pytest.mark.asyncio
     async def test_returns_pending_installments(self, mock_session, sample_client):
         """Debe retornar cuotas pendientes ordenadas."""
-        mock_session.get.return_value = sample_client
+        client_result = MagicMock()
+        client_result.first.return_value = sample_client
 
         # Crear cuotas mock
         installment1 = MagicMock(spec=SaleInstallment)
@@ -98,9 +109,11 @@ class TestCreditServiceGetClientStatus:
 
         mock_result = MagicMock()
         mock_result.all.return_value = [installment1, installment2]
-        mock_session.exec.return_value = mock_result
+        mock_session.exec.side_effect = [client_result, mock_result]
 
-        result = await CreditService.get_client_status(mock_session, client_id=1)
+        result = await CreditService.get_client_status(
+            mock_session, client_id=1, company_id=1, branch_id=1
+        )
 
         assert len(result["pending_installments"]) == 2
 

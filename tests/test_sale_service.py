@@ -26,10 +26,13 @@ async def test_process_sale_cash_happy_path(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
+        exec_result(first_item=session_mock.get.return_value),
     ]
 
     result = await SaleService.process_sale(
         session=session_mock,
+        company_id=1,
+        branch_id=1,
         user_id=sale_data_sample["user_id"],
         items=sale_data_sample["items"],
         payment_data=sale_data_sample["payment_data"],
@@ -56,6 +59,8 @@ async def test_process_sale_cashbox_log_records_sale_id(
 
     result = await SaleService.process_sale(
         session=session_mock,
+        company_id=1,
+        branch_id=1,
         user_id=sale_data_sample["user_id"],
         items=sale_data_sample["items"],
         payment_data=sale_data_sample["payment_data"],
@@ -98,6 +103,8 @@ async def test_process_sale_stock_insufficient(
     with pytest.raises((StockError, ValueError)):
         await SaleService.process_sale(
             session=session_mock,
+            company_id=1,
+            branch_id=1,
             user_id=1,
             items=[item],
             payment_data=payment_data,
@@ -131,6 +138,8 @@ async def test_process_sale_decimal_math(
 
     result = await SaleService.process_sale(
         session=session_mock,
+        company_id=1,
+        branch_id=1,
         user_id=1,
         items=[item],
         payment_data=payment_data,
@@ -172,6 +181,8 @@ async def test_process_sale_mixed_payment(
 
     await SaleService.process_sale(
         session=session_mock,
+        company_id=1,
+        branch_id=1,
         user_id=1,
         items=[item],
         payment_data=payment_data,
@@ -229,6 +240,8 @@ async def test_process_sale_prefers_barcode_match(
 
     await SaleService.process_sale(
         session=session_mock,
+        company_id=1,
+        branch_id=1,
         user_id=1,
         items=[item],
         payment_data=payment_data,
@@ -283,6 +296,8 @@ async def test_process_sale_ambiguous_description_requires_barcode(
     with pytest.raises(StockError):
         await SaleService.process_sale(
             session=session_mock,
+            company_id=1,
+            branch_id=1,
             user_id=1,
             items=[item],
             payment_data=payment_data,
@@ -314,21 +329,25 @@ async def test_process_sale_credit_cashbox_uses_initial_payment(
         interval_days=30,
         cash=PaymentCashDTO(amount=Decimal("10.00")),
     )
-    session_mock.exec.side_effect = [
-        exec_result(all_items=[]),
-        exec_result(all_items=[unit_sample]),
-        exec_result(all_items=[product_sample]),
-    ]
-    session_mock.get.return_value = Client(
+    client = Client(
         id=1,
         name="Cliente Test",
         dni="00000000",
         credit_limit=Decimal("100.00"),
         current_debt=Decimal("0.00"),
     )
+    session_mock.get.return_value = client
+    session_mock.exec.side_effect = [
+        exec_result(all_items=[]),
+        exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[product_sample]),
+        exec_result(first_item=client),
+    ]
 
     result = await SaleService.process_sale(
         session=session_mock,
+        company_id=1,
+        branch_id=1,
         user_id=1,
         items=[item],
         payment_data=payment_data,

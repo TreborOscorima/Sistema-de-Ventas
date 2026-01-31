@@ -82,8 +82,10 @@ def test_delete_sale_marks_logs_voided_and_restores_stock(monkeypatch):
     state.current_user = {
         "id": 99,
         "username": "tester",
+        "company_id": 1,
         "privileges": {"view_cashbox": True, "delete_sales": True},
     }
+    state.selected_branch_id = "1"
     state.sale_to_delete = "1"
     state.sale_delete_reason = "Error"
     state._cashbox_update_trigger = 0

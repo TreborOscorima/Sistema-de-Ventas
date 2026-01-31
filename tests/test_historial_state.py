@@ -51,6 +51,7 @@ class SequencedSession:
 
 def test_sale_log_payment_info_uses_sale_id():
     state = HistorialState()
+    state.current_user = {"company_id": 1}
     log = CashboxLog(
         action="Venta",
         amount=Decimal("5.00"),
@@ -68,6 +69,7 @@ def test_sale_log_payment_info_uses_sale_id():
 
 def test_sale_log_payment_info_falls_back_to_notes():
     state = HistorialState()
+    state.current_user = {"company_id": 1}
     log = CashboxLog(
         action="Venta",
         amount=Decimal("5.00"),
@@ -85,6 +87,7 @@ def test_sale_log_payment_info_falls_back_to_notes():
 
 def test_sale_log_payment_info_filters_voided_in_query():
     state = HistorialState()
+    state.current_user = {"company_id": 1}
     session = FakeSession([])
 
     state._sale_log_payment_info(session, [1])
@@ -94,6 +97,8 @@ def test_sale_log_payment_info_filters_voided_in_query():
 
 def test_build_report_entries_filters_by_method_and_user(monkeypatch):
     state = HistorialState()
+    state.current_user = {"company_id": 1}
+    state.selected_branch_id = "1"
     state.report_filter_method = "cash"
     state.report_filter_source = "Todos"
     state.report_filter_user = "Alice"
@@ -152,6 +157,8 @@ def test_build_report_entries_filters_by_method_and_user(monkeypatch):
 
 def test_build_report_entries_sales_only_skips_cancelled(monkeypatch):
     state = HistorialState()
+    state.current_user = {"company_id": 1}
+    state.selected_branch_id = "1"
     state.report_filter_method = "Todos"
     state.report_filter_source = "Ventas"
     state.report_filter_user = "Todos"

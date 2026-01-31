@@ -65,7 +65,8 @@ def test_remove_category_requires_privilege(monkeypatch):
 
 def test_add_category_creates_when_missing(monkeypatch):
     state = InventoryState()
-    state.current_user = {"privileges": {"edit_inventario": True}}
+    state.current_user = {"company_id": 1, "privileges": {"edit_inventario": True}}
+    state.selected_branch_id = "1"
     state.new_category_name = "Bebidas"
     fake_session = FakeSession(existing_category=None)
     monkeypatch.setattr(rx, "session", lambda: fake_session)
@@ -87,7 +88,8 @@ def test_add_category_creates_when_missing(monkeypatch):
 
 def test_remove_category_deletes_when_exists(monkeypatch):
     state = InventoryState()
-    state.current_user = {"privileges": {"edit_inventario": True}}
+    state.current_user = {"company_id": 1, "privileges": {"edit_inventario": True}}
+    state.selected_branch_id = "1"
     fake_category = Category(name="Bebidas")
     fake_session = FakeSession(existing_category=fake_category)
     monkeypatch.setattr(rx, "session", lambda: fake_session)

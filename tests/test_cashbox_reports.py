@@ -36,6 +36,8 @@ class FakeSession:
 
 def test_build_cashbox_summary_formats_and_sorts(monkeypatch):
     state = CashState()
+    state.current_user = {"company_id": 1, "privileges": {"view_cashbox": True}}
+    state.selected_branch_id = "1"
     fake_session = FakeSession(
         [
             ("Efectivo", 2, Decimal("20.00")),
@@ -63,6 +65,8 @@ def test_build_cashbox_summary_formats_and_sorts(monkeypatch):
 
 def test_build_cashbox_summary_filters_voided_and_dates(monkeypatch):
     state = CashState()
+    state.current_user = {"company_id": 1, "privileges": {"view_cashbox": True}}
+    state.selected_branch_id = "1"
     fake_session = FakeSession([])
     monkeypatch.setattr(rx, "session", lambda: fake_session)
     monkeypatch.setattr(
