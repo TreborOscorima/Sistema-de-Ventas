@@ -374,6 +374,8 @@ def generate_sales_report(
     company_name: str = "TUWAYKIAPP",
     include_cancelled: bool = False,
     currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de ventas consolidado con detalles contables.
@@ -407,6 +409,10 @@ def generate_sales_report(
         )
         .order_by(Sale.timestamp.desc())
     )
+    if company_id:
+        query = query.where(Sale.company_id == company_id)
+    if branch_id:
+        query = query.where(Sale.branch_id == branch_id)
     
     if not include_cancelled:
         query = query.where(Sale.status != SaleStatus.cancelled)
@@ -1085,6 +1091,8 @@ def generate_inventory_report(
     company_name: str = "TUWAYKIAPP",
     include_zero_stock: bool = True,
     currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de inventario valorizado profesional.
@@ -1102,6 +1110,10 @@ def generate_inventory_report(
     
     # Consultar productos
     query = select(Product).order_by(Product.category, Product.description)
+    if company_id:
+        query = query.where(Product.company_id == company_id)
+    if branch_id:
+        query = query.where(Product.branch_id == branch_id)
     if not include_zero_stock:
         query = query.where(Product.stock > 0)
     
@@ -1395,6 +1407,8 @@ def generate_receivables_report(
     session,
     company_name: str = "TUWAYKIAPP",
     currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de cuentas por cobrar con análisis de antigüedad.
@@ -1415,6 +1429,10 @@ def generate_receivables_report(
         .where(SaleInstallment.status != "paid")
         .order_by(SaleInstallment.due_date)
     )
+    if company_id:
+        query = query.where(SaleInstallment.company_id == company_id)
+    if branch_id:
+        query = query.where(SaleInstallment.branch_id == branch_id)
     
     installments = session.exec(query).all()
     
@@ -1424,7 +1442,15 @@ def generate_receivables_report(
     clients_map = {}
     
     if sale_ids:
-        sales_query = select(Sale).where(Sale.id.in_(sale_ids)).options(selectinload(Sale.client))
+        sales_query = (
+            select(Sale)
+            .where(Sale.id.in_(sale_ids))
+            .options(selectinload(Sale.client))
+        )
+        if company_id:
+            sales_query = sales_query.where(Sale.company_id == company_id)
+        if branch_id:
+            sales_query = sales_query.where(Sale.branch_id == branch_id)
         sales_list = session.exec(sales_query).all()
         for sale in sales_list:
             sales_map[sale.id] = sale
@@ -1803,6 +1829,8 @@ def generate_cashbox_report(
     end_date: datetime,
     company_name: str = "TUWAYKIAPP",
     currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de caja consolidado con flujo de caja REAL.
@@ -1831,6 +1859,10 @@ def generate_cashbox_report(
         )
         .order_by(CashboxLog.timestamp.desc())
     )
+    if company_id:
+        query = query.where(CashboxLog.company_id == company_id)
+    if branch_id:
+        query = query.where(CashboxLog.branch_id == branch_id)
     
     logs = session.exec(query).all()
     
@@ -1846,6 +1878,10 @@ def generate_cashbox_report(
         )
         .options(selectinload(Sale.payments))
     )
+    if company_id:
+        sales_query = sales_query.where(Sale.company_id == company_id)
+    if branch_id:
+        sales_query = sales_query.where(Sale.branch_id == branch_id)
     
     sales = session.exec(sales_query).all()
     

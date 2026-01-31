@@ -14,6 +14,7 @@ from app.models import SaleInstallment
 from .auth_state import AuthState
 from .ui_state import UIState
 from .config_state import ConfigState
+from .branches_state import BranchesState
 from .inventory_state import InventoryState
 from .ingreso_state import IngresoState
 from .purchases_state import PurchasesState
@@ -26,6 +27,7 @@ from .cuentas_state import CuentasState
 from .clientes_state import ClientesState
 from .dashboard_state import DashboardState
 from .report_state import ReportState
+from .register_state import RegisterState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin
 
 _mixins = [
@@ -41,20 +43,29 @@ _mixins = [
     VentaState,
     IngresoState,
     InventoryState,
+    BranchesState,
     ConfigState,
     UIState,
+    RegisterState,
     AuthState,
 ]
 
 @rx.event
 def check_overdue_alerts(self):
+    company_id = self._company_id() if hasattr(self, "_company_id") else None
+    branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
     with rx.session() as session:
-        count = session.exec(
+        statement = (
             select(func.count())
             .select_from(SaleInstallment)
             .where(SaleInstallment.due_date < datetime.datetime.now())
             .where(SaleInstallment.status != "paid")
-        ).one()
+        )
+        if company_id:
+            statement = statement.where(SaleInstallment.company_id == company_id)
+        if branch_id:
+            statement = statement.where(SaleInstallment.branch_id == branch_id)
+        count = session.exec(statement).one()
     self.overdue_alerts_count = int(count or 0)
 
 _class_dict = {

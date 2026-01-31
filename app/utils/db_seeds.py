@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.enums import PaymentMethodType
-from app.models import PaymentMethod
+from app.models import Category, PaymentMethod, Unit
 
 # ============================================================================
 # MÉTODOS DE PAGO POR PAÍS
@@ -309,25 +309,104 @@ def get_payment_methods_for_country(country_code: str) -> list[dict]:
 # Default: Perú (para compatibilidad con instalaciones existentes)
 DEFAULT_PAYMENT_METHODS = get_payment_methods_for_country("PE")
 
-
-async def init_payment_methods(session: AsyncSession) -> None:
-    existing = (await session.exec(select(PaymentMethod).limit(1))).first()
-    if existing:
+def seed_new_branch_data(
+    session: Session,
+    company_id: int,
+    branch_id: int,
+) -> None:
+    """Carga datos base para una nueva sucursal."""
+    if not company_id or not branch_id:
         return
+    company_id = int(company_id)
+    branch_id = int(branch_id)
 
-    session.add_all(
-        [
-            PaymentMethod(
-                name=data["name"],
-                code=data["code"],
-                is_active=True,
-                allows_change=data["allows_change"],
-                method_id=data["method_id"],
-                description=data["description"],
-                kind=data["kind"],
-                enabled=True,
-            )
-            for data in DEFAULT_PAYMENT_METHODS
+    has_categories = session.exec(
+        select(Category.id)
+        .where(Category.company_id == company_id)
+        .where(Category.branch_id == branch_id)
+        .limit(1)
+    ).first()
+    if not has_categories:
+        session.add_all(
+            [
+                Category(name="General", company_id=company_id, branch_id=branch_id),
+            ]
+        )
+
+    has_units = session.exec(
+        select(Unit.id)
+        .where(Unit.company_id == company_id)
+        .where(Unit.branch_id == branch_id)
+        .limit(1)
+    ).first()
+    if not has_units:
+        unit_defaults = [
+            ("unidad", False),
+            ("kg", True),
+            ("g", True),
+            ("l", True),
+            ("ml", True),
         ]
+        session.add_all(
+            [
+                Unit(
+                    name=name,
+                    allows_decimal=allows,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+                for name, allows in unit_defaults
+            ]
+        )
+
+    has_methods = session.exec(
+        select(PaymentMethod.id)
+        .where(PaymentMethod.company_id == company_id)
+        .where(PaymentMethod.branch_id == branch_id)
+        .limit(1)
+    ).first()
+    if not has_methods:
+        session.add_all(
+            [
+                PaymentMethod(
+                    name=data["name"],
+                    code=data["code"],
+                    is_active=True,
+                    allows_change=data["allows_change"],
+                    method_id=data["method_id"],
+                    description=data["description"],
+                    kind=data["kind"],
+                    enabled=True,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+                for data in DEFAULT_PAYMENT_METHODS
+            ]
+        )
+
+
+def seed_new_company_data(
+    session: Session,
+    company_id: int,
+    branch_id: int | None = None,
+) -> None:
+    """Compatibilidad: carga datos base para una empresa/sucursal."""
+    if not company_id:
+        return
+    if branch_id:
+        seed_new_branch_data(session, company_id, branch_id)
+
+
+async def init_payment_methods(
+    session: AsyncSession,
+    company_id: int,
+    branch_id: int,
+) -> None:
+    if not company_id or not branch_id:
+        return
+    await session.run_sync(
+        lambda sync_session: seed_new_branch_data(
+            sync_session, company_id, branch_id
+        )
     )
     await session.commit()

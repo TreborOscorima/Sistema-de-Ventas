@@ -83,6 +83,15 @@ class ClientesState(MixinState):
             parsed = Decimal("0")
         return parsed
 
+    def _company_id(self) -> int | None:
+        value = None
+        if hasattr(self, "current_user"):
+            value = self.current_user.get("company_id")
+        try:
+            return int(value) if value else None
+        except (TypeError, ValueError):
+            return None
+
     @rx.var
     def clients_view(self) -> list[dict]:
         rows: list[dict] = []
@@ -109,8 +118,17 @@ class ClientesState(MixinState):
     @rx.event
     def load_clients(self):
         term = (self.search_query or "").strip()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.clients = []
+            return
         with rx.session() as session:
-            query = select(Client)
+            query = (
+                select(Client)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+            )
             if term:
                 like = f"%{term}%"
                 query = query.where(
@@ -187,25 +205,40 @@ class ClientesState(MixinState):
         client_id = self.current_client.get("id")
         if isinstance(client_id, str):
             client_id = int(client_id) if client_id.isdigit() else None
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
 
         with rx.session() as session:
-            existing = session.exec(select(Client).where(Client.dni == dni)).first()
+            existing = session.exec(
+                select(Client)
+                .where(Client.dni == dni)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+            ).first()
             if existing and (not client_id or existing.id != client_id):
                 return rx.toast("El documento ya está registrado.", duration=3000)
 
             if client_id:
-                payload = Client(
-                    id=client_id,
-                    name=name,
-                    dni=dni,
-                    phone=phone or None,
-                    address=address or None,
-                    credit_limit=credit_limit,
-                    current_debt=current_debt,
-                )
-                saved = session.merge(payload)
+                client = session.exec(
+                    select(Client)
+                    .where(Client.id == client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                ).first()
+                if not client:
+                    return rx.toast("Cliente no encontrado.", duration=3000)
+                client.name = name
+                client.dni = dni
+                client.phone = phone or None
+                client.address = address or None
+                client.credit_limit = credit_limit
+                client.current_debt = current_debt
+                session.add(client)
                 session.commit()
-                session.refresh(saved)
+                session.refresh(client)
+                saved = client
             else:
                 payload = Client(
                     name=name,
@@ -214,6 +247,8 @@ class ClientesState(MixinState):
                     address=address or None,
                     credit_limit=credit_limit,
                     current_debt=current_debt,
+                    company_id=company_id,
+                    branch_id=branch_id,
                 )
                 session.add(payload)
                 session.commit()
@@ -244,8 +279,17 @@ class ClientesState(MixinState):
     def delete_client(self, client_id: int):
         if not self.current_user["privileges"].get("manage_clientes"):
             return rx.toast("No tiene permisos para gestionar clientes.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            client = session.get(Client, client_id)
+            client = session.exec(
+                select(Client)
+                .where(Client.id == client_id)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+            ).first()
             if not client:
                 return rx.toast("Cliente no encontrado.", duration=3000)
             if client.current_debt and client.current_debt > 0:
@@ -253,7 +297,10 @@ class ClientesState(MixinState):
                     "No se puede eliminar: cliente con deuda.", duration=3000
                 )
             has_sales = session.exec(
-                select(Sale).where(Sale.client_id == client_id)
+                select(Sale)
+                .where(Sale.client_id == client_id)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
             ).first()
             if has_sales:
                 return rx.toast(

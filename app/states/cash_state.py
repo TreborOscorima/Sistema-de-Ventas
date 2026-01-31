@@ -185,6 +185,10 @@ class CashState(MixinState):
             return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
         if not self.cashbox_is_open:
             return rx.toast("Debe aperturar la caja para registrar movimientos.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         
         try:
             amount = float(self.petty_cash_amount)
@@ -200,15 +204,16 @@ class CashState(MixinState):
         if not self.petty_cash_reason:
             return rx.toast("Ingrese un motivo.", duration=3000)
             
-        username = self.current_user["username"]
+        user_id = self.current_user.get("id")
+        if not user_id:
+            return rx.toast("Usuario no encontrado.", duration=3000)
         
         with rx.session() as session:
-            user = session.exec(select(UserModel).where(UserModel.username == username)).first()
-            if not user:
-                return rx.toast("Usuario no encontrado.", duration=3000)
                 
             log = CashboxLogModel(
-                user_id=user.id,
+                company_id=company_id,
+                branch_id=branch_id,
+                user_id=user_id,
                 action="gasto_caja_chica",
                 amount=amount,
                 quantity=quantity,
@@ -230,10 +235,20 @@ class CashState(MixinState):
         return rx.toast("Movimiento registrado correctamente.", duration=3000)
 
     def _petty_cash_query(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return (
+                select(CashboxLogModel, UserModel.username)
+                .join(UserModel)
+                .where(sqlalchemy.false())
+            )
         return (
             select(CashboxLogModel, UserModel.username)
             .join(UserModel)
             .where(CashboxLogModel.action == "gasto_caja_chica")
+            .where(CashboxLogModel.company_id == company_id)
+            .where(CashboxLogModel.branch_id == branch_id)
             .order_by(desc(CashboxLogModel.timestamp))
         )
 
@@ -243,6 +258,12 @@ class CashState(MixinState):
             .select_from(CashboxLogModel)
             .where(CashboxLogModel.action == "gasto_caja_chica")
         )
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0
+        statement = statement.where(CashboxLogModel.company_id == company_id)
+        statement = statement.where(CashboxLogModel.branch_id == branch_id)
         with rx.session() as session:
             return session.exec(statement).one()
 
@@ -315,23 +336,36 @@ class CashState(MixinState):
         _ = self._cashbox_update_trigger
         
         username = "guest"
+        user_id = None
         if hasattr(self, "current_user") and self.current_user:
-             username = self.current_user["username"]
+             username = self.current_user.get("username", "guest")
+             user_id = self.current_user.get("id")
         
-        with rx.session() as session:
-            user = session.exec(select(UserModel).where(UserModel.username == username)).first()
-            if not user:
-                 return {
-                    "opening_amount": 0.0,
-                    "opening_time": "",
-                    "closing_time": "",
-                    "is_open": False,
-                    "opened_by": username,
-                }
+        if not user_id:
+            return {
+                "opening_amount": 0.0,
+                "opening_time": "",
+                "closing_time": "",
+                "is_open": False,
+                "opened_by": username,
+            }
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return {
+                "opening_amount": 0.0,
+                "opening_time": "",
+                "closing_time": "",
+                "is_open": False,
+                "opened_by": username,
+            }
 
+        with rx.session() as session:
             cashbox_session = session.exec(
                 select(CashboxSessionModel)
-                .where(CashboxSessionModel.user_id == user.id)
+                .where(CashboxSessionModel.user_id == user_id)
+                .where(CashboxSessionModel.company_id == company_id)
+                .where(CashboxSessionModel.branch_id == branch_id)
                 .where(CashboxSessionModel.is_open == True)
             ).first()
             
@@ -372,18 +406,23 @@ class CashState(MixinState):
         except ValueError:
             return opening_amount
 
-        username = session_data.get("opened_by")
+        user_id = self.current_user.get("id")
+        if not user_id:
+            return opening_amount
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return opening_amount
 
         with rx.session() as session:
-            user = session.exec(select(UserModel).where(UserModel.username == username)).first()
-            if not user:
-                return opening_amount
-            
             # Sumar gastos
             statement = select(sqlalchemy.func.sum(CashboxLogModel.amount)).where(
-                CashboxLogModel.user_id == user.id,
+                CashboxLogModel.user_id == user_id,
                 CashboxLogModel.action == "gasto_caja_chica",
-                CashboxLogModel.timestamp >= opening_time
+                CashboxLogModel.timestamp >= opening_time,
+                CashboxLogModel.company_id == company_id,
+                CashboxLogModel.branch_id == branch_id,
             )
             expenses = session.exec(statement).one()
             expenses_value = float(expenses or 0)
@@ -426,11 +465,17 @@ class CashState(MixinState):
 
     def _cashbox_opening_amount_value(self, date: str) -> float:
         session_info = self._active_cashbox_session_info()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0.0
         if session_info:
             with rx.session() as session:
                 cashbox_session = session.exec(
                     select(CashboxSessionModel)
                     .where(CashboxSessionModel.user_id == session_info["user_id"])
+                    .where(CashboxSessionModel.company_id == company_id)
+                    .where(CashboxSessionModel.branch_id == branch_id)
                     .where(CashboxSessionModel.is_open == True)
                 ).first()
                 if cashbox_session:
@@ -443,6 +488,8 @@ class CashState(MixinState):
                 .where(CashboxLogModel.is_voided == False)
                 .where(CashboxLogModel.timestamp >= start_dt)
                 .where(CashboxLogModel.timestamp <= end_dt)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
                 .order_by(CashboxLogModel.timestamp.asc())
             )
             if session_info:
@@ -456,6 +503,10 @@ class CashState(MixinState):
 
     def _cashbox_expense_total(self, date: str) -> float:
         start_dt, end_dt, session_info = self._cashbox_time_range(date)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0.0
         with rx.session() as session:
             statement = (
                 select(sqlalchemy.func.sum(CashboxLogModel.amount))
@@ -463,6 +514,8 @@ class CashState(MixinState):
                 .where(CashboxLogModel.is_voided == False)
                 .where(CashboxLogModel.timestamp >= start_dt)
                 .where(CashboxLogModel.timestamp <= end_dt)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
             )
             if session_info:
                 statement = statement.where(
@@ -492,24 +545,25 @@ class CashState(MixinState):
     def _active_cashbox_session_info(self) -> dict[str, Any] | None:
         if not hasattr(self, "current_user") or not self.current_user:
             return None
-        username = self.current_user.get("username", "")
-        if not username:
+        user_id = self.current_user.get("id")
+        if not user_id:
+            return None
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
             return None
         with rx.session() as session:
-            user = session.exec(
-                select(UserModel).where(UserModel.username == username)
-            ).first()
-            if not user:
-                return None
             cashbox_session = session.exec(
                 select(CashboxSessionModel)
-                .where(CashboxSessionModel.user_id == user.id)
+                .where(CashboxSessionModel.user_id == user_id)
+                .where(CashboxSessionModel.company_id == company_id)
+                .where(CashboxSessionModel.branch_id == branch_id)
                 .where(CashboxSessionModel.is_open == True)
             ).first()
             if not cashbox_session:
                 return None
             return {
-                "user_id": user.id,
+                "user_id": user_id,
                 "opening_time": cashbox_session.opening_time,
                 "closing_time": cashbox_session.closing_time,
             }
@@ -522,7 +576,11 @@ class CashState(MixinState):
     def open_cashbox_session(self):
         if not self.current_user["privileges"]["manage_cashbox"]:
             return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
-        username = self.current_user["username"]
+        user_id = self.current_user.get("id")
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         if self.current_user["role"].lower() == "cajero" and not hasattr(self, "token"):
             return rx.toast("Inicie sesión para abrir caja.", duration=3000)
         
@@ -535,14 +593,14 @@ class CashState(MixinState):
         if amount < 0:
             return rx.toast("Ingrese un monto válido para la caja inicial.", duration=3000)
             
+        if not user_id:
+            return rx.toast("Usuario no encontrado.", duration=3000)
         with rx.session() as session:
-            user = session.exec(select(UserModel).where(UserModel.username == username)).first()
-            if not user:
-                 return rx.toast("Usuario no encontrado.", duration=3000)
-
             existing = session.exec(
                 select(CashboxSessionModel)
-                .where(CashboxSessionModel.user_id == user.id)
+                .where(CashboxSessionModel.user_id == user_id)
+                .where(CashboxSessionModel.company_id == company_id)
+                .where(CashboxSessionModel.branch_id == branch_id)
                 .where(CashboxSessionModel.is_open == True)
             ).first()
             
@@ -550,7 +608,9 @@ class CashState(MixinState):
                  return rx.toast("Ya existe una caja abierta.", duration=3000)
 
             new_session = CashboxSessionModel(
-                user_id=user.id,
+                company_id=company_id,
+                branch_id=branch_id,
+                user_id=user_id,
                 opening_amount=amount,
                 opening_time=datetime.datetime.now(),
                 is_open=True
@@ -560,7 +620,9 @@ class CashState(MixinState):
             session.refresh(new_session)
             
             log = CashboxLogModel(
-                user_id=user.id,
+                company_id=company_id,
+                branch_id=branch_id,
+                user_id=user_id,
                 action="apertura",
                 amount=amount,
                 notes="Apertura de caja",
@@ -574,16 +636,21 @@ class CashState(MixinState):
         return rx.toast("Caja abierta. Jornada iniciada.", duration=3000)
 
     def _close_cashbox_session(self):
-        username = self.current_user["username"]
+        user_id = self.current_user.get("id")
         
-        with rx.session() as session:
-            user = session.exec(select(UserModel).where(UserModel.username == username)).first()
-            if not user:
-                return
+        if not user_id:
+            return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
 
+        with rx.session() as session:
             cashbox_session = session.exec(
                 select(CashboxSessionModel)
-                .where(CashboxSessionModel.user_id == user.id)
+                .where(CashboxSessionModel.user_id == user_id)
+                .where(CashboxSessionModel.company_id == company_id)
+                .where(CashboxSessionModel.branch_id == branch_id)
                 .where(CashboxSessionModel.is_open == True)
             ).first()
             
@@ -596,10 +663,20 @@ class CashState(MixinState):
         self._cashbox_update_trigger += 1
 
     def _cashbox_logs_query(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return (
+                select(CashboxLogModel, UserModel.username)
+                .join(UserModel)
+                .where(sqlalchemy.false())
+            )
         statement = (
             select(CashboxLogModel, UserModel.username)
             .join(UserModel)
             .where(CashboxLogModel.action.in_(["apertura", "cierre"]))
+            .where(CashboxLogModel.company_id == company_id)
+            .where(CashboxLogModel.branch_id == branch_id)
             .order_by(desc(CashboxLogModel.timestamp))
         )
 
@@ -625,10 +702,16 @@ class CashState(MixinState):
         return statement
 
     def _cashbox_logs_count(self) -> int:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0
         statement = (
             select(sqlalchemy.func.count())
             .select_from(CashboxLogModel)
             .where(CashboxLogModel.action.in_(["apertura", "cierre"]))
+            .where(CashboxLogModel.company_id == company_id)
+            .where(CashboxLogModel.branch_id == branch_id)
         )
 
         if self.cashbox_log_filter_start_date:
@@ -823,6 +906,15 @@ class CashState(MixinState):
             self.cashbox_current_page += 1
 
     def _cashbox_sales_query(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return (
+                select(Sale, UserModel)
+                .select_from(Sale)
+                .join(UserModel, Sale.user_id == UserModel.id, isouter=True)
+                .where(sqlalchemy.false())
+            )
         query = (
             select(Sale, UserModel)
             .select_from(Sale)
@@ -832,6 +924,8 @@ class CashState(MixinState):
                 selectinload(Sale.payments),
                 selectinload(Sale.installments),
             )
+            .where(Sale.company_id == company_id)
+            .where(Sale.branch_id == branch_id)
             .order_by(desc(Sale.timestamp))
         )
 
@@ -869,7 +963,16 @@ class CashState(MixinState):
         return query
 
     def _cashbox_sales_count(self) -> int:
-        query = select(sqlalchemy.func.count(Sale.id)).select_from(Sale)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0
+        query = (
+            select(sqlalchemy.func.count(Sale.id))
+            .select_from(Sale)
+            .where(Sale.company_id == company_id)
+            .where(Sale.branch_id == branch_id)
+        )
 
         if self.cashbox_filter_start_date:
             try:
@@ -1624,9 +1727,17 @@ class CashState(MixinState):
     def show_cashbox_log(self, log_id: str):
         if not self.current_user["privileges"]["view_cashbox"]:
             return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
-            
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            log = session.exec(select(CashboxLogModel).where(CashboxLogModel.id == int(log_id))).first()
+            log = session.exec(
+                select(CashboxLogModel)
+                .where(CashboxLogModel.id == int(log_id))
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
+            ).first()
             if not log:
                 return rx.toast("Registro de caja no encontrado.", duration=3000)
             
@@ -1690,6 +1801,10 @@ class CashState(MixinState):
             return denial
         if not self.current_user["privileges"]["delete_sales"]:
             return rx.toast("No tiene permisos para eliminar ventas.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         sale_id = self.sale_to_delete
         reason = self.sale_delete_reason.strip()
         if not sale_id:
@@ -1705,7 +1820,12 @@ class CashState(MixinState):
             except ValueError:
                 return rx.toast("ID de venta inválido.", duration=3000)
                 
-            sale_db = session.exec(select(Sale).where(Sale.id == sale_db_id)).first()
+            sale_db = session.exec(
+                select(Sale)
+                .where(Sale.id == sale_db_id)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+            ).first()
             
             if not sale_db:
                 return rx.toast("Venta no encontrada en BD.", duration=3000)
@@ -1718,9 +1838,10 @@ class CashState(MixinState):
             session.add(sale_db)
 
             logs = session.exec(
-                select(CashboxLogModel).where(
-                    CashboxLogModel.sale_id == sale_db_id
-                )
+                select(CashboxLogModel)
+                .where(CashboxLogModel.sale_id == sale_db_id)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
             ).all()
             for log in logs:
                 if log.is_voided:
@@ -1735,7 +1856,12 @@ class CashState(MixinState):
             # Restaurar stock
             for item in sale_db.items:
                 if item.product_id:
-                    product = session.exec(select(Product).where(Product.id == item.product_id)).first()
+                    product = session.exec(
+                        select(Product)
+                        .where(Product.id == item.product_id)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    ).first()
                     if product:
                         product.stock += item.quantity
                         session.add(product)
@@ -1747,7 +1873,9 @@ class CashState(MixinState):
                             type="Devolucion Venta",
                             quantity=item.quantity,
                             description=f"Venta anulada #{sale_db.id}: {reason}",
-                            timestamp=datetime.datetime.now()
+                            timestamp=datetime.datetime.now(),
+                            company_id=company_id,
+                            branch_id=branch_id,
                         )
                         session.add(movement)
             session.commit()
@@ -1761,6 +1889,10 @@ class CashState(MixinState):
         if not self.current_user["privileges"]["view_cashbox"]:
             return rx.toast("No tiene permisos para ver comprobantes.", duration=3000)
         
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         sale_data = None
         with rx.session() as session:
             try:
@@ -1768,6 +1900,8 @@ class CashState(MixinState):
                 sale = session.exec(
                     select(Sale)
                     .where(Sale.id == sale_db_id)
+                    .where(Sale.company_id == company_id)
+                    .where(Sale.branch_id == branch_id)
                     .options(
                         selectinload(Sale.items),
                         selectinload(Sale.payments),
@@ -1926,6 +2060,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         denial = self._cashbox_guard()
         if denial:
             return denial
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
             "%Y-%m-%d"
         )
@@ -1952,13 +2090,15 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         expense_total = breakdown["expense_total"]
         closing_total = breakdown["expected_total"]
         
-        with rx.session() as session:
-            user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
-            if user:
+        user_id = self.current_user.get("id")
+        if user_id:
+            with rx.session() as session:
                 # Cerrar sesion
                 cashbox_session = session.exec(
                     select(CashboxSessionModel)
-                    .where(CashboxSessionModel.user_id == user.id)
+                    .where(CashboxSessionModel.user_id == user_id)
+                    .where(CashboxSessionModel.company_id == company_id)
+                    .where(CashboxSessionModel.branch_id == branch_id)
                     .where(CashboxSessionModel.is_open == True)
                 ).first()
                 
@@ -1970,7 +2110,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 
                 # Crear log
                 log = CashboxLogModel(
-                    user_id=user.id,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    user_id=user_id,
                     action="cierre",
                     amount=closing_total,
                     notes=f"Cierre de caja {date}",
@@ -2127,6 +2269,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
     def _get_day_sales(self, date: str) -> list[CashboxSale]:
         start_dt, end_dt, session_info = self._cashbox_time_range(date)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
 
         with rx.session() as session:
             statement = (
@@ -2137,6 +2283,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(CashboxLogModel.is_voided == False)
                 .where(CashboxLogModel.timestamp >= start_dt)
                 .where(CashboxLogModel.timestamp <= end_dt)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
                 .order_by(desc(CashboxLogModel.timestamp))
             )
             if session_info:
@@ -2190,6 +2338,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
     def _build_cashbox_summary(self, date: str) -> list[dict]:
         start_date, end_date, session_info = self._cashbox_time_range(date)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
         method_col = sqlalchemy.func.coalesce(
             CashboxLogModel.payment_method, "No especificado"
         )
@@ -2204,6 +2356,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             .where(CashboxLogModel.is_voided == False)
             .where(CashboxLogModel.timestamp >= start_date)
             .where(CashboxLogModel.timestamp <= end_date)
+            .where(CashboxLogModel.company_id == company_id)
+            .where(CashboxLogModel.branch_id == branch_id)
         )
         if session_info:
             statement = statement.where(
@@ -2266,6 +2420,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             return
         if not self.cashbox_is_open:
             return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
         
         description = (
             f"Adelanto {reservation['field_name']} "
@@ -2287,6 +2445,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             new_sale = Sale(
                 timestamp=timestamp,
                 total_amount=amount,
+                company_id=company_id,
+                branch_id=branch_id,
                 user_id=self.current_user.get("id"),
                 status=SaleStatus.completed,
             )
@@ -2308,6 +2468,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         method_type=method_type,
                         reference_code=None,
                         created_at=timestamp,
+                        branch_id=branch_id,
                     )
                 )
             
@@ -2321,10 +2482,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 product_name_snapshot=description,
                 product_barcode_snapshot=str(reservation["id"]),
                 product_category_snapshot="Servicios",
+                branch_id=branch_id,
             )
             session.add(sale_item)
             session.add(
                 CashboxLogModel(
+                    company_id=company_id,
+                    branch_id=branch_id,
                     user_id=self.current_user.get("id"),
                     action=action_label,
                     amount=amount,

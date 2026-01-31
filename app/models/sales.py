@@ -35,6 +35,18 @@ class Sale(rx.Model, table=True):
     delete_reason: Optional[str] = Field(default=None)
     payment_condition: str = Field(default="contado")
 
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     client_id: Optional[int] = Field(
         default=None, foreign_key="client.id", index=True
     )
@@ -51,6 +63,18 @@ class SalePayment(rx.Model, table=True):
     """Transaccion de pago asociada a una venta."""
 
     sale_id: int = Field(foreign_key="sale.id")
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     amount: Decimal = Field(
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
@@ -90,6 +114,18 @@ class SaleItem(rx.Model, table=True):
 
     sale_id: int = Field(foreign_key="sale.id")
     product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
 
     sale: Optional["Sale"] = Relationship(back_populates="items")
     product: Optional["Product"] = Relationship(back_populates="sale_items")
@@ -98,7 +134,27 @@ class SaleItem(rx.Model, table=True):
 class SaleInstallment(rx.Model, table=True):
     """Cuotas de una venta a credito."""
 
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_saleinstallment_sale_status",
+            "sale_id",
+            "status",
+        ),
+    )
+
     sale_id: int = Field(foreign_key="sale.id")
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     number: int = Field(nullable=False)
     amount: Decimal = Field(
         default=Decimal("0.00"),
@@ -143,6 +199,18 @@ class CashboxSession(rx.Model, table=True):
     )
     is_open: bool = Field(default=True)
 
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
     user: Optional["User"] = Relationship(back_populates="sessions")
@@ -181,6 +249,18 @@ class CashboxLog(rx.Model, table=True):
     )
     is_voided: bool = Field(default=False, index=True)
 
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
     user: Optional["User"] = Relationship(back_populates="logs")
@@ -216,6 +296,18 @@ class FieldReservation(rx.Model, table=True):
     status: ReservationStatus = Field(default=ReservationStatus.pending)
 
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
 
     cancellation_reason: Optional[str] = Field(default=None)
     delete_reason: Optional[str] = Field(default=None)
@@ -230,12 +322,39 @@ class FieldReservation(rx.Model, table=True):
 class PaymentMethod(rx.Model, table=True):
     """Metodos de pago configurables."""
 
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "code",
+            name="uq_paymentmethod_company_branch_code",
+        ),
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "method_id",
+            name="uq_paymentmethod_company_branch_method_id",
+        ),
+    )
+
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     name: str = Field(nullable=False)
-    code: str = Field(unique=True, index=True, nullable=False)
+    code: str = Field(index=True, nullable=False)
     is_active: bool = Field(default=True)
     allows_change: bool = Field(default=False)
 
-    method_id: str = Field(unique=True, index=True, nullable=False)
+    method_id: str = Field(index=True, nullable=False)
     description: str = Field(default="")
     kind: PaymentMethodType = Field(default=PaymentMethodType.other)
     enabled: bool = Field(default=True)
@@ -256,6 +375,26 @@ class CompanySettings(rx.Model, table=True):
     país de operación, moneda y datos fiscales.
     """
 
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            name="uq_companysettings_company_branch",
+        ),
+    )
+
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     company_name: str = Field(default="", nullable=False)
     ruc: str = Field(default="", nullable=False)
     address: str = Field(default="", nullable=False)

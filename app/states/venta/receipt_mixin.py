@@ -107,9 +107,19 @@ class ReceiptMixin:
             # Traer desde BD para reimpresion
             with rx.session() as session:
                 try:
+                    company_id = None
+                    branch_id = None
+                    if hasattr(self, "current_user"):
+                        company_id = self.current_user.get("company_id")
+                    if hasattr(self, "_branch_id"):
+                        branch_id = self._branch_id()
+                    if not company_id or not branch_id:
+                        return rx.toast("Empresa o sucursal no definida.", duration=3000)
                     sale = session.exec(
                         select(Sale)
                         .where(Sale.id == int(receipt_id))
+                        .where(Sale.company_id == int(company_id))
+                        .where(Sale.branch_id == int(branch_id))
                         .options(
                             selectinload(Sale.payments),
                             selectinload(Sale.items),

@@ -1,4 +1,5 @@
-from .auth import Permission, Role, RolePermission, User
+from .auth import Permission, Role, RolePermission, User, UserBranch
+from .company import Branch, Company
 from .inventory import Category, FieldPrice, Product, StockMovement, Unit
 from .purchases import Purchase, PurchaseItem, Supplier
 from .sales import (
@@ -21,6 +22,9 @@ __all__ = [
     "Role",
     "RolePermission",
     "User",
+    "UserBranch",
+    "Company",
+    "Branch",
     "Category",
     "FieldPrice",
     "Product",

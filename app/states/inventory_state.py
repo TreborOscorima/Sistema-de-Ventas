@@ -101,9 +101,28 @@ class InventoryState(MixinState):
     categories: List[str] = ["General"]
     _inventory_update_trigger: int = 0
 
+    def _company_id(self) -> int | None:
+        value = None
+        if hasattr(self, "current_user"):
+            value = self.current_user.get("company_id")
+        try:
+            return int(value) if value else None
+        except (TypeError, ValueError):
+            return None
+
     def load_categories(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.categories = ["General"]
+            return
         with rx.session() as session:
-            cats = session.exec(select(Category).order_by(Category.name)).all()
+            cats = session.exec(
+                select(Category)
+                .where(Category.company_id == company_id)
+                .where(Category.branch_id == branch_id)
+                .order_by(Category.name)
+            ).all()
             names = [c.name for c in cats]
             if "General" not in names:
                 names.insert(0, "General")
@@ -120,11 +139,22 @@ class InventoryState(MixinState):
         name = (self.new_category_name or "").strip()
         if not name:
             return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         
         with rx.session() as session:
-            existing = session.exec(select(Category).where(Category.name == name)).first()
+            existing = session.exec(
+                select(Category)
+                .where(Category.name == name)
+                .where(Category.company_id == company_id)
+                .where(Category.branch_id == branch_id)
+            ).first()
             if not existing:
-                session.add(Category(name=name))
+                session.add(
+                    Category(name=name, company_id=company_id, branch_id=branch_id)
+                )
                 session.commit()
                 self.new_category_name = ""
                 self.load_categories()
@@ -139,9 +169,18 @@ class InventoryState(MixinState):
             )
         if category == "General":
             return rx.toast("No se puede eliminar la categoría General.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
             
         with rx.session() as session:
-            cat = session.exec(select(Category).where(Category.name == category)).first()
+            cat = session.exec(
+                select(Category)
+                .where(Category.name == category)
+                .where(Category.company_id == company_id)
+                .where(Category.branch_id == branch_id)
+            ).first()
             if cat:
                 session.delete(cat)
                 session.commit()
@@ -156,6 +195,11 @@ class InventoryState(MixinState):
         if field == "description":
             search_term = str(value).strip().lower()
             if len(search_term) >= 2:
+                company_id = self._company_id()
+                branch_id = self._branch_id()
+                if not company_id or not branch_id:
+                    self.inventory_adjustment_suggestions = []
+                    return
                 with rx.session() as session:
                     search = f"%{search_term}%"
                     products = session.exec(
@@ -166,6 +210,8 @@ class InventoryState(MixinState):
                                 Product.barcode.ilike(search),
                             )
                         )
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
                         .limit(10)
                     ).all()
                     self.inventory_adjustment_suggestions = [
@@ -180,12 +226,20 @@ class InventoryState(MixinState):
         _ = self._inventory_update_trigger
         if not self.current_user["privileges"]["view_inventario"]:
             return []
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
 
         search = (self.inventory_search_term or "").strip().lower()
         offset = (self.inventory_current_page - 1) * self.inventory_items_per_page
         
         with rx.session() as session:
-            query = select(Product)
+            query = (
+                select(Product)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            )
             
             if search:
                 query = query.where(
@@ -207,8 +261,16 @@ class InventoryState(MixinState):
     @rx.var
     def inventory_total_pages(self) -> int:
         search = (self.inventory_search_term or "").strip().lower()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 1
         with rx.session() as session:
-            query = select(func.count(Product.id))
+            query = (
+                select(func.count(Product.id))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            )
             if search:
                 query = query.where(
                     or_(
@@ -241,8 +303,16 @@ class InventoryState(MixinState):
         _ = self._inventory_update_trigger
         if not self.current_user["privileges"]["view_inventario"]:
             return 0
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0
         with rx.session() as session:
-            total = session.exec(select(func.count(Product.id))).one() or 0
+            total = session.exec(
+                select(func.count(Product.id))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).one() or 0
         return int(total)
 
     @rx.var
@@ -250,9 +320,16 @@ class InventoryState(MixinState):
         _ = self._inventory_update_trigger
         if not self.current_user["privileges"]["view_inventario"]:
             return 0
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0
         with rx.session() as session:
             total = session.exec(
-                select(func.count(Product.id)).where(Product.stock > LOW_STOCK_THRESHOLD)
+                select(func.count(Product.id))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.stock > LOW_STOCK_THRESHOLD)
             ).one() or 0
         return int(total)
 
@@ -261,11 +338,16 @@ class InventoryState(MixinState):
         _ = self._inventory_update_trigger
         if not self.current_user["privileges"]["view_inventario"]:
             return 0
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0
         with rx.session() as session:
             total = session.exec(
-                select(func.count(Product.id)).where(
-                    and_(Product.stock > 0, Product.stock <= LOW_STOCK_THRESHOLD)
-                )
+                select(func.count(Product.id))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(and_(Product.stock > 0, Product.stock <= LOW_STOCK_THRESHOLD))
             ).one() or 0
         return int(total)
 
@@ -274,9 +356,16 @@ class InventoryState(MixinState):
         _ = self._inventory_update_trigger
         if not self.current_user["privileges"]["view_inventario"]:
             return 0
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0
         with rx.session() as session:
             total = session.exec(
-                select(func.count(Product.id)).where(Product.stock <= 0)
+                select(func.count(Product.id))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.stock <= 0)
             ).one() or 0
         return int(total)
 
@@ -343,6 +432,10 @@ class InventoryState(MixinState):
         product_id = product_data.get("id")
         barcode = product_data.get("barcode", "").strip()
         description = product_data.get("description", "").strip()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         
         if not description:
              return rx.toast("La descripción no puede estar vacía.", duration=3000)
@@ -352,7 +445,10 @@ class InventoryState(MixinState):
         with rx.session() as session:
             # Verificar codigo de barras duplicado
             existing = session.exec(
-                select(Product).where(Product.barcode == barcode)
+                select(Product)
+                .where(Product.barcode == barcode)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
             ).first()
             
             if existing and (product_id is None or existing.id != product_id):
@@ -360,7 +456,12 @@ class InventoryState(MixinState):
 
             if product_id:
                 # Actualizar
-                product = session.get(Product, product_id)
+                product = session.exec(
+                    select(Product)
+                    .where(Product.id == product_id)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                ).first()
                 if not product:
                     return rx.toast("Producto no encontrado.", duration=3000)
                 
@@ -384,6 +485,8 @@ class InventoryState(MixinState):
                     unit=product_data.get("unit", "Unidad"),
                     purchase_price=product_data.get("purchase_price", 0),
                     sale_price=product_data.get("sale_price", 0),
+                    company_id=company_id,
+                    branch_id=branch_id,
                 )
                 session.add(new_product)
                 msg = "Producto creado correctamente."
@@ -397,12 +500,24 @@ class InventoryState(MixinState):
     def delete_product(self, product_id: int):
         if not self.current_user["privileges"]["edit_inventario"]:
              return rx.toast("No tiene permisos para eliminar productos.", duration=3000)
-        
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            product = session.get(Product, product_id)
+            product = session.exec(
+                select(Product)
+                .where(Product.id == product_id)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).first()
             if product:
                 # Verificar si tiene historial de ventas
-                has_sales = session.exec(select(SaleItem).where(SaleItem.product_id == product_id)).first()
+                has_sales = session.exec(
+                    select(SaleItem)
+                    .where(SaleItem.product_id == product_id)
+                    .where(SaleItem.branch_id == branch_id)
+                ).first()
                 if has_sales:
                     return rx.toast(
                         "No se puede eliminar un producto con historial de ventas. Edítelo para desactivarlo.",
@@ -473,15 +588,25 @@ class InventoryState(MixinState):
     def _find_adjustment_product(
         self, session, barcode: str, description: str
     ) -> Product | None:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return None
         if barcode:
             product = session.exec(
-                select(Product).where(Product.barcode == barcode)
+                select(Product)
+                .where(Product.barcode == barcode)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
             ).first()
             if product:
                 return product
         if description:
             return session.exec(
-                select(Product).where(Product.description == description)
+                select(Product)
+                .where(Product.description == description)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
             ).first()
         return None
 
@@ -494,10 +619,17 @@ class InventoryState(MixinState):
                 or description.get("label")
                 or ""
             )
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
         
         with rx.session() as session:
             product = session.exec(
-                select(Product).where(Product.description == description)
+                select(Product)
+                .where(Product.description == description)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
             ).first()
             
             if product:
@@ -535,13 +667,18 @@ class InventoryState(MixinState):
         barcode = (self.inventory_adjustment_item.get("barcode") or "").strip()
         if not description and not barcode:
             return rx.toast("Seleccione un producto para ajustar.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         
         with rx.session() as session:
             if description and not barcode:
                 duplicate_count = session.exec(
-                    select(func.count(Product.id)).where(
-                        Product.description == description
-                    )
+                    select(func.count(Product.id))
+                    .where(Product.description == description)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
                 ).one()
                 if duplicate_count and duplicate_count > 1:
                     return rx.toast(
@@ -592,6 +729,10 @@ class InventoryState(MixinState):
             else "perfecto"
         )
         notes = self.inventory_adjustment_notes.strip()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         
         if status == "perfecto":
             rx.toast("Inventario verificado como perfecto.", duration=3000)
@@ -644,7 +785,9 @@ class InventoryState(MixinState):
                         type="Re Ajuste Inventario",
                         quantity=-qty,
                         description=details,
-                        timestamp=datetime.datetime.now()
+                        timestamp=datetime.datetime.now(),
+                        company_id=company_id,
+                        branch_id=branch_id,
                     )
                     session.add(movement)
                     recorded = True
@@ -669,6 +812,10 @@ class InventoryState(MixinState):
     def export_inventory_to_excel(self):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
 
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
@@ -700,7 +847,12 @@ class InventoryState(MixinState):
         row += 1
         
         with rx.session() as session:
-            products = session.exec(select(Product).order_by(Product.description)).all()
+            products = session.exec(
+                select(Product)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .order_by(Product.description)
+            ).all()
         
         for product in products:
             barcode = product.barcode or "S/C"

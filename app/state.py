@@ -56,5 +56,13 @@ class State(RootState):
 
     @rx.event
     async def ensure_payment_methods(self):
+        company_id = None
+        if hasattr(self, "current_user"):
+            company_id = self.current_user.get("company_id")
+        branch_id = None
+        if hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
         async with AsyncSessionLocal() as session:
-            await init_payment_methods(session)
+            await init_payment_methods(session, int(company_id), int(branch_id))

@@ -1,5 +1,9 @@
 import reflex as rx
 import app.models  # Importar modelos para que Reflex detecte las tablas
+
+# Evitar warnings de metadata duplicada en Reflex/SQLAlchemy.
+rx.ModelRegistry.models = {rx.Model}
+rx.ModelRegistry._metadata = rx.Model.metadata
 from app.state import State
 from app.components.sidebar import sidebar
 from app.pages.ingreso import ingreso_page
@@ -11,6 +15,8 @@ from app.pages.historial import historial_page
 from app.pages.configuracion import configuracion_page
 from app.pages.cambiar_contrasena import cambiar_contrasena_page
 from app.pages.login import login_page
+from app.pages.periodo_prueba_finalizado import periodo_prueba_finalizado_page
+from app.pages.registro import registro_page
 from app.pages.servicios import servicios_page
 from app.pages.cuentas import cuentas_page
 from app.pages.clientes import clientes_page
@@ -240,6 +246,12 @@ def page_configuracion() -> rx.Component:
 def page_cambiar_contrasena() -> rx.Component:
     return cambiar_contrasena_page()
 
+def page_periodo_prueba_finalizado() -> rx.Component:
+    return periodo_prueba_finalizado_page()
+
+def page_registro() -> rx.Component:
+    return registro_page()
+
 
 app = rx.App(
     theme=rx.theme(appearance="light"),
@@ -289,6 +301,7 @@ app = rx.App(
 # Eventos de carga comunes para todas las páginas
 _common_on_load = [
     State.ensure_roles_and_permissions,
+    State.ensure_trial_active,
     State.ensure_password_change,
     State.ensure_default_data,
     State.ensure_payment_methods,
@@ -306,7 +319,19 @@ app.add_page(
     page_cambiar_contrasena,
     route="/cambiar-clave",
     title="Cambiar Contrasena - TUWAYKIAPP",
-    on_load=[State.ensure_password_change],
+    on_load=[State.ensure_trial_active, State.ensure_password_change],
+)
+
+app.add_page(
+    page_periodo_prueba_finalizado,
+    route="/periodo-prueba-finalizado",
+    title="Periodo de Prueba Finalizado - TUWAYKIAPP",
+)
+
+app.add_page(
+    page_registro,
+    route="/registro",
+    title="Registro - TUWAYKIAPP",
 )
 
 # Páginas individuales con rutas separadas

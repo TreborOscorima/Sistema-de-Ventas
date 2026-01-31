@@ -146,6 +146,28 @@ def require_cashbox_open(
 
 
 class MixinState:
+    def _company_id(self) -> int | None:
+        value = None
+        if hasattr(self, "current_user"):
+            value = self.current_user.get("company_id")
+        try:
+            return int(value) if value else None
+        except (TypeError, ValueError):
+            return None
+
+    def _branch_id(self) -> int | None:
+        value = None
+        if hasattr(self, "selected_branch_id"):
+            value = getattr(self, "selected_branch_id")
+        if not value and hasattr(self, "current_branch_id"):
+            value = getattr(self, "current_branch_id")
+        if not value and hasattr(self, "current_user"):
+            value = self.current_user.get("branch_id")
+        try:
+            return int(value) if value else None
+        except (TypeError, ValueError):
+            return None
+
     def _round_currency(self, value: float) -> float:
         return float(
             Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -269,9 +291,17 @@ class MixinState:
             from app.models import CompanySettings
         except Exception:
             return defaults
+        company_id = self._company_id() if hasattr(self, "_company_id") else None
+        branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
+        if not company_id or not branch_id:
+            return defaults
         try:
             with rx.session() as session:
-                settings = session.exec(select(CompanySettings)).first()
+                settings = session.exec(
+                    select(CompanySettings)
+                    .where(CompanySettings.company_id == company_id)
+                    .where(CompanySettings.branch_id == branch_id)
+                ).first()
         except Exception:
             return defaults
         if not settings:

@@ -1,9 +1,11 @@
-from typing import List, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 import reflex as rx
+import sqlalchemy
 from sqlmodel import Field, Relationship
 
 if TYPE_CHECKING:
+    from .company import Branch, Company
     from .sales import CashboxLog, CashboxSession, FieldReservation, Sale
 
 
@@ -39,17 +41,59 @@ class Permission(rx.Model, table=True):
     )
 
 
+class UserBranch(rx.Model, table=True):
+    """Tabla intermedia para accesos de usuario a sucursales."""
+
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "user_id",
+            "branch_id",
+            name="uq_user_branch",
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    branch_id: int = Field(foreign_key="branch.id")
+
+
 class User(rx.Model, table=True):
     """Modelo de usuario con RBAC."""
 
-    username: str = Field(unique=True, index=True, nullable=False)
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "username",
+            name="uq_user_company_username",
+        ),
+    )
+
+    username: str = Field(index=True, nullable=False)
+    email: Optional[str] = Field(default=None, index=True, unique=True)
     password_hash: str = Field(nullable=False)
     is_active: bool = Field(default=True)
     must_change_password: bool = Field(default=False)
     token_version: int = Field(default=0)
 
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: Optional[int] = Field(
+        default=None,
+        foreign_key="branch.id",
+        index=True,
+    )
     role_id: int = Field(foreign_key="role.id")
 
+    company: "Company" = Relationship(back_populates="users")
+    branch: Optional["Branch"] = Relationship(back_populates="users")
+    branches: List["Branch"] = Relationship(
+        back_populates="members",
+        link_model=UserBranch,
+    )
     role: "Role" = Relationship(back_populates="users")
     sales: List["Sale"] = Relationship(back_populates="user")
     sessions: List["CashboxSession"] = Relationship(back_populates="user")

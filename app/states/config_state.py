@@ -88,6 +88,8 @@ class ConfigState(MixinState):
         return None
 
     def load_config_data(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
         with rx.session() as session:
             # Cargar monedas
             currencies = session.exec(select(Currency)).all()
@@ -103,7 +105,13 @@ class ConfigState(MixinState):
                 self.available_currencies = [{"code": c.code, "name": c.name, "symbol": c.symbol} for c in currencies]
 
             # Cargar unidades
-            units_db = session.exec(select(Unit)).all()
+            units_db = []
+            if company_id and branch_id:
+                units_db = session.exec(
+                    select(Unit)
+                    .where(Unit.company_id == company_id)
+                    .where(Unit.branch_id == branch_id)
+                ).all()
             self.units = [u.name for u in units_db]
             self.decimal_units = {u.name for u in units_db if u.allows_decimal}
             self.unit_rows = [
@@ -112,7 +120,13 @@ class ConfigState(MixinState):
             ]
 
             # Cargar metodos de pago
-            methods = session.exec(select(PaymentMethod)).all()
+            methods = []
+            if company_id and branch_id:
+                methods = session.exec(
+                    select(PaymentMethod)
+                    .where(PaymentMethod.company_id == company_id)
+                    .where(PaymentMethod.branch_id == branch_id)
+                ).all()
             self.payment_methods = [
                 {
                     "id": m.method_id,
@@ -138,8 +152,17 @@ class ConfigState(MixinState):
         self.footer_message = ""
         self.receipt_paper = "80"
         self.receipt_width = ""
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.company_form_key += 1
+            return
         with rx.session() as session:
-            settings = session.exec(select(CompanySettings)).first()
+            settings = session.exec(
+                select(CompanySettings)
+                .where(CompanySettings.company_id == company_id)
+                .where(CompanySettings.branch_id == branch_id)
+            ).first()
             if settings:
                 self.company_name = settings.company_name or ""
                 self.ruc = settings.ruc or ""
@@ -162,6 +185,17 @@ class ConfigState(MixinState):
         self.company_form_key += 1
 
     @rx.event
+    def load_config_page(self):
+        """Carga datos necesarios para la pantalla de configuración."""
+        self.load_settings()
+        if hasattr(self, "load_config_data"):
+            self.load_config_data()
+        if hasattr(self, "load_users"):
+            self.load_users()
+        if hasattr(self, "load_branches"):
+            self.load_branches()
+
+    @rx.event
     def set_country(self, code: str):
         """Establece el país de operación y carga los métodos de pago correspondientes.
         
@@ -176,6 +210,10 @@ class ConfigState(MixinState):
         toast = self._require_manage_config()
         if toast:
             return toast
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
             
         code = (code or "PE").upper()
         if code not in SUPPORTED_COUNTRIES:
@@ -186,17 +224,30 @@ class ConfigState(MixinState):
         
         with rx.session() as session:
             # Actualizar CompanySettings
-            settings = session.exec(select(CompanySettings)).first()
+            settings = session.exec(
+                select(CompanySettings)
+                .where(CompanySettings.company_id == company_id)
+                .where(CompanySettings.branch_id == branch_id)
+            ).first()
             if settings:
                 settings.country_code = code
                 settings.default_currency_code = new_currency
                 session.add(settings)
             else:
-                settings = CompanySettings(country_code=code, default_currency_code=new_currency)
+                settings = CompanySettings(
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    country_code=code,
+                    default_currency_code=new_currency,
+                )
                 session.add(settings)
             
             # Limpiar métodos de pago existentes
-            existing_methods = session.exec(select(PaymentMethod)).all()
+            existing_methods = session.exec(
+                select(PaymentMethod)
+                .where(PaymentMethod.company_id == company_id)
+                .where(PaymentMethod.branch_id == branch_id)
+            ).all()
             for method in existing_methods:
                 session.delete(method)
             
@@ -212,6 +263,8 @@ class ConfigState(MixinState):
                     description=data["description"],
                     kind=data["kind"],
                     enabled=True,
+                    company_id=company_id,
+                    branch_id=branch_id,
                 )
                 session.add(method)
             
@@ -284,8 +337,16 @@ class ConfigState(MixinState):
                     duration=3000,
                 )
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            settings = session.exec(select(CompanySettings)).first()
+            settings = session.exec(
+                select(CompanySettings)
+                .where(CompanySettings.company_id == company_id)
+                .where(CompanySettings.branch_id == branch_id)
+            ).first()
             if settings:
                 settings.company_name = company_name
                 settings.ruc = ruc
@@ -297,6 +358,8 @@ class ConfigState(MixinState):
                 session.add(settings)
             else:
                 settings = CompanySettings(
+                    company_id=company_id,
+                    branch_id=branch_id,
                     company_name=company_name,
                     ruc=ruc,
                     address=address,
@@ -330,11 +393,27 @@ class ConfigState(MixinState):
         name = self.new_unit_name.strip()
         if not name:
             return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
             
         with rx.session() as session:
-            existing = session.exec(select(Unit).where(Unit.name == name)).first()
+            existing = session.exec(
+                select(Unit)
+                .where(Unit.name == name)
+                .where(Unit.company_id == company_id)
+                .where(Unit.branch_id == branch_id)
+            ).first()
             if not existing:
-                session.add(Unit(name=name, allows_decimal=self.new_unit_allows_decimal))
+                session.add(
+                    Unit(
+                        name=name,
+                        allows_decimal=self.new_unit_allows_decimal,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
+                )
                 session.commit()
                 self.new_unit_name = ""
                 self.new_unit_allows_decimal = False
@@ -347,8 +426,17 @@ class ConfigState(MixinState):
         toast = self._require_manage_config()
         if toast:
             return toast
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
         with rx.session() as session:
-            unit = session.exec(select(Unit).where(Unit.name == unit_name)).first()
+            unit = session.exec(
+                select(Unit)
+                .where(Unit.name == unit_name)
+                .where(Unit.company_id == company_id)
+                .where(Unit.branch_id == branch_id)
+            ).first()
             if unit:
                 unit.allows_decimal = allows_decimal
                 session.add(unit)
@@ -359,8 +447,17 @@ class ConfigState(MixinState):
         toast = self._require_manage_config()
         if toast:
             return toast
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            unit = session.exec(select(Unit).where(Unit.name == unit_name)).first()
+            unit = session.exec(
+                select(Unit)
+                .where(Unit.name == unit_name)
+                .where(Unit.company_id == company_id)
+                .where(Unit.branch_id == branch_id)
+            ).first()
             if unit:
                 session.delete(unit)
                 session.commit()
@@ -370,14 +467,29 @@ class ConfigState(MixinState):
     def ensure_default_data(self):
         """Inicializa datos por defecto basados en el país configurado."""
         config = get_country_config(self.selected_country_code)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
         
         with rx.session() as session:
             # Unidades (universales)
-            if not session.exec(select(Unit)).first():
+            if not session.exec(
+                select(Unit)
+                .where(Unit.company_id == company_id)
+                .where(Unit.branch_id == branch_id)
+            ).first():
                 defaults = ["unidad", "pieza", "kg", "g", "l", "ml", "m", "cm", "paquete", "caja", "docena", "bolsa", "botella", "lata"]
                 decimals = {"kg", "g", "l", "ml", "m", "cm"}
                 for name in defaults:
-                    session.add(Unit(name=name, allows_decimal=name in decimals))
+                    session.add(
+                        Unit(
+                            name=name,
+                            allows_decimal=name in decimals,
+                            company_id=company_id,
+                            branch_id=branch_id,
+                        )
+                    )
             
             # Currencies - basadas en el país configurado
             if not session.exec(select(Currency)).first():
@@ -394,7 +506,11 @@ class ConfigState(MixinState):
             # Metodos de pago
             existing_methods = {
                 method.method_id: method
-                for method in session.exec(select(PaymentMethod)).all()
+                for method in session.exec(
+                    select(PaymentMethod)
+                    .where(PaymentMethod.company_id == company_id)
+                    .where(PaymentMethod.branch_id == branch_id)
+                ).all()
                 if method.method_id
             }
             defaults = [
@@ -454,6 +570,8 @@ class ConfigState(MixinState):
                         enabled=True,
                         is_active=True,
                         allows_change=method["method_id"] == "cash",
+                        company_id=company_id,
+                        branch_id=branch_id,
                     )
                 )
             
@@ -506,14 +624,26 @@ class ConfigState(MixinState):
         if not match:
             return rx.toast("Moneda no soportada.", duration=3000)
         
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         # Persistir la moneda en la base de datos
         with rx.session() as session:
-            settings = session.exec(select(CompanySettings)).first()
+            settings = session.exec(
+                select(CompanySettings)
+                .where(CompanySettings.company_id == company_id)
+                .where(CompanySettings.branch_id == branch_id)
+            ).first()
             if settings:
                 settings.default_currency_code = code
                 session.add(settings)
             else:
-                settings = CompanySettings(default_currency_code=code)
+                settings = CompanySettings(
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    default_currency_code=code,
+                )
                 session.add(settings)
             session.commit()
         
@@ -613,14 +743,28 @@ class ConfigState(MixinState):
             return rx.toast("Ingrese el nombre de la unidad.", duration=3000)
         if name in self.decimal_units:
             return rx.toast("Esa unidad ya esta registrada.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         
         with rx.session() as session:
-            existing_unit = session.exec(select(Unit).where(Unit.name == name)).first()
+            existing_unit = session.exec(
+                select(Unit)
+                .where(Unit.name == name)
+                .where(Unit.company_id == company_id)
+                .where(Unit.branch_id == branch_id)
+            ).first()
             if existing_unit:
                 existing_unit.allows_decimal = self.new_unit_allows_decimal
                 session.add(existing_unit)
             else:
-                new_unit = Unit(name=name, allows_decimal=self.new_unit_allows_decimal)
+                new_unit = Unit(
+                    name=name,
+                    allows_decimal=self.new_unit_allows_decimal,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
                 session.add(new_unit)
             session.commit()
         
@@ -635,8 +779,17 @@ class ConfigState(MixinState):
         if toast:
             return toast
         unit = (unit or "").lower()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            unit_db = session.exec(select(Unit).where(Unit.name == unit)).first()
+            unit_db = session.exec(
+                select(Unit)
+                .where(Unit.name == unit)
+                .where(Unit.company_id == company_id)
+                .where(Unit.branch_id == branch_id)
+            ).first()
             if unit_db and unit_db.allows_decimal:
                 unit_db.allows_decimal = False
                 session.add(unit_db)
@@ -719,6 +872,10 @@ class ConfigState(MixinState):
             return rx.toast("Ya existe un metodo con ese nombre.", duration=3000)
         
         method_id = str(uuid.uuid4())
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
             new_method = PaymentMethod(
                 method_id=method_id,
@@ -729,6 +886,8 @@ class ConfigState(MixinState):
                 enabled=True,
                 is_active=True,
                 allows_change=kind == "cash",
+                company_id=company_id,
+                branch_id=branch_id,
             )
             session.add(new_method)
             session.commit()
@@ -763,8 +922,17 @@ class ConfigState(MixinState):
         if not enabled and method.get("enabled", True) and len(active_methods) <= 1:
             return rx.toast("Debe haber al menos un metodo activo.", duration=3000)
         
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            method_db = session.exec(select(PaymentMethod).where(PaymentMethod.method_id == method_id)).first()
+            method_db = session.exec(
+                select(PaymentMethod)
+                .where(PaymentMethod.method_id == method_id)
+                .where(PaymentMethod.company_id == company_id)
+                .where(PaymentMethod.branch_id == branch_id)
+            ).first()
             if method_db:
                 method_db.enabled = enabled
                 method_db.is_active = enabled
@@ -784,9 +952,17 @@ class ConfigState(MixinState):
         ]
         if not remaining_enabled:
             return rx.toast("No puedes eliminar el unico metodo activo.", duration=3000)
-        
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            method_db = session.exec(select(PaymentMethod).where(PaymentMethod.method_id == method_id)).first()
+            method_db = session.exec(
+                select(PaymentMethod)
+                .where(PaymentMethod.method_id == method_id)
+                .where(PaymentMethod.company_id == company_id)
+                .where(PaymentMethod.branch_id == branch_id)
+            ).first()
             if method_db:
                 session.delete(method_db)
                 session.commit()

@@ -52,8 +52,17 @@ class SuppliersState(MixinState):
     @rx.event
     def load_suppliers(self):
         term = (self.supplier_search_query or "").strip()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.suppliers = []
+            return
         with rx.session() as session:
-            query = select(Supplier)
+            query = (
+                select(Supplier)
+                .where(Supplier.company_id == company_id)
+                .where(Supplier.branch_id == branch_id)
+            )
             if term:
                 like = f"%{term}%"
                 query = query.where(
@@ -104,6 +113,10 @@ class SuppliersState(MixinState):
         privileges = self.current_user["privileges"]
         if not (privileges.get("manage_proveedores") or privileges.get("manage_clientes")):
             return rx.toast("No tiene permisos para gestionar proveedores.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
 
         name = sanitize_name(self.current_supplier.get("name") or "")
         tax_id = sanitize_dni(self.current_supplier.get("tax_id") or "")
@@ -119,13 +132,21 @@ class SuppliersState(MixinState):
 
         with rx.session() as session:
             existing = session.exec(
-                select(Supplier).where(Supplier.tax_id == tax_id)
+                select(Supplier)
+                .where(Supplier.company_id == company_id)
+                .where(Supplier.branch_id == branch_id)
+                .where(Supplier.tax_id == tax_id)
             ).first()
             if existing and (not supplier_id or existing.id != supplier_id):
                 return rx.toast("El RUC/CUIT ya esta registrado.", duration=3000)
 
             if supplier_id:
-                supplier = session.get(Supplier, supplier_id)
+                supplier = session.exec(
+                    select(Supplier)
+                    .where(Supplier.id == supplier_id)
+                    .where(Supplier.company_id == company_id)
+                    .where(Supplier.branch_id == branch_id)
+                ).first()
                 if not supplier:
                     return rx.toast("Proveedor no encontrado.", duration=3000)
                 supplier.name = name
@@ -139,6 +160,8 @@ class SuppliersState(MixinState):
                 session.add(supplier)
             else:
                 supplier = Supplier(
+                    company_id=company_id,
+                    branch_id=branch_id,
                     name=name,
                     tax_id=tax_id,
                     phone=phone or None,
@@ -159,12 +182,24 @@ class SuppliersState(MixinState):
         privileges = self.current_user["privileges"]
         if not (privileges.get("manage_proveedores") or privileges.get("manage_clientes")):
             return rx.toast("No tiene permisos para gestionar proveedores.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            supplier = session.get(Supplier, supplier_id)
+            supplier = session.exec(
+                select(Supplier)
+                .where(Supplier.id == supplier_id)
+                .where(Supplier.company_id == company_id)
+                .where(Supplier.branch_id == branch_id)
+            ).first()
             if not supplier:
                 return rx.toast("Proveedor no encontrado.", duration=3000)
             has_purchases = session.exec(
-                select(Purchase).where(Purchase.supplier_id == supplier_id)
+                select(Purchase)
+                .where(Purchase.supplier_id == supplier_id)
+                .where(Purchase.company_id == company_id)
+                .where(Purchase.branch_id == branch_id)
             ).first()
             if has_purchases:
                 return rx.toast(

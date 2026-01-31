@@ -42,12 +42,22 @@ class CartMixin:
         if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
             # Traer reserva desde BD
             with rx.session() as session:
-                # Correccion: manejar UUIDs string correctamente
-                reservation = session.exec(
-                    select(FieldReservation).where(
-                        FieldReservation.id == self.reservation_payment_id
-                    )
-                ).first()
+                company_id = None
+                branch_id = None
+                if hasattr(self, "current_user"):
+                    company_id = self.current_user.get("company_id")
+                if hasattr(self, "_branch_id"):
+                    branch_id = self._branch_id()
+                if not company_id or not branch_id:
+                    reservation = None
+                else:
+                    # Correccion: manejar UUIDs string correctamente
+                    reservation = session.exec(
+                        select(FieldReservation)
+                        .where(FieldReservation.id == self.reservation_payment_id)
+                        .where(FieldReservation.company_id == int(company_id))
+                        .where(FieldReservation.branch_id == int(branch_id))
+                    ).first()
 
                 if reservation:
                     reservation_balance = self._round_currency(
@@ -139,6 +149,15 @@ class CartMixin:
             )
             if field == "description":
                 if value and len(str(value)) > 1:
+                    company_id = None
+                    branch_id = None
+                    if hasattr(self, "current_user"):
+                        company_id = self.current_user.get("company_id")
+                    if hasattr(self, "_branch_id"):
+                        branch_id = self._branch_id()
+                    if not company_id or not branch_id:
+                        self.autocomplete_suggestions = []
+                        return
                     with rx.session() as session:
                         search = str(value).lower()
                         # Filtrado simple en Python sobre un conjunto limitado o SQL LIKE
@@ -146,6 +165,8 @@ class CartMixin:
                         products = session.exec(
                             select(Product)
                             .where(Product.description.ilike(f"%{search}%"))
+                            .where(Product.company_id == int(company_id))
+                            .where(Product.branch_id == int(branch_id))
                             .limit(5)
                         ).all()
                         self.autocomplete_suggestions = [p.description for p in products]
@@ -162,9 +183,21 @@ class CartMixin:
                 else:
                     code = clean_barcode(str(value))
                     if validate_barcode(code):
+                        company_id = None
+                        branch_id = None
+                        if hasattr(self, "current_user"):
+                            company_id = self.current_user.get("company_id")
+                        if hasattr(self, "_branch_id"):
+                            branch_id = self._branch_id()
+                        if not company_id or not branch_id:
+                            self.autocomplete_suggestions = []
+                            return
                         with rx.session() as session:
                             product = session.exec(
-                                select(Product).where(Product.barcode == code)
+                                select(Product)
+                                .where(Product.barcode == code)
+                                .where(Product.company_id == int(company_id))
+                                .where(Product.branch_id == int(branch_id))
                             ).first()
                             if product:
                                 self._fill_sale_item_from_product(
@@ -189,9 +222,20 @@ class CartMixin:
 
         code = clean_barcode(str(barcode_value))
         if validate_barcode(code):
+            company_id = None
+            branch_id = None
+            if hasattr(self, "current_user"):
+                company_id = self.current_user.get("company_id")
+            if hasattr(self, "_branch_id"):
+                branch_id = self._branch_id()
+            if not company_id or not branch_id:
+                return
             with rx.session() as session:
                 product = session.exec(
-                    select(Product).where(Product.barcode == code)
+                    select(Product)
+                    .where(Product.barcode == code)
+                    .where(Product.company_id == int(company_id))
+                    .where(Product.branch_id == int(branch_id))
                 ).first()
                 if product:
                     self._fill_sale_item_from_product(product, keep_quantity=False)
@@ -209,9 +253,21 @@ class CartMixin:
             )
         desc = description.strip()
         if desc:
+            company_id = None
+            branch_id = None
+            if hasattr(self, "current_user"):
+                company_id = self.current_user.get("company_id")
+            if hasattr(self, "_branch_id"):
+                branch_id = self._branch_id()
+            if not company_id or not branch_id:
+                self.autocomplete_suggestions = []
+                return
             with rx.session() as session:
                 product = session.exec(
-                    select(Product).where(Product.description == desc)
+                    select(Product)
+                    .where(Product.description == desc)
+                    .where(Product.company_id == int(company_id))
+                    .where(Product.branch_id == int(branch_id))
                 ).first()
                 if product:
                     self._fill_sale_item_from_product(product)
@@ -252,13 +308,30 @@ class CartMixin:
         new_qty = float(self.new_sale_item["quantity"])
         total_qty = existing_qty + new_qty
         with rx.session() as session:
+            company_id = None
+            branch_id = None
+            if hasattr(self, "current_user"):
+                company_id = self.current_user.get("company_id")
+            if hasattr(self, "_branch_id"):
+                branch_id = self._branch_id()
+            if not company_id or not branch_id:
+                return rx.toast(
+                    "Empresa o sucursal no definida.",
+                    duration=3000,
+                )
             if barcode:
                 product = session.exec(
-                    select(Product).where(Product.barcode == barcode)
+                    select(Product)
+                    .where(Product.barcode == barcode)
+                    .where(Product.company_id == int(company_id))
+                    .where(Product.branch_id == int(branch_id))
                 ).first()
             else:
                 product = session.exec(
-                    select(Product).where(Product.description == description)
+                    select(Product)
+                    .where(Product.description == description)
+                    .where(Product.company_id == int(company_id))
+                    .where(Product.branch_id == int(branch_id))
                 ).first()
 
             if not product:

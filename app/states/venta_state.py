@@ -81,7 +81,16 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
             client_id = self.selected_client.get("id")
         if balance is None and client_id:
             with rx.session() as session:
-                client = session.get(Client, client_id)
+                company_id = self.current_user.get("company_id")
+                branch_id = self._branch_id()
+                if not company_id or not branch_id:
+                    return 0.0
+                client = session.exec(
+                    select(Client)
+                    .where(Client.id == client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                ).first()
                 if not client:
                     return 0.0
                 balance = client.credit_limit - client.current_debt
@@ -121,6 +130,11 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
             self.client_suggestions = []
             return
         like_search = f"%{term}%"
+        company_id = self.current_user.get("company_id")
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.client_suggestions = []
+            return
         with rx.session() as session:
             clients = session.exec(
                 select(Client)
@@ -130,6 +144,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
                         Client.dni.ilike(like_search),
                     )
                 )
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
                 .limit(6)
             ).all()
         self.client_suggestions = [
@@ -329,6 +345,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
                     result = await SaleService.process_sale(
                         session=session,
                         user_id=user_id,
+                        company_id=self.current_user.get("company_id"),
+                        branch_id=self._branch_id(),
                         items=item_dtos,
                         payment_data=payment_dto,
                         reservation_id=reservation_id,

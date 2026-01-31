@@ -78,10 +78,17 @@ class IngresoState(MixinState):
             if field == "description":
                 if value:
                     search = str(value).lower()
+                    company_id = self._company_id()
+                    branch_id = self._branch_id()
+                    if not company_id or not branch_id:
+                        self.entry_autocomplete_suggestions = []
+                        return
                     with rx.session() as session:
                         products = session.exec(
                             select(Product)
                             .where(Product.description.contains(search))
+                            .where(Product.company_id == company_id)
+                            .where(Product.branch_id == branch_id)
                             .limit(5)
                         ).all()
                         self.entry_autocomplete_suggestions = [p.description for p in products]
@@ -141,6 +148,11 @@ class IngresoState(MixinState):
             self.purchase_supplier_suggestions = []
             return
         search = f"%{term}%"
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.purchase_supplier_suggestions = []
+            return
         with rx.session() as session:
             suppliers = session.exec(
                 select(Supplier)
@@ -150,6 +162,8 @@ class IngresoState(MixinState):
                         Supplier.tax_id.ilike(search),
                     )
                 )
+                .where(Supplier.company_id == company_id)
+                .where(Supplier.branch_id == branch_id)
                 .order_by(Supplier.name)
                 .limit(6)
             ).all()
@@ -296,10 +310,17 @@ class IngresoState(MixinState):
         except ValueError:
             return rx.toast("Fecha de documento invalida.", duration=3000)
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+
         with rx.session() as session:
             try:
                 existing_doc = session.exec(
                     select(Purchase).where(
+                        Purchase.company_id == company_id,
+                        Purchase.branch_id == branch_id,
                         Purchase.supplier_id == supplier_id,
                         Purchase.doc_type == doc_type,
                         Purchase.series == series,
@@ -313,8 +334,7 @@ class IngresoState(MixinState):
                     )
 
                 # Obtener ID de usuario actual
-                user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
-                user_id = user.id if user else None
+                user_id = self.current_user.get("id")
 
                 descriptions_missing_barcode = [
                     (item.get("description") or "").strip()
@@ -334,6 +354,8 @@ class IngresoState(MixinState):
                                 func.count(Product.id),
                             )
                             .where(Product.description.in_(unique_descriptions))
+                            .where(Product.company_id == company_id)
+                            .where(Product.branch_id == branch_id)
                             .group_by(Product.description)
                             .having(func.count(Product.id) > 1)
                         ).all()
@@ -354,6 +376,8 @@ class IngresoState(MixinState):
                     total_amount=Decimal(str(self.entry_total or 0)),
                     currency_code=str(currency_code or "PEN"),
                     notes=notes,
+                    company_id=company_id,
+                    branch_id=branch_id,
                     supplier_id=supplier_id,
                     user_id=user_id,
                 )
@@ -367,13 +391,19 @@ class IngresoState(MixinState):
                     product = None
                     if barcode:
                         product = session.exec(
-                            select(Product).where(Product.barcode == barcode)
+                            select(Product)
+                            .where(Product.barcode == barcode)
+                            .where(Product.company_id == company_id)
+                            .where(Product.branch_id == branch_id)
                         ).first()
 
                     if not product:
                         # Probar por descripcion si no hay barcode
                         product = session.exec(
-                            select(Product).where(Product.description == description)
+                            select(Product)
+                            .where(Product.description == description)
+                            .where(Product.company_id == company_id)
+                            .where(Product.branch_id == branch_id)
                         ).first()
 
                     quantity = Decimal(str(item["quantity"]))
@@ -396,6 +426,8 @@ class IngresoState(MixinState):
                             quantity=quantity,
                             description=f"Ingreso: {description}",
                             user_id=user_id,
+                            company_id=company_id,
+                            branch_id=branch_id,
                         )
                         session.add(movement)
                         product_id = product.id
@@ -407,6 +439,8 @@ class IngresoState(MixinState):
                             barcode=barcode or str(uuid.uuid4()),
                             description=description,
                             category=item["category"],
+                            company_id=company_id,
+                            branch_id=branch_id,
                             stock=quantity,
                             unit=item["unit"],
                             purchase_price=unit_cost,
@@ -422,6 +456,8 @@ class IngresoState(MixinState):
                             quantity=quantity,
                             description=f"Ingreso (Nuevo): {description}",
                             user_id=user_id,
+                            company_id=company_id,
+                            branch_id=branch_id,
                         )
                         session.add(movement)
                         product_id = new_product.id
@@ -431,6 +467,8 @@ class IngresoState(MixinState):
                     purchase_item = PurchaseItem(
                         purchase_id=purchase.id,
                         product_id=product_id,
+                        company_id=company_id,
+                        branch_id=branch_id,
                         description_snapshot=description,
                         barcode_snapshot=product_barcode or barcode,
                         category_snapshot=product_category or item.get("category", ""),
@@ -481,9 +519,17 @@ class IngresoState(MixinState):
         code = clean_barcode(barcode)
         if not code or len(code) == 0:
             return None
-        
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return None
         with rx.session() as session:
-            p = session.exec(select(Product).where(Product.barcode == code)).first()
+            p = session.exec(
+                select(Product)
+                .where(Product.barcode == code)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).first()
             if p:
                 return {
                     "id": str(p.id),
@@ -518,10 +564,16 @@ class IngresoState(MixinState):
                 or description.get("label")
                 or ""
             )
-        
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
         with rx.session() as session:
             product = session.exec(
-                select(Product).where(Product.description == description)
+                select(Product)
+                .where(Product.description == description)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
             ).first()
             
             if product:

@@ -74,7 +74,10 @@ INSTALLMENT_DUE_DAYS = 3      # Días antes del vencimiento para alertar
 CASHBOX_OPEN_HOURS = 12       # Horas para alertar caja abierta
 
 
-def get_low_stock_alerts() -> List[Alert]:
+def get_low_stock_alerts(
+    company_id: int | None = None,
+    branch_id: int | None = None,
+) -> List[Alert]:
     """
     Obtiene alertas de productos con stock bajo.
     
@@ -85,16 +88,18 @@ def get_low_stock_alerts() -> List[Alert]:
     
     with rx.session() as session:
         # Productos con stock crítico (< 3)
-        critical_products = session.exec(
-            select(Product)
-            .where(
-                and_(
-                    Product.stock <= STOCK_CRITICAL_THRESHOLD,
-                    Product.stock > 0,
-                    Product.is_active == True
-                )
+        critical_query = select(Product).where(
+            and_(
+                Product.stock <= STOCK_CRITICAL_THRESHOLD,
+                Product.stock > 0,
+                Product.is_active == True,
             )
-        ).all()
+        )
+        if company_id:
+            critical_query = critical_query.where(Product.company_id == company_id)
+        if branch_id:
+            critical_query = critical_query.where(Product.branch_id == branch_id)
+        critical_products = session.exec(critical_query).all()
         
         if critical_products:
             alerts.append(Alert(
@@ -112,16 +117,18 @@ def get_low_stock_alerts() -> List[Alert]:
             ))
         
         # Productos con stock bajo (3-10)
-        low_stock_products = session.exec(
-            select(Product)
-            .where(
-                and_(
-                    Product.stock > STOCK_CRITICAL_THRESHOLD,
-                    Product.stock <= STOCK_LOW_THRESHOLD,
-                    Product.is_active == True
-                )
+        low_stock_query = select(Product).where(
+            and_(
+                Product.stock > STOCK_CRITICAL_THRESHOLD,
+                Product.stock <= STOCK_LOW_THRESHOLD,
+                Product.is_active == True,
             )
-        ).all()
+        )
+        if company_id:
+            low_stock_query = low_stock_query.where(Product.company_id == company_id)
+        if branch_id:
+            low_stock_query = low_stock_query.where(Product.branch_id == branch_id)
+        low_stock_products = session.exec(low_stock_query).all()
         
         if low_stock_products:
             alerts.append(Alert(
@@ -139,16 +146,25 @@ def get_low_stock_alerts() -> List[Alert]:
             ))
         
         # Productos sin stock
-        out_of_stock = session.exec(
+        out_of_stock_query = (
             select(func.count())
             .select_from(Product)
             .where(
                 and_(
                     Product.stock <= 0,
-                    Product.is_active == True
+                    Product.is_active == True,
                 )
             )
-        ).one()
+        )
+        if company_id:
+            out_of_stock_query = out_of_stock_query.where(
+                Product.company_id == company_id
+            )
+        if branch_id:
+            out_of_stock_query = out_of_stock_query.where(
+                Product.branch_id == branch_id
+            )
+        out_of_stock = session.exec(out_of_stock_query).one()
         
         if out_of_stock > 0:
             alerts.append(Alert(
@@ -169,7 +185,11 @@ def _format_alert_currency(amount: Decimal, currency_symbol: str | None) -> str:
     return format_currency(float(amount or 0), symbol or "S/ ")
 
 
-def get_installment_alerts(currency_symbol: str | None = None) -> List[Alert]:
+def get_installment_alerts(
+    currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
+) -> List[Alert]:
     """
     Obtiene alertas de cuotas próximas a vencer o vencidas.
     
@@ -182,28 +202,45 @@ def get_installment_alerts(currency_symbol: str | None = None) -> List[Alert]:
     
     with rx.session() as session:
         # Cuotas vencidas (no pagadas y fecha pasada)
-        overdue_count = session.exec(
+        overdue_query = (
             select(func.count())
             .select_from(SaleInstallment)
+            .join(Sale)
             .where(
                 and_(
                     SaleInstallment.status == "pending",
-                    SaleInstallment.due_date < today
+                    SaleInstallment.due_date < today,
                 )
             )
-        ).one()
+        )
+        if company_id:
+            overdue_query = overdue_query.where(Sale.company_id == company_id)
+        if branch_id:
+            overdue_query = overdue_query.where(SaleInstallment.branch_id == branch_id)
+        overdue_count = session.exec(overdue_query).one()
         
         if overdue_count > 0:
             # Obtener monto total vencido
-            overdue_amount = session.exec(
+            overdue_amount_query = (
                 select(func.sum(SaleInstallment.amount - SaleInstallment.paid_amount))
+                .select_from(SaleInstallment)
+                .join(Sale)
                 .where(
                     and_(
                         SaleInstallment.status == "pending",
-                        SaleInstallment.due_date < today
+                        SaleInstallment.due_date < today,
                     )
                 )
-            ).one() or Decimal("0")
+            )
+            if company_id:
+                overdue_amount_query = overdue_amount_query.where(
+                    Sale.company_id == company_id
+                )
+            if branch_id:
+                overdue_amount_query = overdue_amount_query.where(
+                    SaleInstallment.branch_id == branch_id
+                )
+            overdue_amount = session.exec(overdue_amount_query).one() or Decimal("0")
             
             alerts.append(Alert(
                 type=AlertType.INSTALLMENT_OVERDUE,
@@ -218,29 +255,46 @@ def get_installment_alerts(currency_symbol: str | None = None) -> List[Alert]:
             ))
         
         # Cuotas próximas a vencer (próximos 3 días)
-        due_soon_count = session.exec(
+        due_soon_query = (
             select(func.count())
             .select_from(SaleInstallment)
+            .join(Sale)
             .where(
                 and_(
                     SaleInstallment.status == "pending",
                     SaleInstallment.due_date >= today,
-                    SaleInstallment.due_date <= due_threshold
+                    SaleInstallment.due_date <= due_threshold,
                 )
             )
-        ).one()
+        )
+        if company_id:
+            due_soon_query = due_soon_query.where(Sale.company_id == company_id)
+        if branch_id:
+            due_soon_query = due_soon_query.where(SaleInstallment.branch_id == branch_id)
+        due_soon_count = session.exec(due_soon_query).one()
         
         if due_soon_count > 0:
-            due_soon_amount = session.exec(
+            due_soon_amount_query = (
                 select(func.sum(SaleInstallment.amount - SaleInstallment.paid_amount))
+                .select_from(SaleInstallment)
+                .join(Sale)
                 .where(
                     and_(
                         SaleInstallment.status == "pending",
                         SaleInstallment.due_date >= today,
-                        SaleInstallment.due_date <= due_threshold
+                        SaleInstallment.due_date <= due_threshold,
                     )
                 )
-            ).one() or Decimal("0")
+            )
+            if company_id:
+                due_soon_amount_query = due_soon_amount_query.where(
+                    Sale.company_id == company_id
+                )
+            if branch_id:
+                due_soon_amount_query = due_soon_amount_query.where(
+                    SaleInstallment.branch_id == branch_id
+                )
+            due_soon_amount = session.exec(due_soon_amount_query).one() or Decimal("0")
             
             alerts.append(Alert(
                 type=AlertType.INSTALLMENT_DUE,
@@ -258,7 +312,10 @@ def get_installment_alerts(currency_symbol: str | None = None) -> List[Alert]:
     return alerts
 
 
-def get_cashbox_alerts() -> List[Alert]:
+def get_cashbox_alerts(
+    company_id: int | None = None,
+    branch_id: int | None = None,
+) -> List[Alert]:
     """
     Obtiene alertas relacionadas con la caja.
     
@@ -270,15 +327,21 @@ def get_cashbox_alerts() -> List[Alert]:
     
     with rx.session() as session:
         # Sesiones de caja abiertas por mucho tiempo
-        long_open_sessions = session.exec(
-            select(CashboxSession)
-            .where(
-                and_(
-                    CashboxSession.closing_time == None,
-                    CashboxSession.opening_time < threshold_time
-                )
+        long_open_query = select(CashboxSession).where(
+            and_(
+                CashboxSession.closing_time == None,
+                CashboxSession.opening_time < threshold_time,
             )
-        ).all()
+        )
+        if company_id:
+            long_open_query = long_open_query.where(
+                CashboxSession.company_id == company_id
+            )
+        if branch_id:
+            long_open_query = long_open_query.where(
+                CashboxSession.branch_id == branch_id
+            )
+        long_open_sessions = session.exec(long_open_query).all()
         
         if long_open_sessions:
             alerts.append(Alert(
@@ -302,7 +365,11 @@ def get_cashbox_alerts() -> List[Alert]:
     return alerts
 
 
-def get_all_alerts(currency_symbol: str | None = None) -> List[Alert]:
+def get_all_alerts(
+    currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
+) -> List[Alert]:
     """
     Obtiene todas las alertas del sistema.
     
@@ -312,17 +379,17 @@ def get_all_alerts(currency_symbol: str | None = None) -> List[Alert]:
     alerts = []
     
     try:
-        alerts.extend(get_low_stock_alerts())
+        alerts.extend(get_low_stock_alerts(company_id, branch_id))
     except Exception:
         pass  # No interrumpir si falla una categoría
     
     try:
-        alerts.extend(get_installment_alerts(currency_symbol))
+        alerts.extend(get_installment_alerts(currency_symbol, company_id, branch_id))
     except Exception:
         pass
     
     try:
-        alerts.extend(get_cashbox_alerts())
+        alerts.extend(get_cashbox_alerts(company_id, branch_id))
     except Exception:
         pass
     
@@ -339,14 +406,18 @@ def get_all_alerts(currency_symbol: str | None = None) -> List[Alert]:
     return alerts
 
 
-def get_alert_summary(currency_symbol: str | None = None) -> dict:
+def get_alert_summary(
+    currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
+) -> dict:
     """
     Obtiene un resumen de alertas para mostrar en el dashboard.
     
     Returns:
         Dict con conteos por severidad
     """
-    alerts = get_all_alerts(currency_symbol)
+    alerts = get_all_alerts(currency_symbol, company_id, branch_id)
     
     summary = {
         "total": len(alerts),

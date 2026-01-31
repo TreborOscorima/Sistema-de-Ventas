@@ -186,6 +186,11 @@ class ReportState(MixinState):
         self.report_error = ""
         
         try:
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            if not company_id or not branch_id:
+                self.report_loading = False
+                return rx.toast.error("Empresa o sucursal no definida.", duration=3000)
             # Calcular fechas directamente
             dates = self._calculate_period_dates()
             start_date = dates[0]
@@ -200,6 +205,8 @@ class ReportState(MixinState):
                         company_name=self.company_name,
                         include_cancelled=self.include_cancelled,
                         currency_symbol=self.currency_symbol,
+                        company_id=company_id,
+                        branch_id=branch_id,
                     )
                     filename = f"Reporte_Ventas_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
                 
@@ -209,6 +216,8 @@ class ReportState(MixinState):
                         company_name=self.company_name,
                         include_zero_stock=self.include_zero_stock,
                         currency_symbol=self.currency_symbol,
+                        company_id=company_id,
+                        branch_id=branch_id,
                     )
                     filename = f"Inventario_Valorizado_{datetime.now().strftime('%Y%m%d')}.xlsx"
                 
@@ -217,6 +226,8 @@ class ReportState(MixinState):
                         session,
                         company_name=self.company_name,
                         currency_symbol=self.currency_symbol,
+                        company_id=company_id,
+                        branch_id=branch_id,
                     )
                     filename = f"Cuentas_por_Cobrar_{datetime.now().strftime('%Y%m%d')}.xlsx"
                 
@@ -227,6 +238,8 @@ class ReportState(MixinState):
                         end_date,
                         company_name=self.company_name,
                         currency_symbol=self.currency_symbol,
+                        company_id=company_id,
+                        branch_id=branch_id,
                     )
                     filename = f"Reporte_Caja_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
                 

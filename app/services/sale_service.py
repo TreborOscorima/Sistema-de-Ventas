@@ -24,6 +24,7 @@ Ejemplo de uso::
             result = await SaleService.process_sale(
                 session=session,
                 user_id=1,
+                company_id=1,
                 items=[...],
                 payment_data=payment_info,
             )
@@ -67,6 +68,29 @@ QTY_DISPLAY_QUANT = Decimal("0.01")
 QTY_INTEGER_QUANT = Decimal("1")
 
 logger = get_logger("SaleService")
+
+
+def _apply_company_filter(query, model, company_id: int | None):
+    if not company_id:
+        return query
+    company_attr = getattr(model, "company_id", None)
+    if company_attr is None:
+        return query
+    return query.where(company_attr == company_id)
+
+
+def _apply_branch_filter(query, model, branch_id: int | None):
+    if not branch_id:
+        return query
+    branch_attr = getattr(model, "branch_id", None)
+    if branch_attr is None:
+        return query
+    return query.where(branch_attr == branch_id)
+
+
+def _apply_tenant_filters(query, model, company_id: int | None, branch_id: int | None):
+    query = _apply_company_filter(query, model, company_id)
+    return _apply_branch_filter(query, model, branch_id)
 
 
 class StockError(ValueError):
@@ -348,6 +372,8 @@ class SaleService:
     async def process_sale(
         session: AsyncSession,
         user_id: int | None,
+        company_id: int | None,
+        branch_id: int | None,
         items: list[SaleItemDTO],
         payment_data: PaymentInfoDTO,
         reservation_id: str | None = None,
@@ -373,6 +399,7 @@ class SaleService:
         Args:
             session: Sesión async de SQLAlchemy (debe manejarse externamente)
             user_id: ID del usuario que realiza la venta (puede ser None)
+            company_id: ID de la empresa (tenant) del usuario actual
             items: Lista de productos a vender (SaleItemDTO)
             payment_data: Información de pago (PaymentInfoDTO)
             reservation_id: ID de reserva asociada (opcional)
@@ -393,6 +420,7 @@ class SaleService:
             result = await SaleService.process_sale(
                 session=session,
                 user_id=current_user.id,
+                company_id=current_user.company_id,
                 items=[SaleItemDTO(description="Producto", quantity=2, price=10.0, unit="Unidad")],
                 payment_data=PaymentInfoDTO(method="Efectivo", method_kind="cash"),
             )
@@ -408,7 +436,20 @@ class SaleService:
         if not payment_method:
             raise ValueError("Seleccione un metodo de pago.")
 
-        all_methods = (await session.exec(select(PaymentMethod))).all()
+        if not company_id:
+            raise ValueError("Empresa no definida para procesar la venta.")
+        company_id = int(company_id)
+        if not branch_id:
+            raise ValueError("Sucursal no definida para procesar la venta.")
+        branch_id = int(branch_id)
+
+        all_methods = (
+            await session.exec(
+                _apply_tenant_filters(
+                    select(PaymentMethod), PaymentMethod, company_id, branch_id
+                )
+            )
+        ).all()
         methods_map = {
             (method.code or "").strip().lower(): method.id
             for method in all_methods
@@ -426,10 +467,16 @@ class SaleService:
         reservation = None
         reservation_balance = Decimal("0.00")
         if reservation_id:
+            reservation_query = select(FieldReservation).where(
+                FieldReservation.id == reservation_id
+            )
             reservation = (
                 await session.exec(
-                    select(FieldReservation).where(
-                        FieldReservation.id == reservation_id
+                    _apply_tenant_filters(
+                        reservation_query,
+                        FieldReservation,
+                        company_id,
+                        branch_id,
                     )
                 )
             ).first()
@@ -455,7 +502,11 @@ class SaleService:
                 raise ValueError("La reserva ya esta pagada.")
             raise ValueError("No hay productos en la venta.")
 
-        units = (await session.exec(select(Unit))).all()
+        units = (
+            await session.exec(
+                _apply_tenant_filters(select(Unit), Unit, company_id, branch_id)
+            )
+        ).all()
         decimal_units = {
             u.name.strip().lower(): u.allows_decimal for u in units
         }
@@ -535,6 +586,7 @@ class SaleService:
                 query = select(Product).where(filters[0])
             else:
                 query = select(Product).where(or_(*filters))
+            query = _apply_tenant_filters(query, Product, company_id, branch_id)
             products = (await session.exec(query.with_for_update())).all()
             
             # Map products by all possible keys
@@ -683,7 +735,14 @@ class SaleService:
         if is_credit:
             if payment_data.client_id is None:
                 raise ValueError("Cliente requerido para venta a credito.")
-            client = await session.get(Client, payment_data.client_id)
+            client_query = select(Client).where(Client.id == payment_data.client_id)
+            client = (
+                await session.exec(
+                    _apply_tenant_filters(
+                        client_query, Client, company_id, branch_id
+                    )
+                )
+            ).first()
             if not client:
                 raise ValueError("Cliente no encontrado.")
             credit_base = _round_money(sale_total - initial_payment)
@@ -702,6 +761,8 @@ class SaleService:
                 timestamp=timestamp,
                 total_amount=sale_total,
                 status=SaleStatus.completed,
+                company_id=company_id,
+                branch_id=branch_id,
                 user_id=user_id,
             )
             if hasattr(Sale, "payment_method"):
@@ -729,6 +790,8 @@ class SaleService:
                 session.add(
                     SalePayment(
                         sale_id=new_sale.id,
+                        company_id=company_id,
+                        branch_id=branch_id,
                         amount=amount,
                         method_type=method_type,
                         reference_code=None,
@@ -803,6 +866,8 @@ class SaleService:
                         payment_method_id=cashbox_method_id,
                         notes=notes,
                         timestamp=timestamp,
+                        company_id=company_id,
+                        branch_id=branch_id,
                         user_id=user_id,
                         sale_id=new_sale.id,
                     )
@@ -830,6 +895,8 @@ class SaleService:
                         session.add(
                             SaleInstallment(
                                 sale_id=new_sale.id,
+                                company_id=company_id,
+                                branch_id=branch_id,
                                 number=number,
                                 amount=amount,
                                 due_date=due_date,
@@ -856,6 +923,8 @@ class SaleService:
                 sale_item = SaleItem(
                     sale_id=new_sale.id,
                     product_id=product.id,
+                    company_id=company_id,
+                    branch_id=branch_id,
                     quantity=item["quantity"],
                     unit_price=item["price"],
                     subtotal=item["subtotal"],
@@ -880,6 +949,8 @@ class SaleService:
                 res_item = SaleItem(
                     sale_id=new_sale.id,
                     product_id=None,
+                    company_id=company_id,
+                    branch_id=branch_id,
                     quantity=Decimal("1.0000"),
                     unit_price=applied_amount,
                     subtotal=applied_amount,

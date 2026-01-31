@@ -15,8 +15,29 @@ if TYPE_CHECKING:
 class Supplier(rx.Model, table=True):
     """Proveedor de compras."""
 
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "tax_id",
+            name="uq_supplier_company_branch_tax_id",
+        ),
+    )
+
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     name: str = Field(nullable=False, index=True)
-    tax_id: str = Field(nullable=False, index=True, unique=True)
+    tax_id: str = Field(nullable=False, index=True)
     email: Optional[str] = Field(default=None)
     phone: Optional[str] = Field(default=None)
     address: Optional[str] = Field(default=None)
@@ -34,11 +55,13 @@ class Purchase(rx.Model, table=True):
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
             "supplier_id",
             "doc_type",
             "series",
             "number",
-            name="uq_purchase_supplier_doc",
+            name="uq_purchase_company_branch_supplier_doc",
         ),
     )
 
@@ -58,6 +81,18 @@ class Purchase(rx.Model, table=True):
     currency_code: str = Field(default="PEN", index=True, nullable=False)
     notes: str = Field(default="", nullable=False)
 
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     supplier_id: int = Field(foreign_key="supplier.id", index=True)
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(
@@ -74,7 +109,21 @@ class PurchaseItem(rx.Model, table=True):
     """Detalle de compra."""
 
     purchase_id: int = Field(foreign_key="purchase.id", index=True)
-    product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    product_id: Optional[int] = Field(
+        default=None, foreign_key="product.id", index=True
+    )
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
 
     description_snapshot: str = Field(default="")
     barcode_snapshot: str = Field(default="")

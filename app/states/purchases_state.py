@@ -129,6 +129,10 @@ class PurchasesState(MixinState):
 
     def _purchase_query(self):
         filters = self._purchase_filters()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return select(Purchase).where(Purchase.id == -1)
         query = (
             select(Purchase)
             .join(Supplier, isouter=True)
@@ -137,6 +141,8 @@ class PurchasesState(MixinState):
                 selectinload(Purchase.user),
                 selectinload(Purchase.items),
             )
+            .where(Purchase.company_id == company_id)
+            .where(Purchase.branch_id == branch_id)
             .order_by(Purchase.issue_date.desc(), Purchase.id.desc())
         )
         for clause in filters:
@@ -199,10 +205,16 @@ class PurchasesState(MixinState):
         privileges = self.current_user["privileges"]
         if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
             return 1
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 1
         with rx.session() as session:
             count_query = select(func.count(Purchase.id)).select_from(Purchase).join(
                 Supplier, isouter=True
             )
+            count_query = count_query.where(Purchase.company_id == company_id)
+            count_query = count_query.where(Purchase.branch_id == branch_id)
             for clause in self._purchase_filters():
                 count_query = count_query.where(clause)
             total = session.exec(count_query).one() or 0
@@ -215,10 +227,16 @@ class PurchasesState(MixinState):
         privileges = self.current_user["privileges"]
         if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
             return rx.toast("No tiene permisos para ver compras.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
             purchase = session.exec(
                 select(Purchase)
                 .where(Purchase.id == purchase_id)
+                .where(Purchase.company_id == company_id)
+                .where(Purchase.branch_id == branch_id)
                 .options(
                     selectinload(Purchase.supplier),
                     selectinload(Purchase.user),
@@ -285,10 +303,16 @@ class PurchasesState(MixinState):
     def open_purchase_edit_modal(self, purchase_id: int):
         if not self.current_user["privileges"].get("create_ingresos"):
             return rx.toast("No tiene permisos para editar compras.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
             purchase = session.exec(
                 select(Purchase)
                 .where(Purchase.id == purchase_id)
+                .where(Purchase.company_id == company_id)
+                .where(Purchase.branch_id == branch_id)
                 .options(selectinload(Purchase.supplier))
             ).first()
             if not purchase:
@@ -335,6 +359,11 @@ class PurchasesState(MixinState):
             return
 
         search = f"%{term}%"
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.purchase_edit_supplier_suggestions = []
+            return
         with rx.session() as session:
             suppliers = session.exec(
                 select(Supplier)
@@ -344,6 +373,8 @@ class PurchasesState(MixinState):
                         Supplier.tax_id.ilike(search),
                     )
                 )
+                .where(Supplier.company_id == company_id)
+                .where(Supplier.branch_id == branch_id)
                 .order_by(Supplier.name)
                 .limit(6)
             ).all()
@@ -414,9 +445,16 @@ class PurchasesState(MixinState):
         except ValueError:
             return rx.toast("Fecha de documento invalida.", duration=3000)
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+
         with rx.session() as session:
             existing = session.exec(
                 select(Purchase).where(
+                    Purchase.company_id == company_id,
+                    Purchase.branch_id == branch_id,
                     Purchase.id != purchase_id,
                     Purchase.supplier_id == supplier_id,
                     Purchase.doc_type == doc_type,
@@ -430,7 +468,12 @@ class PurchasesState(MixinState):
                     duration=3000,
                 )
 
-            purchase = session.get(Purchase, purchase_id)
+            purchase = session.exec(
+                select(Purchase)
+                .where(Purchase.id == purchase_id)
+                .where(Purchase.company_id == company_id)
+                .where(Purchase.branch_id == branch_id)
+            ).first()
             if not purchase:
                 return rx.toast("Compra no encontrada.", duration=3000)
 
@@ -451,10 +494,16 @@ class PurchasesState(MixinState):
     def open_purchase_delete_modal(self, purchase_id: int):
         if not self.current_user["privileges"].get("create_ingresos"):
             return rx.toast("No tiene permisos para eliminar compras.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
             purchase = session.exec(
                 select(Purchase)
                 .where(Purchase.id == purchase_id)
+                .where(Purchase.company_id == company_id)
+                .where(Purchase.branch_id == branch_id)
                 .options(selectinload(Purchase.supplier))
             ).first()
             if not purchase:
@@ -487,10 +536,16 @@ class PurchasesState(MixinState):
         if not purchase_id:
             return rx.toast("Compra no encontrada.", duration=3000)
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
             purchase = session.exec(
                 select(Purchase)
                 .where(Purchase.id == purchase_id)
+                .where(Purchase.company_id == company_id)
+                .where(Purchase.branch_id == branch_id)
                 .options(selectinload(Purchase.items))
             ).first()
             if not purchase:
@@ -503,7 +558,12 @@ class PurchasesState(MixinState):
                         "No se puede eliminar: item sin producto asociado.",
                         duration=3000,
                     )
-                product = session.get(Product, item.product_id)
+                product = session.exec(
+                    select(Product)
+                    .where(Product.id == item.product_id)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                ).first()
                 if not product:
                     return rx.toast(
                         "No se puede eliminar: producto no encontrado.",
@@ -523,7 +583,12 @@ class PurchasesState(MixinState):
             user_id = self.current_user.get("id")
 
             for item in items:
-                product = session.get(Product, item.product_id)
+                product = session.exec(
+                    select(Product)
+                    .where(Product.id == item.product_id)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                ).first()
                 qty = Decimal(str(item.quantity or 0))
                 product.stock = (product.stock or Decimal("0")) - qty
                 session.add(product)
@@ -534,6 +599,8 @@ class PurchasesState(MixinState):
                         quantity=-qty,
                         description=f"Anulación compra {doc_label}",
                         user_id=user_id,
+                        company_id=company_id,
+                        branch_id=branch_id,
                     )
                 )
 

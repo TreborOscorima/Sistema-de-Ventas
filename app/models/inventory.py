@@ -17,9 +17,30 @@ if TYPE_CHECKING:
 class Product(rx.Model, table=True):
     """Modelo de producto de inventario."""
 
-    barcode: str = Field(unique=True, index=True, nullable=False)
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "barcode",
+            name="uq_product_company_branch_barcode",
+        ),
+    )
+
+    barcode: str = Field(index=True, nullable=False)
     description: str = Field(nullable=False, index=True)
     category: str = Field(default="General", index=True)
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     stock: Decimal = Field(
         default=Decimal("0.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
@@ -40,7 +61,28 @@ class Product(rx.Model, table=True):
 class Category(rx.Model, table=True):
     """Categorias de productos."""
 
-    name: str = Field(unique=True, index=True, nullable=False)
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "name",
+            name="uq_category_company_branch_name",
+        ),
+    )
+
+    name: str = Field(index=True, nullable=False)
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
 
 
 class StockMovement(rx.Model, table=True):
@@ -59,6 +101,18 @@ class StockMovement(rx.Model, table=True):
 
     product_id: Optional[int] = Field(default=None, foreign_key="product.id")
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
 
     product: Optional["Product"] = Relationship()
     user: Optional["User"] = Relationship()
@@ -67,7 +121,28 @@ class StockMovement(rx.Model, table=True):
 class Unit(rx.Model, table=True):
     """Unidades de medida."""
 
-    name: str = Field(unique=True, index=True, nullable=False)
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "name",
+            name="uq_unit_company_branch_name",
+        ),
+    )
+
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
+    name: str = Field(index=True, nullable=False)
     allows_decimal: bool = Field(default=False)
 
 
@@ -76,6 +151,18 @@ class FieldPrice(rx.Model, table=True):
 
     sport: SportType = Field(nullable=False)
     name: str = Field(nullable=False)
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     price: Decimal = Field(
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),

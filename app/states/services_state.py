@@ -275,19 +275,20 @@ class ServicesState(MixinState):
         
         # Determinar el PaymentMethodType según el método seleccionado
         payment_allocations = self._build_reservation_payments(advance_amount)
-            
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
+
         with rx.session() as session:
-            user = session.exec(
-                select(UserModel).where(
-                    UserModel.username == self.current_user["username"]
-                )
-            ).first()
-            user_id = user.id if user else None
+            user_id = self.current_user.get("id")
             
             # Crear venta para asociar el pago
             new_sale = Sale(
                 timestamp=datetime.datetime.now(),
                 total_amount=self._round_currency(advance_amount),
+                company_id=company_id,
+                branch_id=branch_id,
                 status=SaleStatus.COMPLETED,
                 user_id=user_id,
             )
@@ -304,6 +305,7 @@ class ServicesState(MixinState):
                         amount=self._round_currency(amount),
                         method_type=method_type,
                         reference_code=f"Reserva {reservation['id']}",
+                        branch_id=branch_id,
                     )
                 )
             
@@ -318,12 +320,15 @@ class ServicesState(MixinState):
                     product_name_snapshot=f"Adelanto reserva: {reservation.get('field_name', 'Campo')}",
                     product_barcode_snapshot="RESERVA",
                     product_category_snapshot="Servicios",
+                    branch_id=branch_id,
                 )
             )
             
             # Registrar en CashboxLog para el flujo de caja
             session.add(
                 CashboxLog(
+                    company_id=company_id,
+                    branch_id=branch_id,
                     action="Adelanto",
                     amount=self._round_currency(advance_amount),
                     payment_method=payment_label,
@@ -339,6 +344,12 @@ class ServicesState(MixinState):
     def _apply_reservation_filters(self, query):
         # Convertir Enum a string para comparación si es necesario, o usar el valor directo
         query = query.where(FieldReservationModel.sport == self.field_rental_sport)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if company_id:
+            query = query.where(FieldReservationModel.company_id == company_id)
+        if branch_id:
+            query = query.where(FieldReservationModel.branch_id == branch_id)
         
         if self.reservation_filter_status != "todos":
             db_status = self._reservation_status_to_db(self.reservation_filter_status)
@@ -374,6 +385,10 @@ class ServicesState(MixinState):
 
     def load_reservations(self):
         if not self.current_user["privileges"].get("view_servicios"):
+            self.service_reservations = []
+            self.reservation_total_count = 0
+            return
+        if not self._company_id() or not self._branch_id():
             self.service_reservations = []
             self.reservation_total_count = 0
             return
@@ -465,6 +480,8 @@ class ServicesState(MixinState):
             return rx.toast("No tiene permisos para ver servicios.", duration=3000)
         if not self.current_user["privileges"].get("export_data"):
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        if not self._company_id() or not self._branch_id():
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
             data_query = (
                 select(FieldReservationModel)
@@ -525,8 +542,17 @@ class ServicesState(MixinState):
     field_prices: List[FieldPrice] = []
 
     def load_field_prices(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.field_prices = []
+            return
         with rx.session() as session:
-            prices = session.exec(select(FieldPriceModel)).all()
+            prices = session.exec(
+                select(FieldPriceModel)
+                .where(FieldPriceModel.company_id == company_id)
+                .where(FieldPriceModel.branch_id == branch_id)
+            ).all()
             self.field_prices = [
                 {
                     "id": str(p.id),
@@ -558,11 +584,17 @@ class ServicesState(MixinState):
         if self.new_field_price_name and self.new_field_price_amount:
             try:
                 price = float(self.new_field_price_amount)
+                company_id = self._company_id()
+                branch_id = self._branch_id()
+                if not company_id or not branch_id:
+                    return rx.toast("Empresa no definida.", duration=3000)
                 with rx.session() as session:
                     new_price = FieldPriceModel(
                         sport=self.new_field_price_sport,
                         name=self.new_field_price_name,
-                        price=price
+                        price=price,
+                        company_id=company_id,
+                        branch_id=branch_id,
                     )
                     session.add(new_price)
                     session.commit()
@@ -582,8 +614,17 @@ class ServicesState(MixinState):
         
         try:
             price_val = float(self.new_field_price_amount)
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            if not company_id or not branch_id:
+                return rx.toast("Empresa no definida.", duration=3000)
             with rx.session() as session:
-                price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(self.editing_field_price_id))).first()
+                price = session.exec(
+                    select(FieldPriceModel)
+                    .where(FieldPriceModel.id == int(self.editing_field_price_id))
+                    .where(FieldPriceModel.company_id == company_id)
+                    .where(FieldPriceModel.branch_id == branch_id)
+                ).first()
                 if price:
                     price.name = self.new_field_price_name
                     price.price = price_val
@@ -605,8 +646,17 @@ class ServicesState(MixinState):
             return toast
         try:
             val = float(value)
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            if not company_id or not branch_id:
+                return
             with rx.session() as session:
-                price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(price_id))).first()
+                price = session.exec(
+                    select(FieldPriceModel)
+                    .where(FieldPriceModel.id == int(price_id))
+                    .where(FieldPriceModel.company_id == company_id)
+                    .where(FieldPriceModel.branch_id == branch_id)
+                ).first()
                 if price:
                     price.price = val
                     session.add(price)
@@ -619,8 +669,17 @@ class ServicesState(MixinState):
         toast = self._require_manage_config()
         if toast:
             return toast
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(price_id))).first()
+            price = session.exec(
+                select(FieldPriceModel)
+                .where(FieldPriceModel.id == int(price_id))
+                .where(FieldPriceModel.company_id == company_id)
+                .where(FieldPriceModel.branch_id == branch_id)
+            ).first()
             if price:
                 self.editing_field_price_id = str(price.id)
                 self.new_field_price_name = price.name
@@ -631,8 +690,17 @@ class ServicesState(MixinState):
         toast = self._require_manage_config()
         if toast:
             return toast
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            price = session.exec(select(FieldPriceModel).where(FieldPriceModel.id == int(price_id))).first()
+            price = session.exec(
+                select(FieldPriceModel)
+                .where(FieldPriceModel.id == int(price_id))
+                .where(FieldPriceModel.company_id == company_id)
+                .where(FieldPriceModel.branch_id == branch_id)
+            ).first()
             if price:
                 session.delete(price)
                 session.commit()
@@ -1135,6 +1203,8 @@ class ServicesState(MixinState):
                     .where(FieldReservationModel.sport == self.field_rental_sport)
                     .where(FieldReservationModel.status.notin_([ReservationStatus.CANCELLED]))
                     .where(FieldReservationModel.start_datetime == start_dt)
+                    .where(FieldReservationModel.company_id == company_id)
+                    .where(FieldReservationModel.branch_id == branch_id)
                 ).first()
                 if existing_row:
                     existing = self._reservation_to_dict(existing_row)
@@ -1231,6 +1301,10 @@ class ServicesState(MixinState):
         paid_amount = min(advance_amount, total_amount)
         if paid_amount >= total_amount:
             status = ReservationStatus.PAID
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         
         with rx.session() as session:
             new_reservation = FieldReservationModel(
@@ -1244,7 +1318,9 @@ class ServicesState(MixinState):
                 total_amount=total_amount,
                 paid_amount=paid_amount,
                 status=status,
-                user_id=self.current_user["id"] if self.current_user and "id" in self.current_user else None
+                user_id=self.current_user["id"] if self.current_user and "id" in self.current_user else None,
+                company_id=company_id,
+                branch_id=branch_id,
             )
             session.add(new_reservation)
             session.commit()
@@ -1328,8 +1404,17 @@ class ServicesState(MixinState):
     def print_reservation_receipt(self, reservation_id: str):
         reservation = self._find_reservation_by_id(reservation_id)
         if not reservation:
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            if not company_id or not branch_id:
+                return rx.toast("Empresa no definida.", duration=3000)
             with rx.session() as session:
-                r = session.exec(select(FieldReservationModel).where(FieldReservationModel.id == reservation_id)).first()
+                r = session.exec(
+                    select(FieldReservationModel)
+                    .where(FieldReservationModel.id == reservation_id)
+                    .where(FieldReservationModel.company_id == company_id)
+                    .where(FieldReservationModel.branch_id == branch_id)
+                ).first()
                 if r:
                     reservation = self._reservation_to_dict(r)
 
@@ -1564,14 +1649,19 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         notes = "Pago completado" if entry_type == "pago" else "Pago parcial registrado"
         
         # Registrar venta y pago
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            user = session.exec(select(UserModel).where(UserModel.username == self.current_user["username"])).first()
-            user_id = user.id if user else None
+            user_id = self.current_user.get("id")
             
             # Nueva Cabecera de Venta limpia
             new_sale = Sale(
                 timestamp=datetime.datetime.now(),
                 total_amount=applied_amount,
+                company_id=company_id,
+                branch_id=branch_id,
                 status=SaleStatus.COMPLETED,
                 user_id=user_id,
             )
@@ -1588,12 +1678,15 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         amount=amount,
                         method_type=method_type,
                         reference_code=f"Reserva {reservation['id']}",
+                        branch_id=branch_id,
                     )
                 )
             
             reservation_model = session.exec(
                 select(FieldReservationModel)
                 .where(FieldReservationModel.id == int(reservation["id"]))
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
             ).first()
             if reservation_model:
                 reservation_model.paid_amount = reservation["paid_amount"]
@@ -1613,6 +1706,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 product_name_snapshot=f"{entry_type.capitalize()} reserva: {reservation.get('field_name')}",
                 product_barcode_snapshot="RESERVA",
                 product_category_snapshot="Servicios",
+                branch_id=branch_id,
             )
             session.add(sale_item)
             payment_label = (getattr(self, "payment_method", "") or "").strip() or "Efectivo"
@@ -1623,6 +1717,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             ).strip(" -")
             session.add(
                 CashboxLog(
+                    company_id=company_id,
+                    branch_id=branch_id,
                     action=log_action,
                     amount=applied_amount,
                     payment_method=payment_label,
@@ -1697,15 +1793,18 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         summary_fn = getattr(self, "_generate_payment_summary", None)
         payment_summary = summary_fn() if callable(summary_fn) else ""
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            user = session.exec(
-                select(UserModel).where(UserModel.username == self.current_user["username"])
-            ).first()
-            user_id = user.id if user else None
+            user_id = self.current_user.get("id")
 
             new_sale = Sale(
                 timestamp=datetime.datetime.now(),
                 total_amount=applied_amount,
+                company_id=company_id,
+                branch_id=branch_id,
                 status=SaleStatus.COMPLETED,
                 user_id=user_id,
             )
@@ -1721,6 +1820,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         amount=amount,
                         method_type=method_type,
                         reference_code=f"Reserva {reservation['id']}",
+                        branch_id=branch_id,
                     )
                 )
 
@@ -1735,6 +1835,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 ),
                 product_barcode_snapshot="RESERVA",
                 product_category_snapshot="Servicios",
+                branch_id=branch_id,
             )
             session.add(sale_item)
             payment_label = (getattr(self, "payment_method", "") or "").strip() or "No especificado"
@@ -1745,6 +1846,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             ).strip(" -")
             session.add(
                 CashboxLog(
+                    company_id=company_id,
+                    branch_id=branch_id,
                     action=log_action,
                     amount=applied_amount,
                     payment_method=payment_label,
@@ -1758,6 +1861,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             reservation_model = session.exec(
                 select(FieldReservationModel)
                 .where(FieldReservationModel.id == int(reservation["id"]))
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
             ).first()
             if reservation_model:
                 reservation_model.paid_amount = reservation["paid_amount"]
@@ -1852,10 +1957,16 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     def cancel_reservation(self):
         if not self.current_user["privileges"]["manage_reservations"]:
             return rx.toast("No tiene permisos.", duration=3000)
-        
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
             reservation_model = session.exec(
-                select(FieldReservationModel).where(FieldReservationModel.id == self.reservation_cancel_selection)
+                select(FieldReservationModel)
+                .where(FieldReservationModel.id == self.reservation_cancel_selection)
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
             ).first()
             
             if not reservation_model:
@@ -1914,6 +2025,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         except ValueError:
             return []
         end_date = start_date.replace(hour=23, minute=59, second=59)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
         with rx.session() as session:
             query = (
                 select(FieldReservationModel.start_datetime, FieldReservationModel.end_datetime)
@@ -1921,6 +2036,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(FieldReservationModel.status != ReservationStatus.CANCELLED)
                 .where(FieldReservationModel.start_datetime >= start_date)
                 .where(FieldReservationModel.start_datetime <= end_date)
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
             )
             return session.exec(query).all()
 
@@ -1930,6 +2047,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             slot_end = datetime.datetime.strptime(f"{date_str} {end_time}", "%Y-%m-%d %H:%M")
         except ValueError:
             return False
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return False
         with rx.session() as session:
             conflict = session.exec(
                 select(FieldReservationModel.id)
@@ -1937,6 +2058,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(FieldReservationModel.status != ReservationStatus.CANCELLED)
                 .where(FieldReservationModel.start_datetime < slot_end)
                 .where(FieldReservationModel.end_datetime > slot_start)
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
                 .limit(1)
             ).first()
         return conflict is not None
@@ -1993,8 +2116,17 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         try:
             reservation_id = int(res_id)
         except ValueError: return None
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return None
         with rx.session() as session:
-            reservation = session.exec(select(FieldReservationModel).where(FieldReservationModel.id == reservation_id)).first()
+            reservation = session.exec(
+                select(FieldReservationModel)
+                .where(FieldReservationModel.id == reservation_id)
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
+            ).first()
             return self._reservation_to_dict(reservation) if reservation else None
 
     def _sport_label(self, sport: str) -> str:

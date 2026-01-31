@@ -58,7 +58,10 @@ class CreditService:
     
     @staticmethod
     async def get_client_status(
-        session: AsyncSession, client_id: int
+        session: AsyncSession,
+        client_id: int,
+        company_id: int | None = None,
+        branch_id: int | None = None,
     ) -> Dict[str, Any]:
         """Obtiene el estado crediticio de un cliente.
         
@@ -77,7 +80,12 @@ class CreditService:
         Raises:
             ValueError: Si el cliente no existe
         """
-        client = await session.get(Client, client_id)
+        client_query = select(Client).where(Client.id == client_id)
+        if company_id:
+            client_query = client_query.where(Client.company_id == company_id)
+        if branch_id:
+            client_query = client_query.where(Client.branch_id == branch_id)
+        client = (await session.exec(client_query)).first()
         if not client:
             raise ValueError("Cliente no encontrado.")
 
@@ -86,6 +94,8 @@ class CreditService:
                 select(SaleInstallment)
                 .join(Sale)
                 .where(Sale.client_id == client_id)
+                .where(SaleInstallment.company_id == client.company_id)
+                .where(SaleInstallment.branch_id == client.branch_id)
                 .where(SaleInstallment.status != "paid")
                 .order_by(SaleInstallment.due_date)
             )
@@ -103,6 +113,8 @@ class CreditService:
         amount: Decimal,
         payment_method: str,
         user_id: int | None = None,
+        company_id: int | None = None,
+        branch_id: int | None = None,
     ) -> SaleInstallment:
         """Registra el pago de una cuota de crédito.
         
@@ -158,23 +170,33 @@ class CreditService:
         if not method_label:
             raise ValueError("Metodo de pago requerido.")
 
-        installment = (
-            await session.exec(
-                select(SaleInstallment)
-                .where(SaleInstallment.id == installment_id)
-                .with_for_update()
+        installment_query = (
+            select(SaleInstallment)
+            .where(SaleInstallment.id == installment_id)
+            .with_for_update()
+        )
+        if company_id:
+            installment_query = installment_query.where(
+                SaleInstallment.company_id == company_id
             )
-        ).first()
+        if branch_id:
+            installment_query = installment_query.where(
+                SaleInstallment.branch_id == branch_id
+            )
+        installment = (await session.exec(installment_query)).first()
         if not installment:
             raise ValueError("Cuota no encontrada.")
 
-        sale = (
-            await session.exec(
-                select(Sale)
-                .where(Sale.id == installment.sale_id)
-                .with_for_update()
-            )
-        ).first()
+        sale_query = (
+            select(Sale)
+            .where(Sale.id == installment.sale_id)
+            .with_for_update()
+        )
+        if company_id:
+            sale_query = sale_query.where(Sale.company_id == company_id)
+        if branch_id:
+            sale_query = sale_query.where(Sale.branch_id == branch_id)
+        sale = (await session.exec(sale_query)).first()
         if not sale or sale.client_id is None:
             raise ValueError("Cliente no encontrado.")
 
@@ -182,6 +204,8 @@ class CreditService:
             await session.exec(
                 select(Client)
                 .where(Client.id == sale.client_id)
+                .where(Client.company_id == sale.company_id)
+                .where(Client.branch_id == sale.branch_id)
                 .with_for_update()
             )
         ).first()
@@ -226,6 +250,8 @@ class CreditService:
                 notes=notes,
                 user_id=user_id,
                 sale_id=sale.id,
+                company_id=sale.company_id,
+                branch_id=sale.branch_id,
             )
         )
 

@@ -133,6 +133,12 @@ class CuentasState(MixinState):
         self.current_client_pendientes = pending_count
 
     async def _refresh_installment_totals(self, session) -> None:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.total_pagadas = 0
+            self.total_pendientes = 0
+            return
         paid_result = await session.exec(
             select(func.count())
             .select_from(SaleInstallment)
@@ -141,11 +147,15 @@ class CuentasState(MixinState):
                     ["paid", "completed"]
                 )
             )
+            .where(SaleInstallment.company_id == company_id)
+            .where(SaleInstallment.branch_id == branch_id)
         )
         pending_result = await session.exec(
             select(func.count())
             .select_from(SaleInstallment)
             .where(func.lower(SaleInstallment.status) == "pending")
+            .where(SaleInstallment.company_id == company_id)
+            .where(SaleInstallment.branch_id == branch_id)
         )
         self.total_pagadas = int(paid_result.one() or 0)
         self.total_pendientes = int(pending_result.one() or 0)
@@ -210,9 +220,19 @@ class CuentasState(MixinState):
             self.total_pagadas = 0
             self.total_pendientes = 0
             return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.debtors = []
+            self.total_pagadas = 0
+            self.total_pendientes = 0
+            return
         async with get_async_session() as session:
             result = await session.exec(
-                select(Client).where(Client.current_debt > 0)
+                select(Client)
+                .where(Client.current_debt > 0)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
             )
             self.debtors = [
                 self._client_snapshot(client) for client in result.all()
@@ -236,15 +256,29 @@ class CuentasState(MixinState):
             normalized_client_id = client_id
 
         report_client_name = ""
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         async with get_async_session() as session:
             query = (
                 select(SaleInstallment, Client)
                 .join(Sale, SaleInstallment.sale_id == Sale.id)
                 .outerjoin(Client, Sale.client_id == Client.id)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+                .where(SaleInstallment.company_id == company_id)
+                .where(SaleInstallment.branch_id == branch_id)
             )
             if normalized_client_id is not None:
                 query = query.where(Sale.client_id == normalized_client_id)
-                client = await session.get(Client, normalized_client_id)
+                client = await session.exec(
+                    select(Client)
+                    .where(Client.id == normalized_client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                )
+                client = client.first()
                 if client:
                     report_client_name = client.name or ""
             query = query.order_by(
@@ -357,6 +391,10 @@ class CuentasState(MixinState):
             return rx.toast("No tiene permisos para ver cuentas.", duration=3000)
         if not client:
             return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
         client_id = None
         fallback: dict | None = None
         if isinstance(client, dict):
@@ -372,7 +410,13 @@ class CuentasState(MixinState):
             return
 
         async with get_async_session() as session:
-            refreshed = await session.get(Client, client_id)
+            refreshed = await session.exec(
+                select(Client)
+                .where(Client.id == client_id)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+            )
+            refreshed = refreshed.first()
             if refreshed:
                 self.selected_client = self._client_snapshot(refreshed)
             else:
@@ -380,6 +424,8 @@ class CuentasState(MixinState):
             installments = await session.exec(
                 select(SaleInstallment)
                 .where(SaleInstallment.sale.has(client_id=client_id))
+                .where(SaleInstallment.company_id == company_id)
+                .where(SaleInstallment.branch_id == branch_id)
                 .order_by(SaleInstallment.due_date)
             )
             self.client_installments = installments.all()
@@ -439,6 +485,11 @@ class CuentasState(MixinState):
         if not method_label:
             return rx.toast("Seleccione un metodo de pago.", duration=3000)
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+
         user_id = None
         if isinstance(self.current_user, dict):
             user_id = self.current_user.get("id")
@@ -451,6 +502,8 @@ class CuentasState(MixinState):
                     amount,
                     method_label,
                     user_id=user_id,
+                    company_id=company_id,
+                    branch_id=branch_id,
                 )
                 await session.commit()
             except Exception as exc:
@@ -463,7 +516,13 @@ class CuentasState(MixinState):
             if isinstance(client_id, str):
                 client_id = int(client_id) if client_id.isdigit() else None
             if client_id is not None:
-                refreshed = await session.get(Client, client_id)
+                refreshed = await session.exec(
+                    select(Client)
+                    .where(Client.id == client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                )
+                refreshed = refreshed.first()
                 if refreshed:
                     self.selected_client = self._client_snapshot(refreshed)
                 installments = await session.exec(
@@ -473,13 +532,18 @@ class CuentasState(MixinState):
                             client_id=client_id
                         )
                     )
+                    .where(SaleInstallment.company_id == company_id)
+                    .where(SaleInstallment.branch_id == branch_id)
                     .order_by(SaleInstallment.due_date)
                 )
                 self.client_installments = installments.all()
                 self._set_current_client_totals(self.client_installments)
 
             debtors_result = await session.exec(
-                select(Client).where(Client.current_debt > 0)
+                select(Client)
+                .where(Client.current_debt > 0)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
             )
             self.debtors = [
                 self._client_snapshot(client)

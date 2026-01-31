@@ -17,6 +17,12 @@ CONFIG_SECTIONS: list[dict[str, str]] = [
     "icon": "building",
   },
   {
+    "key": "sucursales",
+    "label": "Sucursales",
+    "description": "Gestion de sedes y accesos",
+    "icon": "map-pin",
+  },
+  {
     "key": "usuarios",
     "label": "Gestion de Usuarios",
     "description": "Roles, accesos y credenciales",
@@ -351,7 +357,7 @@ def user_form() -> rx.Component:
           ),
           rx.divider(color="slate-100"),
           rx.el.div(
-            rx.el.div(
+          rx.el.div(
             rx.el.label("Nombre de Usuario", class_name="text-sm font-medium text-slate-700"),
             rx.el.input(
               value=State.new_user_data["username"],
@@ -359,6 +365,19 @@ def user_form() -> rx.Component:
                 "username", v
               ),
               is_disabled=rx.cond(State.editing_user, True, False),
+              class_name=f"{INPUT_STYLES['default']} mt-1",
+            ),
+            class_name="mb-4",
+          ),
+          rx.el.div(
+            rx.el.label("Correo", class_name="text-sm font-medium text-slate-700"),
+            rx.el.input(
+              type="email",
+              placeholder="usuario@empresa.com",
+              value=State.new_user_data["email"],
+              on_change=lambda v: State.handle_new_user_change(
+                "email", v
+              ),
               class_name=f"{INPUT_STYLES['default']} mt-1",
             ),
             class_name="mb-4",
@@ -553,6 +572,190 @@ def user_section() -> rx.Component:
               ),
               class_name="border-b",
               key=user["username"],
+            ),
+          )
+        ),
+      ),
+      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto",
+    ),
+    class_name="space-y-4",
+  )
+
+
+def branch_users_modal() -> rx.Component:
+  return rx.dialog.root(
+    rx.dialog.content(
+      rx.el.div(
+        rx.el.div(
+          rx.el.h3(
+            rx.el.span("Acceso por Sucursal", class_name="text-xl font-semibold text-slate-800"),
+            rx.el.span(
+              State.branch_users_branch_name,
+              class_name="text-sm font-medium text-slate-500",
+            ),
+            class_name="flex flex-col gap-1",
+          ),
+          rx.el.button(
+            rx.icon("x", class_name="h-4 w-4"),
+            on_click=State.close_branch_users,
+            class_name="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100",
+          ),
+          class_name="flex items-start justify-between",
+        ),
+        rx.el.div(
+          rx.el.div(
+            rx.foreach(
+              State.branch_users_rows,
+              lambda user: rx.el.div(
+                rx.el.div(
+                  rx.el.div(
+                    rx.el.span(user["username"], class_name="font-semibold text-slate-800"),
+                    rx.el.span(
+                      user["role"],
+                      class_name="text-xs text-slate-500",
+                    ),
+                    class_name="flex flex-col",
+                  ),
+                  rx.el.span(user["email"], class_name="text-xs text-slate-400"),
+                  class_name="flex flex-col",
+                ),
+                rx.el.div(
+                  toggle_switch(
+                    checked=user["has_access"],
+                    on_change=lambda value, uid=user["id"]: State.set_branch_user_access(uid, value),
+                  ),
+                ),
+                class_name="flex items-center justify-between gap-4 p-3 border border-slate-200 rounded-lg bg-white",
+              ),
+            ),
+            class_name="space-y-3",
+          ),
+          class_name="max-h-[55vh] overflow-y-auto",
+        ),
+        rx.el.div(
+          rx.el.button(
+            "Cancelar",
+            on_click=State.close_branch_users,
+            class_name=BUTTON_STYLES["secondary"],
+          ),
+          rx.el.button(
+            "Guardar",
+            on_click=State.save_branch_users,
+            class_name=BUTTON_STYLES["success"],
+          ),
+          class_name="flex flex-col sm:flex-row justify-end gap-3 pt-3 border-t border-slate-100",
+        ),
+        class_name="flex flex-col gap-4",
+      ),
+      class_name="bg-white rounded-xl shadow-xl border border-slate-200 p-5 w-[calc(100%-2rem)] max-w-2xl",
+    ),
+    open=State.branch_users_modal_open,
+    on_open_change=State.close_branch_users,
+  )
+
+
+def branch_section() -> rx.Component:
+  return rx.el.div(
+    rx.el.div(
+      rx.el.h2(
+        "SUCURSALES", class_name="text-xl font-semibold text-slate-700"
+      ),
+      rx.el.p(
+        "Crea sucursales y asigna usuarios por empresa.",
+        class_name="text-sm text-slate-500",
+      ),
+      class_name="space-y-1",
+    ),
+    branch_users_modal(),
+    rx.el.div(
+      rx.el.div(
+        rx.el.label("Nombre de Sucursal", class_name="text-sm font-medium text-slate-700"),
+        rx.el.input(
+          value=rx.cond(
+            State.editing_branch_id != "",
+            State.editing_branch_name,
+            State.new_branch_name,
+          ),
+          on_change=State.handle_branch_name_change,
+          placeholder="Ej: Casa Matriz, Sucursal Centro",
+          class_name=INPUT_STYLES["default"],
+        ),
+        class_name="flex flex-col gap-1",
+      ),
+      rx.el.div(
+        rx.el.label("Dirección", class_name="text-sm font-medium text-slate-700"),
+        rx.el.input(
+          value=rx.cond(
+            State.editing_branch_id != "",
+            State.editing_branch_address,
+            State.new_branch_address,
+          ),
+          on_change=State.handle_branch_address_change,
+          placeholder="Ej: Av. Principal 123",
+          class_name=INPUT_STYLES["default"],
+        ),
+        class_name="flex flex-col gap-1",
+      ),
+      rx.el.div(
+        rx.el.button(
+          rx.cond(State.editing_branch_id != "", "Actualizar", "Crear"),
+          on_click=rx.cond(State.editing_branch_id != "", State.save_branch, State.create_branch),
+          class_name=BUTTON_STYLES["success"],
+        ),
+        rx.cond(
+          State.editing_branch_id != "",
+          rx.el.button(
+            "Cancelar",
+            on_click=State.cancel_edit_branch,
+            class_name=BUTTON_STYLES["secondary"],
+          ),
+          rx.fragment(),
+        ),
+        class_name="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end",
+      ),
+      class_name="grid grid-cols-1 lg:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm",
+    ),
+    rx.el.div(
+      rx.el.table(
+        rx.el.thead(
+          rx.el.tr(
+            rx.el.th("Sucursal", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Dirección", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Usuarios", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+            class_name=TABLE_STYLES["header"],
+          )
+        ),
+        rx.el.tbody(
+          rx.foreach(
+            State.branches_list,
+            lambda branch: rx.el.tr(
+              rx.el.td(branch["name"], class_name=TABLE_STYLES["cell"]),
+              rx.el.td(branch["address"], class_name=TABLE_STYLES["cell"]),
+              rx.el.td(str(branch["users_count"]), class_name=TABLE_STYLES["cell"]),
+              rx.el.td(
+                rx.el.div(
+                  rx.el.button(
+                    rx.icon("users", class_name="h-4 w-4"),
+                    on_click=lambda _, bid=branch["id"]: State.open_branch_users(bid),
+                    class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
+                  ),
+                  rx.el.button(
+                    rx.icon("pencil", class_name="h-4 w-4"),
+                    on_click=lambda _, bid=branch["id"]: State.start_edit_branch(bid),
+                    class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
+                  ),
+                  rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda _, bid=branch["id"]: State.delete_branch(bid),
+                    class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                  ),
+                  class_name="flex justify-center gap-2",
+                ),
+                class_name=TABLE_STYLES["cell"],
+              ),
+              class_name=TABLE_STYLES["row"],
+              key=branch["id"],
             ),
           )
         ),
@@ -1062,6 +1265,7 @@ def configuracion_page() -> rx.Component:
           rx.match(
             State.config_active_tab,
             ("empresa", company_settings_section()),
+            ("sucursales", branch_section()),
             ("usuarios", user_section()),
             ("monedas", currency_section()),
             ("unidades", unit_section()),
@@ -1073,7 +1277,7 @@ def configuracion_page() -> rx.Component:
         ),
       class_name="p-4 sm:p-6 pb-4 w-full flex flex-col gap-5",
     ),
-    on_mount=State.load_settings,
+    on_mount=State.load_config_page,
   )
   return permission_guard(
     has_permission=State.is_admin,

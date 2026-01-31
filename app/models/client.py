@@ -13,8 +13,29 @@ if TYPE_CHECKING:
 class Client(rx.Model, table=True):
     """Cliente para ventas a credito."""
 
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "dni",
+            name="uq_client_company_branch_dni",
+        ),
+    )
+
     name: str = Field(index=True, nullable=False)
-    dni: str = Field(unique=True, index=True, nullable=False)
+    dni: str = Field(index=True, nullable=False)
+    company_id: int = Field(
+        default=1,
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        default=1,
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
     phone: Optional[str] = Field(default=None)
     address: Optional[str] = Field(default=None)
     credit_limit: Decimal = Field(

@@ -137,6 +137,20 @@ class DashboardState(MixinState):
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=today_start.weekday())
         month_start = today_start.replace(day=1)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.today_sales = 0.0
+            self.today_sales_count = 0
+            self.week_sales = 0.0
+            self.week_sales_count = 0
+            self.month_sales = 0.0
+            self.month_sales_count = 0
+            self.period_sales = 0.0
+            self.period_sales_count = 0
+            self.period_prev_sales = 0.0
+            self.avg_ticket = 0.0
+            return
         
         with rx.session() as session:
             # Ventas de hoy
@@ -148,7 +162,9 @@ class DashboardState(MixinState):
                 .where(
                     and_(
                         Sale.timestamp >= today_start,
-                        Sale.status != SaleStatus.cancelled
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
                     )
                 )
             ).one()
@@ -164,7 +180,9 @@ class DashboardState(MixinState):
                 .where(
                     and_(
                         Sale.timestamp >= week_start,
-                        Sale.status != SaleStatus.cancelled
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
                     )
                 )
             ).one()
@@ -180,7 +198,9 @@ class DashboardState(MixinState):
                 .where(
                     and_(
                         Sale.timestamp >= month_start,
-                        Sale.status != SaleStatus.cancelled
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
                     )
                 )
             ).one()
@@ -199,7 +219,9 @@ class DashboardState(MixinState):
                     and_(
                         Sale.timestamp >= period_start,
                         Sale.timestamp <= period_end,
-                        Sale.status != SaleStatus.cancelled
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
                     )
                 )
             ).one()
@@ -219,7 +241,9 @@ class DashboardState(MixinState):
                     and_(
                         Sale.timestamp >= prev_start,
                         Sale.timestamp < prev_end,
-                        Sale.status != SaleStatus.cancelled
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
                     )
                 )
             ).one()
@@ -227,10 +251,21 @@ class DashboardState(MixinState):
     
     def _load_kpis(self):
         """Carga KPIs principales."""
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.total_clients = 0
+            self.active_credits = 0
+            self.pending_debt = 0.0
+            self.low_stock_count = 0
+            return
         with rx.session() as session:
             # Total de clientes
             self.total_clients = session.exec(
-                select(func.count()).select_from(Client)
+                select(func.count())
+                .select_from(Client)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
             ).one() or 0
             
             # Créditos activos (ventas a crédito con cuotas pendientes)
@@ -241,7 +276,9 @@ class DashboardState(MixinState):
                 .where(
                     and_(
                         Sale.status != SaleStatus.cancelled,
-                        SaleInstallment.status == "pending"
+                        SaleInstallment.status == "pending",
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
                     )
                 )
             ).one() or 0
@@ -249,7 +286,15 @@ class DashboardState(MixinState):
             # Deuda pendiente total
             pending = session.exec(
                 select(func.sum(SaleInstallment.amount - SaleInstallment.paid_amount))
-                .where(SaleInstallment.status == "pending")
+                .select_from(SaleInstallment)
+                .join(Sale)
+                .where(
+                    and_(
+                        SaleInstallment.status == "pending",
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
+                    )
+                )
             ).one()
             self.pending_debt = float(pending or 0)
             
@@ -257,18 +302,40 @@ class DashboardState(MixinState):
             self.low_stock_count = session.exec(
                 select(func.count())
                 .select_from(Product)
-                .where(and_(Product.stock > 0, Product.stock <= LOW_STOCK_THRESHOLD))
+                .where(
+                    and_(
+                        Product.company_id == company_id,
+                        Product.branch_id == branch_id,
+                        Product.stock > 0,
+                        Product.stock <= LOW_STOCK_THRESHOLD,
+                    )
+                )
             ).one() or 0
     
     def _load_alerts(self):
         """Carga alertas del sistema."""
-        summary = get_alert_summary(self.currency_symbol)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.alerts = []
+            self.alert_count = 0
+            return
+        summary = get_alert_summary(
+            self.currency_symbol,
+            company_id=company_id,
+            branch_id=branch_id,
+        )
         self.alerts = summary.get("alerts", [])
         self.alert_count = summary.get("total", 0)
     
     def _load_sales_by_day(self):
         """Carga ventas de los últimos 7 días para gráfico."""
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.dash_sales_by_day = []
+            return
         
         days_data = []
         day_names = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
@@ -284,7 +351,9 @@ class DashboardState(MixinState):
                         and_(
                             Sale.timestamp >= day_start,
                             Sale.timestamp < day_end,
-                            Sale.status != SaleStatus.cancelled
+                            Sale.status != SaleStatus.cancelled,
+                            Sale.company_id == company_id,
+                            Sale.branch_id == branch_id,
                         )
                     )
                 ).one()
@@ -300,6 +369,11 @@ class DashboardState(MixinState):
     def _load_top_products(self):
         """Carga los 5 productos más vendidos del período seleccionado."""
         period_start, period_end, _, _ = self._get_period_dates()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.dash_top_products = []
+            return
         
         with rx.session() as session:
             results = session.exec(
@@ -315,7 +389,11 @@ class DashboardState(MixinState):
                     and_(
                         Sale.timestamp >= period_start,
                         Sale.timestamp <= period_end,
-                        Sale.status != SaleStatus.cancelled
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
+                        Product.company_id == company_id,
+                        Product.branch_id == branch_id,
                     )
                 )
                 .group_by(Product.id, Product.description)
@@ -335,6 +413,11 @@ class DashboardState(MixinState):
     def _load_sales_by_category(self):
         """Carga ventas por categoría del período seleccionado."""
         period_start, period_end, _, _ = self._get_period_dates()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.dash_sales_by_category = []
+            return
         
         with rx.session() as session:
             results = session.exec(
@@ -349,7 +432,11 @@ class DashboardState(MixinState):
                     and_(
                         Sale.timestamp >= period_start,
                         Sale.timestamp <= period_end,
-                        Sale.status != SaleStatus.cancelled
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
+                        Product.company_id == company_id,
+                        Product.branch_id == branch_id,
                     )
                 )
                 .group_by(Product.category)
@@ -372,6 +459,11 @@ class DashboardState(MixinState):
     def _load_payment_breakdown(self):
         """Carga desglose de métodos de pago del período seleccionado."""
         period_start, period_end, _, _ = self._get_period_dates()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.dash_payment_breakdown = []
+            return
         
         with rx.session() as session:
             results = session.exec(
@@ -384,7 +476,9 @@ class DashboardState(MixinState):
                         CashboxLog.timestamp >= period_start,
                         CashboxLog.timestamp <= period_end,
                         CashboxLog.is_voided == False,
-                        CashboxLog.action.in_(["Venta", "Cobranza", "Cobro Cuota", "Reserva", "Adelanto"])
+                        CashboxLog.action.in_(["Venta", "Cobranza", "Cobro Cuota", "Reserva", "Adelanto"]),
+                        CashboxLog.company_id == company_id,
+                        CashboxLog.branch_id == branch_id,
                     )
                 )
                 .group_by(CashboxLog.action)

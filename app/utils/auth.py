@@ -22,7 +22,11 @@ SECRET_KEY = _require_env("AUTH_SECRET_KEY")
 ALGORITHM = "HS256"
 
 
-def create_access_token(subject: str | Any, token_version: int | None = None) -> str:
+def create_access_token(
+    subject: str | Any,
+    token_version: int | None = None,
+    company_id: int | None = None,
+) -> str:
     expire = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(hours=24)
     payload = {
         "sub": str(subject),
@@ -30,6 +34,8 @@ def create_access_token(subject: str | Any, token_version: int | None = None) ->
     }
     if token_version is not None:
         payload["ver"] = int(token_version)
+    if company_id is not None:
+        payload["cid"] = int(company_id)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_token(token: str) -> dict | None:

@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Any
 from sqlmodel import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
-from app.models import Permission, Role, User as UserModel
+from app.models import Branch, Company, Permission, Role, User as UserModel, UserBranch
 from app.utils.auth import create_access_token, decode_token
 from app.utils.logger import get_logger
 from app.utils.rate_limit import (
@@ -42,7 +42,7 @@ from app.utils.rate_limit import (
     clear_login_attempts as _clear_login_attempts,
     remaining_lockout_time as _remaining_lockout_time,
 )
-from app.utils.validators import validate_password
+from app.utils.validators import validate_email, validate_password
 from app.constants import (
     MAX_LOGIN_ATTEMPTS,
     LOGIN_LOCKOUT_MINUTES,
@@ -169,6 +169,7 @@ class AuthState(MixinState):
         delete_user(username): Elimina usuario
     """
     token: str = rx.LocalStorage("")
+    selected_branch_id: str = rx.LocalStorage("")
     # users: Dict[str, User] = {} # Eliminado a favor de la BD
     roles: List[str] = ["Superadmin", "Administrador", "Usuario", "Cajero"]
     role_privileges: Dict[str, Privileges] = DEFAULT_ROLE_TEMPLATES.copy()
@@ -179,6 +180,7 @@ class AuthState(MixinState):
     show_user_form: bool = False
     new_user_data: NewUser = {
         "username": "",
+        "email": "",
         "password": "",
         "confirm_password": "",
         "role": "Usuario",
@@ -217,25 +219,53 @@ class AuthState(MixinState):
             self._cached_user_time = now
             return self._cached_user
         
-        username = str(payload.get("sub") or "")
-        if not username:
+        subject = payload.get("sub")
+        if subject is None:
             self._cached_user = self._guest_user()
             self._cached_user_token = self.token
             self._cached_user_time = now
             return self._cached_user
-        
+
+        subject_str = str(subject).strip()
+        if not subject_str:
+            self._cached_user = self._guest_user()
+            self._cached_user_token = self.token
+            self._cached_user_time = now
+            return self._cached_user
+
         token_version = payload.get("ver", 0)
         try:
             token_version = int(token_version or 0)
         except (TypeError, ValueError):
             token_version = 0
         
+        user_id = None
+        try:
+            user_id = int(subject_str)
+        except (TypeError, ValueError):
+            user_id = None
+
         with rx.session() as session:
-            user = session.exec(
-                select(UserModel)
-                .where(UserModel.username == username)
-                .options(selectinload(UserModel.role).selectinload(Role.permissions))
-            ).first()
+            user = None
+            query = select(UserModel).options(
+                selectinload(UserModel.role).selectinload(Role.permissions)
+            )
+            if user_id is not None:
+                user = session.exec(
+                    query.where(UserModel.id == user_id)
+                ).first()
+            else:
+                lookup = subject_str.lower()
+                if "@" in lookup:
+                    user = session.exec(
+                        query.where(UserModel.email == lookup)
+                    ).first()
+                else:
+                    users = session.exec(
+                        query.where(UserModel.username == lookup)
+                    ).all()
+                    if len(users) == 1:
+                        user = users[0]
             
             if user and user.is_active:
                 if getattr(user, "token_version", 0) != token_version:
@@ -244,7 +274,9 @@ class AuthState(MixinState):
                     role_name = user.role.name if user.role else "Sin rol"
                     self._cached_user = {
                         "id": user.id,
+                        "company_id": getattr(user, "company_id", None),
                         "username": user.username,
+                        "email": getattr(user, "email", "") or "",
                         "role": role_name,
                         "privileges": self._get_privileges_dict(user),
                         "must_change_password": bool(
@@ -257,6 +289,55 @@ class AuthState(MixinState):
         self._cached_user_token = self.token
         self._cached_user_time = now
         return self._cached_user
+
+    @rx.var
+    def active_branch_id(self) -> int | None:
+        value = self.selected_branch_id
+        if not value:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @rx.var
+    def available_branches(self) -> List[Dict[str, Any]]:
+        user_id = self.current_user.get("id")
+        company_id = self.current_user.get("company_id")
+        if not user_id or not company_id:
+            return []
+        with rx.session() as session:
+            user = session.exec(
+                select(UserModel).where(UserModel.id == user_id)
+            ).first()
+            if not user:
+                return []
+            branch_ids = self._user_branch_ids(session, user_id)
+            if not branch_ids and getattr(user, "branch_id", None):
+                branch_ids = [int(user.branch_id)]
+            if not branch_ids:
+                return []
+            rows = session.exec(
+                select(Branch)
+                .where(Branch.id.in_(branch_ids))
+                .where(Branch.company_id == company_id)
+                .order_by(Branch.name)
+            ).all()
+        return [
+            {"id": str(branch.id), "name": branch.name}
+            for branch in rows
+        ]
+
+    @rx.var
+    def active_branch_name(self) -> str:
+        active_id = self.active_branch_id
+        if not active_id:
+            return ""
+        with rx.session() as session:
+            branch = session.exec(
+                select(Branch).where(Branch.id == active_id)
+            ).first()
+            return branch.name if branch else ""
     
     def invalidate_user_cache(self) -> None:
         """Invalida el cache de usuario (llamar tras cambios de permisos)."""
@@ -334,9 +415,14 @@ class AuthState(MixinState):
         if not self.current_user["privileges"].get("manage_users"):
             self.users_list = []
             return
+        company_id = self._company_id()
+        if not company_id:
+            self.users_list = []
+            return
         with rx.session() as session:
             users = session.exec(
                 select(UserModel)
+                .where(UserModel.company_id == company_id)
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
             ).all()
             self._load_roles_cache(session)
@@ -345,7 +431,9 @@ class AuthState(MixinState):
                 role_name = user.role.name if user.role else "Sin rol"
                 normalized_users.append({
                     "id": user.id,
+                    "company_id": getattr(user, "company_id", None),
                     "username": user.username,
+                    "email": getattr(user, "email", "") or "",
                     "role": role_name,
                     "privileges": self._get_privileges_dict(user),
                     "must_change_password": bool(
@@ -357,7 +445,9 @@ class AuthState(MixinState):
     def _guest_user(self) -> User:
         return {
             "id": None,
+            "company_id": None,
             "username": "Invitado",
+            "email": "",
             "role": "Invitado",
             "privileges": EMPTY_PRIVILEGES.copy(),
             "must_change_password": False,
@@ -402,6 +492,47 @@ class AuthState(MixinState):
             )
             for role in roles
         }
+
+    def _user_branch_ids(self, session, user_id: int) -> list[int]:
+        if not user_id:
+            return []
+        rows = session.exec(
+            select(UserBranch.branch_id).where(UserBranch.user_id == user_id)
+        ).all()
+        return [int(row) for row in rows if row]
+
+    def _ensure_user_branch_access(self, session, user: UserModel) -> list[int]:
+        if not user:
+            return []
+        branch_ids = self._user_branch_ids(session, user.id)
+        default_branch_id = getattr(user, "branch_id", None)
+        if default_branch_id and default_branch_id not in branch_ids:
+            session.add(
+                UserBranch(user_id=user.id, branch_id=int(default_branch_id))
+            )
+            session.flush()
+            branch_ids.append(int(default_branch_id))
+        return branch_ids
+
+    def _select_default_branch(
+        self,
+        session,
+        user: UserModel,
+        branch_ids: list[int],
+    ) -> int | None:
+        if not branch_ids:
+            return None
+        stored = getattr(self, "selected_branch_id", "") or ""
+        try:
+            stored_id = int(stored) if stored else None
+        except (TypeError, ValueError):
+            stored_id = None
+        if stored_id and stored_id in branch_ids:
+            return stored_id
+        default_branch_id = getattr(user, "branch_id", None)
+        if default_branch_id and default_branch_id in branch_ids:
+            return int(default_branch_id)
+        return branch_ids[0]
 
     def _ensure_permissions(self, session, codenames: list[str]) -> Dict[str, Permission]:
         if not codenames:
@@ -489,6 +620,7 @@ class AuthState(MixinState):
     def _reset_new_user_form(self):
         self.new_user_data = {
             "username": "",
+            "email": "",
             "password": "",
             "confirm_password": "",
             "role": "Usuario",
@@ -502,6 +634,12 @@ class AuthState(MixinState):
         if value in {"prod", "production"}:
             return "prod"
         return "dev"
+
+    def _trial_enforced(self) -> bool:
+        value = os.getenv("TRIAL_ENFORCEMENT")
+        if value is not None:
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return self._resolve_env() != "dev"
 
     def _initial_admin_password(self) -> str | None:
         value = (os.getenv("INITIAL_ADMIN_PASSWORD") or "").strip()
@@ -684,6 +822,29 @@ class AuthState(MixinState):
             yield rx.redirect("/dashboard")
 
     @rx.event
+    def ensure_trial_active(self):
+        if not self.is_authenticated:
+            return
+        if not self._trial_enforced():
+            return
+        current_path = self.router.url.path
+        if current_path == "/periodo-prueba-finalizado":
+            return
+        company_id = self.current_user.get("company_id")
+        if not company_id:
+            return
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+            if (
+                company
+                and company.trial_ends_at
+                and company.trial_ends_at < datetime.now()
+            ):
+                return rx.redirect("/periodo-prueba-finalizado")
+
+    @rx.event
     def ensure_password_change(self):
         if not self.is_authenticated:
             if self.router.url.path != "/":
@@ -701,20 +862,48 @@ class AuthState(MixinState):
             )
 
     @rx.event
+    def set_active_branch(self, branch_id: str):
+        user_id = self.current_user.get("id")
+        company_id = self.current_user.get("company_id")
+        if not user_id or not company_id:
+            return rx.toast("Usuario no encontrado.", duration=3000)
+        try:
+            branch_id_int = int(branch_id)
+        except (TypeError, ValueError):
+            return rx.toast("Sucursal invalida.", duration=3000)
+        with rx.session() as session:
+            allowed = session.exec(
+                select(UserBranch)
+                .join(Branch, Branch.id == UserBranch.branch_id)
+                .where(UserBranch.user_id == user_id)
+                .where(UserBranch.branch_id == branch_id_int)
+                .where(Branch.company_id == company_id)
+            ).first()
+            if not allowed:
+                return rx.toast("No tiene acceso a esta sucursal.", duration=3000)
+        self.selected_branch_id = str(branch_id_int)
+        return rx.toast("Sucursal actualizada.", duration=2000)
+
+    @rx.event
     def login(self, form_data: dict):
-        username = (form_data.get("username") or "").strip().lower()
+        identifier = (
+            form_data.get("email")
+            or form_data.get("identifier")
+            or form_data.get("username")
+            or ""
+        ).strip().lower()
         raw_password = form_data.get("password") or ""
         password = raw_password.encode("utf-8")
 
         # Rate limiting: verificar si el usuario está bloqueado
-        if _is_rate_limited(username):
-            remaining = _remaining_lockout_time(username)
+        if _is_rate_limited(identifier):
+            remaining = _remaining_lockout_time(identifier)
             self.error_message = (
                 f"Demasiados intentos fallidos. Espere {remaining} minuto(s)."
             )
             logger.warning(
                 "Login bloqueado por rate limit para usuario: %s",
-                username[:20],  # No logear username completo por seguridad
+                identifier[:20],  # No logear identificador completo por seguridad
             )
             return
 
@@ -740,7 +929,7 @@ class AuthState(MixinState):
                         )
                         return
 
-                if username == "admin" and raw_password == initial_password:
+                if identifier == "admin" and raw_password == initial_password:
                     # Crear superadmin
                     password_hash = bcrypt.hashpw(
                         password, bcrypt.gensalt()
@@ -763,11 +952,13 @@ class AuthState(MixinState):
                     session.add(admin_user)
                     session.commit()
 
-                    _clear_login_attempts(username)
+                    _clear_login_attempts(identifier)
                     self.token = create_access_token(
-                        "admin",
+                        admin_user.id,
                         token_version=getattr(admin_user, "token_version", 0),
+                        company_id=getattr(admin_user, "company_id", None),
                     )
+                    self.selected_branch_id = ""
                     self.error_message = ""
                     self.password_change_error = ""
                     self.needs_initial_admin = False
@@ -775,23 +966,48 @@ class AuthState(MixinState):
                         return rx.redirect("/cambiar-clave")
                     return rx.redirect("/")
 
-                _record_failed_attempt(username)
+                _record_failed_attempt(identifier)
                 self.error_message = (
                     "Sistema no inicializado. Ingrese la contraseña inicial."
                 )
                 return
 
-            user = session.exec(
-                select(UserModel).where(UserModel.username == username)
-            ).first()
+            user = None
+            password_ok = False
+            if "@" in identifier:
+                user = session.exec(
+                    select(UserModel).where(UserModel.email == identifier)
+                ).first()
+                if user and bcrypt.checkpw(password, user.password_hash.encode("utf-8")):
+                    password_ok = True
+            else:
+                users = session.exec(
+                    select(UserModel).where(UserModel.username == identifier)
+                ).all()
+                if users:
+                    matches = [
+                        candidate
+                        for candidate in users
+                        if bcrypt.checkpw(
+                            password, candidate.password_hash.encode("utf-8")
+                        )
+                    ]
+                    if len(matches) > 1:
+                        self.error_message = (
+                            "Hay mas de un usuario con ese nombre. Inicie sesion con su correo."
+                        )
+                        return
+                    if len(matches) == 1:
+                        user = matches[0]
+                        password_ok = True
 
-            if user and bcrypt.checkpw(password, user.password_hash.encode("utf-8")):
+            if user and password_ok:
                 if not user.is_active:
                     self.error_message = "Usuario inactivo. Contacte al administrador."
                     return
                 if not user.role_id:
                     fallback_role = (
-                        "Superadmin" if username == "admin" else "Usuario"
+                        "Superadmin" if user.username == "admin" else "Usuario"
                     )
                     role = self._get_role_by_name(session, fallback_role)
                     if not role:
@@ -811,10 +1027,18 @@ class AuthState(MixinState):
                     session.commit()
                 
                 # Login exitoso: limpiar intentos fallidos
-                _clear_login_attempts(username)
+                _clear_login_attempts(identifier)
                 self.token = create_access_token(
-                    username,
+                    user.id,
                     token_version=getattr(user, "token_version", 0),
+                    company_id=getattr(user, "company_id", None),
+                )
+                branch_ids = self._ensure_user_branch_access(session, user)
+                selected_branch = self._select_default_branch(
+                    session, user, branch_ids
+                )
+                self.selected_branch_id = (
+                    str(selected_branch) if selected_branch else ""
                 )
                 self.error_message = ""
                 self.password_change_error = ""
@@ -825,7 +1049,7 @@ class AuthState(MixinState):
                 return rx.redirect(self._default_route_for_privileges(privileges))
 
         # Login fallido: registrar intento
-        _record_failed_attempt(username)
+        _record_failed_attempt(identifier)
         self.error_message = "Usuario o contraseña incorrectos."
 
     @rx.event
@@ -835,6 +1059,7 @@ class AuthState(MixinState):
         new_password = (form_data.get("password") or "").strip()
         confirm_password = (form_data.get("confirm_password") or "").strip()
         username = (self.current_user.get("username") or "").strip()
+        user_id = self.current_user.get("id")
 
         is_valid, error = validate_password(new_password)
         if not is_valid:
@@ -851,7 +1076,7 @@ class AuthState(MixinState):
 
         with rx.session() as session:
             user = session.exec(
-                select(UserModel).where(UserModel.username == username)
+                select(UserModel).where(UserModel.id == user_id)
             ).first()
             if not user:
                 self.password_change_error = "Usuario no encontrado."
@@ -901,6 +1126,7 @@ class AuthState(MixinState):
                 
         self.new_user_data = {
             "username": user["username"],
+            "email": (user.get("email") or ""),
             "password": "",
             "confirm_password": "",
             "role": role_key,
@@ -920,11 +1146,18 @@ class AuthState(MixinState):
         if not self.current_user["privileges"].get("manage_users"):
             return rx.toast("No tiene permisos para gestionar usuarios.", duration=3000)
         key = (username or "").strip().lower()
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+        branch_id = self._branch_id()
+        if not branch_id:
+            return rx.toast("Sucursal no definida.", duration=3000)
         
         with rx.session() as session:
             user = session.exec(
                 select(UserModel)
                 .where(UserModel.username == key)
+                .where(UserModel.company_id == company_id)
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
             ).first()
             
@@ -934,9 +1167,12 @@ class AuthState(MixinState):
             # Convertir a dict
             role_name = user.role.name if user.role else "Sin rol"
             user_dict = {
+                "id": user.id,
                 "username": user.username,
+                "email": getattr(user, "email", "") or "",
                 "role": role_name,
                 "privileges": self._get_privileges_dict(user),
+                "company_id": getattr(user, "company_id", None),
                 "must_change_password": bool(
                     getattr(user, "must_change_password", False)
                 ),
@@ -962,6 +1198,9 @@ class AuthState(MixinState):
             return
         if field == "username":
             self.new_user_data["username"] = value.lower()
+            return
+        if field == "email":
+            self.new_user_data["email"] = value.lower()
             return
         self.new_user_data[field] = value
 
@@ -1032,9 +1271,17 @@ class AuthState(MixinState):
         username = self.new_user_data["username"].lower().strip()
         if not username:
             return rx.toast("El nombre de usuario no puede estar vacío.", duration=3000)
+        email = (self.new_user_data.get("email") or "").strip().lower()
         role_name = (self.new_user_data.get("role") or "").strip()
         if not role_name:
             return rx.toast("Debe asignar un rol al usuario.", duration=3000)
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+        if not self.editing_user and not email:
+            return rx.toast("El correo es obligatorio.", duration=3000)
+        if email and not validate_email(email):
+            return rx.toast("Ingrese un correo valido.", duration=3000)
             
         self.new_user_data["privileges"] = self._normalize_privileges(
             self.new_user_data["privileges"]
@@ -1062,11 +1309,20 @@ class AuthState(MixinState):
             if self.editing_user:
                 # Actualizar usuario existente
                 user_to_update = session.exec(
-                    select(UserModel).where(UserModel.username == self.editing_user["username"])
+                    select(UserModel)
+                    .where(UserModel.username == self.editing_user["username"])
+                    .where(UserModel.company_id == company_id)
                 ).first()
                 
                 if not user_to_update:
                     return rx.toast("Usuario a editar no encontrado.", duration=3000)
+                if email:
+                    existing_email = session.exec(
+                        select(UserModel).where(UserModel.email == email)
+                    ).first()
+                    if existing_email and existing_email.id != user_to_update.id:
+                        return rx.toast("El correo ya esta registrado.", duration=3000)
+                    user_to_update.email = email
                     
                 if self.new_user_data["password"]:
                     password = self.new_user_data["password"]
@@ -1102,11 +1358,18 @@ class AuthState(MixinState):
             else:
                 # Crear nuevo usuario
                 existing_user = session.exec(
-                    select(UserModel).where(UserModel.username == username)
+                    select(UserModel)
+                    .where(UserModel.username == username)
+                    .where(UserModel.company_id == company_id)
                 ).first()
                 
                 if existing_user:
                     return rx.toast("El nombre de usuario ya existe.", duration=3000)
+                existing_email = session.exec(
+                    select(UserModel).where(UserModel.email == email)
+                ).first()
+                if existing_email:
+                    return rx.toast("El correo ya esta registrado.", duration=3000)
                 password = self.new_user_data["password"]
                 if not password:
                     return rx.toast(
@@ -1129,10 +1392,17 @@ class AuthState(MixinState):
                 
                 new_user = UserModel(
                     username=username,
+                    email=email or None,
                     password_hash=password_hash,
                     role_id=role.id,
+                    company_id=company_id,
+                    branch_id=branch_id,
                 )
                 session.add(new_user)
+                session.flush()
+                session.add(
+                    UserBranch(user_id=new_user.id, branch_id=branch_id)
+                )
                 session.commit()
                 self._load_roles_cache(session)
                 
@@ -1146,11 +1416,15 @@ class AuthState(MixinState):
             return rx.toast("No tiene permisos para eliminar usuarios.", duration=3000)
         if username == self.current_user["username"]:
             return rx.toast("No puedes eliminar tu propio usuario.", duration=3000)
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
             
         with rx.session() as session:
             user = session.exec(
                 select(UserModel)
                 .where(UserModel.username == username)
+                .where(UserModel.company_id == company_id)
                 .options(selectinload(UserModel.role))
             ).first()
             

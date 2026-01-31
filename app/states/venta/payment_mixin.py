@@ -11,8 +11,20 @@ from ..types import PaymentBreakdownItem, PaymentMethodConfig
 class PaymentMixin:
     @rx.var
     def payment_methods(self) -> List[PaymentMethodConfig]:
+        company_id = None
+        branch_id = None
+        if hasattr(self, "current_user"):
+            company_id = self.current_user.get("company_id")
+        if hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
         with rx.session() as session:
-            methods = session.exec(select(PaymentMethod)).all()
+            methods = session.exec(
+                select(PaymentMethod)
+                .where(PaymentMethod.company_id == company_id)
+                .where(PaymentMethod.branch_id == branch_id)
+            ).all()
             if not methods:
                 return []
             return [

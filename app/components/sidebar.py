@@ -131,6 +131,28 @@ def sidebar() -> rx.Component:
                     ),
                     class_name="flex h-16 items-center justify-between px-4",
                 ),
+                rx.cond(
+                    (State.available_branches.length() > 1) & State.sidebar_open,
+                    rx.el.div(
+                        rx.el.label(
+                            "Sucursal",
+                            class_name="text-xs font-medium text-slate-500",
+                        ),
+                        rx.el.select(
+                            rx.foreach(
+                                State.available_branches,
+                                lambda branch: rx.el.option(
+                                    branch["name"], value=branch["id"]
+                                ),
+                            ),
+                            value=State.selected_branch_id,
+                            on_change=State.set_active_branch,
+                            class_name="w-full h-9 px-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        ),
+                        class_name="px-4 pb-3 flex flex-col gap-1",
+                    ),
+                    rx.fragment(),
+                ),
                 # Separador con gradiente sutil
                 rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4"),
                 # Navegación

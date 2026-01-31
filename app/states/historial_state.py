@@ -121,15 +121,31 @@ class HistorialState(MixinState):
 
     def _load_category_options(self) -> None:
         categories: set[str] = set()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.available_category_options = [["Todas", "Todas"]]
+            return
         with rx.session() as session:
-            for name in session.exec(select(Category.name)).all():
+            for name in session.exec(
+                select(Category.name)
+                .where(Category.company_id == company_id)
+                .where(Category.branch_id == branch_id)
+            ).all():
                 if name:
                     categories.add(str(name).strip())
-            for name in session.exec(select(Product.category)).all():
+            for name in session.exec(
+                select(Product.category)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).all():
                 if name:
                     categories.add(str(name).strip())
             for name in session.exec(
                 select(SaleItem.product_category_snapshot)
+                .join(Sale, SaleItem.sale_id == Sale.id)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
             ).all():
                 if name:
                     categories.add(str(name).strip())
@@ -201,8 +217,14 @@ class HistorialState(MixinState):
         self.available_report_method_options = method_options
         self.available_report_source_options = [option[:] for option in REPORT_SOURCE_OPTIONS]
 
+        company_id = self._company_id()
+        if not company_id:
+            self.available_report_user_options = [["Todos", "Todos"]]
+            return
         with rx.session() as session:
-            usernames = session.exec(select(User.username)).all()
+            usernames = session.exec(
+                select(User.username).where(User.company_id == company_id)
+            ).all()
 
         user_values = sorted(
             {
@@ -240,10 +262,18 @@ class HistorialState(MixinState):
         user_filter = self.report_filter_user or "Todos"
 
         rows: list[dict] = []
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rows
         with rx.session() as session:
             if source_filter in {"Todos", "Ventas"}:
-                payment_query = select(SalePayment).options(
-                    selectinload(SalePayment.sale).selectinload(Sale.user)
+                payment_query = (
+                    select(SalePayment)
+                    .join(Sale, SalePayment.sale_id == Sale.id)
+                    .where(Sale.company_id == company_id)
+                    .where(Sale.branch_id == branch_id)
+                    .options(selectinload(SalePayment.sale).selectinload(Sale.user))
                 )
                 if start_date:
                     payment_query = payment_query.where(
@@ -305,6 +335,8 @@ class HistorialState(MixinState):
                 log_query = (
                     select(CashboxLog, User.username)
                     .join(User, User.id == CashboxLog.user_id, isouter=True)
+                    .where(CashboxLog.company_id == company_id)
+                    .where(CashboxLog.branch_id == branch_id)
                     .where(CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS))
                     .where(CashboxLog.is_voided == False)
                 )
@@ -358,10 +390,16 @@ class HistorialState(MixinState):
         user_filter = self.report_filter_user or "Todos"
 
         rows: list[dict] = []
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rows
         with rx.session() as session:
             log_query = (
                 select(CashboxLog, User.username)
                 .join(User, User.id == CashboxLog.user_id, isouter=True)
+                .where(CashboxLog.company_id == company_id)
+                .where(CashboxLog.branch_id == branch_id)
                 .where(CashboxLog.action.in_(["apertura", "cierre"]))
                 .where(CashboxLog.is_voided == False)
             )
@@ -405,6 +443,12 @@ class HistorialState(MixinState):
 
     def _apply_sales_filters(self, query):
         start_date, end_date = self._history_date_range()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return query.where(sa.false())
+        query = query.where(Sale.company_id == company_id)
+        query = query.where(Sale.branch_id == branch_id)
         if start_date:
             query = query.where(Sale.timestamp >= start_date)
         if end_date:
@@ -418,7 +462,10 @@ class HistorialState(MixinState):
             like_search = f"%{search}%"
             sale_ids = (
                 select(SaleItem.sale_id)
+                .join(Sale, SaleItem.sale_id == Sale.id)
                 .where(SaleItem.product_name_snapshot.ilike(like_search))
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
                 .distinct()
             )
             query = query.where(Sale.id.in_(sale_ids))
@@ -427,16 +474,25 @@ class HistorialState(MixinState):
         if category and category != "Todas":
             sale_ids = (
                 select(SaleItem.sale_id)
+                .join(Sale, SaleItem.sale_id == Sale.id)
                 .where(SaleItem.product_category_snapshot == category)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
                 .distinct()
             )
             query = query.where(Sale.id.in_(sale_ids))
         return query
 
     def _sales_query(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return select(Sale).where(sa.false())
         query = (
             select(Sale)
             .where(Sale.status != SaleStatus.cancelled)
+            .where(Sale.company_id == company_id)
+            .where(Sale.branch_id == branch_id)
             .options(
                 selectinload(Sale.payments),
                 selectinload(Sale.items),
@@ -591,6 +647,9 @@ class HistorialState(MixinState):
     ) -> dict[int, dict[str, str]]:
         if not sale_ids:
             return {}
+        company_id = self._company_id()
+        if not company_id:
+            return {}
         conditions = [CashboxLog.sale_id.in_(sale_ids)]
         conditions.extend(
             CashboxLog.notes.like(f"%Venta%{sale_id}%")
@@ -600,6 +659,7 @@ class HistorialState(MixinState):
             return {}
         logs = session.exec(
             select(CashboxLog)
+            .where(CashboxLog.company_id == company_id)
             .where(CashboxLog.action.in_(["Venta", "Inicial Credito"]))
             .where(CashboxLog.is_voided == False)
             .where(sa.or_(*conditions))
@@ -943,10 +1003,14 @@ class HistorialState(MixinState):
             sale_db_id = int(sale_id)
         except ValueError:
             return rx.toast("Venta no encontrada.", duration=3000)
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
             sale = session.exec(
                 select(Sale)
                 .where(Sale.id == sale_db_id)
+                .where(Sale.company_id == company_id)
                 .options(
                     selectinload(Sale.items),
                     selectinload(Sale.payments),
@@ -1019,6 +1083,10 @@ class HistorialState(MixinState):
     def export_to_excel(self):
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
 
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
@@ -1495,6 +1563,11 @@ class HistorialState(MixinState):
             "mixto": Decimal("0.00"),
         }
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return {k: self._round_currency(v) for k, v in stats.items()}
+
         start_date, end_date = self._history_date_range()
 
         with rx.session() as session:
@@ -1508,6 +1581,8 @@ class HistorialState(MixinState):
                 )
                 .join(Sale, SalePayment.sale_id == Sale.id)
                 .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
             )
             if start_date:
                 payment_query = payment_query.where(
@@ -1537,6 +1612,8 @@ class HistorialState(MixinState):
                 )
                 .where(CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS))
                 .where(CashboxLog.is_voided == False)
+                .where(CashboxLog.company_id == company_id)
+                .where(CashboxLog.branch_id == branch_id)
             )
             if start_date:
                 query_log = query_log.where(CashboxLog.timestamp >= start_date)
@@ -1577,10 +1654,16 @@ class HistorialState(MixinState):
         total_credit = Decimal("0.00")
         start_date, end_date = self._history_date_range()
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0.0
         with rx.session() as session:
             query = (
                 select(Sale)
                 .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
                 .options(selectinload(Sale.payments))
             )
             if start_date:
@@ -1608,10 +1691,16 @@ class HistorialState(MixinState):
         start_date, end_date = self._history_date_range()
         pending_total = Decimal("0.00")
 
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0.0
         with rx.session() as session:
             query = (
                 select(Sale)
                 .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
                 .options(
                     selectinload(Sale.payments),
                     selectinload(Sale.installments),
@@ -1666,9 +1755,16 @@ class HistorialState(MixinState):
             "other": {"icon": "circle-help", "color": "gray"},
         }
         enabled_kinds: set[str] = set()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
         with rx.session() as session:
             methods = session.exec(
-                select(PaymentMethod).where(PaymentMethod.enabled == True)
+                select(PaymentMethod)
+                .where(PaymentMethod.enabled == True)
+                .where(PaymentMethod.company_id == company_id)
+                .where(PaymentMethod.branch_id == branch_id)
             ).all()
         for method in methods:
             kind = (method.kind or method.method_id or "other").strip().lower()
@@ -1760,6 +1856,10 @@ class HistorialState(MixinState):
 
     @rx.var
     def productos_mas_vendidos(self) -> list[dict]:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
         with rx.session() as session:
             statement = select(
                 SaleItem.product_name_snapshot, 
@@ -1768,6 +1868,8 @@ class HistorialState(MixinState):
             statement = (
                 statement
                 .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
                 .group_by(SaleItem.product_name_snapshot)
                 .order_by(sa.desc("total_qty"))
                 .limit(5)
@@ -1780,8 +1882,18 @@ class HistorialState(MixinState):
 
     @rx.var
     def productos_stock_bajo(self) -> list[Dict]:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
         with rx.session() as session:
-            products = session.exec(select(Product).where(Product.stock <= 10).order_by(Product.stock)).all()
+            products = session.exec(
+                select(Product)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.stock <= 10)
+                .order_by(Product.stock)
+            ).all()
             return [
                 {
                     "barcode": p.barcode,
@@ -1794,11 +1906,17 @@ class HistorialState(MixinState):
 
     @rx.var
     def sales_by_day(self) -> list[dict]:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
         with rx.session() as session:
             date_col = sa.func.date(Sale.timestamp)
             query = (
                 select(date_col, sa.func.sum(Sale.total_amount))
                 .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
                 .group_by(date_col)
                 .order_by(date_col.desc())
                 .limit(7)
