@@ -179,6 +179,7 @@ class AuthState(MixinState):
     needs_initial_admin: bool = False
     show_user_form: bool = False
     user_form_key: int = 0
+    branch_access_revision: int = 0
     new_user_data: NewUser = {
         "username": "",
         "email": "",
@@ -303,6 +304,7 @@ class AuthState(MixinState):
 
     @rx.var
     def available_branches(self) -> List[Dict[str, Any]]:
+        _ = self.branch_access_revision
         user_id = self.current_user.get("id")
         company_id = self.current_user.get("company_id")
         if not user_id or not company_id:

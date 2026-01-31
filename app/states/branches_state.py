@@ -307,6 +307,14 @@ class BranchesState(MixinState):
         if not self.branch_users_branch_id:
             return
         branch_id = int(self.branch_users_branch_id)
+        current_user_id = None
+        if hasattr(self, "current_user"):
+            current_user_id = self.current_user.get("id")
+        if current_user_id is not None:
+            try:
+                current_user_id = int(current_user_id)
+            except (TypeError, ValueError):
+                current_user_id = None
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
@@ -340,6 +348,14 @@ class BranchesState(MixinState):
                             continue
                         session.delete(member)
             session.commit()
+        if current_user_id is not None and (
+            current_user_id in to_add or current_user_id in to_remove
+        ):
+            if hasattr(self, "invalidate_user_cache"):
+                self.invalidate_user_cache()
+            self.branch_access_revision += 1
+            if current_user_id in to_remove and getattr(self, "active_branch_id", None) == branch_id:
+                self.selected_branch_id = ""
         self.load_branches()
         self.close_branch_users()
         return rx.toast("Accesos actualizados.", duration=2500)

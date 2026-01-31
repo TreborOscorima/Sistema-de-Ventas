@@ -153,15 +153,14 @@ class ConfigState(MixinState):
         self.receipt_paper = "80"
         self.receipt_width = ""
         company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        if not company_id:
             self.company_form_key += 1
             return
         with rx.session() as session:
             settings = session.exec(
                 select(CompanySettings)
                 .where(CompanySettings.company_id == company_id)
-                .where(CompanySettings.branch_id == branch_id)
+                .order_by(CompanySettings.branch_id, CompanySettings.id)
             ).first()
             if settings:
                 self.company_name = settings.company_name or ""
@@ -212,7 +211,7 @@ class ConfigState(MixinState):
             return toast
         company_id = self._company_id()
         branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
             
         code = (code or "PE").upper()
@@ -224,23 +223,25 @@ class ConfigState(MixinState):
         
         with rx.session() as session:
             # Actualizar CompanySettings
-            settings = session.exec(
+            settings_list = session.exec(
                 select(CompanySettings)
                 .where(CompanySettings.company_id == company_id)
-                .where(CompanySettings.branch_id == branch_id)
-            ).first()
-            if settings:
-                settings.country_code = code
-                settings.default_currency_code = new_currency
-                session.add(settings)
+            ).all()
+            if settings_list:
+                for settings in settings_list:
+                    settings.country_code = code
+                    settings.default_currency_code = new_currency
+                    session.add(settings)
             else:
-                settings = CompanySettings(
-                    company_id=company_id,
-                    branch_id=branch_id,
-                    country_code=code,
-                    default_currency_code=new_currency,
+                branch_id_value = int(branch_id) if branch_id else 1
+                session.add(
+                    CompanySettings(
+                        company_id=company_id,
+                        branch_id=branch_id_value,
+                        country_code=code,
+                        default_currency_code=new_currency,
+                    )
                 )
-                session.add(settings)
             
             # Limpiar métodos de pago existentes
             existing_methods = session.exec(
@@ -339,36 +340,38 @@ class ConfigState(MixinState):
 
         company_id = self._company_id()
         branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
-            settings = session.exec(
+            settings_list = session.exec(
                 select(CompanySettings)
                 .where(CompanySettings.company_id == company_id)
-                .where(CompanySettings.branch_id == branch_id)
-            ).first()
-            if settings:
-                settings.company_name = company_name
-                settings.ruc = ruc
-                settings.address = address
-                settings.phone = phone or None
-                settings.footer_message = footer_message or None
-                settings.receipt_paper = receipt_paper
-                settings.receipt_width = receipt_width_value
-                session.add(settings)
+            ).all()
+            if settings_list:
+                for settings in settings_list:
+                    settings.company_name = company_name
+                    settings.ruc = ruc
+                    settings.address = address
+                    settings.phone = phone or None
+                    settings.footer_message = footer_message or None
+                    settings.receipt_paper = receipt_paper
+                    settings.receipt_width = receipt_width_value
+                    session.add(settings)
             else:
-                settings = CompanySettings(
-                    company_id=company_id,
-                    branch_id=branch_id,
-                    company_name=company_name,
-                    ruc=ruc,
-                    address=address,
-                    phone=phone or None,
-                    footer_message=footer_message or None,
-                    receipt_paper=receipt_paper,
-                    receipt_width=receipt_width_value,
+                branch_id_value = int(branch_id) if branch_id else 1
+                session.add(
+                    CompanySettings(
+                        company_id=company_id,
+                        branch_id=branch_id_value,
+                        company_name=company_name,
+                        ruc=ruc,
+                        address=address,
+                        phone=phone or None,
+                        footer_message=footer_message or None,
+                        receipt_paper=receipt_paper,
+                        receipt_width=receipt_width_value,
+                    )
                 )
-                session.add(settings)
             session.commit()
         self.company_name = company_name
         self.ruc = ruc

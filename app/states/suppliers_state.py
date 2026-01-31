@@ -121,7 +121,7 @@ class SuppliersState(MixinState):
         name = sanitize_name(self.current_supplier.get("name") or "")
         tax_id = sanitize_dni(self.current_supplier.get("tax_id") or "")
         if not name or not tax_id:
-            return rx.toast("Nombre y RUC/CUIT son obligatorios.", duration=3000)
+            return rx.toast("Nombre y N° de Registro de Empresa son obligatorios.", duration=3000)
 
         phone = sanitize_phone(self.current_supplier.get("phone") or "")
         address = sanitize_text(self.current_supplier.get("address") or "")
@@ -138,7 +138,7 @@ class SuppliersState(MixinState):
                 .where(Supplier.tax_id == tax_id)
             ).first()
             if existing and (not supplier_id or existing.id != supplier_id):
-                return rx.toast("El RUC/CUIT ya esta registrado.", duration=3000)
+                return rx.toast("El N° de Registro de Empresa ya esta registrado.", duration=3000)
 
             if supplier_id:
                 supplier = session.exec(

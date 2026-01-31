@@ -292,15 +292,14 @@ class MixinState:
         except Exception:
             return defaults
         company_id = self._company_id() if hasattr(self, "_company_id") else None
-        branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
-        if not company_id or not branch_id:
+        if not company_id:
             return defaults
         try:
             with rx.session() as session:
                 settings = session.exec(
                     select(CompanySettings)
                     .where(CompanySettings.company_id == company_id)
-                    .where(CompanySettings.branch_id == branch_id)
+                    .order_by(CompanySettings.branch_id, CompanySettings.id)
                 ).first()
         except Exception:
             return defaults

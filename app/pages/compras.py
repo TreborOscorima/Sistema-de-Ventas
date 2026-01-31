@@ -485,7 +485,7 @@ def purchase_edit_modal() -> rx.Component:
           class_name="block text-sm font-medium text-slate-600",
         ),
         rx.el.input(
-          placeholder="Buscar por nombre o RUC/CUIT",
+          placeholder="Buscar por nombre o N° de Registro de Empresa",
           value=State.purchase_edit_supplier_query,
           on_change=State.search_purchase_edit_supplier,
           class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -591,7 +591,7 @@ def supplier_modal() -> rx.Component:
     description="Registrar o editar proveedor.",
     children=[
       rx.el.div(
-        rx.el.label("Nombre", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Razón Social / Nombre de Empresa", class_name="text-sm font-medium text-slate-700"),
         rx.el.input(
           value=State.current_supplier["name"],
           on_change=lambda val: State.update_current_supplier("name", val),
@@ -600,7 +600,7 @@ def supplier_modal() -> rx.Component:
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("RUC/CUIT", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("N° de Registro de Empresa", class_name="text-sm font-medium text-slate-700"),
         rx.el.input(
           value=State.current_supplier["tax_id"],
           on_change=lambda val: State.update_current_supplier("tax_id", val),
@@ -695,7 +695,7 @@ def compras_page() -> rx.Component:
       rx.el.div(
         rx.el.label("Buscar", class_name="text-sm font-medium text-slate-600 mb-1"),
         rx.el.input(
-          placeholder="Documento, proveedor, RUC/CUIT",
+          placeholder="Documento, Proveedor, N° de Registro de Empresa",
           value=State.purchase_search_term,
           on_change=State.set_purchase_search_term,
           class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -796,7 +796,7 @@ def compras_page() -> rx.Component:
       rx.el.div(
         rx.el.label("Buscar proveedor", class_name="text-sm font-medium text-slate-600 mb-1"),
         rx.el.input(
-          placeholder="Nombre, RUC/CUIT, telefono",
+          placeholder="Razón Social, N° de Registro de Empresa, telefono",
           value=State.supplier_search_query,
           on_change=State.set_supplier_search_query,
           class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -823,7 +823,7 @@ def compras_page() -> rx.Component:
         rx.el.thead(
           rx.el.tr(
             rx.el.th("Proveedor", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("RUC/CUIT", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("N° de Registro de Empresa", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("Telefono", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("Email", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("Direccion", class_name=TABLE_STYLES["header_cell"]),

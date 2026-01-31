@@ -170,7 +170,7 @@ def privilege_badges(user: rx.Var[dict]) -> rx.Component:
       )
       for label, key in PRIVILEGE_LABELS
     ],
-    class_name="flex flex-wrap gap-2 max-w-xl",
+    class_name="flex flex-wrap gap-2 w-full",
   )
 
 
@@ -226,7 +226,7 @@ def company_settings_section() -> rx.Component:
       rx.el.div(
         rx.el.div(
           rx.el.label(
-            "Razón Social / Nombre", class_name="text-sm font-medium"
+            "Razón Social / Nombre de Empresa", class_name="text-sm font-medium"
           ),
           rx.el.input(
             default_value=State.company_name,
@@ -238,11 +238,11 @@ def company_settings_section() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label(State.tax_id_label, class_name="text-sm font-medium"),
+          rx.el.label("N° de Registro de Empresa", class_name="text-sm font-medium"),
           rx.el.input(
             default_value=State.ruc,
             on_change=State.set_ruc,
-            placeholder=State.tax_id_placeholder,
+            placeholder="N° de Registro de Empresa",
             key=State.company_form_key.to_string() + "-ruc",
             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
           ),
@@ -344,7 +344,8 @@ def user_form() -> rx.Component:
         "Crear Nuevo Usuario",
         on_click=State.show_create_user_form,
         class_name=f"{BUTTON_STYLES['primary']} w-full sm:w-auto mb-6",
-      )
+      ),
+      as_child=True,
     ),
     rx.radix.primitives.dialog.portal(
       rx.radix.primitives.dialog.overlay(
@@ -531,11 +532,11 @@ def user_section() -> rx.Component:
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Rol", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Privilegios", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} w-32"),
+            rx.el.th("Rol", class_name=f"{TABLE_STYLES['header_cell']} w-28"),
+            rx.el.th("Privilegios", class_name=f"{TABLE_STYLES['header_cell']} w-full"),
             rx.el.th(
-              "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+              "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center w-24"
             ),
             class_name=TABLE_STYLES["header"],
           )
@@ -544,11 +545,11 @@ def user_section() -> rx.Component:
           rx.foreach(
             State.users_list,
             lambda user: rx.el.tr(
-              rx.el.td(user["username"], class_name="py-3 px-4"),
-              rx.el.td(user["role"], class_name="py-3 px-4"),
+              rx.el.td(user["username"], class_name="py-3 px-4 w-32 truncate"),
+              rx.el.td(user["role"], class_name="py-3 px-4 w-28 truncate"),
               rx.el.td(
                 privilege_badges(user),
-                class_name="py-3 px-4",
+                class_name="py-3 px-4 w-full",
               ),
               rx.el.td(
                 rx.el.div(
@@ -672,13 +673,14 @@ def branch_section() -> rx.Component:
       rx.el.div(
         rx.el.label("Nombre de Sucursal", class_name="text-sm font-medium text-slate-700"),
         rx.el.input(
-          value=rx.cond(
+          default_value=rx.cond(
             State.editing_branch_id != "",
             State.editing_branch_name,
             State.new_branch_name,
           ),
           on_change=State.handle_branch_name_change,
           placeholder="Ej: Casa Matriz, Sucursal Centro",
+          key=State.editing_branch_id + "-branch-name",
           class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
@@ -686,13 +688,14 @@ def branch_section() -> rx.Component:
       rx.el.div(
         rx.el.label("Dirección", class_name="text-sm font-medium text-slate-700"),
         rx.el.input(
-          value=rx.cond(
+          default_value=rx.cond(
             State.editing_branch_id != "",
             State.editing_branch_address,
             State.new_branch_address,
           ),
           on_change=State.handle_branch_address_change,
           placeholder="Ej: Av. Principal 123",
+          key=State.editing_branch_id + "-branch-address",
           class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
@@ -760,6 +763,7 @@ def branch_section() -> rx.Component:
             ),
           )
         ),
+        class_name="w-full table-fixed",
       ),
       class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto",
     ),
