@@ -68,6 +68,7 @@ class ServicesState(MixinState):
     schedule_selected_week: str = CURRENT_WEEK_STR
     schedule_selected_month: str = CURRENT_MONTH_STR
     schedule_selected_slots: List[Dict[str, str]] = []
+    services_refresh_token: int = 0
     reservation_form: Dict[str, str] = {
         "client_name": "",
         "dni": "",
@@ -86,6 +87,20 @@ class ServicesState(MixinState):
     service_admin_log: List[ServiceLogEntry] = []
     reservation_payment_id: str = ""
     reservation_total_count: int = 0
+
+    @rx.event
+    def refresh_service_state(self):
+        self.services_refresh_token += 1
+        self.reservation_current_page = 1
+        self.reservation_payment_id = ""
+        self.reservation_payment_amount = ""
+        self.reservation_cancel_selection = ""
+        self.reservation_modal_open = False
+        self.reservation_modal_mode = "new"
+        self.reservation_modal_reservation_id = ""
+        self.schedule_selected_slots = []
+        self._sync_calendar_state(datetime.date.today(), clear_selection=True)
+        self.reservation_form = self._reservation_default_form()
 
     def _reservation_to_dict(self, reservation: FieldReservationModel) -> FieldReservation:
         sport_value = (
@@ -906,6 +921,7 @@ class ServicesState(MixinState):
 
     @rx.var
     def schedule_slots(self) -> list[dict]:
+        _ = self.services_refresh_token
         date_str = (
             self.schedule_selected_date
             or self.reservation_form.get("date", "")

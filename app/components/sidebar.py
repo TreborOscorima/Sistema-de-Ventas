@@ -4,6 +4,7 @@ from app.components.ui import RADIUS, SHADOWS, TRANSITIONS
 
 CONFIG_SUBSECTIONS = [
     {"key": "empresa", "label": "Datos de Empresa", "icon": "building"},
+    {"key": "sucursales", "label": "Sucursales", "icon": "map-pin"},
     {"key": "usuarios", "label": "Gestion de Usuarios", "icon": "users"},
     {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
     {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
@@ -132,24 +133,63 @@ def sidebar() -> rx.Component:
                     class_name="flex h-16 items-center justify-between px-4",
                 ),
                 rx.cond(
-                    (State.available_branches.length() > 1) & State.sidebar_open,
+                    State.sidebar_open,
                     rx.el.div(
                         rx.el.label(
-                            "Sucursal",
+                            rx.cond(
+                                State.available_branches.length() > 1,
+                                "Sucursal actual",
+                                "Sucursal",
+                            ),
                             class_name="text-xs font-medium text-slate-500",
                         ),
-                        rx.el.select(
-                            rx.foreach(
-                                State.available_branches,
-                                lambda branch: rx.el.option(
-                                    branch["name"], value=branch["id"]
+                        rx.cond(
+                            State.available_branches.length() > 1,
+                            rx.el.select(
+                                rx.foreach(
+                                    State.available_branches,
+                                    lambda branch: rx.el.option(
+                                        branch["name"], value=branch["id"]
+                                    ),
                                 ),
+                                value=State.selected_branch_id,
+                                on_change=State.set_active_branch,
+                                class_name="w-full h-9 px-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                             ),
-                            value=State.selected_branch_id,
-                            on_change=State.set_active_branch,
-                            class_name="w-full h-9 px-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                            rx.el.div(
+                                rx.el.span(
+                                    rx.cond(
+                                        State.active_branch_name != "",
+                                        State.active_branch_name,
+                                        "Sin sucursal",
+                                    ),
+                                    class_name="text-sm font-semibold text-slate-800",
+                                ),
+                                class_name="w-full h-9 px-2 flex items-center bg-white border border-slate-200 rounded-md",
+                            ),
                         ),
-                        class_name="px-4 pb-3 flex flex-col gap-1",
+                        rx.el.label(
+                            "Accesos",
+                            class_name="text-[11px] font-medium text-slate-400 mt-2",
+                        ),
+                        rx.cond(
+                            State.available_branches.length() > 0,
+                            rx.el.div(
+                                rx.foreach(
+                                    State.available_branches,
+                                    lambda branch: rx.el.span(
+                                        branch["name"],
+                                        class_name="px-2 py-0.5 text-[11px] rounded-full bg-slate-100 text-slate-600 border border-slate-200",
+                                    ),
+                                ),
+                                class_name="flex flex-wrap gap-1",
+                            ),
+                            rx.el.span(
+                                "Sin accesos configurados",
+                                class_name="text-[11px] text-slate-400",
+                            ),
+                        ),
+                        class_name="px-4 pb-3 flex flex-col gap-2",
                     ),
                     rx.fragment(),
                 ),

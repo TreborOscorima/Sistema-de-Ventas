@@ -360,7 +360,7 @@ def user_form() -> rx.Component:
           rx.el.div(
             rx.el.label("Nombre de Usuario", class_name="text-sm font-medium text-slate-700"),
             rx.el.input(
-              value=State.new_user_data["username"],
+              default_value=State.new_user_data["username"],
               on_change=lambda v: State.handle_new_user_change(
                 "username", v
               ),
@@ -374,7 +374,7 @@ def user_form() -> rx.Component:
             rx.el.input(
               type="email",
               placeholder="usuario@empresa.com",
-              value=State.new_user_data["email"],
+              default_value=State.new_user_data["email"],
               on_change=lambda v: State.handle_new_user_change(
                 "email", v
               ),
@@ -404,7 +404,7 @@ def user_form() -> rx.Component:
             rx.el.div(
               rx.el.input(
                 placeholder="Ej: Administrador, Cajero, Auditor",
-                value=State.new_role_name,
+                default_value=State.new_role_name,
                 on_change=State.update_new_role_name,
                 class_name=f"flex-1 {INPUT_STYLES['default']}",
               ),
@@ -426,7 +426,7 @@ def user_form() -> rx.Component:
                 "Dejar en blanco para no cambiar",
                 "",
               ),
-              value=State.new_user_data["password"],
+              default_value=State.new_user_data["password"],
               on_change=lambda v: State.handle_new_user_change(
                 "password", v
               ),
@@ -438,7 +438,7 @@ def user_form() -> rx.Component:
             rx.el.label("Confirmar Contraseña", class_name="text-sm font-medium text-slate-700"),
             rx.el.input(
               type="password",
-              value=State.new_user_data["confirm_password"],
+              default_value=State.new_user_data["confirm_password"],
               on_change=lambda v: State.handle_new_user_change(
                 "confirm_password", v
               ),
@@ -482,6 +482,7 @@ def user_form() -> rx.Component:
           class_name="flex-1 overflow-y-auto min-h-0 p-1 scroll-smooth",
           style={"scroll-behavior": "auto"},
           id="user-form-content",
+          key=State.user_form_key.to_string(),
         ),
         rx.divider(color="slate-100"),
         rx.el.div(
@@ -732,7 +733,7 @@ def branch_section() -> rx.Component:
             lambda branch: rx.el.tr(
               rx.el.td(branch["name"], class_name=TABLE_STYLES["cell"]),
               rx.el.td(branch["address"], class_name=TABLE_STYLES["cell"]),
-              rx.el.td(str(branch["users_count"]), class_name=TABLE_STYLES["cell"]),
+              rx.el.td(branch["users_count"].to_string(), class_name=TABLE_STYLES["cell"]),
               rx.el.td(
                 rx.el.div(
                   rx.el.button(

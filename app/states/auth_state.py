@@ -178,6 +178,7 @@ class AuthState(MixinState):
     password_change_error: str = ""
     needs_initial_admin: bool = False
     show_user_form: bool = False
+    user_form_key: int = 0
     new_user_data: NewUser = {
         "username": "",
         "email": "",
@@ -501,18 +502,20 @@ class AuthState(MixinState):
         ).all()
         return [int(row) for row in rows if row]
 
-    def _ensure_user_branch_access(self, session, user: UserModel) -> list[int]:
+    def _ensure_user_branch_access(self, session, user: UserModel) -> tuple[list[int], bool]:
         if not user:
-            return []
+            return [], False
         branch_ids = self._user_branch_ids(session, user.id)
         default_branch_id = getattr(user, "branch_id", None)
+        changed = False
         if default_branch_id and default_branch_id not in branch_ids:
             session.add(
                 UserBranch(user_id=user.id, branch_id=int(default_branch_id))
             )
             session.flush()
             branch_ids.append(int(default_branch_id))
-        return branch_ids
+            changed = True
+        return branch_ids, changed
 
     def _select_default_branch(
         self,
@@ -862,7 +865,7 @@ class AuthState(MixinState):
             )
 
     @rx.event
-    def set_active_branch(self, branch_id: str):
+    async def set_active_branch(self, branch_id: str):
         user_id = self.current_user.get("id")
         company_id = self.current_user.get("company_id")
         if not user_id or not company_id:
@@ -882,6 +885,57 @@ class AuthState(MixinState):
             if not allowed:
                 return rx.toast("No tiene acceso a esta sucursal.", duration=3000)
         self.selected_branch_id = str(branch_id_int)
+        # Forzar refresco de datos dependientes de sucursal
+        if hasattr(self, "_cashbox_update_trigger"):
+            self._cashbox_update_trigger += 1
+        if hasattr(self, "_inventory_update_trigger"):
+            self._inventory_update_trigger += 1
+        if hasattr(self, "_purchase_update_trigger"):
+            self._purchase_update_trigger += 1
+        if hasattr(self, "_history_update_trigger"):
+            self._history_update_trigger += 1
+        if hasattr(self, "_report_update_trigger"):
+            self._report_update_trigger += 1
+        if hasattr(self, "load_clients"):
+            self.load_clients()
+        if hasattr(self, "load_suppliers"):
+            self.load_suppliers()
+        if hasattr(self, "load_categories"):
+            self.load_categories()
+        if hasattr(self, "reload_history"):
+            self.reload_history()
+        if hasattr(self, "load_reservations"):
+            self.load_reservations()
+        if hasattr(self, "load_field_prices"):
+            self.load_field_prices()
+        if hasattr(self, "refresh_service_state"):
+            self.refresh_service_state()
+        if hasattr(self, "load_users"):
+            self.load_users()
+        if hasattr(self, "load_branches"):
+            self.load_branches()
+        if hasattr(self, "load_debtors"):
+            await self.load_debtors()
+        if hasattr(self, "load_dashboard"):
+            self.load_dashboard()
+        if hasattr(self, "check_overdue_alerts"):
+            self.check_overdue_alerts()
+        if hasattr(self, "cashbox_current_page"):
+            self.cashbox_current_page = 1
+        if hasattr(self, "cashbox_log_current_page"):
+            self.cashbox_log_current_page = 1
+        if hasattr(self, "petty_cash_current_page"):
+            self.petty_cash_current_page = 1
+        if hasattr(self, "cashbox_filter_start_date"):
+            self.cashbox_filter_start_date = ""
+            self.cashbox_filter_end_date = ""
+            self.cashbox_staged_start_date = ""
+            self.cashbox_staged_end_date = ""
+        if hasattr(self, "cashbox_log_filter_start_date"):
+            self.cashbox_log_filter_start_date = ""
+            self.cashbox_log_filter_end_date = ""
+            self.cashbox_log_staged_start_date = ""
+            self.cashbox_log_staged_end_date = ""
         return rx.toast("Sucursal actualizada.", duration=2000)
 
     @rx.event
@@ -1033,7 +1087,9 @@ class AuthState(MixinState):
                     token_version=getattr(user, "token_version", 0),
                     company_id=getattr(user, "company_id", None),
                 )
-                branch_ids = self._ensure_user_branch_access(session, user)
+                branch_ids, branch_access_changed = self._ensure_user_branch_access(session, user)
+                if branch_access_changed:
+                    session.commit()
                 selected_branch = self._select_default_branch(
                     session, user, branch_ids
                 )
@@ -1112,6 +1168,7 @@ class AuthState(MixinState):
         if not self.current_user["privileges"].get("manage_users"):
             return rx.toast("No tiene permisos para gestionar usuarios.", duration=3000)
         self._reset_new_user_form()
+        self.user_form_key += 1
         self.show_user_form = True
 
     def _open_user_editor(self, user: User):
@@ -1132,6 +1189,7 @@ class AuthState(MixinState):
             "role": role_key,
             "privileges": merged_privileges,
         }
+        self.user_form_key += 1
         self.editing_user = user
         self.show_user_form = True
 
@@ -1197,10 +1255,10 @@ class AuthState(MixinState):
             self.new_user_data["privileges"] = self._role_privileges(value)
             return
         if field == "username":
-            self.new_user_data["username"] = value.lower()
+            self.new_user_data["username"] = value
             return
         if field == "email":
-            self.new_user_data["email"] = value.lower()
+            self.new_user_data["email"] = value
             return
         self.new_user_data[field] = value
 
@@ -1278,6 +1336,9 @@ class AuthState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
+        branch_id = self._branch_id()
+        if not branch_id:
+            return rx.toast("Sucursal no definida.", duration=3000)
         if not self.editing_user and not email:
             return rx.toast("El correo es obligatorio.", duration=3000)
         if email and not validate_email(email):
