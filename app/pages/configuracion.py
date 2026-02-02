@@ -4,6 +4,9 @@ from app.components.ui import (
   BUTTON_STYLES,
   INPUT_STYLES,
   TABLE_STYLES,
+  action_button,
+  limit_reached_modal,
+  modal_container,
   toggle_switch,
   page_title,
   permission_guard,
@@ -45,6 +48,12 @@ CONFIG_SECTIONS: list[dict[str, str]] = [
     "label": "Metodos de Pago",
     "description": "Botones y opciones que veras en Venta",
     "icon": "credit-card",
+  },
+  {
+    "key": "suscripcion",
+    "label": "Suscripcion",
+    "description": "Estado del plan y consumo",
+    "icon": "sparkles",
   },
 ]
 
@@ -332,6 +341,153 @@ def company_settings_section() -> rx.Component:
         class_name="flex flex-col sm:flex-row sm:items-center justify-between gap-3",
       ),
             class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4",
+    ),
+    class_name="space-y-4",
+  )
+
+
+def _usage_meter(
+  title: str,
+  icon: str,
+  used: rx.Var,
+  limit_label: rx.Var | str,
+  percent: rx.Var,
+  is_full: rx.Var,
+) -> rx.Component:
+  return rx.el.div(
+    rx.el.div(
+      rx.el.div(
+        rx.icon(icon, class_name="h-5 w-5 text-slate-600"),
+        class_name="p-2 rounded-lg bg-slate-100",
+      ),
+      rx.el.div(
+        rx.el.p(title, class_name="text-sm font-medium text-slate-600"),
+        rx.el.p(
+          rx.el.span(used, class_name="tabular-nums"),
+          rx.el.span(" / ", class_name="text-slate-400"),
+          rx.el.span(limit_label, class_name="tabular-nums"),
+          class_name=rx.cond(
+            is_full,
+            "text-sm font-semibold text-red-600",
+            "text-sm font-semibold text-slate-800",
+          ),
+        ),
+        class_name="flex flex-col gap-1",
+      ),
+      class_name="flex items-center gap-3",
+    ),
+    rx.progress(
+      value=percent,
+      max=100,
+      color_scheme=rx.cond(is_full, "red", "indigo"),
+      class_name="h-2",
+    ),
+    class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3",
+  )
+
+
+def _upgrade_plan_modal() -> rx.Component:
+  return modal_container(
+    is_open=State.show_upgrade_modal,
+    on_close=State.close_upgrade_modal,
+    title="Contactar a Ventas",
+    description="Conversemos para encontrar el plan que mejor se adapte a tu negocio.",
+    children=[
+      rx.el.div(
+        rx.el.p(
+          "Nuestro equipo puede ayudarte a ampliar límites y activar módulos adicionales.",
+          class_name="text-sm text-slate-600",
+        ),
+        class_name="space-y-2",
+      )
+    ],
+    footer=rx.el.div(
+      action_button("Cerrar", State.close_upgrade_modal, variant="secondary"),
+      action_button("Contactar a Ventas", State.contact_sales_whatsapp, variant="primary"),
+      class_name="flex flex-col sm:flex-row justify-end gap-2",
+    ),
+    max_width="max-w-md",
+  )
+
+
+def subscription_section() -> rx.Component:
+  return rx.el.div(
+    rx.el.div(
+      rx.el.h2("MI SUSCRIPCION", class_name="text-xl font-semibold text-slate-700"),
+      rx.el.p(
+        "Consulta tu plan actual y el consumo de recursos.",
+        class_name="text-sm text-slate-500",
+      ),
+      class_name="space-y-1",
+    ),
+    rx.card(
+      rx.el.div(
+        rx.el.div(
+          rx.el.div(
+            rx.el.span(
+              State.subscription_snapshot["plan_display"],
+              class_name="text-sm font-semibold text-slate-800",
+            ),
+            rx.badge(
+              State.subscription_snapshot["status_label"],
+              color_scheme=State.subscription_snapshot["status_tone"],
+            ),
+            class_name="flex items-center gap-2",
+          ),
+          rx.el.p(
+            rx.cond(
+              State.subscription_snapshot["is_trial"],
+              rx.el.span(
+                "Trial · ",
+                State.subscription_snapshot["trial_days_left"],
+                " días restantes",
+              ),
+              rx.el.span("Plan activo"),
+            ),
+            class_name="text-sm text-slate-600",
+          ),
+          rx.cond(
+            State.subscription_snapshot["is_trial"],
+            rx.el.p(
+              rx.el.span("Vence: ", class_name="text-slate-500"),
+              State.subscription_snapshot["trial_ends_on"],
+              class_name="text-xs text-slate-500",
+            ),
+            rx.fragment(),
+          ),
+          class_name="flex flex-col gap-1",
+        ),
+        class_name="flex items-start justify-between",
+      ),
+      class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm",
+    ),
+    rx.el.div(
+      _usage_meter(
+        "Sucursales",
+        "store",
+        State.subscription_snapshot["branches_used"],
+        State.subscription_snapshot["branches_limit_label"],
+        State.subscription_snapshot["branches_percent"],
+        State.subscription_snapshot["branches_full"],
+      ),
+      _usage_meter(
+        "Usuarios",
+        "user",
+        State.subscription_snapshot["users_used"],
+        State.subscription_snapshot["users_limit_label"],
+        State.subscription_snapshot["users_percent"],
+        State.subscription_snapshot["users_full"],
+      ),
+      class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
+    ),
+    rx.el.div(
+      action_button(
+        "Mejorar Plan",
+        State.open_upgrade_modal,
+        variant="primary",
+        icon="rocket",
+      ),
+      class_name="flex justify-end",
     ),
     class_name="space-y-4",
   )
@@ -1276,12 +1432,20 @@ def configuracion_page() -> rx.Component:
             ("unidades", unit_section()),
             ("pagos", payment_methods_section()),
             ("precios_campo", field_prices_section()),
+            ("suscripcion", subscription_section()),
             user_section(),
           ),
           class_name="space-y-4",
         ),
       class_name="p-4 sm:p-6 pb-4 w-full flex flex-col gap-5",
     ),
+    limit_reached_modal(
+      is_open=State.show_limit_modal,
+      on_close=State.close_limit_modal,
+      message=State.limit_modal_message,
+      on_primary=State.open_upgrade_modal,
+    ),
+    _upgrade_plan_modal(),
     on_mount=State.load_config_page,
   )
   return permission_guard(

@@ -4,7 +4,7 @@ from sqlmodel import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 
-from app.models import Branch, User as UserModel, UserBranch, Sale, Purchase, CashboxSession, Product
+from app.models import Branch, Company, User as UserModel, UserBranch, Sale, Purchase, CashboxSession, Product
 from app.utils.db_seeds import seed_new_branch_data
 from .mixin_state import MixinState
 
@@ -22,6 +22,13 @@ class BranchesState(MixinState):
     branch_users_branch_id: str = ""
     branch_users_branch_name: str = ""
     branch_users_rows: List[Dict[str, Any]] = []
+    show_limit_modal: bool = False
+    limit_modal_message: str = ""
+
+    @rx.event
+    def close_limit_modal(self):
+        self.show_limit_modal = False
+        self.limit_modal_message = ""
 
     def _require_manage_config(self):
         if hasattr(self, "current_user") and not self.current_user["privileges"].get(
@@ -92,6 +99,31 @@ class BranchesState(MixinState):
         if not name:
             return rx.toast("Ingrese el nombre de la sucursal.", duration=2500)
         with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+            if not company:
+                return rx.toast("Empresa no definida.", duration=3000)
+            max_branches_raw = getattr(company, "max_branches", None)
+            try:
+                max_branches = int(max_branches_raw)
+            except (TypeError, ValueError):
+                max_branches = None
+            if max_branches is not None and max_branches >= 0:
+                current_count = session.exec(
+                    select(func.count(Branch.id)).where(Branch.company_id == company_id)
+                ).one()
+                if int(current_count or 0) >= max_branches:
+                    plan_type = getattr(company, "plan_type", "")
+                    if hasattr(plan_type, "value"):
+                        plan_type = plan_type.value
+                    plan_label = str(plan_type or "").strip() or "desconocido"
+                    self.limit_modal_message = (
+                        f"Has alcanzado el límite de sucursales para tu plan {plan_label}. "
+                        f"Tu plan actual permite hasta {max_branches} sucursales."
+                    )
+                    self.show_limit_modal = True
+                    return
             existing = session.exec(
                 select(Branch)
                 .where(Branch.company_id == company_id)

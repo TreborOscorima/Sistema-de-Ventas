@@ -1,5 +1,6 @@
 from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
+from enum import Enum
 
 import reflex as rx
 from sqlmodel import Field, Relationship
@@ -8,6 +9,20 @@ from .auth import UserBranch
 
 if TYPE_CHECKING:
     from .auth import User
+
+
+class PlanType(str, Enum):
+    TRIAL = "trial"
+    STANDARD = "standard"
+    PROFESSIONAL = "professional"
+    ENTERPRISE = "enterprise"
+
+
+class SubscriptionStatus(str, Enum):
+    ACTIVE = "active"
+    WARNING = "warning"
+    PAST_DUE = "past_due"
+    SUSPENDED = "suspended"
 
 
 class Company(rx.Model, table=True):
@@ -22,6 +37,22 @@ class Company(rx.Model, table=True):
     )
     created_at: datetime = Field(
         default_factory=datetime.now,
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+    plan_type: str = Field(
+        default=PlanType.TRIAL,
+        description="Nivel de suscripción actual",
+    )
+    max_branches: int = Field(default=2)
+    max_users: int = Field(default=3)
+    has_reservations_module: bool = Field(default=True)
+    has_electronic_billing: bool = Field(default=False)
+    subscription_status: str = Field(
+        default=SubscriptionStatus.ACTIVE,
+        description="Estado calculado de la suscripción",
+    )
+    subscription_ends_at: Optional[datetime] = Field(
+        default=None,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
 

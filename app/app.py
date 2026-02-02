@@ -16,6 +16,7 @@ from app.pages.configuracion import configuracion_page
 from app.pages.cambiar_contrasena import cambiar_contrasena_page
 from app.pages.login import login_page
 from app.pages.periodo_prueba_finalizado import periodo_prueba_finalizado_page
+from app.pages.cuenta_suspendida import cuenta_suspendida_page
 from app.pages.registro import registro_page
 from app.pages.servicios import servicios_page
 from app.pages.cuentas import cuentas_page
@@ -249,6 +250,9 @@ def page_cambiar_contrasena() -> rx.Component:
 def page_periodo_prueba_finalizado() -> rx.Component:
     return periodo_prueba_finalizado_page()
 
+def page_cuenta_suspendida() -> rx.Component:
+    return cuenta_suspendida_page()
+
 def page_registro() -> rx.Component:
     return registro_page()
 
@@ -301,6 +305,8 @@ app = rx.App(
 # Eventos de carga comunes para todas las páginas
 _common_on_load = [
     State.ensure_roles_and_permissions,
+    State.check_subscription_status,
+    State.ensure_subscription_active,
     State.ensure_trial_active,
     State.ensure_password_change,
     State.ensure_default_data,
@@ -326,6 +332,12 @@ app.add_page(
     page_periodo_prueba_finalizado,
     route="/periodo-prueba-finalizado",
     title="Periodo de Prueba Finalizado - TUWAYKIAPP",
+)
+
+app.add_page(
+    page_cuenta_suspendida,
+    route="/cuenta-suspendida",
+    title="Cuenta Suspendida - TUWAYKIAPP",
 )
 
 app.add_page(

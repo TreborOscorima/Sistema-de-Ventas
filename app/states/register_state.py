@@ -1,4 +1,3 @@
-import os
 import uuid
 from datetime import datetime, timedelta
 
@@ -6,7 +5,8 @@ import bcrypt
 import reflex as rx
 from sqlmodel import select
 
-from app.models import Branch, Company, Role, User as UserModel, UserBranch
+from app.models import Branch, Role, User as UserModel, UserBranch
+from app.models.company import Company, PlanType
 from app.utils.auth import create_access_token
 from app.utils.db_seeds import seed_new_branch_data
 from app.utils.validators import validate_email, validate_password
@@ -88,22 +88,18 @@ class RegisterState(MixinState):
                     return
 
                 now = datetime.now()
-                trial_days_raw = (os.getenv("TRIAL_DAYS") or "15").strip()
-                try:
-                    trial_days = int(trial_days_raw)
-                except ValueError:
-                    trial_days = 15
-                if trial_days < 0:
-                    trial_days = 0
                 ruc_placeholder = f"TEMP{uuid.uuid4().hex[:11]}"
                 company = Company(
                     name=company_name,
                     ruc=ruc_placeholder,
                     is_active=True,
-                    trial_ends_at=(
-                        now + timedelta(days=trial_days) if trial_days > 0 else None
-                    ),
+                    trial_ends_at=now + timedelta(days=15),
                     created_at=now,
+                    plan_type=PlanType.TRIAL,
+                    max_branches=2,
+                    max_users=3,
+                    has_reservations_module=True,
+                    has_electronic_billing=False,
                 )
                 session.add(company)
                 session.flush()

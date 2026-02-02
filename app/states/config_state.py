@@ -9,6 +9,8 @@ from app.enums import PaymentMethodType
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
 
+WHATSAPP_SALES_URL = "https://wa.me/message/ULLEZ4HUFB5HA1"
+
 class ConfigState(MixinState):
     # Configuracion de empresa
     company_name: str = ""
@@ -19,6 +21,7 @@ class ConfigState(MixinState):
     receipt_paper: str = "80"
     receipt_width: str = ""
     company_form_key: int = 0
+    show_upgrade_modal: bool = False
     
     # País de operación
     selected_country_code: str = "PE"
@@ -193,6 +196,23 @@ class ConfigState(MixinState):
             self.load_users()
         if hasattr(self, "load_branches"):
             self.load_branches()
+
+    @rx.event
+    def open_upgrade_modal(self):
+        self.show_upgrade_modal = True
+
+    @rx.event
+    def close_upgrade_modal(self):
+        self.show_upgrade_modal = False
+
+    @rx.event
+    def set_upgrade_modal(self, value: bool):
+        self.show_upgrade_modal = bool(value)
+
+    @rx.event
+    def contact_sales_whatsapp(self):
+        self.show_upgrade_modal = False
+        return rx.redirect(WHATSAPP_SALES_URL)
 
     @rx.event
     def set_country(self, code: str):

@@ -806,6 +806,59 @@ def modal_container(
     )
 
 
+def limit_reached_modal(
+    is_open: rx.Var,
+    on_close: Callable,
+    message: rx.Var | str,
+    on_primary: Callable | None = None,
+    primary_label: str = "Ver Planes",
+) -> rx.Component:
+    """
+    Modal para límites de plan alcanzados.
+
+    Parametros:
+        is_open: Var reactiva que controla visibilidad
+        on_close: Manejador para cerrar el modal
+        message: Mensaje principal del cuerpo
+        on_primary: Accion del boton principal (opcional)
+        primary_label: Texto del boton principal
+    """
+    footer = rx.el.div(
+        action_button("Cerrar", on_close, variant="secondary"),
+        action_button(
+            primary_label,
+            on_primary if on_primary else on_close,
+            variant="primary",
+        ),
+        class_name="flex flex-col sm:flex-row justify-end gap-2",
+    )
+
+    body = rx.el.div(
+        rx.el.div(
+            rx.icon("rocket", class_name="h-6 w-6 text-indigo-600"),
+            rx.el.div(
+                rx.el.p(message, class_name="text-sm text-slate-700"),
+                rx.el.p(
+                    "Para seguir creciendo, actualiza tu suscripción.",
+                    class_name="text-xs text-slate-500",
+                ),
+                class_name="flex flex-col gap-1",
+            ),
+            class_name="flex items-start gap-3",
+        ),
+    )
+
+    return modal_container(
+        is_open=is_open,
+        on_close=on_close,
+        title="🚀 Mejora tu Plan",
+        description="",
+        children=[body],
+        footer=footer,
+        max_width="max-w-md",
+    )
+
+
 def filter_section(
     filters: list[rx.Component],
     on_search: Callable,

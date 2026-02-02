@@ -17,6 +17,115 @@ from app.components.ui import (
 )
 
 
+def _plan_summary_card() -> rx.Component:
+  return rx.card(
+    rx.el.div(
+      rx.el.div(
+        rx.el.div(
+          rx.icon("sparkles", class_name="w-5 h-5 text-amber-600"),
+          class_name=f"p-2 {RADIUS['lg']} bg-amber-50",
+        ),
+        rx.el.div(
+          rx.el.p(
+            State.subscription_snapshot["plan_display"],
+            class_name="text-sm font-semibold text-slate-800",
+          ),
+          rx.el.p(
+            "Estado de suscripción",
+            class_name="text-xs text-slate-500",
+          ),
+          class_name="flex flex-col",
+        ),
+        rx.el.div(
+          rx.badge(
+            State.subscription_snapshot["status_label"],
+            color_scheme=State.subscription_snapshot["status_tone"],
+          ),
+          class_name="ml-auto",
+        ),
+        class_name="flex items-center gap-3",
+      ),
+      rx.el.div(
+        rx.cond(
+          State.subscription_snapshot["is_trial"],
+          rx.el.div(
+            rx.icon("clock-3", class_name="w-4 h-4 text-amber-600"),
+            rx.el.span(
+              State.subscription_snapshot["trial_days_left"],
+              " días restantes",
+              class_name="text-sm text-amber-700 font-medium",
+            ),
+            class_name="flex items-center gap-2",
+          ),
+          rx.el.div(
+            rx.icon("circle_check", class_name="w-4 h-4 text-emerald-600"),
+            rx.el.span(
+              "Plan activo",
+              class_name="text-sm text-emerald-700 font-medium",
+            ),
+            class_name="flex items-center gap-2",
+          ),
+        ),
+        rx.cond(
+          State.subscription_snapshot["is_trial"],
+          rx.el.span(
+            "Vence: ",
+            State.subscription_snapshot["trial_ends_on"],
+            class_name="text-xs text-slate-500",
+          ),
+          rx.fragment(),
+        ),
+        class_name="mt-3 flex items-center justify-between",
+      ),
+      rx.cond(
+        State.subscription_snapshot["is_trial"],
+        rx.el.div(
+          action_button(
+            "Contactar a Ventas",
+            State.contact_sales_whatsapp,
+            variant="link_primary",
+            icon="message-circle",
+          ),
+          class_name="flex justify-end",
+        ),
+        rx.fragment(),
+      ),
+      class_name="space-y-2",
+    ),
+    class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm",
+  )
+
+
+def _payment_alert_banner() -> rx.Component:
+  return rx.cond(
+    State.payment_alert_info["show"],
+    rx.callout.root(
+      rx.callout.icon(
+        rx.cond(
+          State.payment_alert_info["color"] == "red",
+          rx.icon("circle_alert", class_name="h-4 w-4 text-red-600"),
+          rx.icon("triangle_alert", class_name="h-4 w-4 text-amber-700"),
+        ),
+      ),
+      rx.callout.text(
+        State.payment_alert_info["message"],
+        class_name=rx.cond(
+          State.payment_alert_info["color"] == "red",
+          "font-semibold text-red-950",
+          "font-semibold text-amber-950",
+        ),
+      ),
+      color=State.payment_alert_info["color"],
+      class_name=rx.cond(
+        State.payment_alert_info["color"] == "red",
+        "mt-4 border border-red-300 bg-red-100 text-red-950",
+        "mt-4 border border-amber-400 bg-amber-200 text-amber-950",
+      ),
+    ),
+    rx.fragment(),
+  )
+
+
 def _stat_card(
   title: str, 
   value: rx.Var, 
@@ -85,9 +194,9 @@ def _period_selector() -> rx.Component:
 def _alert_item(alert: dict) -> rx.Component:
   """Item de alerta."""
   severity_styles = {
-    "critical": ("bg-red-100 border-red-300 text-red-800", "circle-alert", "text-red-600"),
-    "error": ("bg-red-50 border-red-200 text-red-700", "alert-triangle", "text-red-500"),
-    "warning": ("bg-amber-50 border-amber-200 text-amber-700", "alert-triangle", "text-amber-500"),
+    "critical": ("bg-red-100 border-red-300 text-red-800", "circle_alert", "text-red-600"),
+    "error": ("bg-red-50 border-red-200 text-red-700", "triangle_alert", "text-red-500"),
+    "warning": ("bg-amber-50 border-amber-200 text-amber-700", "triangle_alert", "text-amber-500"),
     "info": ("bg-blue-50 border-blue-200 text-blue-700", "info", "text-blue-500"),
   }
   
@@ -454,6 +563,13 @@ def dashboard_page() -> rx.Component:
           ),
         ),
       ],
+    ),
+
+    _payment_alert_banner(),
+
+    rx.el.div(
+      _plan_summary_card(),
+      class_name="mt-4",
     ),
     
     # KPIs principales

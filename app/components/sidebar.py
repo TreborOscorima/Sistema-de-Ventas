@@ -10,6 +10,7 @@ CONFIG_SUBSECTIONS = [
     {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
     {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
     {"key": "precios_campo", "label": "Precios de Campo", "icon": "tags"},
+    {"key": "suscripcion", "label": "Suscripcion", "icon": "sparkles"},
 ]
 
 SERVICES_SUBSECTIONS = [
@@ -64,20 +65,28 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         class_name="w-full no-underline block",
     )
     return rx.cond(
-        page == "Clientes",
+        page == "Servicios",
         rx.cond(
-            State.current_user["privileges"]["view_clientes"],
+            State.company_has_reservations,
             link,
             rx.fragment(),
         ),
         rx.cond(
-            page == "Cuentas Corrientes",
+            page == "Clientes",
             rx.cond(
-                State.current_user["privileges"]["view_cuentas"],
+                State.current_user["privileges"]["view_clientes"],
                 link,
                 rx.fragment(),
             ),
-            link,
+            rx.cond(
+                page == "Cuentas Corrientes",
+                rx.cond(
+                    State.current_user["privileges"]["view_cuentas"],
+                    link,
+                    rx.fragment(),
+                ),
+                link,
+            ),
         ),
     )
 
@@ -117,7 +126,18 @@ def sidebar() -> rx.Component:
                         rx.cond(
                             State.sidebar_open,
                             rx.el.div(
-                                rx.el.span("TUWAYKIAPP", class_name="text-lg font-bold text-slate-900 tracking-tight"),
+                                rx.el.div(
+                                    rx.el.span(
+                                        "TUWAYKIAPP",
+                                        class_name="text-lg font-bold text-slate-900 tracking-tight",
+                                    ),
+                                    rx.cond(
+                                        State.subscription_snapshot["is_trial"],
+                                        rx.badge("TRIAL", color_scheme="orange"),
+                                        rx.fragment(),
+                                    ),
+                                    class_name="flex items-center gap-2",
+                                ),
                                 rx.el.span("Sistema de Ventas", class_name="text-[10px] text-slate-400 uppercase tracking-wider"),
                                 class_name="flex flex-col leading-tight",
                             ),

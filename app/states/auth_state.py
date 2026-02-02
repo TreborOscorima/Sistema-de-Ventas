@@ -34,6 +34,7 @@ from sqlmodel import select
 from sqlalchemy import func
 from sqlalchemy.orm import selectinload
 from app.models import Branch, Company, Permission, Role, User as UserModel, UserBranch
+from app.models.company import SubscriptionStatus
 from app.utils.auth import create_access_token, decode_token
 from app.utils.logger import get_logger
 from app.utils.rate_limit import (
@@ -387,7 +388,10 @@ class AuthState(MixinState):
     
     @rx.var
     def can_view_servicios(self) -> bool:
-        return bool(self.current_user["privileges"].get("view_servicios"))
+        return bool(
+            self.current_user["privileges"].get("view_servicios")
+            and self.company_has_reservations
+        )
     
     @rx.var
     def can_view_clientes(self) -> bool:
@@ -407,6 +411,197 @@ class AuthState(MixinState):
     @rx.var
     def can_manage_config(self) -> bool:
         return bool(self.current_user["privileges"].get("manage_config"))
+
+    @rx.var
+    def company_has_reservations(self) -> bool:
+        company_id = self._company_id()
+        if not company_id:
+            return False
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+        return bool(getattr(company, "has_reservations_module", False))
+
+    @rx.var
+    def plan_name(self) -> str:
+        company_id = self._company_id()
+        if not company_id:
+            return ""
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+        plan_type = getattr(company, "plan_type", "") if company else ""
+        if hasattr(plan_type, "value"):
+            plan_type = plan_type.value
+        return str(plan_type or "")
+
+    @rx.var
+    def subscription_snapshot(self) -> Dict[str, Any]:
+        """Snapshot con estado del plan y uso actual para UI."""
+        default = {
+            "plan_type": "",
+            "plan_display": "PLAN",
+            "status_label": "Activo",
+            "status_tone": "success",
+            "is_trial": False,
+            "trial_days_left": 0,
+            "trial_ends_on": "",
+            "max_branches": 0,
+            "max_users": 0,
+            "branches_used": 0,
+            "users_used": 0,
+            "branches_percent": 0,
+            "users_percent": 0,
+            "branches_full": False,
+            "users_full": False,
+            "branches_limit_label": "0",
+            "users_limit_label": "0",
+            "users_unlimited": False,
+        }
+        company_id = self._company_id()
+        if not company_id:
+            return default
+
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+            if not company:
+                return default
+
+            branches_used = session.exec(
+                select(func.count(Branch.id)).where(Branch.company_id == company_id)
+            ).one()
+            users_used = session.exec(
+                select(func.count(UserModel.id))
+                .where(UserModel.company_id == company_id)
+                .where(UserModel.is_active == True)
+            ).one()
+
+        def _safe_int(value: Any, fallback: int = 0) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return fallback
+
+        plan_type = getattr(company, "plan_type", "") or ""
+        if hasattr(plan_type, "value"):
+            plan_type = plan_type.value
+        plan_type = str(plan_type or "").strip().lower()
+        is_trial = plan_type == "trial"
+
+        trial_ends_at = getattr(company, "trial_ends_at", None)
+        now = datetime.now()
+        is_expired = bool(is_trial and trial_ends_at and trial_ends_at < now)
+        status_label = "Vencido" if is_expired else "Activo"
+        status_tone = "danger" if is_expired else ("warning" if is_trial else "success")
+        if not is_trial:
+            sub_status = getattr(company, "subscription_status", "")
+            if hasattr(sub_status, "value"):
+                sub_status = sub_status.value
+            sub_status = str(sub_status or "").strip().lower()
+            if sub_status == SubscriptionStatus.WARNING.value:
+                status_label = "Por vencer"
+                status_tone = "warning"
+            elif sub_status == SubscriptionStatus.PAST_DUE.value:
+                status_label = "Pago vencido"
+                status_tone = "danger"
+            elif sub_status == SubscriptionStatus.SUSPENDED.value:
+                status_label = "Suspendido"
+                status_tone = "danger"
+        trial_days_left = 0
+        trial_ends_on = ""
+        if is_trial and trial_ends_at:
+            trial_days_left = max((trial_ends_at.date() - now.date()).days, 0)
+            trial_ends_on = trial_ends_at.strftime("%d/%m/%Y")
+
+        max_branches = _safe_int(getattr(company, "max_branches", 0), 0)
+        max_users = _safe_int(getattr(company, "max_users", 0), 0)
+
+        branches_used = _safe_int(branches_used, 0)
+        users_used = _safe_int(users_used, 0)
+
+        branches_percent = (
+            min(int(round((branches_used / max_branches) * 100)), 100)
+            if max_branches > 0
+            else 0
+        )
+        users_percent = (
+            min(int(round((users_used / max_users) * 100)), 100)
+            if max_users > 0
+            else 0
+        )
+
+        users_unlimited = max_users < 0
+        branches_full = max_branches > 0 and branches_used >= max_branches
+        users_full = max_users > 0 and users_used >= max_users
+
+        return {
+            "plan_type": plan_type,
+            "plan_display": f"PLAN {plan_type.upper()}" if plan_type else "PLAN",
+            "status_label": status_label,
+            "status_tone": status_tone,
+            "is_trial": is_trial,
+            "trial_days_left": trial_days_left,
+            "trial_ends_on": trial_ends_on,
+            "max_branches": max_branches,
+            "max_users": max_users,
+            "branches_used": branches_used,
+            "users_used": users_used,
+            "branches_percent": branches_percent,
+            "users_percent": users_percent,
+            "branches_full": branches_full,
+            "users_full": users_full,
+            "branches_limit_label": "Ilimitado" if max_branches < 0 else str(max_branches),
+            "users_limit_label": "Ilimitado" if max_users < 0 else str(max_users),
+            "users_unlimited": users_unlimited,
+        }
+
+    @rx.var
+    def payment_alert_info(self) -> Dict[str, Any]:
+        """Info de alerta para pagos próximos o vencidos."""
+        default = {"show": False, "color": "yellow", "message": ""}
+        company_id = self._company_id()
+        if not company_id:
+            return default
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+        if not company:
+            return default
+        plan_type = getattr(company, "plan_type", "")
+        if hasattr(plan_type, "value"):
+            plan_type = plan_type.value
+        plan_type = str(plan_type or "").strip().lower()
+        if plan_type == "trial":
+            return default
+        subscription_ends_at = getattr(company, "subscription_ends_at", None)
+        if not subscription_ends_at:
+            return default
+        now = datetime.now()
+        days_remaining = (subscription_ends_at.date() - now.date()).days
+        if days_remaining > 5:
+            return default
+        if days_remaining >= 0:
+            return {
+                "show": True,
+                "color": "yellow",
+                "message": f"Tu plan vence en {days_remaining} días.",
+            }
+        if days_remaining >= -5:
+            grace_left = max(0, 5 - abs(days_remaining))
+            return {
+                "show": True,
+                "color": "red",
+                "message": (
+                    "¡Pago vencido! "
+                    f"Tienes {grace_left} días de gracia antes del corte."
+                ),
+            }
+        return default
     
     @rx.var
     def is_admin(self) -> bool:
@@ -827,6 +1022,101 @@ class AuthState(MixinState):
             yield rx.redirect("/dashboard")
 
     @rx.event
+    def check_subscription_status(self):
+        if not self.is_authenticated:
+            return
+        company_id = self.current_user.get("company_id")
+        if not company_id:
+            return
+        current_path = self.router.url.path
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+            if not company:
+                return
+            plan_type = getattr(company, "plan_type", "")
+            if hasattr(plan_type, "value"):
+                plan_type = plan_type.value
+            plan_type = str(plan_type or "").strip().lower()
+            now = datetime.now()
+            new_status = None
+
+            if plan_type == "trial":
+                trial_ends_at = getattr(company, "trial_ends_at", None)
+                if trial_ends_at and trial_ends_at < now:
+                    new_status = SubscriptionStatus.SUSPENDED.value
+                    current_status = getattr(company, "subscription_status", "")
+                    if hasattr(current_status, "value"):
+                        current_status = current_status.value
+                    if str(current_status or "") != new_status:
+                        company.subscription_status = new_status
+                        session.add(company)
+                        session.commit()
+                    if current_path != "/periodo-prueba-finalizado":
+                        return rx.redirect("/periodo-prueba-finalizado")
+                    return
+                new_status = SubscriptionStatus.ACTIVE.value
+            else:
+                subscription_ends_at = getattr(company, "subscription_ends_at", None)
+                if subscription_ends_at:
+                    days_remaining = (
+                        subscription_ends_at.date() - now.date()
+                    ).days
+                    if days_remaining > 5:
+                        new_status = SubscriptionStatus.ACTIVE.value
+                    elif days_remaining >= 0:
+                        new_status = SubscriptionStatus.WARNING.value
+                    elif days_remaining >= -5:
+                        new_status = SubscriptionStatus.PAST_DUE.value
+                    else:
+                        new_status = SubscriptionStatus.SUSPENDED.value
+                else:
+                    new_status = SubscriptionStatus.ACTIVE.value
+
+            current_status = getattr(company, "subscription_status", "")
+            if hasattr(current_status, "value"):
+                current_status = current_status.value
+            current_status = str(current_status or "")
+            if new_status and current_status != new_status:
+                company.subscription_status = new_status
+                session.add(company)
+                session.commit()
+
+            if (
+                new_status == SubscriptionStatus.SUSPENDED.value
+                and current_path != "/cuenta-suspendida"
+            ):
+                return rx.redirect("/cuenta-suspendida")
+
+    @rx.event
+    def ensure_subscription_active(self):
+        if not self.is_authenticated:
+            return
+        current_path = self.router.url.path
+        if current_path in {"/cuenta-suspendida", "/periodo-prueba-finalizado"}:
+            return
+        company_id = self.current_user.get("company_id")
+        if not company_id:
+            return
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+            if not company:
+                return
+            plan_type = getattr(company, "plan_type", "")
+            if hasattr(plan_type, "value"):
+                plan_type = plan_type.value
+            if str(plan_type or "").strip().lower() == "trial":
+                return
+            status = getattr(company, "subscription_status", "")
+            if hasattr(status, "value"):
+                status = status.value
+            if str(status or "").strip().lower() == SubscriptionStatus.SUSPENDED.value:
+                return rx.redirect("/cuenta-suspendida")
+
+    @rx.event
     def ensure_trial_active(self):
         if not self.is_authenticated:
             return
@@ -842,11 +1132,14 @@ class AuthState(MixinState):
             company = session.exec(
                 select(Company).where(Company.id == company_id)
             ).first()
-            if (
-                company
-                and company.trial_ends_at
-                and company.trial_ends_at < datetime.now()
-            ):
+            if not company:
+                return
+            plan_type = getattr(company, "plan_type", "")
+            if hasattr(plan_type, "value"):
+                plan_type = plan_type.value
+            if str(plan_type or "").strip().lower() != "trial":
+                return
+            if company.trial_ends_at and company.trial_ends_at < datetime.now():
                 return rx.redirect("/periodo-prueba-finalizado")
 
     @rx.event
@@ -1369,6 +1662,31 @@ class AuthState(MixinState):
                     self.new_user_data["privileges"],
                     overwrite=True, # <--- La clave: fuerza la actualización en la DB
                 )
+            if not self.editing_user:
+                company = session.exec(
+                    select(Company).where(Company.id == company_id)
+                ).first()
+                if not company:
+                    return rx.toast("Empresa no definida.", duration=3000)
+                max_users_raw = getattr(company, "max_users", None)
+                try:
+                    max_users = int(max_users_raw)
+                except (TypeError, ValueError):
+                    max_users = None
+                if max_users is not None and max_users >= 0:
+                    current_count = session.exec(
+                        select(func.count(UserModel.id))
+                        .where(UserModel.company_id == company_id)
+                        .where(UserModel.is_active == True)
+                    ).one()
+                    if int(current_count or 0) >= max_users:
+                        plan_type = getattr(company, "plan_type", "")
+                        if hasattr(plan_type, "value"):
+                            plan_type = plan_type.value
+                        plan_label = str(plan_type or "").strip() or "desconocido"
+                        return rx.window_alert(
+                            f"Límite alcanzado. Tu plan {plan_label} solo permite {max_users} usuarios."
+                        )
             if self.editing_user:
                 # Actualizar usuario existente
                 user_to_update = session.exec(
