@@ -22,6 +22,7 @@ class ConfigState(MixinState):
     receipt_width: str = ""
     company_form_key: int = 0
     show_upgrade_modal: bool = False
+    show_pricing_modal: bool = False
     
     # País de operación
     selected_country_code: str = "PE"
@@ -208,6 +209,18 @@ class ConfigState(MixinState):
     @rx.event
     def set_upgrade_modal(self, value: bool):
         self.show_upgrade_modal = bool(value)
+
+    @rx.event
+    def open_pricing_modal(self):
+        self.show_pricing_modal = True
+
+    @rx.event
+    def close_pricing_modal(self):
+        self.show_pricing_modal = False
+
+    @rx.event
+    def set_pricing_modal(self, value: bool):
+        self.show_pricing_modal = bool(value)
 
     @rx.event
     def contact_sales_whatsapp(self):

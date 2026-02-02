@@ -191,6 +191,8 @@ class AuthState(MixinState):
     }
     editing_user: Optional[Dict[str, Any]] = None
     new_role_name: str = ""
+    show_user_limit_modal: bool = False
+    user_limit_modal_message: str = ""
     
     # Cache de usuario para evitar consultas repetidas a BD
     _cached_user: Optional[User] = None
@@ -459,6 +461,7 @@ class AuthState(MixinState):
             "branches_limit_label": "0",
             "users_limit_label": "0",
             "users_unlimited": False,
+            "branches_unlimited": False,
         }
         company_id = self._company_id()
         if not company_id:
@@ -523,20 +526,26 @@ class AuthState(MixinState):
         branches_used = _safe_int(branches_used, 0)
         users_used = _safe_int(users_used, 0)
 
-        branches_percent = (
-            min(int(round((branches_used / max_branches) * 100)), 100)
-            if max_branches > 0
-            else 0
-        )
-        users_percent = (
-            min(int(round((users_used / max_users) * 100)), 100)
-            if max_users > 0
-            else 0
-        )
+        users_unlimited = max_users < 0 or max_users >= 999
+        branches_unlimited = max_branches < 0 or max_branches >= 999
 
-        users_unlimited = max_users < 0
-        branches_full = max_branches > 0 and branches_used >= max_branches
-        users_full = max_users > 0 and users_used >= max_users
+        branches_percent = (
+            0
+            if branches_unlimited
+            else min(int(round((branches_used / max_branches) * 100)), 100)
+        ) if max_branches > 0 else 0
+        users_percent = (
+            0
+            if users_unlimited
+            else min(int(round((users_used / max_users) * 100)), 100)
+        ) if max_users > 0 else 0
+
+        branches_full = (
+            False if branches_unlimited else (max_branches > 0 and branches_used >= max_branches)
+        )
+        users_full = (
+            False if users_unlimited else (max_users > 0 and users_used >= max_users)
+        )
 
         return {
             "plan_type": plan_type,
@@ -554,9 +563,10 @@ class AuthState(MixinState):
             "users_percent": users_percent,
             "branches_full": branches_full,
             "users_full": users_full,
-            "branches_limit_label": "Ilimitado" if max_branches < 0 else str(max_branches),
-            "users_limit_label": "Ilimitado" if max_users < 0 else str(max_users),
+            "branches_limit_label": "Ilimitado" if branches_unlimited else str(max_branches),
+            "users_limit_label": "Ilimitado" if users_unlimited else str(max_users),
             "users_unlimited": users_unlimited,
+            "branches_unlimited": branches_unlimited,
         }
 
     @rx.var
@@ -1544,6 +1554,11 @@ class AuthState(MixinState):
         self._reset_new_user_form()
 
     @rx.event
+    def close_user_limit_modal(self):
+        self.show_user_limit_modal = False
+        self.user_limit_modal_message = ""
+
+    @rx.event
     def handle_new_user_change(self, field: str, value: str):
         if field == "role":
             self.new_user_data["role"] = value
@@ -1684,9 +1699,12 @@ class AuthState(MixinState):
                         if hasattr(plan_type, "value"):
                             plan_type = plan_type.value
                         plan_label = str(plan_type or "").strip() or "desconocido"
-                        return rx.window_alert(
-                            f"Límite alcanzado. Tu plan {plan_label} solo permite {max_users} usuarios."
+                        self.user_limit_modal_message = (
+                            f"Límite alcanzado. Tu plan {plan_label} "
+                            f"solo permite {max_users} usuarios."
                         )
+                        self.show_user_limit_modal = True
+                        return
             if self.editing_user:
                 # Actualizar usuario existente
                 user_to_update = session.exec(

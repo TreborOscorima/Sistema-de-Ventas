@@ -7,6 +7,7 @@ from app.components.ui import (
   action_button,
   limit_reached_modal,
   modal_container,
+  pricing_modal,
   toggle_switch,
   page_title,
   permission_guard,
@@ -353,6 +354,7 @@ def _usage_meter(
   limit_label: rx.Var | str,
   percent: rx.Var,
   is_full: rx.Var,
+  is_unlimited: rx.Var,
 ) -> rx.Component:
   return rx.el.div(
     rx.el.div(
@@ -376,11 +378,15 @@ def _usage_meter(
       ),
       class_name="flex items-center gap-3",
     ),
-    rx.progress(
-      value=percent,
-      max=100,
-      color_scheme=rx.cond(is_full, "red", "indigo"),
-      class_name="h-2",
+    rx.cond(
+      is_unlimited,
+      rx.el.p("Ilimitado", class_name="text-xs font-semibold text-emerald-600"),
+      rx.progress(
+        value=percent,
+        max=100,
+        color_scheme=rx.cond(is_full, "red", "indigo"),
+        class_name="h-2",
+      ),
     ),
     class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3",
   )
@@ -469,6 +475,7 @@ def subscription_section() -> rx.Component:
         State.subscription_snapshot["branches_limit_label"],
         State.subscription_snapshot["branches_percent"],
         State.subscription_snapshot["branches_full"],
+        State.subscription_snapshot["branches_unlimited"],
       ),
       _usage_meter(
         "Usuarios",
@@ -477,17 +484,24 @@ def subscription_section() -> rx.Component:
         State.subscription_snapshot["users_limit_label"],
         State.subscription_snapshot["users_percent"],
         State.subscription_snapshot["users_full"],
+        State.subscription_snapshot["users_unlimited"],
       ),
       class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
     ),
     rx.el.div(
       action_button(
+        "Contactar a Ventas",
+        State.contact_sales_whatsapp,
+        variant="secondary",
+        icon="message-circle",
+      ),
+      action_button(
         "Mejorar Plan",
-        State.open_upgrade_modal,
+        State.open_pricing_modal,
         variant="primary",
         icon="rocket",
       ),
-      class_name="flex justify-end",
+      class_name="flex flex-col sm:flex-row justify-end gap-2",
     ),
     class_name="space-y-4",
   )
@@ -1444,6 +1458,16 @@ def configuracion_page() -> rx.Component:
       on_close=State.close_limit_modal,
       message=State.limit_modal_message,
       on_primary=State.open_upgrade_modal,
+    ),
+    limit_reached_modal(
+      is_open=State.show_user_limit_modal,
+      on_close=State.close_user_limit_modal,
+      message=State.user_limit_modal_message,
+      on_primary=State.open_upgrade_modal,
+    ),
+    pricing_modal(
+      is_open=State.show_pricing_modal,
+      on_close=State.close_pricing_modal,
     ),
     _upgrade_plan_modal(),
     on_mount=State.load_config_page,

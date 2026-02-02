@@ -22,8 +22,21 @@ def _plan_summary_card() -> rx.Component:
     rx.el.div(
       rx.el.div(
         rx.el.div(
-          rx.icon("sparkles", class_name="w-5 h-5 text-amber-600"),
-          class_name=f"p-2 {RADIUS['lg']} bg-amber-50",
+          rx.match(
+            State.subscription_snapshot["plan_type"],
+            ("trial", rx.icon("clock_3", class_name="w-5 h-5 text-amber-700")),
+            ("standard", rx.icon("store", class_name="w-5 h-5 text-indigo-600")),
+            ("professional", rx.icon("crown", class_name="w-5 h-5 text-amber-600")),
+            ("enterprise", rx.icon("rocket", class_name="w-5 h-5 text-emerald-600")),
+            rx.icon("badge_check", class_name="w-5 h-5 text-indigo-600"),
+          ),
+          class_name=rx.match(
+            State.subscription_snapshot["plan_type"],
+            ("trial", f"p-2 {RADIUS['lg']} bg-amber-50"),
+            ("professional", f"p-2 {RADIUS['lg']} bg-amber-50"),
+            ("enterprise", f"p-2 {RADIUS['lg']} bg-emerald-50"),
+            f"p-2 {RADIUS['lg']} bg-indigo-50",
+          ),
         ),
         rx.el.div(
           rx.el.p(
@@ -79,16 +92,17 @@ def _plan_summary_card() -> rx.Component:
       ),
       rx.cond(
         State.subscription_snapshot["is_trial"],
-        rx.el.div(
-          action_button(
-            "Contactar a Ventas",
-            State.contact_sales_whatsapp,
-            variant="link_primary",
-            icon="message-circle",
-          ),
-          class_name="flex justify-end",
-        ),
         rx.fragment(),
+        rx.fragment(),
+      ),
+      rx.el.div(
+        rx.el.button(
+          rx.icon("settings", class_name="h-4 w-4"),
+          rx.el.span("Gestionar Suscripción"),
+          on_click=State.go_to_subscription,
+          class_name=f"{BUTTON_STYLES['link_primary']} inline-flex",
+        ),
+        class_name="flex justify-end",
       ),
       class_name="space-y-2",
     ),

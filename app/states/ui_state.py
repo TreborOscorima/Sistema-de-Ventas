@@ -112,6 +112,11 @@ class UIState(MixinState):
     def set_config_active_tab(self, tab: str):
         self.config_active_tab = tab
 
+    @rx.event
+    def go_to_subscription(self):
+        self.config_active_tab = "suscripcion"
+        return rx.redirect("/configuracion")
+
     def _navigation_items_config(self) -> List[Dict[str, str]]:
         return [
             {"label": "Dashboard", "icon": "layout-dashboard", "page": "Dashboard", "route": "/dashboard"},

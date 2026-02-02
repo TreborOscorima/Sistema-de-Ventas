@@ -859,6 +859,170 @@ def limit_reached_modal(
     )
 
 
+def pricing_modal(
+    is_open: rx.Var,
+    on_close: Callable,
+) -> rx.Component:
+    def _plan_card(
+        title: str,
+        icon: str,
+        limits: list[str],
+        modules: list[str],
+        action_label: str,
+        action_href: str,
+        highlight: bool = False,
+        badge_text: str | None = None,
+    ) -> rx.Component:
+        show_badge = rx.Var.create(bool(badge_text))
+        accent_ring = "ring-2 ring-amber-200/70" if highlight else "ring-1 ring-slate-200/80"
+        header_bg = (
+            "bg-gradient-to-r from-amber-50 via-amber-100/60 to-white"
+            if highlight
+            else "bg-gradient-to-r from-indigo-50 via-white to-white"
+        )
+        icon_wrap = "bg-amber-100 text-amber-700" if highlight else "bg-indigo-100 text-indigo-600"
+        button_style = BUTTON_STYLES["primary"] if highlight else BUTTON_STYLES["secondary"]
+
+        def _bullet(item: str) -> rx.Component:
+            return rx.el.li(
+                rx.icon(
+                    "circle_check",
+                    class_name="h-4 w-4 text-emerald-600 flex-shrink-0",
+                ),
+                rx.el.span(item, class_name="text-sm text-slate-700"),
+                class_name="flex items-start gap-2",
+            )
+
+        return rx.el.div(
+            rx.el.div(
+                rx.el.div(
+                    rx.icon(icon, class_name="h-5 w-5"),
+                    class_name=f"p-2 rounded-lg {icon_wrap}",
+                ),
+                rx.el.div(
+                    rx.el.p(title, class_name="text-xs font-semibold uppercase text-slate-500"),
+                    rx.el.h4(title.replace("PLAN ", ""), class_name="text-lg font-semibold text-slate-900"),
+                    class_name="flex flex-col leading-tight",
+                ),
+                rx.cond(
+                    show_badge,
+                    rx.badge(
+                        badge_text or "",
+                        color_scheme="amber" if highlight else "indigo",
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="flex items-center justify-between",
+            ),
+            rx.el.div(
+                rx.el.p("Límites", class_name="text-xs uppercase text-slate-400 tracking-wide"),
+                rx.el.ul(
+                    *[_bullet(item) for item in limits],
+                    class_name="space-y-1.5",
+                ),
+                class_name="space-y-2",
+            ),
+            rx.el.div(
+                rx.el.p("Módulos", class_name="text-xs uppercase text-slate-400 tracking-wide"),
+                rx.el.ul(
+                    *[_bullet(item) for item in modules],
+                    class_name="space-y-1.5",
+                ),
+                class_name="space-y-2",
+            ),
+            rx.link(
+                rx.el.button(
+                    action_label,
+                    class_name=button_style + " w-full justify-center",
+                ),
+                href=action_href,
+                is_external=True,
+                class_name="w-full",
+            ),
+            class_name=(
+                f"{CARD_STYLES['bordered']} space-y-4 {accent_ring} "
+                f"{header_bg} shadow-sm hover:shadow-md transition-all"
+            ),
+        )
+
+    standard_link = (
+        "https://wa.me/5491168376517?text="
+        "Hola,%20quiero%20el%20Plan%20Standard."
+    )
+    professional_link = (
+        "https://wa.me/5491168376517?text="
+        "Hola,%20quiero%20el%20Plan%20Professional."
+    )
+    enterprise_link = (
+        "https://wa.me/5491168376517?text="
+        "Hola,%20busco%20una%20solucion%20Enterprise."
+    )
+
+    content = rx.el.div(
+        _plan_card(
+            title="PLAN STANDARD",
+            icon="store",
+            limits=["Hasta 5 sucursales", "10 usuarios"],
+            modules=[
+                "Múltiples usuarios y roles",
+                "Ventas rápidas con lector de código o teclado",
+                "Productos por unidad, peso y litros",
+                "Gestión de stock y reposición",
+                "Reportes diarios de ventas e ingresos",
+                "Clientes y cuentas corrientes",
+            ],
+            action_label="Elegir Standard",
+            action_href=standard_link,
+        ),
+        _plan_card(
+            title="PLAN PROFESSIONAL",
+            icon="crown",
+            limits=["Hasta 10 sucursales", "Usuarios ilimitados"],
+            modules=[
+                "Todo lo del Standard",
+                "Multi-sucursal con control centralizado",
+                "Reportes avanzados y comparativos",
+                "Soporte prioritario",
+                "Automatizaciones y aprobaciones",
+                "Integraciones personalizadas",
+            ],
+            action_label="Elegir Professional",
+            action_href=professional_link,
+            highlight=True,
+            badge_text="Más popular",
+        ),
+        _plan_card(
+            title="PLAN ENTERPRISE",
+            icon="rocket",
+            limits=["Sucursales a medida", "Usuarios ilimitados"],
+            modules=[
+                "Facturación electrónica",
+                "API Access y webhooks",
+                "Gerente de cuenta dedicado",
+                "SLA y soporte 24/7",
+                "Implementación a medida",
+                "Onboarding y capacitación",
+            ],
+            action_label="Contactar",
+            action_href=enterprise_link,
+        ),
+        class_name="grid grid-cols-1 md:grid-cols-3 gap-5",
+    )
+
+    return modal_container(
+        is_open=is_open,
+        on_close=on_close,
+        title="Elige el plan ideal para tu crecimiento",
+        description="Compará opciones y elegí el plan que mejor se adapta a tu negocio.",
+        children=[content],
+        footer=rx.el.div(
+            action_button("Cerrar", on_close, variant="secondary"),
+            class_name="flex justify-end",
+        ),
+        max_width="max-w-5xl",
+    )
+
+
 def filter_section(
     filters: list[rx.Component],
     on_search: Callable,
