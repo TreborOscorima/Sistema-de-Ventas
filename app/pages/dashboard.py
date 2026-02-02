@@ -25,7 +25,7 @@ def _plan_summary_card() -> rx.Component:
           rx.match(
             State.subscription_snapshot["plan_type"],
             ("trial", rx.icon("clock_3", class_name="w-5 h-5 text-amber-700")),
-            ("standard", rx.icon("store", class_name="w-5 h-5 text-indigo-600")),
+            ("standard", rx.icon("sparkles", class_name="w-5 h-5 text-amber-600")),
             ("professional", rx.icon("crown", class_name="w-5 h-5 text-amber-600")),
             ("enterprise", rx.icon("rocket", class_name="w-5 h-5 text-emerald-600")),
             rx.icon("badge_check", class_name="w-5 h-5 text-indigo-600"),

@@ -961,7 +961,7 @@ def pricing_modal(
     content = rx.el.div(
         _plan_card(
             title="PLAN STANDARD",
-            icon="store",
+            icon="sparkles",
             limits=["Hasta 5 sucursales", "10 usuarios"],
             modules=[
                 "Múltiples usuarios y roles",

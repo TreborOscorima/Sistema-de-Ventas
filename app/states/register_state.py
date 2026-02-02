@@ -5,7 +5,7 @@ import bcrypt
 import reflex as rx
 from sqlmodel import select
 
-from app.models import Branch, Role, User as UserModel, UserBranch
+from app.models import Branch, Role, User as UserModel, UserBranch, CompanySettings
 from app.models.company import Company, PlanType
 from app.utils.auth import create_access_token
 from app.utils.db_seeds import seed_new_branch_data
@@ -27,6 +27,7 @@ class RegisterState(MixinState):
         company_name = (form_data.get("company_name") or "").strip()
         username = (form_data.get("username") or "").strip().lower()
         email = (form_data.get("email") or "").strip().lower()
+        contact_phone = (form_data.get("contact_phone") or "").strip()
         password = form_data.get("password") or ""
         confirm_password = form_data.get("confirm_password") or ""
 
@@ -40,6 +41,10 @@ class RegisterState(MixinState):
             return
         if not email or not validate_email(email):
             self.register_error = "Ingrese un correo valido."
+            self.is_registering = False
+            return
+        if not contact_phone:
+            self.register_error = "El numero de contacto es obligatorio."
             self.is_registering = False
             return
         if password != confirm_password:
@@ -111,6 +116,17 @@ class RegisterState(MixinState):
                 )
                 session.add(branch)
                 session.flush()
+
+                session.add(
+                    CompanySettings(
+                        company_id=company.id,
+                        branch_id=branch.id,
+                        company_name=company_name,
+                        ruc=ruc_placeholder,
+                        address="",
+                        phone=contact_phone,
+                    )
+                )
 
                 password_hash = bcrypt.hashpw(
                     password.encode("utf-8"), bcrypt.gensalt()

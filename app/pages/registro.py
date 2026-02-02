@@ -69,11 +69,25 @@ def registro_page() -> rx.Component:
                 ),
                 rx.el.div(
                     rx.el.label(
-                        "Contrasena",
+                        "Número de contacto",
                         class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
                     rx.el.input(
-                        placeholder="????????",
+                        placeholder="+54 9 11 1234 5678",
+                        name="contact_phone",
+                        type="tel",
+                        auto_complete="tel",
+                        class_name=INPUT_STYLES["default"],
+                    ),
+                    class_name="space-y-1",
+                ),
+                rx.el.div(
+                    rx.el.label(
+                        "Contraseña",
+                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                    ),
+                    rx.el.input(
+                        placeholder="••••••••",
                         name="password",
                         type="password",
                         auto_complete="new-password",
@@ -83,11 +97,11 @@ def registro_page() -> rx.Component:
                 ),
                 rx.el.div(
                     rx.el.label(
-                        "Confirmar Contrasena",
+                        "Confirmar Contraseña",
                         class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
                     rx.el.input(
-                        placeholder="????????",
+                        placeholder="••••••••",
                         name="confirm_password",
                         type="password",
                         auto_complete="new-password",
@@ -129,7 +143,7 @@ def registro_page() -> rx.Component:
                     href="/",
                     class_name=f"text-indigo-600 hover:text-indigo-700 {TRANSITIONS['fast']} font-medium",
                 ),
-                class_name="mt-8 pt-6 border-t border-slate-100 flex items-center gap-2 text-xs",
+                class_name="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center gap-2 text-xs text-center",
             ),
             class_name=f"w-full max-w-md p-8 bg-white {RADIUS['xl']} {SHADOWS['xl']} border border-slate-100",
         ),
