@@ -67,21 +67,21 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     return rx.cond(
         page == "Servicios",
         rx.cond(
-            State.company_has_reservations,
+            State.can_view_servicios,
             link,
             rx.fragment(),
         ),
         rx.cond(
             page == "Clientes",
             rx.cond(
-                State.current_user["privileges"]["view_clientes"],
+                State.can_view_clientes,
                 link,
                 rx.fragment(),
             ),
             rx.cond(
                 page == "Cuentas Corrientes",
                 rx.cond(
-                    State.current_user["privileges"]["view_cuentas"],
+                    State.can_view_cuentas,
                     link,
                     rx.fragment(),
                 ),

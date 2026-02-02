@@ -356,6 +356,23 @@ class AuthState(MixinState):
     # =========================================================================
     
     @rx.var
+    def plan_actual_str(self) -> str:
+        """Devuelve el nombre del plan normalizado para comparaciones seguras."""
+        company_id = self._company_id()
+        if not company_id:
+            return "unknown"
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+        if not company:
+            return "unknown"
+        plan = getattr(company, "plan_type", "")
+        if hasattr(plan, "value"):
+            plan = plan.value
+        return str(plan or "").strip().lower() or "unknown"
+
+    @rx.var
     def can_view_ingresos(self) -> bool:
         return bool(self.current_user["privileges"].get("view_ingresos"))
 
@@ -390,6 +407,9 @@ class AuthState(MixinState):
     
     @rx.var
     def can_view_servicios(self) -> bool:
+        plan = self.plan_actual_str
+        if plan == "standard":
+            return False
         return bool(
             self.current_user["privileges"].get("view_servicios")
             and self.company_has_reservations
@@ -397,6 +417,8 @@ class AuthState(MixinState):
     
     @rx.var
     def can_view_clientes(self) -> bool:
+        if self.plan_actual_str == "standard":
+            return False
         return bool(self.current_user["privileges"].get("view_clientes"))
 
     @rx.var
@@ -408,6 +430,8 @@ class AuthState(MixinState):
     
     @rx.var
     def can_view_cuentas(self) -> bool:
+        if self.plan_actual_str == "standard":
+            return False
         return bool(self.current_user["privileges"].get("view_cuentas"))
     
     @rx.var
@@ -987,7 +1011,7 @@ class AuthState(MixinState):
         if not self.is_authenticated:
             yield rx.redirect("/")
             return
-        if not self.current_user["privileges"].get("view_servicios"):
+        if not self.can_view_servicios:
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Servicios.",
                 duration=3000,
@@ -999,7 +1023,7 @@ class AuthState(MixinState):
         if not self.is_authenticated:
             yield rx.redirect("/")
             return
-        if not self.current_user["privileges"].get("view_clientes"):
+        if not self.can_view_clientes:
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Clientes.",
                 duration=3000,
@@ -1011,7 +1035,7 @@ class AuthState(MixinState):
         if not self.is_authenticated:
             yield rx.redirect("/")
             return
-        if not self.current_user["privileges"].get("view_cuentas"):
+        if not self.can_view_cuentas:
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Cuentas.",
                 duration=3000,

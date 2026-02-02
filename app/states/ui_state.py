@@ -155,6 +155,12 @@ class UIState(MixinState):
         }
 
     def _can_access_page(self, page: str) -> bool:
+        if page == "Clientes":
+            return bool(self.can_view_clientes)
+        if page == "Cuentas Corrientes":
+            return bool(self.can_view_cuentas)
+        if page == "Servicios":
+            return bool(self.can_view_servicios)
         required = self._page_permission_map().get(page)
         if not required:
             return True
