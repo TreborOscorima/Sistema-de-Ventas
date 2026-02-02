@@ -893,6 +893,7 @@ def pricing_modal(
                 class_name="flex items-start gap-2",
             )
 
+        plan_name = title.replace("PLAN ", "")
         return rx.el.div(
             rx.el.div(
                 rx.el.div(
@@ -900,8 +901,8 @@ def pricing_modal(
                     class_name=f"p-2 rounded-lg {icon_wrap}",
                 ),
                 rx.el.div(
-                    rx.el.p(title, class_name="text-xs font-semibold uppercase text-slate-500"),
-                    rx.el.h4(title.replace("PLAN ", ""), class_name="text-lg font-semibold text-slate-900"),
+                    rx.el.p("PLAN", class_name="text-xs font-semibold uppercase text-slate-500"),
+                    rx.el.h4(plan_name, class_name="text-lg font-semibold text-slate-900"),
                     class_name="flex flex-col leading-tight",
                 ),
                 rx.cond(

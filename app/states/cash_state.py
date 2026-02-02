@@ -43,7 +43,7 @@ from app.models import (
     StockMovement,
     Product,
 )
-from app.utils.sanitization import sanitize_notes, sanitize_reason
+from app.utils.sanitization import sanitize_notes, sanitize_reason, sanitize_notes_preserve_spaces
 from .types import CashboxSale, CashboxSession, CashboxLogEntry, Movement
 from .mixin_state import MixinState
 from app.utils.exports import (
@@ -177,7 +177,7 @@ class CashState(MixinState):
 
     @rx.event
     def set_petty_cash_reason(self, value: str):
-        self.petty_cash_reason = sanitize_notes(value)
+        self.petty_cash_reason = sanitize_notes_preserve_spaces(value)
 
     @rx.event
     def add_petty_cash_movement(self):

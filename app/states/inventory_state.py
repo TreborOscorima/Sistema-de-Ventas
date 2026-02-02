@@ -23,6 +23,7 @@ import datetime
 import uuid
 import logging
 import io
+from decimal import Decimal, InvalidOperation
 from sqlmodel import select
 from sqlalchemy import and_, or_, func
 from app.models import Product, StockMovement, User as UserModel, Category, SaleItem
@@ -743,6 +744,12 @@ class InventoryState(MixinState):
                 )
             
             recorded = False
+            def _to_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
+                try:
+                    return Decimal(str(value))
+                except (InvalidOperation, TypeError, ValueError):
+                    return default
+
             with rx.session() as session:
                 for item in self.inventory_adjustment_items:
                     description = (item.get("description") or "").strip()
@@ -756,15 +763,15 @@ class InventoryState(MixinState):
                     if not product:
                         continue
                     
-                    quantity = item.get("adjust_quantity", 0) or 0
+                    quantity = _to_decimal(item.get("adjust_quantity", 0) or 0)
                     if quantity <= 0:
                         continue
                     
-                    available = product.stock
-                    qty = min(quantity, available)
+                    available = _to_decimal(product.stock or 0)
+                    qty = quantity if quantity <= available else available
                     
                     # Actualizar stock
-                    product.stock = max(available - qty, 0)
+                    product.stock = max(available - qty, Decimal("0"))
                     session.add(product)
                     
                     # Crear StockMovement

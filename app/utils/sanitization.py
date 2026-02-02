@@ -40,6 +40,24 @@ def sanitize_text(value: Any, max_length: int = 500) -> str:
     return cleaned
 
 
+def sanitize_text_preserve_spaces(value: Any, max_length: int = 500) -> str:
+    """
+    Sanitiza texto sin recortar espacios al final (para inputs en vivo).
+
+    Args:
+        value: Valor a sanitizar
+        max_length: Longitud máxima permitida
+    """
+    if value is None:
+        return ""
+    cleaned = str(value)
+    if "<" in cleaned and ">" in cleaned:
+        cleaned = re.sub(r"<[^>]*>", "", cleaned)
+    if len(cleaned) > max_length:
+        cleaned = cleaned[:max_length]
+    return cleaned
+
+
 def sanitize_notes(value: Any) -> str:
     """
     Sanitiza campos de notas/observaciones.
@@ -53,6 +71,11 @@ def sanitize_notes(value: Any) -> str:
         String sanitizado
     """
     return sanitize_text(value, max_length=250)
+
+
+def sanitize_notes_preserve_spaces(value: Any) -> str:
+    """Sanitiza notas sin eliminar espacios al final."""
+    return sanitize_text_preserve_spaces(value, max_length=250)
 
 
 def sanitize_description(value: Any) -> str:
