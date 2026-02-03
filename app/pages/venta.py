@@ -201,20 +201,31 @@ def quick_add_bar() -> rx.Component:
         rx.el.div(
             # Código de barra
             rx.el.div(
-                rx.icon("scan-barcode", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
-                rx.el.input(
-                    id="venta_barcode_input",
-                    key=State.sale_form_key.to_string(),
-                    default_value=State.new_sale_item["barcode"],
-                    on_change=lambda val: State.handle_sale_change("barcode", val),
-                    debounce_timeout=300,
-                    placeholder="Código...",
-                    on_key_down=lambda k: State.handle_key_down(k),
-                    class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
-                    type="text",
-                    auto_complete="off",
+                rx.el.div(
+                    rx.icon("scan-barcode", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
+                    rx.el.input(
+                        id="venta_barcode_input",
+                        key=State.sale_form_key.to_string(),
+                        default_value=State.new_sale_item["barcode"],
+                        on_change=lambda val: State.handle_sale_change("barcode", val),
+                        debounce_timeout=300,
+                        placeholder="Código...",
+                        on_key_down=lambda k: State.handle_key_down(k),
+                        class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
+                        type="text",
+                        auto_complete="off",
+                    ),
+                    class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                 ),
-                class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full sm:w-48 lg:w-56",
+                rx.cond(
+                    State.last_scanned_label != "",
+                    rx.el.span(
+                        State.last_scanned_label,
+                        class_name="text-[11px] text-slate-500 truncate",
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="flex flex-col gap-1 w-full sm:w-48 lg:w-56",
             ),
             # Búsqueda de producto
             rx.el.div(
@@ -224,6 +235,7 @@ def quick_add_bar() -> rx.Component:
                         rx.input(
                             value=State.new_sale_item["description"],
                             on_change=lambda val: State.handle_sale_change("description", val),
+                            on_key_down=State.handle_autocomplete_keydown,
                             placeholder="Buscar producto...",
                             class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
                         ),
@@ -232,14 +244,19 @@ def quick_add_bar() -> rx.Component:
                     class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                 ),
                 rx.cond(
-                    State.autocomplete_suggestions.length() > 0,
+                    State.autocomplete_results.length() > 0,
                     rx.el.div(
                         rx.foreach(
-                            State.autocomplete_suggestions,
+                            State.autocomplete_rows,
                             lambda suggestion: rx.el.button(
-                                suggestion,
+                                suggestion["description"],
                                 on_click=lambda _, s=suggestion: State.select_product_for_sale(s),
-                                class_name="w-full text-left px-3 py-2.5 hover:bg-indigo-50 text-sm border-b border-slate-100 last:border-0",
+                                class_name=rx.cond(
+                                    suggestion["index"]
+                                    == State.autocomplete_selected_index,
+                                    "w-full text-left px-3 py-2.5 bg-indigo-50 text-sm border-b border-slate-100 last:border-0",
+                                    "w-full text-left px-3 py-2.5 hover:bg-indigo-50 text-sm border-b border-slate-100 last:border-0",
+                                ),
                             ),
                         ),
                         class_name="absolute z-20 left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto",

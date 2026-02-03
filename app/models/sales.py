@@ -12,7 +12,7 @@ from app.enums import PaymentMethodType, ReservationStatus, SaleStatus, SportTyp
 if TYPE_CHECKING:
     from .auth import User
     from .client import Client
-    from .inventory import Product
+    from .inventory import Product, ProductBatch, ProductVariant
 
 
 class Sale(rx.Model, table=True):
@@ -114,6 +114,14 @@ class SaleItem(rx.Model, table=True):
 
     sale_id: int = Field(foreign_key="sale.id")
     product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    product_variant_id: Optional[int] = Field(
+        default=None,
+        foreign_key="productvariant.id",
+    )
+    product_batch_id: Optional[int] = Field(
+        default=None,
+        foreign_key="productbatch.id",
+    )
     company_id: int = Field(
         default=1,
         foreign_key="company.id",
@@ -129,6 +137,12 @@ class SaleItem(rx.Model, table=True):
 
     sale: Optional["Sale"] = Relationship(back_populates="items")
     product: Optional["Product"] = Relationship(back_populates="sale_items")
+    product_variant: Optional["ProductVariant"] = Relationship(
+        back_populates="sale_items"
+    )
+    product_batch: Optional["ProductBatch"] = Relationship(
+        back_populates="sale_items"
+    )
 
 
 class SaleInstallment(rx.Model, table=True):
@@ -404,3 +418,7 @@ class CompanySettings(rx.Model, table=True):
     receipt_width: Optional[int] = Field(default=None)
     default_currency_code: str = Field(default="PEN", nullable=False)
     country_code: str = Field(default="PE", nullable=False)
+
+
+# Re-export para compatibilidad con imports legacy.
+from .inventory import PriceTier  # noqa: E402  pylint: disable=wrong-import-position

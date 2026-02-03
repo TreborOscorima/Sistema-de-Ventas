@@ -26,7 +26,16 @@ import io
 from decimal import Decimal, InvalidOperation
 from sqlmodel import select
 from sqlalchemy import and_, or_, func
-from app.models import Product, StockMovement, User as UserModel, Category, SaleItem
+from app.models import (
+    Product,
+    ProductBatch,
+    ProductVariant,
+    PriceTier,
+    StockMovement,
+    User as UserModel,
+    Category,
+    SaleItem,
+)
 from .types import InventoryAdjustment
 from .mixin_state import MixinState
 from app.utils.exports import (
@@ -83,6 +92,14 @@ class InventoryState(MixinState):
         "sale_price": 0,
     }
     is_editing_product: bool = False
+    show_variants: bool = False
+    show_wholesale: bool = False
+    variants: List[Dict[str, Any]] = []
+    price_tiers: List[Dict[str, Any]] = []
+    stock_details_open: bool = False
+    stock_details_title: str = ""
+    stock_details_mode: str = "simple"
+    selected_product_details: List[Dict[str, Any]] = []
     
     inventory_check_modal_open: bool = False
     inventory_check_status: str = "perfecto"
@@ -381,21 +398,191 @@ class InventoryState(MixinState):
             self.inventory_current_page = page_num
 
     @rx.event
-    def open_edit_product(self, product: Product):
+    def open_edit_product(self, product: Product | Dict[str, Any] | None = None):
         if not self.current_user["privileges"]["edit_inventario"]:
             return rx.toast("No tiene permisos para editar el inventario.", duration=3000)
+
+        if product is None:
+            self.editing_product = {
+                "id": None,
+                "barcode": "",
+                "description": "",
+                "category": "",
+                "stock": 0,
+                "unit": "",
+                "purchase_price": 0,
+                "sale_price": 0,
+            }
+            self.show_variants = False
+            self.show_wholesale = False
+            self.variants = []
+            self.price_tiers = []
+            self.is_editing_product = True
+            return
+
+        def _read_value(key: str, default: Any = "") -> Any:
+            if isinstance(product, dict):
+                return product.get(key, default)
+            return getattr(product, key, default)
+
+        product_id = _read_value("id", None)
+
         # Convertir modelo a dict para edicion
         self.editing_product = {
-            "id": product.id,
-            "barcode": product.barcode,
-            "description": product.description,
-            "category": product.category,
-            "stock": product.stock,
-            "unit": product.unit,
-            "purchase_price": product.purchase_price,
-            "sale_price": product.sale_price,
+            "id": product_id,
+            "barcode": _read_value("barcode", ""),
+            "description": _read_value("description", ""),
+            "category": _read_value("category", ""),
+            "stock": _read_value("stock", 0),
+            "unit": _read_value("unit", ""),
+            "purchase_price": _read_value("purchase_price", 0),
+            "sale_price": _read_value("sale_price", 0),
         }
+
+        self.show_variants = False
+        self.show_wholesale = False
+        self.variants = []
+        self.price_tiers = []
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if company_id and branch_id and product_id:
+            with rx.session() as session:
+                variants = session.exec(
+                    select(ProductVariant)
+                    .where(ProductVariant.product_id == product_id)
+                    .where(ProductVariant.company_id == company_id)
+                    .where(ProductVariant.branch_id == branch_id)
+                    .order_by(ProductVariant.id)
+                ).all()
+                if variants:
+                    self.variants = [
+                        {
+                            "sku": variant.sku,
+                            "size": variant.size or "",
+                            "color": variant.color or "",
+                            "stock": float(variant.stock or 0),
+                        }
+                        for variant in variants
+                    ]
+                    total_stock = sum(
+                        float(variant.stock or 0) for variant in variants
+                    )
+                    self.editing_product["stock"] = total_stock
+                    self.show_variants = True
+
+                tiers = session.exec(
+                    select(PriceTier)
+                    .where(PriceTier.product_id == product_id)
+                    .where(PriceTier.company_id == company_id)
+                    .where(PriceTier.branch_id == branch_id)
+                    .order_by(PriceTier.min_quantity)
+                ).all()
+                if tiers:
+                    self.price_tiers = [
+                        {
+                            "min_qty": tier.min_quantity,
+                            "price": float(tier.unit_price or 0),
+                        }
+                        for tier in tiers
+                    ]
+                    self.show_wholesale = True
+
         self.is_editing_product = True
+
+    @rx.event
+    def open_create_product_modal(self):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return rx.toast("No tiene permisos para editar el inventario.", duration=3000)
+        self.editing_product = {
+            "id": None,
+            "barcode": "",
+            "description": "",
+            "category": "",
+            "stock": 0,
+            "unit": "",
+            "purchase_price": 0,
+            "sale_price": 0,
+        }
+        self.show_variants = False
+        self.show_wholesale = False
+        self.variants = []
+        self.price_tiers = []
+        self.is_editing_product = True
+
+    @rx.event
+    def open_stock_details(self, product: Product | Dict[str, Any]):
+        if not self.current_user["privileges"]["view_inventario"]:
+            return rx.toast("No tiene permisos para ver el inventario.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+
+        def _read_value(key: str, default: Any = "") -> Any:
+            if isinstance(product, dict):
+                return product.get(key, default)
+            return getattr(product, key, default)
+
+        product_id = _read_value("id", None)
+        description = _read_value("description", "")
+        if not product_id:
+            return rx.toast("Producto no encontrado.", duration=3000)
+
+        self.stock_details_title = str(description or "Detalle de stock")
+        self.selected_product_details = []
+        self.stock_details_mode = "simple"
+
+        with rx.session() as session:
+            variants = session.exec(
+                select(ProductVariant)
+                .where(ProductVariant.product_id == product_id)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+                .order_by(ProductVariant.sku)
+            ).all()
+            if variants:
+                self.selected_product_details = [
+                    {
+                        "sku": variant.sku,
+                        "size": variant.size or "",
+                        "color": variant.color or "",
+                        "stock": variant.stock,
+                    }
+                    for variant in variants
+                ]
+                self.stock_details_mode = "variant"
+            else:
+                batches = session.exec(
+                    select(ProductBatch)
+                    .where(ProductBatch.product_id == product_id)
+                    .where(ProductBatch.company_id == company_id)
+                    .where(ProductBatch.branch_id == branch_id)
+                    .order_by(ProductBatch.expiration_date)
+                ).all()
+                if batches:
+                    self.selected_product_details = [
+                        {
+                            "batch_number": batch.batch_number,
+                            "expiration_date": (
+                                batch.expiration_date.strftime("%Y-%m-%d")
+                                if batch.expiration_date
+                                else ""
+                            ),
+                            "stock": batch.stock,
+                        }
+                        for batch in batches
+                    ]
+                    self.stock_details_mode = "batch"
+
+        self.stock_details_open = True
+
+    @rx.event
+    def close_stock_details(self):
+        self.stock_details_open = False
+        self.stock_details_title = ""
+        self.stock_details_mode = "simple"
+        self.selected_product_details = []
 
     @rx.event
     def cancel_edit_product(self):
@@ -410,6 +597,10 @@ class InventoryState(MixinState):
             "purchase_price": 0,
             "sale_price": 0,
         }
+        self.show_variants = False
+        self.show_wholesale = False
+        self.variants = []
+        self.price_tiers = []
 
     @rx.event
     def handle_edit_product_change(self, field: str, value: str):
@@ -423,6 +614,122 @@ class InventoryState(MixinState):
                 pass 
         else:
             self.editing_product[field] = value
+
+    @rx.var
+    def variant_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for index, variant in enumerate(self.variants):
+            row = dict(variant)
+            row["index"] = index
+            rows.append(row)
+        return rows
+
+    @rx.var
+    def price_tier_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for index, tier in enumerate(self.price_tiers):
+            row = dict(tier)
+            row["index"] = index
+            rows.append(row)
+        return rows
+
+    @rx.var
+    def variants_stock_total(self) -> float:
+        total = 0.0
+        for variant in self.variants:
+            try:
+                total += float(variant.get("stock", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+        return total
+
+    @rx.event
+    def set_show_variants(self, value: bool | str):
+        if isinstance(value, str):
+            value = value.lower() in ["true", "1", "on", "yes"]
+        self.show_variants = bool(value)
+        if self.show_variants and not self.variants:
+            self.add_variant_row()
+
+    @rx.event
+    def set_show_wholesale(self, value: bool | str):
+        if isinstance(value, str):
+            value = value.lower() in ["true", "1", "on", "yes"]
+        self.show_wholesale = bool(value)
+        if self.show_wholesale and not self.price_tiers:
+            self.add_tier_row()
+
+    @rx.event
+    def add_variant_row(self):
+        self.variants = [
+            *self.variants,
+            {"sku": "", "size": "", "color": "", "stock": 0},
+        ]
+
+    @rx.event
+    def remove_variant_row(self, index: int):
+        if index < 0 or index >= len(self.variants):
+            return
+        self.variants = [row for idx, row in enumerate(self.variants) if idx != index]
+
+    @rx.event
+    def update_variant_field(self, index: int, field: str, value: Any):
+        if index < 0 or index >= len(self.variants):
+            return
+        variants = list(self.variants)
+        row = dict(variants[index])
+        if field == "stock":
+            try:
+                row[field] = float(value) if value not in ("", None) else 0
+            except (TypeError, ValueError):
+                return
+        else:
+            row[field] = value
+        variants[index] = row
+        self.variants = variants
+
+    @rx.event
+    def handle_variant_sku_keydown(self, key: str, index: int):
+        if key in ("Enter", "NumpadEnter", "Tab"):
+            return rx.call_script(
+                f"document.getElementById('variant_sku_{index}').blur()"
+            )
+
+    @rx.event
+    def add_tier_row(self):
+        self.price_tiers = [
+            *self.price_tiers,
+            {"min_qty": 0, "price": 0.0},
+        ]
+
+    @rx.event
+    def remove_tier_row(self, index: int):
+        if index < 0 or index >= len(self.price_tiers):
+            return
+        self.price_tiers = [
+            row for idx, row in enumerate(self.price_tiers) if idx != index
+        ]
+
+    @rx.event
+    def update_tier_field(self, index: int, field: str, value: Any):
+        if index < 0 or index >= len(self.price_tiers):
+            return
+        tiers = list(self.price_tiers)
+        row = dict(tiers[index])
+        if field == "min_qty":
+            try:
+                row[field] = int(float(value)) if value not in ("", None) else 0
+            except (TypeError, ValueError):
+                return
+        elif field == "price":
+            try:
+                row[field] = float(value) if value not in ("", None) else 0
+            except (TypeError, ValueError):
+                return
+        else:
+            row[field] = value
+        tiers[index] = row
+        self.price_tiers = tiers
 
     @rx.event
     def save_edited_product(self):
@@ -443,6 +750,23 @@ class InventoryState(MixinState):
         if not barcode:
              return rx.toast("El código de barras no puede estar vacío.", duration=3000)
 
+        if self.show_variants:
+            skus = [
+                (variant.get("sku") or "").strip()
+                for variant in self.variants
+                if (variant.get("sku") or "").strip()
+            ]
+            if not skus:
+                return rx.toast(
+                    "Agregue al menos una variante con SKU válido.",
+                    duration=3000,
+                )
+            if len(skus) != len(set(skus)):
+                return rx.toast(
+                    "Hay SKUs de variantes duplicados.",
+                    duration=3000,
+                )
+
         with rx.session() as session:
             # Verificar codigo de barras duplicado
             existing = session.exec(
@@ -454,6 +778,30 @@ class InventoryState(MixinState):
             
             if existing and (product_id is None or existing.id != product_id):
                 return rx.toast("Ya existe un producto con ese código de barras.", duration=3000)
+
+            if self.show_variants:
+                variant_skus = [
+                    (variant.get("sku") or "").strip()
+                    for variant in self.variants
+                    if (variant.get("sku") or "").strip()
+                ]
+                if variant_skus:
+                    duplicate_query = (
+                        select(ProductVariant)
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                        .where(ProductVariant.sku.in_(variant_skus))
+                    )
+                    if product_id:
+                        duplicate_query = duplicate_query.where(
+                            ProductVariant.product_id != product_id
+                        )
+                    duplicate_variant = session.exec(duplicate_query).first()
+                    if duplicate_variant:
+                        return rx.toast(
+                            f"El SKU de variante '{duplicate_variant.sku}' ya existe en otro producto.",
+                            duration=3500,
+                        )
 
             if product_id:
                 # Actualizar
@@ -469,7 +817,11 @@ class InventoryState(MixinState):
                 product.barcode = barcode
                 product.description = description
                 product.category = product_data.get("category", "General")
-                product.stock = product_data.get("stock", 0)
+                product.stock = (
+                    self.variants_stock_total
+                    if self.show_variants
+                    else product_data.get("stock", 0)
+                )
                 product.unit = product_data.get("unit", "Unidad")
                 product.purchase_price = product_data.get("purchase_price", 0)
                 product.sale_price = product_data.get("sale_price", 0)
@@ -482,7 +834,11 @@ class InventoryState(MixinState):
                     barcode=barcode,
                     description=description,
                     category=product_data.get("category", "General"),
-                    stock=product_data.get("stock", 0),
+                    stock=(
+                        self.variants_stock_total
+                        if self.show_variants
+                        else product_data.get("stock", 0)
+                    ),
                     unit=product_data.get("unit", "Unidad"),
                     purchase_price=product_data.get("purchase_price", 0),
                     sale_price=product_data.get("sale_price", 0),
@@ -490,11 +846,105 @@ class InventoryState(MixinState):
                     branch_id=branch_id,
                 )
                 session.add(new_product)
+                session.flush()
+                product = new_product
                 msg = "Producto creado correctamente."
+
+            if product_id:
+                session.flush()
+
+            product_id = product.id if product else None
+
+            if product_id:
+                if self.show_variants:
+                    existing_variants = session.exec(
+                        select(ProductVariant)
+                        .where(ProductVariant.product_id == product_id)
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                    ).all()
+                    for variant in existing_variants:
+                        session.delete(variant)
+
+                    for variant in self.variants:
+                        sku = (variant.get("sku") or "").strip()
+                        if not sku:
+                            continue
+                        stock_value = variant.get("stock", 0) or 0
+                        try:
+                            stock_value = Decimal(str(stock_value))
+                        except (TypeError, InvalidOperation):
+                            stock_value = Decimal("0")
+                        session.add(
+                            ProductVariant(
+                                product_id=product_id,
+                                sku=sku,
+                                size=(variant.get("size") or "").strip() or None,
+                                color=(variant.get("color") or "").strip() or None,
+                                stock=stock_value,
+                                company_id=company_id,
+                                branch_id=branch_id,
+                            )
+                        )
+                else:
+                    existing_variants = session.exec(
+                        select(ProductVariant)
+                        .where(ProductVariant.product_id == product_id)
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                    ).all()
+                    for variant in existing_variants:
+                        session.delete(variant)
+
+                if self.show_wholesale:
+                    existing_tiers = session.exec(
+                        select(PriceTier)
+                        .where(PriceTier.product_id == product_id)
+                        .where(PriceTier.company_id == company_id)
+                        .where(PriceTier.branch_id == branch_id)
+                    ).all()
+                    for tier in existing_tiers:
+                        session.delete(tier)
+
+                    for tier in self.price_tiers:
+                        min_qty = tier.get("min_qty", 0) or 0
+                        price_value = tier.get("price", 0) or 0
+                        try:
+                            min_qty = int(min_qty)
+                        except (TypeError, ValueError):
+                            min_qty = 0
+                        try:
+                            price_value = Decimal(str(price_value))
+                        except (TypeError, InvalidOperation):
+                            price_value = Decimal("0")
+                        if min_qty <= 0:
+                            continue
+                        session.add(
+                            PriceTier(
+                                product_id=product_id,
+                                min_quantity=min_qty,
+                                unit_price=price_value,
+                                company_id=company_id,
+                                branch_id=branch_id,
+                            )
+                        )
+                else:
+                    existing_tiers = session.exec(
+                        select(PriceTier)
+                        .where(PriceTier.product_id == product_id)
+                        .where(PriceTier.company_id == company_id)
+                        .where(PriceTier.branch_id == branch_id)
+                    ).all()
+                    for tier in existing_tiers:
+                        session.delete(tier)
             
             session.commit()
             self._inventory_update_trigger += 1
             self.is_editing_product = False
+            self.show_variants = False
+            self.show_wholesale = False
+            self.variants = []
+            self.price_tiers = []
             return rx.toast(msg, duration=3000)
 
     @rx.event

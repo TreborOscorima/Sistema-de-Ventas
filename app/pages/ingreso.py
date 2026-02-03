@@ -94,6 +94,7 @@ def ingreso_page() -> rx.Component:
                 on_change=State.set_purchase_series,
                 value=State.purchase_series,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                debounce_timeout=200,
             ),
             class_name="w-full",
         ),
@@ -107,6 +108,7 @@ def ingreso_page() -> rx.Component:
                 on_change=State.set_purchase_number,
                 value=State.purchase_number,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                debounce_timeout=200,
             ),
             class_name="w-full",
         ),
@@ -156,6 +158,7 @@ def ingreso_page() -> rx.Component:
             on_change=State.search_supplier_change,
             value=State.purchase_supplier_query,
             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            debounce_timeout=200,
         ),
         rx.cond(
             State.purchase_supplier_suggestions.length() > 0,
@@ -249,13 +252,16 @@ def ingreso_page() -> rx.Component:
                         "Descripción",
                         class_name="block text-sm font-medium text-slate-600 mb-1",
                     ),
-                    rx.el.input(
-                        placeholder="Ej: Coca-Cola 600ml",
-                        on_change=lambda val: State.handle_entry_change(
-                            "description", val
+                    rx.debounce_input(
+                        rx.input(
+                            value=State.new_entry_item["description"],
+                            on_change=lambda val: State.handle_entry_change(
+                                "description", val
+                            ),
+                            placeholder="Ej: Coca-Cola 600ml",
+                            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                         ),
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        value=State.new_entry_item["description"],
+                        debounce_timeout=200,
                     ),
                     rx.cond(
                         State.entry_autocomplete_suggestions.length() > 0,

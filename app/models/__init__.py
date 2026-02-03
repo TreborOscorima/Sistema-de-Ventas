@@ -1,6 +1,16 @@
 from .auth import Permission, Role, RolePermission, User, UserBranch
 from .company import Branch, Company
-from .inventory import Category, FieldPrice, Product, StockMovement, Unit
+from .inventory import (
+    Category,
+    FieldPrice,
+    PriceTier,
+    Product,
+    ProductBatch,
+    ProductKit,
+    ProductVariant,
+    StockMovement,
+    Unit,
+)
 from .purchases import Purchase, PurchaseItem, Supplier
 from .sales import (
     CashboxLog,
@@ -27,7 +37,11 @@ __all__ = [
     "Branch",
     "Category",
     "FieldPrice",
+    "PriceTier",
     "Product",
+    "ProductBatch",
+    "ProductKit",
+    "ProductVariant",
     "StockMovement",
     "Unit",
     "Supplier",

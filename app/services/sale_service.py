@@ -50,7 +50,10 @@ from app.models import (
     Client,
     FieldReservation,
     PaymentMethod,
+    PriceTier,
     Product,
+    ProductBatch,
+    ProductVariant,
     Sale,
     SaleInstallment,
     SaleItem,
@@ -59,9 +62,10 @@ from app.models import (
 )
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.utils.calculations import calculate_subtotal, calculate_total
+from app.utils.db import get_async_session as get_session
 from app.utils.logger import get_logger
 
-# NOTA: Ya no importamos get_async_session aquí porque la sesión viene desde fuera
+# Nota: get_session es un alias de get_async_session para uso interno.
 
 QTY_DECIMAL_QUANT = Decimal("0.0001")
 QTY_DISPLAY_QUANT = Decimal("0.01")
@@ -91,6 +95,403 @@ def _apply_branch_filter(query, model, branch_id: int | None):
 def _apply_tenant_filters(query, model, company_id: int | None, branch_id: int | None):
     query = _apply_company_filter(query, model, company_id)
     return _apply_branch_filter(query, model, branch_id)
+
+def _variant_label(variant: ProductVariant) -> str:
+    parts = []
+    if variant.size:
+        parts.append(str(variant.size).strip())
+    if variant.color:
+        parts.append(str(variant.color).strip())
+    return " ".join([p for p in parts if p])
+
+
+def _adapt_product_payload(product: Product) -> dict[str, Any]:
+    payload = {
+        "id": product.id,
+        "product_id": product.id,
+        "variant_id": None,
+        "is_variant": False,
+        "barcode": product.barcode,
+        "description": product.description,
+        "category": product.category,
+        "unit": product.unit,
+        "sale_price": product.sale_price,
+        "purchase_price": getattr(product, "purchase_price", None),
+        "stock": product.stock,
+    }
+    if hasattr(product, "image"):
+        payload["image"] = getattr(product, "image")
+    if hasattr(product, "image_url"):
+        payload["image_url"] = getattr(product, "image_url")
+    if hasattr(product, "location"):
+        payload["location"] = getattr(product, "location")
+    return payload
+
+
+def _adapt_variant_payload(
+    variant: ProductVariant,
+    parent: Product,
+) -> dict[str, Any]:
+    label = _variant_label(variant)
+    description = parent.description
+    if label:
+        description = f"{parent.description} ({label})"
+    payload = _adapt_product_payload(parent)
+    payload.update(
+        {
+            "barcode": variant.sku,
+            "description": description,
+            "stock": variant.stock,
+            "is_variant": True,
+            "variant_id": variant.id,
+            "product_id": parent.id,
+        }
+    )
+    return payload
+
+
+async def get_product_by_barcode(
+    barcode: str | None,
+    company_id: int | None,
+    branch_id: int | None,
+    session: AsyncSession | None = None,
+) -> dict[str, Any] | None:
+    """Busca un producto por SKU (variante) o barcode (producto estándar)."""
+    code = (barcode or "").strip()
+    if not code:
+        return None
+
+    async def _run(current_session: AsyncSession) -> dict[str, Any] | None:
+        variant_query = select(ProductVariant).where(ProductVariant.sku == code)
+        variant = (
+            await current_session.exec(
+                _apply_tenant_filters(
+                    variant_query, ProductVariant, company_id, branch_id
+                )
+            )
+        ).first()
+        if variant:
+            parent_query = select(Product).where(
+                Product.id == variant.product_id
+            )
+            parent = (
+                await current_session.exec(
+                    _apply_tenant_filters(
+                        parent_query, Product, company_id, branch_id
+                    )
+                )
+            ).first()
+            if parent:
+                return _adapt_variant_payload(variant, parent)
+
+        product_query = select(Product).where(Product.barcode == code)
+        product = (
+            await current_session.exec(
+                _apply_tenant_filters(
+                    product_query, Product, company_id, branch_id
+                )
+            )
+        ).first()
+        if product:
+            return _adapt_product_payload(product)
+        return None
+
+    if session is not None:
+        return await _run(session)
+    async with get_session() as current_session:
+        return await _run(current_session)
+
+
+async def search_products(
+    query: str | None,
+    company_id: int | None,
+    branch_id: int | None,
+    *,
+    limit: int = 10,
+    session: AsyncSession | None = None,
+) -> list[dict[str, Any]]:
+    term = (query or "").strip()
+    if not term:
+        return []
+    like_search = f"%{term}%"
+
+    async def _run(current_session: AsyncSession) -> list[dict[str, Any]]:
+        product_query = select(Product).where(
+            or_(
+                Product.description.ilike(like_search),
+                Product.barcode.ilike(like_search),
+            )
+        )
+        product_query = _apply_tenant_filters(
+            product_query, Product, company_id, branch_id
+        )
+        products = (
+            await current_session.exec(product_query.limit(limit))
+        ).all()
+
+        variant_query = (
+            select(ProductVariant, Product)
+            .join(Product, Product.id == ProductVariant.product_id)
+            .where(
+                or_(
+                    ProductVariant.sku.ilike(like_search),
+                    ProductVariant.size.ilike(like_search),
+                    ProductVariant.color.ilike(like_search),
+                    Product.description.ilike(like_search),
+                    func.concat(
+                        Product.description,
+                        " (",
+                        func.coalesce(ProductVariant.size, ""),
+                        " ",
+                        func.coalesce(ProductVariant.color, ""),
+                        ")",
+                    ).ilike(like_search),
+                )
+            )
+        )
+        variant_query = _apply_tenant_filters(
+            variant_query, ProductVariant, company_id, branch_id
+        )
+        variant_query = _apply_tenant_filters(
+            variant_query, Product, company_id, branch_id
+        )
+        variant_rows = (
+            await current_session.exec(variant_query.limit(limit))
+        ).all()
+
+        results: list[dict[str, Any]] = [
+            _adapt_product_payload(product) for product in products
+        ]
+        for variant, parent in variant_rows:
+            if parent:
+                results.append(_adapt_variant_payload(variant, parent))
+        return results
+
+    if session is not None:
+        return await _run(session)
+    async with get_session() as current_session:
+        return await _run(current_session)
+
+
+async def calculate_item_price(
+    product_id: int | None,
+    qty: Decimal,
+    company_id: int | None,
+    branch_id: int | None,
+    session: AsyncSession | None = None,
+) -> Decimal:
+    if not product_id:
+        return Decimal("0.00")
+
+    async def _run(current_session: AsyncSession) -> Decimal:
+        tier_query = select(PriceTier).where(
+            PriceTier.product_id == product_id,
+            PriceTier.min_quantity <= qty,
+        )
+        tier_query = _apply_tenant_filters(
+            tier_query, PriceTier, company_id, branch_id
+        )
+        tier_query = tier_query.order_by(PriceTier.min_quantity.desc())
+        tier = (await current_session.exec(tier_query)).first()
+        if tier and tier.unit_price is not None:
+            return _round_money(tier.unit_price)
+
+        product_query = select(Product).where(Product.id == product_id)
+        product = (
+            await current_session.exec(
+                _apply_tenant_filters(
+                    product_query, Product, company_id, branch_id
+                )
+            )
+        ).first()
+        if not product:
+            return Decimal("0.00")
+        return _round_money(product.sale_price)
+
+    if session is not None:
+        return await _run(session)
+    async with get_session() as current_session:
+        return await _run(current_session)
+
+
+async def get_available_stock(
+    product_id: int | None,
+    variant_id: int | None,
+    company_id: int | None,
+    branch_id: int | None,
+    session: AsyncSession | None = None,
+) -> Decimal:
+    async def _run(current_session: AsyncSession) -> Decimal:
+        product = None
+        variant = None
+        if variant_id:
+            variant_query = select(ProductVariant).where(
+                ProductVariant.id == variant_id
+            )
+            variant = (
+                await current_session.exec(
+                    _apply_tenant_filters(
+                        variant_query, ProductVariant, company_id, branch_id
+                    )
+                )
+            ).first()
+            if variant and variant.product_id:
+                product_query = select(Product).where(
+                    Product.id == variant.product_id
+                )
+                product = (
+                    await current_session.exec(
+                        _apply_tenant_filters(
+                            product_query, Product, company_id, branch_id
+                        )
+                    )
+                ).first()
+
+        if product is None and product_id:
+            product_query = select(Product).where(Product.id == product_id)
+            product = (
+                await current_session.exec(
+                    _apply_tenant_filters(
+                        product_query, Product, company_id, branch_id
+                    )
+                )
+            ).first()
+
+        allows_decimal = False
+        unit_name = getattr(product, "unit", None) if product else None
+        if unit_name:
+            unit_query = select(Unit).where(Unit.name == unit_name)
+            unit_query = _apply_tenant_filters(unit_query, Unit, company_id, branch_id)
+            unit = (await current_session.exec(unit_query)).first()
+            if unit is not None:
+                allows_decimal = bool(unit.allows_decimal)
+
+        batch_query = None
+        if variant:
+            batch_query = select(ProductBatch).where(
+                ProductBatch.product_variant_id == variant.id
+            )
+        elif product:
+            batch_query = select(ProductBatch).where(
+                ProductBatch.product_id == product.id
+            )
+
+        batches: list[ProductBatch] = []
+        if batch_query is not None:
+            batch_query = batch_query.where(ProductBatch.stock > 0)
+            batch_query = _apply_tenant_filters(
+                batch_query, ProductBatch, company_id, branch_id
+            )
+            batch_query = batch_query.order_by(
+                ProductBatch.expiration_date.asc(), ProductBatch.id.asc()
+            )
+            batches = (await current_session.exec(batch_query)).all()
+
+        if batches:
+            return _sum_batch_stock(batches, allows_decimal)
+        if variant:
+            return _round_quantity(variant.stock, allows_decimal)
+        if product:
+            variant_sum_query = select(
+                func.coalesce(func.sum(ProductVariant.stock), 0)
+            ).where(ProductVariant.product_id == product.id)
+            variant_sum_query = _apply_tenant_filters(
+                variant_sum_query, ProductVariant, company_id, branch_id
+            )
+            variant_total = (await current_session.exec(variant_sum_query)).one()
+            try:
+                if Decimal(str(variant_total)) > 0:
+                    return _round_quantity(variant_total, allows_decimal)
+            except Exception:
+                pass
+            return _round_quantity(product.stock, allows_decimal)
+        return Decimal("0")
+
+    if session is not None:
+        return await _run(session)
+    async with get_session() as current_session:
+        return await _run(current_session)
+
+
+async def _get_price_tier(
+    session: AsyncSession,
+    *,
+    product_id: int | None = None,
+    variant_id: int | None = None,
+    qty: Decimal,
+    company_id: int | None,
+    branch_id: int | None,
+) -> PriceTier | None:
+    if variant_id:
+        query = select(PriceTier).where(PriceTier.product_variant_id == variant_id)
+    else:
+        query = select(PriceTier).where(PriceTier.product_id == product_id)
+    query = query.where(PriceTier.min_quantity <= qty)
+    query = _apply_tenant_filters(query, PriceTier, company_id, branch_id)
+    query = query.order_by(PriceTier.min_quantity.desc())
+    return (await session.exec(query)).first()
+
+
+async def _calculate_item_price(
+    session: AsyncSession,
+    product: Product,
+    variant: ProductVariant | None,
+    qty: Decimal,
+    company_id: int | None,
+    branch_id: int | None,
+) -> Decimal:
+    tier = None
+    if variant:
+        tier = await _get_price_tier(
+            session,
+            variant_id=variant.id,
+            qty=qty,
+            company_id=company_id,
+            branch_id=branch_id,
+        )
+    if tier is None:
+        tier = await _get_price_tier(
+            session,
+            product_id=product.id,
+            qty=qty,
+            company_id=company_id,
+            branch_id=branch_id,
+        )
+    if tier and tier.unit_price is not None:
+        return _round_money(tier.unit_price)
+    return _round_money(product.sale_price)
+
+
+def _sum_batch_stock(
+    batches: list[ProductBatch],
+    allows_decimal: bool,
+) -> Decimal:
+    total = Decimal("0.0000")
+    for batch in batches:
+        total += _round_quantity(batch.stock, allows_decimal)
+    return _round_quantity(total, allows_decimal)
+
+
+def _deduct_from_batches(
+    batches: list[ProductBatch],
+    quantity: Decimal,
+    allows_decimal: bool,
+) -> list[ProductBatch]:
+    remaining = _round_quantity(quantity, allows_decimal)
+    used_batches: list[ProductBatch] = []
+    for batch in batches:
+        if remaining <= 0:
+            break
+        available = _round_quantity(batch.stock, allows_decimal)
+        if available <= 0:
+            continue
+        deduct = min(available, remaining)
+        batch.stock = _round_quantity(available - deduct, allows_decimal)
+        remaining = _round_quantity(remaining - deduct, allows_decimal)
+        used_batches.append(batch)
+    if remaining > 0:
+        raise StockError("Stock insuficiente en lotes para completar la venta.")
+    return used_batches
 
 
 class StockError(ValueError):
@@ -367,10 +768,73 @@ class SaleService:
     
     Todos los métodos son asíncronos y requieren una sesión de BD.
     """
+
+    @staticmethod
+    async def get_product_by_barcode(
+        barcode: str | None,
+        company_id: int | None,
+        branch_id: int | None,
+        session: AsyncSession | None = None,
+    ) -> dict[str, Any] | None:
+        return await get_product_by_barcode(
+            barcode,
+            company_id,
+            branch_id,
+            session=session,
+        )
+
+    @staticmethod
+    async def search_products(
+        query: str | None,
+        company_id: int | None,
+        branch_id: int | None,
+        *,
+        limit: int = 10,
+        session: AsyncSession | None = None,
+    ) -> list[dict[str, Any]]:
+        return await search_products(
+            query,
+            company_id,
+            branch_id,
+            limit=limit,
+            session=session,
+        )
+
+    @staticmethod
+    async def calculate_item_price(
+        product_id: int | None,
+        qty: Decimal,
+        company_id: int | None,
+        branch_id: int | None,
+        session: AsyncSession | None = None,
+    ) -> Decimal:
+        return await calculate_item_price(
+            product_id,
+            qty,
+            company_id,
+            branch_id,
+            session=session,
+        )
+
+    @staticmethod
+    async def get_available_stock(
+        product_id: int | None,
+        variant_id: int | None,
+        company_id: int | None,
+        branch_id: int | None,
+        session: AsyncSession | None = None,
+    ) -> Decimal:
+        return await get_available_stock(
+            product_id,
+            variant_id,
+            company_id,
+            branch_id,
+            session=session,
+        )
     
     @staticmethod
     async def process_sale(
-        session: AsyncSession,
+        session: AsyncSession | None,
         user_id: int | None,
         company_id: int | None,
         branch_id: int | None,
@@ -427,6 +891,19 @@ class SaleService:
             await session.commit()
             print(f"Venta #{result.sale.id} - Total: {result.sale_total_display}")
         """
+        if session is None:
+            async with get_session() as managed_session:
+                return await SaleService.process_sale(
+                    session=managed_session,
+                    user_id=user_id,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    items=items,
+                    payment_data=payment_data,
+                    reservation_id=reservation_id,
+                    currency_symbol=currency_symbol,
+                )
+
         payment_method = (payment_data.method or "").strip()
         symbol = (currency_symbol or "").strip()
         if symbol:
@@ -513,6 +990,7 @@ class SaleService:
 
         product_snapshot: list[Dict[str, Any]] = []
         decimal_snapshot: list[Dict[str, Any]] = []
+        pending_items: list[Dict[str, Any]] = []
         for item in items:
             description = (item.description or "").strip()
             if not description:
@@ -523,37 +1001,26 @@ class SaleService:
                 item.quantity, allows_decimal
             )
             quantity_db = _round_quantity(item.quantity, allows_decimal)
-            price = _round_money(item.price)
-            if quantity_db <= 0 or price <= 0:
+            if quantity_db <= 0:
                 raise ValueError(
-                    f"Cantidad o precio invalido para {description}."
+                    f"Cantidad invalida para {description}."
                 )
-            subtotal = calculate_subtotal(quantity_db, price)
-            product_snapshot.append(
-                {
-                    "description": description,
-                    "quantity": quantity_receipt,
-                    "unit": unit,
-                    "price": _money_to_float(price),
-                    "subtotal": _money_to_float(subtotal),
-                }
-            )
-            decimal_snapshot.append(
+            pending_items.append(
                 {
                     "description": description,
                     "quantity": quantity_db,
+                    "quantity_receipt": quantity_receipt,
                     "unit": unit,
-                    "price": price,
-                    "subtotal": subtotal,
                     "barcode": item.barcode or "",
                     "product_id": item.product_id,
+                    "allows_decimal": allows_decimal,
                 }
             )
 
         descriptions: list[str] = []
         barcodes: list[str] = []
         product_ids: list[int] = []
-        for item in decimal_snapshot:
+        for item in pending_items:
             pid = item.get("product_id")
             if pid:
                 product_ids.append(pid)
@@ -611,22 +1078,100 @@ class SaleService:
             for description in ambiguous_descriptions:
                 products_by_description.pop(description, None)
 
-        locked_products: list[tuple[Dict[str, Any], Product]] = []
-        for item in decimal_snapshot:
+        variants_by_sku: dict[str, ProductVariant] = {}
+        variants_by_id: dict[int, ProductVariant] = {}
+        if unique_barcodes:
+            variant_query = select(ProductVariant).where(
+                ProductVariant.sku.in_(unique_barcodes)
+            )
+            variant_query = _apply_tenant_filters(
+                variant_query, ProductVariant, company_id, branch_id
+            )
+            variants = (await session.exec(variant_query.with_for_update())).all()
+            for variant in variants:
+                if variant.sku:
+                    variants_by_sku[variant.sku] = variant
+
+        missing_variant_ids = [
+            pid for pid in unique_product_ids if pid not in products_by_id
+        ]
+        if missing_variant_ids:
+            variant_id_query = select(ProductVariant).where(
+                ProductVariant.id.in_(missing_variant_ids)
+            )
+            variant_id_query = _apply_tenant_filters(
+                variant_id_query, ProductVariant, company_id, branch_id
+            )
+            variants = (
+                await session.exec(variant_id_query.with_for_update())
+            ).all()
+            for variant in variants:
+                if variant.id:
+                    variants_by_id[variant.id] = variant
+
+        variant_product_ids = {
+            variant.product_id
+            for variant in list(variants_by_sku.values())
+            + list(variants_by_id.values())
+            if variant.product_id
+        }
+        missing_variant_products = [
+            pid for pid in variant_product_ids if pid not in products_by_id
+        ]
+        if missing_variant_products:
+            missing_query = select(Product).where(
+                Product.id.in_(missing_variant_products)
+            )
+            missing_query = _apply_tenant_filters(
+                missing_query, Product, company_id, branch_id
+            )
+            extra_products = (
+                await session.exec(missing_query.with_for_update())
+            ).all()
+            for product in extra_products:
+                if product.id:
+                    products_by_id[product.id] = product
+                description = (product.description or "").strip()
+                if description:
+                    if description in products_by_description:
+                        ambiguous_descriptions.add(description)
+                    else:
+                        products_by_description[description] = product
+                if product.barcode:
+                    products_by_barcode[product.barcode] = product
+            for description in ambiguous_descriptions:
+                products_by_description.pop(description, None)
+
+        resolved_items: list[Dict[str, Any]] = []
+        batch_cache: dict[tuple[str, int], list[ProductBatch]] = {}
+        for item in pending_items:
             product = None
-            
+            variant = None
+
             # 1. Try lookup by ID (Most Reliable)
             pid = item.get("product_id")
             if pid:
                 product = products_by_id.get(pid)
-            
-            # 2. Try lookup by Barcode
+                if not product:
+                    variant = variants_by_id.get(pid)
+                    if variant:
+                        product = products_by_id.get(variant.product_id)
+
+            # 2. Try lookup by Barcode (Variant SKU)
+            if not product:
+                barcode = (item.get("barcode") or "").strip()
+                if barcode:
+                    variant = variants_by_sku.get(barcode)
+                    if variant:
+                        product = products_by_id.get(variant.product_id)
+
+            # 3. Try lookup by Barcode (Product)
             if not product:
                 barcode = (item.get("barcode") or "").strip()
                 if barcode:
                     product = products_by_barcode.get(barcode)
-            
-            # 3. Try lookup by Description
+
+            # 4. Try lookup by Description
             if not product:
                 description = item.get("description", "")
                 if description in ambiguous_descriptions:
@@ -635,25 +1180,109 @@ class SaleService:
                         "Use codigo de barras."
                     )
                 product = products_by_description.get(description)
-            
-            # 4. Final validation
+
+            # 5. Final validation
             if not product:
                 identifier = ""
                 if item.get("barcode"):
                     identifier = f"código {item['barcode']}"
                 elif item.get("description"):
-                    identifier = item['description']
+                    identifier = item["description"]
                 else:
                     identifier = "desconocido"
-                    
+
                 raise StockError(
                     f"Producto {identifier} no encontrado en inventario."
                 )
-            if product.stock < item["quantity"]:
+
+            unit_price = await _calculate_item_price(
+                session,
+                product,
+                variant,
+                item["quantity"],
+                company_id,
+                branch_id,
+            )
+            if unit_price <= 0:
+                raise ValueError(
+                    f"Precio invalido para {item['description']}."
+                )
+            subtotal = calculate_subtotal(item["quantity"], unit_price)
+
+            product_snapshot.append(
+                {
+                    "description": item["description"],
+                    "quantity": item["quantity_receipt"],
+                    "unit": item["unit"],
+                    "price": _money_to_float(unit_price),
+                    "subtotal": _money_to_float(subtotal),
+                }
+            )
+            decimal_item = {
+                "description": item["description"],
+                "quantity": item["quantity"],
+                "unit": item["unit"],
+                "price": unit_price,
+                "subtotal": subtotal,
+                "barcode": item.get("barcode") or "",
+                "product_id": product.id,
+                "product_variant_id": variant.id if variant else None,
+                "product_batch_id": None,
+            }
+            decimal_snapshot.append(decimal_item)
+
+            # Load batches (FEFO) if applicable
+            cache_key = (
+                ("variant", variant.id)
+                if variant
+                else ("product", product.id)
+            )
+            batches = batch_cache.get(cache_key)
+            if batches is None:
+                if variant:
+                    batch_query = select(ProductBatch).where(
+                        ProductBatch.product_variant_id == variant.id
+                    )
+                else:
+                    batch_query = select(ProductBatch).where(
+                        ProductBatch.product_id == product.id
+                    )
+                batch_query = batch_query.where(ProductBatch.stock > 0)
+                batch_query = _apply_tenant_filters(
+                    batch_query, ProductBatch, company_id, branch_id
+                )
+                batch_query = batch_query.order_by(
+                    ProductBatch.expiration_date.is_(None),
+                    ProductBatch.expiration_date.asc(),
+                    ProductBatch.id.asc(),
+                )
+                batches = (
+                    await session.exec(batch_query.with_for_update())
+                ).all()
+                batch_cache[cache_key] = batches
+
+            allows_decimal = item["allows_decimal"]
+            if batches:
+                available_stock = _sum_batch_stock(batches, allows_decimal)
+            elif variant:
+                available_stock = _round_quantity(variant.stock, allows_decimal)
+            else:
+                available_stock = _round_quantity(product.stock, allows_decimal)
+
+            if available_stock < item["quantity"]:
                 raise StockError(
                     f"Stock insuficiente para {item['description']}."
                 )
-            locked_products.append((item, product))
+
+            resolved_items.append(
+                {
+                    "item": decimal_item,
+                    "product": product,
+                    "variant": variant,
+                    "batches": batches,
+                    "allows_decimal": allows_decimal,
+                }
+            )
 
         items_total = calculate_total(decimal_snapshot)
         sale_total = _round_money(items_total + reservation_balance)
@@ -910,29 +1539,102 @@ class SaleService:
                     )
                     session.add(client)
     
-            for item, product in locked_products:
-                allows_decimal = decimal_units.get(
-                    (product.unit or "").strip().lower(), False
+            products_to_recalculate: set[int] = set()
+            for entry in resolved_items:
+                item = entry["item"]
+                product = entry["product"]
+                variant = entry["variant"]
+                batches = entry["batches"]
+                allows_decimal = entry["allows_decimal"]
+
+                batch_id = None
+                if variant:
+                    if batches:
+                        used_batches = _deduct_from_batches(
+                            batches, item["quantity"], allows_decimal
+                        )
+                        if len(used_batches) == 1:
+                            batch_id = used_batches[0].id
+                        for batch in used_batches:
+                            session.add(batch)
+                        variant.stock = _sum_batch_stock(
+                            batches, allows_decimal
+                        )
+                        session.add(variant)
+                    else:
+                        current_stock = _round_quantity(
+                            variant.stock, allows_decimal
+                        )
+                        variant.stock = _round_quantity(
+                            current_stock - item["quantity"], allows_decimal
+                        )
+                        session.add(variant)
+                    products_to_recalculate.add(product.id)
+                else:
+                    if batches:
+                        used_batches = _deduct_from_batches(
+                            batches, item["quantity"], allows_decimal
+                        )
+                        if len(used_batches) == 1:
+                            batch_id = used_batches[0].id
+                        for batch in used_batches:
+                            session.add(batch)
+                        product.stock = _sum_batch_stock(
+                            batches, allows_decimal
+                        )
+                        session.add(product)
+                    else:
+                        current_stock = _round_quantity(
+                            product.stock, allows_decimal
+                        )
+                        product.stock = _round_quantity(
+                            current_stock - item["quantity"], allows_decimal
+                        )
+                        session.add(product)
+
+                barcode_snapshot = (
+                    variant.sku if variant else product.barcode
                 )
-                scale = 4 if allows_decimal else 0
-                product.stock = func.round(
-                    Product.stock - item["quantity"], scale
-                )
-                session.add(product)
-    
                 sale_item = SaleItem(
                     sale_id=new_sale.id,
                     product_id=product.id,
+                    product_variant_id=variant.id if variant else None,
+                    product_batch_id=batch_id,
                     company_id=company_id,
                     branch_id=branch_id,
                     quantity=item["quantity"],
                     unit_price=item["price"],
                     subtotal=item["subtotal"],
                     product_name_snapshot=product.description,
-                    product_barcode_snapshot=product.barcode,
+                    product_barcode_snapshot=barcode_snapshot,
                     product_category_snapshot=product.category or "General",
                 )
                 session.add(sale_item)
+
+            if products_to_recalculate:
+                for product_id in products_to_recalculate:
+                    total_query = select(
+                        func.coalesce(func.sum(ProductVariant.stock), 0)
+                    ).where(ProductVariant.product_id == product_id)
+                    total_query = _apply_tenant_filters(
+                        total_query, ProductVariant, company_id, branch_id
+                    )
+                    total_row = (await session.exec(total_query)).first()
+                    if total_row is None:
+                        total_stock = Decimal("0.0000")
+                    elif isinstance(total_row, tuple):
+                        total_stock = total_row[0]
+                    else:
+                        total_stock = total_row
+                    product = products_by_id.get(product_id)
+                    if product:
+                        allows_decimal = decimal_units.get(
+                            (product.unit or "").strip().lower(), False
+                        )
+                        product.stock = _round_quantity(
+                            total_stock, allows_decimal
+                        )
+                        session.add(product)
     
             reservation_context = None
             reservation_balance_display = _money_to_float(reservation_balance)

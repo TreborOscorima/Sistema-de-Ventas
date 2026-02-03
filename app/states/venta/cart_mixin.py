@@ -3,10 +3,11 @@ import uuid
 from typing import Any, Dict, List, Union
 
 import reflex as rx
-from sqlmodel import select
 from decimal import Decimal
+from sqlmodel import select
 
-from app.models import FieldReservation, Product
+from app.models import FieldReservation
+from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
 from ..types import TransactionItem
 
@@ -26,11 +27,42 @@ class CartMixin:
     }
     new_sale_items: List[Dict[str, Any]] = []
     autocomplete_suggestions: List[str] = []
+    autocomplete_results: List[Dict[str, Any]] = []
+    autocomplete_selected_index: int = -1
+    selected_product: Dict[str, Any] | None = None
+    last_scanned_label: str = ""
 
     @rx.event
-    def handle_key_down(self, key: str):
+    async def handle_key_down(self, key: str):
         if key == "Enter":
-            return self.add_item_to_sale()
+            barcode = str(self.new_sale_item.get("barcode", "") or "").strip()
+            if barcode:
+                company_id = None
+                branch_id = None
+                if hasattr(self, "current_user"):
+                    company_id = self.current_user.get("company_id")
+                if hasattr(self, "_branch_id"):
+                    branch_id = self._branch_id()
+                if not company_id or not branch_id:
+                    return rx.toast(
+                        "Empresa o sucursal no definida.",
+                        duration=3000,
+                    )
+                product = await SaleService.get_product_by_barcode(
+                    barcode,
+                    int(company_id),
+                    int(branch_id),
+                )
+                if product:
+                    if self.new_sale_item.get("quantity", 0) <= 0:
+                        self.new_sale_item["quantity"] = 1
+                    self._set_last_scanned_label(product)
+                    return await self.add_item_to_sale(product_override=product)
+                return rx.toast(
+                    "Producto no encontrado o sin stock disponible.",
+                    duration=3000,
+                )
+            return await self.add_item_to_sale()
 
     @rx.var
     def sale_subtotal(self) -> float:
@@ -81,8 +113,76 @@ class CartMixin:
             item["sale_price"] = self._round_currency(item.get("sale_price", 0))
         item["subtotal"] = self._round_currency(item["quantity"] * item["price"])
 
-    def _fill_sale_item_from_product(self, product: Product, keep_quantity: bool = False):
-        product_barcode = product.barcode
+    def _product_value(self, product: Any, key: str, default: Any = None) -> Any:
+        if isinstance(product, dict):
+            return product.get(key, default)
+        return getattr(product, key, default)
+
+    def _set_last_scanned_label(self, product: Any):
+        description = self._product_value(product, "description", "")
+        unit = self._product_value(product, "unit", "")
+        stock = self._product_value(product, "stock", 0)
+        try:
+            stock_display = self._normalize_quantity_value(stock, unit)
+        except Exception:
+            stock_display = stock
+        price = self._round_currency(self._product_value(product, "sale_price", 0))
+        currency = getattr(self, "currency_symbol", "S/")
+        self.last_scanned_label = (
+            f"{description} | Stock: {stock_display} | {currency}{price}"
+        )
+
+    async def _apply_price_tier(
+        self,
+        product: Any | None = None,
+        quantity_override: float | Decimal | None = None,
+    ) -> Decimal | None:
+        product = product or self.selected_product
+        if not product:
+            return None
+        product_id = self._product_value(
+            product,
+            "product_id",
+            self._product_value(product, "id", None),
+        )
+        if not product_id:
+            return None
+        qty = quantity_override
+        if qty is None:
+            qty = self.new_sale_item.get("quantity", 0)
+        if not qty or qty <= 0:
+            return None
+        company_id = self._company_id() if hasattr(self, "_company_id") else None
+        branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
+        if not company_id or not branch_id:
+            return None
+        tier_price = await SaleService.calculate_item_price(
+            int(product_id),
+            Decimal(str(qty)),
+            int(company_id),
+            int(branch_id),
+        )
+        if tier_price and tier_price > 0:
+            self.new_sale_item["price"] = self._round_currency(tier_price)
+            self.new_sale_item["sale_price"] = self._round_currency(tier_price)
+            self.new_sale_item["subtotal"] = self._round_currency(
+                self.new_sale_item["quantity"] * self.new_sale_item["price"]
+            )
+        return tier_price
+
+    def _fill_sale_item_from_product(
+        self,
+        product: Any,
+        keep_quantity: bool = False,
+    ):
+        product_barcode = self._product_value(product, "barcode", "")
+        description = self._product_value(product, "description", "")
+        category = self._product_value(product, "category", "General")
+        unit = self._product_value(product, "unit", "Unidad")
+        sale_price = self._product_value(product, "sale_price", 0)
+        product_id = self._product_value(product, "product_id", None)
+        if product_id is None:
+            product_id = self._product_value(product, "id", None)
 
         quantity = (
             self.new_sale_item["quantity"]
@@ -90,25 +190,30 @@ class CartMixin:
             else 1
         )
 
-        self.new_sale_item["product_id"] = product.id
+        self.new_sale_item["product_id"] = product_id
         self.new_sale_item["barcode"] = product_barcode
-        self.new_sale_item["description"] = product.description
-        self.new_sale_item["category"] = product.category
-        self.new_sale_item["unit"] = product.unit
+        self.new_sale_item["description"] = description
+        self.new_sale_item["category"] = category
+        self.new_sale_item["unit"] = unit
         self.new_sale_item["quantity"] = self._normalize_quantity_value(
-            quantity, product.unit
+            quantity, unit
         )
-        self.new_sale_item["price"] = self._round_currency(product.sale_price)
-        self.new_sale_item["sale_price"] = self._round_currency(product.sale_price)
+        self.new_sale_item["price"] = self._round_currency(sale_price)
+        self.new_sale_item["sale_price"] = self._round_currency(sale_price)
         self.new_sale_item["subtotal"] = self._round_currency(
             self.new_sale_item["quantity"] * self.new_sale_item["price"]
         )
+        if isinstance(product, dict):
+            self.selected_product = dict(product)
 
         if not keep_quantity:
             self.autocomplete_suggestions = []
+            self.autocomplete_results = []
 
         logging.info(
-            f"[FILL-SALE] C▃igo corregido: escaneado incompleto  '{product_barcode}' completo (producto: {product.description})"
+            "[FILL-SALE] C▃igo corregido: escaneado incompleto  '%s' completo (producto: %s)",
+            product_barcode,
+            description,
         )
 
     def _reset_sale_form(self):
@@ -126,9 +231,13 @@ class CartMixin:
             "product_id": None,
         }
         self.autocomplete_suggestions = []
+        self.autocomplete_results = []
+        self.autocomplete_selected_index = -1
+        self.selected_product = None
+        self.last_scanned_label = ""
 
     @rx.event
-    def handle_sale_change(self, field: str, value: Union[str, float]):
+    async def handle_sale_change(self, field: str, value: Union[str, float]):
         try:
             if field in ["quantity", "price"]:
                 numeric = float(value) if value else 0
@@ -136,6 +245,7 @@ class CartMixin:
                     self.new_sale_item[field] = self._normalize_quantity_value(
                         numeric, self.new_sale_item.get("unit", "")
                     )
+                    await self._apply_price_tier()
                 else:
                     self.new_sale_item[field] = self._round_currency(numeric)
             else:
@@ -148,6 +258,7 @@ class CartMixin:
                 self.new_sale_item["quantity"] * self.new_sale_item["price"]
             )
             if field == "description":
+                self.selected_product = None
                 if value and len(str(value)) > 1:
                     company_id = None
                     branch_id = None
@@ -157,22 +268,28 @@ class CartMixin:
                         branch_id = self._branch_id()
                     if not company_id or not branch_id:
                         self.autocomplete_suggestions = []
+                        self.autocomplete_results = []
                         return
-                    with rx.session() as session:
-                        search = str(value).lower()
-                        # Filtrado simple en Python sobre un conjunto limitado o SQL LIKE
-                        # Para mejor rendimiento usar SQL LIKE
-                        products = session.exec(
-                            select(Product)
-                            .where(Product.description.ilike(f"%{search}%"))
-                            .where(Product.company_id == int(company_id))
-                            .where(Product.branch_id == int(branch_id))
-                            .limit(5)
-                        ).all()
-                        self.autocomplete_suggestions = [p.description for p in products]
+                    search = str(value).lower()
+                    results = await SaleService.search_products(
+                        search,
+                        int(company_id),
+                        int(branch_id),
+                        limit=5,
+                    )
+                    self.autocomplete_results = results
+                    self.autocomplete_selected_index = 0 if results else -1
+                    self.autocomplete_suggestions = [
+                        str(result.get("description", "")).strip()
+                        for result in results
+                        if result.get("description")
+                    ]
                 else:
                     self.autocomplete_suggestions = []
+                    self.autocomplete_results = []
+                    self.autocomplete_selected_index = -1
             elif field == "barcode":
+                self.selected_product = None
                 if not value or not str(value).strip():
                     self.new_sale_item["barcode"] = ""
                     self.new_sale_item["description"] = ""
@@ -180,6 +297,9 @@ class CartMixin:
                     self.new_sale_item["price"] = 0
                     self.new_sale_item["subtotal"] = 0
                     self.autocomplete_suggestions = []
+                    self.autocomplete_results = []
+                    self.autocomplete_selected_index = -1
+                    self.last_scanned_label = ""
                 else:
                     code = clean_barcode(str(value))
                     if validate_barcode(code):
@@ -191,25 +311,60 @@ class CartMixin:
                             branch_id = self._branch_id()
                         if not company_id or not branch_id:
                             self.autocomplete_suggestions = []
+                            self.autocomplete_results = []
+                            self.autocomplete_selected_index = -1
                             return
-                        with rx.session() as session:
-                            product = session.exec(
-                                select(Product)
-                                .where(Product.barcode == code)
-                                .where(Product.company_id == int(company_id))
-                                .where(Product.branch_id == int(branch_id))
-                            ).first()
-                            if product:
-                                self._fill_sale_item_from_product(
-                                    product, keep_quantity=False
-                                )
-                                self.autocomplete_suggestions = []
-                                return
+                        product = await SaleService.get_product_by_barcode(
+                            code,
+                            int(company_id),
+                            int(branch_id),
+                        )
+                        if product:
+                            self._fill_sale_item_from_product(
+                                product, keep_quantity=False
+                            )
+                            await self._apply_price_tier(product)
+                            self.autocomplete_suggestions = []
+                            self.autocomplete_results = []
+                            self.autocomplete_selected_index = -1
+                            return
         except ValueError as e:
             logging.exception(f"Error parsing sale value: {e}")
 
     @rx.event
-    def process_sale_barcode_from_input(self, barcode_value):
+    def handle_autocomplete_keydown(self, key: str):
+        if not self.autocomplete_results:
+            return
+        total = len(self.autocomplete_results)
+        if key in ("ArrowDown", "ArrowRight"):
+            if self.autocomplete_selected_index < 0:
+                self.autocomplete_selected_index = 0
+            else:
+                self.autocomplete_selected_index = min(
+                    self.autocomplete_selected_index + 1, total - 1
+                )
+            return
+        if key in ("ArrowUp", "ArrowLeft"):
+            if self.autocomplete_selected_index < 0:
+                self.autocomplete_selected_index = 0
+            else:
+                self.autocomplete_selected_index = max(
+                    self.autocomplete_selected_index - 1, 0
+                )
+            return
+        if key in ("Enter", "NumpadEnter"):
+            idx = self.autocomplete_selected_index
+            if idx < 0:
+                idx = 0
+            if 0 <= idx < total:
+                return self.select_product_for_sale(self.autocomplete_results[idx])
+        if key == "Escape":
+            self.autocomplete_suggestions = []
+            self.autocomplete_results = []
+            self.autocomplete_selected_index = -1
+
+    @rx.event
+    async def process_sale_barcode_from_input(self, barcode_value):
         self.new_sale_item["barcode"] = str(barcode_value) if barcode_value else ""
 
         if not barcode_value or not str(barcode_value).strip():
@@ -218,6 +373,7 @@ class CartMixin:
             self.new_sale_item["price"] = 0
             self.new_sale_item["subtotal"] = 0
             self.autocomplete_suggestions = []
+            self.autocomplete_results = []
             return
 
         code = clean_barcode(str(barcode_value))
@@ -230,20 +386,30 @@ class CartMixin:
                 branch_id = self._branch_id()
             if not company_id or not branch_id:
                 return
-            with rx.session() as session:
-                product = session.exec(
-                    select(Product)
-                    .where(Product.barcode == code)
-                    .where(Product.company_id == int(company_id))
-                    .where(Product.branch_id == int(branch_id))
-                ).first()
-                if product:
-                    self._fill_sale_item_from_product(product, keep_quantity=False)
-                    self.autocomplete_suggestions = []
-                    return
+            product = await SaleService.get_product_by_barcode(
+                code,
+                int(company_id),
+                int(branch_id),
+            )
+            if product:
+                if self.new_sale_item.get("quantity", 0) <= 0:
+                    self.new_sale_item["quantity"] = 1
+                self._fill_sale_item_from_product(product, keep_quantity=True)
+                await self._apply_price_tier(product)
+                self.autocomplete_suggestions = []
+                self.autocomplete_results = []
+                return await self.add_item_to_sale(product_override=product)
 
     @rx.event
-    def select_product_for_sale(self, description: str):
+    async def select_product_for_sale(self, description: str | dict):
+        if isinstance(description, dict):
+            if description.get("description") or description.get("barcode"):
+                self._fill_sale_item_from_product(description)
+                self.selected_product = dict(description)
+                self.autocomplete_suggestions = []
+                self.autocomplete_results = []
+                self.autocomplete_selected_index = -1
+                return
         if isinstance(description, dict):
             description = (
                 description.get("value")
@@ -261,31 +427,66 @@ class CartMixin:
                 branch_id = self._branch_id()
             if not company_id or not branch_id:
                 self.autocomplete_suggestions = []
+                self.autocomplete_results = []
                 return
-            with rx.session() as session:
-                product = session.exec(
-                    select(Product)
-                    .where(Product.description == desc)
-                    .where(Product.company_id == int(company_id))
-                    .where(Product.branch_id == int(branch_id))
-                ).first()
-                if product:
-                    self._fill_sale_item_from_product(product)
+            product = None
+            if self.autocomplete_results:
+                for candidate in self.autocomplete_results:
+                    if candidate.get("description") == desc:
+                        product = candidate
+                        break
+            if product is None:
+                results = await SaleService.search_products(
+                    desc,
+                    int(company_id),
+                    int(branch_id),
+                    limit=5,
+                )
+                for candidate in results:
+                    if candidate.get("description") == desc:
+                        product = candidate
+                        break
+                if product is None and results:
+                    product = results[0]
+            if product:
+                self._fill_sale_item_from_product(product)
+                await self._apply_price_tier(product)
+                self.selected_product = dict(product) if isinstance(product, dict) else None
         self.autocomplete_suggestions = []
+        self.autocomplete_results = []
+        self.autocomplete_selected_index = -1
+
+    @rx.var
+    def autocomplete_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for index, result in enumerate(self.autocomplete_results):
+            row = dict(result)
+            row["index"] = index
+            rows.append(row)
+        return rows
 
     @rx.event
-    def add_item_to_sale(self):
+    async def add_item_to_sale(self, product_override: dict | None = None):
         if not self.current_user["privileges"]["create_ventas"]:
             return rx.toast("No tiene permisos para crear ventas.", duration=3000)
         self.sale_receipt_ready = False
-        if (
-            not self.new_sale_item["description"]
-            or self.new_sale_item["quantity"] <= 0
-            or self.new_sale_item["price"] <= 0
-        ):
-            return rx.toast(
-                "Por favor, busque un producto y complete los campos.", duration=3000
-            )
+
+        if product_override:
+            if (
+                not self.new_sale_item.get("description")
+                or self.new_sale_item.get("price", 0) <= 0
+            ):
+                self._fill_sale_item_from_product(product_override, keep_quantity=True)
+            self.selected_product = dict(product_override)
+        elif self.selected_product:
+            product_override = self.selected_product
+            if (
+                not self.new_sale_item.get("description")
+                or self.new_sale_item.get("price", 0) <= 0
+            ):
+                self._fill_sale_item_from_product(product_override, keep_quantity=True)
+        if product_override:
+            await self._apply_price_tier(product_override)
 
         description = self.new_sale_item["description"].strip()
         barcode = str(self.new_sale_item.get("barcode", "") or "").strip()
@@ -307,52 +508,121 @@ class CartMixin:
         existing_qty = float(existing_item["quantity"]) if existing_item else 0.0
         new_qty = float(self.new_sale_item["quantity"])
         total_qty = existing_qty + new_qty
-        with rx.session() as session:
-            company_id = None
-            branch_id = None
-            if hasattr(self, "current_user"):
-                company_id = self.current_user.get("company_id")
-            if hasattr(self, "_branch_id"):
-                branch_id = self._branch_id()
-            if not company_id or not branch_id:
-                return rx.toast(
-                    "Empresa o sucursal no definida.",
-                    duration=3000,
-                )
-            if barcode:
-                product = session.exec(
-                    select(Product)
-                    .where(Product.barcode == barcode)
-                    .where(Product.company_id == int(company_id))
-                    .where(Product.branch_id == int(branch_id))
-                ).first()
-            else:
-                product = session.exec(
-                    select(Product)
-                    .where(Product.description == description)
-                    .where(Product.company_id == int(company_id))
-                    .where(Product.branch_id == int(branch_id))
-                ).first()
+        company_id = None
+        branch_id = None
+        if hasattr(self, "current_user"):
+            company_id = self.current_user.get("company_id")
+        if hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast(
+                "Empresa o sucursal no definida.",
+                duration=3000,
+            )
 
-            if not product:
-                return rx.toast(
-                    "Producto no encontrado en el inventario.", duration=3000
+        product = None
+        if product_override:
+            product = product_override
+        elif barcode:
+            product = await SaleService.get_product_by_barcode(
+                barcode,
+                int(company_id),
+                int(branch_id),
+            )
+            if not product and description:
+                results = await SaleService.search_products(
+                    description,
+                    int(company_id),
+                    int(branch_id),
+                    limit=5,
                 )
-            if product.stock < Decimal(str(total_qty)):
-                remaining = max(product.stock - Decimal(str(existing_qty)), Decimal("0"))
-                unit = product.unit or self.new_sale_item.get("unit", "")
-                in_cart_display = self._normalize_quantity_value(existing_qty, unit)
-                remaining_display = self._normalize_quantity_value(remaining, unit)
-                return rx.toast(
-                    f"Stock insuficiente: ya tienes {in_cart_display} en el carrito y solo quedan {remaining_display} disponibles.",
-                    duration=3000,
-                )
+                for candidate in results:
+                    if candidate.get("description") == description:
+                        product = candidate
+                        break
+                if product is None and results:
+                    product = results[0]
+        else:
+            results = await SaleService.search_products(
+                description,
+                int(company_id),
+                int(branch_id),
+                limit=5,
+            )
+            for candidate in results:
+                if candidate.get("description") == description:
+                    product = candidate
+                    break
+            if product is None and results:
+                product = results[0]
+
+        if product:
+            if not self.new_sale_item["description"] or self.new_sale_item["price"] <= 0:
+                self._fill_sale_item_from_product(product, keep_quantity=True)
+                await self._apply_price_tier(product)
+            if isinstance(product, dict):
+                self.selected_product = dict(product)
+
+        if (
+            not self.new_sale_item["description"]
+            or self.new_sale_item["quantity"] <= 0
+            or self.new_sale_item["price"] <= 0
+        ):
+            return rx.toast(
+                "Por favor, busque un producto y complete los campos.", duration=3000
+            )
+
+        if not product:
+            return rx.toast(
+                "Producto no encontrado en el inventario.", duration=3000
+            )
+        if not barcode:
+            self.new_sale_item["barcode"] = self._product_value(
+                product, "barcode", ""
+            )
+            barcode = self.new_sale_item["barcode"]
+        if not self.new_sale_item.get("product_id"):
+            self.new_sale_item["product_id"] = self._product_value(
+                product,
+                "product_id",
+                self._product_value(product, "id", None),
+            )
+        await self._apply_price_tier(product, quantity_override=total_qty)
+        product_id = self.new_sale_item.get("product_id") or self._product_value(
+            product,
+            "product_id",
+            self._product_value(product, "id", None),
+        )
+        variant_id = self._product_value(product, "variant_id", None)
+        available_stock = await SaleService.get_available_stock(
+            int(product_id) if product_id else None,
+            int(variant_id) if variant_id else None,
+            int(company_id),
+            int(branch_id),
+        )
+        product_stock = Decimal(str(available_stock or 0))
+        if product_stock < Decimal(str(total_qty)):
+            remaining = max(product_stock - Decimal(str(existing_qty)), Decimal("0"))
+            unit = self._product_value(
+                product,
+                "unit",
+                self.new_sale_item.get("unit", ""),
+            )
+            in_cart_display = self._normalize_quantity_value(existing_qty, unit)
+            remaining_display = self._normalize_quantity_value(remaining, unit)
+            return rx.toast(
+                f"Stock insuficiente: ya tienes {in_cart_display} en el carrito y solo quedan {remaining_display} disponibles.",
+                duration=3000,
+            )
 
         if existing_item is not None:
             updated_item = existing_item.copy()
             unit = updated_item.get("unit", "")
             updated_item["quantity"] = self._normalize_quantity_value(
                 existing_qty + new_qty, unit
+            )
+            updated_item["price"] = self.new_sale_item.get(
+                "price", updated_item.get("price", 0)
             )
             updated_item["subtotal"] = self._round_currency(
                 updated_item["quantity"] * updated_item["price"]

@@ -5,6 +5,7 @@ from app.components.ui import (
   page_title,
   pagination_controls,
   permission_guard,
+  toggle_switch,
 )
 
 
@@ -37,6 +38,7 @@ def edit_product_modal() -> rx.Component:
               value=State.editing_product["barcode"],
               on_change=lambda v: State.handle_edit_product_change("barcode", v),
               class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+              debounce_timeout=200,
             ),
           ),
           rx.el.div(
@@ -45,6 +47,7 @@ def edit_product_modal() -> rx.Component:
               value=State.editing_product["description"],
               on_change=lambda v: State.handle_edit_product_change("description", v),
               class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+              debounce_timeout=200,
             ),
           ),
           rx.el.div(
@@ -60,13 +63,33 @@ def edit_product_modal() -> rx.Component:
             ),
           ),
           rx.el.div(
-            rx.el.label("Stock", class_name="block text-sm font-medium text-slate-700"),
-            rx.el.input(
-              type="number",
-              value=State.editing_product["stock"].to_string(),
-              on_change=lambda v: State.handle_edit_product_change("stock", v),
-              class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-            ),
+            rx.cond(
+              State.show_variants,
+              rx.el.div(
+                rx.el.label(
+                  "Stock Total (calculado)",
+                  class_name="block text-sm font-medium text-slate-700",
+                ),
+                rx.el.input(
+                  type="number",
+                  value=State.variants_stock_total.to_string(),
+                  is_disabled=True,
+                  class_name="w-full h-10 px-3 text-sm bg-slate-100 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                ),
+              ),
+              rx.el.div(
+                rx.el.label(
+                  "Stock",
+                  class_name="block text-sm font-medium text-slate-700",
+                ),
+                rx.el.input(
+                  type="number",
+                  value=State.editing_product["stock"].to_string(),
+                  on_change=lambda v: State.handle_edit_product_change("stock", v),
+                  class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                ),
+              ),
+            )
           ),
           rx.el.div(
             rx.el.label("Unidad", class_name="block text-sm font-medium text-slate-700"),
@@ -101,6 +124,192 @@ def edit_product_modal() -> rx.Component:
           ),
           class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
         ),
+        rx.el.div(
+          rx.el.div(
+            rx.el.label(
+              "Tiene Variantes",
+              class_name="text-sm font-medium text-slate-700",
+            ),
+            rx.el.div(
+              toggle_switch(
+                checked=State.show_variants,
+                on_change=State.set_show_variants,
+              ),
+              rx.el.span(
+                "Tallas/colores con stock individual",
+                class_name="text-xs text-slate-500",
+              ),
+              class_name="flex items-center gap-2",
+            ),
+            class_name="flex flex-col gap-2",
+          ),
+          rx.el.div(
+            rx.el.label(
+              "Precios Mayoristas",
+              class_name="text-sm font-medium text-slate-700",
+            ),
+            rx.el.div(
+              toggle_switch(
+                checked=State.show_wholesale,
+                on_change=State.set_show_wholesale,
+              ),
+              rx.el.span(
+                "Escalas por cantidad mínima",
+                class_name="text-xs text-slate-500",
+              ),
+              class_name="flex items-center gap-2",
+            ),
+            class_name="flex flex-col gap-2",
+          ),
+          class_name="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4",
+        ),
+        rx.cond(
+          State.show_variants,
+          rx.el.div(
+            rx.el.div(
+              rx.el.h4(
+                "Variantes",
+                class_name="text-sm font-semibold text-slate-700",
+              ),
+              rx.el.button(
+                rx.icon("plus", class_name="h-4 w-4"),
+                "Agregar variante",
+                on_click=State.add_variant_row,
+                class_name="flex items-center gap-2 px-3 py-2 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+              ),
+              class_name="flex items-center justify-between",
+            ),
+            rx.el.div(
+              rx.el.div(
+                rx.el.span(
+                  "SKU", class_name="text-xs text-slate-500 uppercase sm:col-span-2"
+                ),
+                rx.el.span("Talla", class_name="text-xs text-slate-500 uppercase"),
+                rx.el.span("Color", class_name="text-xs text-slate-500 uppercase"),
+                rx.el.span("Stock", class_name="text-xs text-slate-500 uppercase"),
+                rx.el.span("Acción", class_name="text-xs text-slate-500 uppercase"),
+                class_name="hidden sm:grid sm:grid-cols-6 gap-2",
+              ),
+              rx.foreach(
+                State.variant_rows,
+                lambda row: rx.el.div(
+                  rx.el.input(
+                    placeholder="SKU",
+                    id=f"variant_sku_{row['index']}",
+                    default_value=row["sku"],
+                    on_blur=lambda v, index=row["index"]: State.update_variant_field(
+                      index, "sku", v
+                    ),
+                    on_key_down=lambda k, index=row["index"]: State.handle_variant_sku_keydown(
+                      k, index
+                    ),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:col-span-2",
+                  ),
+                  rx.el.input(
+                    placeholder="Talla",
+                    value=row["size"],
+                    on_change=lambda v, index=row["index"]: State.update_variant_field(
+                      index, "size", v
+                    ),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  ),
+                  rx.el.input(
+                    placeholder="Color",
+                    value=row["color"],
+                    on_change=lambda v, index=row["index"]: State.update_variant_field(
+                      index, "color", v
+                    ),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  ),
+                  rx.el.input(
+                    type="number",
+                    placeholder="0",
+                    value=row["stock"].to_string(),
+                    on_change=lambda v, index=row["index"]: State.update_variant_field(
+                      index, "stock", v
+                    ),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  ),
+                  rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda _, index=row["index"]: State.remove_variant_row(
+                      index
+                    ),
+                    class_name="p-2 text-red-600 hover:bg-red-50 rounded-md",
+                  ),
+                  class_name="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center",
+                ),
+              ),
+              class_name="flex flex-col gap-3",
+            ),
+            class_name="mt-4 space-y-3",
+          ),
+          rx.fragment(),
+        ),
+        rx.cond(
+          State.show_wholesale,
+          rx.el.div(
+            rx.el.div(
+              rx.el.h4(
+                "Precios Mayoristas",
+                class_name="text-sm font-semibold text-slate-700",
+              ),
+              rx.el.button(
+                rx.icon("plus", class_name="h-4 w-4"),
+                "Agregar regla",
+                on_click=State.add_tier_row,
+                class_name="flex items-center gap-2 px-3 py-2 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+              ),
+              class_name="flex items-center justify-between",
+            ),
+            rx.el.div(
+              rx.el.div(
+                rx.el.span(
+                  "Cantidad mínima", class_name="text-xs text-slate-500 uppercase"
+                ),
+                rx.el.span(
+                  "Precio unitario", class_name="text-xs text-slate-500 uppercase"
+                ),
+                rx.el.span("Acción", class_name="text-xs text-slate-500 uppercase"),
+                class_name="hidden sm:grid sm:grid-cols-3 gap-2",
+              ),
+              rx.foreach(
+                State.price_tier_rows,
+                lambda row: rx.el.div(
+                  rx.el.input(
+                    type="number",
+                    placeholder="0",
+                    value=row["min_qty"].to_string(),
+                    on_change=lambda v, index=row["index"]: State.update_tier_field(
+                      index, "min_qty", v
+                    ),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  ),
+                  rx.el.input(
+                    type="number",
+                    placeholder="0.00",
+                    value=row["price"].to_string(),
+                    on_change=lambda v, index=row["index"]: State.update_tier_field(
+                      index, "price", v
+                    ),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  ),
+                  rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda _, index=row["index"]: State.remove_tier_row(
+                      index
+                    ),
+                    class_name="p-2 text-red-600 hover:bg-red-50 rounded-md",
+                  ),
+                  class_name="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center",
+                ),
+              ),
+              class_name="flex flex-col gap-3",
+            ),
+            class_name="mt-4 space-y-3",
+          ),
+          rx.fragment(),
+        ),
         rx.divider(color="slate-100"),
         rx.el.div(
           rx.el.button(
@@ -114,6 +323,111 @@ def edit_product_modal() -> rx.Component:
             class_name="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
           ),
           class_name="flex flex-col sm:flex-row sm:justify-end gap-3 mt-6",
+        ),
+        class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
+      ),
+      class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
+    ),
+    rx.fragment(),
+  )
+
+
+def stock_details_modal() -> rx.Component:
+  return rx.cond(
+    State.stock_details_open,
+    rx.el.div(
+      rx.el.div(
+        on_click=State.close_stock_details,
+        class_name="fixed inset-0 bg-black/40 backdrop-blur-sm modal-overlay",
+      ),
+      rx.el.div(
+        rx.el.div(
+          rx.el.h3(
+            State.stock_details_title,
+            class_name="text-xl font-semibold text-slate-800",
+          ),
+          rx.el.button(
+            rx.icon("x", class_name="h-4 w-4"),
+            on_click=State.close_stock_details,
+            class_name="p-2 rounded-full hover:bg-slate-100",
+          ),
+          class_name="flex items-start justify-between gap-4 mb-4",
+        ),
+        rx.divider(color="slate-100"),
+        rx.cond(
+          State.stock_details_mode == "variant",
+          rx.el.table(
+            rx.el.thead(
+              rx.el.tr(
+                rx.el.th("SKU", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Talla", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Color", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th(
+                  "Stock", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+                ),
+                class_name=TABLE_STYLES["header"],
+              )
+            ),
+            rx.el.tbody(
+              rx.foreach(
+                State.selected_product_details,
+                lambda row: rx.el.tr(
+                  rx.el.td(row["sku"], class_name="py-2 px-3"),
+                  rx.el.td(row["size"], class_name="py-2 px-3"),
+                  rx.el.td(row["color"], class_name="py-2 px-3"),
+                  rx.el.td(
+                    row["stock"].to_string(),
+                    class_name="py-2 px-3 text-center",
+                  ),
+                  class_name="border-b",
+                ),
+              )
+            ),
+            class_name="w-full text-sm",
+          ),
+          rx.cond(
+            State.stock_details_mode == "batch",
+            rx.el.table(
+              rx.el.thead(
+                rx.el.tr(
+                  rx.el.th("Lote", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Vencimiento", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th(
+                    "Stock",
+                    class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                  ),
+                  class_name=TABLE_STYLES["header"],
+                )
+              ),
+              rx.el.tbody(
+                rx.foreach(
+                  State.selected_product_details,
+                  lambda row: rx.el.tr(
+                    rx.el.td(row["batch_number"], class_name="py-2 px-3"),
+                    rx.el.td(row["expiration_date"], class_name="py-2 px-3"),
+                    rx.el.td(
+                      row["stock"].to_string(),
+                      class_name="py-2 px-3 text-center",
+                    ),
+                    class_name="border-b",
+                  ),
+                )
+              ),
+              class_name="w-full text-sm",
+            ),
+            rx.el.p(
+              "Producto único sin variantes.",
+              class_name="text-sm text-slate-500",
+            ),
+          ),
+        ),
+        rx.el.div(
+          rx.el.button(
+            "Cerrar",
+            on_click=State.close_stock_details,
+            class_name="px-4 py-2 rounded-md border text-slate-700 hover:bg-slate-50",
+          ),
+          class_name="flex justify-end mt-6",
         ),
         class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
       ),
@@ -194,6 +508,7 @@ def inventory_adjustment_modal() -> rx.Component:
                     "description", value
                   ),
                   class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  debounce_timeout=200,
                 ),
                 rx.cond(
                   State.inventory_adjustment_suggestions.length()
@@ -489,6 +804,7 @@ def inventario_page() -> rx.Component:
           value=State.new_category_name,
           on_change=lambda value: State.update_new_category_name(value),
           class_name="flex-1 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          debounce_timeout=200,
         ),
         rx.el.button(
           rx.icon("plus", class_name="h-4 w-4"),
@@ -528,6 +844,12 @@ def inventario_page() -> rx.Component:
         class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
       ),
       rx.el.div(
+        rx.el.button(
+          rx.icon("plus", class_name="h-4 w-4"),
+          "Nuevo Producto",
+          on_click=State.open_create_product_modal,
+          class_name="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[42px]",
+        ),
         rx.el.button(
           rx.icon("download", class_name="h-4 w-4"),
           "Exportar Inventario",
@@ -640,6 +962,12 @@ def inventario_page() -> rx.Component:
                     title="Editar",
                   ),
                   rx.el.button(
+                    rx.icon("eye", class_name="h-4 w-4"),
+                    on_click=lambda: State.open_stock_details(product),
+                    class_name="p-2 text-slate-600 hover:bg-slate-100 rounded-full",
+                    title="Ver Desglose",
+                  ),
+                  rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
                     on_click=lambda: State.delete_product(product["id"]),
                     class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
@@ -676,6 +1004,7 @@ def inventario_page() -> rx.Component:
     ),
     inventory_adjustment_modal(),
     edit_product_modal(),
+    stock_details_modal(),
     class_name="p-4 sm:p-6 w-full flex flex-col gap-6",
   )
   return permission_guard(
