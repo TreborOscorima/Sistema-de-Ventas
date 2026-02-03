@@ -51,6 +51,7 @@ from app.utils.exports import (
     style_header_row,
     add_data_rows,
     auto_adjust_column_widths,
+    apply_wrap_text,
     create_pdf_report,
     add_company_header,
     add_totals_row_with_formulas,
@@ -1391,7 +1392,7 @@ class CashState(MixinState):
                     unit_price = item.get("subtotal")
                 price_display = self._format_currency(unit_price or 0)
                 item_parts.append(f"{name} (x{quantity}) - {price_display}")
-            details = ", ".join(item_parts) if item_parts else "Sin detalle"
+            details = "\n".join(item_parts) if item_parts else "Sin detalle"
             
             ws.cell(row=row, column=1, value=sale["timestamp"])
             ws.cell(row=row, column=2, value=sale["user"])
@@ -1405,6 +1406,9 @@ class CashState(MixinState):
             for col in range(1, 9):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
+
+        if row > data_start:
+            apply_wrap_text(ws, [8], data_start, row - 1)
         
         # Fila de totales con fórmulas
         totals_row = row

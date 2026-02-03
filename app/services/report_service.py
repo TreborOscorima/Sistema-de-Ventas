@@ -5,6 +5,7 @@ Genera reportes profesionales para evaluaciones administrativas,
 contables y financieras con el nivel de detalle requerido.
 """
 import io
+import re
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any
@@ -42,6 +43,7 @@ CURRENCY_FORMAT = '"S/"#,##0.00'
 PERCENT_FORMAT = '0.00%'
 DATE_FORMAT = 'DD/MM/YYYY'
 DATETIME_FORMAT = 'DD/MM/YYYY HH:MM:SS'
+NUMBER_FORMAT = '#,##0.####'
 
 THIN_BORDER = Border(
     left=Side(style="thin"),
@@ -270,6 +272,34 @@ def _safe_string(value: Any, default: str = "") -> str:
         return default
 
 
+def _variant_label_from_item(item: SaleItem) -> str:
+    variant = item.product_variant
+    if variant:
+        parts: list[str] = []
+        if variant.size:
+            parts.append(f"Talla {str(variant.size).strip()}")
+        if variant.color:
+            parts.append(str(variant.color).strip())
+        label = " / ".join([p for p in parts if p])
+        return label or "-"
+    snapshot = (item.product_name_snapshot or "").strip()
+    if snapshot:
+        match = re.search(r"\(([^)]+)\)$", snapshot)
+        if match:
+            return match.group(1).strip() or "-"
+    return "-"
+
+
+def _product_base_name_from_item(item: SaleItem, variant_label: str) -> str:
+    if item.product and item.product.description:
+        return item.product.description
+    name = (item.product_name_snapshot or "").strip() or "Producto"
+    if variant_label != "-" and name.endswith(")") and "(" in name:
+        base = name.rsplit("(", 1)[0].strip()
+        return base or name
+    return name
+
+
 def _translate_payment_method(method: str) -> str:
     """
     Traduce códigos de método de pago a español legible.
@@ -403,6 +433,7 @@ def generate_sales_report(
         )
         .options(
             selectinload(Sale.items).selectinload(SaleItem.product),
+            selectinload(Sale.items).selectinload(SaleItem.product_variant),
             selectinload(Sale.payments),
             selectinload(Sale.user),
             selectinload(Sale.client),
@@ -834,33 +865,35 @@ def generate_sales_report(
     _auto_adjust_columns(ws_user)
     
     # =================
-    # HOJA 6: DETALLE DE TRANSACCIONES (mejorado)
+    # HOJA 6: DETALLE DE TRANSACCIONES (por item)
     # =================
     ws_detail = wb.create_sheet("Detalle Transacciones")
-    row = _add_company_header(ws_detail, company_name, "LISTADO DETALLADO DE TRANSACCIONES", period_str, columns=10)
+    row = _add_company_header(
+        ws_detail,
+        company_name,
+        "LISTADO DETALLADO DE TRANSACCIONES",
+        period_str,
+        columns=11,
+    )
     
     headers = [
-        "Nº Venta", "Fecha y Hora", "Cliente", "Vendedor", "Productos Vendidos",
-        f"Venta ({currency_label})", f"Costo ({currency_label})", f"Utilidad ({currency_label})", "Forma de Pago", "Estado"
+        "Fecha y Hora",
+        "Nº Venta",
+        "Cliente",
+        "Vendedor",
+        "Método de Pago",
+        "Producto",
+        "Variante",
+        "Categoría",
+        "Cantidad",
+        f"Precio Unitario ({currency_label})",
+        f"Subtotal ({currency_label})",
     ]
     _style_header_row(ws_detail, row, headers)
     detail_data_start = row + 1
     row += 1
     
     for sale in sales:
-        # Productos
-        products = []
-        sale_cost = Decimal("0")
-        for item in (sale.items or []):
-            name = item.product_name_snapshot or "Producto"
-            qty = item.quantity or 0
-            products.append(f"{name} x{qty}")
-            # Obtener costo del producto relacionado
-            cost_price = _safe_decimal(item.product.purchase_price) if item.product else Decimal("0")
-            sale_cost += cost_price * _safe_decimal(qty)
-        
-        products_str = "; ".join(products) if products else "Sin productos"
-        
         # Método de pago
         payment_method = "No especificado"
         for payment in (sale.payments or []):
@@ -868,47 +901,70 @@ def generate_sales_report(
                 payment_method = _translate_payment_method(payment.method_type.value)
                 break
         
-        sale_total = _safe_decimal(sale.total_amount)
-        
         is_credit = (
             bool(getattr(sale, "is_credit", False)) or
             (sale.payment_condition or "").lower() in {"credito", "credit"}
         )
         if is_credit:
             payment_method = "Crédito/Fiado"
-        
-        # Estado traducido
-        status_es = _translate_sale_status(sale.status.value) if sale.status else "Desconocido"
-        
-        ws_detail.cell(row=row, column=1, value=sale.id)
-        ws_detail.cell(row=row, column=2, value=sale.timestamp.strftime("%d/%m/%Y %H:%M") if sale.timestamp else "Sin fecha")
-        ws_detail.cell(
-            row=row,
-            column=3,
-            value=_safe_string(
-                sale.client.name if sale.client else None,
-                "Cliente General",
-            ),
-        )
-        ws_detail.cell(
-            row=row,
-            column=4,
-            value=_safe_string(
-                sale.user.username if sale.user else None,
-                "Sistema",
-            ),
-        )
-        ws_detail.cell(row=row, column=5, value=_safe_string(products_str[:80]))  # Limitar longitud
-        ws_detail.cell(row=row, column=6, value=float(sale_total)).number_format = currency_format
-        ws_detail.cell(row=row, column=7, value=float(sale_cost)).number_format = currency_format
-        # Utilidad = Fórmula: Venta - Costo
-        ws_detail.cell(row=row, column=8, value=f"=F{row}-G{row}").number_format = currency_format
-        ws_detail.cell(row=row, column=9, value=_safe_string(payment_method))
-        ws_detail.cell(row=row, column=10, value=_safe_string(status_es))
-        
-        for col in range(1, 11):
-            ws_detail.cell(row=row, column=col).border = THIN_BORDER
-        row += 1
+
+        sale_items = sale.items or []
+        if not sale_items:
+            sale_items = [None]
+
+        for item in sale_items:
+            if item is None:
+                product_name = "Sin productos"
+                variant_label = "-"
+                category = "Sin categoría"
+                quantity = Decimal("0")
+                unit_price = Decimal("0")
+                subtotal = Decimal("0")
+            else:
+                variant_label = _variant_label_from_item(item)
+                product_name = _product_base_name_from_item(item, variant_label)
+                category = (
+                    item.product_category_snapshot
+                    or (item.product.category if item.product else "")
+                    or ("Servicios" if item.product_id is None else "General")
+                )
+                quantity = _safe_decimal(item.quantity)
+                unit_price = _safe_decimal(item.unit_price)
+                subtotal = _safe_decimal(item.subtotal)
+
+            ws_detail.cell(
+                row=row,
+                column=1,
+                value=sale.timestamp.strftime("%d/%m/%Y %H:%M") if sale.timestamp else "Sin fecha",
+            )
+            ws_detail.cell(row=row, column=2, value=sale.id)
+            ws_detail.cell(
+                row=row,
+                column=3,
+                value=_safe_string(
+                    sale.client.name if sale.client else None,
+                    "Cliente General",
+                ),
+            )
+            ws_detail.cell(
+                row=row,
+                column=4,
+                value=_safe_string(
+                    sale.user.username if sale.user else None,
+                    "Sistema",
+                ),
+            )
+            ws_detail.cell(row=row, column=5, value=_safe_string(payment_method))
+            ws_detail.cell(row=row, column=6, value=_safe_string(product_name))
+            ws_detail.cell(row=row, column=7, value=_safe_string(variant_label, "-"))
+            ws_detail.cell(row=row, column=8, value=_safe_string(category, "General"))
+            ws_detail.cell(row=row, column=9, value=float(quantity)).number_format = NUMBER_FORMAT
+            ws_detail.cell(row=row, column=10, value=float(unit_price)).number_format = currency_format
+            ws_detail.cell(row=row, column=11, value=float(subtotal)).number_format = currency_format
+
+            for col in range(1, 12):
+                ws_detail.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
     
     # Fila de totales con fórmulas
     detail_totals_row = row
@@ -918,11 +974,12 @@ def generate_sales_report(
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "F", "number_format": currency_format},
-        {"type": "sum", "col_letter": "G", "number_format": currency_format},
-        {"type": "sum", "col_letter": "H", "number_format": currency_format},
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
+        {"type": "text", "value": ""},
+        {"type": "sum", "col_letter": "I", "number_format": NUMBER_FORMAT},
+        {"type": "text", "value": ""},
+        {"type": "sum", "col_letter": "K", "number_format": currency_format},
     ])
     
     _auto_adjust_columns(ws_detail)
@@ -1109,7 +1166,11 @@ def generate_inventory_report(
     currency_format = _currency_format(currency_symbol)
     
     # Consultar productos
-    query = select(Product).order_by(Product.category, Product.description)
+    query = (
+        select(Product)
+        .order_by(Product.category, Product.description)
+        .options(selectinload(Product.variants))
+    )
     if company_id:
         query = query.where(Product.company_id == company_id)
     if branch_id:
@@ -1118,6 +1179,53 @@ def generate_inventory_report(
         query = query.where(Product.stock > 0)
     
     products = session.exec(query).all()
+
+    def _variant_label(variant: Any) -> str:
+        parts: list[str] = []
+        if getattr(variant, "size", None):
+            parts.append(str(variant.size).strip())
+        if getattr(variant, "color", None):
+            parts.append(str(variant.color).strip())
+        return " ".join([p for p in parts if p]).strip()
+
+    inventory_rows: list[dict[str, Any]] = []
+    for product in products:
+        variants = list(product.variants or [])
+        if variants:
+            for variant in variants:
+                stock = _safe_decimal(getattr(variant, "stock", 0))
+                if not include_zero_stock and stock <= 0:
+                    continue
+                label = _variant_label(variant)
+                description = _safe_string(product.description, "Sin descripción")
+                if label:
+                    description = f"{description} ({label})"
+                inventory_rows.append(
+                    {
+                        "sku": _safe_string(variant.sku, product.barcode or "S/C"),
+                        "description": description,
+                        "category": _safe_string(product.category, "Sin categoría"),
+                        "stock": stock,
+                        "unit": _safe_string(product.unit, "Unid."),
+                        "purchase_price": _safe_decimal(product.purchase_price),
+                        "sale_price": _safe_decimal(product.sale_price),
+                    }
+                )
+        else:
+            stock = _safe_decimal(product.stock)
+            if not include_zero_stock and stock <= 0:
+                continue
+            inventory_rows.append(
+                {
+                    "sku": _safe_string(product.barcode, "S/C"),
+                    "description": _safe_string(product.description, "Sin descripción"),
+                    "category": _safe_string(product.category, "Sin categoría"),
+                    "stock": stock,
+                    "unit": _safe_string(product.unit, "Unid."),
+                    "purchase_price": _safe_decimal(product.purchase_price),
+                    "sale_price": _safe_decimal(product.sale_price),
+                }
+            )
     
     today = datetime.now().strftime("%d/%m/%Y")
     
@@ -1130,26 +1238,35 @@ def generate_inventory_report(
     row = _add_company_header(ws_summary, company_name, "INVENTARIO VALORIZADO", f"Al {today}")
     
     # Calcular métricas
-    total_items = len(products)
-    total_units = sum(p.stock or 0 for p in products)
-    total_cost_value = sum((p.stock or 0) * (p.purchase_price or 0) for p in products)
-    total_sale_value = sum((p.stock or 0) * (p.sale_price or 0) for p in products)
+    total_items = len(inventory_rows)
+    total_units = sum(row["stock"] for row in inventory_rows)
+    total_cost_value = sum(
+        row["stock"] * row["purchase_price"] for row in inventory_rows
+    )
+    total_sale_value = sum(
+        row["stock"] * row["sale_price"] for row in inventory_rows
+    )
     potential_profit = total_sale_value - total_cost_value
     
-    stock_zero = sum(1 for p in products if (p.stock or 0) == 0)
-    stock_low = sum(1 for p in products if 0 < (p.stock or 0) <= 5)
-    stock_medium = sum(1 for p in products if 5 < (p.stock or 0) <= 10)
-    stock_ok = sum(1 for p in products if (p.stock or 0) > 10)
+    stock_zero = sum(1 for row in inventory_rows if row["stock"] == 0)
+    stock_low = sum(1 for row in inventory_rows if 0 < row["stock"] <= 5)
+    stock_medium = sum(1 for row in inventory_rows if 5 < row["stock"] <= 10)
+    stock_ok = sum(1 for row in inventory_rows if row["stock"] > 10)
     
     by_category: dict[str, dict] = {}
-    for p in products:
-        cat = p.category or "Sin categoría"
+    for row_data in inventory_rows:
+        cat = row_data["category"] or "Sin categoría"
         if cat not in by_category:
-            by_category[cat] = {"items": 0, "units": 0, "cost": Decimal("0"), "sale": Decimal("0")}
+            by_category[cat] = {
+                "items": 0,
+                "units": Decimal("0"),
+                "cost": Decimal("0"),
+                "sale": Decimal("0"),
+            }
         by_category[cat]["items"] += 1
-        by_category[cat]["units"] += p.stock or 0
-        by_category[cat]["cost"] += Decimal(str((p.stock or 0) * (p.purchase_price or 0)))
-        by_category[cat]["sale"] += Decimal(str((p.stock or 0) * (p.sale_price or 0)))
+        by_category[cat]["units"] += row_data["stock"]
+        by_category[cat]["cost"] += row_data["stock"] * row_data["purchase_price"]
+        by_category[cat]["sale"] += row_data["stock"] * row_data["sale_price"]
     
     row += 1
     ws_summary.cell(row=row, column=1, value="RESUMEN DE VALORIZACIÓN").font = SUBTITLE_FONT
@@ -1201,7 +1318,7 @@ def generate_inventory_report(
     for cat_name, cat_data in sorted_cats:
         ws_category.cell(row=row, column=1, value=_safe_string(cat_name))
         ws_category.cell(row=row, column=2, value=cat_data["items"])
-        ws_category.cell(row=row, column=3, value=cat_data["units"])
+        ws_category.cell(row=row, column=3, value=float(cat_data["units"]))
         ws_category.cell(row=row, column=4, value=float(cat_data["cost"])).number_format = currency_format
         ws_category.cell(row=row, column=5, value=float(cat_data["sale"])).number_format = currency_format
         # Utilidad Potencial = Fórmula: Valor Venta - Valor Costo
@@ -1252,10 +1369,10 @@ def generate_inventory_report(
     inv_detail_start = row + 1
     row += 1
     
-    for product in products:
-        stock = _safe_int(product.stock)
-        cost = _safe_decimal(product.purchase_price)
-        price = _safe_decimal(product.sale_price)
+    for row_data in inventory_rows:
+        stock = _safe_decimal(row_data["stock"])
+        cost = _safe_decimal(row_data["purchase_price"])
+        price = _safe_decimal(row_data["sale_price"])
         
         # Estado del stock
         if stock == 0:
@@ -1267,11 +1384,11 @@ def generate_inventory_report(
         else:
             status = "✅ NORMAL"
         
-        ws_detail.cell(row=row, column=1, value=_safe_string(product.barcode, "S/C"))
-        ws_detail.cell(row=row, column=2, value=_safe_string(product.description, "Sin descripción"))
-        ws_detail.cell(row=row, column=3, value=_safe_string(product.category, "Sin categoría"))
-        ws_detail.cell(row=row, column=4, value=stock)
-        ws_detail.cell(row=row, column=5, value=_safe_string(product.unit, "Unid."))
+        ws_detail.cell(row=row, column=1, value=_safe_string(row_data["sku"], "S/C"))
+        ws_detail.cell(row=row, column=2, value=_safe_string(row_data["description"], "Sin descripción"))
+        ws_detail.cell(row=row, column=3, value=_safe_string(row_data["category"], "Sin categoría"))
+        ws_detail.cell(row=row, column=4, value=float(stock))
+        ws_detail.cell(row=row, column=5, value=_safe_string(row_data["unit"], "Unid."))
         ws_detail.cell(row=row, column=6, value=float(cost)).number_format = currency_format
         ws_detail.cell(row=row, column=7, value=float(price)).number_format = currency_format
         # Margen Unitario = Fórmula: Precio - Costo
@@ -1345,17 +1462,19 @@ def generate_inventory_report(
     critical_data_start = row + 1
     row += 1
     
-    critical_products = [p for p in products if _safe_int(p.stock) <= 10]
-    critical_products.sort(key=lambda p: _safe_int(p.stock))
+    critical_products = [
+        row_data for row_data in inventory_rows if _safe_decimal(row_data["stock"]) <= 10
+    ]
+    critical_products.sort(key=lambda r: _safe_decimal(r["stock"]))
     
-    for product in critical_products:
-        stock = _safe_int(product.stock)
+    for row_data in critical_products:
+        stock = _safe_decimal(row_data["stock"])
         
-        ws_critical.cell(row=row, column=1, value=_safe_string(product.barcode, "S/C"))
-        ws_critical.cell(row=row, column=2, value=_safe_string(product.description, "Sin descripción"))
-        ws_critical.cell(row=row, column=3, value=_safe_string(product.category, "Sin categoría"))
-        ws_critical.cell(row=row, column=4, value=stock)
-        ws_critical.cell(row=row, column=5, value=float(_safe_decimal(product.sale_price))).number_format = currency_format
+        ws_critical.cell(row=row, column=1, value=_safe_string(row_data["sku"], "S/C"))
+        ws_critical.cell(row=row, column=2, value=_safe_string(row_data["description"], "Sin descripción"))
+        ws_critical.cell(row=row, column=3, value=_safe_string(row_data["category"], "Sin categoría"))
+        ws_critical.cell(row=row, column=4, value=float(stock))
+        ws_critical.cell(row=row, column=5, value=float(_safe_decimal(row_data["sale_price"]))).number_format = currency_format
         # Valor Disponible = Fórmula: Stock × Precio
         ws_critical.cell(row=row, column=6, value=f"=D{row}*E{row}").number_format = currency_format
         
@@ -2040,7 +2159,11 @@ def generate_cashbox_report(
         action_es = "Apertura de Caja" if log.action == "apertura" else "Cierre de Caja" if log.action == "cierre" else (log.action or "").capitalize()
         ws_logs.cell(row=row, column=2, value=_safe_string(action_es))
         ws_logs.cell(row=row, column=3, value=float(_safe_decimal(log.amount))).number_format = currency_format
-        ws_logs.cell(row=row, column=4, value=_safe_string(log.notes, "Sin observaciones"))
+        notes_str = _safe_string(log.notes, "Sin observaciones")
+        if "#" in notes_str and ", " in notes_str:
+            notes_str = notes_str.replace(", ", "\n")
+        cell = ws_logs.cell(row=row, column=4, value=notes_str)
+        cell.alignment = Alignment(wrap_text=True, vertical="top")
         
         for col in range(1, 5):
             ws_logs.cell(row=row, column=col).border = THIN_BORDER
@@ -2051,6 +2174,7 @@ def generate_cashbox_report(
         "Cierre de Caja: Monto contado al finalizar el día.",
     ], columns=4)
     
+    ws_logs.column_dimensions["D"].width = 60
     _auto_adjust_columns(ws_logs)
     
     # =================

@@ -26,6 +26,7 @@ import io
 from decimal import Decimal, InvalidOperation
 from sqlmodel import select
 from sqlalchemy import and_, or_, func
+from sqlalchemy.orm import selectinload
 from app.models import (
     Product,
     ProductBatch,
@@ -1517,17 +1518,59 @@ class InventoryState(MixinState):
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
                 .order_by(Product.description)
+                .options(selectinload(Product.variants))
             ).all()
-        
+
+        def _variant_label(variant: ProductVariant) -> str:
+            parts: list[str] = []
+            if variant.size:
+                parts.append(str(variant.size).strip())
+            if variant.color:
+                parts.append(str(variant.color).strip())
+            return " ".join([p for p in parts if p]).strip()
+
+        export_rows: list[dict[str, Any]] = []
         for product in products:
-            barcode = product.barcode or "S/C"
-            description = product.description or "Sin descripción"
-            category = product.category or "Sin categoría"
-            unit = product.unit or "Unid."
-            stock = product.stock or 0
-            purchase_price = float(product.purchase_price or 0)
-            sale_price = float(product.sale_price or 0)
-            
+            variants = list(product.variants or [])
+            if variants:
+                for variant in variants:
+                    label = _variant_label(variant)
+                    description = product.description or "Sin descripción"
+                    if label:
+                        description = f"{description} ({label})"
+                    export_rows.append(
+                        {
+                            "sku": variant.sku or product.barcode or "S/C",
+                            "description": description,
+                            "category": product.category or "Sin categoría",
+                            "unit": product.unit or "Unid.",
+                            "stock": variant.stock or 0,
+                            "purchase_price": float(product.purchase_price or 0),
+                            "sale_price": float(product.sale_price or 0),
+                        }
+                    )
+            else:
+                export_rows.append(
+                    {
+                        "sku": product.barcode or "S/C",
+                        "description": product.description or "Sin descripción",
+                        "category": product.category or "Sin categoría",
+                        "unit": product.unit or "Unid.",
+                        "stock": product.stock or 0,
+                        "purchase_price": float(product.purchase_price or 0),
+                        "sale_price": float(product.sale_price or 0),
+                    }
+                )
+
+        for row_data in export_rows:
+            barcode = row_data["sku"]
+            description = row_data["description"]
+            category = row_data["category"]
+            unit = row_data["unit"]
+            stock = row_data["stock"] or 0
+            purchase_price = row_data["purchase_price"]
+            sale_price = row_data["sale_price"]
+
             # Estado del stock
             if stock == 0:
                 status = "SIN STOCK"
@@ -1537,7 +1580,7 @@ class InventoryState(MixinState):
                 status = "BAJO"
             else:
                 status = "NORMAL"
-            
+
             ws.cell(row=row, column=1, value=barcode)
             ws.cell(row=row, column=2, value=description)
             ws.cell(row=row, column=3, value=category)
@@ -1554,7 +1597,7 @@ class InventoryState(MixinState):
             # Valor a Venta = Fórmula: Stock × Precio
             ws.cell(row=row, column=11, value=f"=D{row}*G{row}").number_format = currency_format
             ws.cell(row=row, column=12, value=status)
-            
+
             # Color según estado
             status_cell = ws.cell(row=row, column=12)
             if "SIN STOCK" in status:
@@ -1565,7 +1608,7 @@ class InventoryState(MixinState):
                 status_cell.fill = WARNING_FILL
             else:
                 status_cell.fill = POSITIVE_FILL
-            
+
             for col in range(1, 13):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1

@@ -313,6 +313,25 @@ def auto_adjust_column_widths(ws: Worksheet, min_width: int = 10, max_width: int
         ws.column_dimensions[column_letter].width = adjusted_width
 
 
+def apply_wrap_text(
+    ws: Worksheet,
+    columns: list[int],
+    start_row: int,
+    end_row: int | None = None,
+    vertical: str = "top",
+) -> None:
+    """
+    Aplica wrap_text a columnas específicas en un rango de filas.
+    """
+    if end_row is None:
+        end_row = ws.max_row
+    for row in range(start_row, end_row + 1):
+        for col in columns:
+            cell = ws.cell(row=row, column=col)
+            current = cell.alignment or Alignment()
+            cell.alignment = current.copy(wrap_text=True, vertical=vertical)
+
+
 def create_pdf_report(
     buffer: io.BytesIO,
     title: str,

@@ -28,6 +28,7 @@ from app.utils.exports import (
     add_totals_row_with_formulas,
     add_notes_section,
     CURRENCY_FORMAT,
+    NUMBER_FORMAT,
     THIN_BORDER,
     POSITIVE_FILL,
     NEGATIVE_FILL,
@@ -1096,36 +1097,37 @@ class HistorialState(MixinState):
         wb, ws = create_excel_workbook("Historial de Ventas")
         
         # Encabezado profesional
-        row = add_company_header(ws, company_name, "HISTORIAL DE MOVIMIENTOS Y VENTAS", f"Generado: {today}", columns=9)
+        row = add_company_header(
+            ws,
+            company_name,
+            "HISTORIAL DE MOVIMIENTOS Y VENTAS",
+            f"Generado: {today}",
+            columns=11,
+        )
         
         headers = [
-            "Nº Venta",
             "Fecha y Hora",
+            "Nº Venta",
             "Cliente",
-            "Productos Vendidos",
-            "Categorías",
-            f"Total Venta ({currency_label})",
-            "Método de Pago",
             "Vendedor",
-            "Observaciones/Detalle",
+            "Método de Pago",
+            "Producto",
+            "Variante",
+            "Categoría",
+            "Cantidad",
+            f"Precio Unitario ({currency_label})",
+            f"Subtotal ({currency_label})",
         ]
         style_header_row(ws, row, headers)
         data_start = row + 1
         row += 1
-
-        def _format_quantity(value: Any) -> str:
-            qty = Decimal(str(value or 0))
-            text = format(qty.normalize(), "f")
-            if "." in text:
-                text = text.rstrip("0").rstrip(".")
-            return text or "0"
 
         with rx.session() as session:
             query = (
                 select(Sale)
                 .where(Sale.status != SaleStatus.cancelled)
                 .options(
-                    selectinload(Sale.items),
+                    selectinload(Sale.items).selectinload(SaleItem.product_variant),
                     selectinload(Sale.payments),
                     selectinload(Sale.installments),
                     selectinload(Sale.user),
@@ -1193,26 +1195,6 @@ class HistorialState(MixinState):
                         else:
                             payment_details = "Pago registrado"
 
-                items = sale.items or []
-                item_parts = []
-                for item in items:
-                    name = (item.product_name_snapshot or "").strip() or "Producto"
-                    quantity = _format_quantity(item.quantity)
-                    price_display = self._format_currency(item.unit_price or 0)
-                    item_parts.append(f"{name} (x{quantity}) - {price_display}")
-                products_summary = ", ".join(item_parts) if item_parts else "Sin productos"
-
-                category_parts = []
-                for item in items:
-                    category = (item.product_category_snapshot or "").strip()
-                    if not category:
-                        category = "Servicios" if item.product_id is None else "General"
-                    if category not in category_parts:
-                        category_parts.append(category)
-                categories_summary = (
-                    ", ".join(category_parts) if category_parts else "Sin categoría"
-                )
-
                 client_name = sale.client.name if sale.client else "Venta al contado"
                 user_name = sale.user.username if sale.user else "Sistema"
                 if is_credit:
@@ -1220,43 +1202,85 @@ class HistorialState(MixinState):
                 else:
                     method_display = self._normalize_wallet_label(payment_method)
 
-                ws.cell(row=row, column=1, value=str(sale.id))
-                ws.cell(row=row, column=2, value=sale.timestamp.strftime("%d/%m/%Y %H:%M") if sale.timestamp else "")
-                ws.cell(row=row, column=3, value=client_name)
-                ws.cell(row=row, column=4, value=products_summary)
-                ws.cell(row=row, column=5, value=categories_summary)
-                ws.cell(row=row, column=6, value=float(sale.total_amount or 0)).number_format = currency_format
-                ws.cell(row=row, column=7, value=method_display)
-                ws.cell(row=row, column=8, value=user_name)
-                ws.cell(row=row, column=9, value=self._payment_details_text(payment_details))
-                
-                for col in range(1, 10):
-                    ws.cell(row=row, column=col).border = THIN_BORDER
-                row += 1
+                sale_items = sale.items or []
+                if not sale_items:
+                    sale_items = [None]
+
+                for item in sale_items:
+                    if item is None:
+                        product_name = "Sin productos"
+                        variant_label = "-"
+                        category = "Sin categoría"
+                        quantity = Decimal("0")
+                        unit_price = Decimal("0")
+                        subtotal = Decimal("0")
+                    else:
+                        variant_label = "-"
+                        if item.product_variant:
+                            parts: list[str] = []
+                            if item.product_variant.size:
+                                parts.append(f"Talla {str(item.product_variant.size).strip()}")
+                            if item.product_variant.color:
+                                parts.append(str(item.product_variant.color).strip())
+                            label = " / ".join([p for p in parts if p])
+                            variant_label = label or "-"
+                        else:
+                            snapshot = (item.product_name_snapshot or "").strip()
+                            if snapshot and snapshot.endswith(")") and "(" in snapshot:
+                                variant_label = snapshot.rsplit("(", 1)[-1].rstrip(")") or "-"
+                        name_snapshot = (item.product_name_snapshot or "").strip() or "Producto"
+                        if variant_label != "-" and name_snapshot.endswith(")") and "(" in name_snapshot:
+                            product_name = name_snapshot.rsplit("(", 1)[0].strip() or name_snapshot
+                        else:
+                            product_name = name_snapshot
+                        category = (item.product_category_snapshot or "").strip()
+                        if not category:
+                            category = "Servicios" if item.product_id is None else "General"
+                        quantity = Decimal(str(item.quantity or 0))
+                        unit_price = Decimal(str(item.unit_price or 0))
+                        subtotal = Decimal(str(item.subtotal or 0))
+
+                    ws.cell(row=row, column=1, value=sale.timestamp.strftime("%d/%m/%Y %H:%M") if sale.timestamp else "")
+                    ws.cell(row=row, column=2, value=str(sale.id))
+                    ws.cell(row=row, column=3, value=client_name)
+                    ws.cell(row=row, column=4, value=user_name)
+                    ws.cell(row=row, column=5, value=method_display)
+                    ws.cell(row=row, column=6, value=product_name)
+                    ws.cell(row=row, column=7, value=variant_label)
+                    ws.cell(row=row, column=8, value=category)
+                    ws.cell(row=row, column=9, value=float(quantity)).number_format = NUMBER_FORMAT
+                    ws.cell(row=row, column=10, value=float(unit_price)).number_format = currency_format
+                    ws.cell(row=row, column=11, value=float(subtotal)).number_format = currency_format
+                    
+                    for col in range(1, 12):
+                        ws.cell(row=row, column=col).border = THIN_BORDER
+                    row += 1
 
         # Fila de totales
         totals_row = row
         add_totals_row_with_formulas(ws, totals_row, data_start, [
-            {"type": "label", "value": "TOTAL VENTAS"},
+            {"type": "label", "value": "TOTALES"},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "F", "number_format": currency_format},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "I", "number_format": NUMBER_FORMAT},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "K", "number_format": currency_format},
         ])
         
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Nº Venta: Identificador único de la transacción en el sistema.",
-            "Total Venta: Monto total de la operación (fórmula =SUM verificable).",
+            "Subtotal: Cantidad x Precio Unitario por cada ítem.",
             "Crédito (Completado): El cliente pagó la totalidad del crédito.",
             "Crédito (Adelanto): El cliente realizó un pago parcial.",
             "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
             "Venta al contado: Cliente no identificado, pago inmediato.",
-        ], columns=9)
+        ], columns=11)
         
         auto_adjust_column_widths(ws)
 
