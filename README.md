@@ -31,6 +31,10 @@ Esta versión **v2.0** marca un hito en la arquitectura del sistema al implement
 *   **Créditos más seguros:** bloqueo de concurrencia y validación de sobrepago en cuotas.
 *   **Reservas con pagos mixtos:** desglose real por método y registro consistente en caja.
 *   **Permisos reforzados:** altas/bajas de categorías protegidas por `edit_inventario`.
+*   **Variantes y lotes en ingresos:** soporte de Tallas/Colores y Lotes/Vencimientos en compras con UI dinámica.
+*   **Exportes por ítem:** reportes de Historial y Detalle de Transacciones con una fila por ítem vendido.
+*   **Inventario por SKU:** exportación de inventario valorizado con desglose por variantes.
+*   **Caja más legible:** listas de productos en exportes con saltos de línea y ajuste de texto.
 *   **QA automatizado:** tests con pytest + CI en GitHub Actions.
 
 ---
@@ -56,7 +60,7 @@ La estructura de datos se define en `app/models/` y se gestiona mediante migraci
 | :--- | :--- | :--- |
 | **Auth/RBAC** | `User`, `Role`, `Permission` | Usuarios, roles y permisos con control granular. |
 | **Clientes & Crédito** | `Client`, `SaleInstallment` | Clientes, límites de crédito, cuotas y estado de deuda. |
-| **Inventario** | `Product`, `Category`, `StockMovement`, `Unit` | Catálogo, categorías, movimientos y unidades de medida. |
+| **Inventario** | `Product`, `ProductVariant`, `ProductBatch`, `Category`, `StockMovement`, `Unit` | Catálogo, variantes, lotes, movimientos y unidades de medida. |
 | **Compras/Proveedores** | `Supplier`, `Purchase`, `PurchaseItem` | Documentos de compra y relación con proveedores. |
 | **Ventas & Caja** | `Sale`, `SaleItem`, `SalePayment`, `CashboxSession`, `CashboxLog` | Ventas, pagos y auditoría de caja. |
 | **Servicios** | `FieldReservation`, `FieldPrice` | Reservas de canchas y tarifas. |
@@ -180,6 +184,8 @@ Sistema-de-Ventas/
 *   **Documento de compra:** registro de ingreso con series/número y proveedor.
 *   **Ajuste de stock:** actualiza existencias y costos de manera controlada.
 *   **Detalle de ítems:** cantidades, unidad, precio de compra y venta.
+*   **Variantes y Lotes:** ingreso por Talla/Color o por Lote/Vencimiento según categoría.
+*   **Modo camaleónico:** el formulario se adapta automáticamente al tipo de producto escaneado.
 
 ### 🧾 Compras y Proveedores
 *   **Registro de compras:** historial de documentos, búsqueda y filtros.
@@ -190,7 +196,9 @@ Sistema-de-Ventas/
 *   **Gestión Persistente:** CRUD completo de productos conectado directamente a MySQL.
 *   **Categorización:** Creación dinámica de categorías que persisten entre sesiones.
 *   **Permisos:** crear/eliminar categorías requiere privilegio `edit_inventario`.
-*   **Reportes:** Exportación de inventario valorizado a Excel.
+*   **Variantes por SKU:** stock y movimientos separados por Talla/Color.
+*   **Ajuste físico mejorado:** búsqueda por SKU o descripción con sugerencias de variantes.
+*   **Reportes:** Exportación de inventario valorizado a Excel con desglose por variantes.
 
 ### 👥 Clientes
 *   **Gestión de clientes:** datos básicos, límites de crédito y validaciones.
@@ -206,10 +214,13 @@ Sistema-de-Ventas/
 *   **Historial Detallado:** Consulta de movimientos históricos con desglose de ítems y estadísticas precisas por método de pago (Efectivo, Tarjeta, Yape/Plin).
 *   **Anulaciones seguras:** movimientos marcados como anulados y excluidos de totales/reportes.
 *   **Reimpresión:** Capacidad de reimprimir tickets de ventas pasadas.
+*   **Exportes legibles:** productos listados con saltos de línea y celdas con ajuste de texto.
 
 ### 📈 Reportes
 *   **Reportes consolidados:** ingresos por método de pago, cierres de caja y ventas.
-*   **Exportación:** descarga en Excel según módulo.
+*   **Detalle por ítem:** historial y transacciones con una fila por ítem vendido.
+*   **Inventario por variantes:** valorizado por SKU para análisis real de stock.
+*   **Exportación:** descarga en Excel según módulo con formatos legibles.
 
 ### ⚽ Servicios (Reservas)
 *   **Agenda Visual:** Planificador interactivo para canchas deportivas.
