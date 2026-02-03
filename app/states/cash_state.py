@@ -43,7 +43,12 @@ from app.models import (
     StockMovement,
     Product,
 )
-from app.utils.sanitization import sanitize_notes, sanitize_reason, sanitize_notes_preserve_spaces
+from app.utils.sanitization import (
+    sanitize_notes,
+    sanitize_reason,
+    sanitize_reason_preserve_spaces,
+    sanitize_notes_preserve_spaces,
+)
 from .types import CashboxSale, CashboxSession, CashboxLogEntry, Movement
 from .mixin_state import MixinState
 from app.utils.exports import (
@@ -1796,7 +1801,7 @@ class CashState(MixinState):
         denial = self._cashbox_guard()
         if denial:
             return denial
-        self.sale_delete_reason = sanitize_reason(value)
+        self.sale_delete_reason = sanitize_reason_preserve_spaces(value)
 
     @rx.event
     def delete_sale(self):
@@ -1810,7 +1815,7 @@ class CashState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         sale_id = self.sale_to_delete
-        reason = self.sale_delete_reason.strip()
+        reason = sanitize_reason(self.sale_delete_reason).strip()
         if not sale_id:
             return rx.toast("Seleccione una venta a eliminar.", duration=3000)
         if not reason:

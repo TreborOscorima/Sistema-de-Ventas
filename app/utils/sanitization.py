@@ -204,6 +204,11 @@ def sanitize_reason(value: Any) -> str:
     return sanitize_text(value, max_length=200)
 
 
+def sanitize_reason_preserve_spaces(value: Any) -> str:
+    """Sanitiza razones sin eliminar espacios al final (para inputs en vivo)."""
+    return sanitize_text_preserve_spaces(value, max_length=200)
+
+
 def validate_positive_decimal(value: Any) -> bool:
     """
     Valida que un valor sea un decimal positivo.
