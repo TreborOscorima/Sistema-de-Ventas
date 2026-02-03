@@ -24,6 +24,7 @@ class CartMixin:
         "sale_price": 0,
         "subtotal": 0,
         "product_id": None,
+        "variant_id": None,
     }
     new_sale_items: List[Dict[str, Any]] = []
     autocomplete_suggestions: List[str] = []
@@ -181,6 +182,7 @@ class CartMixin:
         unit = self._product_value(product, "unit", "Unidad")
         sale_price = self._product_value(product, "sale_price", 0)
         product_id = self._product_value(product, "product_id", None)
+        variant_id = self._product_value(product, "variant_id", None)
         if product_id is None:
             product_id = self._product_value(product, "id", None)
 
@@ -191,6 +193,7 @@ class CartMixin:
         )
 
         self.new_sale_item["product_id"] = product_id
+        self.new_sale_item["variant_id"] = variant_id
         self.new_sale_item["barcode"] = product_barcode
         self.new_sale_item["description"] = description
         self.new_sale_item["category"] = category
@@ -229,6 +232,7 @@ class CartMixin:
             "sale_price": 0,
             "subtotal": 0,
             "product_id": None,
+            "variant_id": None,
         }
         self.autocomplete_suggestions = []
         self.autocomplete_results = []
@@ -586,6 +590,10 @@ class CartMixin:
                 product,
                 "product_id",
                 self._product_value(product, "id", None),
+            )
+        if self.new_sale_item.get("variant_id") is None:
+            self.new_sale_item["variant_id"] = self._product_value(
+                product, "variant_id", None
             )
         await self._apply_price_tier(product, quantity_override=total_qty)
         product_id = self.new_sale_item.get("product_id") or self._product_value(

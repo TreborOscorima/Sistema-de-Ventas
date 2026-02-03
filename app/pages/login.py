@@ -77,7 +77,7 @@ def login_page() -> rx.Component:
                 on_submit=State.login,
                 class_name="space-y-5",
             ),
-            # Error message
+            # Mensaje de error
             rx.cond(
                 State.error_message != "",
                 rx.el.div(

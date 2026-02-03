@@ -306,7 +306,7 @@ def get_payment_methods_for_country(country_code: str) -> list[dict]:
     return methods
 
 
-# Default: Perú (para compatibilidad con instalaciones existentes)
+# Por defecto: Perú (para compatibilidad con instalaciones existentes)
 DEFAULT_PAYMENT_METHODS = get_payment_methods_for_country("PE")
 
 def seed_new_branch_data(

@@ -38,6 +38,7 @@ from app.models import (
 )
 from .types import InventoryAdjustment
 from .mixin_state import MixinState
+from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -113,9 +114,11 @@ class InventoryState(MixinState):
         "current_stock": 0,
         "adjust_quantity": 0,
         "reason": "",
+        "product_id": None,
+        "variant_id": None,
     }
     inventory_adjustment_items: List[InventoryAdjustment] = []
-    inventory_adjustment_suggestions: List[str] = []
+    inventory_adjustment_suggestions: List[Dict[str, Any]] = []
     categories: List[str] = ["General"]
     _inventory_update_trigger: int = 0
 
@@ -211,32 +214,20 @@ class InventoryState(MixinState):
         
         # Buscar productos cuando se escribe en el campo descripción
         if field == "description":
-            search_term = str(value).strip().lower()
-            if len(search_term) >= 2:
-                company_id = self._company_id()
-                branch_id = self._branch_id()
-                if not company_id or not branch_id:
-                    self.inventory_adjustment_suggestions = []
-                    return
-                with rx.session() as session:
-                    search = f"%{search_term}%"
-                    products = session.exec(
-                        select(Product)
-                        .where(
-                            or_(
-                                Product.description.ilike(search),
-                                Product.barcode.ilike(search),
-                            )
-                        )
-                        .where(Product.company_id == company_id)
-                        .where(Product.branch_id == branch_id)
-                        .limit(10)
-                    ).all()
-                    self.inventory_adjustment_suggestions = [
-                        p.description for p in products
-                    ]
-            else:
-                self.inventory_adjustment_suggestions = []
+            self._process_inventory_adjustment_search(value)
+
+    @rx.event
+    def process_inventory_adjustment_search_blur(self, value: Any):
+        """Procesa el buscador al perder foco (ideal para lector de código)."""
+        return self._process_inventory_adjustment_search(value)
+
+    @rx.event
+    def handle_inventory_adjustment_search_enter(self, key: str, input_id: str):
+        """Detecta Enter y fuerza blur para capturar el valor completo."""
+        if key == "Enter":
+            return rx.call_script(
+                f"const el=document.getElementById('{input_id}'); if(el) el.blur();"
+            )
 
     @rx.var
     def inventory_list(self) -> list[Product]:
@@ -865,6 +856,7 @@ class InventoryState(MixinState):
                     ).all()
                     for variant in existing_variants:
                         session.delete(variant)
+                    session.flush()
 
                     for variant in self.variants:
                         sku = (variant.get("sku") or "").strip()
@@ -1024,26 +1016,100 @@ class InventoryState(MixinState):
             "current_stock": 0,
             "adjust_quantity": 0,
             "reason": "",
+            "product_id": None,
+            "variant_id": None,
         }
         self.inventory_adjustment_suggestions = []
 
-    def _fill_inventory_adjustment_from_product(self, product: Product):
-        self.inventory_adjustment_item["barcode"] = product.get("barcode", "")
-        self.inventory_adjustment_item["description"] = product.get("description", "")
-        self.inventory_adjustment_item["category"] = product.get("category", "")
-        self.inventory_adjustment_item["unit"] = product.get("unit", "Unidad")
-        self.inventory_adjustment_item["current_stock"] = product.get("stock", 0)
+    def _variant_label(self, variant: ProductVariant) -> str:
+        parts: List[str] = []
+        if variant.size:
+            parts.append(str(variant.size).strip())
+        if variant.color:
+            parts.append(str(variant.color).strip())
+        label = " ".join([p for p in parts if p])
+        sku = (variant.sku or "").strip()
+        if label and sku:
+            return f"{label} ({sku})"
+        return label or sku or "Variante"
+
+    def _fill_inventory_adjustment_from_product(
+        self, product: Product, variant: ProductVariant | None = None
+    ):
+        def _field(obj: Any, name: str, default: Any = "") -> Any:
+            if isinstance(obj, dict):
+                return obj.get(name, default)
+            return getattr(obj, name, default)
+
+        barcode = variant.sku if variant else _field(product, "barcode", "")
+        description = _field(product, "description", "")
+        if variant:
+            label = self._variant_label(variant)
+            if label:
+                description = f"{description} ({label})"
+        self.inventory_adjustment_item["barcode"] = barcode or ""
+        self.inventory_adjustment_item["description"] = description or ""
+        self.inventory_adjustment_item["category"] = _field(product, "category", "")
+        self.inventory_adjustment_item["unit"] = _field(product, "unit", "Unidad")
+        self.inventory_adjustment_item["current_stock"] = (
+            variant.stock if variant else _field(product, "stock", 0)
+        )
+        self.inventory_adjustment_item["product_id"] = _field(product, "id", None)
+        self.inventory_adjustment_item["variant_id"] = variant.id if variant else None
         self.inventory_adjustment_item["adjust_quantity"] = 0
         self.inventory_adjustment_item["reason"] = ""
 
     def _find_adjustment_product(
-        self, session, barcode: str, description: str
-    ) -> Product | None:
+        self,
+        session,
+        barcode: str,
+        description: str,
+        variant_id: int | None = None,
+        product_id: int | None = None,
+    ) -> tuple[Product | None, ProductVariant | None]:
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return None
+            return None, None
+        if variant_id:
+            variant = session.exec(
+                select(ProductVariant)
+                .where(ProductVariant.id == variant_id)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+            ).first()
+            if variant:
+                product = session.exec(
+                    select(Product)
+                    .where(Product.id == variant.product_id)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                ).first()
+                return product, variant
+        if product_id:
+            product = session.exec(
+                select(Product)
+                .where(Product.id == product_id)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).first()
+            if product:
+                return product, None
         if barcode:
+            variant = session.exec(
+                select(ProductVariant)
+                .where(ProductVariant.sku == barcode)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+            ).first()
+            if variant:
+                product = session.exec(
+                    select(Product)
+                    .where(Product.id == variant.product_id)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                ).first()
+                return product, variant
             product = session.exec(
                 select(Product)
                 .where(Product.barcode == barcode)
@@ -1051,48 +1117,131 @@ class InventoryState(MixinState):
                 .where(Product.branch_id == branch_id)
             ).first()
             if product:
-                return product
+                return product, None
         if description:
-            return session.exec(
-                select(Product)
-                .where(Product.description == description)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-            ).first()
-        return None
-
-    @rx.event
-    def select_inventory_adjustment_product(self, description: str):
-        if isinstance(description, dict):
-            description = (
-                description.get("value")
-                or description.get("description")
-                or description.get("label")
-                or ""
-            )
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return
-        
-        with rx.session() as session:
             product = session.exec(
                 select(Product)
                 .where(Product.description == description)
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
             ).first()
-            
             if product:
-                self._fill_inventory_adjustment_from_product({
-                    "barcode": product.barcode,
-                    "description": product.description,
-                    "category": product.category,
-                    "stock": product.stock,
-                    "unit": product.unit,
-                    "purchase_price": product.purchase_price,
-                    "sale_price": product.sale_price,
-                })
+                return product, None
+        return None, None
+
+    def _process_inventory_adjustment_search(self, value: Any):
+        term = str(value or "").strip()
+        self.inventory_adjustment_item["description"] = term
+        if not term:
+            self.inventory_adjustment_suggestions = []
+            return
+
+        code = clean_barcode(term)
+        if validate_barcode(code):
+            with rx.session() as session:
+                product, variant = self._find_adjustment_product(
+                    session, code, "", None, None
+                )
+                if product:
+                    self._fill_inventory_adjustment_from_product(product, variant)
+                    self.inventory_adjustment_suggestions = []
+                    return
+
+        search_term = term.lower()
+        if len(search_term) < 2:
+            self.inventory_adjustment_suggestions = []
+            return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.inventory_adjustment_suggestions = []
+            return
+        with rx.session() as session:
+            search = f"%{search_term}%"
+            products = session.exec(
+                select(Product)
+                .where(
+                    or_(
+                        Product.description.ilike(search),
+                        Product.barcode.ilike(search),
+                    )
+                )
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .limit(8)
+            ).all()
+            variant_rows = session.exec(
+                select(ProductVariant, Product)
+                .join(Product, ProductVariant.product_id == Product.id)
+                .where(
+                    or_(
+                        ProductVariant.sku.ilike(search),
+                        ProductVariant.size.ilike(search),
+                        ProductVariant.color.ilike(search),
+                        Product.description.ilike(search),
+                    )
+                )
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+                .limit(8)
+            ).all()
+
+        suggestions: list[dict] = []
+        for product in products:
+            suggestions.append(
+                {
+                    "label": product.description,
+                    "kind": "product",
+                    "product_id": product.id,
+                    "variant_id": None,
+                }
+            )
+        for variant, parent in variant_rows:
+            label = self._variant_label(variant)
+            full_label = parent.description
+            if label:
+                full_label = f"{parent.description} ({label})"
+            suggestions.append(
+                {
+                    "label": full_label,
+                    "kind": "variant",
+                    "product_id": parent.id,
+                    "variant_id": variant.id,
+                }
+            )
+        self.inventory_adjustment_suggestions = suggestions
+
+    @rx.event
+    def select_inventory_adjustment_product(self, description: Any):
+        variant_id = None
+        product_id = None
+        if isinstance(description, dict):
+            variant_id = description.get("variant_id")
+            product_id = description.get("product_id")
+            description = (
+                description.get("value")
+                or description.get("description")
+                or description.get("label")
+                or ""
+            )
+        description = str(description or "").strip()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
+
+        code = clean_barcode(description)
+        barcode = code if validate_barcode(code) else ""
+        with rx.session() as session:
+            product, variant = self._find_adjustment_product(
+                session,
+                barcode,
+                description,
+                int(variant_id) if variant_id else None,
+                int(product_id) if product_id else None,
+            )
+            if product:
+                self._fill_inventory_adjustment_from_product(product, variant)
         self.inventory_adjustment_suggestions = []
 
     @rx.event
@@ -1136,15 +1285,26 @@ class InventoryState(MixinState):
                         "Descripcion duplicada en inventario. Use codigo de barras.",
                         duration=3000,
                     )
-            product = self._find_adjustment_product(session, barcode, description)
+            product, variant = self._find_adjustment_product(
+                session,
+                barcode,
+                description,
+                self.inventory_adjustment_item.get("variant_id"),
+                self.inventory_adjustment_item.get("product_id"),
+            )
             if not product:
                 return rx.toast("Producto no encontrado en el inventario.", duration=3000)
             
-            quantity = self.inventory_adjustment_item["adjust_quantity"]
+            try:
+                quantity = float(self.inventory_adjustment_item.get("adjust_quantity", 0) or 0)
+            except (TypeError, ValueError):
+                quantity = 0
             if quantity <= 0:
                 return rx.toast("Ingrese la cantidad a ajustar.", duration=3000)
             
-            available = product.stock
+            available = (
+                float(variant.stock or 0) if variant else float(product.stock or 0)
+            )
             if quantity > available:
                 return rx.toast(
                     "La cantidad supera el stock disponible.", duration=3000
@@ -1152,12 +1312,21 @@ class InventoryState(MixinState):
             
             item_copy = self.inventory_adjustment_item.copy()
             item_copy["temp_id"] = str(uuid.uuid4())
+            item_copy["product_id"] = product.id
+            item_copy["variant_id"] = variant.id if variant else None
             item_copy["adjust_quantity"] = self._normalize_quantity_value(
                 item_copy.get("adjust_quantity", 0), item_copy.get("unit", "")
             )
             # Asegurar que la unidad se tome del producto si falta
             if not item_copy.get("unit"):
                 item_copy["unit"] = product.unit
+            if not item_copy.get("barcode"):
+                item_copy["barcode"] = variant.sku if variant else product.barcode
+            if not item_copy.get("description"):
+                label = self._variant_label(variant) if variant else ""
+                item_copy["description"] = (
+                    f"{product.description} ({label})" if label else product.description
+                )
                 
             self.inventory_adjustment_items.append(item_copy)
             self._reset_inventory_adjustment_form()
@@ -1201,14 +1370,19 @@ class InventoryState(MixinState):
                     return default
 
             with rx.session() as session:
+                products_to_recalculate: set[int] = set()
                 for item in self.inventory_adjustment_items:
                     description = (item.get("description") or "").strip()
                     barcode = (item.get("barcode") or "").strip()
                     if not description and not barcode:
                         continue
                     
-                    product = self._find_adjustment_product(
-                        session, barcode, description
+                    product, variant = self._find_adjustment_product(
+                        session,
+                        barcode,
+                        description,
+                        item.get("variant_id"),
+                        item.get("product_id"),
                     )
                     if not product:
                         continue
@@ -1217,12 +1391,19 @@ class InventoryState(MixinState):
                     if quantity <= 0:
                         continue
                     
-                    available = _to_decimal(product.stock or 0)
+                    available = _to_decimal(
+                        (variant.stock if variant else product.stock) or 0
+                    )
                     qty = quantity if quantity <= available else available
                     
                     # Actualizar stock
-                    product.stock = max(available - qty, Decimal("0"))
-                    session.add(product)
+                    if variant:
+                        variant.stock = max(available - qty, Decimal("0"))
+                        session.add(variant)
+                        products_to_recalculate.add(product.id)
+                    else:
+                        product.stock = max(available - qty, Decimal("0"))
+                        session.add(product)
                     
                     # Crear StockMovement
                     detail_parts = []
@@ -1249,6 +1430,33 @@ class InventoryState(MixinState):
                     session.add(movement)
                     recorded = True
                 
+                if products_to_recalculate:
+                    for product_id in products_to_recalculate:
+                        total_query = select(
+                            func.coalesce(func.sum(ProductVariant.stock), 0)
+                        ).where(ProductVariant.product_id == product_id)
+                        total_query = total_query.where(
+                            ProductVariant.company_id == company_id
+                        ).where(ProductVariant.branch_id == branch_id)
+                        total_row = session.exec(total_query).first()
+                        if total_row is None:
+                            total_stock = Decimal("0.0000")
+                        elif isinstance(total_row, tuple):
+                            total_stock = total_row[0]
+                        else:
+                            total_stock = total_row
+                        product = session.exec(
+                            select(Product)
+                            .where(Product.id == product_id)
+                            .where(Product.company_id == company_id)
+                            .where(Product.branch_id == branch_id)
+                        ).first()
+                        if product:
+                            product.stock = self._normalize_quantity_value(
+                                total_stock, product.unit or ""
+                            )
+                            session.add(product)
+
                 if recorded:
                     session.commit()
                     self._inventory_update_trigger += 1

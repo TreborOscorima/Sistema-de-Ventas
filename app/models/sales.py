@@ -420,5 +420,5 @@ class CompanySettings(rx.Model, table=True):
     country_code: str = Field(default="PE", nullable=False)
 
 
-# Re-export para compatibilidad con imports legacy.
+# Reexportación para compatibilidad con importaciones heredadas.
 from .inventory import PriceTier  # noqa: E402  pylint: disable=wrong-import-position

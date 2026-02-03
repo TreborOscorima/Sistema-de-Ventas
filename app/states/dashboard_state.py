@@ -88,7 +88,7 @@ class DashboardState(MixinState):
             delta = end - start
             prev_start = start - delta - timedelta(days=1)
             prev_end = start - timedelta(days=1)
-        else:  # month (default)
+        else:  # mes (por defecto)
             start = today_start.replace(day=1)
             end = now
             prev_month = start - timedelta(days=1)

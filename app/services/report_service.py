@@ -1923,7 +1923,7 @@ def generate_cashbox_report(
         by_payment_collections[method_es] = by_payment_collections.get(method_es, Decimal("0")) + amount
         by_payment_collections_count[method_es] = by_payment_collections_count.get(method_es, 0) + 1
     
-    # Consolidar TODO el flujo de caja (Ventas + Cobranzas)
+    # Consolidar todo el flujo de caja (Ventas + Cobranzas)
     by_payment: dict[str, Decimal] = {}
     by_payment_count: dict[str, int] = {}
     

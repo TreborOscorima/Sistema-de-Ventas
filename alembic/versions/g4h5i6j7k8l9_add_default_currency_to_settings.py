@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Agregar columna default_currency_code a companysettings
-    # Default 'PEN' para instalaciones existentes (Perú)
+    # Por defecto 'PEN' para instalaciones existentes (Perú)
     op.add_column(
         'companysettings',
         sa.Column('default_currency_code', sa.String(10), nullable=False, server_default='PEN')

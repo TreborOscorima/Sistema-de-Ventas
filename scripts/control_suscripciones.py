@@ -64,7 +64,7 @@ def aplicar_cambios(session, company_id, plan_opcion, estado_opcion):
         company.max_users = -1  # <--- ILIMITADO
         print(f"👑 Plan cambiado a: PROFESSIONAL (10 Suc / Users Ilimitados)")
 
-    elif plan_opcion == "3": # TRIAL (Reset)
+    elif plan_opcion == "3": # PRUEBA (Reiniciar)
         company.plan_type = PlanType.TRIAL
         company.max_branches = 2
         company.max_users = 3
@@ -84,7 +84,7 @@ def aplicar_cambios(session, company_id, plan_opcion, estado_opcion):
         company.subscription_status = SubscriptionStatus.ACTIVE
         print("✅ Estado: ACTIVO (Vence en 30 días)")
 
-    elif estado_opcion == "2": # WARNING
+    elif estado_opcion == "2": # ADVERTENCIA
         company.subscription_ends_at = now + timedelta(days=3)
         company.subscription_status = SubscriptionStatus.ACTIVE
         print("🟡 Estado: WARNING (Vence en 3 días)")

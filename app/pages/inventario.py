@@ -499,16 +499,22 @@ def inventory_adjustment_modal() -> rx.Component:
                 class_name="text-sm font-medium text-slate-600",
               ),
               rx.el.div(
-                rx.el.input(
-                  placeholder="Ej: Gaseosa 500ml",
-                  value=State.inventory_adjustment_item[
-                    "description"
-                  ],
-                  on_change=lambda value: State.handle_inventory_adjustment_change(
-                    "description", value
+                rx.debounce_input(
+                  rx.input(
+                    id="inventory-adjustment-search",
+                    placeholder="Ej: Gaseosa 500ml o código",
+                    value=State.inventory_adjustment_item["description"],
+                    on_change=lambda value: State.handle_inventory_adjustment_change(
+                      "description", value
+                    ),
+                    on_blur=lambda e: State.process_inventory_adjustment_search_blur(e),
+                    on_key_down=lambda k: State.handle_inventory_adjustment_search_enter(
+                      k, "inventory-adjustment-search"
+                    ),
+                    auto_complete=False,
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                   ),
-                  class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                  debounce_timeout=200,
+                  debounce_timeout=250,
                 ),
                 rx.cond(
                   State.inventory_adjustment_suggestions.length()
@@ -517,7 +523,7 @@ def inventory_adjustment_modal() -> rx.Component:
                     rx.foreach(
                       State.inventory_adjustment_suggestions,
                       lambda suggestion: rx.el.button(
-                        suggestion,
+                        suggestion["label"],
                         on_click=lambda _,
                         suggestion=suggestion: State.select_inventory_adjustment_product(
                           suggestion

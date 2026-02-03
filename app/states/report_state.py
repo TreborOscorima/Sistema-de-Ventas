@@ -172,7 +172,7 @@ class ReportState(MixinState):
                 start = today_start.replace(day=1)
                 return (start, today_end)
         else:
-            # Default: este mes
+            # Por defecto: este mes
             start = today_start.replace(day=1)
             return (start, today_end)
     

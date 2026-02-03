@@ -44,7 +44,7 @@ db_url = (
 # X-Frame-Options: DENY
 # X-XSS-Protection: 1; mode=block
 # Strict-Transport-Security: max-age=31536000; includeSubDomains
-# Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'
+# Encabezado Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'
 #
 # Ejemplo nginx:
 #   add_header X-Content-Type-Options "nosniff" always;

@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Agregar columna country_code a companysettings
-    # Default 'PE' (Perú) para instalaciones existentes
+    # Por defecto 'PE' (Perú) para instalaciones existentes
     op.add_column(
         'companysettings',
         sa.Column('country_code', sa.String(5), nullable=False, server_default='PE')

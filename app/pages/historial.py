@@ -52,7 +52,7 @@ def history_filters() -> rx.Component:
           class_name="text-sm font-medium text-slate-600",
         ),
         rx.el.input(
-          placeholder="Ej: Coca-Cola 600ml",
+          placeholder="Descripción del producto",
           on_change=State.set_staged_history_filter_product,
           class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
           default_value=State.staged_history_filter_product,

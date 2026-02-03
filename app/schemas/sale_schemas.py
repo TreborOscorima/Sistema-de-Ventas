@@ -33,6 +33,7 @@ class SaleItemDTO(BaseSchema):
     barcode: str | None = None
     category: str | None = None
     product_id: int | None = None
+    variant_id: int | None = None
 
 
 class PaymentBreakdownItemDTO(BaseSchema):

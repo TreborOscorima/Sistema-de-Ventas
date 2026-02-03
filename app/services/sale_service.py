@@ -1013,6 +1013,7 @@ class SaleService:
                     "unit": unit,
                     "barcode": item.barcode or "",
                     "product_id": item.product_id,
+                    "variant_id": getattr(item, "variant_id", None),
                     "allows_decimal": allows_decimal,
                 }
             )
@@ -1020,10 +1021,14 @@ class SaleService:
         descriptions: list[str] = []
         barcodes: list[str] = []
         product_ids: list[int] = []
+        variant_ids: list[int] = []
         for item in pending_items:
             pid = item.get("product_id")
             if pid:
                 product_ids.append(pid)
+            vid = item.get("variant_id")
+            if vid:
+                variant_ids.append(vid)
             description = (item.get("description") or "").strip()
             if description:
                 descriptions.append(description)
@@ -1032,6 +1037,7 @@ class SaleService:
                 barcodes.append(barcode)
 
         unique_product_ids = list(dict.fromkeys(product_ids))
+        unique_variant_ids = list(dict.fromkeys(variant_ids))
         unique_descriptions = list(dict.fromkeys(descriptions))
         unique_barcodes = list(dict.fromkeys(barcodes))
         
@@ -1092,6 +1098,20 @@ class SaleService:
                 if variant.sku:
                     variants_by_sku[variant.sku] = variant
 
+        if unique_variant_ids:
+            variant_id_query = select(ProductVariant).where(
+                ProductVariant.id.in_(unique_variant_ids)
+            )
+            variant_id_query = _apply_tenant_filters(
+                variant_id_query, ProductVariant, company_id, branch_id
+            )
+            variants = (
+                await session.exec(variant_id_query.with_for_update())
+            ).all()
+            for variant in variants:
+                if variant.id:
+                    variants_by_id[variant.id] = variant
+
         missing_variant_ids = [
             pid for pid in unique_product_ids if pid not in products_by_id
         ]
@@ -1148,16 +1168,23 @@ class SaleService:
             product = None
             variant = None
 
-            # 1. Try lookup by ID (Most Reliable)
+            # 1. Intentar búsqueda por ID de variante (más confiable para variantes)
+            vid = item.get("variant_id")
+            if vid:
+                variant = variants_by_id.get(vid)
+                if variant:
+                    product = products_by_id.get(variant.product_id)
+
+            # 2. Intentar búsqueda por ID (más confiable para productos)
             pid = item.get("product_id")
-            if pid:
+            if pid and not product:
                 product = products_by_id.get(pid)
                 if not product:
                     variant = variants_by_id.get(pid)
                     if variant:
                         product = products_by_id.get(variant.product_id)
 
-            # 2. Try lookup by Barcode (Variant SKU)
+            # 3. Intentar búsqueda por código de barras (SKU de variante)
             if not product:
                 barcode = (item.get("barcode") or "").strip()
                 if barcode:
@@ -1165,13 +1192,13 @@ class SaleService:
                     if variant:
                         product = products_by_id.get(variant.product_id)
 
-            # 3. Try lookup by Barcode (Product)
+            # 4. Intentar búsqueda por código de barras (producto)
             if not product:
                 barcode = (item.get("barcode") or "").strip()
                 if barcode:
                     product = products_by_barcode.get(barcode)
 
-            # 4. Try lookup by Description
+            # 5. Intentar búsqueda por descripción
             if not product:
                 description = item.get("description", "")
                 if description in ambiguous_descriptions:
@@ -1231,7 +1258,7 @@ class SaleService:
             }
             decimal_snapshot.append(decimal_item)
 
-            # Load batches (FEFO) if applicable
+            # Cargar lotes (FEFO) si aplica
             cache_key = (
                 ("variant", variant.id)
                 if variant
@@ -1595,6 +1622,10 @@ class SaleService:
                 barcode_snapshot = (
                     variant.sku if variant else product.barcode
                 )
+                variant_label = _variant_label(variant) if variant else ""
+                name_snapshot = product.description
+                if variant_label:
+                    name_snapshot = f"{product.description} ({variant_label})"
                 sale_item = SaleItem(
                     sale_id=new_sale.id,
                     product_id=product.id,
@@ -1605,7 +1636,7 @@ class SaleService:
                     quantity=item["quantity"],
                     unit_price=item["price"],
                     subtotal=item["subtotal"],
-                    product_name_snapshot=product.description,
+                    product_name_snapshot=name_snapshot,
                     product_barcode_snapshot=barcode_snapshot,
                     product_category_snapshot=product.category or "General",
                 )

@@ -36,6 +36,7 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
                     on_change=lambda value, temp_id=item["temp_id"]: State.update_entry_item_category(
                         temp_id, value
                     ),
+                    disabled=item.get("is_existing_product", False),
                     class_name="w-40 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                 ),
                 rx.el.button(
@@ -66,10 +67,101 @@ def ingreso_page() -> rx.Component:
             "Completa la información básica del documento y selecciona el proveedor.",
             class_name="text-sm text-slate-500",
         ),
-        class_name="flex flex-col gap-1 mb-4",
+        class_name="flex flex-col gap-1 pb-4 mb-4 border-b border-slate-100",
     )
 
     purchase_fields = rx.el.div(
+        rx.el.div(
+            rx.el.label(
+                "Buscar Proveedor",
+                class_name="block text-sm font-medium text-slate-600 mb-1",
+            ),
+            rx.el.div(
+                rx.el.div(
+                    rx.el.input(
+                        placeholder="Buscar por Nombre de Empresa o N° de Registro",
+                        on_change=State.search_supplier_change,
+                        value=State.purchase_supplier_query,
+                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        debounce_timeout=200,
+                    ),
+                    rx.cond(
+                        State.purchase_supplier_suggestions.length() > 0,
+                        rx.el.div(
+                            rx.foreach(
+                                State.purchase_supplier_suggestions,
+                                lambda supplier: rx.el.button(
+                                    rx.el.div(
+                                        rx.el.span(
+                                            supplier["name"],
+                                            class_name="font-medium text-slate-800",
+                                        ),
+                                        rx.el.span(
+                                            supplier["tax_id"],
+                                            class_name="text-xs text-slate-500",
+                                        ),
+                                        class_name="flex flex-col text-left",
+                                    ),
+                                    on_click=lambda _,
+                                    supplier=supplier: State.select_supplier(
+                                        supplier
+                                    ),
+                                    class_name="w-full text-left p-2 hover:bg-slate-100",
+                                ),
+                            ),
+                            class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
+                        ),
+                        rx.fragment(),
+                    ),
+                    class_name="relative flex-1",
+                ),
+                rx.el.button(
+                    "Limpiar Proveedor",
+                    on_click=State.clear_supplier_search,
+                    class_name="h-10 px-3 rounded-md border border-slate-200 bg-white text-slate-600 text-sm hover:bg-slate-50 w-full sm:w-auto",
+                ),
+                class_name="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center",
+            ),
+            rx.el.p(
+                "Si no existe el proveedor, gestionelo en Compras > Proveedores.",
+                class_name="text-xs text-slate-500 mt-2",
+            ),
+            class_name="w-full sm:col-span-2 lg:col-span-4 relative",
+        ),
+        rx.el.div(
+            rx.el.label(
+                "Razón Social",
+                class_name="block text-sm font-medium text-slate-600 mb-1",
+            ),
+            rx.el.input(
+                value=rx.cond(
+                    State.selected_supplier != None,
+                    State.selected_supplier["name"],
+                    "",
+                ),
+                placeholder="Razón Social / Nombre de Empresa",
+                read_only=True,
+                class_name="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            ),
+            class_name="w-full",
+        ),
+        rx.el.div(
+            rx.el.label(
+                "N° Registro",
+                class_name="block text-sm font-medium text-slate-600 mb-1",
+            ),
+            rx.el.input(
+                value=rx.cond(
+                    State.selected_supplier != None,
+                    State.selected_supplier["tax_id"],
+                    "",
+                ),
+                placeholder="N° de Registro de Empresa",
+                read_only=True,
+                class_name="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono",
+            ),
+            class_name="w-full",
+        ),
         rx.el.div(
             rx.el.label(
                 "Tipo de Documento",
@@ -125,103 +217,132 @@ def ingreso_page() -> rx.Component:
             ),
             class_name="w-full",
         ),
-        class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
+        class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end",
     )
 
-    purchase_notes = rx.el.div(
+    purchase_grid = rx.el.div(
+        purchase_fields,
+        class_name="w-full",
+    )
+
+    variant_existing_inputs = rx.el.div(
         rx.el.label(
-            "Notas (opcional)",
+            "Talla/Color",
             class_name="block text-sm font-medium text-slate-600 mb-1",
         ),
-        rx.el.textarea(
-            placeholder="Observaciones del documento o compra",
-            on_change=State.set_purchase_notes,
-            value=State.purchase_notes,
-            class_name="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[80px]",
+        rx.el.select(
+            rx.el.option("Seleccionar Talla/Color", value=""),
+            rx.foreach(
+                State.variants_list,
+                lambda variant: rx.el.option(
+                    variant["label"], value=variant["id"]
+                ),
+            ),
+            value=State.selected_variant_id,
+            on_change=State.set_selected_variant,
+            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
         ),
         class_name="w-full",
     )
 
-    purchase_left = rx.el.div(
-        purchase_fields,
-        purchase_notes,
-        class_name="flex flex-col gap-4 lg:col-span-2",
+    variant_new_inputs = rx.el.div(
+        rx.el.div(
+            rx.el.label(
+                "Talla",
+                class_name="block text-sm font-medium text-slate-600 mb-1",
+            ),
+            rx.el.input(
+                placeholder="Ej: 40",
+                on_change=State.set_variant_size,
+                value=State.variant_size,
+                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            ),
+            class_name="w-full",
+        ),
+        rx.el.div(
+            rx.el.label(
+                "Color",
+                class_name="block text-sm font-medium text-slate-600 mb-1",
+            ),
+            rx.el.input(
+                placeholder="Ej: Negro",
+                on_change=State.set_variant_color,
+                value=State.variant_color,
+                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            ),
+            class_name="w-full",
+        ),
+        class_name="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end w-full",
     )
 
-    purchase_supplier = rx.el.div(
+    batch_quantity_inputs = rx.el.div(
+        rx.el.div(
+            rx.el.label(
+                "Nro Lote",
+                class_name="block text-sm font-medium text-slate-600 mb-1",
+            ),
+            rx.el.input(
+                placeholder="Ej: L123",
+                on_change=State.set_batch_code,
+                value=State.batch_code,
+                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            ),
+            class_name="w-full",
+        ),
+        rx.el.div(
+            rx.el.label(
+                "Vencimiento",
+                class_name="block text-sm font-medium text-slate-600 mb-1",
+            ),
+            rx.el.input(
+                type="date",
+                on_change=State.set_batch_date,
+                value=State.batch_date,
+                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            ),
+            class_name="w-full",
+        ),
+        class_name="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end w-full",
+    )
+
+    quantity_field = rx.el.div(
         rx.el.label(
-            "Proveedor",
-            class_name="block text-sm font-medium text-slate-600",
+            "Cantidad",
+            class_name="block text-sm font-medium text-slate-600 mb-1",
         ),
         rx.el.input(
-            placeholder="Buscar por nombre o RUC/CUIT",
-            on_change=State.search_supplier_change,
-            value=State.purchase_supplier_query,
+            type="number",
+            on_change=lambda val: State.handle_entry_change("quantity", val),
             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-            debounce_timeout=200,
+            value=State.new_entry_item["quantity"].to_string(),
         ),
-        rx.cond(
-            State.purchase_supplier_suggestions.length() > 0,
-            rx.el.div(
-                rx.foreach(
-                    State.purchase_supplier_suggestions,
-                    lambda supplier: rx.el.button(
-                        rx.el.div(
-                            rx.el.span(
-                                supplier["name"],
-                                class_name="font-medium text-slate-800",
-                            ),
-                            rx.el.span(
-                                supplier["tax_id"],
-                                class_name="text-xs text-slate-500",
-                            ),
-                            class_name="flex flex-col text-left",
-                        ),
-                        on_click=lambda _,
-                        supplier=supplier: State.select_supplier(
-                            supplier
-                        ),
-                        class_name="w-full text-left p-2 hover:bg-slate-100",
-                    ),
-                ),
-                class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
-            ),
-            rx.fragment(),
-        ),
-        rx.cond(
-            State.selected_supplier != None,
-            rx.el.div(
-                rx.el.div(
-                    rx.el.span(
-                        State.selected_supplier["name"],
-                        class_name="font-medium text-slate-800",
-                    ),
-                    rx.el.span(
-                        State.selected_supplier["tax_id"],
-                        class_name="text-xs text-slate-500",
-                    ),
-                    class_name="flex flex-col",
-                ),
-                rx.el.button(
-                    rx.icon("x", class_name="h-4 w-4"),
-                    on_click=State.clear_selected_supplier,
-                    class_name="p-1 text-slate-500 hover:text-slate-800",
-                ),
-                class_name="flex items-center justify-between rounded-md border border-slate-200 bg-white p-2",
-            ),
-            rx.fragment(),
-        ),
-        rx.el.p(
-            "Si no existe el proveedor, gestionelo en Compras > Proveedores.",
-            class_name="text-xs text-slate-500",
-        ),
-        class_name="flex flex-col gap-2 bg-slate-50 border border-slate-200 rounded-xl p-4 relative",
+        class_name="w-full",
     )
 
-    purchase_grid = rx.el.div(
-        purchase_left,
-        purchase_supplier,
-        class_name="grid grid-cols-1 lg:grid-cols-3 gap-6",
+    quantity_inputs = rx.cond(
+        State.has_variants,
+        rx.cond(State.is_existing_product, variant_existing_inputs, variant_new_inputs),
+        rx.cond(State.requires_batches, batch_quantity_inputs, rx.fragment()),
+    )
+
+    entry_mode_selector = rx.cond(
+        State.is_existing_product,
+        rx.fragment(),
+        rx.el.div(
+            rx.el.label(
+                "Tipo",
+                class_name="block text-sm font-medium text-slate-600 mb-1",
+            ),
+            rx.el.select(
+                rx.el.option("Estándar", value="standard"),
+                rx.el.option("Variantes", value="variant"),
+                rx.el.option("Lotes", value="batch"),
+                value=State.entry_mode,
+                on_change=State.set_entry_mode,
+                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            ),
+            class_name="w-full",
+        ),
     )
 
     entry_item_form = rx.el.div(
@@ -233,137 +354,138 @@ def ingreso_page() -> rx.Component:
                 rx.el.label(
                     "Codigo de Barra",
                     class_name="block text-sm font-medium text-slate-600 mb-1",
-                    ),
-                    rx.el.input(
-                        id="barcode-input-entry",
-                        key=State.entry_form_key.to_string(),
-                        default_value=State.new_entry_item["barcode"],
-                        placeholder="Ej: 7791234567890",
-                        on_blur=lambda e: State.process_entry_barcode_from_input(e),
-                        on_key_down=lambda k: State.handle_barcode_enter(k, "barcode-input-entry"),
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        type="text",
-                        auto_complete="off",
-                    ),
-                    class_name="w-full sm:w-48",
                 ),
-                rx.el.div(
-                    rx.el.label(
-                        "Descripción",
-                        class_name="block text-sm font-medium text-slate-600 mb-1",
+                rx.el.input(
+                    id="barcode-input-entry",
+                    key=State.entry_form_key.to_string(),
+                    default_value=State.new_entry_item["barcode"],
+                    placeholder="Ej: 7791234567890",
+                    on_blur=lambda e: State.process_entry_barcode_from_input(e),
+                    on_key_down=lambda k: State.handle_barcode_enter(
+                        k, "barcode-input-entry"
                     ),
-                    rx.debounce_input(
-                        rx.input(
-                            value=State.new_entry_item["description"],
-                            on_change=lambda val: State.handle_entry_change(
-                                "description", val
-                            ),
-                            placeholder="Ej: Coca-Cola 600ml",
-                            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        ),
-                        debounce_timeout=200,
-                    ),
-                    rx.cond(
-                        State.entry_autocomplete_suggestions.length() > 0,
-                        rx.el.div(
-                            rx.foreach(
-                                State.entry_autocomplete_suggestions,
-                                lambda suggestion: rx.el.button(
-                                    suggestion,
-                                    on_click=lambda _,
-                                    suggestion=suggestion: State.select_product_for_entry(
-                                        suggestion
-                                    ),
-                                    class_name="w-full text-left p-2 hover:bg-slate-100",
-                                ),
-                            ),
-                            class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
-                        ),
-                        rx.fragment(),
-                    ),
-                    class_name="flex-grow relative",
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    type="text",
+                    auto_complete="off",
                 ),
-                rx.el.div(
-                    rx.el.label(
-                        "Cantidad",
-                        class_name="block text-sm font-medium text-slate-600 mb-1",
-                    ),
-                    rx.el.input(
-                        type="number",
-                        on_change=lambda val: State.handle_entry_change(
-                            "quantity", val
-                        ),
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        value=State.new_entry_item["quantity"].to_string(),
-                    ),
-                    class_name="w-full sm:w-24",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Unidad",
-                        class_name="block text-sm font-medium text-slate-600 mb-1",
-                    ),
-                    rx.el.select(
-                        rx.foreach(
-                            State.units, lambda unit: rx.el.option(unit, value=unit)
-                        ),
-                        value=State.new_entry_item["unit"],
-                        on_change=lambda val: State.handle_entry_change("unit", val),
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                    ),
-                    class_name="w-full sm:w-32",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Precio Compra",
-                        class_name="block text-sm font-medium text-slate-600 mb-1",
-                    ),
-                    rx.el.input(
-                        type="number",
-                        on_change=lambda val: State.handle_entry_change("price", val),
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        value=State.new_entry_item["price"].to_string(),
-                    ),
-                    class_name="w-full sm:w-32",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Precio Venta",
-                        class_name="block text-sm font-medium text-slate-600 mb-1",
-                    ),
-                    rx.el.input(
-                        type="number",
-                        on_change=lambda val: State.handle_entry_change(
-                            "sale_price", val
-                        ),
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        value=State.new_entry_item["sale_price"].to_string(),
-                    ),
-                    class_name="w-full sm:w-32",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Subtotal",
-                        class_name="block text-sm font-medium text-slate-600 mb-1",
-                    ),
-                    rx.el.div(
-                        State.currency_symbol,
-                        State.entry_subtotal.to_string(),
-                        class_name="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-200 rounded-md text-right font-semibold flex items-center justify-end",
-                    ),
-                    class_name="w-full sm:w-32",
-                ),
-                rx.el.div(
-                    rx.el.button(
-                        rx.icon("plus", class_name="h-5 w-5"),
-                        "Añadir",
-                        on_click=State.add_item_to_entry,
-                        class_name="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-indigo-600 text-white font-medium hover:bg-indigo-700 mt-2",
-                    ),
-                    class_name="w-full sm:w-auto flex items-center",
-                ),
-                class_name="flex flex-wrap items-start gap-4",
+                class_name="col-span-12 sm:col-span-4 lg:col-span-3",
             ),
+            rx.el.div(
+                rx.el.label(
+                    "Descripción",
+                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                ),
+                rx.debounce_input(
+                    rx.input(
+                        value=State.new_entry_item["description"],
+                        on_change=lambda val: State.handle_entry_change(
+                            "description", val
+                        ),
+                        placeholder="Descripción del producto",
+                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        is_read_only=State.is_existing_product,
+                    ),
+                    debounce_timeout=200,
+                ),
+                rx.cond(
+                    State.entry_autocomplete_suggestions.length() > 0,
+                    rx.el.div(
+                        rx.foreach(
+                            State.entry_autocomplete_suggestions,
+                            lambda suggestion: rx.el.button(
+                                suggestion,
+                                on_click=lambda _,
+                                suggestion=suggestion: State.select_product_for_entry(
+                                    suggestion
+                                ),
+                                class_name="w-full text-left p-2 hover:bg-slate-100",
+                            ),
+                        ),
+                        class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="col-span-12 sm:col-span-8 lg:col-span-3 relative",
+            ),
+            rx.el.div(
+                entry_mode_selector,
+                class_name="col-span-12 sm:col-span-4 lg:col-span-2",
+            ),
+            rx.el.div(
+                quantity_inputs,
+                class_name="col-span-12 sm:col-span-8 lg:col-span-4",
+            ),
+            class_name="grid grid-cols-12 gap-4 items-end",
+        ),
+        rx.el.div(
+            rx.el.div(
+                quantity_field,
+                class_name="col-span-6 sm:col-span-2 lg:col-span-2",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Unidad",
+                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                ),
+                rx.el.select(
+                    rx.foreach(
+                        State.units, lambda unit: rx.el.option(unit, value=unit)
+                    ),
+                    value=State.new_entry_item["unit"],
+                    on_change=lambda val: State.handle_entry_change("unit", val),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                ),
+                class_name="col-span-6 sm:col-span-2 lg:col-span-2",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Precio Compra",
+                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                ),
+                rx.el.input(
+                    type="number",
+                    on_change=lambda val: State.handle_entry_change("price", val),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    value=State.new_entry_item["price"].to_string(),
+                ),
+                class_name="col-span-6 sm:col-span-2 lg:col-span-2",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Precio Venta",
+                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                ),
+                rx.el.input(
+                    type="number",
+                    on_change=lambda val: State.handle_entry_change("sale_price", val),
+                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    value=State.new_entry_item["sale_price"].to_string(),
+                ),
+                class_name="col-span-6 sm:col-span-2 lg:col-span-2",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Subtotal",
+                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                ),
+                rx.el.div(
+                    State.currency_symbol,
+                    State.entry_subtotal.to_string(),
+                    class_name="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-200 rounded-md text-right font-semibold flex items-center justify-end",
+                ),
+                class_name="col-span-6 sm:col-span-2 lg:col-span-2",
+            ),
+            rx.el.div(
+                rx.el.button(
+                    rx.icon("plus", class_name="h-5 w-5"),
+                    "Añadir",
+                    on_click=State.add_item_to_entry,
+                    class_name="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-indigo-600 text-white font-medium hover:bg-indigo-700",
+                ),
+                class_name="col-span-12 sm:col-span-4 lg:col-span-2 flex items-end",
+            ),
+            class_name="grid grid-cols-12 gap-4 items-end mt-4",
+        ),
         class_name="mt-3 pt-3 border-t border-slate-100",
     )
 
@@ -459,7 +581,7 @@ def ingreso_page() -> rx.Component:
         ),
         class_name="p-4 sm:p-6 w-full flex flex-col gap-4",
     )
-    
+
     return permission_guard(
         has_permission=State.can_view_ingresos,
         content=content,

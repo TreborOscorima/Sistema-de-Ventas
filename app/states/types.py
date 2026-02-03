@@ -21,6 +21,14 @@ class TransactionItem(TypedDict):
     sale_price: float
     subtotal: float
     product_id: int | None
+    variant_id: int | None
+    variant_size: str
+    variant_color: str
+    batch_code: str
+    batch_date: str
+    is_existing_product: bool
+    has_variants: bool
+    requires_batches: bool
 
 class Movement(TypedDict):
     id: str
@@ -147,6 +155,8 @@ class InventoryAdjustment(TypedDict):
     current_stock: float
     adjust_quantity: float
     reason: str
+    product_id: int | None
+    variant_id: int | None
 
 class Privileges(TypedDict):
     view_ingresos: bool
