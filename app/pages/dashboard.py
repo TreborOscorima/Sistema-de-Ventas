@@ -318,23 +318,26 @@ def _category_chart() -> rx.Component:
       class_name="flex items-center justify-between mb-4",
     ),
     # Gráfico de torta
-    rx.recharts.pie_chart(
-      rx.recharts.pie(
-        data=State.dash_sales_by_category,
-        data_key="total",
-        name_key="category",
-        cx="50%",
-        cy="50%",
-        inner_radius=40,
-        outer_radius=80,
-        padding_angle=2,
-        fill="#6366f1",
-        label=True,
+    rx.el.div(
+      rx.recharts.pie_chart(
+        rx.recharts.pie(
+          data=State.dash_sales_by_category,
+          data_key="total",
+          name_key="category",
+          cx="50%",
+          cy="50%",
+          inner_radius=40,
+          outer_radius=80,
+          padding_angle=2,
+          fill="#6366f1",
+          label=True,
+        ),
+        rx.recharts.graphing_tooltip(),
+        rx.recharts.legend(),
+        width="100%",
+        height=240,
       ),
-      rx.recharts.graphing_tooltip(),
-      rx.recharts.legend(),
-      width="100%",
-      height=200,
+      class_name="flex-shrink-0",
     ),
     # Tabla detallada
     rx.el.div(
@@ -366,7 +369,7 @@ def _category_chart() -> rx.Component:
                 class_name=f"flex items-center py-2.5 px-3 border-b border-slate-100 {TRANSITIONS['fast']} hover:bg-slate-50",
               ),
             ),
-            class_name="max-h-40 overflow-y-auto",
+            class_name="flex-1 min-h-0 overflow-y-auto",
           ),
           # Footer
           rx.el.div(
@@ -375,7 +378,7 @@ def _category_chart() -> rx.Component:
             rx.el.span("100%", class_name="w-16 text-sm font-bold text-slate-500 text-right"),
             class_name="flex items-center py-2.5 px-3 border-t-2 border-slate-200 bg-slate-50",
           ),
-          class_name=f"overflow-hidden {RADIUS['lg']} border border-slate-200",
+          class_name=f"flex flex-col h-full overflow-hidden {RADIUS['lg']} border border-slate-200",
         ),
         rx.el.div(
           rx.icon("pie-chart", class_name="w-10 h-10 text-slate-300 mx-auto mb-2"),
@@ -583,7 +586,7 @@ def dashboard_page() -> rx.Component:
 
     rx.el.div(
       _plan_summary_card(),
-      class_name="mt-4",
+      class_name="mt-4 flex-1 min-h-0",
     ),
     
     # KPIs principales
