@@ -1247,6 +1247,10 @@ class AuthState(MixinState):
             await self.load_debtors()
         if hasattr(self, "load_dashboard"):
             self.load_dashboard()
+        if hasattr(self, "load_settings"):
+            self.load_settings()
+        if hasattr(self, "load_config_data"):
+            self.load_config_data()
         if hasattr(self, "check_overdue_alerts"):
             self.check_overdue_alerts()
         if hasattr(self, "cashbox_current_page"):
@@ -1425,6 +1429,10 @@ class AuthState(MixinState):
                 self.selected_branch_id = (
                     str(selected_branch) if selected_branch else ""
                 )
+                if hasattr(self, "load_settings"):
+                    self.load_settings()
+                if hasattr(self, "load_config_data"):
+                    self.load_config_data()
                 self.error_message = ""
                 self.password_change_error = ""
                 self._load_roles_cache(session)
