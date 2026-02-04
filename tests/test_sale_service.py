@@ -26,7 +26,9 @@ async def test_process_sale_cash_happy_path(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
-        exec_result(first_item=session_mock.get.return_value),
+        exec_result(all_items=[]),
+        exec_result(first_item=None),
+        exec_result(all_items=[]),
     ]
 
     result = await SaleService.process_sale(
@@ -55,6 +57,9 @@ async def test_process_sale_cashbox_log_records_sale_id(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
+        exec_result(all_items=[]),
+        exec_result(first_item=None),
+        exec_result(all_items=[]),
     ]
 
     result = await SaleService.process_sale(
@@ -98,6 +103,9 @@ async def test_process_sale_stock_insufficient(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
+        exec_result(all_items=[]),
+        exec_result(first_item=None),
+        exec_result(all_items=[]),
     ]
 
     with pytest.raises((StockError, ValueError)):
@@ -118,6 +126,7 @@ async def test_process_sale_decimal_math(
     unit_sample,
     product_sample,
 ):
+    product_sample.sale_price = Decimal("10.00")
     item = SaleItemDTO(
         description=product_sample.description,
         quantity=Decimal("3"),
@@ -134,6 +143,9 @@ async def test_process_sale_decimal_math(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
+        exec_result(all_items=[]),
+        exec_result(first_item=None),
+        exec_result(all_items=[]),
     ]
 
     result = await SaleService.process_sale(
@@ -155,6 +167,7 @@ async def test_process_sale_mixed_payment(
     unit_sample,
     product_sample,
 ):
+    product_sample.sale_price = Decimal("10.00")
     item = SaleItemDTO(
         description=product_sample.description,
         quantity=Decimal("2"),
@@ -177,6 +190,9 @@ async def test_process_sale_mixed_payment(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
+        exec_result(all_items=[]),
+        exec_result(first_item=None),
+        exec_result(all_items=[]),
     ]
 
     await SaleService.process_sale(
@@ -236,6 +252,9 @@ async def test_process_sale_prefers_barcode_match(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_a, product_b]),
+        exec_result(all_items=[]),
+        exec_result(first_item=None),
+        exec_result(all_items=[]),
     ]
 
     await SaleService.process_sale(
@@ -341,6 +360,9 @@ async def test_process_sale_credit_cashbox_uses_initial_payment(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[product_sample]),
+        exec_result(all_items=[]),
+        exec_result(first_item=None),
+        exec_result(all_items=[]),
         exec_result(first_item=client),
     ]
 

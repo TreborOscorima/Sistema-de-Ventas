@@ -273,6 +273,7 @@ def _top_products_list() -> rx.Component:
             rx.el.span(
               State.currency_symbol,
               rx.text(f"{p['revenue']:.2f}"),
+              class_name="inline-flex items-baseline gap-1 whitespace-nowrap",
             ),
             class_name="font-semibold text-slate-900 tabular-nums",
           ),
@@ -360,7 +361,7 @@ def _category_chart() -> rx.Component:
                 rx.el.span(
                   State.currency_symbol,
                   rx.text(f"{cat['total']:.2f}"),
-                  class_name="w-28 text-sm text-slate-900 font-medium text-right tabular-nums",
+                  class_name="w-28 text-sm text-slate-900 font-medium text-right tabular-nums inline-flex items-baseline justify-end gap-1 whitespace-nowrap",
                 ),
                 rx.el.span(
                   rx.text(f"{cat['percentage']}%"),
@@ -374,7 +375,7 @@ def _category_chart() -> rx.Component:
           # Footer
           rx.el.div(
             rx.el.span("Total", class_name="flex-1 text-sm font-bold text-slate-900"),
-            rx.el.span(State.formatted_category_total, class_name="w-28 text-sm font-bold text-slate-900 text-right tabular-nums"),
+            rx.el.span(State.formatted_category_total, class_name="w-28 text-sm font-bold text-slate-900 text-right tabular-nums whitespace-nowrap"),
             rx.el.span("100%", class_name="w-16 text-sm font-bold text-slate-500 text-right"),
             class_name="flex items-center py-2.5 px-3 border-t-2 border-slate-200 bg-slate-50",
           ),
