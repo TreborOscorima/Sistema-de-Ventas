@@ -20,7 +20,6 @@ def _require_env(var_name: str) -> str:
         raise RuntimeError(f"Missing required environment variable: {var_name}")
     return value
 
-
 DB_USER = _require_env("DB_USER")
 DB_PASSWORD = _require_env("DB_PASSWORD")
 DB_HOST = _require_env("DB_HOST")
