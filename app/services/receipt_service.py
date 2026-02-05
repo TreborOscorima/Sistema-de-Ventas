@@ -359,13 +359,23 @@ class ReceiptService:
             description_lines = ReceiptService._wrap_receipt_lines(description, width)
             for desc_line in description_lines:
                 receipt_lines.append(desc_line)
-            receipt_lines.append(
-                (
-                    f"{item['quantity']} {item['unit']} x "
-                    f"{currency_formatter(item['price'], currency_symbol)}"
-                    f"    {currency_formatter(item['subtotal'], currency_symbol)}"
-                )
+            left_text = (
+                f"{item['quantity']} {item['unit']} x "
+                f"{currency_formatter(item['price'], currency_symbol)}"
             )
+            right_text = currency_formatter(item["subtotal"], currency_symbol)
+            available = max(width - len(right_text) - 1, 1)
+            left_lines = ReceiptService._wrap_receipt_lines(left_text, available)
+            if left_lines:
+                for line in left_lines[:-1]:
+                    receipt_lines.append(line)
+                receipt_lines.append(
+                    ReceiptService._row(left_lines[-1], right_text, width)
+                )
+            else:
+                receipt_lines.append(
+                    ReceiptService._row("", right_text, width)
+                )
             receipt_lines.append("")
             receipt_lines.append(ReceiptService._line(width))
 

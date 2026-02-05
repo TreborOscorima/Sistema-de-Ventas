@@ -2025,9 +2025,19 @@ class CashState(MixinState):
             description = item.get("description", "")
             for desc_line in self._wrap_receipt_lines(description, receipt_width):
                 receipt_lines.append(desc_line)
-            receipt_lines.append(
-                f"{item.get('quantity', 0)} {item.get('unit', '')} x {self._format_currency(item.get('price', 0))}    {self._format_currency(item.get('subtotal', 0))}"
+            left_text = (
+                f"{item.get('quantity', 0)} {item.get('unit', '')} x "
+                f"{self._format_currency(item.get('price', 0))}"
             )
+            right_text = self._format_currency(item.get("subtotal", 0))
+            available = max(receipt_width - len(right_text) - 1, 1)
+            left_lines = self._wrap_receipt_lines(left_text, available)
+            if left_lines:
+                for line_part in left_lines[:-1]:
+                    receipt_lines.append(line_part)
+                receipt_lines.append(row(left_lines[-1], right_text, receipt_width))
+            else:
+                receipt_lines.append(row("", right_text, receipt_width))
             receipt_lines.append("")
             receipt_lines.append(line())
         
