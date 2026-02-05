@@ -76,6 +76,10 @@ BUTTON_STYLES = {
     "icon_ghost": f"p-2 text-slate-500 hover:bg-slate-100 active:bg-slate-200 {RADIUS['full']} {TRANSITIONS['fast']}",
 }
 
+# Alias de estilos para botones frecuentes
+blue_button = BUTTON_STYLES["primary"]
+green_button = BUTTON_STYLES["success"]
+
 
 # =============================================================================
 # INPUT STYLES - Con focus states mejorados

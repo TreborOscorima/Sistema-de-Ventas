@@ -234,8 +234,8 @@ class MixinState:
         lines.extend(f"{indent}{line}" for line in value_lines[1:])
         return lines
 
-    def _receipt_width(self) -> int:
-        settings = self._company_settings_snapshot()
+    def _receipt_width(self, branch_id: int | None = None) -> int:
+        settings = self._company_settings_snapshot(branch_id=branch_id)
         raw_width = settings.get("receipt_width")
         width_raw = os.getenv("RECEIPT_WIDTH", "").strip()
         width = None
@@ -257,8 +257,8 @@ class MixinState:
             width = 42
         return max(24, min(width, 64))
 
-    def _receipt_paper_mm(self) -> int:
-        settings = self._company_settings_snapshot()
+    def _receipt_paper_mm(self, branch_id: int | None = None) -> int:
+        settings = self._company_settings_snapshot(branch_id=branch_id)
         paper = (settings.get("receipt_paper") or "").strip().lower()
         if not paper:
             paper = os.getenv("RECEIPT_PAPER", "").strip().lower()
@@ -269,7 +269,7 @@ class MixinState:
         width = self._receipt_width()
         return 58 if width <= 34 else 80
 
-    def _company_settings_snapshot(self) -> Dict[str, Any]:
+    def _company_settings_snapshot(self, branch_id: int | None = None) -> Dict[str, Any]:
         """Obtiene snapshot de configuración de empresa con labels fiscales dinámicos."""
         from app.utils.db_seeds import get_country_config
         
@@ -288,19 +288,39 @@ class MixinState:
         }
         try:
             from sqlmodel import select
-            from app.models import CompanySettings
+            from app.models import Branch, CompanySettings
         except Exception:
             return defaults
         company_id = self._company_id() if hasattr(self, "_company_id") else None
         if not company_id:
             return defaults
+        if branch_id is None and hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
         try:
             with rx.session() as session:
+                settings_stmt = select(CompanySettings).where(
+                    CompanySettings.company_id == company_id
+                )
+                if branch_id:
+                    settings_stmt = settings_stmt.where(
+                        CompanySettings.branch_id == branch_id
+                    )
                 settings = session.exec(
-                    select(CompanySettings)
-                    .where(CompanySettings.company_id == company_id)
-                    .order_by(CompanySettings.branch_id, CompanySettings.id)
+                    settings_stmt.order_by(CompanySettings.branch_id, CompanySettings.id)
                 ).first()
+                if not settings and branch_id:
+                    settings = session.exec(
+                        select(CompanySettings)
+                        .where(CompanySettings.company_id == company_id)
+                        .order_by(CompanySettings.branch_id, CompanySettings.id)
+                    ).first()
+                branch = None
+                if branch_id:
+                    branch = session.exec(
+                        select(Branch)
+                        .where(Branch.company_id == company_id)
+                        .where(Branch.id == branch_id)
+                    ).first()
         except Exception:
             return defaults
         if not settings:
@@ -310,10 +330,20 @@ class MixinState:
         if hasattr(settings, "country_code") and settings.country_code:
             config = get_country_config(settings.country_code)
         
+        branch_name = ""
+        branch_address = ""
+        if branch:
+            branch_name = branch.name or ""
+            branch_address = branch.address or ""
+
+        address = settings.address or ""
+        if branch_address:
+            address = branch_address
+
         return {
             "company_name": settings.company_name or "",
             "ruc": settings.ruc or "",
-            "address": settings.address or "",
+            "address": address,
             "phone": settings.phone or "",
             "footer_message": settings.footer_message or "",
             "receipt_paper": settings.receipt_paper or "",
@@ -323,6 +353,8 @@ class MixinState:
                 else ""
             ),
             "tax_id_label": config.get("tax_id_label", "ID Fiscal"),
+            "branch_name": branch_name,
+            "branch_address": branch_address,
         }
 
     @rx.var

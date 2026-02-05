@@ -4,6 +4,8 @@ from app.components.ui import (
     INPUT_STYLES,
     TABLE_STYLES,
     action_button,
+    blue_button,
+    green_button,
     modal_container,
     toggle_switch,
     permission_guard,
@@ -215,6 +217,49 @@ def recent_moves_modal() -> rx.Component:
         children=[content],
         footer=footer,
         max_width="max-w-3xl",
+    )
+
+
+def sale_receipt_modal() -> rx.Component:
+    footer = rx.hstack(
+        rx.el.button(
+            rx.icon("download", class_name="h-4 w-4"),
+            "Descargar PDF",
+            on_click=State.download_pdf_receipt,
+            class_name=f"{blue_button} flex-1",
+        ),
+        rx.el.button(
+            rx.icon("printer", class_name="h-4 w-4"),
+            "Imprimir Ticket",
+            on_click=State.print_receipt,
+            class_name=f"{green_button} flex-1",
+        ),
+        spacing="2",
+        class_name="w-full",
+    )
+
+    body = rx.el.div(
+        rx.el.p(
+            "Selecciona la salida del comprobante para finalizar la venta.",
+            class_name="text-sm text-slate-600 text-center",
+        ),
+        class_name="py-2",
+    )
+
+    return modal_container(
+        is_open=State.show_sale_receipt_modal,
+        on_close=State.close_sale_receipt_modal,
+        title=rx.el.span(
+            "Comprobante generado",
+            class_name="block w-full text-center",
+        ),
+        description=rx.el.span(
+            "¿Cómo deseas entregar el comprobante?",
+            class_name="block w-full text-center",
+        ),
+        children=[body],
+        footer=footer,
+        max_width="max-w-md",
     )
 
 
@@ -1087,21 +1132,7 @@ def payment_sidebar() -> rx.Component:
                         "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-lg",
                     ),
                 ),
-                rx.cond(
-                    State.sale_receipt_ready,
-                    rx.el.button(
-                        rx.icon("printer", class_name="h-4 w-4"),
-                        "Imprimir",
-                        on_click=State.print_sale_receipt,
-                        class_name="w-full flex items-center justify-center gap-2 px-4 py-2 border-2 border-indigo-600 text-indigo-600 rounded-lg font-medium hover:bg-indigo-50 transition-colors",
-                    ),
-                    rx.el.button(
-                        rx.icon("printer", class_name="h-4 w-4"),
-                        "Imprimir",
-                        disabled=True,
-                        class_name="w-full flex items-center justify-center gap-2 px-4 py-2 border border-slate-300 text-slate-400 rounded-lg cursor-not-allowed",
-                    ),
-                ),
+                rx.fragment(),
                 class_name="p-4 flex flex-col gap-2",
             ),
             class_name="shrink-0 bg-white border-t",
@@ -1504,15 +1535,7 @@ def payment_mobile_section() -> rx.Component:
                         "flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700",
                     ),
                 ),
-                rx.cond(
-                    State.sale_receipt_ready,
-                    rx.el.button(
-                        rx.icon("printer", class_name="h-4 w-4"),
-                        on_click=State.print_sale_receipt,
-                        class_name="px-4 py-3 border-2 border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50",
-                    ),
-                    rx.fragment(),
-                ),
+                rx.fragment(),
                 class_name="flex gap-2 mt-3",
             ),
             class_name="p-3 sm:p-4 bg-slate-50 border-t",
@@ -1568,6 +1591,7 @@ def venta_page() -> rx.Component:
         ),
         client_form_modal(),
         recent_moves_modal(),
+        sale_receipt_modal(),
         class_name="flex min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)]",
     )
     return permission_guard(

@@ -385,7 +385,9 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             self.last_sale_total = result.sale_total_display
             self.last_sale_timestamp = result.timestamp.strftime("%Y-%m-%d %H:%M:%S")
             self.last_payment_summary = result.payment_summary
+            self.last_sale_id = str(result.sale.id)
             self.sale_receipt_ready = True
+            self.show_sale_receipt_modal = True
             self.new_sale_items = []
             self._reset_sale_form()
             self._reset_payment_fields()
