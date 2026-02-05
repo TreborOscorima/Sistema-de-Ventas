@@ -146,6 +146,24 @@ class CashboxLogEntry(TypedDict):
     formatted_cost: str
     formatted_quantity: str
 
+class RecentTransactionLine(TypedDict):
+    left: str
+    right: str
+
+class RecentTransaction(TypedDict):
+    id: str
+    timestamp: str
+    time: str
+    time_display: str
+    detail_full: str
+    detail_short: str
+    client: str
+    client_display: str
+    amount: float
+    amount_display: str
+    sale_id: str
+    detail_lines: List[RecentTransactionLine]
+
 class InventoryAdjustment(TypedDict):
     temp_id: str
     barcode: str

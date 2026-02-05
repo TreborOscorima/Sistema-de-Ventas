@@ -41,9 +41,10 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List
 
 from sqlmodel import select
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, desc
 from sqlalchemy.ext.asyncio import AsyncSession  # ✅ IMPORTANTE
 
+from app.constants import CASHBOX_INCOME_ACTIONS
 from app.enums import PaymentMethodType, ReservationStatus, SaleStatus
 from app.models import (
     CashboxLog,
@@ -103,6 +104,144 @@ def _variant_label(variant: ProductVariant) -> str:
     if variant.color:
         parts.append(str(variant.color).strip())
     return " ".join([p for p in parts if p])
+
+
+def _normalize_cashbox_action(action: str | None) -> str:
+    value = (action or "").replace("_", " ").strip()
+    if not value:
+        return "Movimiento"
+    if value.islower():
+        return value.title()
+    return value
+
+
+def _compact_notes(text: str, max_length: int = 90) -> str:
+    if not text:
+        return ""
+    compact = " ".join(text.split())
+    if len(compact) <= max_length:
+        return compact
+    return compact[: max_length - 3].rstrip() + "..."
+
+
+def _extract_detail_from_notes(
+    notes: str,
+    action_label: str,
+) -> str:
+    raw = " ".join((notes or "").split()).strip()
+    if not raw:
+        return ""
+
+    action_lower = (action_label or "").strip().lower()
+    detail = raw
+
+    if detail.startswith("#") and ":" in detail:
+        detail = detail.split(":", 1)[1].strip()
+    elif detail.lower().startswith("inicial #") and "(" in detail and ")" in detail:
+        start = detail.find("(") + 1
+        end = detail.find(")", start)
+        if end > start:
+            detail = detail[start:end].strip()
+
+    lowered = detail.lower()
+    if " - cliente" in lowered:
+        detail = detail[: lowered.index(" - cliente")].strip()
+    elif "cliente:" in lowered:
+        detail = detail[: lowered.index("cliente:")].strip()
+
+    if action_lower and detail.lower().startswith(action_lower):
+        detail = detail[len(action_label):].lstrip(" -:").strip()
+
+    return detail
+
+
+async def get_recent_activity(
+    session: AsyncSession,
+    branch_id: int,
+    limit: int = 15,
+    company_id: int | None = None,
+) -> list[dict[str, Any]]:
+    """Obtiene los movimientos recientes de caja para una sucursal."""
+    if not branch_id:
+        return []
+    limit_value = int(limit) if limit else 15
+    if limit_value < 1:
+        limit_value = 15
+
+    query = (
+        select(CashboxLog, Sale, Client)
+        .join(Sale, CashboxLog.sale_id == Sale.id, isouter=True)
+        .join(Client, Sale.client_id == Client.id, isouter=True)
+        .where(CashboxLog.branch_id == branch_id)
+        .where(CashboxLog.is_voided == False)
+        .where(CashboxLog.action.in_(CASHBOX_INCOME_ACTIONS))
+        .order_by(desc(CashboxLog.timestamp))
+        .limit(limit_value)
+    )
+    if company_id:
+        query = query.where(CashboxLog.company_id == company_id)
+
+    rows = (await session.exec(query)).all()
+    sale_ids = list({log.sale_id for log, _sale, _client in rows if log.sale_id})
+    items_by_sale: dict[int, list[dict[str, Any]]] = {}
+    if sale_ids:
+        items_query = select(SaleItem).where(SaleItem.sale_id.in_(sale_ids))
+        items_query = _apply_tenant_filters(
+            items_query, SaleItem, company_id, branch_id
+        )
+        items_query = items_query.order_by(SaleItem.sale_id, SaleItem.id)
+        sale_items = (await session.exec(items_query)).all()
+        for item in sale_items:
+            if not item.sale_id:
+                continue
+            items_by_sale.setdefault(item.sale_id, []).append(
+                {
+                    "description": item.product_name_snapshot
+                    or item.product_barcode_snapshot
+                    or "Producto",
+                    "quantity": item.quantity,
+                    "unit_price": item.unit_price,
+                    "subtotal": item.subtotal,
+                }
+            )
+    results: list[dict[str, Any]] = []
+    for log, sale, client in rows:
+        action_label = _normalize_cashbox_action(log.action)
+        payment_method = (log.payment_method or "").strip()
+        detail = action_label
+        if payment_method:
+            detail = f"{detail} ({payment_method})"
+        notes_detail = _extract_detail_from_notes(log.notes, action_label)
+        detail_full = detail
+        detail_short = detail
+        if notes_detail:
+            detail_full = f"{detail} - {notes_detail}"
+            detail_short = f"{detail} - {_compact_notes(notes_detail)}"
+        client_name = ""
+        if client and client.name:
+            client_name = client.name
+
+        timestamp = log.timestamp
+        time_display = ""
+        timestamp_display = ""
+        if timestamp:
+            time_display = timestamp.strftime("%H:%M")
+            timestamp_display = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+        results.append(
+            {
+                "id": str(log.id),
+                "timestamp": timestamp_display,
+                "time": time_display,
+                "detail_full": detail_full,
+                "detail_short": detail_short,
+                "client": client_name,
+                "amount": float(log.amount or 0),
+                "sale_id": str(log.sale_id) if log.sale_id else "",
+                "items": items_by_sale.get(log.sale_id or 0, []),
+            }
+        )
+    return results
 
 
 def _adapt_product_payload(product: Product) -> dict[str, Any]:
@@ -830,6 +969,20 @@ class SaleService:
             company_id,
             branch_id,
             session=session,
+        )
+
+    @staticmethod
+    async def get_recent_activity(
+        session: AsyncSession,
+        branch_id: int,
+        limit: int = 15,
+        company_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        return await get_recent_activity(
+            session=session,
+            branch_id=branch_id,
+            limit=limit,
+            company_id=company_id,
         )
     
     @staticmethod

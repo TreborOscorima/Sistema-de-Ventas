@@ -3,8 +3,9 @@ from app.state import State
 from app.components.ui import (
     INPUT_STYLES,
     TABLE_STYLES,
+    action_button,
+    modal_container,
     toggle_switch,
-    page_title,
     permission_guard,
 )
 from app.pages.clientes import client_form_modal
@@ -87,6 +88,133 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
             class_name="flex items-center gap-4 mt-2",
         ),
         class_name="p-3 bg-white border-b border-slate-100",
+    )
+
+
+def recent_moves_modal() -> rx.Component:
+    table_header = rx.table.header(
+        rx.table.row(
+            rx.table.column_header_cell("Hora"),
+            rx.table.column_header_cell("Detalle"),
+            rx.table.column_header_cell("Cliente"),
+            rx.table.column_header_cell("Total", justify="end"),
+            rx.table.column_header_cell("", justify="center"),
+        )
+    )
+
+    table_body = rx.table.body(
+        rx.foreach(
+            State.recent_transactions,
+            lambda entry: rx.table.row(
+                rx.table.cell(
+                    entry["time_display"],
+                    class_name="text-sm text-slate-600",
+                ),
+                rx.table.cell(
+                    rx.cond(
+                        State.recent_expanded_id == entry["id"],
+                        rx.cond(
+                            entry["detail_lines"].length() > 0,
+                            rx.el.div(
+                                rx.foreach(
+                                    entry["detail_lines"],
+                                    lambda line: rx.el.div(
+                                        rx.el.span(
+                                            line["left"],
+                                            class_name="min-w-0 flex-1",
+                                        ),
+                                        rx.el.span(
+                                            line["right"],
+                                            class_name="whitespace-nowrap font-semibold text-slate-900",
+                                        ),
+                                        class_name="flex items-start justify-between gap-3",
+                                    ),
+                                ),
+                                class_name="flex flex-col gap-1",
+                            ),
+                            rx.el.span(
+                                entry["detail_full"],
+                                class_name="whitespace-pre-line",
+                            ),
+                        ),
+                        rx.el.span(entry["detail_short"]),
+                    ),
+                    on_click=State.toggle_recent_detail(entry["id"]),
+                    class_name=(
+                        "text-sm text-slate-800 cursor-pointer "
+                        "hover:text-indigo-700"
+                    ),
+                ),
+                rx.table.cell(
+                    entry["client_display"],
+                    class_name="text-sm text-slate-600",
+                ),
+                rx.table.cell(
+                    entry["amount_display"],
+                    justify="end",
+                    class_name="text-sm font-semibold text-slate-900 tabular-nums",
+                ),
+                rx.table.cell(
+                    rx.cond(
+                        entry["sale_id"] != "",
+                        rx.el.button(
+                            rx.icon("printer", class_name="h-4 w-4"),
+                            on_click=State.reprint_recent_sale(entry["sale_id"]),
+                            class_name="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full",
+                            title="Reimprimir comprobante",
+                        ),
+                        rx.el.span("-", class_name="text-xs text-slate-400"),
+                    ),
+                    justify="center",
+                ),
+            ),
+        ),
+    )
+
+    table = rx.table.root(
+        table_header,
+        table_body,
+        variant="surface",
+        size="2",
+        class_name="w-full",
+    )
+
+    content = rx.cond(
+        State.recent_loading,
+        rx.el.div(
+            rx.spinner(size="3"),
+            class_name="py-8 flex justify-center",
+        ),
+        rx.cond(
+            State.recent_transactions.length() > 0,
+            rx.el.div(
+                table,
+                class_name="w-full overflow-x-auto",
+            ),
+            rx.el.p(
+                "No hay movimientos recientes.",
+                class_name="text-sm text-slate-500 text-center py-6",
+            ),
+        ),
+    )
+
+    footer = rx.el.div(
+        action_button(
+            "Cerrar",
+            on_click=State.toggle_recent_modal(False),
+            variant="secondary",
+        ),
+        class_name="flex justify-end",
+    )
+
+    return modal_container(
+        is_open=State.show_recent_modal,
+        on_close=State.toggle_recent_modal(False),
+        title="Movimientos recientes",
+        description="Últimas 15 operaciones registradas en la sucursal activa.",
+        children=[content],
+        footer=footer,
+        max_width="max-w-3xl",
     )
 
 
@@ -1400,9 +1528,28 @@ def venta_page() -> rx.Component:
             rx.cond(
                 State.reservation_selected_for_payment != None,
                 rx.fragment(),
-                page_title(
-                    "PUNTO DE VENTA",
-                    "Realiza ventas directas, selecciona productos y gestiona el cobro.",
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.h1(
+                            "PUNTO DE VENTA",
+                            class_name="text-2xl font-bold text-slate-900 tracking-tight",
+                        ),
+                        rx.el.p(
+                            "Realiza ventas directas, selecciona productos y gestiona el cobro.",
+                            class_name="text-sm text-slate-500",
+                        ),
+                        class_name="flex flex-col gap-1",
+                    ),
+                    rx.el.button(
+                        rx.icon("history", class_name="h-4 w-4"),
+                        rx.el.span("Movimientos recientes"),
+                        on_click=State.toggle_recent_modal(True),
+                        class_name=(
+                            "flex items-center gap-2 px-3 py-2 text-sm border border-slate-200 "
+                            "rounded-lg text-slate-700 hover:bg-slate-50"
+                        ),
+                    ),
+                    class_name="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4",
                 ),
             ),
             # Info de reserva/servicio prominente (si aplica)
@@ -1420,6 +1567,7 @@ def venta_page() -> rx.Component:
             class_name="hidden lg:block h-[calc(100vh-4rem)] sticky top-16",
         ),
         client_form_modal(),
+        recent_moves_modal(),
         class_name="flex min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)]",
     )
     return permission_guard(

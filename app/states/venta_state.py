@@ -14,6 +14,7 @@ Clase principal:
         - CartMixin: Gestión del carrito
         - PaymentMixin: Métodos de pago
         - ReceiptMixin: Generación de recibos
+        - RecentMovesMixin: Movimientos recientes en POS
 
 Flujo típico:
     1. Usuario agrega productos al carrito (CartMixin)
@@ -35,13 +36,13 @@ from app.services.sale_service import SaleService, StockError
 from app.utils.db import get_async_session
 from app.utils.logger import get_logger
 from .mixin_state import MixinState
-from .venta import CartMixin, PaymentMixin, ReceiptMixin
+from .venta import CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin
 
 
 logger = get_logger("VentaState")
 
 
-class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
+class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin):
     """Estado principal de la pantalla de ventas.
     
     Combina múltiples mixins para separar responsabilidades:
@@ -59,6 +60,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin):
         credit_interval_days: Días entre cuotas
         credit_initial_payment: Pago inicial (adelanto)
         is_processing_sale: Flag para evitar doble-submit
+        show_recent_modal: Estado del modal de movimientos recientes
     """
     sale_form_key: int = 0
     client_search_query: str = ""

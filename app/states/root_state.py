@@ -5,6 +5,7 @@ Este módulo utiliza herencia múltiple (Mixins) para componer el estado
 principal de la aplicación a partir de estados especializados.
 """
 import datetime
+from typing import Any
 
 import reflex as rx
 from sqlalchemy import func
@@ -28,7 +29,7 @@ from .clientes_state import ClientesState
 from .dashboard_state import DashboardState
 from .report_state import ReportState
 from .register_state import RegisterState
-from .venta import CartMixin, PaymentMixin, ReceiptMixin
+from .venta import CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin
 
 _mixins = [
     ReportState,
@@ -80,7 +81,7 @@ _class_dict = {
 
 for _mixin in _mixins:
     if _mixin is VentaState:
-        for _venta_mixin in (CartMixin, PaymentMixin, ReceiptMixin):
+        for _venta_mixin in (CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin):
             if hasattr(_venta_mixin, "__annotations__"):
                 _class_dict["__annotations__"].update(_venta_mixin.__annotations__)
             for _name, _value in _venta_mixin.__dict__.items():
