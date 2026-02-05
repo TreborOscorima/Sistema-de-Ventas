@@ -119,6 +119,8 @@ class CashboxSale(TypedDict):
     total: float
     service_total: float
     items: List[TransactionItem]
+    items_preview: List[TransactionItem]
+    items_hidden_count: int
     is_deleted: bool
     delete_reason: str
 

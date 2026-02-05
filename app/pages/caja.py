@@ -264,36 +264,65 @@ def cashbox_opening_card() -> rx.Component:
   )
 
 
-def sale_items_list(items: rx.Var[list[dict]]) -> rx.Component:
+def sale_items_list(
+  items: rx.Var[list[dict]],
+  preview_items: rx.Var[list[dict]],
+  hidden_count: rx.Var[int],
+  sale_id: rx.Var[str],
+) -> rx.Component:
+  expanded = State.expanded_cashbox_sale_id == sale_id
+  def _item_row(item: rx.Var[dict]) -> rx.Component:
+    return rx.el.div(
+      rx.el.div(
+        rx.el.span(
+          item["description"],
+          title=item["description"],
+          class_name="block text-sm font-medium text-slate-900 truncate",
+        ),
+      ),
+      rx.el.div(
+        rx.el.span(
+          item["quantity"].to_string(),
+          " x ",
+          item["sale_price"].to_string(),
+          class_name="text-[11px] text-slate-500",
+        ),
+        rx.el.span(
+          State.currency_symbol,
+          item["subtotal"].to_string(),
+          class_name="text-[11px] font-semibold text-slate-700",
+        ),
+        class_name="flex justify-between items-center",
+      ),
+      class_name="flex flex-col gap-0.5 border-b border-dashed border-slate-100 last:border-0 pb-1 last:pb-0",
+    )
+
+  list_content = rx.cond(
+    expanded,
+    rx.foreach(items, _item_row),
+    rx.foreach(preview_items, _item_row),
+  )
+
   return rx.el.div(
-    rx.foreach(
-      items,
-      lambda item: rx.el.div(
-        rx.el.div(
-          rx.el.span(
-            item["description"],
-            title=item["description"],
-            class_name="block text-sm font-medium text-slate-900 truncate",
-          ),
+    list_content,
+    rx.cond(
+      expanded | (hidden_count <= 0),
+      rx.fragment(),
+      rx.el.div(
+        rx.el.span(
+          "Ver ",
+          hidden_count.to_string(),
+          " item(s) más",
+          class_name="text-[11px] text-indigo-600 font-medium",
         ),
-        rx.el.div(
-          rx.el.span(
-            item["quantity"].to_string(),
-            " x ",
-            item["sale_price"].to_string(),
-            class_name="text-[11px] text-slate-500",
-          ),
-          rx.el.span(
-            State.currency_symbol,
-            item["subtotal"].to_string(),
-            class_name="text-[11px] font-semibold text-slate-700",
-          ),
-          class_name="flex justify-between items-center",
-        ),
-        class_name="flex flex-col gap-0.5 border-b border-dashed border-slate-100 last:border-0 pb-1 last:pb-0",
+        class_name="pt-1",
       ),
     ),
-    class_name="flex flex-col gap-1 max-h-28 overflow-y-auto pr-2",
+    class_name=rx.cond(
+      expanded,
+      "flex flex-col gap-1",
+      "flex flex-col gap-1 h-24 overflow-hidden",
+    ),
   )
 
 
@@ -398,8 +427,14 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
       class_name="py-3.5 px-4 text-right align-top",
     ),
     rx.el.td(
-      sale_items_list(sale["items"]),
-      class_name="py-3.5 px-4 align-top min-w-[240px]",
+      sale_items_list(
+        sale["items"],
+        sale["items_preview"],
+        sale["items_hidden_count"],
+        sale["sale_id"],
+      ),
+      on_click=lambda _, sale_id=sale["sale_id"]: State.toggle_cashbox_sale_detail(sale_id),
+      class_name="py-3.5 px-4 align-top min-w-[240px] cursor-pointer",
     ),
     rx.el.td(
       rx.el.div(

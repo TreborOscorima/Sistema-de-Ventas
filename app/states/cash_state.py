@@ -116,7 +116,18 @@ class CashState(MixinState):
     cashbox_log_items_per_page: int = 10
     cashbox_log_modal_open: bool = False
     cashbox_log_selected: CashboxLogEntry | None = None
+    expanded_cashbox_sale_id: str = ""
     _cashbox_update_trigger: int = 0
+
+    @rx.event
+    def toggle_cashbox_sale_detail(self, sale_id: str):
+        value = str(sale_id or "").strip()
+        if not value:
+            return
+        if self.expanded_cashbox_sale_id == value:
+            self.expanded_cashbox_sale_id = ""
+        else:
+            self.expanded_cashbox_sale_id = value
     
     cash_active_tab: str = "resumen"
     petty_cash_amount: str = "" # Este será el Total calculado o manual
@@ -1165,6 +1176,8 @@ class CashState(MixinState):
             )
             items_total += item.subtotal or 0
         total_amount = sale.total_amount if sale.total_amount is not None else items_total
+        preview_limit = 2
+        hidden_count = max(len(items) - preview_limit, 0)
         sale_dict: CashboxSale = {
             "sale_id": str(sale.id),
             "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1180,6 +1193,8 @@ class CashState(MixinState):
             "is_deleted": sale.status == SaleStatus.cancelled,
             "delete_reason": sale.delete_reason,
             "items": items,
+            "items_preview": items[:preview_limit],
+            "items_hidden_count": hidden_count,
             "service_total": total_amount,
             "payment_breakdown": payment_breakdown,
             "payment_kind": payment_kind,
