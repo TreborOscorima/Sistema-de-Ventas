@@ -439,6 +439,21 @@ def create_pdf_report(
         table_data.append(headers)
 
     column_count = len(headers) if headers else max((len(row) for row in data), default=0)
+    wrap_columns = info_dict.get("wrap_columns") or []
+    if isinstance(wrap_columns, tuple):
+        wrap_columns = list(wrap_columns)
+    if not isinstance(wrap_columns, list):
+        wrap_columns = []
+    wrap_columns = [int(col) for col in wrap_columns if isinstance(col, (int, float))]
+    wrap_style = ParagraphStyle(
+        name="WrapStyle",
+        parent=styles["Normal"],
+        fontSize=8,
+        leading=11,
+        textColor=colors.black,
+        wordWrap="CJK",
+    )
+
     for row in data:
         normalized_row = list(row)
         if column_count:
@@ -446,15 +461,39 @@ def create_pdf_report(
                 normalized_row += [""] * (column_count - len(normalized_row))
             elif len(normalized_row) > column_count:
                 normalized_row = normalized_row[:column_count]
-        table_data.append(
-            ["" if value is None else value for value in normalized_row]
-        )
+        formatted_row: list[Any] = []
+        for idx, value in enumerate(normalized_row):
+            clean_value = "" if value is None else value
+            if idx in wrap_columns and not isinstance(clean_value, Paragraph):
+                formatted_row.append(Paragraph(str(clean_value), wrap_style))
+            else:
+                formatted_row.append(clean_value)
+        table_data.append(formatted_row)
 
     if not table_data:
         table_data = [["Sin datos"]]
 
+    col_widths = None
+    column_widths = info_dict.get("column_widths")
+    if (
+        column_widths
+        and column_count
+        and isinstance(column_widths, (list, tuple))
+        and len(column_widths) == column_count
+    ):
+        try:
+            numeric_widths = [float(width) for width in column_widths]
+            total_width = sum(numeric_widths)
+            if total_width <= 1.1:
+                col_widths = [doc.width * width for width in numeric_widths]
+            else:
+                col_widths = numeric_widths
+        except (TypeError, ValueError):
+            col_widths = None
+
     main_table = Table(
         table_data,
+        colWidths=col_widths,
         hAlign="LEFT",
         repeatRows=1 if headers else 0,
     )
@@ -465,7 +504,7 @@ def create_pdf_report(
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, -1), 9),
             ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ]

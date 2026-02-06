@@ -615,6 +615,6 @@ def dashboard_page() -> rx.Component:
       class_name="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6 items-stretch",
     ),
     
-    on_mount=State.load_dashboard,
+    on_mount=State.load_dashboard_background,
     class_name="p-6 ",
   )

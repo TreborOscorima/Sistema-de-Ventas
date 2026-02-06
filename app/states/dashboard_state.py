@@ -66,6 +66,17 @@ class DashboardState(MixinState):
     def set_loading(self, loading: bool):
         """Establece el estado de carga."""
         self.dashboard_loading = loading
+
+    def _load_dashboard_data(self) -> None:
+        """Carga todos los datos del dashboard sin manejar UI state."""
+        self._load_sales_summary()
+        self._load_kpis()
+        self._load_alerts()
+        self._load_sales_by_day()
+        self._load_top_products()
+        self._load_sales_by_category()
+        self._load_payment_breakdown()
+        self.last_refresh = datetime.now().strftime("%H:%M:%S")
     
     def _get_period_dates(self) -> tuple[datetime, datetime, datetime, datetime]:
         """Obtiene fechas de inicio y fin del período seleccionado y período anterior."""
@@ -117,19 +128,23 @@ class DashboardState(MixinState):
         self.dashboard_loading = True
         
         try:
-            self._load_sales_summary()
-            self._load_kpis()
-            self._load_alerts()
-            self._load_sales_by_day()
-            self._load_top_products()
-            self._load_sales_by_category()
-            self._load_payment_breakdown()
-            
-            self.last_refresh = datetime.now().strftime("%H:%M:%S")
+            self._load_dashboard_data()
         except Exception as e:
             print(f"Error loading dashboard: {e}")
         finally:
             self.dashboard_loading = False
+
+    @rx.event(background=True)
+    async def load_dashboard_background(self):
+        """Carga el dashboard en segundo plano para mejorar la navegación."""
+        async with self:
+            self.dashboard_loading = True
+            try:
+                self._load_dashboard_data()
+            except Exception as e:
+                print(f"Error loading dashboard: {e}")
+            finally:
+                self.dashboard_loading = False
     
     def _load_sales_summary(self):
         """Carga resumen de ventas por período."""
@@ -320,10 +335,19 @@ class DashboardState(MixinState):
             self.alerts = []
             self.alert_count = 0
             return
+        settings = {}
+        if hasattr(self, "_company_settings_snapshot"):
+            settings = self._company_settings_snapshot()
+        country_code = settings.get("country_code") or getattr(
+            self, "selected_country_code", None
+        )
+        timezone = settings.get("timezone")
         summary = get_alert_summary(
             self.currency_symbol,
             company_id=company_id,
             branch_id=branch_id,
+            country_code=country_code,
+            timezone=timezone,
         )
         self.alerts = summary.get("alerts", [])
         self.alert_count = summary.get("total", 0)

@@ -492,7 +492,7 @@ def historial_page() -> rx.Component:
       class_name="p-4 sm:p-6 w-full flex flex-col gap-6",
     ),
     sale_detail_modal(),
-    on_mount=State.reload_history,
+    on_mount=State.reload_history_background,
   )
   return permission_guard(
     has_permission=State.can_view_historial,

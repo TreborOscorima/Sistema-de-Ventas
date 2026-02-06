@@ -14,6 +14,7 @@ class TransactionItem(TypedDict):
     temp_id: str
     barcode: str
     description: str
+    display_description: str
     category: str
     quantity: float
     unit: str

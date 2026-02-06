@@ -26,16 +26,22 @@ CASH_SUBSECTIONS = [
 
 def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     """Item de navegación con indicador lateral activo."""
-    show_badge = (
+    has_overdue = (
         (page == "Cuentas Corrientes")
         & (State.overdue_alerts_count > 0)
-        & State.sidebar_open
     )
+    show_badge = has_overdue & State.sidebar_open
     
     # Estilos para item activo vs inactivo
     active_class = f"relative flex items-center gap-3 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
     inactive_class = f"relative flex items-center gap-3 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}"
     
+    target_route = rx.cond(
+        has_overdue,
+        "/cuentas?filter=overdue",
+        route,
+    )
+
     link = rx.link(
         rx.el.div(
             rx.icon(icon, class_name="h-5 w-5 flex-shrink-0"),
@@ -61,7 +67,8 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
                 inactive_class,
             ),
         ),
-        href=route,
+        href=target_route,
+        on_click=lambda _: State.set_pending_page(page),
         class_name="w-full no-underline block",
     )
     return rx.cond(
@@ -188,27 +195,7 @@ def sidebar() -> rx.Component:
                                 class_name="w-full h-9 px-2 flex items-center bg-white border border-slate-200 rounded-md",
                             ),
                         ),
-                        rx.el.label(
-                            "Accesos",
-                            class_name="text-[11px] font-medium text-slate-400 mt-2",
-                        ),
-                        rx.cond(
-                            State.available_branches.length() > 0,
-                            rx.el.div(
-                                rx.foreach(
-                                    State.available_branches,
-                                    lambda branch: rx.el.span(
-                                        branch["name"],
-                                        class_name="px-2 py-0.5 text-[11px] rounded-full bg-slate-100 text-slate-600 border border-slate-200",
-                                    ),
-                                ),
-                                class_name="flex flex-wrap gap-1",
-                            ),
-                            rx.el.span(
-                                "Sin accesos configurados",
-                                class_name="text-[11px] text-slate-400",
-                            ),
-                        ),
+                        rx.fragment(),
                         class_name="px-4 pb-3 flex flex-col gap-2",
                     ),
                     rx.fragment(),

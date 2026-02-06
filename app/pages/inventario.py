@@ -320,6 +320,8 @@ def edit_product_modal() -> rx.Component:
           rx.el.button(
             "Guardar Cambios",
             on_click=State.save_edited_product,
+            disabled=State.is_loading,
+            loading=State.is_loading,
             class_name="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
           ),
           class_name="flex flex-col sm:flex-row sm:justify-end gap-3 mt-6",
@@ -747,6 +749,8 @@ def inventory_adjustment_modal() -> rx.Component:
             rx.icon("save", class_name="h-4 w-4"),
             "Guardar Registro",
             on_click=State.submit_inventory_check,
+            disabled=State.is_loading,
+            loading=State.is_loading,
             class_name="flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
           ),
           class_name="flex flex-col gap-3 sm:flex-row sm:justify-end",
@@ -844,35 +848,35 @@ def inventario_page() -> rx.Component:
       class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm mb-6",
     ),
     rx.el.div(
-      rx.el.input(
-        placeholder="Buscar producto...",
-        on_change=State.set_inventory_search_term,
-        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-      ),
       rx.el.div(
-        rx.el.button(
-          rx.icon("plus", class_name="h-4 w-4"),
-          "Nuevo Producto",
-          on_click=State.open_create_product_modal,
-          class_name="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[42px]",
+        rx.el.input(
+          placeholder="Buscar producto...",
+          on_change=State.set_inventory_search_term,
+          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
         ),
-        rx.el.button(
-          rx.icon("download", class_name="h-4 w-4"),
-          "Exportar Inventario",
-          on_click=State.export_inventory_to_excel,
-          class_name="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 min-h-[42px]",
+        rx.el.div(
+          rx.el.button(
+            rx.icon("plus", class_name="h-4 w-4"),
+            "Nuevo Producto",
+            on_click=State.open_create_product_modal,
+            class_name="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[42px]",
+          ),
+          rx.el.button(
+            rx.icon("download", class_name="h-4 w-4"),
+            "Exportar Inventario",
+            on_click=State.export_inventory_to_excel,
+            class_name="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 min-h-[42px]",
+          ),
+          rx.el.button(
+            rx.icon("clipboard_check", class_name="h-4 w-4"),
+            "Registrar Inventario Fisico",
+            on_click=State.open_inventory_check_modal,
+            class_name="flex items-center justify-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 min-h-[42px]",
+          ),
+          class_name="flex flex-col gap-2 w-full md:w-auto md:flex-row",
         ),
-        rx.el.button(
-          rx.icon("clipboard_check", class_name="h-4 w-4"),
-          "Registrar Inventario Fisico",
-          on_click=State.open_inventory_check_modal,
-          class_name="flex items-center justify-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 min-h-[42px]",
-        ),
-        class_name="flex flex-col gap-2 w-full md:w-auto md:flex-row",
+        class_name="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-4 border-b border-slate-200",
       ),
-      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between",
-    ),
-    rx.el.div(
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
@@ -920,13 +924,13 @@ def inventario_page() -> rx.Component:
                 rx.el.div(
                   product["stock"].to_string(),
                   rx.cond(
-                    product["stock"] <= 5,
+                    product["stock_is_low"],
                     rx.el.span(
                       "Bajo",
                       class_name="ml-2 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800",
                     ),
                     rx.cond(
-                      product["stock"] <= 10,
+                      product["stock_is_medium"],
                       rx.el.span(
                         "Moderado",
                         class_name="ml-2 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800",
@@ -935,7 +939,7 @@ def inventario_page() -> rx.Component:
                     ),
                   ),
                   class_name=rx.cond(
-                    product["stock"] <= 5,
+                    product["stock_is_low"],
                     "flex items-center justify-center font-bold text-red-600",
                     "flex items-center justify-center",
                   ),
@@ -956,7 +960,7 @@ def inventario_page() -> rx.Component:
               ),
               rx.el.td(
                 State.currency_symbol,
-                f"{product['stock'] * product['purchase_price']:.2f}",
+                product["stock_total_display"],
                 class_name="py-3 px-4 text-right font-bold",
               ),
               rx.el.td(
@@ -973,11 +977,17 @@ def inventario_page() -> rx.Component:
                     class_name="p-2 text-slate-600 hover:bg-slate-100 rounded-full",
                     title="Ver Desglose",
                   ),
-                  rx.el.button(
-                    rx.icon("trash-2", class_name="h-4 w-4"),
-                    on_click=lambda: State.delete_product(product["id"]),
-                    class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
-                    title="Eliminar",
+                  rx.cond(
+                    product["is_variant"],
+                    rx.fragment(),
+                    rx.el.button(
+                      rx.icon("trash-2", class_name="h-4 w-4"),
+                      on_click=lambda: State.delete_product(product["id"]),
+                      disabled=State.is_loading,
+                      loading=State.is_loading,
+                      class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
+                      title="Eliminar",
+                    ),
                   ),
                   class_name="flex items-center justify-center gap-2",
                 ),

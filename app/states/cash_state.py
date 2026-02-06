@@ -480,6 +480,202 @@ class CashState(MixinState):
         end_dt = target_date.replace(hour=23, minute=59, second=59, microsecond=0)
         return start_dt, end_dt, None
 
+    def _cashbox_range_for_log(
+        self,
+        log: CashboxLogModel,
+    ) -> tuple[datetime.datetime, datetime.datetime, int | None, str, datetime.datetime]:
+        """Obtiene rango de tiempo para un cierre histórico basado en el log."""
+        timestamp = log.timestamp or datetime.datetime.now()
+        report_date = timestamp.strftime("%Y-%m-%d")
+        start_dt = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_dt = timestamp.replace(hour=23, minute=59, second=59, microsecond=0)
+        user_id = log.user_id
+        company_id = log.company_id
+        branch_id = log.branch_id
+        if user_id:
+            window_start = timestamp - datetime.timedelta(hours=4)
+            window_end = timestamp + datetime.timedelta(hours=4)
+            with rx.session() as session:
+                sessions = session.exec(
+                    select(CashboxSessionModel)
+                    .where(CashboxSessionModel.company_id == company_id)
+                    .where(CashboxSessionModel.branch_id == branch_id)
+                    .where(CashboxSessionModel.user_id == user_id)
+                    .where(CashboxSessionModel.closing_time.is_not(None))
+                    .where(CashboxSessionModel.closing_time >= window_start)
+                    .where(CashboxSessionModel.closing_time <= window_end)
+                ).all()
+            if sessions:
+                closest = min(
+                    sessions,
+                    key=lambda item: abs(
+                        (item.closing_time or timestamp) - timestamp
+                    ).total_seconds(),
+                )
+                start_dt = closest.opening_time or start_dt
+                end_dt = closest.closing_time or timestamp
+        return start_dt, end_dt, user_id, report_date, timestamp
+
+    def _cashbox_opening_amount_for_range(
+        self,
+        start_dt: datetime.datetime,
+        end_dt: datetime.datetime,
+        company_id: int,
+        branch_id: int,
+        user_id: int | None = None,
+    ) -> float:
+        with rx.session() as session:
+            statement = (
+                select(CashboxLogModel)
+                .where(CashboxLogModel.action == "apertura")
+                .where(CashboxLogModel.is_voided == False)
+                .where(CashboxLogModel.timestamp >= start_dt)
+                .where(CashboxLogModel.timestamp <= end_dt)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
+                .order_by(CashboxLogModel.timestamp.asc())
+            )
+            if user_id:
+                statement = statement.where(CashboxLogModel.user_id == user_id)
+            log = session.exec(statement).first()
+            if log:
+                return float(log.amount or 0)
+        return 0.0
+
+    def _cashbox_expense_total_for_range(
+        self,
+        start_dt: datetime.datetime,
+        end_dt: datetime.datetime,
+        company_id: int,
+        branch_id: int,
+        user_id: int | None = None,
+    ) -> float:
+        with rx.session() as session:
+            statement = (
+                select(sqlalchemy.func.sum(CashboxLogModel.amount))
+                .where(CashboxLogModel.action.in_(CASHBOX_EXPENSE_ACTIONS))
+                .where(CashboxLogModel.is_voided == False)
+                .where(CashboxLogModel.timestamp >= start_dt)
+                .where(CashboxLogModel.timestamp <= end_dt)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
+            )
+            if user_id:
+                statement = statement.where(CashboxLogModel.user_id == user_id)
+            total = session.exec(statement).one()
+        return self._round_currency(float(total or 0))
+
+    def _build_cashbox_summary_for_range(
+        self,
+        start_dt: datetime.datetime,
+        end_dt: datetime.datetime,
+        company_id: int,
+        branch_id: int,
+        user_id: int | None = None,
+    ) -> list[dict]:
+        method_col = sqlalchemy.func.coalesce(
+            CashboxLogModel.payment_method, "No especificado"
+        )
+        statement = (
+            select(
+                method_col,
+                sqlalchemy.func.count(CashboxLogModel.id),
+                sqlalchemy.func.sum(CashboxLogModel.amount),
+            )
+            .where(CashboxLogModel.amount > 0)
+            .where(CashboxLogModel.action.in_(CASHBOX_INCOME_ACTIONS))
+            .where(CashboxLogModel.is_voided == False)
+            .where(CashboxLogModel.timestamp >= start_dt)
+            .where(CashboxLogModel.timestamp <= end_dt)
+            .where(CashboxLogModel.company_id == company_id)
+            .where(CashboxLogModel.branch_id == branch_id)
+            .group_by(method_col)
+        )
+        if user_id:
+            statement = statement.where(CashboxLogModel.user_id == user_id)
+        with rx.session() as session:
+            results = session.exec(statement).all()
+        summary: list[dict] = []
+        for method, count, amount in results:
+            label = (method or "No especificado").strip() or "No especificado"
+            summary.append(
+                {
+                    "method": label,
+                    "count": int(count or 0),
+                    "total": self._round_currency(float(amount or 0)),
+                }
+            )
+        summary.sort(key=lambda item: item.get("total", 0), reverse=True)
+        return summary
+
+    def _get_sales_for_range(
+        self,
+        start_dt: datetime.datetime,
+        end_dt: datetime.datetime,
+        company_id: int,
+        branch_id: int,
+        user_id: int | None = None,
+    ) -> list[CashboxSale]:
+        with rx.session() as session:
+            statement = (
+                select(CashboxLogModel, UserModel.username)
+                .join(UserModel, isouter=True)
+                .where(CashboxLogModel.amount > 0)
+                .where(CashboxLogModel.action.in_(CASHBOX_INCOME_ACTIONS))
+                .where(CashboxLogModel.is_voided == False)
+                .where(CashboxLogModel.timestamp >= start_dt)
+                .where(CashboxLogModel.timestamp <= end_dt)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
+                .order_by(desc(CashboxLogModel.timestamp))
+            )
+            if user_id:
+                statement = statement.where(CashboxLogModel.user_id == user_id)
+            logs = session.exec(statement).all()
+
+            import re
+
+            result: list[CashboxSale] = []
+            for log, username in logs:
+                method_label = (log.payment_method or "No especificado").strip() or "No especificado"
+                payment_detail = log.notes or ""
+                concept = payment_detail.strip()
+                if concept:
+                    concept = re.sub(r"#\d+", "", concept)
+                    concept = re.sub(r"\s{2,}", " ", concept)
+                    concept = concept.strip()
+                    concept = re.sub(r"^[\s:;-]+", "", concept)
+                if not concept:
+                    action_label = (log.action or "").replace("_", " ").strip().title()
+                    concept = action_label or method_label
+                timestamp = log.timestamp
+                time_label = ""
+                if timestamp:
+                    time_label = timestamp.strftime("%H:%M")
+                result.append(
+                    {
+                        "sale_id": str(log.id),
+                        "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "time": time_label,
+                        "user": username or "Desconocido",
+                        "payment_method": method_label,
+                        "payment_label": method_label,
+                        "payment_details": payment_detail,
+                        "concept": concept,
+                        "amount": self._round_currency(float(log.amount or 0)),
+                        "total": log.amount,
+                        "is_deleted": False,
+                        "payment_breakdown": [
+                            {
+                                "label": method_label,
+                                "amount": self._round_currency(float(log.amount or 0)),
+                            }
+                        ],
+                        "payment_kind": "",
+                    }
+                )
+            return result
+
     def _cashbox_opening_amount_value(self, date: str) -> float:
         session_info = self._active_cashbox_session_info()
         company_id = self._company_id()
@@ -1514,9 +1710,12 @@ class CashState(MixinState):
                 amount = 0.0
             return self._format_currency(amount)
 
-        headers = ["Hora", "Operación", "Método", "Referencia", "Monto"]
+        headers = ["N°", "Hora", "Operación", "Método", "Referencia", "Monto"]
         data = []
-        for sale in day_sales:
+        import re
+        sales_rows = [sale for sale in day_sales if not sale.get("is_deleted")]
+        seq = len(sales_rows)
+        for sale in sales_rows:
             if sale.get("is_deleted"):
                 continue
             operation_raw = sale.get("action") or sale.get("type") or "Venta"
@@ -1526,18 +1725,26 @@ class CashState(MixinState):
                 self._normalize_wallet_label(method_raw) if method_raw else "No especificado"
             )
             reference = self._payment_details_text(sale.get("payment_details", ""))
+            reference_clean = re.sub(r"#\s*\d+", "", reference or "").strip()
+            if not reference_clean:
+                reference_clean = reference
             amount = sale.get("total")
             if amount is None:
                 amount = sale.get("amount", 0)
             data.append(
                 [
+                    seq,
                     _format_time(sale.get("timestamp", "")),
                     operation,
                     method_label,
-                    reference,
+                    reference_clean,
                     _format_amount(amount),
                 ]
             )
+            seq -= 1
+
+        info_dict["column_widths"] = [0.06, 0.12, 0.16, 0.18, 0.36, 0.12]
+        info_dict["wrap_columns"] = [4]
 
         output = io.BytesIO()
         create_pdf_report(
@@ -1549,6 +1756,344 @@ class CashState(MixinState):
         )
 
         return rx.download(data=output.getvalue(), filename="cierre_caja.pdf")
+
+    @rx.event
+    def export_cashbox_close_pdf_for_log(self, log_id: str):
+        if not (
+            self.current_user["privileges"]["view_cashbox"]
+            and self.current_user["privileges"]["export_data"]
+        ):
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        try:
+            log_id_int = int(log_id)
+        except (TypeError, ValueError):
+            return rx.toast("Registro de cierre no valido.", duration=3000)
+        with rx.session() as session:
+            log = session.exec(
+                select(CashboxLogModel)
+                .where(CashboxLogModel.id == log_id_int)
+            ).first()
+        if not log or (log.action or "").lower() != "cierre":
+            return rx.toast("El registro seleccionado no es un cierre.", duration=3000)
+
+        start_dt, end_dt, user_id, report_date, closing_timestamp = self._cashbox_range_for_log(log)
+        company_id = log.company_id
+        branch_id = log.branch_id
+        responsable = ""
+        if user_id:
+            with rx.session() as session:
+                user = session.exec(
+                    select(UserModel).where(UserModel.id == user_id)
+                ).first()
+                if user:
+                    responsable = user.username or ""
+        if not responsable:
+            responsable = self.current_user.get("username") or ""
+
+        summary = self._build_cashbox_summary_for_range(
+            start_dt, end_dt, company_id, branch_id, user_id
+        )
+        opening_amount = self._cashbox_opening_amount_for_range(
+            start_dt, end_dt, company_id, branch_id, user_id
+        )
+        expense_total = self._cashbox_expense_total_for_range(
+            start_dt, end_dt, company_id, branch_id, user_id
+        )
+        income_total = self._round_currency(sum(item.get("total", 0) for item in summary))
+        expected_total = self._round_currency(opening_amount + income_total - expense_total)
+        day_sales = self._get_sales_for_range(
+            start_dt, end_dt, company_id, branch_id, user_id
+        )
+
+        if not summary and not day_sales and opening_amount == 0:
+            return rx.toast("No hay movimientos de caja para exportar.", duration=3000)
+
+        info_dict = {
+            "Fecha Cierre": report_date,
+            "Responsable": responsable,
+        }
+        for item in summary:
+            total = item.get("total", 0) or 0
+            if total <= 0:
+                continue
+            method = (item.get("method", "No especificado") or "").strip() or "No especificado"
+            info_dict[f"Total {method}"] = self._format_currency(total)
+        info_dict["Apertura"] = self._format_currency(opening_amount)
+        info_dict["Ingresos reales"] = self._format_currency(income_total)
+        info_dict["Egresos caja chica"] = self._format_currency(expense_total)
+        info_dict["Saldo esperado"] = self._format_currency(expected_total)
+
+        def _format_time(timestamp: str) -> str:
+            if not timestamp:
+                return ""
+            if " " in timestamp:
+                return timestamp.split(" ", 1)[1]
+            try:
+                parsed = datetime.datetime.fromisoformat(timestamp)
+                return parsed.strftime("%H:%M:%S")
+            except ValueError:
+                return timestamp
+
+        def _format_amount(value: Any) -> str:
+            try:
+                amount = float(value or 0)
+            except (TypeError, ValueError):
+                amount = 0.0
+            return self._format_currency(amount)
+
+        headers = ["N°", "Hora", "Operación", "Método", "Referencia", "Monto"]
+        data = []
+        import re
+        sales_rows = [sale for sale in day_sales if not sale.get("is_deleted")]
+        seq = len(sales_rows)
+        for sale in sales_rows:
+            operation_raw = sale.get("action") or sale.get("type") or "Venta"
+            operation = str(operation_raw).replace("_", " ").strip().title() or "Venta"
+            method_raw = sale.get("payment_label") or sale.get("payment_method") or ""
+            method_label = (
+                self._normalize_wallet_label(method_raw) if method_raw else "No especificado"
+            )
+            reference = self._payment_details_text(sale.get("payment_details", ""))
+            reference_clean = re.sub(r"#\s*\d+", "", reference or "").strip()
+            if not reference_clean:
+                reference_clean = reference
+            amount = sale.get("total")
+            if amount is None:
+                amount = sale.get("amount", 0)
+            data.append(
+                [
+                    seq,
+                    _format_time(sale.get("timestamp", "")),
+                    operation,
+                    method_label,
+                    reference_clean,
+                    _format_amount(amount),
+                ]
+            )
+            seq -= 1
+
+        info_dict["column_widths"] = [0.06, 0.12, 0.16, 0.18, 0.36, 0.12]
+        info_dict["wrap_columns"] = [4]
+
+        output = io.BytesIO()
+        create_pdf_report(
+            output,
+            "Reporte de Cierre de Caja",
+            data,
+            headers,
+            info_dict,
+        )
+
+        return rx.download(data=output.getvalue(), filename="cierre_caja.pdf")
+
+    @rx.event
+    def print_cashbox_close_summary_for_log(self, log_id: str):
+        if not self.current_user["privileges"]["view_cashbox"]:
+            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        try:
+            log_id_int = int(log_id)
+        except (TypeError, ValueError):
+            return rx.toast("Registro de cierre no valido.", duration=3000)
+        with rx.session() as session:
+            log = session.exec(
+                select(CashboxLogModel)
+                .where(CashboxLogModel.id == log_id_int)
+            ).first()
+        if not log or (log.action or "").lower() != "cierre":
+            return rx.toast("El registro seleccionado no es un cierre.", duration=3000)
+
+        start_dt, end_dt, user_id, report_date, closing_timestamp = self._cashbox_range_for_log(log)
+        company_id = log.company_id
+        branch_id = log.branch_id
+        responsable = ""
+        if user_id:
+            with rx.session() as session:
+                user = session.exec(
+                    select(UserModel).where(UserModel.id == user_id)
+                ).first()
+                if user:
+                    responsable = user.username or ""
+        if not responsable:
+            responsable = self.current_user.get("username") or ""
+
+        summary = self._build_cashbox_summary_for_range(
+            start_dt, end_dt, company_id, branch_id, user_id
+        )
+        opening_amount = self._cashbox_opening_amount_for_range(
+            start_dt, end_dt, company_id, branch_id, user_id
+        )
+        expense_total = self._cashbox_expense_total_for_range(
+            start_dt, end_dt, company_id, branch_id, user_id
+        )
+        income_total = self._round_currency(sum(item.get("total", 0) for item in summary))
+        expected_total = self._round_currency(opening_amount + income_total - expense_total)
+        day_sales = self._get_sales_for_range(
+            start_dt, end_dt, company_id, branch_id, user_id
+        )
+
+        if not summary and not day_sales and opening_amount == 0:
+            return rx.toast("No hay movimientos de caja para imprimir.", duration=3000)
+
+        totals_list = [
+            {
+                "method": item.get("method", "No especificado"),
+                "amount": self._round_currency(item.get("total", 0)),
+            }
+            for item in summary
+            if item.get("total", 0) > 0
+        ]
+
+        receipt_width = self._receipt_width()
+        paper_width_mm = self._receipt_paper_mm()
+
+        def center(text, width=receipt_width):
+            return text.center(width)
+
+        def line(width=receipt_width):
+            return "-" * width
+
+        def row(left, right, width=receipt_width):
+            spaces = width - len(left) - len(right)
+            return left + " " * max(spaces, 1) + right
+
+        company = self._company_settings_snapshot()
+        company_name = (company.get("company_name") or "").strip()
+        ruc = (company.get("ruc") or "").strip()
+        tax_id_label = company.get("tax_id_label", "RUC")
+        address = (company.get("address") or "").strip()
+        phone = (company.get("phone") or "").strip()
+        address_lines = self._wrap_receipt_lines(address, receipt_width)
+
+        receipt_lines = [""]
+        if company_name:
+            for name_line in self._wrap_receipt_lines(company_name, receipt_width):
+                receipt_lines.append(center(name_line))
+            receipt_lines.append("")
+        if ruc:
+            receipt_lines.append(center(f"{tax_id_label}: {ruc}"))
+            receipt_lines.append("")
+        for addr_line in address_lines:
+            receipt_lines.append(center(addr_line))
+        if address_lines:
+            receipt_lines.append("")
+        if phone:
+            receipt_lines.append(center(f"Tel: {phone}"))
+            receipt_lines.append("")
+        receipt_lines.extend(
+            [
+                line(),
+                center("RESUMEN DIARIO DE CAJA"),
+                line(),
+                "",
+                f"Fecha: {report_date}",
+                "",
+                f"Responsable: {responsable}",
+                "",
+                f"Cierre: {closing_timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
+                "",
+                line(),
+                "",
+                "RESUMEN DE CAJA",
+                "",
+                row("Apertura:", self._format_currency(opening_amount)),
+                row("Ingresos:", self._format_currency(income_total)),
+                row("Egresos:", self._format_currency(expense_total)),
+                row("Saldo esperado:", self._format_currency(expected_total)),
+                "",
+                line(),
+                "",
+                "INGRESOS POR METODO",
+                "",
+            ]
+        )
+
+        for item in totals_list:
+            amount = item.get("amount", 0)
+            if amount > 0:
+                method = item.get("method", "No especificado")
+                receipt_lines.append(
+                    row(f"{method}:", self._format_currency(amount))
+                )
+                receipt_lines.append("")
+
+        receipt_lines.append(
+            row("TOTAL CIERRE:", self._format_currency(expected_total))
+        )
+        receipt_lines.append("")
+        receipt_lines.append(line())
+        receipt_lines.append("")
+        receipt_lines.append("DETALLE DE INGRESOS")
+        receipt_lines.append("")
+
+        import re
+        sales_rows = [sale for sale in day_sales if not sale.get("is_deleted")]
+        seq = len(sales_rows)
+        for sale in sales_rows:
+            method_label = sale.get("payment_label", sale.get("payment_method", ""))
+            payment_detail = self._payment_details_text(sale.get("payment_details", ""))
+            payment_detail = re.sub(r"#\s*\d+", "", payment_detail or "").strip()
+            receipt_lines.append(f"{sale['timestamp']}")
+            receipt_lines.extend(
+                self._wrap_receipt_label_value(
+                    "Correlativo", f"#{seq}", receipt_width
+                )
+            )
+            receipt_lines.extend(
+                self._wrap_receipt_label_value(
+                    "Usuario", sale["user"], receipt_width
+                )
+            )
+            receipt_lines.extend(
+                self._wrap_receipt_label_value(
+                    "Metodo", method_label, receipt_width
+                )
+            )
+            if payment_detail and payment_detail != method_label:
+                receipt_lines.extend(
+                    self._wrap_receipt_label_value(
+                        "Detalle", payment_detail, receipt_width
+                    )
+                )
+            receipt_lines.append(row("Total:", self._format_currency(sale['total'])))
+            receipt_lines.append(line())
+            seq -= 1
+
+        receipt_lines.extend(
+            [
+                "",
+                center("FIN DEL REPORTE"),
+                " ",
+                " ",
+                " ",
+            ]
+        )
+
+        receipt_text = chr(10).join(receipt_lines)
+        safe_receipt_text = html.escape(receipt_text)
+
+        html_content = f"""<html>
+<head>
+<meta charset='utf-8'/>
+<title>Resumen de Caja</title>
+<style>
+@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
+body {{ margin: 0; padding: 2mm; }}
+pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
+</style>
+</head>
+<body>
+<pre>{safe_receipt_text}</pre>
+</body>
+</html>"""
+
+        script = f"""
+        const cashboxWindow = window.open('', '_blank');
+        cashboxWindow.document.write({json.dumps(html_content)});
+        cashboxWindow.document.close();
+        cashboxWindow.focus();
+        cashboxWindow.print();
+        """
+        return rx.call_script(script)
 
     @rx.event
     def export_cashbox_sessions(self):
@@ -2241,10 +2786,19 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         receipt_lines.append("")
         
         # Agregar detalle de ventas con método de pago completo
-        for sale in day_sales:
+        import re
+        sales_rows = [sale for sale in day_sales if not sale.get("is_deleted")]
+        seq = len(sales_rows)
+        for sale in sales_rows:
             method_label = sale.get("payment_label", sale.get("payment_method", ""))
             payment_detail = self._payment_details_text(sale.get("payment_details", ""))
+            payment_detail = re.sub(r"#\s*\d+", "", payment_detail or "").strip()
             receipt_lines.append(f"{sale['timestamp']}")
+            receipt_lines.extend(
+                self._wrap_receipt_label_value(
+                    "Correlativo", f"#{seq}", receipt_width
+                )
+            )
             receipt_lines.extend(
                 self._wrap_receipt_label_value(
                     "Usuario", sale["user"], receipt_width
@@ -2263,6 +2817,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 )
             receipt_lines.append(row("Total:", self._format_currency(sale['total'])))
             receipt_lines.append(line())
+            seq -= 1
         
         receipt_lines.extend([
             "",

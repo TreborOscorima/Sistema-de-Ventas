@@ -418,6 +418,7 @@ class CompanySettings(rx.Model, table=True):
     receipt_width: Optional[int] = Field(default=None)
     default_currency_code: str = Field(default="PEN", nullable=False)
     country_code: str = Field(default="PE", nullable=False)
+    timezone: Optional[str] = Field(default=None)
 
 
 # Reexportación para compatibilidad con importaciones heredadas.

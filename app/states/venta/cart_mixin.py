@@ -336,7 +336,7 @@ class CartMixin:
             logging.exception(f"Error parsing sale value: {e}")
 
     @rx.event
-    def handle_autocomplete_keydown(self, key: str):
+    async def handle_autocomplete_keydown(self, key: str):
         if not self.autocomplete_results:
             return
         total = len(self.autocomplete_results)
@@ -361,7 +361,9 @@ class CartMixin:
             if idx < 0:
                 idx = 0
             if 0 <= idx < total:
-                return self.select_product_for_sale(self.autocomplete_results[idx])
+                return await self.select_product_for_sale(
+                    self.autocomplete_results[idx]
+                )
         if key == "Escape":
             self.autocomplete_suggestions = []
             self.autocomplete_results = []

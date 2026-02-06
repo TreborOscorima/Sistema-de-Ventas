@@ -189,6 +189,7 @@ SUPPORTED_COUNTRIES = {
         "currency": "PEN",
         "currency_name": "Sol peruano",
         "currency_symbol": "S/",
+        "timezone": "America/Lima",
         # Labels fiscales
         "tax_id_label": "RUC",  # Registro Único de Contribuyentes
         "personal_id_label": "DNI",  # Documento Nacional de Identidad
@@ -204,6 +205,7 @@ SUPPORTED_COUNTRIES = {
         "currency": "ARS",
         "currency_name": "Peso argentino",
         "currency_symbol": "$",
+        "timezone": "America/Argentina/Buenos_Aires",
         # Labels fiscales
         "tax_id_label": "CUIT",  # Clave Única de Identificación Tributaria
         "personal_id_label": "DNI",  # Documento Nacional de Identidad
@@ -219,6 +221,7 @@ SUPPORTED_COUNTRIES = {
         "currency": "USD",
         "currency_name": "Dólar estadounidense",
         "currency_symbol": "$",
+        "timezone": "America/Guayaquil",
         # Labels fiscales
         "tax_id_label": "RUC",  # Registro Único de Contribuyentes
         "personal_id_label": "Cédula",  # Cédula de Identidad
@@ -234,6 +237,7 @@ SUPPORTED_COUNTRIES = {
         "currency": "COP",
         "currency_name": "Peso colombiano",
         "currency_symbol": "$",
+        "timezone": "America/Bogota",
         # Labels fiscales
         "tax_id_label": "NIT",  # Número de Identificación Tributaria
         "personal_id_label": "C.C.",  # Cédula de Ciudadanía
@@ -249,6 +253,7 @@ SUPPORTED_COUNTRIES = {
         "currency": "CLP",
         "currency_name": "Peso chileno",
         "currency_symbol": "$",
+        "timezone": "America/Santiago",
         # Labels fiscales
         "tax_id_label": "RUT",  # Rol Único Tributario (empresas)
         "personal_id_label": "RUN",  # Rol Único Nacional (personas)
@@ -264,6 +269,7 @@ SUPPORTED_COUNTRIES = {
         "currency": "MXN",
         "currency_name": "Peso mexicano",
         "currency_symbol": "$",
+        "timezone": "America/Mexico_City",
         # Labels fiscales
         "tax_id_label": "RFC",  # Registro Federal de Contribuyentes
         "personal_id_label": "CURP",  # Clave Única de Registro de Población

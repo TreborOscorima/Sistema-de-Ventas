@@ -46,6 +46,7 @@ class IngresoState(MixinState):
         "temp_id": "",
         "barcode": "",
         "description": "",
+        "display_description": "",
         "category": "General",
         "quantity": 0,
         "unit": "Unidad",
@@ -424,6 +425,25 @@ class IngresoState(MixinState):
         item_copy["is_existing_product"] = self.is_existing_product
         item_copy["has_variants"] = self.has_variants
         item_copy["requires_batches"] = self.requires_batches
+        display_description = ""
+        variant_label = ""
+        if item_copy.get("variant_id"):
+            variant_id_str = str(item_copy.get("variant_id"))
+            for variant in self.variants_list:
+                if str(variant.get("id")) == variant_id_str:
+                    variant_label = variant.get("label", "") or ""
+                    break
+        elif self.has_variants and not self.is_existing_product:
+            size_value = (item_copy.get("variant_size") or "").strip()
+            color_value = (item_copy.get("variant_color") or "").strip()
+            parts = [part for part in (size_value, color_value) if part]
+            if parts:
+                variant_label = " ".join(parts)
+        if variant_label:
+            display_description = f"{item_copy['description']} ({variant_label})"
+        if not display_description:
+            display_description = item_copy["description"]
+        item_copy["display_description"] = display_description
         self._apply_item_rounding(item_copy)
         self.new_entry_items.append(item_copy)
         self._reset_entry_form()
@@ -449,6 +469,7 @@ class IngresoState(MixinState):
                 self.new_entry_item.setdefault("variant_id", None)
                 self.new_entry_item.setdefault("variant_size", "")
                 self.new_entry_item.setdefault("variant_color", "")
+                self.new_entry_item.setdefault("display_description", self.new_entry_item.get("description", ""))
                 self.new_entry_item.setdefault("batch_code", "")
                 self.new_entry_item.setdefault("batch_date", "")
                 self.new_entry_item.setdefault("is_existing_product", False)
@@ -975,6 +996,7 @@ class IngresoState(MixinState):
             "temp_id": "",
             "barcode": "",
             "description": "",
+            "display_description": "",
             "category": self.categories[0] if hasattr(self, "categories") and self.categories else "",
             "quantity": 0,
             "unit": "Unidad",

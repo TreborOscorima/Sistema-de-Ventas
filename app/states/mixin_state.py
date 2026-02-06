@@ -146,6 +146,32 @@ def require_cashbox_open(
 
 
 class MixinState:
+    is_loading: bool = False
+
+    def set_loading(self, value: bool) -> None:
+        """Activa o desactiva el estado global de carga."""
+        self.is_loading = bool(value)
+
+    def add_notification(self, message: str, type: str = "info", duration: int = 3000):
+        """Publica una notificación global de estado.
+
+        Usa el sistema de notificaciones propio si está disponible; caso contrario,
+        cae en un toast estándar.
+        """
+        normalized_type = (type or "info").strip().lower()
+        if normalized_type not in {"success", "error", "warning", "info"}:
+            normalized_type = "info"
+
+        if hasattr(self, "notification_message"):
+            self.notification_message = str(message or "")
+            if hasattr(self, "notification_type"):
+                self.notification_type = normalized_type
+            if hasattr(self, "is_notification_open"):
+                self.is_notification_open = True
+            return None
+
+        return rx.toast(str(message or ""), duration=duration)
+
     def _company_id(self) -> int | None:
         value = None
         if hasattr(self, "current_user"):
@@ -285,6 +311,8 @@ class MixinState:
             "receipt_paper": "",
             "receipt_width": "",
             "tax_id_label": config.get("tax_id_label", "ID Fiscal"),
+            "country_code": country_code,
+            "timezone": config.get("timezone", ""),
         }
         try:
             from sqlmodel import select
@@ -339,6 +367,11 @@ class MixinState:
         address = settings.address or ""
         if branch_address:
             address = branch_address
+        timezone_value = ""
+        if hasattr(settings, "timezone") and settings.timezone:
+            timezone_value = settings.timezone
+        else:
+            timezone_value = config.get("timezone", "")
 
         return {
             "company_name": settings.company_name or "",
@@ -355,6 +388,8 @@ class MixinState:
             "tax_id_label": config.get("tax_id_label", "ID Fiscal"),
             "branch_name": branch_name,
             "branch_address": branch_address,
+            "country_code": getattr(settings, "country_code", None) or country_code,
+            "timezone": timezone_value,
         }
 
     @rx.var

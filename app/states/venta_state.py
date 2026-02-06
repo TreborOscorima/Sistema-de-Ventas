@@ -247,17 +247,22 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
 
     @rx.event
     async def confirm_sale(self):
+        self.is_loading = True
         self.is_processing_sale = True
         yield
         try:
             if not self.current_user["privileges"]["create_ventas"]:
-                yield rx.toast("No tiene permisos para crear ventas.", duration=3000)
+                self.add_notification(
+                    "No tiene permisos para crear ventas.", "error"
+                )
                 return
 
             if hasattr(self, "_require_cashbox_open"):
                 denial = self._require_cashbox_open()
                 if denial:
-                    yield denial
+                    self.add_notification(
+                        "Debe aperturar la caja para operar.", "error"
+                    )
                     return
 
             sale_total_guess = self.sale_total
@@ -331,9 +336,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     error_id,
                     str(exc),
                 )
-                yield rx.toast(
-                    f"Datos de venta inválidos. Código: {error_id}",
-                    duration=4000,
+                self.add_notification(
+                    f"Datos de venta inválidos. Código: {error_id}", "error"
                 )
                 return
 
@@ -362,7 +366,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 except (ValueError, StockError) as exc:
                     await session.rollback()
                     logger.warning("Validacion de venta fallida: %s", exc)
-                    yield rx.toast(str(exc), duration=3000)
+                    self.add_notification(str(exc), "error")
                     return
                 except Exception as exc:
                     await session.rollback()
@@ -373,9 +377,9 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                         str(exc),
                         exc_info=True,
                     )
-                    yield rx.toast(
+                    self.add_notification(
                         f"Error al procesar la venta. Código: {error_id}",
-                        duration=5000,
+                        "error",
                     )
                     return
 
@@ -399,7 +403,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             if hasattr(self, "_cashbox_update_trigger"):
                 self._cashbox_update_trigger += 1
 
-            yield rx.toast("Venta confirmada.", duration=3000)
+            self.add_notification("Venta confirmada.", "success")
             return
         finally:
             self.is_processing_sale = False
+            self.is_loading = False

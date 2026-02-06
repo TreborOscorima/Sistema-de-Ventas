@@ -889,6 +889,12 @@ class HistorialState(MixinState):
         self._report_update_trigger += 1
         # print("Reloading history...") # Depuracion
 
+    @rx.event(background=True)
+    async def reload_history_background(self):
+        """Recarga el historial en segundo plano para evitar bloquear la navegación."""
+        async with self:
+            self.reload_history()
+
     @rx.event
     def reset_history_filters(self):
         self.staged_history_filter_type = "Todos"

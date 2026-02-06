@@ -22,9 +22,9 @@ Permisos requeridos:
 Clases:
     CuentasState: Estado principal del módulo de cobranzas
 """
-import datetime
 import io
 from decimal import Decimal
+import datetime
 
 import reflex as rx
 from sqlmodel import select
@@ -32,7 +32,9 @@ from sqlalchemy import func
 
 from app.models import Client, Sale, SaleInstallment
 from app.services.credit_service import CreditService
+from app.services.alert_service import get_overdue_count
 from app.utils.db import get_async_session
+from app.utils.timezone import country_today_date, country_today_start
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -76,6 +78,64 @@ class CuentasState(MixinState):
     total_pendientes: int = 0
     current_client_pagadas: int = 0
     current_client_pendientes: int = 0
+    filter_mode: str = "all"
+    view_mode: str = "clients"
+    overdue_installments_count: int = 0
+    installments_rows: list[dict] = []
+    debtors_page: int = 1
+    debtors_items_per_page: int = 10
+    installments_page: int = 1
+    installments_items_per_page: int = 10
+
+    def _company_time_context(self) -> tuple[str, str | None]:
+        settings = self._company_settings_snapshot()
+        code = (
+            settings.get("country_code")
+            or getattr(self, "selected_country_code", None)
+            or "PE"
+        )
+        timezone = settings.get("timezone")
+        timezone_value = str(timezone).strip() if timezone else None
+        return str(code), timezone_value
+
+    def _country_code(self) -> str:
+        code, _timezone = self._company_time_context()
+        return code
+
+    def _country_today(self) -> datetime.date:
+        code, timezone = self._company_time_context()
+        return country_today_date(code, timezone=timezone)
+
+    def _country_today_start(self) -> datetime.datetime:
+        code, timezone = self._company_time_context()
+        return country_today_start(code, timezone=timezone)
+
+    def _query_filter_mode(self) -> str | None:
+        query = ""
+        try:
+            query = getattr(self.router.url, "query", "") or ""
+        except Exception:
+            query = ""
+        if not query:
+            try:
+                router = getattr(self, "router", None)
+                raw_url = str(getattr(router, "url", ""))
+                if "?" in raw_url:
+                    query = raw_url.split("?", 1)[1]
+            except Exception:
+                query = ""
+        if not query:
+            return None
+        from urllib.parse import parse_qs
+
+        params = parse_qs(query.lstrip("?"))
+        value = (params.get("filter") or params.get("mode") or [""])[0]
+        value = (value or "").strip().lower()
+        if value in {"all", "paid", "pending", "overdue"}:
+            return value
+        if value in {"vencidas", "vencida"}:
+            return "overdue"
+        return None
 
     def _installment_status_label(self, status: str) -> str:
         value = (status or "").strip().lower()
@@ -175,7 +235,7 @@ class CuentasState(MixinState):
     @rx.var
     def client_installments_view(self) -> list[dict]:
         rows: list[dict] = []
-        today = datetime.date.today()
+        today = self._country_today()
         for installment in self.client_installments:
             status = (installment.status or "pending").strip().lower()
             if status == "completed":
@@ -219,6 +279,8 @@ class CuentasState(MixinState):
             self.debtors = []
             self.total_pagadas = 0
             self.total_pendientes = 0
+            self.installments_rows = []
+            self.overdue_installments_count = 0
             return
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -226,7 +288,19 @@ class CuentasState(MixinState):
             self.debtors = []
             self.total_pagadas = 0
             self.total_pendientes = 0
+            self.installments_rows = []
+            self.overdue_installments_count = 0
             return
+        route_filter = self._query_filter_mode()
+        if route_filter:
+            self.filter_mode = route_filter
+        else:
+            self.filter_mode = "all"
+        # Siempre iniciar en la vista de clientes
+        self.view_mode = "clients"
+        self.debtors_page = 1
+        self.installments_page = 1
+        country_code, timezone = self._company_time_context()
         async with get_async_session() as session:
             result = await session.exec(
                 select(Client)
@@ -238,6 +312,219 @@ class CuentasState(MixinState):
                 self._client_snapshot(client) for client in result.all()
             ]
             await self._refresh_installment_totals(session)
+            self.overdue_installments_count = await get_overdue_count(
+                session,
+                company_id=company_id,
+                branch_id=branch_id,
+                country_code=country_code,
+                timezone=timezone,
+            )
+            await self._load_installments(session)
+
+    @rx.event(background=True)
+    async def load_debtors_background(self):
+        """Carga deudores en segundo plano para entrada rápida."""
+        async with self:
+            await self.load_debtors()
+
+    async def _load_installments(self, session) -> None:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.installments_rows = []
+            return
+        today_start = self._country_today_start()
+
+        query = (
+            select(SaleInstallment, Client)
+            .join(Sale, SaleInstallment.sale_id == Sale.id)
+            .outerjoin(Client, Sale.client_id == Client.id)
+            .where(SaleInstallment.company_id == company_id)
+            .where(SaleInstallment.branch_id == branch_id)
+            .where(Sale.company_id == company_id)
+            .where(Sale.branch_id == branch_id)
+        )
+
+        mode = (self.filter_mode or "all").strip().lower()
+        if mode == "paid":
+            query = query.where(
+                func.lower(SaleInstallment.status).in_(["paid", "completed"])
+            )
+        elif mode == "pending":
+            query = query.where(
+                func.lower(SaleInstallment.status).in_(["pending", "partial"])
+            )
+        elif mode == "overdue":
+            query = query.where(
+                func.lower(SaleInstallment.status).in_(["pending", "partial"])
+            ).where(SaleInstallment.due_date < today_start)
+
+        query = query.order_by(
+            SaleInstallment.due_date.desc(),
+            SaleInstallment.id.desc(),
+        )
+
+        result = await session.exec(query)
+        rows = []
+        today_date = self._country_today()
+        for installment, client in result.all():
+            status_raw = (installment.status or "pending").strip().lower()
+            if status_raw == "completed":
+                status_raw = "paid"
+            is_paid = status_raw in {"paid", "completed"}
+            amount = Decimal(str(installment.amount or 0))
+            paid_amount = Decimal(str(installment.paid_amount or 0))
+            pending_amount = amount - paid_amount
+            if pending_amount < 0:
+                pending_amount = Decimal("0")
+            due_date = installment.due_date
+            due_date_display = (
+                due_date.strftime("%Y-%m-%d") if due_date else ""
+            )
+            is_overdue = False
+            if due_date:
+                try:
+                    is_overdue = due_date.date() < today_date and not is_paid
+                except Exception:
+                    is_overdue = False
+            client_payload = None
+            if client:
+                client_payload = {
+                    "id": client.id,
+                    "name": client.name,
+                    "dni": client.dni,
+                    "phone": client.phone,
+                    "current_debt": client.current_debt,
+                }
+            rows.append(
+                {
+                    "id": installment.id,
+                    "client": client_payload,
+                    "client_name": client.name if client else "Cliente no registrado",
+                    "client_dni": client.dni if client else "-",
+                    "due_date": due_date_display,
+                    "amount": float(amount),
+                    "paid_amount": float(paid_amount),
+                    "pending_amount": float(pending_amount),
+                    "has_pending": pending_amount > 0,
+                    "status": status_raw,
+                    "status_label": self._installment_status_label(status_raw),
+                    "is_overdue": is_overdue,
+                    "is_paid": is_paid,
+                }
+            )
+        self.installments_rows = rows
+
+    @rx.event
+    async def load_installments(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.installments_rows = []
+            return
+        async with get_async_session() as session:
+            await self._load_installments(session)
+
+    @rx.event
+    async def set_filter_overdue(self):
+        return await self.set_filter_mode("overdue")
+
+    @rx.event
+    async def set_filter_mode(self, mode: str):
+        normalized = (mode or "").strip().lower()
+        if normalized not in {"all", "paid", "pending", "overdue"}:
+            normalized = "all"
+        self.filter_mode = normalized
+        self.view_mode = "installments"
+        self.installments_page = 1
+        await self.load_installments()
+        return rx.call_script(self._update_filter_url_script())
+
+    @rx.event
+    async def set_filter_paid(self):
+        return await self.set_filter_mode("paid")
+
+    @rx.event
+    async def set_filter_pending(self):
+        return await self.set_filter_mode("pending")
+
+    @rx.event
+    async def set_filter_all(self):
+        return await self.set_filter_mode("all")
+
+    @rx.event
+    def set_view_mode(self, mode: str):
+        normalized = (mode or "").strip().lower()
+        if normalized in {"clients", "installments"}:
+            self.view_mode = normalized
+            if normalized == "clients":
+                self.debtors_page = 1
+            else:
+                self.installments_page = 1
+            if normalized == "installments":
+                return rx.call_script(self._update_filter_url_script())
+
+    def _update_filter_url_script(self) -> str:
+        mode = (self.filter_mode or "all").strip().lower()
+        return (
+            "(() => {"
+            "const url = new URL(window.location.href);"
+            f"url.searchParams.set('filter', '{mode}');"
+            "window.history.replaceState(null, '', url.toString());"
+            "})()"
+        )
+
+    @rx.var
+    def debtors_total_pages(self) -> int:
+        total_items = len(self.debtors or [])
+        if total_items == 0:
+            return 1
+        per_page = max(self.debtors_items_per_page, 1)
+        return (total_items + per_page - 1) // per_page
+
+    @rx.var
+    def paginated_debtors(self) -> list[dict]:
+        total_pages = self.debtors_total_pages
+        page = min(max(self.debtors_page, 1), total_pages)
+        per_page = max(self.debtors_items_per_page, 1)
+        offset = (page - 1) * per_page
+        return (self.debtors or [])[offset : offset + per_page]
+
+    @rx.var
+    def installments_total_pages(self) -> int:
+        total_items = len(self.installments_rows or [])
+        if total_items == 0:
+            return 1
+        per_page = max(self.installments_items_per_page, 1)
+        return (total_items + per_page - 1) // per_page
+
+    @rx.var
+    def paginated_installments_rows(self) -> list[dict]:
+        total_pages = self.installments_total_pages
+        page = min(max(self.installments_page, 1), total_pages)
+        per_page = max(self.installments_items_per_page, 1)
+        offset = (page - 1) * per_page
+        return (self.installments_rows or [])[offset : offset + per_page]
+
+    @rx.event
+    def next_debtors_page(self):
+        if self.debtors_page < self.debtors_total_pages:
+            self.debtors_page += 1
+
+    @rx.event
+    def prev_debtors_page(self):
+        if self.debtors_page > 1:
+            self.debtors_page -= 1
+
+    @rx.event
+    def next_installments_page(self):
+        if self.installments_page < self.installments_total_pages:
+            self.installments_page += 1
+
+    @rx.event
+    def prev_installments_page(self):
+        if self.installments_page > 1:
+            self.installments_page -= 1
 
     @rx.event
     async def export_cuentas_excel(self, client_id: int | None = None):
@@ -471,86 +758,107 @@ class CuentasState(MixinState):
     @rx.event
     async def submit_payment(self):
         if not self.current_user["privileges"].get("manage_cuentas"):
-            return rx.toast("No tiene permisos para gestionar cuentas.", duration=3000)
+            self.add_notification(
+                "No tiene permisos para gestionar cuentas.", "error"
+            )
+            return
         if not self.selected_installment_id:
-            return rx.toast("Seleccione una cuota para pagar.", duration=3000)
+            self.add_notification("Seleccione una cuota para pagar.", "error")
+            return
         try:
             amount = Decimal(str(self.payment_amount or "0"))
         except Exception:
-            return rx.toast("Monto invalido.", duration=3000)
+            self.add_notification("Monto invalido.", "error")
+            return
         if amount <= 0:
-            return rx.toast("El monto debe ser mayor a cero.", duration=3000)
+            self.add_notification(
+                "El monto debe ser mayor a cero.", "error"
+            )
+            return
 
         method_label = (self.installment_payment_method or "").strip()
         if not method_label:
-            return rx.toast("Seleccione un metodo de pago.", duration=3000)
+            self.add_notification(
+                "Seleccione un metodo de pago.", "error"
+            )
+            return
 
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            self.add_notification("Empresa no definida.", "error")
+            return
 
         user_id = None
         if isinstance(self.current_user, dict):
             user_id = self.current_user.get("id")
 
-        async with get_async_session() as session:
-            try:
-                await CreditService.pay_installment(
-                    session,
-                    self.selected_installment_id,
-                    amount,
-                    method_label,
-                    user_id=user_id,
-                    company_id=company_id,
-                    branch_id=branch_id,
-                )
-                await session.commit()
-            except Exception as exc:
-                await session.rollback()
-                return rx.toast(str(exc), duration=3000)
+        self.is_loading = True
+        yield
 
-            client_id = None
-            if isinstance(self.selected_client, dict):
-                client_id = self.selected_client.get("id")
-            if isinstance(client_id, str):
-                client_id = int(client_id) if client_id.isdigit() else None
-            if client_id is not None:
-                refreshed = await session.exec(
+        try:
+            async with get_async_session() as session:
+                try:
+                    await CreditService.pay_installment(
+                        session,
+                        self.selected_installment_id,
+                        amount,
+                        method_label,
+                        user_id=user_id,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
+                    await session.commit()
+                except Exception as exc:
+                    await session.rollback()
+                    self.add_notification(str(exc), "error")
+                    return
+
+                client_id = None
+                if isinstance(self.selected_client, dict):
+                    client_id = self.selected_client.get("id")
+                if isinstance(client_id, str):
+                    client_id = int(client_id) if client_id.isdigit() else None
+                if client_id is not None:
+                    refreshed = await session.exec(
+                        select(Client)
+                        .where(Client.id == client_id)
+                        .where(Client.company_id == company_id)
+                        .where(Client.branch_id == branch_id)
+                    )
+                    refreshed = refreshed.first()
+                    if refreshed:
+                        self.selected_client = self._client_snapshot(refreshed)
+                    installments = await session.exec(
+                        select(SaleInstallment)
+                        .where(
+                            SaleInstallment.sale.has(
+                                client_id=client_id
+                            )
+                        )
+                        .where(SaleInstallment.company_id == company_id)
+                        .where(SaleInstallment.branch_id == branch_id)
+                        .order_by(SaleInstallment.due_date)
+                    )
+                    self.client_installments = installments.all()
+                    self._set_current_client_totals(self.client_installments)
+
+                debtors_result = await session.exec(
                     select(Client)
-                    .where(Client.id == client_id)
+                    .where(Client.current_debt > 0)
                     .where(Client.company_id == company_id)
                     .where(Client.branch_id == branch_id)
                 )
-                refreshed = refreshed.first()
-                if refreshed:
-                    self.selected_client = self._client_snapshot(refreshed)
-                installments = await session.exec(
-                    select(SaleInstallment)
-                    .where(
-                        SaleInstallment.sale.has(
-                            client_id=client_id
-                        )
-                    )
-                    .where(SaleInstallment.company_id == company_id)
-                    .where(SaleInstallment.branch_id == branch_id)
-                    .order_by(SaleInstallment.due_date)
-                )
-                self.client_installments = installments.all()
-                self._set_current_client_totals(self.client_installments)
-
-            debtors_result = await session.exec(
-                select(Client)
-                .where(Client.current_debt > 0)
-                .where(Client.company_id == company_id)
-                .where(Client.branch_id == branch_id)
-            )
-            self.debtors = [
-                self._client_snapshot(client)
-                for client in debtors_result.all()
-            ]
-            await self._refresh_installment_totals(session)
+                self.debtors = [
+                    self._client_snapshot(client)
+                    for client in debtors_result.all()
+                ]
+                await self._refresh_installment_totals(session)
+                await self._load_installments(session)
+        finally:
+            self.is_loading = False
 
         self.selected_installment_id = None
         self.payment_amount = ""
-        return rx.toast("Pago registrado.", duration=3000)
+        self.add_notification("Pago registrado.", "success")
+        return

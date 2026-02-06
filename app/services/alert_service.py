@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
+from app.utils.timezone import country_today_start
 
 import reflex as rx
 from sqlmodel import select, func
@@ -189,6 +190,8 @@ def get_installment_alerts(
     currency_symbol: str | None = None,
     company_id: int | None = None,
     branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
 ) -> List[Alert]:
     """
     Obtiene alertas de cuotas próximas a vencer o vencidas.
@@ -197,7 +200,7 @@ def get_installment_alerts(
         Lista de alertas de cuotas
     """
     alerts = []
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = country_today_start(country_code, timezone=timezone)
     due_threshold = today + timedelta(days=INSTALLMENT_DUE_DAYS)
     
     with rx.session() as session:
@@ -208,7 +211,9 @@ def get_installment_alerts(
             .join(Sale)
             .where(
                 and_(
-                    SaleInstallment.status == "pending",
+                    func.lower(SaleInstallment.status).not_in(
+                        ["paid", "completed"]
+                    ),
                     SaleInstallment.due_date < today,
                 )
             )
@@ -227,7 +232,9 @@ def get_installment_alerts(
                 .join(Sale)
                 .where(
                     and_(
-                        SaleInstallment.status == "pending",
+                        func.lower(SaleInstallment.status).not_in(
+                            ["paid", "completed"]
+                        ),
                         SaleInstallment.due_date < today,
                     )
                 )
@@ -261,7 +268,9 @@ def get_installment_alerts(
             .join(Sale)
             .where(
                 and_(
-                    SaleInstallment.status == "pending",
+                    func.lower(SaleInstallment.status).not_in(
+                        ["paid", "completed"]
+                    ),
                     SaleInstallment.due_date >= today,
                     SaleInstallment.due_date <= due_threshold,
                 )
@@ -280,7 +289,9 @@ def get_installment_alerts(
                 .join(Sale)
                 .where(
                     and_(
-                        SaleInstallment.status == "pending",
+                        func.lower(SaleInstallment.status).not_in(
+                            ["paid", "completed"]
+                        ),
                         SaleInstallment.due_date >= today,
                         SaleInstallment.due_date <= due_threshold,
                     )
@@ -365,10 +376,40 @@ def get_cashbox_alerts(
     return alerts
 
 
+async def get_overdue_count(
+    session,
+    company_id: int | None = None,
+    branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
+) -> int:
+    """Cuenta cuotas vencidas (pendientes con fecha pasada) usando sesión async."""
+    today = country_today_start(country_code, timezone=timezone)
+    overdue_query = (
+        select(func.count())
+        .select_from(SaleInstallment)
+        .join(Sale)
+        .where(
+            and_(
+                func.lower(SaleInstallment.status).not_in(["paid", "completed"]),
+                SaleInstallment.due_date < today,
+            )
+        )
+    )
+    if company_id:
+        overdue_query = overdue_query.where(Sale.company_id == company_id)
+    if branch_id:
+        overdue_query = overdue_query.where(SaleInstallment.branch_id == branch_id)
+    result = await session.exec(overdue_query)
+    return int(result.one() or 0)
+
+
 def get_all_alerts(
     currency_symbol: str | None = None,
     company_id: int | None = None,
     branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
 ) -> List[Alert]:
     """
     Obtiene todas las alertas del sistema.
@@ -384,7 +425,15 @@ def get_all_alerts(
         pass  # No interrumpir si falla una categoría
     
     try:
-        alerts.extend(get_installment_alerts(currency_symbol, company_id, branch_id))
+        alerts.extend(
+            get_installment_alerts(
+                currency_symbol,
+                company_id,
+                branch_id,
+                country_code=country_code,
+                timezone=timezone,
+            )
+        )
     except Exception:
         pass
     
@@ -410,6 +459,8 @@ def get_alert_summary(
     currency_symbol: str | None = None,
     company_id: int | None = None,
     branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
 ) -> dict:
     """
     Obtiene un resumen de alertas para mostrar en el dashboard.
@@ -417,7 +468,13 @@ def get_alert_summary(
     Returns:
         Dict con conteos por severidad
     """
-    alerts = get_all_alerts(currency_symbol, company_id, branch_id)
+    alerts = get_all_alerts(
+        currency_symbol,
+        company_id,
+        branch_id,
+        country_code=country_code,
+        timezone=timezone,
+    )
     
     summary = {
         "total": len(alerts),

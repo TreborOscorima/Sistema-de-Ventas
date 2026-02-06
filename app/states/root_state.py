@@ -5,6 +5,8 @@ Este módulo utiliza herencia múltiple (Mixins) para componer el estado
 principal de la aplicación a partir de estados especializados.
 """
 import datetime
+
+from app.utils.timezone import country_today_start
 from typing import Any
 
 import reflex as rx
@@ -56,11 +58,19 @@ def check_overdue_alerts(self):
     company_id = self._company_id() if hasattr(self, "_company_id") else None
     branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
     with rx.session() as session:
+        settings = {}
+        if hasattr(self, "_company_settings_snapshot"):
+            settings = self._company_settings_snapshot()
+        country_code = settings.get("country_code") or getattr(
+            self, "selected_country_code", None
+        )
+        timezone = settings.get("timezone")
+        now = country_today_start(country_code, timezone=timezone)
         statement = (
             select(func.count())
             .select_from(SaleInstallment)
-            .where(SaleInstallment.due_date < datetime.datetime.now())
-            .where(SaleInstallment.status != "paid")
+            .where(SaleInstallment.due_date < now)
+            .where(func.lower(SaleInstallment.status).not_in(["paid", "completed"]))
         )
         if company_id:
             statement = statement.where(SaleInstallment.company_id == company_id)
@@ -100,6 +110,8 @@ for _mixin in _mixins:
 
 _class_dict["__annotations__"]["overdue_alerts_count"] = int
 _class_dict["overdue_alerts_count"] = 0
+_class_dict["__annotations__"]["is_loading"] = bool
+_class_dict["is_loading"] = False
 _class_dict["check_overdue_alerts"] = check_overdue_alerts
 
 # Crear RootState dinamicamente para que BaseStateMeta procese todos los metodos mixin

@@ -6,7 +6,7 @@ from app.components.ui import TABLE_STYLES, page_title, permission_guard
 def item_entry_row(item: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
         rx.el.td(item["barcode"], class_name="py-3 px-4"),
-        rx.el.td(item["description"], class_name="py-3 px-4"),
+        rx.el.td(item["display_description"], class_name="py-3 px-4"),
         rx.el.td(item.get("category", "General"), class_name="py-3 px-4"),
         rx.el.td(item["quantity"].to_string(), class_name="py-3 px-4 text-center"),
         rx.el.td(item["unit"], class_name="py-3 px-4 text-center"),

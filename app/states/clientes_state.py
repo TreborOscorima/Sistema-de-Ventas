@@ -186,13 +186,17 @@ class ClientesState(MixinState):
     @rx.event
     def save_client(self):
         if not self.current_user["privileges"].get("manage_clientes"):
-            return rx.toast("No tiene permisos para gestionar clientes.", duration=3000)
+            return self.add_notification(
+                "No tiene permisos para gestionar clientes.", "error"
+            )
         
         # Sanitizar inputs para prevenir XSS e inyecciones
         name = sanitize_name((self.current_client.get("name") or ""))
         dni = sanitize_dni((self.current_client.get("dni") or ""))
         if not name or not dni:
-            return rx.toast("Nombre y documento de identidad son obligatorios.", duration=3000)
+            return self.add_notification(
+                "Nombre y documento de identidad son obligatorios.", "error"
+            )
 
         phone = sanitize_phone((self.current_client.get("phone") or ""))
         address = sanitize_text((self.current_client.get("address") or ""))
@@ -208,56 +212,70 @@ class ClientesState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return self.add_notification("Empresa no definida.", "error")
 
-        with rx.session() as session:
-            existing = session.exec(
-                select(Client)
-                .where(Client.dni == dni)
-                .where(Client.company_id == company_id)
-                .where(Client.branch_id == branch_id)
-            ).first()
-            if existing and (not client_id or existing.id != client_id):
-                return rx.toast("El documento ya está registrado.", duration=3000)
+        self.is_loading = True
+        yield
 
-            if client_id:
-                client = session.exec(
+        saved = None
+        try:
+            with rx.session() as session:
+                existing = session.exec(
                     select(Client)
-                    .where(Client.id == client_id)
+                    .where(Client.dni == dni)
                     .where(Client.company_id == company_id)
                     .where(Client.branch_id == branch_id)
                 ).first()
-                if not client:
-                    return rx.toast("Cliente no encontrado.", duration=3000)
-                client.name = name
-                client.dni = dni
-                client.phone = phone or None
-                client.address = address or None
-                client.credit_limit = credit_limit
-                client.current_debt = current_debt
-                session.add(client)
-                session.commit()
-                session.refresh(client)
-                saved = client
-            else:
-                payload = Client(
-                    name=name,
-                    dni=dni,
-                    phone=phone or None,
-                    address=address or None,
-                    credit_limit=credit_limit,
-                    current_debt=current_debt,
-                    company_id=company_id,
-                    branch_id=branch_id,
-                )
-                session.add(payload)
-                session.commit()
-                session.refresh(payload)
-                saved = payload
+                if existing and (not client_id or existing.id != client_id):
+                    return self.add_notification(
+                        "El documento ya está registrado.", "error"
+                    )
+
+                if client_id:
+                    client = session.exec(
+                        select(Client)
+                        .where(Client.id == client_id)
+                        .where(Client.company_id == company_id)
+                        .where(Client.branch_id == branch_id)
+                    ).first()
+                    if not client:
+                        return self.add_notification("Cliente no encontrado.", "error")
+                    client.name = name
+                    client.dni = dni
+                    client.phone = phone or None
+                    client.address = address or None
+                    client.credit_limit = credit_limit
+                    client.current_debt = current_debt
+                    session.add(client)
+                    session.commit()
+                    session.refresh(client)
+                    saved = client
+                else:
+                    payload = Client(
+                        name=name,
+                        dni=dni,
+                        phone=phone or None,
+                        address=address or None,
+                        credit_limit=credit_limit,
+                        current_debt=current_debt,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
+                    session.add(payload)
+                    session.commit()
+                    session.refresh(payload)
+                    saved = payload
+        except Exception:
+            return self.add_notification(
+                "No se pudo guardar el cliente.", "error"
+            )
+        finally:
+            self.is_loading = False
 
         self.load_clients()
         self.show_modal = False
         self.current_client = self._empty_client_form()
+        self.is_loading = False
 
         if self.select_after_save and saved:
             balance = saved.credit_limit - saved.current_debt
@@ -273,41 +291,53 @@ class ClientesState(MixinState):
                 self.select_client(client_payload)
             self.select_after_save = False
 
-        return rx.toast("Cliente guardado.", duration=3000)
+        return self.add_notification("Cliente guardado.", "success")
 
     @rx.event
     def delete_client(self, client_id: int):
         if not self.current_user["privileges"].get("manage_clientes"):
-            return rx.toast("No tiene permisos para gestionar clientes.", duration=3000)
+            return self.add_notification(
+                "No tiene permisos para gestionar clientes.", "error"
+            )
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
-        with rx.session() as session:
-            client = session.exec(
-                select(Client)
-                .where(Client.id == client_id)
-                .where(Client.company_id == company_id)
-                .where(Client.branch_id == branch_id)
-            ).first()
-            if not client:
-                return rx.toast("Cliente no encontrado.", duration=3000)
-            if client.current_debt and client.current_debt > 0:
-                return rx.toast(
-                    "No se puede eliminar: cliente con deuda.", duration=3000
-                )
-            has_sales = session.exec(
-                select(Sale)
-                .where(Sale.client_id == client_id)
-                .where(Sale.company_id == company_id)
-                .where(Sale.branch_id == branch_id)
-            ).first()
-            if has_sales:
-                return rx.toast(
-                    "No se puede eliminar: cliente con ventas.", duration=3000
-                )
-            session.delete(client)
-            session.commit()
+            return self.add_notification("Empresa no definida.", "error")
+
+        self.is_loading = True
+        yield
+        try:
+            with rx.session() as session:
+                client = session.exec(
+                    select(Client)
+                    .where(Client.id == client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                ).first()
+                if not client:
+                    return self.add_notification("Cliente no encontrado.", "error")
+                if client.current_debt and client.current_debt > 0:
+                    return self.add_notification(
+                        "No se puede eliminar: cliente con deuda.", "error"
+                    )
+                has_sales = session.exec(
+                    select(Sale)
+                    .where(Sale.client_id == client_id)
+                    .where(Sale.company_id == company_id)
+                    .where(Sale.branch_id == branch_id)
+                ).first()
+                if has_sales:
+                    return self.add_notification(
+                        "No se puede eliminar: cliente con ventas.", "error"
+                    )
+                session.delete(client)
+                session.commit()
+        except Exception:
+            return self.add_notification(
+                "No se pudo eliminar el cliente.", "error"
+            )
+        finally:
+            self.is_loading = False
 
         self.load_clients()
-        return rx.toast("Cliente eliminado.", duration=3000)
+        return self.add_notification("Cliente eliminado.", "success")

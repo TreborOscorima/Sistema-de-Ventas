@@ -38,6 +38,7 @@ PAGE_TO_ROUTE = {
 class UIState(MixinState):
     sidebar_open: bool = True
     current_page: str = ""  # Vacío inicialmente, se setea según privilegios
+    pending_page: str = rx.SessionStorage("")  # Selección inmediata por pestaña
     config_active_tab: str = "usuarios"
 
     @rx.event
@@ -49,12 +50,15 @@ class UIState(MixinState):
         # Si la ruta tiene una página mapeada y el usuario puede accederla
         if page and self._can_access_page(page):
             self.current_page = page
+            self.pending_page = ""
         # Si no, usar el primer módulo permitido
         elif self.allowed_pages:
             self.current_page = self.allowed_pages[0]
+            self.pending_page = ""
         # Fallback si no hay páginas permitidas
         else:
             self.current_page = "Ingreso"
+            self.pending_page = ""
 
     @rx.var
     def navigation_items(self) -> List[Dict[str, str]]:
@@ -70,11 +74,26 @@ class UIState(MixinState):
 
     @rx.var
     def active_page(self) -> str:
-        # Si current_page está vacío o no es accesible, usar el primero permitido
-        if not self.current_page:
-            return self.allowed_pages[0] if self.allowed_pages else "Ingreso"
-        if self._can_access_page(self.current_page):
+        # Prioriza selección pendiente para que el sidebar reaccione inmediatamente.
+        pending = (self.pending_page or "").strip()
+        route = ""
+        try:
+            route = self.router.url.path
+        except Exception:
+            route = ""
+        route_page = ROUTE_TO_PAGE.get(route) if route else None
+        if pending and self._can_access_page(pending) and route_page != pending:
+            return pending
+
+        # Luego prioriza la ruta actual.
+        if route_page and self._can_access_page(route_page):
+            return route_page
+
+        # Fallback a current_page si es accesible.
+        if self.current_page and self._can_access_page(self.current_page):
             return self.current_page
+
+        # Si no, usar el primero permitido.
         if self.allowed_pages:
             return self.allowed_pages[0]
         return "Ingreso"
@@ -90,6 +109,7 @@ class UIState(MixinState):
         
         previous_page = self.current_page
         self.current_page = page
+        self.pending_page = page
         
         # Logica entre modulos (asume metodos/attrs en el State principal)
         if page == "Punto de Venta" and previous_page != "Punto de Venta":
@@ -107,6 +127,12 @@ class UIState(MixinState):
                 
         if hasattr(self, "reservation_payment_routed"):
             self.reservation_payment_routed = False
+
+    @rx.event
+    def set_pending_page(self, page: str):
+        if not self._can_access_page(page):
+            return
+        self.pending_page = page
 
     @rx.event
     def set_config_active_tab(self, tab: str):

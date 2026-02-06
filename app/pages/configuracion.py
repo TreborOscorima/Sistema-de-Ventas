@@ -281,6 +281,32 @@ def company_settings_section() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
+          rx.el.label("Zona Horaria (IANA)", class_name="text-sm font-medium"),
+          rx.el.select(
+            rx.el.option(
+              rx.cond(
+                State.timezone_placeholder != "",
+                "Usar zona del país (" + State.timezone_placeholder + ")",
+                "Usar zona del país",
+              ),
+              value="",
+            ),
+            rx.foreach(
+              State.timezone_options,
+              lambda tz: rx.el.option(tz, value=tz),
+            ),
+            value=State.timezone,
+            on_change=State.set_timezone,
+            key=State.company_form_key.to_string() + "-timezone",
+            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          ),
+          rx.el.p(
+            "Selecciona una zona horaria IANA. Deja en blanco para usar la zona del país.",
+            class_name="text-xs text-slate-500",
+          ),
+          class_name="flex flex-col gap-1",
+        ),
+        rx.el.div(
           rx.el.label(
             "Mensaje en Recibo/Ticket", class_name="text-sm font-medium"
           ),
@@ -1478,7 +1504,7 @@ def configuracion_page() -> rx.Component:
       on_close=State.close_pricing_modal,
     ),
     _upgrade_plan_modal(),
-    on_mount=State.load_config_page,
+    on_mount=State.load_config_page_background,
   )
   return permission_guard(
     has_permission=State.is_admin,

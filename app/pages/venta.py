@@ -1112,7 +1112,7 @@ def payment_sidebar() -> rx.Component:
             rx.el.div(
                 rx.el.button(
                     rx.cond(
-                        State.is_processing_sale,
+                        State.is_loading,
                         rx.hstack(
                             rx.spinner(size="2"),
                             rx.text("Procesando..."),
@@ -1125,9 +1125,10 @@ def payment_sidebar() -> rx.Component:
                         ),
                     ),
                     on_click=State.confirm_sale,
-                    disabled=State.is_processing_sale,
+                    disabled=State.is_loading,
+                    loading=State.is_loading,
                     class_name=rx.cond(
-                        State.is_processing_sale,
+                        State.is_loading,
                         "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold transition-colors text-lg opacity-50 cursor-not-allowed",
                         "w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-colors text-lg",
                     ),
@@ -1515,7 +1516,7 @@ def payment_mobile_section() -> rx.Component:
             rx.el.div(
                 rx.el.button(
                     rx.cond(
-                        State.is_processing_sale,
+                        State.is_loading,
                         rx.hstack(
                             rx.spinner(size="2"),
                             rx.text("Procesando..."),
@@ -1528,9 +1529,10 @@ def payment_mobile_section() -> rx.Component:
                         ),
                     ),
                     on_click=State.confirm_sale,
-                    disabled=State.is_processing_sale,
+                    disabled=State.is_loading,
+                    loading=State.is_loading,
                     class_name=rx.cond(
-                        State.is_processing_sale,
+                        State.is_loading,
                         "flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold opacity-50 cursor-not-allowed",
                         "flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700",
                     ),

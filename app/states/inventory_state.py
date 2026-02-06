@@ -25,7 +25,7 @@ import logging
 import io
 from decimal import Decimal, InvalidOperation
 from sqlmodel import select
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_, func, exists
 from sqlalchemy.orm import selectinload
 from app.models import (
     Product,
@@ -150,13 +150,146 @@ class InventoryState(MixinState):
                 names.insert(0, "General")
             self.categories = names
 
+    def _inventory_search_clause(self, search: str, company_id: int, branch_id: int):
+        term = f"%{search}%"
+        variant_match = (
+            exists()
+            .where(ProductVariant.product_id == Product.id)
+            .where(ProductVariant.company_id == company_id)
+            .where(ProductVariant.branch_id == branch_id)
+            .where(
+                or_(
+                    ProductVariant.sku.ilike(term),
+                    ProductVariant.size.ilike(term),
+                    ProductVariant.color.ilike(term),
+                )
+            )
+        )
+        return or_(
+            Product.description.ilike(term),
+            Product.barcode.ilike(term),
+            Product.category.ilike(term),
+            variant_match,
+        )
+
+    def _inventory_row_from_product(self, product: Product) -> Dict[str, Any]:
+        stock_value = float(product.stock or 0)
+        purchase_value = float(product.purchase_price or 0)
+        stock_total = self._round_currency(stock_value * purchase_value)
+        return {
+            "id": product.id,
+            "variant_id": None,
+            "is_variant": False,
+            "barcode": product.barcode,
+            "description": product.description,
+            "category": product.category,
+            "stock": product.stock,
+            "stock_is_low": stock_value <= 5,
+            "stock_is_medium": 5 < stock_value <= 10,
+            "unit": product.unit,
+            "purchase_price": product.purchase_price,
+            "sale_price": product.sale_price,
+            "stock_total_display": f"{stock_total:.2f}",
+        }
+
+    def _inventory_row_from_variant(
+        self, product: Product, variant: ProductVariant
+    ) -> Dict[str, Any]:
+        label = self._variant_label(variant)
+        description = product.description or ""
+        if label:
+            description = f"{description} ({label})"
+        stock_value = float(variant.stock or 0)
+        purchase_value = float(product.purchase_price or 0)
+        stock_total = self._round_currency(stock_value * purchase_value)
+        return {
+            "id": product.id,
+            "variant_id": variant.id,
+            "is_variant": True,
+            "barcode": variant.sku or product.barcode,
+            "description": description,
+            "category": product.category,
+            "stock": variant.stock,
+            "stock_is_low": stock_value <= 5,
+            "stock_is_medium": 5 < stock_value <= 10,
+            "unit": product.unit,
+            "purchase_price": product.purchase_price,
+            "sale_price": product.sale_price,
+            "stock_total_display": f"{stock_total:.2f}",
+        }
+
+    def _inventory_search_rows(
+        self,
+        session,
+        search: str,
+        company_id: int,
+        branch_id: int,
+    ) -> List[Dict[str, Any]]:
+        term = f"%{search}%"
+        variant_query = (
+            select(ProductVariant, Product)
+            .join(Product, ProductVariant.product_id == Product.id)
+            .where(ProductVariant.company_id == company_id)
+            .where(ProductVariant.branch_id == branch_id)
+            .where(Product.company_id == company_id)
+            .where(Product.branch_id == branch_id)
+            .where(
+                or_(
+                    ProductVariant.sku.ilike(term),
+                    ProductVariant.size.ilike(term),
+                    ProductVariant.color.ilike(term),
+                    Product.description.ilike(term),
+                    Product.barcode.ilike(term),
+                    Product.category.ilike(term),
+                )
+            )
+            .order_by(Product.description, ProductVariant.sku)
+        )
+
+        variant_rows = [
+            self._inventory_row_from_variant(parent, variant)
+            for variant, parent in session.exec(variant_query).all()
+        ]
+
+        no_variant = ~exists().where(ProductVariant.product_id == Product.id).where(
+            ProductVariant.company_id == company_id
+        ).where(ProductVariant.branch_id == branch_id)
+        product_query = (
+            select(Product)
+            .where(Product.company_id == company_id)
+            .where(Product.branch_id == branch_id)
+            .where(no_variant)
+            .where(
+                or_(
+                    Product.description.ilike(term),
+                    Product.barcode.ilike(term),
+                    Product.category.ilike(term),
+                )
+            )
+            .order_by(Product.description, Product.id)
+        )
+        product_rows = [
+            self._inventory_row_from_product(product)
+            for product in session.exec(product_query).all()
+        ]
+
+        rows = [*variant_rows, *product_rows]
+        rows.sort(
+            key=lambda row: (
+                str(row.get("description") or "").lower(),
+                str(row.get("barcode") or "").lower(),
+            )
+        )
+        return rows
+
     def update_new_category_name(self, value: str):
         self.new_category_name = value
 
+    @rx.event
     def add_category(self):
         if not self.current_user["privileges"]["edit_inventario"]:
-            return rx.toast(
-                "No tiene permisos para editar categorias.", duration=3000
+            return self.add_notification(
+                "No tiene permisos para editar categorias.", "error"
             )
         name = (self.new_category_name or "").strip()
         if not name:
@@ -164,50 +297,69 @@ class InventoryState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
-        
-        with rx.session() as session:
-            existing = session.exec(
-                select(Category)
-                .where(Category.name == name)
-                .where(Category.company_id == company_id)
-                .where(Category.branch_id == branch_id)
-            ).first()
-            if not existing:
-                session.add(
-                    Category(name=name, company_id=company_id, branch_id=branch_id)
-                )
-                session.commit()
-                self.new_category_name = ""
-                self.load_categories()
-                return rx.toast(f"Categoría '{name}' agregada.", duration=2000)
-            else:
-                return rx.toast("La categoría ya existe.", duration=2000)
+            return self.add_notification("Empresa no definida.", "error")
 
+        self.is_loading = True
+        yield
+        
+        try:
+            with rx.session() as session:
+                existing = session.exec(
+                    select(Category)
+                    .where(Category.name == name)
+                    .where(Category.company_id == company_id)
+                    .where(Category.branch_id == branch_id)
+                ).first()
+                if not existing:
+                    session.add(
+                        Category(name=name, company_id=company_id, branch_id=branch_id)
+                    )
+                    session.commit()
+                    self.new_category_name = ""
+                    self.load_categories()
+                    return self.add_notification(
+                        f"Categoría '{name}' agregada.", "success"
+                    )
+                return self.add_notification("La categoría ya existe.", "warning")
+        finally:
+            self.is_loading = False
+
+    @rx.event
     def remove_category(self, category: str):
         if not self.current_user["privileges"]["edit_inventario"]:
-            return rx.toast(
-                "No tiene permisos para editar categorias.", duration=3000
+            return self.add_notification(
+                "No tiene permisos para editar categorias.", "error"
             )
         if category == "General":
-            return rx.toast("No se puede eliminar la categoría General.", duration=3000)
+            return self.add_notification(
+                "No se puede eliminar la categoría General.", "error"
+            )
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return self.add_notification("Empresa no definida.", "error")
+
+        self.is_loading = True
+        yield
             
-        with rx.session() as session:
-            cat = session.exec(
-                select(Category)
-                .where(Category.name == category)
-                .where(Category.company_id == company_id)
-                .where(Category.branch_id == branch_id)
-            ).first()
-            if cat:
-                session.delete(cat)
-                session.commit()
-                self.load_categories()
-                return rx.toast(f"Categoría '{category}' eliminada.", duration=2000)
+        try:
+            with rx.session() as session:
+                cat = session.exec(
+                    select(Category)
+                    .where(Category.name == category)
+                    .where(Category.company_id == company_id)
+                    .where(Category.branch_id == branch_id)
+                ).first()
+                if cat:
+                    session.delete(cat)
+                    session.commit()
+                    self.load_categories()
+                    return self.add_notification(
+                        f"Categoría '{category}' eliminada.", "success"
+                    )
+                return self.add_notification("Categoría no encontrada.", "warning")
+        finally:
+            self.is_loading = False
 
     @rx.event
     def handle_inventory_adjustment_change(self, field: str, value: Any):
@@ -231,7 +383,7 @@ class InventoryState(MixinState):
             )
 
     @rx.var
-    def inventory_list(self) -> list[Product]:
+    def inventory_list(self) -> list[dict]:
         # Usar trigger para forzar recálculo
         _ = self._inventory_update_trigger
         if not self.current_user["privileges"]["view_inventario"]:
@@ -245,28 +397,28 @@ class InventoryState(MixinState):
         offset = (self.inventory_current_page - 1) * self.inventory_items_per_page
         
         with rx.session() as session:
+            if search:
+                rows = self._inventory_search_rows(
+                    session, search, company_id, branch_id
+                )
+                return rows[offset : offset + self.inventory_items_per_page]
+
             query = (
                 select(Product)
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
             )
-            
-            if search:
-                query = query.where(
-                    or_(
-                        Product.description.ilike(f"%{search}%"),
-                        Product.barcode.ilike(f"%{search}%"),
-                        Product.category.ilike(f"%{search}%"),
-                    )
-                )
-            
+
             # Ordenar por descripción de manera determinista
             query = query.order_by(Product.description, Product.id)
-            
+
             # Aplicar paginación SQL
             query = query.offset(offset).limit(self.inventory_items_per_page)
-            
-            return session.exec(query).all()
+
+            return [
+                self._inventory_row_from_product(product)
+                for product in session.exec(query).all()
+            ]
 
     @rx.var
     def inventory_total_pages(self) -> int:
@@ -276,20 +428,54 @@ class InventoryState(MixinState):
         if not company_id or not branch_id:
             return 1
         with rx.session() as session:
-            query = (
-                select(func.count(Product.id))
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-            )
             if search:
-                query = query.where(
-                    or_(
-                        Product.description.ilike(f"%{search}%"),
-                        Product.barcode.ilike(f"%{search}%"),
-                        Product.category.ilike(f"%{search}%"),
+                term = f"%{search}%"
+                variant_count_query = (
+                    select(func.count())
+                    .select_from(ProductVariant)
+                    .join(Product, ProductVariant.product_id == Product.id)
+                    .where(ProductVariant.company_id == company_id)
+                    .where(ProductVariant.branch_id == branch_id)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(
+                        or_(
+                            ProductVariant.sku.ilike(term),
+                            ProductVariant.size.ilike(term),
+                            ProductVariant.color.ilike(term),
+                            Product.description.ilike(term),
+                            Product.barcode.ilike(term),
+                            Product.category.ilike(term),
+                        )
                     )
                 )
-            total_items = session.exec(query).one() or 0
+                variant_count = session.exec(variant_count_query).one() or 0
+
+                no_variant = ~exists().where(ProductVariant.product_id == Product.id).where(
+                    ProductVariant.company_id == company_id
+                ).where(ProductVariant.branch_id == branch_id)
+                product_count_query = (
+                    select(func.count(Product.id))
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(no_variant)
+                    .where(
+                        or_(
+                            Product.description.ilike(term),
+                            Product.barcode.ilike(term),
+                            Product.category.ilike(term),
+                        )
+                    )
+                )
+                product_count = session.exec(product_count_query).one() or 0
+                total_items = int(variant_count) + int(product_count)
+            else:
+                query = (
+                    select(func.count(Product.id))
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                )
+                total_items = session.exec(query).one() or 0
             
         if total_items == 0:
             return 1
@@ -304,7 +490,7 @@ class InventoryState(MixinState):
         return self.inventory_current_page
 
     @rx.var
-    def inventory_paginated_list(self) -> list[Product]:
+    def inventory_paginated_list(self) -> list[dict]:
         # Alias para compatibilidad con UI existente, ya que inventory_list ahora está paginado
         return self.inventory_list
 
@@ -726,7 +912,9 @@ class InventoryState(MixinState):
     @rx.event
     def save_edited_product(self):
         if not self.current_user["privileges"]["edit_inventario"]:
-            return rx.toast("No tiene permisos para editar el inventario.", duration=3000)
+            return self.add_notification(
+                "No tiene permisos para editar el inventario.", "error"
+            )
         
         product_data = self.editing_product
         product_id = product_data.get("id")
@@ -735,12 +923,16 @@ class InventoryState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return self.add_notification("Empresa no definida.", "error")
         
         if not description:
-             return rx.toast("La descripción no puede estar vacía.", duration=3000)
+            return self.add_notification(
+                "La descripción no puede estar vacía.", "error"
+            )
         if not barcode:
-             return rx.toast("El código de barras no puede estar vacío.", duration=3000)
+            return self.add_notification(
+                "El código de barras no puede estar vacío.", "error"
+            )
 
         if self.show_variants:
             skus = [
@@ -749,230 +941,251 @@ class InventoryState(MixinState):
                 if (variant.get("sku") or "").strip()
             ]
             if not skus:
-                return rx.toast(
-                    "Agregue al menos una variante con SKU válido.",
-                    duration=3000,
+                return self.add_notification(
+                    "Agregue al menos una variante con SKU válido.", "error"
                 )
             if len(skus) != len(set(skus)):
-                return rx.toast(
-                    "Hay SKUs de variantes duplicados.",
-                    duration=3000,
+                return self.add_notification(
+                    "Hay SKUs de variantes duplicados.", "error"
                 )
 
-        with rx.session() as session:
-            # Verificar codigo de barras duplicado
-            existing = session.exec(
-                select(Product)
-                .where(Product.barcode == barcode)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-            ).first()
-            
-            if existing and (product_id is None or existing.id != product_id):
-                return rx.toast("Ya existe un producto con ese código de barras.", duration=3000)
+        self.is_loading = True
+        yield
 
-            if self.show_variants:
-                variant_skus = [
-                    (variant.get("sku") or "").strip()
-                    for variant in self.variants
-                    if (variant.get("sku") or "").strip()
-                ]
-                if variant_skus:
-                    duplicate_query = (
-                        select(ProductVariant)
-                        .where(ProductVariant.company_id == company_id)
-                        .where(ProductVariant.branch_id == branch_id)
-                        .where(ProductVariant.sku.in_(variant_skus))
+        msg = ""
+        try:
+            with rx.session() as session:
+                # Verificar codigo de barras duplicado
+                existing = session.exec(
+                    select(Product)
+                    .where(Product.barcode == barcode)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                ).first()
+                
+                if existing and (product_id is None or existing.id != product_id):
+                    return self.add_notification(
+                        "Ya existe un producto con ese código de barras.",
+                        "error",
                     )
-                    if product_id:
-                        duplicate_query = duplicate_query.where(
-                            ProductVariant.product_id != product_id
-                        )
-                    duplicate_variant = session.exec(duplicate_query).first()
-                    if duplicate_variant:
-                        return rx.toast(
-                            f"El SKU de variante '{duplicate_variant.sku}' ya existe en otro producto.",
-                            duration=3500,
-                        )
 
-            if product_id:
-                # Actualizar
+                if self.show_variants:
+                    variant_skus = [
+                        (variant.get("sku") or "").strip()
+                        for variant in self.variants
+                        if (variant.get("sku") or "").strip()
+                    ]
+                    if variant_skus:
+                        duplicate_query = (
+                            select(ProductVariant)
+                            .where(ProductVariant.company_id == company_id)
+                            .where(ProductVariant.branch_id == branch_id)
+                            .where(ProductVariant.sku.in_(variant_skus))
+                        )
+                        if product_id:
+                            duplicate_query = duplicate_query.where(
+                                ProductVariant.product_id != product_id
+                            )
+                        duplicate_variant = session.exec(duplicate_query).first()
+                        if duplicate_variant:
+                            return self.add_notification(
+                                f"El SKU de variante '{duplicate_variant.sku}' ya existe en otro producto.",
+                                "error",
+                            )
+
+                if product_id:
+                    # Actualizar
+                    product = session.exec(
+                        select(Product)
+                        .where(Product.id == product_id)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    ).first()
+                    if not product:
+                        return self.add_notification("Producto no encontrado.", "error")
+                    
+                    product.barcode = barcode
+                    product.description = description
+                    product.category = product_data.get("category", "General")
+                    product.stock = (
+                        self.variants_stock_total
+                        if self.show_variants
+                        else product_data.get("stock", 0)
+                    )
+                    product.unit = product_data.get("unit", "Unidad")
+                    product.purchase_price = product_data.get("purchase_price", 0)
+                    product.sale_price = product_data.get("sale_price", 0)
+                    
+                    session.add(product)
+                    msg = "Producto actualizado correctamente."
+                else:
+                    # Crear
+                    new_product = Product(
+                        barcode=barcode,
+                        description=description,
+                        category=product_data.get("category", "General"),
+                        stock=(
+                            self.variants_stock_total
+                            if self.show_variants
+                            else product_data.get("stock", 0)
+                        ),
+                        unit=product_data.get("unit", "Unidad"),
+                        purchase_price=product_data.get("purchase_price", 0),
+                        sale_price=product_data.get("sale_price", 0),
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
+                    session.add(new_product)
+                    session.flush()
+                    product = new_product
+                    msg = "Producto creado correctamente."
+
+                if product_id:
+                    session.flush()
+
+                product_id = product.id if product else None
+
+                if product_id:
+                    if self.show_variants:
+                        existing_variants = session.exec(
+                            select(ProductVariant)
+                            .where(ProductVariant.product_id == product_id)
+                            .where(ProductVariant.company_id == company_id)
+                            .where(ProductVariant.branch_id == branch_id)
+                        ).all()
+                        for variant in existing_variants:
+                            session.delete(variant)
+                        session.flush()
+
+                        for variant in self.variants:
+                            sku = (variant.get("sku") or "").strip()
+                            if not sku:
+                                continue
+                            stock_value = variant.get("stock", 0) or 0
+                            try:
+                                stock_value = Decimal(str(stock_value))
+                            except (TypeError, InvalidOperation):
+                                stock_value = Decimal("0")
+                            session.add(
+                                ProductVariant(
+                                    product_id=product_id,
+                                    sku=sku,
+                                    size=(variant.get("size") or "").strip() or None,
+                                    color=(variant.get("color") or "").strip() or None,
+                                    stock=stock_value,
+                                    company_id=company_id,
+                                    branch_id=branch_id,
+                                )
+                            )
+                    else:
+                        existing_variants = session.exec(
+                            select(ProductVariant)
+                            .where(ProductVariant.product_id == product_id)
+                            .where(ProductVariant.company_id == company_id)
+                            .where(ProductVariant.branch_id == branch_id)
+                        ).all()
+                        for variant in existing_variants:
+                            session.delete(variant)
+
+                    if self.show_wholesale:
+                        existing_tiers = session.exec(
+                            select(PriceTier)
+                            .where(PriceTier.product_id == product_id)
+                            .where(PriceTier.company_id == company_id)
+                            .where(PriceTier.branch_id == branch_id)
+                        ).all()
+                        for tier in existing_tiers:
+                            session.delete(tier)
+
+                        for tier in self.price_tiers:
+                            min_qty = tier.get("min_qty", 0) or 0
+                            price_value = tier.get("price", 0) or 0
+                            try:
+                                min_qty = int(min_qty)
+                            except (TypeError, ValueError):
+                                min_qty = 0
+                            try:
+                                price_value = Decimal(str(price_value))
+                            except (TypeError, InvalidOperation):
+                                price_value = Decimal("0")
+                            if min_qty <= 0:
+                                continue
+                            session.add(
+                                PriceTier(
+                                    product_id=product_id,
+                                    min_quantity=min_qty,
+                                    unit_price=price_value,
+                                    company_id=company_id,
+                                    branch_id=branch_id,
+                                )
+                            )
+                    else:
+                        existing_tiers = session.exec(
+                            select(PriceTier)
+                            .where(PriceTier.product_id == product_id)
+                            .where(PriceTier.company_id == company_id)
+                            .where(PriceTier.branch_id == branch_id)
+                        ).all()
+                        for tier in existing_tiers:
+                            session.delete(tier)
+                
+                session.commit()
+        except Exception:
+            return self.add_notification(
+                "No se pudo guardar el producto.", "error"
+            )
+        finally:
+            self.is_loading = False
+
+        self._inventory_update_trigger += 1
+        self.is_editing_product = False
+        self.show_variants = False
+        self.show_wholesale = False
+        self.variants = []
+        self.price_tiers = []
+        return self.add_notification(msg, "success")
+
+    @rx.event
+    def delete_product(self, product_id: int):
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return self.add_notification(
+                "No tiene permisos para eliminar productos.", "error"
+            )
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return self.add_notification("Empresa no definida.", "error")
+
+        self.is_loading = True
+        yield
+
+        try:
+            with rx.session() as session:
                 product = session.exec(
                     select(Product)
                     .where(Product.id == product_id)
                     .where(Product.company_id == company_id)
                     .where(Product.branch_id == branch_id)
                 ).first()
-                if not product:
-                    return rx.toast("Producto no encontrado.", duration=3000)
-                
-                product.barcode = barcode
-                product.description = description
-                product.category = product_data.get("category", "General")
-                product.stock = (
-                    self.variants_stock_total
-                    if self.show_variants
-                    else product_data.get("stock", 0)
-                )
-                product.unit = product_data.get("unit", "Unidad")
-                product.purchase_price = product_data.get("purchase_price", 0)
-                product.sale_price = product_data.get("sale_price", 0)
-                
-                session.add(product)
-                msg = "Producto actualizado correctamente."
-            else:
-                # Crear
-                new_product = Product(
-                    barcode=barcode,
-                    description=description,
-                    category=product_data.get("category", "General"),
-                    stock=(
-                        self.variants_stock_total
-                        if self.show_variants
-                        else product_data.get("stock", 0)
-                    ),
-                    unit=product_data.get("unit", "Unidad"),
-                    purchase_price=product_data.get("purchase_price", 0),
-                    sale_price=product_data.get("sale_price", 0),
-                    company_id=company_id,
-                    branch_id=branch_id,
-                )
-                session.add(new_product)
-                session.flush()
-                product = new_product
-                msg = "Producto creado correctamente."
-
-            if product_id:
-                session.flush()
-
-            product_id = product.id if product else None
-
-            if product_id:
-                if self.show_variants:
-                    existing_variants = session.exec(
-                        select(ProductVariant)
-                        .where(ProductVariant.product_id == product_id)
-                        .where(ProductVariant.company_id == company_id)
-                        .where(ProductVariant.branch_id == branch_id)
-                    ).all()
-                    for variant in existing_variants:
-                        session.delete(variant)
-                    session.flush()
-
-                    for variant in self.variants:
-                        sku = (variant.get("sku") or "").strip()
-                        if not sku:
-                            continue
-                        stock_value = variant.get("stock", 0) or 0
-                        try:
-                            stock_value = Decimal(str(stock_value))
-                        except (TypeError, InvalidOperation):
-                            stock_value = Decimal("0")
-                        session.add(
-                            ProductVariant(
-                                product_id=product_id,
-                                sku=sku,
-                                size=(variant.get("size") or "").strip() or None,
-                                color=(variant.get("color") or "").strip() or None,
-                                stock=stock_value,
-                                company_id=company_id,
-                                branch_id=branch_id,
-                            )
+                if product:
+                    # Verificar si tiene historial de ventas
+                    has_sales = session.exec(
+                        select(SaleItem)
+                        .where(SaleItem.product_id == product_id)
+                        .where(SaleItem.branch_id == branch_id)
+                    ).first()
+                    if has_sales:
+                        return self.add_notification(
+                            "No se puede eliminar un producto con historial de ventas. Edítelo para desactivarlo.",
+                            "warning",
                         )
-                else:
-                    existing_variants = session.exec(
-                        select(ProductVariant)
-                        .where(ProductVariant.product_id == product_id)
-                        .where(ProductVariant.company_id == company_id)
-                        .where(ProductVariant.branch_id == branch_id)
-                    ).all()
-                    for variant in existing_variants:
-                        session.delete(variant)
-
-                if self.show_wholesale:
-                    existing_tiers = session.exec(
-                        select(PriceTier)
-                        .where(PriceTier.product_id == product_id)
-                        .where(PriceTier.company_id == company_id)
-                        .where(PriceTier.branch_id == branch_id)
-                    ).all()
-                    for tier in existing_tiers:
-                        session.delete(tier)
-
-                    for tier in self.price_tiers:
-                        min_qty = tier.get("min_qty", 0) or 0
-                        price_value = tier.get("price", 0) or 0
-                        try:
-                            min_qty = int(min_qty)
-                        except (TypeError, ValueError):
-                            min_qty = 0
-                        try:
-                            price_value = Decimal(str(price_value))
-                        except (TypeError, InvalidOperation):
-                            price_value = Decimal("0")
-                        if min_qty <= 0:
-                            continue
-                        session.add(
-                            PriceTier(
-                                product_id=product_id,
-                                min_quantity=min_qty,
-                                unit_price=price_value,
-                                company_id=company_id,
-                                branch_id=branch_id,
-                            )
-                        )
-                else:
-                    existing_tiers = session.exec(
-                        select(PriceTier)
-                        .where(PriceTier.product_id == product_id)
-                        .where(PriceTier.company_id == company_id)
-                        .where(PriceTier.branch_id == branch_id)
-                    ).all()
-                    for tier in existing_tiers:
-                        session.delete(tier)
-            
-            session.commit()
-            self._inventory_update_trigger += 1
-            self.is_editing_product = False
-            self.show_variants = False
-            self.show_wholesale = False
-            self.variants = []
-            self.price_tiers = []
-            return rx.toast(msg, duration=3000)
-
-    @rx.event
-    def delete_product(self, product_id: int):
-        if not self.current_user["privileges"]["edit_inventario"]:
-             return rx.toast("No tiene permisos para eliminar productos.", duration=3000)
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
-        with rx.session() as session:
-            product = session.exec(
-                select(Product)
-                .where(Product.id == product_id)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-            ).first()
-            if product:
-                # Verificar si tiene historial de ventas
-                has_sales = session.exec(
-                    select(SaleItem)
-                    .where(SaleItem.product_id == product_id)
-                    .where(SaleItem.branch_id == branch_id)
-                ).first()
-                if has_sales:
-                    return rx.toast(
-                        "No se puede eliminar un producto con historial de ventas. Edítelo para desactivarlo.",
-                        duration=4000
-                    )
-                session.delete(product)
-                session.commit()
-                self._inventory_update_trigger += 1
-                return rx.toast("Producto eliminado.", duration=3000)
-            else:
-                return rx.toast("Producto no encontrado.", duration=3000)
+                    session.delete(product)
+                    session.commit()
+                    self._inventory_update_trigger += 1
+                    return self.add_notification("Producto eliminado.", "success")
+                return self.add_notification("Producto no encontrado.", "error")
+        finally:
+            self.is_loading = False
 
     @rx.event
     def open_inventory_check_modal(self):
@@ -1341,8 +1554,8 @@ class InventoryState(MixinState):
     @rx.event
     def submit_inventory_check(self):
         if not self.current_user["privileges"]["edit_inventario"]:
-            return rx.toast(
-                "No tiene permisos para registrar inventario.", duration=3000
+            return self.add_notification(
+                "No tiene permisos para registrar inventario.", "error"
             )
         status = (
             self.inventory_check_status
@@ -1353,126 +1566,133 @@ class InventoryState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
-        
-        if status == "perfecto":
-            rx.toast("Inventario verificado como perfecto.", duration=3000)
-        else:
-            if not self.inventory_adjustment_items:
-                return rx.toast(
-                    "Agregue los productos que requieren re ajuste.", duration=3000
-                )
-            
-            recorded = False
-            def _to_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
-                try:
-                    return Decimal(str(value))
-                except (InvalidOperation, TypeError, ValueError):
-                    return default
+            return self.add_notification("Empresa no definida.", "error")
 
-            with rx.session() as session:
-                products_to_recalculate: set[int] = set()
-                for item in self.inventory_adjustment_items:
-                    description = (item.get("description") or "").strip()
-                    barcode = (item.get("barcode") or "").strip()
-                    if not description and not barcode:
-                        continue
-                    
-                    product, variant = self._find_adjustment_product(
-                        session,
-                        barcode,
-                        description,
-                        item.get("variant_id"),
-                        item.get("product_id"),
+        self.is_loading = True
+        yield
+
+        success_message = "Registro de inventario guardado."
+        try:
+            if status == "perfecto":
+                success_message = "Inventario verificado como perfecto."
+            else:
+                if not self.inventory_adjustment_items:
+                    return self.add_notification(
+                        "Agregue los productos que requieren re ajuste.", "error"
                     )
-                    if not product:
-                        continue
-                    
-                    quantity = _to_decimal(item.get("adjust_quantity", 0) or 0)
-                    if quantity <= 0:
-                        continue
-                    
-                    available = _to_decimal(
-                        (variant.stock if variant else product.stock) or 0
-                    )
-                    qty = quantity if quantity <= available else available
-                    
-                    # Actualizar stock
-                    if variant:
-                        variant.stock = max(available - qty, Decimal("0"))
-                        session.add(variant)
-                        products_to_recalculate.add(product.id)
-                    else:
-                        product.stock = max(available - qty, Decimal("0"))
-                        session.add(product)
-                    
-                    # Crear StockMovement
-                    detail_parts = []
-                    if item.get("reason"):
-                        detail_parts.append(item["reason"])
-                    if notes:
-                        detail_parts.append(notes)
-                    details = (
-                        " | ".join(part for part in detail_parts if part)
-                        if detail_parts
-                        else "Ajuste inventario"
-                    )
-                    
-                    movement = StockMovement(
-                        product_id=product.id,
-                        user_id=self.current_user.get("id"),
-                        type="Re Ajuste Inventario",
-                        quantity=-qty,
-                        description=details,
-                        timestamp=datetime.datetime.now(),
-                        company_id=company_id,
-                        branch_id=branch_id,
-                    )
-                    session.add(movement)
-                    recorded = True
                 
-                if products_to_recalculate:
-                    for product_id in products_to_recalculate:
-                        total_query = select(
-                            func.coalesce(func.sum(ProductVariant.stock), 0)
-                        ).where(ProductVariant.product_id == product_id)
-                        total_query = total_query.where(
-                            ProductVariant.company_id == company_id
-                        ).where(ProductVariant.branch_id == branch_id)
-                        total_row = session.exec(total_query).first()
-                        if total_row is None:
-                            total_stock = Decimal("0.0000")
-                        elif isinstance(total_row, tuple):
-                            total_stock = total_row[0]
-                        else:
-                            total_stock = total_row
-                        product = session.exec(
-                            select(Product)
-                            .where(Product.id == product_id)
-                            .where(Product.company_id == company_id)
-                            .where(Product.branch_id == branch_id)
-                        ).first()
-                        if product:
-                            product.stock = self._normalize_quantity_value(
-                                total_stock, product.unit or ""
-                            )
-                            session.add(product)
+                recorded = False
+                def _to_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
+                    try:
+                        return Decimal(str(value))
+                    except (InvalidOperation, TypeError, ValueError):
+                        return default
 
-                if recorded:
-                    session.commit()
-                    self._inventory_update_trigger += 1
-                else:
-                    return rx.toast(
-                        "No se pudo registrar el re ajuste. Verifique los productos.",
-                        duration=3000,
-                    )
+                with rx.session() as session:
+                    products_to_recalculate: set[int] = set()
+                    for item in self.inventory_adjustment_items:
+                        description = (item.get("description") or "").strip()
+                        barcode = (item.get("barcode") or "").strip()
+                        if not description and not barcode:
+                            continue
+                        
+                        product, variant = self._find_adjustment_product(
+                            session,
+                            barcode,
+                            description,
+                            item.get("variant_id"),
+                            item.get("product_id"),
+                        )
+                        if not product:
+                            continue
+                        
+                        quantity = _to_decimal(item.get("adjust_quantity", 0) or 0)
+                        if quantity <= 0:
+                            continue
+                        
+                        available = _to_decimal(
+                            (variant.stock if variant else product.stock) or 0
+                        )
+                        qty = quantity if quantity <= available else available
+                        
+                        # Actualizar stock
+                        if variant:
+                            variant.stock = max(available - qty, Decimal("0"))
+                            session.add(variant)
+                            products_to_recalculate.add(product.id)
+                        else:
+                            product.stock = max(available - qty, Decimal("0"))
+                            session.add(product)
+                        
+                        # Crear StockMovement
+                        detail_parts = []
+                        if item.get("reason"):
+                            detail_parts.append(item["reason"])
+                        if notes:
+                            detail_parts.append(notes)
+                        details = (
+                            " | ".join(part for part in detail_parts if part)
+                            if detail_parts
+                            else "Ajuste inventario"
+                        )
+                        
+                        movement = StockMovement(
+                            product_id=product.id,
+                            user_id=self.current_user.get("id"),
+                            type="Re Ajuste Inventario",
+                            quantity=-qty,
+                            description=details,
+                            timestamp=datetime.datetime.now(),
+                            company_id=company_id,
+                            branch_id=branch_id,
+                        )
+                        session.add(movement)
+                        recorded = True
+                    
+                    if products_to_recalculate:
+                        for product_id in products_to_recalculate:
+                            total_query = select(
+                                func.coalesce(func.sum(ProductVariant.stock), 0)
+                            ).where(ProductVariant.product_id == product_id)
+                            total_query = total_query.where(
+                                ProductVariant.company_id == company_id
+                            ).where(ProductVariant.branch_id == branch_id)
+                            total_row = session.exec(total_query).first()
+                            if total_row is None:
+                                total_stock = Decimal("0.0000")
+                            elif isinstance(total_row, tuple):
+                                total_stock = total_row[0]
+                            else:
+                                total_stock = total_row
+                            product = session.exec(
+                                select(Product)
+                                .where(Product.id == product_id)
+                                .where(Product.company_id == company_id)
+                                .where(Product.branch_id == branch_id)
+                            ).first()
+                            if product:
+                                product.stock = self._normalize_quantity_value(
+                                    total_stock, product.unit or ""
+                                )
+                                session.add(product)
+
+                    if recorded:
+                        session.commit()
+                        self._inventory_update_trigger += 1
+                    else:
+                        return self.add_notification(
+                            "No se pudo registrar el re ajuste. Verifique los productos.",
+                            "error",
+                        )
+        finally:
+            self.is_loading = False
 
         self.inventory_check_modal_open = False
         self.inventory_check_status = "perfecto"
         self.inventory_adjustment_notes = ""
         self.inventory_adjustment_items = []
         self._reset_inventory_adjustment_form()
-        return rx.toast("Registro de inventario guardado.", duration=3000)
+        return self.add_notification(success_message, "success")
 
     @rx.event
     def export_inventory_to_excel(self):

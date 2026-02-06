@@ -48,6 +48,8 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
         rx.el.button(
           rx.icon("trash-2", class_name="h-4 w-4"),
           on_click=lambda _, c_id=client["id"]: State.delete_client(c_id),
+          disabled=State.is_loading,
+          loading=State.is_loading,
           class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
           title="Eliminar",
         ),
@@ -143,6 +145,8 @@ def client_form_modal() -> rx.Component:
         rx.icon("save", class_name="h-4 w-4"),
         "Guardar",
         on_click=State.save_client,
+        disabled=State.is_loading,
+        loading=State.is_loading,
         class_name=BUTTON_STYLES["primary"],
       ),
       class_name="flex justify-end gap-3 pt-2",

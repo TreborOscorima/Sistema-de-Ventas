@@ -5,11 +5,29 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlmodel import select
 from app.models import Unit, PaymentMethod, Currency, CompanySettings
 from app.utils.db_seeds import SUPPORTED_COUNTRIES, get_payment_methods_for_country, get_country_config
+from app.utils.timezone import is_valid_timezone
 from app.enums import PaymentMethodType
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
 
+try:  # Python 3.9+
+    from zoneinfo import available_timezones
+except Exception:  # pragma: no cover
+    available_timezones = None  # type: ignore
+
 WHATSAPP_SALES_URL = "https://wa.me/message/ULLEZ4HUFB5HA1"
+
+if available_timezones:
+    _ALL_TIMEZONES = sorted(available_timezones())
+else:
+    _ALL_TIMEZONES = sorted(
+        {
+            (get_country_config(code).get("timezone") or "UTC")
+            for code in SUPPORTED_COUNTRIES.keys()
+        }
+    )
+    if "UTC" not in _ALL_TIMEZONES:
+        _ALL_TIMEZONES.insert(0, "UTC")
 
 class ConfigState(MixinState):
     # Configuracion de empresa
@@ -20,6 +38,7 @@ class ConfigState(MixinState):
     footer_message: str = ""
     receipt_paper: str = "80"
     receipt_width: str = ""
+    timezone: str = ""
     company_form_key: int = 0
     show_upgrade_modal: bool = False
     show_pricing_modal: bool = False
@@ -81,6 +100,19 @@ class ConfigState(MixinState):
     def personal_id_placeholder(self) -> str:
         """Placeholder para el campo de documento personal."""
         return get_country_config(self.selected_country_code).get("personal_id_placeholder", "")
+
+    @rx.var
+    def timezone_placeholder(self) -> str:
+        """Zona horaria sugerida según el país."""
+        return get_country_config(self.selected_country_code).get("timezone", "UTC")
+
+    @rx.var
+    def timezone_options(self) -> List[str]:
+        """Opciones IANA para selector de zona horaria."""
+        current = (self.timezone or "").strip()
+        if current and current not in _ALL_TIMEZONES:
+            return [current, *_ALL_TIMEZONES]
+        return _ALL_TIMEZONES
 
     def _require_manage_config(self):
         if hasattr(self, "current_user") and not self.current_user["privileges"].get(
@@ -156,16 +188,27 @@ class ConfigState(MixinState):
         self.footer_message = ""
         self.receipt_paper = "80"
         self.receipt_width = ""
+        self.timezone = ""
         company_id = self._company_id()
+        branch_id = self._branch_id()
         if not company_id:
             self.company_form_key += 1
             return
         with rx.session() as session:
-            settings = session.exec(
-                select(CompanySettings)
-                .where(CompanySettings.company_id == company_id)
-                .order_by(CompanySettings.branch_id, CompanySettings.id)
-            ).first()
+            settings = None
+            settings_stmt = select(CompanySettings).where(
+                CompanySettings.company_id == company_id
+            )
+            if branch_id:
+                settings = session.exec(
+                    settings_stmt.where(CompanySettings.branch_id == branch_id)
+                ).first()
+            if not settings:
+                settings = session.exec(
+                    settings_stmt.order_by(
+                        CompanySettings.branch_id, CompanySettings.id
+                    )
+                ).first()
             if settings:
                 self.company_name = settings.company_name or ""
                 self.ruc = settings.ruc or ""
@@ -185,6 +228,9 @@ class ConfigState(MixinState):
                 # Cargar el país de operación
                 if hasattr(settings, 'country_code') and settings.country_code:
                     self.selected_country_code = settings.country_code
+                # Cargar la zona horaria (si existe)
+                if hasattr(settings, "timezone") and settings.timezone:
+                    self.timezone = settings.timezone
         self.company_form_key += 1
 
     @rx.event
@@ -197,6 +243,12 @@ class ConfigState(MixinState):
             self.load_users()
         if hasattr(self, "load_branches"):
             self.load_branches()
+
+    @rx.event(background=True)
+    async def load_config_page_background(self):
+        """Carga la configuración en segundo plano para mejorar la navegación."""
+        async with self:
+            self.load_config_page()
 
     @rx.event
     def open_upgrade_modal(self):
@@ -343,6 +395,10 @@ class ConfigState(MixinState):
         self.receipt_width = value or ""
 
     @rx.event
+    def set_timezone(self, value: str):
+        self.timezone = value or ""
+
+    @rx.event
     def save_settings(self):
         toast = self._require_manage_config()
         if toast:
@@ -370,6 +426,13 @@ class ConfigState(MixinState):
                     "El ancho de recibo debe estar entre 24 y 64.",
                     duration=3000,
                 )
+        timezone_value = (self.timezone or "").strip()
+        if not is_valid_timezone(timezone_value):
+            return rx.toast(
+                "Zona horaria invalida. Usa el formato IANA (ej: America/Lima).",
+                duration=3500,
+            )
+        timezone_db_value = timezone_value or None
 
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -381,6 +444,7 @@ class ConfigState(MixinState):
                 .where(CompanySettings.company_id == company_id)
             ).all()
             if settings_list:
+                has_branch_settings = False
                 for settings in settings_list:
                     settings.company_name = company_name
                     settings.ruc = ruc
@@ -389,7 +453,30 @@ class ConfigState(MixinState):
                     settings.footer_message = footer_message or None
                     settings.receipt_paper = receipt_paper
                     settings.receipt_width = receipt_width_value
+                    if branch_id:
+                        if settings.branch_id == branch_id:
+                            settings.timezone = timezone_db_value
+                            has_branch_settings = True
+                    else:
+                        settings.timezone = timezone_db_value
                     session.add(settings)
+                if branch_id and not has_branch_settings:
+                    session.add(
+                        CompanySettings(
+                            company_id=company_id,
+                            branch_id=branch_id,
+                            company_name=company_name,
+                            ruc=ruc,
+                            address=address,
+                            phone=phone or None,
+                            footer_message=footer_message or None,
+                            receipt_paper=receipt_paper,
+                            receipt_width=receipt_width_value,
+                            timezone=timezone_db_value,
+                            country_code=self.selected_country_code or "PE",
+                            default_currency_code=self.selected_currency_code or "PEN",
+                        )
+                    )
             else:
                 branch_id_value = int(branch_id) if branch_id else 1
                 session.add(
@@ -403,6 +490,7 @@ class ConfigState(MixinState):
                         footer_message=footer_message or None,
                         receipt_paper=receipt_paper,
                         receipt_width=receipt_width_value,
+                        timezone=timezone_db_value,
                     )
                 )
             session.commit()
@@ -415,6 +503,7 @@ class ConfigState(MixinState):
         self.receipt_width = (
             str(receipt_width_value) if receipt_width_value is not None else ""
         )
+        self.timezone = timezone_value
         self.company_form_key += 1
         return rx.toast("Configuracion de empresa guardada.", duration=2500)
 

@@ -499,11 +499,41 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
       class_name="py-3 px-4 text-right font-medium",
     ),
     rx.el.td(
-      rx.el.button(
-        rx.icon("eye", class_name="h-4 w-4"),
-        "Visualizar",
-        on_click=lambda _, log_id=log["id"]: State.show_cashbox_log(log_id),
-        class_name=BUTTON_STYLES["link_primary"],
+      rx.el.div(
+        rx.el.button(
+          rx.icon("eye", class_name="h-4 w-4"),
+          on_click=lambda _, log_id=log["id"]: State.show_cashbox_log(log_id),
+          title="Visualizar",
+          aria_label="Visualizar",
+          class_name="p-2 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors",
+        ),
+        rx.cond(
+          log["action"] == "cierre",
+          rx.el.button(
+            rx.icon("file-text", class_name="h-4 w-4"),
+            on_click=lambda _, log_id=log["id"]: State.export_cashbox_close_pdf_for_log(
+              log_id
+            ),
+            title="Descargar PDF",
+            aria_label="Descargar PDF",
+            class_name="p-2 rounded-md text-red-600 hover:bg-red-50 transition-colors",
+          ),
+          rx.fragment(),
+        ),
+        rx.cond(
+          log["action"] == "cierre",
+          rx.el.button(
+            rx.icon("printer", class_name="h-4 w-4"),
+            on_click=lambda _, log_id=log["id"]: State.print_cashbox_close_summary_for_log(
+              log_id
+            ),
+            title="Reimprimir resumen",
+            aria_label="Reimprimir resumen",
+            class_name="p-2 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors",
+          ),
+          rx.fragment(),
+        ),
+        class_name="flex flex-row gap-2 justify-center",
       ),
       class_name="py-3 px-4 text-center",
     ),
