@@ -300,7 +300,6 @@ class InventoryState(MixinState):
             return self.add_notification("Empresa no definida.", "error")
 
         self.is_loading = True
-        yield
         
         try:
             with rx.session() as session:
@@ -340,7 +339,6 @@ class InventoryState(MixinState):
             return self.add_notification("Empresa no definida.", "error")
 
         self.is_loading = True
-        yield
             
         try:
             with rx.session() as session:
