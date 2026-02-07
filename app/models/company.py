@@ -64,7 +64,6 @@ class Branch(rx.Model, table=True):
     """Sucursal de empresa."""
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,

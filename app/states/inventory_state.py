@@ -39,6 +39,7 @@ from app.models import (
 )
 from .types import InventoryAdjustment
 from .mixin_state import MixinState
+from app.utils.tenant import set_tenant_context
 from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.exports import (
     create_excel_workbook,
@@ -124,13 +125,9 @@ class InventoryState(MixinState):
     _inventory_update_trigger: int = 0
 
     def _company_id(self) -> int | None:
-        value = None
-        if hasattr(self, "current_user"):
-            value = self.current_user.get("company_id")
-        try:
-            return int(value) if value else None
-        except (TypeError, ValueError):
-            return None
+        company_id, branch_id = self._tenant_ids()
+        set_tenant_context(company_id, branch_id)
+        return company_id
 
     def load_categories(self):
         company_id = self._company_id()
@@ -291,6 +288,9 @@ class InventoryState(MixinState):
             return self.add_notification(
                 "No tiene permisos para editar categorias.", "error"
             )
+        block = self._require_active_subscription()
+        if block:
+            return block
         name = (self.new_category_name or "").strip()
         if not name:
             return
@@ -329,6 +329,9 @@ class InventoryState(MixinState):
             return self.add_notification(
                 "No tiene permisos para editar categorias.", "error"
             )
+        block = self._require_active_subscription()
+        if block:
+            return block
         if category == "General":
             return self.add_notification(
                 "No se puede eliminar la categoría General.", "error"
@@ -913,6 +916,9 @@ class InventoryState(MixinState):
             return self.add_notification(
                 "No tiene permisos para editar el inventario.", "error"
             )
+        block = self._require_active_subscription()
+        if block:
+            return block
         
         product_data = self.editing_product
         product_id = product_data.get("id")
@@ -1149,6 +1155,9 @@ class InventoryState(MixinState):
             return self.add_notification(
                 "No tiene permisos para eliminar productos.", "error"
             )
+        block = self._require_active_subscription()
+        if block:
+            return block
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -1271,6 +1280,58 @@ class InventoryState(MixinState):
         self.inventory_adjustment_item["adjust_quantity"] = 0
         self.inventory_adjustment_item["reason"] = ""
 
+    def _product_has_variants(
+        self,
+        session,
+        product_id: int,
+        company_id: int,
+        branch_id: int,
+    ) -> bool:
+        if not product_id:
+            return False
+        return (
+            session.exec(
+                select(ProductVariant.id)
+                .where(ProductVariant.product_id == product_id)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+                .limit(1)
+            ).first()
+            is not None
+        )
+
+    def _get_batches_for_adjustment(
+        self,
+        session,
+        product: Product,
+        variant: ProductVariant | None,
+        company_id: int,
+        branch_id: int,
+        lock: bool = False,
+    ) -> list[ProductBatch]:
+        if variant:
+            query = select(ProductBatch).where(
+                ProductBatch.product_variant_id == variant.id
+            )
+        else:
+            query = (
+                select(ProductBatch)
+                .where(ProductBatch.product_id == product.id)
+                .where(ProductBatch.product_variant_id.is_(None))
+            )
+        query = (
+            query.where(ProductBatch.company_id == company_id)
+            .where(ProductBatch.branch_id == branch_id)
+            .order_by(
+                ProductBatch.expiration_date.is_(None),
+                ProductBatch.expiration_date.asc(),
+                ProductBatch.id.asc(),
+            )
+        )
+        if lock:
+            query = query.with_for_update()
+        return session.exec(query).all()
+
     def _find_adjustment_product(
         self,
         session,
@@ -1278,64 +1339,81 @@ class InventoryState(MixinState):
         description: str,
         variant_id: int | None = None,
         product_id: int | None = None,
+        for_update: bool = False,
     ) -> tuple[Product | None, ProductVariant | None]:
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return None, None
+        def _maybe_lock(statement):
+            return statement.with_for_update() if for_update else statement
         if variant_id:
             variant = session.exec(
-                select(ProductVariant)
-                .where(ProductVariant.id == variant_id)
-                .where(ProductVariant.company_id == company_id)
-                .where(ProductVariant.branch_id == branch_id)
+                _maybe_lock(
+                    select(ProductVariant)
+                    .where(ProductVariant.id == variant_id)
+                    .where(ProductVariant.company_id == company_id)
+                    .where(ProductVariant.branch_id == branch_id)
+                )
             ).first()
             if variant:
                 product = session.exec(
-                    select(Product)
-                    .where(Product.id == variant.product_id)
-                    .where(Product.company_id == company_id)
-                    .where(Product.branch_id == branch_id)
+                    _maybe_lock(
+                        select(Product)
+                        .where(Product.id == variant.product_id)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    )
                 ).first()
                 return product, variant
         if product_id:
             product = session.exec(
-                select(Product)
-                .where(Product.id == product_id)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
+                _maybe_lock(
+                    select(Product)
+                    .where(Product.id == product_id)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                )
             ).first()
             if product:
                 return product, None
         if barcode:
             variant = session.exec(
-                select(ProductVariant)
-                .where(ProductVariant.sku == barcode)
-                .where(ProductVariant.company_id == company_id)
-                .where(ProductVariant.branch_id == branch_id)
+                _maybe_lock(
+                    select(ProductVariant)
+                    .where(ProductVariant.sku == barcode)
+                    .where(ProductVariant.company_id == company_id)
+                    .where(ProductVariant.branch_id == branch_id)
+                )
             ).first()
             if variant:
                 product = session.exec(
-                    select(Product)
-                    .where(Product.id == variant.product_id)
-                    .where(Product.company_id == company_id)
-                    .where(Product.branch_id == branch_id)
+                    _maybe_lock(
+                        select(Product)
+                        .where(Product.id == variant.product_id)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    )
                 ).first()
                 return product, variant
             product = session.exec(
-                select(Product)
-                .where(Product.barcode == barcode)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
+                _maybe_lock(
+                    select(Product)
+                    .where(Product.barcode == barcode)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                )
             ).first()
             if product:
                 return product, None
         if description:
             product = session.exec(
-                select(Product)
-                .where(Product.description == description)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
+                _maybe_lock(
+                    select(Product)
+                    .where(Product.description == description)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                )
             ).first()
             if product:
                 return product, None
@@ -1506,17 +1584,38 @@ class InventoryState(MixinState):
             )
             if not product:
                 return rx.toast("Producto no encontrado en el inventario.", duration=3000)
-            
+
+            if not variant and self._product_has_variants(
+                session, product.id, company_id, branch_id
+            ):
+                return rx.toast(
+                    "Producto con variantes. Seleccione la variante a ajustar.",
+                    duration=3500,
+                )
+
             try:
-                quantity = float(self.inventory_adjustment_item.get("adjust_quantity", 0) or 0)
-            except (TypeError, ValueError):
-                quantity = 0
+                quantity = Decimal(
+                    str(self.inventory_adjustment_item.get("adjust_quantity", 0) or 0)
+                )
+            except (InvalidOperation, TypeError, ValueError):
+                quantity = Decimal("0")
             if quantity <= 0:
                 return rx.toast("Ingrese la cantidad a ajustar.", duration=3000)
-            
-            available = (
-                float(variant.stock or 0) if variant else float(product.stock or 0)
+
+            batches = self._get_batches_for_adjustment(
+                session, product, variant, company_id, branch_id
             )
+            if batches:
+                available = sum(
+                    (Decimal(str(batch.stock or 0)) for batch in batches),
+                    Decimal("0"),
+                )
+            else:
+                available = (
+                    Decimal(str(variant.stock or 0))
+                    if variant
+                    else Decimal(str(product.stock or 0))
+                )
             if quantity > available:
                 return rx.toast(
                     "La cantidad supera el stock disponible.", duration=3000
@@ -1555,6 +1654,9 @@ class InventoryState(MixinState):
             return self.add_notification(
                 "No tiene permisos para registrar inventario.", "error"
             )
+        block = self._require_active_subscription()
+        if block:
+            return block
         status = (
             self.inventory_check_status
             if self.inventory_check_status in ["perfecto", "ajuste"]
@@ -1588,6 +1690,8 @@ class InventoryState(MixinState):
 
                 with rx.session() as session:
                     products_to_recalculate: set[int] = set()
+                    products_recalc_batches: set[int] = set()
+                    variants_recalc_batches: set[int] = set()
                     for item in self.inventory_adjustment_items:
                         description = (item.get("description") or "").strip()
                         barcode = (item.get("barcode") or "").strip()
@@ -1600,27 +1704,75 @@ class InventoryState(MixinState):
                             description,
                             item.get("variant_id"),
                             item.get("product_id"),
+                            for_update=True,
                         )
                         if not product:
+                            continue
+                        if not variant and self._product_has_variants(
+                            session, product.id, company_id, branch_id
+                        ):
                             continue
                         
                         quantity = _to_decimal(item.get("adjust_quantity", 0) or 0)
                         if quantity <= 0:
                             continue
-                        
-                        available = _to_decimal(
-                            (variant.stock if variant else product.stock) or 0
+
+                        unit = product.unit or item.get("unit") or ""
+                        batches = self._get_batches_for_adjustment(
+                            session, product, variant, company_id, branch_id, lock=True
                         )
-                        qty = quantity if quantity <= available else available
-                        
-                        # Actualizar stock
-                        if variant:
-                            variant.stock = max(available - qty, Decimal("0"))
-                            session.add(variant)
-                            products_to_recalculate.add(product.id)
+                        if batches:
+                            available = sum(
+                                (_to_decimal(batch.stock, Decimal("0")) for batch in batches),
+                                Decimal("0"),
+                            )
+                            qty = quantity if quantity <= available else available
+                            if qty <= 0:
+                                continue
+                            remaining = qty
+                            for batch in batches:
+                                if remaining <= 0:
+                                    break
+                                current_stock = _to_decimal(batch.stock, Decimal("0"))
+                                if current_stock <= 0:
+                                    continue
+                                deduct = remaining if remaining <= current_stock else current_stock
+                                batch.stock = current_stock - deduct
+                                session.add(batch)
+                                remaining -= deduct
+                            total_after = sum(
+                                (_to_decimal(batch.stock, Decimal("0")) for batch in batches),
+                                Decimal("0"),
+                            )
+                            if variant:
+                                variant.stock = self._normalize_quantity_value(
+                                    total_after, unit
+                                )
+                                session.add(variant)
+                                variants_recalc_batches.add(variant.id)
+                                products_to_recalculate.add(product.id)
+                            else:
+                                product.stock = self._normalize_quantity_value(
+                                    total_after, unit
+                                )
+                                session.add(product)
+                                products_recalc_batches.add(product.id)
                         else:
-                            product.stock = max(available - qty, Decimal("0"))
-                            session.add(product)
+                            available = _to_decimal(
+                                (variant.stock if variant else product.stock) or 0
+                            )
+                            qty = quantity if quantity <= available else available
+                            if qty <= 0:
+                                continue
+
+                            # Actualizar stock
+                            if variant:
+                                variant.stock = max(available - qty, Decimal("0"))
+                                session.add(variant)
+                                products_to_recalculate.add(product.id)
+                            else:
+                                product.stock = max(available - qty, Decimal("0"))
+                                session.add(product)
                         
                         # Crear StockMovement
                         detail_parts = []
@@ -1646,7 +1798,33 @@ class InventoryState(MixinState):
                         )
                         session.add(movement)
                         recorded = True
-                    
+
+                    if variants_recalc_batches:
+                        for variant_id in variants_recalc_batches:
+                            total_query = select(
+                                func.coalesce(func.sum(ProductBatch.stock), 0)
+                            ).where(ProductBatch.product_variant_id == variant_id)
+                            total_query = total_query.where(
+                                ProductBatch.company_id == company_id
+                            ).where(ProductBatch.branch_id == branch_id)
+                            total_row = session.exec(total_query).first()
+                            if total_row is None:
+                                total_stock = Decimal("0.0000")
+                            elif isinstance(total_row, tuple):
+                                total_stock = total_row[0]
+                            else:
+                                total_stock = total_row
+                            variant_row = session.exec(
+                                select(ProductVariant)
+                                .where(ProductVariant.id == variant_id)
+                                .where(ProductVariant.company_id == company_id)
+                                .where(ProductVariant.branch_id == branch_id)
+                            ).first()
+                            if variant_row:
+                                variant_row.stock = total_stock
+                                session.add(variant_row)
+                                products_to_recalculate.add(variant_row.product_id)
+
                     if products_to_recalculate:
                         for product_id in products_to_recalculate:
                             total_query = select(
@@ -1655,6 +1833,37 @@ class InventoryState(MixinState):
                             total_query = total_query.where(
                                 ProductVariant.company_id == company_id
                             ).where(ProductVariant.branch_id == branch_id)
+                            total_row = session.exec(total_query).first()
+                            if total_row is None:
+                                total_stock = Decimal("0.0000")
+                            elif isinstance(total_row, tuple):
+                                total_stock = total_row[0]
+                            else:
+                                total_stock = total_row
+                            product = session.exec(
+                                select(Product)
+                                .where(Product.id == product_id)
+                                .where(Product.company_id == company_id)
+                                .where(Product.branch_id == branch_id)
+                            ).first()
+                            if product:
+                                product.stock = self._normalize_quantity_value(
+                                    total_stock, product.unit or ""
+                                )
+                                session.add(product)
+
+                    if products_recalc_batches:
+                        for product_id in (
+                            products_recalc_batches - products_to_recalculate
+                        ):
+                            total_query = select(
+                                func.coalesce(func.sum(ProductBatch.stock), 0)
+                            ).where(ProductBatch.product_id == product_id)
+                            total_query = total_query.where(
+                                ProductBatch.product_variant_id.is_(None)
+                            ).where(ProductBatch.company_id == company_id).where(
+                                ProductBatch.branch_id == branch_id
+                            )
                             total_row = session.exec(total_query).first()
                             if total_row is None:
                                 total_stock = Decimal("0.0000")
@@ -1726,9 +1935,6 @@ class InventoryState(MixinState):
             f"Valor a Venta ({currency_label})",
             "Estado Stock",
         ]
-        style_header_row(ws, row, headers)
-        data_start = row + 1
-        row += 1
         
         with rx.session() as session:
             products = session.exec(
@@ -1779,6 +1985,53 @@ class InventoryState(MixinState):
                         "sale_price": float(product.sale_price or 0),
                     }
                 )
+
+        total_items = len(export_rows)
+        total_units = sum(float(item.get("stock", 0) or 0) for item in export_rows)
+        total_cost_value = sum(
+            float(item.get("stock", 0) or 0) * float(item.get("purchase_price", 0) or 0)
+            for item in export_rows
+        )
+        total_sale_value = sum(
+            float(item.get("stock", 0) or 0) * float(item.get("sale_price", 0) or 0)
+            for item in export_rows
+        )
+        stock_zero = sum(1 for item in export_rows if float(item.get("stock", 0) or 0) == 0)
+        stock_critical = sum(
+            1 for item in export_rows if 0 < float(item.get("stock", 0) or 0) <= 5
+        )
+        stock_low = sum(
+            1 for item in export_rows if 5 < float(item.get("stock", 0) or 0) <= 10
+        )
+
+        row += 1
+        ws.cell(row=row, column=1, value="RESUMEN EJECUTIVO")
+        row += 1
+        ws.cell(row=row, column=1, value="Total SKUs:")
+        ws.cell(row=row, column=2, value=total_items)
+        row += 1
+        ws.cell(row=row, column=1, value="Total unidades en stock:")
+        ws.cell(row=row, column=2, value=total_units)
+        row += 1
+        ws.cell(row=row, column=1, value=f"Valor total al costo ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_cost_value).number_format = currency_format
+        row += 1
+        ws.cell(row=row, column=1, value=f"Valor total a venta ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_sale_value).number_format = currency_format
+        row += 1
+        ws.cell(row=row, column=1, value="Productos sin stock:")
+        ws.cell(row=row, column=2, value=stock_zero)
+        row += 1
+        ws.cell(row=row, column=1, value="Productos críticos (1-5):")
+        ws.cell(row=row, column=2, value=stock_critical)
+        row += 1
+        ws.cell(row=row, column=1, value="Productos bajos (6-10):")
+        ws.cell(row=row, column=2, value=stock_low)
+        row += 2
+
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
 
         for row_data in export_rows:
             barcode = row_data["sku"]

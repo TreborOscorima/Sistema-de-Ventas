@@ -193,12 +193,24 @@ def _generate_button() -> rx.Component:
             ),
             rx.fragment(
                 rx.icon("file-down", class_name="w-5 h-5 mr-2"),
-                "Generar y Descargar Reporte",
+                "Generar Reporte",
             ),
         ),
         on_click=State.generate_report,
         disabled=State.report_loading,
         class_name="w-full h-10 flex items-center justify-center px-6 bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors",
+    )
+
+
+def _download_button() -> rx.Component:
+    """Botón para descargar el reporte generado."""
+    return rx.el.button(
+        rx.fragment(
+            rx.icon("download", class_name="w-5 h-5 mr-2"),
+            "Descargar Reporte",
+        ),
+        on_click=State.download_report,
+        class_name="w-full h-10 flex items-center justify-center px-6 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors",
     )
 
 
@@ -315,6 +327,19 @@ def reportes_page() -> rx.Component:
                         class_name="mb-6",
                     ),
                     _error_message(),
+                    rx.cond(
+                        State.report_ready,
+                        rx.el.div(
+                            rx.el.div(
+                                rx.icon("circle-check", class_name="w-4 h-4 mr-2 text-emerald-600"),
+                                "Reporte listo para descargar.",
+                                class_name="flex items-center text-sm text-emerald-700 mb-3",
+                            ),
+                            _download_button(),
+                            class_name="mb-4",
+                        ),
+                        rx.fragment(),
+                    ),
                     _generate_button(),
                     class_name="bg-white rounded-xl border border-slate-200 p-6 shadow-sm",
                 ),

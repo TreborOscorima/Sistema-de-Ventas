@@ -69,7 +69,7 @@ class CuentasState(MixinState):
     """
     debtors: list[dict] = []
     selected_client: dict | None = None
-    client_installments: list[SaleInstallment] = []
+    client_installments: list[dict] = []
     show_payment_modal: bool = False
     payment_amount: str = ""
     installment_payment_method: str = "Efectivo"
@@ -149,6 +149,17 @@ class CuentasState(MixinState):
             return mapping[value]
         return value.capitalize() if value else "Pendiente"
 
+    def _installment_snapshot(self, installment: SaleInstallment) -> dict:
+        return {
+            "id": installment.id,
+            "number": installment.number,
+            "status": installment.status,
+            "amount": installment.amount,
+            "paid_amount": installment.paid_amount,
+            "due_date": installment.due_date,
+            "payment_date": installment.payment_date,
+        }
+
     def _client_snapshot(self, client: Client) -> dict:
         current_debt = client.current_debt
         if current_debt is None:
@@ -171,12 +182,12 @@ class CuentasState(MixinState):
         return cleaned or "Cliente"
 
     def _compute_installment_counts(
-        self, installments: list[SaleInstallment]
+        self, installments: list[dict]
     ) -> tuple[int, int]:
         paid_count = 0
         pending_count = 0
         for installment in installments:
-            status = (installment.status or "").strip().lower()
+            status = (installment.get("status") or "").strip().lower()
             if status in {"paid", "completed"}:
                 paid_count += 1
             elif status == "pending":
@@ -184,7 +195,7 @@ class CuentasState(MixinState):
         return paid_count, pending_count
 
     def _set_current_client_totals(
-        self, installments: list[SaleInstallment]
+        self, installments: list[dict]
     ) -> None:
         paid_count, pending_count = self._compute_installment_counts(
             installments
@@ -237,16 +248,16 @@ class CuentasState(MixinState):
         rows: list[dict] = []
         today = self._country_today()
         for installment in self.client_installments:
-            status = (installment.status or "pending").strip().lower()
+            status = (installment.get("status") or "pending").strip().lower()
             if status == "completed":
                 status = "paid"
             is_paid = status in {"paid", "completed"}
-            amount = Decimal(str(installment.amount or 0))
-            paid_amount = Decimal(str(installment.paid_amount or 0))
+            amount = Decimal(str(installment.get("amount") or 0))
+            paid_amount = Decimal(str(installment.get("paid_amount") or 0))
             pending_amount = amount - paid_amount
             if pending_amount < 0:
                 pending_amount = Decimal("0")
-            due_date = installment.due_date
+            due_date = installment.get("due_date")
             due_date_display = (
                 due_date.strftime("%Y-%m-%d") if due_date else ""
             )
@@ -258,8 +269,8 @@ class CuentasState(MixinState):
                     is_overdue = False
             rows.append(
                 {
-                    "id": installment.id,
-                    "number": installment.number,
+                    "id": installment.get("id"),
+                    "number": installment.get("number"),
                     "due_date": due_date_display,
                     "amount": amount,
                     "paid_amount": paid_amount,
@@ -577,6 +588,29 @@ class CuentasState(MixinState):
 
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
+        period_label = f"Corte: {today}"
+
+        total_installments = len(rows)
+        total_amount = Decimal("0")
+        total_paid = Decimal("0")
+        total_pending = Decimal("0")
+        paid_count = 0
+        pending_count = 0
+        overdue_count = 0
+        for installment, _ in rows:
+            amount = Decimal(str(installment.amount or 0))
+            paid_amount = Decimal(str(installment.paid_amount or 0))
+            pending_amount = amount - paid_amount
+            total_amount += amount
+            total_paid += paid_amount
+            total_pending += pending_amount
+            status_label = self._installment_status_label(installment.status).lower()
+            if "pagad" in status_label:
+                paid_count += 1
+            elif "vencid" in status_label:
+                overdue_count += 1
+            else:
+                pending_count += 1
         
         workbook, sheet = create_excel_workbook("Cuentas por Cobrar")
         
@@ -584,7 +618,32 @@ class CuentasState(MixinState):
         title = f"ESTADO DE CUENTA - {report_client_name.upper()}" if report_client_name else "CUENTAS POR COBRAR - REPORTE GLOBAL"
         
         # Encabezado profesional
-        row = add_company_header(sheet, company_name, title, f"Generado: {today}", columns=7)
+        row = add_company_header(sheet, company_name, title, period_label, columns=7)
+
+        row += 1
+        sheet.cell(row=row, column=1, value="RESUMEN DE CARTERA")
+        row += 1
+        sheet.cell(row=row, column=1, value="Cuotas registradas:")
+        sheet.cell(row=row, column=2, value=total_installments)
+        row += 1
+        sheet.cell(row=row, column=1, value="Cuotas pagadas:")
+        sheet.cell(row=row, column=2, value=paid_count)
+        row += 1
+        sheet.cell(row=row, column=1, value="Cuotas pendientes:")
+        sheet.cell(row=row, column=2, value=pending_count)
+        row += 1
+        sheet.cell(row=row, column=1, value="Cuotas vencidas:")
+        sheet.cell(row=row, column=2, value=overdue_count)
+        row += 1
+        sheet.cell(row=row, column=1, value=f"Total comprometido ({currency_label}):")
+        sheet.cell(row=row, column=2, value=float(total_amount)).number_format = currency_format
+        row += 1
+        sheet.cell(row=row, column=1, value=f"Total cobrado ({currency_label}):")
+        sheet.cell(row=row, column=2, value=float(total_paid)).number_format = currency_format
+        row += 1
+        sheet.cell(row=row, column=1, value=f"Saldo pendiente ({currency_label}):")
+        sheet.cell(row=row, column=2, value=float(total_pending)).number_format = currency_format
+        row += 2
 
         headers = [
             "Fecha Vencimiento",
@@ -715,7 +774,10 @@ class CuentasState(MixinState):
                 .where(SaleInstallment.branch_id == branch_id)
                 .order_by(SaleInstallment.due_date)
             )
-            self.client_installments = installments.all()
+            self.client_installments = [
+                self._installment_snapshot(installment)
+                for installment in installments.all()
+            ]
             self._set_current_client_totals(self.client_installments)
         self.payment_amount = ""
         self.selected_installment_id = None
@@ -761,6 +823,14 @@ class CuentasState(MixinState):
             self.add_notification(
                 "No tiene permisos para gestionar cuentas.", "error"
             )
+            return
+        block = self._require_active_subscription()
+        if block:
+            if isinstance(block, list):
+                for action in block:
+                    yield action
+            else:
+                yield block
             return
         if not self.selected_installment_id:
             self.add_notification("Seleccione una cuota para pagar.", "error")
@@ -840,7 +910,10 @@ class CuentasState(MixinState):
                         .where(SaleInstallment.branch_id == branch_id)
                         .order_by(SaleInstallment.due_date)
                     )
-                    self.client_installments = installments.all()
+                    self.client_installments = [
+                        self._installment_snapshot(installment)
+                        for installment in installments.all()
+                    ]
                     self._set_current_client_totals(self.client_installments)
 
                 debtors_result = await session.exec(

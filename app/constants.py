@@ -149,6 +149,9 @@ CASHBOX_EXPENSE_ACTIONS: set[str] = {
 # MÉTODOS DE REPORTE
 # =============================================================================
 
+# Límite máximo de filas para exportaciones (previene OOM en reportes masivos)
+MAX_REPORT_ROWS: int = int(os.getenv("MAX_REPORT_ROWS", "100000"))
+
 REPORT_METHOD_KEYS: list[str] = [
     "cash",
     "debit",

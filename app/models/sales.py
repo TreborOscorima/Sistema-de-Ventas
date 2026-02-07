@@ -18,6 +18,15 @@ if TYPE_CHECKING:
 class Sale(rx.Model, table=True):
     """Cabecera de venta."""
 
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_sale_company_branch_timestamp",
+            "company_id",
+            "branch_id",
+            "timestamp",
+        ),
+    )
+
     timestamp: datetime = Field(
         default_factory=datetime.now,
         sa_column=sqlalchemy.Column(
@@ -36,13 +45,11 @@ class Sale(rx.Model, table=True):
     payment_condition: str = Field(default="contado")
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -64,13 +71,11 @@ class SalePayment(rx.Model, table=True):
 
     sale_id: int = Field(foreign_key="sale.id")
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -94,6 +99,21 @@ class SalePayment(rx.Model, table=True):
 
 class SaleItem(rx.Model, table=True):
     """Detalle de venta."""
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_saleitem_company_branch_sale",
+            "company_id",
+            "branch_id",
+            "sale_id",
+        ),
+        sqlalchemy.Index(
+            "ix_saleitem_company_branch_product",
+            "company_id",
+            "branch_id",
+            "product_id",
+        ),
+    )
 
     quantity: Decimal = Field(
         default=Decimal("1.0000"),
@@ -123,13 +143,11 @@ class SaleItem(rx.Model, table=True):
         foreign_key="productbatch.id",
     )
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -158,13 +176,11 @@ class SaleInstallment(rx.Model, table=True):
 
     sale_id: int = Field(foreign_key="sale.id")
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -214,13 +230,11 @@ class CashboxSession(rx.Model, table=True):
     is_open: bool = Field(default=True)
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -232,6 +246,15 @@ class CashboxSession(rx.Model, table=True):
 
 class CashboxLog(rx.Model, table=True):
     """Log de movimientos de caja."""
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_cashboxlog_company_branch_timestamp",
+            "company_id",
+            "branch_id",
+            "timestamp",
+        ),
+    )
 
     timestamp: datetime = Field(
         default_factory=datetime.now,
@@ -264,13 +287,11 @@ class CashboxLog(rx.Model, table=True):
     is_voided: bool = Field(default=False, index=True)
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -282,6 +303,16 @@ class CashboxLog(rx.Model, table=True):
 
 class FieldReservation(rx.Model, table=True):
     """Reserva de canchas deportivas."""
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_fieldreservation_company_branch_sport_start",
+            "company_id",
+            "branch_id",
+            "sport",
+            "start_datetime",
+        ),
+    )
 
     client_name: str = Field(nullable=False)
     client_dni: Optional[str] = Field(default=None)
@@ -311,13 +342,11 @@ class FieldReservation(rx.Model, table=True):
 
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -352,13 +381,11 @@ class PaymentMethod(rx.Model, table=True):
     )
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -398,13 +425,11 @@ class CompanySettings(rx.Model, table=True):
     )
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,

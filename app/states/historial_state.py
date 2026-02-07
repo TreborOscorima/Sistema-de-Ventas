@@ -34,6 +34,7 @@ from app.utils.exports import (
     NEGATIVE_FILL,
     WARNING_FILL,
 )
+from app.utils.tenant import tenant_bypass
 
 REPORT_METHOD_KEYS = [
     "cash",
@@ -98,7 +99,7 @@ class HistorialState(MixinState):
     sale_detail_modal_open: bool = False
     selected_sale_id: str = ""
     selected_sale_summary: dict = {}
-    selected_sale_items: list[SaleItem] = []
+    selected_sale_items: list[dict] = []
 
     def _history_date_range(self) -> tuple[datetime.datetime | None, datetime.datetime | None]:
         start_date = None
@@ -256,6 +257,64 @@ class HistorialState(MixinState):
         if self.staged_report_filter_user not in user_values_set:
             self.staged_report_filter_user = "Todos"
 
+    def _build_sale_user_lookup(
+        self, session, sales: list[Sale]
+    ) -> dict[int, str]:
+        """Obtiene usernames por user_id sin restringir por branch_id."""
+        company_id = self._company_id()
+        if not company_id:
+            return {}
+        user_ids = {
+            int(sale.user_id)
+            for sale in sales
+            if sale is not None and getattr(sale, "user_id", None) is not None
+        }
+        if not user_ids:
+            return {}
+
+        query = (
+            select(User.id, User.username)
+            .where(User.id.in_(user_ids))
+            .where(User.company_id == company_id)
+        )
+        with tenant_bypass():
+            rows = session.exec(query.execution_options(tenant_bypass=True)).all()
+
+        lookup: dict[int, str] = {}
+        for row in rows:
+            try:
+                user_id, username = row[0], row[1]
+            except Exception:
+                user_id = getattr(row, "id", None)
+                username = getattr(row, "username", None)
+            try:
+                user_id_int = int(user_id)
+            except (TypeError, ValueError):
+                continue
+            user_name = str(username or "").strip()
+            if user_name:
+                lookup[user_id_int] = user_name
+        return lookup
+
+    def _sale_username(
+        self,
+        sale: Sale | None,
+        user_lookup: dict[int, str] | None = None,
+        default: str = "Desconocido",
+    ) -> str:
+        if sale and sale.user and getattr(sale.user, "username", None):
+            user_name = str(sale.user.username).strip()
+            if user_name:
+                return user_name
+        if sale and user_lookup:
+            try:
+                user_id = int(getattr(sale, "user_id", None) or 0)
+            except (TypeError, ValueError):
+                user_id = 0
+            if user_id and user_id in user_lookup:
+                return user_lookup[user_id]
+        return default
+
     def _build_report_entries(self) -> list[dict]:
         start_date, end_date = self._report_date_range()
         method_filter = self.report_filter_method or "Todos"
@@ -285,15 +344,21 @@ class HistorialState(MixinState):
                         SalePayment.created_at <= end_date
                     )
                 payments = session.exec(payment_query).all()
+                sales_for_lookup = [
+                    payment.sale
+                    for payment in payments
+                    if payment is not None and getattr(payment, "sale", None) is not None
+                ]
+                sale_user_lookup = self._build_sale_user_lookup(
+                    session, sales_for_lookup
+                )
 
                 for payment in payments:
                     sale = payment.sale
                     if sale and sale.status == SaleStatus.cancelled:
                         continue
-                    user_name = (
-                        sale.user.username
-                        if sale and sale.user
-                        else "Desconocido"
+                    user_name = self._sale_username(
+                        sale, sale_user_lookup, "Desconocido"
                     )
                     if user_filter != "Todos" and user_name != user_filter:
                         continue
@@ -699,6 +764,7 @@ class HistorialState(MixinState):
             sales = session.exec(query).all()
             sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
+            sale_user_lookup = self._build_sale_user_lookup(session, sales)
 
             rows: list[dict] = []
             for sale in sales:
@@ -717,7 +783,9 @@ class HistorialState(MixinState):
                 client_name = (
                     sale.client.name if sale.client else "Sin cliente"
                 )
-                user_name = sale.user.username if sale.user else "Desconocido"
+                user_name = self._sale_username(
+                    sale, sale_user_lookup, "Desconocido"
+                )
                 total_amount = self._round_currency(float(sale.total_amount or 0))
                 rows.append(
                     {
@@ -735,6 +803,10 @@ class HistorialState(MixinState):
             return rows
 
     def _sales_total_count(self) -> int:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return 0
         with rx.session() as session:
             count_query = (
                 select(sa.func.count())
@@ -1044,7 +1116,16 @@ class HistorialState(MixinState):
                     payment_details = log_info.get(
                         "payment_details", payment_details
                     )
-            self.selected_sale_items = sale.items or []
+            sale_user_lookup = self._build_sale_user_lookup(session, [sale])
+            self.selected_sale_items = [
+                {
+                    "description": item.product_name_snapshot,
+                    "quantity": float(item.quantity or 0),
+                    "unit_price": self._round_currency(float(item.unit_price or 0)),
+                    "subtotal": self._round_currency(float(item.subtotal or 0)),
+                }
+                for item in (sale.items or [])
+            ]
             self.selected_sale_id = str(sale.id)
             self.selected_sale_summary = {
                 "sale_id": str(sale.id),
@@ -1052,7 +1133,9 @@ class HistorialState(MixinState):
                 if sale.timestamp
                 else "",
                 "client_name": sale.client.name if sale.client else "Sin cliente",
-                "user": sale.user.username if sale.user else "Desconocido",
+                "user": self._sale_username(
+                    sale, sale_user_lookup, "Desconocido"
+                ),
                 "payment_method": payment_method,
                 "payment_details": self._payment_details_text(payment_details),
                 "total": self._round_currency(float(sale.total_amount or 0)),
@@ -1075,16 +1158,7 @@ class HistorialState(MixinState):
 
     @rx.var
     def selected_sale_items_view(self) -> list[dict]:
-        items = self.selected_sale_items or []
-        return [
-            {
-                "description": item.product_name_snapshot,
-                "quantity": float(item.quantity or 0),
-                "unit_price": self._round_currency(float(item.unit_price or 0)),
-                "subtotal": self._round_currency(float(item.subtotal or 0)),
-            }
-            for item in items
-        ]
+        return list(self.selected_sale_items or [])
 
     @rx.event
     def export_to_excel(self):
@@ -1098,7 +1172,10 @@ class HistorialState(MixinState):
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
-        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        start_dt, end_dt = self._history_date_range()
+        period_start = start_dt.strftime("%d/%m/%Y") if start_dt else "Inicio"
+        period_end = end_dt.strftime("%d/%m/%Y") if end_dt else "Actual"
+        period_label = f"Período: {period_start} a {period_end}"
         
         wb, ws = create_excel_workbook("Historial de Ventas")
         
@@ -1107,7 +1184,7 @@ class HistorialState(MixinState):
             ws,
             company_name,
             "HISTORIAL DE MOVIMIENTOS Y VENTAS",
-            f"Generado: {today}",
+            period_label,
             columns=11,
         )
         
@@ -1146,6 +1223,7 @@ class HistorialState(MixinState):
             sales = session.exec(query).all()
             sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
+            sale_user_lookup = self._build_sale_user_lookup(session, sales)
 
             invalid_labels = {"", "-", "no especificado"}
             for sale in sales:
@@ -1202,7 +1280,7 @@ class HistorialState(MixinState):
                             payment_details = "Pago registrado"
 
                 client_name = sale.client.name if sale.client else "Venta al contado"
-                user_name = sale.user.username if sale.user else "Sistema"
+                user_name = self._sale_username(sale, sale_user_lookup, "Sistema")
                 if is_credit:
                     method_display = payment_method
                 else:
@@ -1304,7 +1382,10 @@ class HistorialState(MixinState):
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
-        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        start_dt, end_dt = self._report_date_range()
+        period_start = start_dt.strftime("%d/%m/%Y") if start_dt else "Inicio"
+        period_end = end_dt.strftime("%d/%m/%Y") if end_dt else "Actual"
+        period_label = f"Período: {period_start} a {period_end}"
         
         active_tab = self.report_active_tab or "metodos"
         if active_tab == "cierres":
@@ -1315,7 +1396,13 @@ class HistorialState(MixinState):
             wb, ws = create_excel_workbook("Cierres de Caja")
             
             # Encabezado profesional
-            row = add_company_header(ws, company_name, "HISTORIAL DE CIERRES DE CAJA", f"Generado: {today}", columns=5)
+            row = add_company_header(
+                ws,
+                company_name,
+                "HISTORIAL DE CIERRES DE CAJA",
+                period_label,
+                columns=5,
+            )
             
             headers = [
                 "Fecha y Hora",
@@ -1372,7 +1459,13 @@ class HistorialState(MixinState):
             wb, ws = create_excel_workbook("Detalle de Cobros")
             
             # Encabezado profesional
-            row = add_company_header(ws, company_name, "DETALLE DE COBROS E INGRESOS", f"Generado: {today}", columns=6)
+            row = add_company_header(
+                ws,
+                company_name,
+                "DETALLE DE COBROS E INGRESOS",
+                period_label,
+                columns=6,
+            )
             
             detail_headers = [
                 "Fecha y Hora",
@@ -1439,7 +1532,13 @@ class HistorialState(MixinState):
         wb, ws = create_excel_workbook("Resumen por Método")
         
         # Encabezado profesional
-        row = add_company_header(ws, company_name, "INGRESOS POR MÉTODO DE PAGO", f"Generado: {today}", columns=4)
+        row = add_company_header(
+            ws,
+            company_name,
+            "INGRESOS POR MÉTODO DE PAGO",
+            period_label,
+            columns=4,
+        )
         
         summary_headers = [
             "Método de Pago",
@@ -1499,7 +1598,13 @@ class HistorialState(MixinState):
 
         # Segunda hoja: Detalle
         detail_ws = wb.create_sheet("Detalle de Cobros")
-        row = add_company_header(detail_ws, company_name, "DETALLE DE COBROS E INGRESOS", f"Generado: {today}", columns=6)
+        row = add_company_header(
+            detail_ws,
+            company_name,
+            "DETALLE DE COBROS E INGRESOS",
+            period_label,
+            columns=6,
+        )
         
         detail_headers = [
             "Fecha y Hora",

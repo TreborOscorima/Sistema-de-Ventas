@@ -1458,6 +1458,141 @@ def campo_tab() -> rx.Component:
   )
 
 
+def field_prices_tab() -> rx.Component:
+  return rx.el.div(
+    rx.el.div(
+      rx.el.h3("PRECIOS DE CAMPO", class_name="text-lg font-semibold text-slate-800"),
+      rx.el.p(
+        "Configura las tarifas por deporte y nombre de campo para usarlas directamente al registrar reservas.",
+        class_name="text-sm text-slate-600",
+      ),
+      class_name="flex flex-col gap-1",
+    ),
+    rx.cond(
+      State.can_manage_config,
+      rx.el.div(
+        rx.el.input(
+          placeholder="Deporte (ej: Futbol, Voley)",
+          value=State.new_field_price_sport,
+          on_change=State.set_new_field_price_sport,
+          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          debounce_timeout=200,
+        ),
+        rx.el.input(
+          placeholder="Nombre del campo (ej: Futbol 5)",
+          value=State.new_field_price_name,
+          on_change=State.set_new_field_price_name,
+          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          debounce_timeout=200,
+        ),
+        rx.el.input(
+          type="number",
+          step="0.01",
+          placeholder="Precio por hora",
+          value=State.new_field_price_amount,
+          on_change=State.set_new_field_price_amount,
+          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+        ),
+        rx.el.button(
+          rx.icon("plus", class_name="h-4 w-4"),
+          "Agregar",
+          on_click=State.add_field_price,
+          class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[44px]",
+        ),
+        rx.el.button(
+          rx.icon("refresh-ccw", class_name="h-4 w-4"),
+          "Actualizar",
+          on_click=State.update_field_price,
+          is_disabled=rx.cond(State.editing_field_price_id == "", True, False),
+          class_name=rx.cond(
+            State.editing_field_price_id == "",
+            "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed min-h-[44px]",
+            "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-amber-500 text-white hover:bg-amber-600 min-h-[44px]",
+          ),
+        ),
+        class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[1fr,2fr,1fr,auto,auto] gap-3 items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200",
+      ),
+      rx.el.div(
+        rx.el.p(
+          "Solo usuarios con permiso de Configuracion Global pueden modificar precios.",
+          class_name="text-sm text-amber-700",
+        ),
+        class_name="rounded-md border border-amber-200 bg-amber-50 px-3 py-2",
+      ),
+    ),
+    rx.cond(
+      State.editing_field_price_id != "",
+      rx.el.div(
+        "Editando un precio existente. Ajusta los campos y presiona Actualizar.",
+        class_name="text-sm text-amber-700 bg-amber-50 border border-amber-100 px-3 py-2 rounded-md",
+      ),
+      rx.fragment(),
+    ),
+    rx.el.div(
+      rx.el.table(
+        rx.el.thead(
+          rx.el.tr(
+            rx.el.th("Deporte", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Campo", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Precio (por hora)", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th(
+              "Acciones",
+              class_name=f"{TABLE_STYLES['header_cell']} text-center",
+            ),
+            class_name=TABLE_STYLES["header"],
+          )
+        ),
+        rx.el.tbody(
+          rx.foreach(
+            State.field_prices,
+            lambda price: rx.el.tr(
+              rx.el.td(price["sport"], class_name="py-2 px-3"),
+              rx.el.td(price["name"], class_name="py-2 px-3"),
+              rx.el.td(
+                rx.el.input(
+                  type="number",
+                  step="0.01",
+                  value=price["price"].to_string(),
+                  on_change=lambda value, pid=price["id"]: State.update_field_price_amount(
+                    pid, value
+                  ),
+                  disabled=~State.can_manage_config,
+                  class_name="w-full sm:w-36 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-500",
+                ),
+                class_name="py-2 px-3",
+              ),
+              rx.el.td(
+                rx.cond(
+                  State.can_manage_config,
+                  rx.el.div(
+                    rx.el.button(
+                      rx.icon("pencil", class_name="h-4 w-4"),
+                      on_click=lambda _, pid=price["id"]: State.edit_field_price(pid),
+                      class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
+                    ),
+                    rx.el.button(
+                      rx.icon("trash-2", class_name="h-4 w-4"),
+                      on_click=lambda _, pid=price["id"]: State.remove_field_price(pid),
+                      class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                    ),
+                    class_name="flex items-center justify-center gap-2",
+                  ),
+                  rx.el.span("Solo lectura", class_name="text-xs text-slate-500"),
+                ),
+                class_name="py-2 px-3 text-center",
+              ),
+              class_name="border-b",
+            ),
+          )
+        ),
+        class_name="min-w-full",
+      ),
+      class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-x-auto",
+    ),
+    class_name="flex flex-col gap-4",
+  )
+
+
 def servicio_card(title: str, description: str) -> rx.Component:
   return rx.el.div(
     rx.el.div(
@@ -1473,11 +1608,12 @@ def servicios_page() -> rx.Component:
   content = rx.el.div(
     page_title(
       "SERVICIOS",
-      "Gestiona el alquiler de campo con reservas, adelantos, cancelaciones y registros administrativos.",
+      "Gestiona reservas, precios de campo, adelantos, cancelaciones y registros administrativos.",
     ),
     rx.match(
       State.service_active_tab,
       ("campo", campo_tab()),
+      ("precios_campo", field_prices_tab()),
       ("piscina", servicio_card("Alquiler de Piscina", "Registro y seguimiento de alquiler de piscina.")),
       servicio_card("Alquiler de Campo", "Reserva y control de alquiler de campo."),
     ),

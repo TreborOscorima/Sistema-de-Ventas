@@ -81,10 +81,30 @@ def _get_redis() -> "redis.Redis | None":
 # FUNCIONES PRINCIPALES
 # =============================================================================
 
+def _normalize_ip(ip_address: str | None) -> str | None:
+    if not ip_address:
+        return None
+    ip = str(ip_address).strip()
+    if "," in ip:
+        ip = ip.split(",", 1)[0].strip()
+    return ip or None
+
+
+def _build_key(username: str, ip_address: str | None = None) -> str | None:
+    key = (username or "").lower().strip()
+    if not key:
+        return None
+    ip = _normalize_ip(ip_address)
+    if ip:
+        return f"{key}|{ip}"
+    return key
+
+
 def is_rate_limited(
     username: str,
     max_attempts: int = MAX_LOGIN_ATTEMPTS,
     window_minutes: int = LOGIN_LOCKOUT_MINUTES,
+    ip_address: str | None = None,
 ) -> bool:
     """
     Verifica si un usuario está bloqueado por demasiados intentos fallidos.
@@ -97,7 +117,7 @@ def is_rate_limited(
     Returns:
         True si está bloqueado, False si puede intentar
     """
-    key = username.lower().strip()
+    key = _build_key(username, ip_address)
     if not key:
         return False
     
@@ -138,6 +158,7 @@ def _is_rate_limited_memory(
 def record_failed_attempt(
     username: str,
     window_minutes: int = LOGIN_LOCKOUT_MINUTES,
+    ip_address: str | None = None,
 ) -> None:
     """
     Registra un intento de login fallido.
@@ -146,7 +167,7 @@ def record_failed_attempt(
         username: Nombre de usuario
         window_minutes: Tiempo de expiración del registro
     """
-    key = username.lower().strip()
+    key = _build_key(username, ip_address)
     if not key:
         return
     
@@ -167,14 +188,14 @@ def record_failed_attempt(
     _memory_store[key].append(datetime.now())
 
 
-def clear_login_attempts(username: str) -> None:
+def clear_login_attempts(username: str, ip_address: str | None = None) -> None:
     """
     Limpia los intentos fallidos tras login exitoso.
     
     Args:
         username: Nombre de usuario
     """
-    key = username.lower().strip()
+    key = _build_key(username, ip_address)
     if not key:
         return
     
@@ -193,6 +214,7 @@ def clear_login_attempts(username: str) -> None:
 def remaining_lockout_time(
     username: str,
     window_minutes: int = LOGIN_LOCKOUT_MINUTES,
+    ip_address: str | None = None,
 ) -> int:
     """
     Calcula los minutos restantes de bloqueo.
@@ -204,7 +226,7 @@ def remaining_lockout_time(
     Returns:
         Minutos restantes o 0 si no está bloqueado
     """
-    key = username.lower().strip()
+    key = _build_key(username, ip_address)
     if not key:
         return 0
     

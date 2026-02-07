@@ -22,6 +22,7 @@ from sqlalchemy import and_, or_
 from app.models import Product, SaleInstallment, Sale, CashboxSession
 from app.enums import SaleStatus
 from app.utils.formatting import format_currency
+from app.utils.tenant import set_tenant_context
 
 
 class AlertType(str, Enum):
@@ -75,6 +76,13 @@ INSTALLMENT_DUE_DAYS = 3      # Días antes del vencimiento para alertar
 CASHBOX_OPEN_HOURS = 12       # Horas para alertar caja abierta
 
 
+def _require_tenant(company_id: int | None, branch_id: int | None) -> None:
+    if not company_id:
+        raise ValueError("company_id requerido para alertas.")
+    if not branch_id:
+        raise ValueError("branch_id requerido para alertas.")
+
+
 def get_low_stock_alerts(
     company_id: int | None = None,
     branch_id: int | None = None,
@@ -85,6 +93,8 @@ def get_low_stock_alerts(
     Returns:
         Lista de alertas de stock
     """
+    _require_tenant(company_id, branch_id)
+    set_tenant_context(company_id, branch_id)
     alerts = []
     
     with rx.session() as session:
@@ -199,6 +209,8 @@ def get_installment_alerts(
     Returns:
         Lista de alertas de cuotas
     """
+    _require_tenant(company_id, branch_id)
+    set_tenant_context(company_id, branch_id)
     alerts = []
     today = country_today_start(country_code, timezone=timezone)
     due_threshold = today + timedelta(days=INSTALLMENT_DUE_DAYS)
@@ -333,6 +345,8 @@ def get_cashbox_alerts(
     Returns:
         Lista de alertas de caja
     """
+    _require_tenant(company_id, branch_id)
+    set_tenant_context(company_id, branch_id)
     alerts = []
     threshold_time = datetime.now() - timedelta(hours=CASHBOX_OPEN_HOURS)
     
@@ -384,6 +398,8 @@ async def get_overdue_count(
     timezone: str | None = None,
 ) -> int:
     """Cuenta cuotas vencidas (pendientes con fecha pasada) usando sesión async."""
+    _require_tenant(company_id, branch_id)
+    set_tenant_context(company_id, branch_id)
     today = country_today_start(country_code, timezone=timezone)
     overdue_query = (
         select(func.count())
@@ -417,6 +433,8 @@ def get_all_alerts(
     Returns:
         Lista de todas las alertas ordenadas por severidad
     """
+    _require_tenant(company_id, branch_id)
+    set_tenant_context(company_id, branch_id)
     alerts = []
     
     try:
@@ -468,6 +486,8 @@ def get_alert_summary(
     Returns:
         Dict con conteos por severidad
     """
+    _require_tenant(company_id, branch_id)
+    set_tenant_context(company_id, branch_id)
     alerts = get_all_alerts(
         currency_symbol,
         company_id,

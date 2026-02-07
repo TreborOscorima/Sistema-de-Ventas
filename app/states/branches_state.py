@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import Branch, Company, User as UserModel, UserBranch, Sale, Purchase, CashboxSession, Product
 from app.utils.db_seeds import seed_new_branch_data
+from app.utils.tenant import set_tenant_context
 from .mixin_state import MixinState
 
 
@@ -91,6 +92,9 @@ class BranchesState(MixinState):
         toast = self._require_manage_config()
         if toast:
             return toast
+        block = self._require_active_subscription()
+        if block:
+            return block
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
@@ -180,6 +184,9 @@ class BranchesState(MixinState):
         toast = self._require_manage_config()
         if toast:
             return toast
+        block = self._require_active_subscription()
+        if block:
+            return block
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
@@ -219,6 +226,9 @@ class BranchesState(MixinState):
         toast = self._require_manage_config()
         if toast:
             return toast
+        block = self._require_active_subscription()
+        if block:
+            return block
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
@@ -275,6 +285,8 @@ class BranchesState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
+        # Gestión de accesos por sucursal: alcance por empresa.
+        set_tenant_context(company_id, None)
         branch_id_int = int(branch_id)
         with rx.session() as session:
             branch = session.exec(
@@ -350,6 +362,8 @@ class BranchesState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
+        # Gestión de accesos por sucursal: alcance por empresa.
+        set_tenant_context(company_id, None)
         desired_ids = {
             int(row["id"]) for row in self.branch_users_rows if row.get("has_access")
         }

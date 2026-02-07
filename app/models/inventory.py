@@ -30,13 +30,11 @@ class Product(rx.Model, table=True):
     description: str = Field(nullable=False, index=True)
     category: str = Field(default="General", index=True)
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -91,13 +89,11 @@ class ProductVariant(rx.Model, table=True):
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
     )
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -138,13 +134,11 @@ class ProductBatch(rx.Model, table=True):
         foreign_key="productvariant.id",
     )
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -177,13 +171,11 @@ class ProductKit(rx.Model, table=True):
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
     )
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -224,13 +216,11 @@ class PriceTier(rx.Model, table=True):
         foreign_key="productvariant.id",
     )
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -256,13 +246,11 @@ class Category(rx.Model, table=True):
 
     name: str = Field(index=True, nullable=False)
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -286,13 +274,11 @@ class StockMovement(rx.Model, table=True):
     product_id: Optional[int] = Field(default=None, foreign_key="product.id")
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -315,13 +301,11 @@ class Unit(rx.Model, table=True):
     )
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -336,13 +320,11 @@ class FieldPrice(rx.Model, table=True):
     sport: SportType = Field(nullable=False)
     name: str = Field(nullable=False)
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,

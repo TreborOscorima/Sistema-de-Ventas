@@ -21,8 +21,9 @@ from sqlmodel import select, func
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import selectinload
 
-from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment
+from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User
 from app.enums import SaleStatus, PaymentMethodType
+from app.utils.tenant import set_tenant_context, tenant_bypass
 
 
 # =============================================================================
@@ -272,6 +273,119 @@ def _safe_string(value: Any, default: str = "") -> str:
         return default
 
 
+def _build_sale_user_lookup(
+    session,
+    sales: list[Sale],
+    company_id: int | None,
+) -> dict[int, str]:
+    """Obtiene usernames por user_id para ventas, evitando filtros por sucursal."""
+    user_ids = {
+        int(sale.user_id)
+        for sale in sales
+        if sale is not None and getattr(sale, "user_id", None) is not None
+    }
+    if not user_ids:
+        return {}
+
+    query = select(User.id, User.username).where(User.id.in_(user_ids))
+    if company_id:
+        query = query.where(User.company_id == company_id)
+
+    with tenant_bypass():
+        rows = session.exec(query.execution_options(tenant_bypass=True)).all()
+
+    lookup: dict[int, str] = {}
+    for row in rows:
+        try:
+            user_id, username = row[0], row[1]
+        except Exception:
+            user_id = getattr(row, "id", None)
+            username = getattr(row, "username", None)
+        safe_id = _safe_int(user_id)
+        safe_name = _safe_string(username)
+        if safe_id and safe_name:
+            lookup[safe_id] = safe_name
+    return lookup
+
+
+def _resolve_sale_username(
+    sale: Sale,
+    user_lookup: dict[int, str],
+    default: str = "Desconocido",
+) -> str:
+    """Resuelve el usuario de una venta usando relación y fallback por user_id."""
+    if sale.user and getattr(sale.user, "username", None):
+        return _safe_string(sale.user.username, default)
+    user_id = _safe_int(getattr(sale, "user_id", None))
+    if user_id and user_id in user_lookup:
+        return _safe_string(user_lookup.get(user_id), default)
+    return default
+
+
+def _build_cashbox_log_user_lookup(
+    session,
+    logs: list[CashboxLog],
+    company_id: int | None,
+) -> dict[int, str]:
+    """Resuelve usernames para logs de caja aunque el usuario no pertenezca a la sucursal actual."""
+    user_ids = {
+        int(log.user_id)
+        for log in logs
+        if log is not None and getattr(log, "user_id", None) is not None
+    }
+    if not user_ids:
+        return {}
+
+    query = select(User.id, User.username).where(User.id.in_(user_ids))
+    if company_id:
+        query = query.where(User.company_id == company_id)
+
+    with tenant_bypass():
+        rows = session.exec(query.execution_options(tenant_bypass=True)).all()
+
+    lookup: dict[int, str] = {}
+    for row in rows:
+        try:
+            user_id, username = row[0], row[1]
+        except Exception:
+            user_id = getattr(row, "id", None)
+            username = getattr(row, "username", None)
+        safe_id = _safe_int(user_id)
+        safe_name = _safe_string(username)
+        if safe_id and safe_name:
+            lookup[safe_id] = safe_name
+    return lookup
+
+
+def _translate_cashbox_action(action: str | None) -> str:
+    raw = _safe_string(action).lower()
+    mapping = {
+        "apertura": "Apertura de Caja",
+        "cierre": "Cierre de Caja",
+        "venta": "Venta",
+        "reserva": "Reserva",
+        "adelanto": "Adelanto",
+        "cobranza": "Cobranza",
+        "inicial credito": "Inicial Crédito",
+        "gasto_caja_chica": "Gasto Caja Chica",
+        "gasto caja chica": "Gasto Caja Chica",
+    }
+    if raw in mapping:
+        return mapping[raw]
+    return raw.replace("_", " ").strip().title() or "Movimiento"
+
+
+def _cashbox_action_nature(action: str | None) -> str:
+    raw = _safe_string(action).lower()
+    if raw == "apertura":
+        return "Apertura"
+    if raw == "cierre":
+        return "Cierre"
+    if "gasto" in raw or "egreso" in raw:
+        return "Egreso"
+    return "Ingreso"
+
+
 def _variant_label_from_item(item: SaleItem) -> str:
     variant = item.product_variant
     if variant:
@@ -418,6 +532,7 @@ def generate_sales_report(
     - Análisis de utilidad bruta
     - Listado detallado de transacciones
     """
+    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -449,6 +564,7 @@ def generate_sales_report(
         query = query.where(Sale.status != SaleStatus.cancelled)
     
     sales = session.exec(query).all()
+    sale_user_lookup = _build_sale_user_lookup(session, sales, company_id)
     
     period_str = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
     
@@ -504,7 +620,7 @@ def generate_sales_report(
         by_day[day_key]["total"] += sale_total
         
         # Por usuario
-        user_name = sale.user.username if sale.user else "Desconocido"
+        user_name = _resolve_sale_username(sale, sale_user_lookup, "Desconocido")
         if user_name not in by_user:
             by_user[user_name] = {"count": 0, "total": Decimal("0")}
         by_user[user_name]["count"] += 1
@@ -561,6 +677,14 @@ def generate_sales_report(
         ws_summary.cell(row=row, column=1, value=label).font = Font(bold=True)
         ws_summary.cell(row=row, column=2, value=value)
         row += 1
+
+    _add_notes_section(ws_summary, row, [
+        "Ventas Brutas: Importe total facturado en el período seleccionado.",
+        "Costo de Ventas: Costo de adquisición de los ítems efectivamente vendidos.",
+        "Utilidad Bruta = Ventas Brutas - Costo de Ventas.",
+        "Ticket Promedio = Ventas Brutas ÷ Nº de transacciones.",
+        "Ventas a Crédito: Operaciones con saldo pendiente parcial o total.",
+    ], columns=8)
     
     # =================
     # HOJA 2: VENTAS POR DÍA (con fórmulas de Excel)
@@ -950,7 +1074,7 @@ def generate_sales_report(
                 row=row,
                 column=4,
                 value=_safe_string(
-                    sale.user.username if sale.user else None,
+                    _resolve_sale_username(sale, sale_user_lookup, "Sistema"),
                     "Sistema",
                 ),
             )
@@ -981,6 +1105,13 @@ def generate_sales_report(
         {"type": "text", "value": ""},
         {"type": "sum", "col_letter": "K", "number_format": currency_format},
     ])
+
+    _add_notes_section(ws_detail, detail_totals_row, [
+        "Cada fila representa un ítem vendido dentro de una transacción.",
+        "Nº Venta: correlativo interno de la operación comercial.",
+        "Subtotal = Cantidad × Precio Unitario para cada ítem.",
+        "Método de Pago muestra la forma de cobro aplicada a la venta.",
+    ], columns=11)
     
     _auto_adjust_columns(ws_detail)
     
@@ -1161,6 +1292,7 @@ def generate_inventory_report(
     - Productos con stock crítico
     - Rotación estimada
     """
+    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -1291,6 +1423,14 @@ def generate_inventory_report(
         ws_summary.cell(row=row, column=1, value=label).font = Font(bold=True) if not label.startswith("   ") else Font()
         ws_summary.cell(row=row, column=2, value=value)
         row += 1
+
+    _add_notes_section(ws_summary, row, [
+        "Valor al Costo: inversión total del inventario (stock × costo unitario).",
+        "Valor a Precio Venta: potencial de facturación si se vende todo el stock.",
+        "Utilidad Potencial = Valor a Precio Venta - Valor al Costo.",
+        "Stock crítico: productos con 1 a 5 unidades disponibles.",
+        "Stock bajo: productos con 6 a 10 unidades disponibles.",
+    ], columns=8)
     
     _auto_adjust_columns(ws_summary)
     
@@ -1538,6 +1678,7 @@ def generate_receivables_report(
     - Detalle por cliente
     - Provisión sugerida para cobranza dudosa
     """
+    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -1961,6 +2102,7 @@ def generate_cashbox_report(
     - Diferencias detectadas
     - Desglose de ingresos por origen (Ventas vs Cobranzas)
     """
+    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -1984,6 +2126,7 @@ def generate_cashbox_report(
         query = query.where(CashboxLog.branch_id == branch_id)
     
     logs = session.exec(query).all()
+    log_user_lookup = _build_cashbox_log_user_lookup(session, logs, company_id)
     
     # Consultar ventas del período
     sales_query = (
@@ -2140,41 +2283,88 @@ def generate_cashbox_report(
     # Actualizar participación con fórmulas
     for r in range(caja_pay_start, caja_pay_totals):
         ws_summary.cell(row=r, column=4, value=f"=IF($C${caja_pay_totals}>0,C{r}/$C${caja_pay_totals},0)").number_format = PERCENT_FORMAT
+
+    _add_notes_section(ws_summary, caja_pay_totals, [
+        "Ingresos por Ventas: cobros de operaciones comerciales del período.",
+        "Cobros de Cuotas: recuperaciones de ventas a crédito de períodos actuales o previos.",
+        "Total Ingresos = Ventas + Cobros de Cuotas (dinero real ingresado en caja).",
+        "Participación %: peso de cada método de pago sobre el total recaudado.",
+    ], columns=4)
     
     _auto_adjust_columns(ws_summary)
     
     # =================
-    # HOJA 2: DETALLE APERTURAS/CIERRES
+    # HOJA 2: MOVIMIENTOS DE CAJA
     # =================
-    ws_logs = wb.create_sheet("Aperturas y Cierres")
-    row = _add_company_header(ws_logs, company_name, "DETALLE DE APERTURAS Y CIERRES", period_str)
-    
-    headers = ["Fecha/Hora", "Acción", "Monto", "Notas"]
+    ws_logs = wb.create_sheet("Movimientos Caja")
+    row = _add_company_header(
+        ws_logs,
+        company_name,
+        "BITÁCORA DE MOVIMIENTOS DE CAJA",
+        period_str,
+        columns=7,
+    )
+
+    headers = [
+        "Fecha/Hora",
+        "Tipo Movimiento",
+        "Responsable",
+        "Naturaleza",
+        f"Monto ({currency_label})",
+        "Método de Pago",
+        "Referencia / Notas",
+    ]
     _style_header_row(ws_logs, row, headers)
     row += 1
-    
+
     for log in logs:
-        ws_logs.cell(row=row, column=1, value=log.timestamp.strftime("%d/%m/%Y %H:%M:%S") if log.timestamp else "")
-        # Traducir acción a español
-        action_es = "Apertura de Caja" if log.action == "apertura" else "Cierre de Caja" if log.action == "cierre" else (log.action or "").capitalize()
-        ws_logs.cell(row=row, column=2, value=_safe_string(action_es))
-        ws_logs.cell(row=row, column=3, value=float(_safe_decimal(log.amount))).number_format = currency_format
+        user_id = _safe_int(getattr(log, "user_id", None))
+        user_name = _safe_string(log_user_lookup.get(user_id), "Sistema")
+        action_label = _translate_cashbox_action(getattr(log, "action", ""))
+        nature = _cashbox_action_nature(getattr(log, "action", ""))
+        method_raw = _safe_string(getattr(log, "payment_method", ""))
+        method_label = (
+            _translate_payment_method(_normalize_payment_method(method_raw))
+            if method_raw
+            else "No especificado"
+        )
+
+        ws_logs.cell(
+            row=row,
+            column=1,
+            value=log.timestamp.strftime("%d/%m/%Y %H:%M:%S") if log.timestamp else "",
+        )
+        ws_logs.cell(row=row, column=2, value=_safe_string(action_label))
+        ws_logs.cell(row=row, column=3, value=user_name)
+        ws_logs.cell(row=row, column=4, value=nature)
+        ws_logs.cell(row=row, column=5, value=float(_safe_decimal(log.amount))).number_format = currency_format
+        ws_logs.cell(row=row, column=6, value=_safe_string(method_label))
         notes_str = _safe_string(log.notes, "Sin observaciones")
         if "#" in notes_str and ", " in notes_str:
             notes_str = notes_str.replace(", ", "\n")
-        cell = ws_logs.cell(row=row, column=4, value=notes_str)
-        cell.alignment = Alignment(wrap_text=True, vertical="top")
-        
-        for col in range(1, 5):
+        notes_cell = ws_logs.cell(row=row, column=7, value=notes_str)
+        notes_cell.alignment = Alignment(wrap_text=True, vertical="top")
+
+        nature_cell = ws_logs.cell(row=row, column=4)
+        if nature == "Ingreso":
+            nature_cell.fill = POSITIVE_FILL
+        elif nature == "Egreso":
+            nature_cell.fill = NEGATIVE_FILL
+        else:
+            nature_cell.fill = WARNING_FILL
+
+        for col in range(1, 8):
             ws_logs.cell(row=row, column=col).border = THIN_BORDER
         row += 1
-    
+
     _add_notes_section(ws_logs, row, [
-        "Apertura de Caja: Monto inicial con el que se inicia el día.",
-        "Cierre de Caja: Monto contado al finalizar el día.",
-    ], columns=4)
-    
-    ws_logs.column_dimensions["D"].width = 60
+        "Naturaleza Ingreso: dinero que entra a caja (ventas, reservas, cobranzas, adelantos).",
+        "Naturaleza Egreso: dinero que sale de caja (gastos, devoluciones, ajustes).",
+        "Apertura: fondo inicial al inicio de jornada; Cierre: arqueo final del día.",
+        "Responsable: usuario que registró el movimiento en el sistema.",
+    ], columns=7)
+
+    ws_logs.column_dimensions["G"].width = 65
     _auto_adjust_columns(ws_logs)
     
     # =================

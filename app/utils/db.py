@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.utils.logger import get_logger
+from app.utils.tenant import register_tenant_listeners
 
 load_dotenv()
 
@@ -44,14 +45,21 @@ AsyncSessionLocal = async_sessionmaker(
     expire_on_commit=False,
 )
 
+# Registrar listeners de aislamiento multi-tenant.
+register_tenant_listeners()
+
 
 @asynccontextmanager
 async def get_async_session() -> AsyncIterator[AsyncSession]:
     logger.info("🚀 Iniciando Transacción ASÍNCRONA...")
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception as e:
-            logger.error(f"🔥 Error en sesión DB: {e}")
-            await session.rollback()
-            raise
+    try:
+        async with AsyncSessionLocal() as session:
+            try:
+                yield session
+            except Exception as e:
+                logger.error(f"🔥 Error en sesión DB: {e}")
+                await session.rollback()
+                raise
+    except Exception as e:
+        logger.error("🔥 No se pudo abrir sesión DB.", exc_info=True)
+        raise

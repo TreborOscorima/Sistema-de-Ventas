@@ -418,6 +418,9 @@ class PurchasesState(MixinState):
     def save_purchase_edit(self):
         if not self.current_user["privileges"].get("create_ingresos"):
             return rx.toast("No tiene permisos para editar compras.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
 
         purchase_id = self.purchase_edit_form.get("id")
         if not purchase_id:
@@ -530,6 +533,9 @@ class PurchasesState(MixinState):
     def delete_purchase(self):
         if not self.current_user["privileges"].get("create_ingresos"):
             return rx.toast("No tiene permisos para eliminar compras.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
 
         target = self.purchase_delete_target or {}
         purchase_id = target.get("id")

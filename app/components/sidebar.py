@@ -9,12 +9,12 @@ CONFIG_SUBSECTIONS = [
     {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
     {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
     {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
-    {"key": "precios_campo", "label": "Precios de Campo", "icon": "tags"},
     {"key": "suscripcion", "label": "Suscripcion", "icon": "sparkles"},
 ]
 
 SERVICES_SUBSECTIONS = [
     {"key": "campo", "label": "Alquiler de Campo", "icon": "trophy"},
+    {"key": "precios_campo", "label": "Precios de Campo", "icon": "tags"},
     # {"key": "piscina", "label": "Alquiler de Piscina", "icon": "waves"},
 ]
 
@@ -33,8 +33,8 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     show_badge = has_overdue & State.sidebar_open
     
     # Estilos para item activo vs inactivo
-    active_class = f"relative flex items-center gap-3 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
-    inactive_class = f"relative flex items-center gap-3 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}"
+    active_class = f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
+    inactive_class = f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}"
     
     target_route = rx.cond(
         has_overdue,
@@ -49,7 +49,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
                 text, 
                 class_name=rx.cond(
                     State.sidebar_open, 
-                    "opacity-100 truncate", 
+                    "opacity-100 min-w-0 flex-1 truncate", 
                     "opacity-0 w-0"
                 )
             ),
@@ -69,7 +69,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         ),
         href=target_route,
         on_click=lambda _: State.set_pending_page(page),
-        class_name="w-full no-underline block",
+        class_name="w-full min-w-0 no-underline block",
     )
     return rx.cond(
         page == "Servicios",
@@ -106,8 +106,8 @@ def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.C
     return rx.el.button(
         rx.el.div(
             rx.icon(section["icon"], class_name="h-4 w-4"),
-            rx.el.span(section["label"], class_name="text-sm"),
-            class_name="flex items-center gap-2",
+            rx.el.span(section["label"], class_name="text-sm min-w-0 flex-1 truncate"),
+            class_name="flex items-center gap-2 min-w-0",
         ),
         on_click=on_click_handler,
         class_name=rx.cond(
@@ -136,26 +136,29 @@ def sidebar() -> rx.Component:
                                 rx.el.div(
                                     rx.el.span(
                                         "TUWAYKIAPP",
-                                        class_name="text-lg font-bold text-slate-900 tracking-tight",
+                                        class_name="text-lg font-bold text-slate-900 tracking-tight truncate",
                                     ),
                                     rx.cond(
                                         State.subscription_snapshot["is_trial"],
                                         rx.badge("TRIAL", color_scheme="orange"),
                                         rx.fragment(),
                                     ),
-                                    class_name="flex items-center gap-2",
+                                    class_name="flex items-center gap-2 min-w-0",
                                 ),
-                                rx.el.span("Sistema de Ventas", class_name="text-[10px] text-slate-400 uppercase tracking-wider"),
-                                class_name="flex flex-col leading-tight",
+                                rx.el.span(
+                                    "Sistema de Ventas",
+                                    class_name="text-[10px] text-slate-400 uppercase tracking-wider truncate",
+                                ),
+                                class_name="flex flex-col leading-tight min-w-0",
                             ),
                             rx.fragment(),
                         ),
-                        class_name="flex items-center gap-3",
+                        class_name="flex items-center gap-3 min-w-0 flex-1",
                     ),
                     rx.el.button(
                         rx.icon("panel-left-close", class_name="h-5 w-5 text-slate-400"),
                         on_click=State.toggle_sidebar,
-                        class_name=f"p-2 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
+                        class_name=f"p-2 shrink-0 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
                     ),
                     class_name="flex h-16 items-center justify-between px-4",
                 ),
@@ -232,9 +235,9 @@ def sidebar() -> rx.Component:
                                                         ),
                                                         rx.el.span(
                                                             section["label"],
-                                                            class_name="text-sm",
+                                                            class_name="text-sm min-w-0 flex-1 truncate",
                                                         ),
-                                                        class_name="flex items-center gap-2",
+                                                        class_name="flex items-center gap-2 min-w-0",
                                                     ),
                                                     on_click=lambda _,
                                                     key=section["key"]: State.go_to_config_tab(
@@ -243,8 +246,8 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.config_active_tab
                                                         == section["key"],
-                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
+                                                        f"w-full min-w-0 text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full min-w-0 text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
@@ -266,9 +269,9 @@ def sidebar() -> rx.Component:
                                                         ),
                                                         rx.el.span(
                                                             section["label"],
-                                                            class_name="text-sm",
+                                                            class_name="text-sm min-w-0 flex-1 truncate",
                                                         ),
-                                                        class_name="flex items-center gap-2",
+                                                        class_name="flex items-center gap-2 min-w-0",
                                                     ),
                                                     on_click=lambda _, key=section[
                                                         "key"
@@ -276,8 +279,8 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.cash_active_tab
                                                         == section["key"],
-                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
+                                                        f"w-full min-w-0 text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full min-w-0 text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
@@ -299,9 +302,9 @@ def sidebar() -> rx.Component:
                                                         ),
                                                         rx.el.span(
                                                             section["label"],
-                                                            class_name="text-sm",
+                                                            class_name="text-sm min-w-0 flex-1 truncate",
                                                         ),
-                                                        class_name="flex items-center gap-2",
+                                                        class_name="flex items-center gap-2 min-w-0",
                                                     ),
                                                     on_click=lambda _, key=section[
                                                         "key"
@@ -309,8 +312,8 @@ def sidebar() -> rx.Component:
                                                     class_name=rx.cond(
                                                         State.service_active_tab
                                                         == section["key"],
-                                                        f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
+                                                        f"w-full min-w-0 text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"w-full min-w-0 text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
@@ -325,7 +328,7 @@ def sidebar() -> rx.Component:
                 ),
             ),
         ),
-        class_name="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
+        class_name="flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
     ),
     # Footer con usuario
     rx.el.div(
@@ -343,17 +346,17 @@ def sidebar() -> rx.Component:
                     rx.el.div(
                         rx.el.p(
                             State.current_user["username"], 
-                            class_name="font-semibold text-slate-900 text-sm"
+                            class_name="font-semibold text-slate-900 text-sm truncate"
                         ),
                         rx.el.p(
                             State.current_user["role"],
-                            class_name=f"text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 {RADIUS['full']} inline-block mt-0.5",
+                            class_name=f"text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 {RADIUS['full']} inline-block mt-0.5 truncate",
                         ),
-                        class_name="flex flex-col",
+                        class_name="flex flex-col min-w-0",
                     ),
                     rx.fragment(),
                 ),
-                class_name="flex items-center gap-3",
+                class_name="flex items-center gap-3 min-w-0",
             ),
             class_name="p-4",
         ),
@@ -367,7 +370,7 @@ def sidebar() -> rx.Component:
     ),
     class_name=rx.cond(
         State.sidebar_open,
-        f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-64 {SHADOWS['lg']} md:shadow-none",
+        f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-64 {SHADOWS['lg']} md:shadow-none",
         f"w-0 overflow-hidden {TRANSITIONS['slow']}",
     ),
 ),

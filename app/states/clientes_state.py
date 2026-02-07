@@ -27,6 +27,7 @@ from sqlmodel import select
 from sqlalchemy import or_
 
 from app.models import Client, Sale
+from app.utils.tenant import set_tenant_context
 from app.utils.sanitization import (
     sanitize_name,
     sanitize_dni,
@@ -49,7 +50,7 @@ class ClientesState(MixinState):
         select_after_save: Si True, selecciona el cliente después de guardar
         current_client: Cliente en edición (dict temporal)
     """
-    clients: list[Client] = []
+    clients: list[dict] = []
     search_query: str = ""
     show_modal: bool = False
     select_after_save: bool = False
@@ -84,30 +85,42 @@ class ClientesState(MixinState):
         return parsed
 
     def _company_id(self) -> int | None:
-        value = None
-        if hasattr(self, "current_user"):
-            value = self.current_user.get("company_id")
-        try:
-            return int(value) if value else None
-        except (TypeError, ValueError):
-            return None
+        company_id, branch_id = self._tenant_ids()
+        set_tenant_context(company_id, branch_id)
+        return company_id
 
     @rx.var
     def clients_view(self) -> list[dict]:
         rows: list[dict] = []
         for client in self.clients:
-            credit_limit = self._parse_decimal(getattr(client, "credit_limit", 0))
-            current_debt = self._parse_decimal(getattr(client, "current_debt", 0))
+            if isinstance(client, dict):
+                credit_limit_raw = client.get("credit_limit", 0)
+                current_debt_raw = client.get("current_debt", 0)
+                client_id = client.get("id")
+                name = client.get("name")
+                dni = client.get("dni")
+                phone = client.get("phone")
+                address = client.get("address")
+            else:
+                credit_limit_raw = getattr(client, "credit_limit", 0)
+                current_debt_raw = getattr(client, "current_debt", 0)
+                client_id = getattr(client, "id", None)
+                name = getattr(client, "name", "")
+                dni = getattr(client, "dni", "")
+                phone = getattr(client, "phone", "")
+                address = getattr(client, "address", "")
+            credit_limit = self._parse_decimal(credit_limit_raw)
+            current_debt = self._parse_decimal(current_debt_raw)
             available = credit_limit - current_debt
             if available < 0:
                 available = Decimal("0")
             rows.append(
                 {
-                    "id": client.id,
-                    "name": client.name,
-                    "dni": client.dni,
-                    "phone": client.phone,
-                    "address": client.address,
+                    "id": client_id,
+                    "name": name,
+                    "dni": dni,
+                    "phone": phone,
+                    "address": address,
                     "credit_limit": credit_limit,
                     "current_debt": current_debt,
                     "credit_available": available,
@@ -140,7 +153,19 @@ class ClientesState(MixinState):
                     )
                 )
             query = query.order_by(Client.name)
-            self.clients = session.exec(query).all()
+            results = session.exec(query).all()
+            self.clients = [
+                {
+                    "id": client.id,
+                    "name": client.name,
+                    "dni": client.dni,
+                    "phone": client.phone,
+                    "address": client.address,
+                    "credit_limit": client.credit_limit,
+                    "current_debt": client.current_debt,
+                }
+                for client in results
+            ]
 
     @rx.event
     def set_search_query(self, value: str):

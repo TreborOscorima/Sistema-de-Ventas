@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CashboxLog, Client, Sale, SaleInstallment
 from app.utils.calculations import calculate_total
+from app.utils.tenant import set_tenant_context
 
 
 def _round_money(value: Any) -> Decimal:
@@ -80,6 +81,7 @@ class CreditService:
         Raises:
             ValueError: Si el cliente no existe
         """
+        set_tenant_context(company_id, branch_id)
         client_query = select(Client).where(Client.id == client_id)
         if company_id:
             client_query = client_query.where(Client.company_id == company_id)
@@ -162,6 +164,7 @@ class CreditService:
             else:
                 print(f"Pago parcial, pendiente: {installment.amount - installment.paid_amount}")
         """
+        set_tenant_context(company_id, branch_id)
         payment_amount = _round_money(amount)
         if payment_amount <= 0:
             raise ValueError("Monto de pago invalido.")

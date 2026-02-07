@@ -256,6 +256,14 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     "No tiene permisos para crear ventas.", "error"
                 )
                 return
+            block = self._require_active_subscription()
+            if block:
+                if isinstance(block, list):
+                    for action in block:
+                        yield action
+                else:
+                    yield block
+                return
 
             if hasattr(self, "_require_cashbox_open"):
                 denial = self._require_cashbox_open()

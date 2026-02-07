@@ -10,7 +10,7 @@ from .mixin_state import MixinState
 
 
 class SuppliersState(MixinState):
-    suppliers: list[Supplier] = []
+    suppliers: list[dict[str, Any]] = []
     supplier_search_query: str = ""
     supplier_modal_open: bool = False
     current_supplier: dict[str, Any] = {
@@ -38,13 +38,13 @@ class SuppliersState(MixinState):
     def suppliers_view(self) -> list[dict[str, Any]]:
         return [
             {
-                "id": supplier.id,
-                "name": supplier.name,
-                "tax_id": supplier.tax_id,
-                "phone": supplier.phone or "",
-                "address": supplier.address or "",
-                "email": supplier.email or "",
-                "is_active": supplier.is_active,
+                "id": supplier.get("id"),
+                "name": supplier.get("name"),
+                "tax_id": supplier.get("tax_id"),
+                "phone": supplier.get("phone") or "",
+                "address": supplier.get("address") or "",
+                "email": supplier.get("email") or "",
+                "is_active": bool(supplier.get("is_active")),
             }
             for supplier in self.suppliers
         ]
@@ -74,7 +74,19 @@ class SuppliersState(MixinState):
                     )
                 )
             query = query.order_by(Supplier.name)
-            self.suppliers = session.exec(query).all()
+            results = session.exec(query).all()
+            self.suppliers = [
+                {
+                    "id": supplier.id,
+                    "name": supplier.name,
+                    "tax_id": supplier.tax_id,
+                    "phone": supplier.phone,
+                    "address": supplier.address,
+                    "email": supplier.email,
+                    "is_active": supplier.is_active,
+                }
+                for supplier in results
+            ]
 
     @rx.event
     def set_supplier_search_query(self, value: str):

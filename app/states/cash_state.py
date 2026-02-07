@@ -42,6 +42,8 @@ from app.models import (
     SalePayment,
     StockMovement,
     Product,
+    ProductVariant,
+    ProductBatch,
 )
 from app.utils.sanitization import (
     sanitize_notes,
@@ -200,6 +202,9 @@ class CashState(MixinState):
     def add_petty_cash_movement(self):
         if not self.current_user["privileges"]["manage_cashbox"]:
             return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
         if not self.cashbox_is_open:
             return rx.toast("Debe aperturar la caja para registrar movimientos.", duration=3000)
         company_id = self._company_id()
@@ -789,6 +794,9 @@ class CashState(MixinState):
     def open_cashbox_session(self):
         if not self.current_user["privileges"]["manage_cashbox"]:
             return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
         user_id = self.current_user.get("id")
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -1521,11 +1529,68 @@ class CashState(MixinState):
         # Obtener nombre de empresa
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
-        
+        period_start = self.cashbox_filter_start_date or "Inicio"
+        period_end = self.cashbox_filter_end_date or "Actual"
+        period_label = f"Período: {period_start} a {period_end}"
+
+        total_operations = 0
+        total_facturado = 0.0
+        total_cobrado = 0.0
+        total_pendiente = 0.0
+        credit_operations = 0
+
+        for sale in sales:
+            if sale.get("is_deleted"):
+                continue
+            total_operations += 1
+            total_amount = float(sale.get("total", 0) or 0)
+            paid_amount = float(sale.get("amount", 0) or 0)
+            payment_condition = (sale.get("payment_condition") or "").strip().lower()
+            payment_type = (sale.get("payment_type") or "").strip().lower()
+            is_credit = (
+                bool(sale.get("is_credit"))
+                or payment_type == "credit"
+                or payment_condition in {"credito", "credit"}
+            )
+            if is_credit:
+                credit_operations += 1
+            total_facturado += total_amount
+            total_cobrado += paid_amount
+            total_pendiente += max(total_amount - paid_amount, 0)
+
         wb, ws = create_excel_workbook("Resumen de Caja")
         
         # Agregar encabezado profesional
-        row = add_company_header(ws, company_name, "RESUMEN DE GESTIÓN DE CAJA", f"Fecha: {today}", columns=8)
+        row = add_company_header(
+            ws,
+            company_name,
+            "RESUMEN DE GESTIÓN DE CAJA",
+            period_label,
+            columns=8,
+        )
+
+        row += 1
+        ws.cell(row=row, column=1, value="RESUMEN EJECUTIVO")
+        row += 1
+        ws.cell(row=row, column=1, value="Fecha de corte:")
+        ws.cell(row=row, column=2, value=today)
+        row += 1
+        ws.cell(row=row, column=1, value="Operaciones registradas:")
+        ws.cell(row=row, column=2, value=total_operations)
+        row += 1
+        ws.cell(row=row, column=1, value="Operaciones a crédito:")
+        ws.cell(row=row, column=2, value=credit_operations)
+        row += 1
+        ws.cell(row=row, column=1, value=f"Total facturado ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_facturado).number_format = currency_format
+        row += 1
+        ws.cell(row=row, column=1, value=f"Total cobrado ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_cobrado).number_format = currency_format
+        row += 1
+        ws.cell(row=row, column=1, value=f"Saldo pendiente ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_pendiente).number_format = currency_format
+
+        row += 2
         
         headers = [
             "Fecha y Hora",
@@ -2109,11 +2174,54 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
+        period_start = self.cashbox_log_filter_start_date or "Inicio"
+        period_end = self.cashbox_log_filter_end_date or "Actual"
+        period_label = f"Período: {period_start} a {period_end}"
+
+        opening_count = 0
+        closing_count = 0
+        opening_total = 0.0
+        closing_total = 0.0
+        for log in logs:
+            action = (log.get("action") or "").strip().lower()
+            opening_amount = float(log.get("opening_amount", 0) or 0)
+            closing_amount = float(log.get("closing_total", 0) or 0)
+            if action == "apertura":
+                opening_count += 1
+                opening_total += opening_amount
+            elif action == "cierre":
+                closing_count += 1
+                closing_total += closing_amount
         
         wb, ws = create_excel_workbook("Aperturas y Cierres")
         
         # Encabezado profesional
-        row = add_company_header(ws, company_name, "REGISTRO DE APERTURAS Y CIERRES DE CAJA", f"Generado: {today}", columns=7)
+        row = add_company_header(
+            ws,
+            company_name,
+            "REGISTRO DE APERTURAS Y CIERRES DE CAJA",
+            period_label,
+            columns=7,
+        )
+
+        row += 1
+        ws.cell(row=row, column=1, value="RESUMEN DE OPERACIONES")
+        row += 1
+        ws.cell(row=row, column=1, value="Fecha de corte:")
+        ws.cell(row=row, column=2, value=today)
+        row += 1
+        ws.cell(row=row, column=1, value="Cantidad de aperturas:")
+        ws.cell(row=row, column=2, value=opening_count)
+        row += 1
+        ws.cell(row=row, column=1, value="Cantidad de cierres:")
+        ws.cell(row=row, column=2, value=closing_count)
+        row += 1
+        ws.cell(row=row, column=1, value=f"Total aperturas ({currency_label}):")
+        ws.cell(row=row, column=2, value=opening_total).number_format = currency_format
+        row += 1
+        ws.cell(row=row, column=1, value=f"Total cierres ({currency_label}):")
+        ws.cell(row=row, column=2, value=closing_total).number_format = currency_format
+        row += 2
         
         headers = [
             "Fecha y Hora",
@@ -2133,7 +2241,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         
         for log in logs:
             action = (log.get("action") or "").lower()
-            action_display = "Apertura de Caja" if action == "apertura" else "Cierre de Caja" if action == "cierre" else action.capitalize()
+            action_display = (
+                "Apertura de Caja"
+                if action == "apertura"
+                else "Cierre de Caja"
+                if action == "cierre"
+                else str(action).replace("_", " ").strip().title()
+            )
             
             opening_amount = float(log.get("opening_amount", 0) or 0)
             closing_amount = float(log.get("closing_total", 0) or 0)
@@ -2206,25 +2320,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
-        
-        wb, ws = create_excel_workbook("Caja Chica")
-        
-        # Encabezado profesional
-        row = add_company_header(ws, company_name, "MOVIMIENTOS DE CAJA CHICA", f"Generado: {today}", columns=7)
-        
-        headers = [
-            "Fecha y Hora",
-            "Responsable",
-            "Concepto/Motivo",
-            "Cantidad",
-            "Unidad",
-            f"Costo Unitario ({currency_label})",
-            f"Total Egreso ({currency_label})",
-        ]
-        style_header_row(ws, row, headers)
-        data_start = row + 1
-        row += 1
-        
+
         def _parse_numeric(value: Any) -> float:
             if value is None:
                 return 0.0
@@ -2243,6 +2339,53 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 return float(num)
             except ValueError:
                 return 0.0
+
+        total_movements = len(movements)
+        total_units = sum(
+            _parse_numeric(item.get("formatted_quantity", "0"))
+            for item in movements
+        )
+        total_expense = sum(
+            _parse_numeric(item.get("formatted_total", "0"))
+            for item in movements
+        )
+
+        wb, ws = create_excel_workbook("Caja Chica")
+        
+        # Encabezado profesional
+        row = add_company_header(
+            ws,
+            company_name,
+            "MOVIMIENTOS DE CAJA CHICA",
+            f"Corte: {today}",
+            columns=7,
+        )
+
+        row += 1
+        ws.cell(row=row, column=1, value="RESUMEN DE EGRESOS")
+        row += 1
+        ws.cell(row=row, column=1, value="Movimientos registrados:")
+        ws.cell(row=row, column=2, value=total_movements)
+        row += 1
+        ws.cell(row=row, column=1, value="Unidades egresadas:")
+        ws.cell(row=row, column=2, value=total_units)
+        row += 1
+        ws.cell(row=row, column=1, value=f"Total egresado ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_expense).number_format = currency_format
+        row += 2
+
+        headers = [
+            "Fecha y Hora",
+            "Responsable",
+            "Concepto/Motivo",
+            "Cantidad",
+            "Unidad",
+            f"Costo Unitario ({currency_label})",
+            f"Total Egreso ({currency_label})",
+        ]
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
 
         for item in movements:
             # Extraer valores numéricos para las fórmulas
@@ -2370,6 +2513,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             return denial
         if not self.current_user["privileges"]["delete_sales"]:
             return rx.toast("No tiene permisos para eliminar ventas.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -2423,30 +2569,163 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 session.add(log)
             
             # Restaurar stock
+            products_recalc_variants: set[int] = set()
+            products_recalc_batches: set[int] = set()
+            variants_recalc_batches: set[int] = set()
             for item in sale_db.items:
-                if item.product_id:
+                quantity = item.quantity or 0
+                if quantity <= 0:
+                    continue
+
+                if item.product_variant_id:
+                    variant = session.exec(
+                        select(ProductVariant)
+                        .where(ProductVariant.id == item.product_variant_id)
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                        .with_for_update()
+                    ).first()
+                    if variant:
+                        if item.product_batch_id:
+                            batch = session.exec(
+                                select(ProductBatch)
+                                .where(ProductBatch.id == item.product_batch_id)
+                                .where(ProductBatch.company_id == company_id)
+                                .where(ProductBatch.branch_id == branch_id)
+                                .with_for_update()
+                            ).first()
+                            if batch:
+                                batch.stock = (batch.stock or 0) + quantity
+                                session.add(batch)
+                                variants_recalc_batches.add(variant.id)
+                                products_recalc_variants.add(variant.product_id)
+                            else:
+                                variant.stock = (variant.stock or 0) + quantity
+                                session.add(variant)
+                                products_recalc_variants.add(variant.product_id)
+                        else:
+                            variant.stock = (variant.stock or 0) + quantity
+                            session.add(variant)
+                            products_recalc_variants.add(variant.product_id)
+                elif item.product_id:
                     product = session.exec(
                         select(Product)
                         .where(Product.id == item.product_id)
                         .where(Product.company_id == company_id)
                         .where(Product.branch_id == branch_id)
+                        .with_for_update()
                     ).first()
                     if product:
-                        product.stock += item.quantity
-                        session.add(product)
-                        
-                        # Registrar movimiento de stock
-                        movement = StockMovement(
-                            product_id=product.id,
-                            user_id=self.current_user.get("id"),
-                            type="Devolucion Venta",
-                            quantity=item.quantity,
-                            description=f"Venta anulada #{sale_db.id}: {reason}",
-                            timestamp=datetime.datetime.now(),
-                            company_id=company_id,
-                            branch_id=branch_id,
-                        )
-                        session.add(movement)
+                        if item.product_batch_id:
+                            batch = session.exec(
+                                select(ProductBatch)
+                                .where(ProductBatch.id == item.product_batch_id)
+                                .where(ProductBatch.company_id == company_id)
+                                .where(ProductBatch.branch_id == branch_id)
+                                .with_for_update()
+                            ).first()
+                            if batch:
+                                batch.stock = (batch.stock or 0) + quantity
+                                session.add(batch)
+                                products_recalc_batches.add(product.id)
+                            else:
+                                product.stock = (product.stock or 0) + quantity
+                                session.add(product)
+                        else:
+                            product.stock = (product.stock or 0) + quantity
+                            session.add(product)
+
+                # Registrar movimiento de stock
+                movement = StockMovement(
+                    product_id=item.product_id,
+                    user_id=self.current_user.get("id"),
+                    type="Devolucion Venta",
+                    quantity=quantity,
+                    description=f"Venta anulada #{sale_db.id}: {reason}",
+                    timestamp=datetime.datetime.now(),
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+                session.add(movement)
+
+            if variants_recalc_batches:
+                for variant_id in variants_recalc_batches:
+                    total_query = (
+                        select(sqlalchemy.func.coalesce(sqlalchemy.func.sum(ProductBatch.stock), 0))
+                        .where(ProductBatch.product_variant_id == variant_id)
+                        .where(ProductBatch.company_id == company_id)
+                        .where(ProductBatch.branch_id == branch_id)
+                    )
+                    total_row = session.exec(total_query).first()
+                    if total_row is None:
+                        total_stock = 0
+                    elif isinstance(total_row, tuple):
+                        total_stock = total_row[0]
+                    else:
+                        total_stock = total_row
+                    variant_row = session.exec(
+                        select(ProductVariant)
+                        .where(ProductVariant.id == variant_id)
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                    ).first()
+                    if variant_row:
+                        variant_row.stock = total_stock
+                        session.add(variant_row)
+                        products_recalc_variants.add(variant_row.product_id)
+
+            if products_recalc_variants:
+                for product_id in products_recalc_variants:
+                    total_query = (
+                        select(sqlalchemy.func.coalesce(sqlalchemy.func.sum(ProductVariant.stock), 0))
+                        .where(ProductVariant.product_id == product_id)
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                    )
+                    total_row = session.exec(total_query).first()
+                    if total_row is None:
+                        total_stock = 0
+                    elif isinstance(total_row, tuple):
+                        total_stock = total_row[0]
+                    else:
+                        total_stock = total_row
+                    product_row = session.exec(
+                        select(Product)
+                        .where(Product.id == product_id)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    ).first()
+                    if product_row:
+                        product_row.stock = total_stock
+                        session.add(product_row)
+
+            if products_recalc_batches:
+                for product_id in (
+                    products_recalc_batches - products_recalc_variants
+                ):
+                    total_query = (
+                        select(sqlalchemy.func.coalesce(sqlalchemy.func.sum(ProductBatch.stock), 0))
+                        .where(ProductBatch.product_id == product_id)
+                        .where(ProductBatch.product_variant_id.is_(None))
+                        .where(ProductBatch.company_id == company_id)
+                        .where(ProductBatch.branch_id == branch_id)
+                    )
+                    total_row = session.exec(total_query).first()
+                    if total_row is None:
+                        total_stock = 0
+                    elif isinstance(total_row, tuple):
+                        total_stock = total_row[0]
+                    else:
+                        total_stock = total_row
+                    product_row = session.exec(
+                        select(Product)
+                        .where(Product.id == product_id)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    ).first()
+                    if product_row:
+                        product_row.stock = total_stock
+                        session.add(product_row)
             session.commit()
         
         self._cashbox_update_trigger += 1
@@ -2639,6 +2918,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         denial = self._cashbox_guard()
         if denial:
             return denial
+        block = self._require_active_subscription()
+        if block:
+            return block
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -3053,6 +3335,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 session.add(
                     SalePayment(
                         sale_id=new_sale.id,
+                        company_id=company_id,
                         amount=method_amount,
                         method_type=method_type,
                         reference_code=None,
@@ -3071,6 +3354,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 product_name_snapshot=description,
                 product_barcode_snapshot=str(reservation["id"]),
                 product_category_snapshot="Servicios",
+                company_id=company_id,
                 branch_id=branch_id,
             )
             session.add(sale_item)

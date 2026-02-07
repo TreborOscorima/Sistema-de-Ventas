@@ -511,6 +511,9 @@ class IngresoState(MixinState):
     def confirm_entry(self):
         if not self.current_user["privileges"]["create_ingresos"]:
             return rx.toast("No tiene permisos para crear ingresos.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
         if not self.new_entry_items:
             return rx.toast("No hay productos para ingresar.", duration=3000)
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

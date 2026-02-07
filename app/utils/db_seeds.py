@@ -5,6 +5,7 @@ from sqlmodel import Session, select
 
 from app.enums import PaymentMethodType
 from app.models import Category, PaymentMethod, Unit
+from app.utils.tenant import set_tenant_context
 
 # ============================================================================
 # MÉTODOS DE PAGO POR PAÍS
@@ -325,6 +326,7 @@ def seed_new_branch_data(
         return
     company_id = int(company_id)
     branch_id = int(branch_id)
+    set_tenant_context(company_id, branch_id)
 
     has_categories = session.exec(
         select(Category.id)
@@ -410,6 +412,7 @@ async def init_payment_methods(
 ) -> None:
     if not company_id or not branch_id:
         return
+    set_tenant_context(company_id, branch_id)
     await session.run_sync(
         lambda sync_session: seed_new_branch_data(
             sync_session, company_id, branch_id

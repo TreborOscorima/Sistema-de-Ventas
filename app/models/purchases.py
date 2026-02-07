@@ -25,13 +25,11 @@ class Supplier(rx.Model, table=True):
     )
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -82,13 +80,11 @@ class Purchase(rx.Model, table=True):
     notes: str = Field(default="", nullable=False)
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,
@@ -113,13 +109,11 @@ class PurchaseItem(rx.Model, table=True):
         default=None, foreign_key="product.id", index=True
     )
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,

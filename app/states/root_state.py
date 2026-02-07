@@ -7,6 +7,7 @@ principal de la aplicación a partir de estados especializados.
 import datetime
 
 from app.utils.timezone import country_today_start
+from app.utils.tenant import set_tenant_context
 from typing import Any
 
 import reflex as rx
@@ -57,6 +58,11 @@ _mixins = [
 def check_overdue_alerts(self):
     company_id = self._company_id() if hasattr(self, "_company_id") else None
     branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
+    if not company_id:
+        self.overdue_alerts_count = 0
+        return
+    # Asegura contexto tenant antes de cualquier SELECT.
+    set_tenant_context(company_id, branch_id)
     with rx.session() as session:
         settings = {}
         if hasattr(self, "_company_settings_snapshot"):
@@ -76,7 +82,12 @@ def check_overdue_alerts(self):
             statement = statement.where(SaleInstallment.company_id == company_id)
         if branch_id:
             statement = statement.where(SaleInstallment.branch_id == branch_id)
-        count = session.exec(statement).one()
+        count = session.exec(
+            statement.execution_options(
+                tenant_company_id=company_id,
+                tenant_branch_id=branch_id,
+            )
+        ).one()
     self.overdue_alerts_count = int(count or 0)
 
 _class_dict = {

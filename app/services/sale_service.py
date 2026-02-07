@@ -65,6 +65,7 @@ from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.utils.calculations import calculate_subtotal, calculate_total
 from app.utils.db import get_async_session as get_session
 from app.utils.logger import get_logger
+from app.utils.tenant import set_tenant_context
 
 # Nota: get_session es un alias de get_async_session para uso interno.
 
@@ -162,6 +163,7 @@ async def get_recent_activity(
     company_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """Obtiene los movimientos recientes de caja para una sucursal."""
+    set_tenant_context(company_id, branch_id)
     if not branch_id:
         return []
     limit_value = int(limit) if limit else 15
@@ -296,6 +298,7 @@ async def get_product_by_barcode(
     session: AsyncSession | None = None,
 ) -> dict[str, Any] | None:
     """Busca un producto por SKU (variante) o barcode (producto estándar)."""
+    set_tenant_context(company_id, branch_id)
     code = (barcode or "").strip()
     if not code:
         return None
@@ -349,6 +352,7 @@ async def search_products(
     limit: int = 10,
     session: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
+    set_tenant_context(company_id, branch_id)
     term = (query or "").strip()
     if not term:
         return []
@@ -419,6 +423,7 @@ async def calculate_item_price(
     branch_id: int | None,
     session: AsyncSession | None = None,
 ) -> Decimal:
+    set_tenant_context(company_id, branch_id)
     if not product_id:
         return Decimal("0.00")
 
@@ -460,6 +465,7 @@ async def get_available_stock(
     branch_id: int | None,
     session: AsyncSession | None = None,
 ) -> Decimal:
+    set_tenant_context(company_id, branch_id)
     async def _run(current_session: AsyncSession) -> Decimal:
         product = None
         variant = None
@@ -1044,6 +1050,7 @@ class SaleService:
             await session.commit()
             print(f"Venta #{result.sale.id} - Total: {result.sale_total_display}")
         """
+        set_tenant_context(company_id, branch_id)
         if session is None:
             async with get_session() as managed_session:
                 return await SaleService.process_sale(

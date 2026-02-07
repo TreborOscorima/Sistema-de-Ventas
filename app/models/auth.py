@@ -76,7 +76,6 @@ class User(rx.Model, table=True):
     token_version: int = Field(default=0)
 
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,

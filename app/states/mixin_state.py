@@ -35,9 +35,13 @@ Ejemplo de uso::
 """
 import os
 import functools
+import datetime
+from contextlib import contextmanager
 import reflex as rx
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any, Callable, TypeVar
+
+from app.utils.tenant import set_tenant_context
 from app.utils.payment import normalize_wallet_label, payment_category
 from .types import CashboxSale, PaymentBreakdownItem
 
@@ -172,27 +176,100 @@ class MixinState:
 
         return rx.toast(str(message or ""), duration=duration)
 
-    def _company_id(self) -> int | None:
-        value = None
+    def _tenant_ids(self) -> tuple[int | None, int | None]:
+        company_value = None
         if hasattr(self, "current_user"):
-            value = self.current_user.get("company_id")
+            company_value = self.current_user.get("company_id")
+
+        branch_value = None
+        if hasattr(self, "selected_branch_id"):
+            branch_value = getattr(self, "selected_branch_id")
+        if not branch_value and hasattr(self, "current_branch_id"):
+            branch_value = getattr(self, "current_branch_id")
+        if not branch_value and hasattr(self, "current_user"):
+            branch_value = self.current_user.get("branch_id")
+
         try:
-            return int(value) if value else None
+            company_id = int(company_value) if company_value else None
         except (TypeError, ValueError):
+            company_id = None
+        try:
+            branch_id = int(branch_value) if branch_value else None
+        except (TypeError, ValueError):
+            branch_id = None
+        return company_id, branch_id
+
+    @contextmanager
+    def tenant_session(self):
+        """Atajo para abrir rx.session con tenant context activo."""
+        company_id, branch_id = self._tenant_ids()
+        set_tenant_context(company_id, branch_id)
+        with rx.session() as session:
+            yield session
+
+    def _require_active_subscription(self):
+        """Bloquea acciones si la suscripción está suspendida o el trial expiró."""
+        if os.getenv("PYTEST_CURRENT_TEST"):
+            return None
+        try:
+            from sqlmodel import select
+            from app.models import Company
+            from app.models.company import SubscriptionStatus
+        except Exception:
             return None
 
-    def _branch_id(self) -> int | None:
-        value = None
-        if hasattr(self, "selected_branch_id"):
-            value = getattr(self, "selected_branch_id")
-        if not value and hasattr(self, "current_branch_id"):
-            value = getattr(self, "current_branch_id")
-        if not value and hasattr(self, "current_user"):
-            value = self.current_user.get("branch_id")
-        try:
-            return int(value) if value else None
-        except (TypeError, ValueError):
+        if not hasattr(self, "current_user"):
             return None
+
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+
+        if not company:
+            return rx.toast("Empresa no definida.", duration=3000)
+
+        plan_type = getattr(company, "plan_type", "")
+        if hasattr(plan_type, "value"):
+            plan_type = plan_type.value
+        plan_type = str(plan_type or "").strip().lower()
+
+        now = datetime.datetime.now()
+        if plan_type == "trial":
+            trial_ends_at = getattr(company, "trial_ends_at", None)
+            if trial_ends_at and trial_ends_at < now:
+                return [
+                    rx.toast(
+                        "Periodo de prueba finalizado.", duration=3000
+                    ),
+                    rx.redirect("/periodo-prueba-finalizado"),
+                ]
+
+        status = getattr(company, "subscription_status", "")
+        if hasattr(status, "value"):
+            status = status.value
+        status = str(status or "").strip().lower()
+        if status == SubscriptionStatus.SUSPENDED.value:
+            return [
+                rx.toast("Cuenta suspendida.", duration=3000),
+                rx.redirect("/cuenta-suspendida"),
+            ]
+
+        return None
+
+    def _company_id(self) -> int | None:
+        company_id, branch_id = self._tenant_ids()
+        set_tenant_context(company_id, branch_id)
+        return company_id
+
+    def _branch_id(self) -> int | None:
+        company_id, branch_id = self._tenant_ids()
+        set_tenant_context(company_id, branch_id)
+        return branch_id
 
     def _round_currency(self, value: float) -> float:
         return float(

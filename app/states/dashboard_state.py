@@ -363,29 +363,46 @@ class DashboardState(MixinState):
         
         days_data = []
         day_names = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+        start_date = today - timedelta(days=6)
+        end_date = today + timedelta(days=1)
         
         with rx.session() as session:
+            results = session.exec(
+                select(
+                    func.date(Sale.timestamp).label("day"),
+                    func.coalesce(func.sum(Sale.total_amount), 0).label("total"),
+                )
+                .where(
+                    and_(
+                        Sale.timestamp >= start_date,
+                        Sale.timestamp < end_date,
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
+                    )
+                )
+                .group_by(func.date(Sale.timestamp))
+            ).all()
+
+            totals_by_day = {}
+            for row in results:
+                day_value = row[0]
+                if isinstance(day_value, str):
+                    try:
+                        day_value = datetime.strptime(day_value, "%Y-%m-%d").date()
+                    except ValueError:
+                        continue
+                if hasattr(day_value, "date"):
+                    day_value = day_value.date()
+                totals_by_day[day_value] = float(row[1] or 0)
+
             for i in range(6, -1, -1):
                 day_start = today - timedelta(days=i)
-                day_end = day_start + timedelta(days=1)
-                
-                result = session.exec(
-                    select(func.coalesce(func.sum(Sale.total_amount), 0))
-                    .where(
-                        and_(
-                            Sale.timestamp >= day_start,
-                            Sale.timestamp < day_end,
-                            Sale.status != SaleStatus.cancelled,
-                            Sale.company_id == company_id,
-                            Sale.branch_id == branch_id,
-                        )
-                    )
-                ).one()
-                
+                day_key = day_start.date()
                 days_data.append({
                     "day": day_names[day_start.weekday()],
                     "date": day_start.strftime("%d/%m"),
-                    "total": float(result or 0),
+                    "total": float(totals_by_day.get(day_key, 0)),
                 })
         
         self.dash_sales_by_day = days_data

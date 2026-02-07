@@ -37,6 +37,7 @@ from app.models import Branch, Company, Permission, Role, User as UserModel, Use
 from app.models.company import SubscriptionStatus
 from app.utils.auth import create_access_token, decode_token
 from app.utils.logger import get_logger
+from app.utils.tenant import set_tenant_context, tenant_bypass
 from app.utils.rate_limit import (
     is_rate_limited as _is_rate_limited,
     record_failed_attempt as _record_failed_attempt,
@@ -194,10 +195,11 @@ class AuthState(MixinState):
     show_user_limit_modal: bool = False
     user_limit_modal_message: str = ""
     
-    # Cache de usuario para evitar consultas repetidas a BD
-    _cached_user: Optional[User] = None
-    _cached_user_token: str = ""
-    _cached_user_time: float = 0.0
+    # Cache de usuario para evitar consultas repetidas a BD (backend-only).
+    # Usamos campos no-reactivos para evitar recursión al calcular vars.
+    _cached_user: Optional[User] = rx.field(default=None, is_var=False)
+    _cached_user_token: str = rx.field(default="", is_var=False)
+    _cached_user_time: float = rx.field(default=0.0, is_var=False)
     _USER_CACHE_TTL: float = 30.0  # Segundos de validez del cache
 
     @rx.var
@@ -252,8 +254,10 @@ class AuthState(MixinState):
 
         with rx.session() as session:
             user = None
-            query = select(UserModel).options(
-                selectinload(UserModel.role).selectinload(Role.permissions)
+            query = (
+                select(UserModel)
+                .options(selectinload(UserModel.role).selectinload(Role.permissions))
+                .execution_options(tenant_bypass=True)
             )
             if user_id is not None:
                 user = session.exec(
@@ -277,6 +281,10 @@ class AuthState(MixinState):
                     self._cached_user = self._guest_user()
                 else:
                     role_name = user.role.name if user.role else "Sin rol"
+                    set_tenant_context(
+                        getattr(user, "company_id", None),
+                        getattr(user, "branch_id", None),
+                    )
                     self._cached_user = {
                         "id": user.id,
                         "company_id": getattr(user, "company_id", None),
@@ -312,9 +320,12 @@ class AuthState(MixinState):
         company_id = self.current_user.get("company_id")
         if not user_id or not company_id:
             return []
+        set_tenant_context(company_id, None)
         with rx.session() as session:
             user = session.exec(
-                select(UserModel).where(UserModel.id == user_id)
+                select(UserModel)
+                .where(UserModel.id == user_id)
+                .where(UserModel.company_id == company_id)
             ).first()
             if not user:
                 return []
@@ -339,9 +350,15 @@ class AuthState(MixinState):
         active_id = self.active_branch_id
         if not active_id:
             return ""
+        company_id = self.current_user.get("company_id")
+        if not company_id:
+            return ""
+        set_tenant_context(company_id, None)
         with rx.session() as session:
             branch = session.exec(
-                select(Branch).where(Branch.id == active_id)
+                select(Branch)
+                .where(Branch.id == active_id)
+                .where(Branch.company_id == company_id)
             ).first()
             return branch.name if branch else ""
     
@@ -651,11 +668,14 @@ class AuthState(MixinState):
         if not company_id:
             self.users_list = []
             return
+        # Refuerza el contexto tenant para evitar errores en background/write queue.
+        set_tenant_context(company_id, None)
         with rx.session() as session:
             users = session.exec(
                 select(UserModel)
                 .where(UserModel.company_id == company_id)
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
+                .execution_options(tenant_company_id=company_id)
             ).all()
             self._load_roles_cache(session)
             normalized_users = []
@@ -916,10 +936,12 @@ class AuthState(MixinState):
 
     @rx.event
     def ensure_roles_and_permissions(self):
-        with rx.session() as session:
-            self._bootstrap_default_roles(session)
-            user_count = session.exec(select(func.count(UserModel.id))).one()
-            self.needs_initial_admin = not user_count or user_count == 0
+        # Se ejecuta antes de tener un tenant seleccionado, por eso usamos bypass.
+        with tenant_bypass():
+            with rx.session() as session:
+                self._bootstrap_default_roles(session)
+                user_count = session.exec(select(func.count(UserModel.id))).one()
+                self.needs_initial_admin = not user_count or user_count == 0
 
     @rx.event
     def ensure_view_ingresos(self):
@@ -1282,9 +1304,27 @@ class AuthState(MixinState):
         raw_password = form_data.get("password") or ""
         password = raw_password.encode("utf-8")
 
+        client_ip = None
+        router = getattr(self, "router", None)
+        session_ctx = getattr(router, "session", None)
+        if session_ctx is not None:
+            for attr in ("client_ip", "client_host", "client_address"):
+                value = getattr(session_ctx, attr, None)
+                if value:
+                    client_ip = value
+                    break
+        headers = getattr(router, "headers", None)
+        if isinstance(headers, dict):
+            client_ip = (
+                headers.get("x-forwarded-for")
+                or headers.get("X-Forwarded-For")
+                or headers.get("x-real-ip")
+                or client_ip
+            )
+
         # Rate limiting: verificar si el usuario está bloqueado
-        if _is_rate_limited(identifier):
-            remaining = _remaining_lockout_time(identifier)
+        if _is_rate_limited(identifier, ip_address=client_ip):
+            remaining = _remaining_lockout_time(identifier, ip_address=client_ip)
             self.error_message = (
                 f"Demasiados intentos fallidos. Espere {remaining} minuto(s)."
             )
@@ -1296,7 +1336,9 @@ class AuthState(MixinState):
 
         with rx.session() as session:
             admin_user = session.exec(
-                select(UserModel).where(UserModel.username == "admin")
+                select(UserModel)
+                .where(UserModel.username == "admin")
+                .execution_options(tenant_bypass=True)
             ).first()
             if admin_user and self.needs_initial_admin:
                 self.needs_initial_admin = False
@@ -1339,7 +1381,7 @@ class AuthState(MixinState):
                     session.add(admin_user)
                     session.commit()
 
-                    _clear_login_attempts(identifier)
+                    _clear_login_attempts(identifier, ip_address=client_ip)
                     self.token = create_access_token(
                         admin_user.id,
                         token_version=getattr(admin_user, "token_version", 0),
@@ -1353,7 +1395,7 @@ class AuthState(MixinState):
                         return rx.redirect("/cambiar-clave")
                     return rx.redirect("/")
 
-                _record_failed_attempt(identifier)
+                _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
                     "Sistema no inicializado. Ingrese la contraseña inicial."
                 )
@@ -1363,13 +1405,17 @@ class AuthState(MixinState):
             password_ok = False
             if "@" in identifier:
                 user = session.exec(
-                    select(UserModel).where(UserModel.email == identifier)
+                    select(UserModel)
+                    .where(UserModel.email == identifier)
+                    .execution_options(tenant_bypass=True)
                 ).first()
                 if user and bcrypt.checkpw(password, user.password_hash.encode("utf-8")):
                     password_ok = True
             else:
                 users = session.exec(
-                    select(UserModel).where(UserModel.username == identifier)
+                    select(UserModel)
+                    .where(UserModel.username == identifier)
+                    .execution_options(tenant_bypass=True)
                 ).all()
                 if users:
                     matches = [
@@ -1414,7 +1460,7 @@ class AuthState(MixinState):
                     session.commit()
                 
                 # Login exitoso: limpiar intentos fallidos
-                _clear_login_attempts(identifier)
+                _clear_login_attempts(identifier, ip_address=client_ip)
                 self.token = create_access_token(
                     user.id,
                     token_version=getattr(user, "token_version", 0),
@@ -1442,7 +1488,7 @@ class AuthState(MixinState):
                 return rx.redirect(self._default_route_for_privileges(privileges))
 
         # Login fallido: registrar intento
-        _record_failed_attempt(identifier)
+        _record_failed_attempt(identifier, ip_address=client_ip)
         self.error_message = "Usuario o contraseña incorrectos."
 
     @rx.event
@@ -1453,6 +1499,11 @@ class AuthState(MixinState):
         confirm_password = (form_data.get("confirm_password") or "").strip()
         username = (self.current_user.get("username") or "").strip()
         user_id = self.current_user.get("id")
+        company_id = self.current_user.get("company_id")
+        if not company_id:
+            self.password_change_error = "Empresa no definida."
+            return
+        set_tenant_context(company_id, None)
 
         is_valid, error = validate_password(new_password)
         if not is_valid:
@@ -1469,7 +1520,9 @@ class AuthState(MixinState):
 
         with rx.session() as session:
             user = session.exec(
-                select(UserModel).where(UserModel.id == user_id)
+                select(UserModel)
+                .where(UserModel.id == user_id)
+                .where(UserModel.company_id == company_id)
             ).first()
             if not user:
                 self.password_change_error = "Usuario no encontrado."
@@ -1544,9 +1597,8 @@ class AuthState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        branch_id = self._branch_id()
-        if not branch_id:
-            return rx.toast("Sucursal no definida.", duration=3000)
+        # La edición de usuarios es a nivel empresa, no de sucursal.
+        set_tenant_context(company_id, None)
         
         with rx.session() as session:
             user = session.exec(
@@ -1554,6 +1606,7 @@ class AuthState(MixinState):
                 .where(UserModel.username == key)
                 .where(UserModel.company_id == company_id)
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
+                .execution_options(tenant_company_id=company_id)
             ).first()
             
             if not user:
@@ -1667,6 +1720,9 @@ class AuthState(MixinState):
     def save_user(self):
         if not self.current_user["privileges"]["manage_users"]:
             return rx.toast("No tiene permisos para gestionar usuarios.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
             
         username = self.new_user_data["username"].lower().strip()
         if not username:
@@ -1690,6 +1746,8 @@ class AuthState(MixinState):
             self.new_user_data["privileges"]
         )
 
+        # Gestión de usuarios: alcance por empresa (sin filtrar por sucursal actual).
+        set_tenant_context(company_id, None)
         with rx.session() as session:
             role = self._get_role_by_name(session, role_name)
             # CASO 1: El rol no existe -> Lo creamos nuevo con los permisos del form
@@ -1845,18 +1903,24 @@ class AuthState(MixinState):
     def delete_user(self, username: str):
         if not self.current_user["privileges"]["manage_users"]:
             return rx.toast("No tiene permisos para eliminar usuarios.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
         if username == self.current_user["username"]:
             return rx.toast("No puedes eliminar tu propio usuario.", duration=3000)
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-            
+        
+        # Eliminación de usuarios: alcance por empresa (sin filtrar por sucursal actual).
+        set_tenant_context(company_id, None)
         with rx.session() as session:
             user = session.exec(
                 select(UserModel)
                 .where(UserModel.username == username)
                 .where(UserModel.company_id == company_id)
                 .options(selectinload(UserModel.role))
+                .execution_options(tenant_company_id=company_id)
             ).first()
             
             if not user:

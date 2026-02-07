@@ -25,13 +25,11 @@ class Client(rx.Model, table=True):
     name: str = Field(index=True, nullable=False)
     dni: str = Field(index=True, nullable=False)
     company_id: int = Field(
-        default=1,
         foreign_key="company.id",
         index=True,
         nullable=False,
     )
     branch_id: int = Field(
-        default=1,
         foreign_key="branch.id",
         index=True,
         nullable=False,

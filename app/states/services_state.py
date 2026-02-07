@@ -7,14 +7,32 @@ import math
 import calendar
 import io
 from sqlmodel import select
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel, SalePayment, CashboxLog
 from app.enums import SaleStatus, ReservationStatus, PaymentMethodType
-from app.utils.sanitization import sanitize_name, sanitize_dni, sanitize_phone
+from app.utils.sanitization import (
+    sanitize_name,
+    sanitize_dni,
+    sanitize_phone,
+    sanitize_reason,
+    sanitize_reason_preserve_spaces,
+    sanitize_text,
+)
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice
 from .mixin_state import MixinState
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
-from app.utils.exports import create_excel_workbook, style_header_row, add_data_rows, auto_adjust_column_widths
+from app.utils.exports import (
+    create_excel_workbook,
+    style_header_row,
+    auto_adjust_column_widths,
+    add_company_header,
+    add_totals_row_with_formulas,
+    add_notes_section,
+    THIN_BORDER,
+    POSITIVE_FILL,
+    WARNING_FILL,
+    NEGATIVE_FILL,
+)
 
 TODAY_STR = get_today_str()
 CURRENT_WEEK_STR = get_current_week_str()
@@ -50,6 +68,8 @@ class ServicesState(MixinState):
     @rx.event
     def set_service_tab(self, tab: str):
         self.service_active_tab = tab
+        if tab == "precios_campo":
+            self.load_field_prices()
 
     def _require_manage_config(self):
         if hasattr(self, "current_user") and not self.current_user["privileges"].get(
@@ -271,6 +291,49 @@ class ServicesState(MixinState):
             amount = total_value
         return [(method_type, self._round_currency(amount))]
 
+    def _reservation_lock_key(self, date_str: str, sport: str) -> str:
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        sport_value = sport.value if hasattr(sport, "value") else str(sport)
+        return f"reservation:{company_id}:{branch_id}:{sport_value}:{date_str}"
+
+    def _supports_named_locks(self, session) -> bool:
+        try:
+            bind = session.get_bind()
+            if not bind:
+                return False
+            return bind.dialect.name in {"mysql", "mariadb"}
+        except Exception:
+            return False
+
+    def _acquire_named_lock(self, session, key: str, timeout: int = 5) -> bool:
+        if not self._supports_named_locks(session):
+            return True
+        try:
+            result = session.exec(
+                text("SELECT GET_LOCK(:key, :timeout)"),
+                params={"key": key, "timeout": timeout},
+            ).one()
+            lock_value = result
+            if isinstance(result, (tuple, list)):
+                lock_value = result[0] if result else None
+            else:
+                try:
+                    lock_value = result[0]
+                except Exception:
+                    lock_value = result
+            return bool(lock_value == 1 or lock_value is True)
+        except Exception:
+            return False
+
+    def _release_named_lock(self, session, key: str) -> None:
+        if not self._supports_named_locks(session):
+            return
+        try:
+            session.exec(text("SELECT RELEASE_LOCK(:key)"), params={"key": key})
+        except Exception:
+            return None
+
     def _register_reservation_advance_in_cashbox(
         self, reservation: FieldReservation, advance_amount: float
     ) -> None:
@@ -317,6 +380,7 @@ class ServicesState(MixinState):
                 session.add(
                     SalePayment(
                         sale_id=new_sale.id,
+                        company_id=company_id,
                         amount=self._round_currency(amount),
                         method_type=method_type,
                         reference_code=f"Reserva {reservation['id']}",
@@ -335,6 +399,7 @@ class ServicesState(MixinState):
                     product_name_snapshot=f"Adelanto reserva: {reservation.get('field_name', 'Campo')}",
                     product_barcode_snapshot="RESERVA",
                     product_category_snapshot="Servicios",
+                    company_id=company_id,
                     branch_id=branch_id,
                 )
             )
@@ -508,13 +573,85 @@ class ServicesState(MixinState):
         
         if not data:
             return rx.toast("No hay datos para exportar.", duration=3000)
-            
+
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        sport_label = self.field_rental_sport.capitalize() if self.field_rental_sport else "Todos"
+        period_from = self.reservation_filter_start_date or "Inicio"
+        period_to = self.reservation_filter_end_date or "Actual"
+        period_label = f"Período: {period_from} a {period_to} | Deporte: {sport_label}"
+
+        total_reservations = len(data)
+        total_amount = sum(float(item.get("total_amount", 0) or 0) for item in data)
+        total_paid = sum(float(item.get("paid_amount", 0) or 0) for item in data)
+        total_balance = total_amount - total_paid
+
+        status_counts: dict[str, int] = {"pendiente": 0, "pagado": 0, "cancelado": 0}
+        for item in data:
+            status_value = self._reservation_status_to_ui(item.get("status", "pendiente"))
+            key = str(status_value or "pendiente").strip().lower()
+            status_counts[key] = status_counts.get(key, 0) + 1
+
         wb, ws = create_excel_workbook("Reservas")
-        
-        headers = ["Fecha", "Hora Inicio", "Hora Fin", "Cliente", "DNI", "Telefono", "Deporte", "Campo", "Estado", "Monto Total", "Pagado", "Saldo"]
-        style_header_row(ws, 1, headers)
-        
-        rows = []
+
+        row = add_company_header(
+            ws,
+            company_name,
+            "RESERVAS DE CAMPOS DEPORTIVOS",
+            period_label,
+            columns=12,
+        )
+
+        row += 1
+        ws.cell(row=row, column=1, value="RESUMEN OPERATIVO")
+        row += 1
+        ws.cell(row=row, column=1, value="Total de Reservas:")
+        ws.cell(row=row, column=2, value=total_reservations)
+        row += 1
+        ws.cell(row=row, column=1, value="Reservas Pagadas:")
+        ws.cell(row=row, column=2, value=status_counts.get("pagado", 0))
+        row += 1
+        ws.cell(row=row, column=1, value="Reservas Pendientes:")
+        ws.cell(row=row, column=2, value=status_counts.get("pendiente", 0))
+        row += 1
+        ws.cell(row=row, column=1, value="Reservas Canceladas:")
+        ws.cell(row=row, column=2, value=status_counts.get("cancelado", 0))
+        row += 1
+        ws.cell(row=row, column=1, value=f"Monto Total ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_amount).number_format = currency_format
+        row += 1
+        ws.cell(row=row, column=1, value=f"Monto Cobrado ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_paid).number_format = currency_format
+        row += 1
+        ws.cell(row=row, column=1, value=f"Saldo Pendiente ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_balance).number_format = currency_format
+
+        row += 2
+        headers = [
+            "Fecha",
+            "Hora Inicio",
+            "Hora Fin",
+            "Cliente",
+            "DNI",
+            "Teléfono",
+            "Deporte",
+            "Campo",
+            "Estado",
+            f"Monto Total ({currency_label})",
+            f"Pagado ({currency_label})",
+            f"Saldo ({currency_label})",
+        ]
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
+
+        status_display_map = {
+            "pendiente": "Pendiente",
+            "pagado": "Pagada",
+            "cancelado": "Cancelada",
+        }
+
         for r in data:
             try:
                 start_date, start_time = r["start_datetime"].split(" ")
@@ -523,26 +660,74 @@ class ServicesState(MixinState):
                 start_date = r["start_datetime"]
                 start_time = ""
                 end_time = ""
-                
-            balance = float(r["total_amount"]) - float(r["paid_amount"])
-            status_str = r["status"] if isinstance(r["status"], str) else r["status"].value
-            
-            rows.append([
-                start_date,
-                start_time,
-                end_time,
-                r["client_name"],
-                r["dni"],
-                r["phone"],
-                r.get("sport_label", r["sport"]),
-                r["field_name"],
-                status_str,
-                float(r["total_amount"]),
-                float(r["paid_amount"]),
-                balance
-            ])
-            
-        add_data_rows(ws, rows, 2)
+
+            status_ui = self._reservation_status_to_ui(r.get("status", "pendiente"))
+            status_key = str(status_ui or "pendiente").strip().lower()
+            status_display = status_display_map.get(status_key, status_key.capitalize())
+
+            total_value = float(r.get("total_amount", 0) or 0)
+            paid_value = float(r.get("paid_amount", 0) or 0)
+
+            ws.cell(row=row, column=1, value=start_date)
+            ws.cell(row=row, column=2, value=start_time)
+            ws.cell(row=row, column=3, value=end_time)
+            ws.cell(row=row, column=4, value=r.get("client_name", "") or "Cliente no registrado")
+            ws.cell(row=row, column=5, value=r.get("dni", "") or "-")
+            ws.cell(row=row, column=6, value=r.get("phone", "") or "-")
+            ws.cell(row=row, column=7, value=r.get("sport_label", r.get("sport", "")) or "Sin deporte")
+            ws.cell(row=row, column=8, value=r.get("field_name", "") or "Sin campo")
+            ws.cell(row=row, column=9, value=status_display)
+            ws.cell(row=row, column=10, value=total_value).number_format = currency_format
+            ws.cell(row=row, column=11, value=paid_value).number_format = currency_format
+            ws.cell(row=row, column=12, value=f"=J{row}-K{row}").number_format = currency_format
+
+            status_cell = ws.cell(row=row, column=9)
+            if status_key == "pagado":
+                status_cell.fill = POSITIVE_FILL
+            elif status_key == "pendiente":
+                status_cell.fill = WARNING_FILL
+            elif status_key == "cancelado":
+                status_cell.fill = NEGATIVE_FILL
+
+            for col in range(1, 13):
+                ws.cell(row=row, column=col).border = THIN_BORDER
+            row += 1
+
+        totals_row = row
+        add_totals_row_with_formulas(
+            ws,
+            totals_row,
+            data_start,
+            [
+                {"type": "label", "value": "TOTALES"},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+                {"type": "text", "value": ""},
+                {"type": "formula", "value": f"=COUNTA(A{data_start}:A{totals_row-1})"},
+                {"type": "sum", "col_letter": "J", "number_format": currency_format},
+                {"type": "sum", "col_letter": "K", "number_format": currency_format},
+                {"type": "sum", "col_letter": "L", "number_format": currency_format},
+            ],
+        )
+
+        add_notes_section(
+            ws,
+            totals_row,
+            [
+                "Monto Total: Tarifa completa de la reserva.",
+                "Pagado: Importe efectivamente cobrado al cliente.",
+                "Saldo = Monto Total - Pagado (fórmula verificable en Excel).",
+                "Estado Pendiente: reserva creada con saldo pendiente de cobro.",
+                "Estado Pagada: reserva totalmente cancelada.",
+                "Estado Cancelada: reserva anulada, no genera ingreso operativo.",
+            ],
+            columns=12,
+        )
+
         auto_adjust_column_widths(ws)
         
         output = io.BytesIO()
@@ -1014,6 +1199,8 @@ class ServicesState(MixinState):
     @rx.event
     def set_service_active_tab(self, tab: str):
         self.service_active_tab = tab
+        if tab == "precios_campo":
+            self.load_field_prices()
 
     @rx.event
     def set_field_rental_sport(self, sport: str):
@@ -1286,12 +1473,16 @@ class ServicesState(MixinState):
     def create_field_reservation(self):
         if not self.current_user["privileges"]["manage_reservations"]:
             return rx.toast("No tiene permisos para gestionar reservas.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
         form = self.reservation_form
         # Sanitizar inputs para prevenir XSS
         name = sanitize_name(form.get("client_name", ""))
         dni = sanitize_dni(form.get("dni", ""))
         phone = sanitize_phone(form.get("phone", ""))
-        field_name = form.get("field_name", "").strip() or f"Campo {self._sport_label(self.field_rental_sport)}"
+        raw_field_name = form.get("field_name", "").strip()
+        field_name = sanitize_text(raw_field_name, max_length=120) or f"Campo {self._sport_label(self.field_rental_sport)}"
         date = form.get("date", "").strip()
         start_time = form.get("start_time", "").strip()
         end_time = form.get("end_time", "").strip()
@@ -1322,48 +1513,83 @@ class ServicesState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         
+        lock_key = self._reservation_lock_key(date, self.field_rental_sport)
         with rx.session() as session:
-            new_reservation = FieldReservationModel(
-                client_name=name,
-                client_dni=dni,
-                client_phone=phone,
-                sport=self.field_rental_sport,
-                field_name=field_name,
-                start_datetime=start_dt,
-                end_datetime=end_dt,
-                total_amount=total_amount,
-                paid_amount=paid_amount,
-                status=status,
-                user_id=self.current_user["id"] if self.current_user and "id" in self.current_user else None,
-                company_id=company_id,
-                branch_id=branch_id,
-            )
-            session.add(new_reservation)
-            session.commit()
-            session.refresh(new_reservation)
-            status_ui = self._reservation_status_to_ui(new_reservation.status)
-            reservation: FieldReservation = {
-                "id": str(new_reservation.id),
-                "client_name": new_reservation.client_name,
-                "dni": new_reservation.client_dni or "",
-                "phone": new_reservation.client_phone or "",
-                "sport": new_reservation.sport.value
-                if hasattr(new_reservation.sport, "value")
-                else str(new_reservation.sport),
-                "sport_label": form.get(
-                    "sport_label", self._sport_label(str(new_reservation.sport))
-                ),
-                "field_name": new_reservation.field_name,
-                "start_datetime": new_reservation.start_datetime.strftime("%Y-%m-%d %H:%M"),
-                "end_datetime": new_reservation.end_datetime.strftime("%Y-%m-%d %H:%M"),
-                "advance_amount": new_reservation.paid_amount,
-                "total_amount": new_reservation.total_amount,
-                "paid_amount": new_reservation.paid_amount,
-                "status": status_ui,
-                "created_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "cancellation_reason": "",
-                "delete_reason": "",
-            }
+            if not self._acquire_named_lock(session, lock_key, timeout=5):
+                return rx.toast(
+                    "Sistema ocupado. Intente nuevamente en unos segundos.",
+                    duration=3500,
+                )
+            try:
+                conflict = session.exec(
+                    select(FieldReservationModel.id)
+                    .where(FieldReservationModel.sport == self.field_rental_sport)
+                    .where(FieldReservationModel.status != ReservationStatus.CANCELLED)
+                    .where(FieldReservationModel.start_datetime < end_dt)
+                    .where(FieldReservationModel.end_datetime > start_dt)
+                    .where(FieldReservationModel.company_id == company_id)
+                    .where(FieldReservationModel.branch_id == branch_id)
+                    .with_for_update()
+                    .limit(1)
+                ).first()
+                if conflict:
+                    return rx.toast(
+                        "El horario seleccionado ya esta reservado.",
+                        duration=3000,
+                    )
+
+                new_reservation = FieldReservationModel(
+                    client_name=name,
+                    client_dni=dni,
+                    client_phone=phone,
+                    sport=self.field_rental_sport,
+                    field_name=field_name,
+                    start_datetime=start_dt,
+                    end_datetime=end_dt,
+                    total_amount=total_amount,
+                    paid_amount=paid_amount,
+                    status=status,
+                    user_id=self.current_user["id"]
+                    if self.current_user and "id" in self.current_user
+                    else None,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+                session.add(new_reservation)
+                session.commit()
+                session.refresh(new_reservation)
+                status_ui = self._reservation_status_to_ui(new_reservation.status)
+                reservation: FieldReservation = {
+                    "id": str(new_reservation.id),
+                    "client_name": new_reservation.client_name,
+                    "dni": new_reservation.client_dni or "",
+                    "phone": new_reservation.client_phone or "",
+                    "sport": new_reservation.sport.value
+                    if hasattr(new_reservation.sport, "value")
+                    else str(new_reservation.sport),
+                    "sport_label": form.get(
+                        "sport_label",
+                        self._sport_label(str(new_reservation.sport)),
+                    ),
+                    "field_name": new_reservation.field_name,
+                    "start_datetime": new_reservation.start_datetime.strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
+                    "end_datetime": new_reservation.end_datetime.strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
+                    "advance_amount": new_reservation.paid_amount,
+                    "total_amount": new_reservation.total_amount,
+                    "paid_amount": new_reservation.paid_amount,
+                    "status": status_ui,
+                    "created_at": datetime.datetime.now().strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
+                    "cancellation_reason": "",
+                    "delete_reason": "",
+                }
+            finally:
+                self._release_named_lock(session, lock_key)
         
         self.load_reservations()
         self._log_service_action(reservation, "reserva", 0, notes="Reserva creada", status=str(reservation["status"]))
@@ -1691,6 +1917,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 session.add(
                     SalePayment(
                         sale_id=new_sale.id,
+                        company_id=company_id,
                         amount=amount,
                         method_type=method_type,
                         reference_code=f"Reserva {reservation['id']}",
@@ -1703,6 +1930,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(FieldReservationModel.id == int(reservation["id"]))
                 .where(FieldReservationModel.company_id == company_id)
                 .where(FieldReservationModel.branch_id == branch_id)
+                .with_for_update()
             ).first()
             if reservation_model:
                 reservation_model.paid_amount = reservation["paid_amount"]
@@ -1722,6 +1950,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 product_name_snapshot=f"{entry_type.capitalize()} reserva: {reservation.get('field_name')}",
                 product_barcode_snapshot="RESERVA",
                 product_category_snapshot="Servicios",
+                company_id=company_id,
                 branch_id=branch_id,
             )
             session.add(sale_item)
@@ -1761,6 +1990,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     def pay_reservation_with_payment_method(self):
         if not self.current_user["privileges"].get("manage_reservations"):
             return rx.toast("No tiene permisos para gestionar reservas.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
         reservation = self._find_reservation_by_id(self.reservation_payment_id)
         if not reservation:
             return rx.toast("Seleccione una reserva desde Servicios -> Pagar.", duration=3000)
@@ -1833,6 +2065,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 session.add(
                     SalePayment(
                         sale_id=new_sale.id,
+                        company_id=company_id,
                         amount=amount,
                         method_type=method_type,
                         reference_code=f"Reserva {reservation['id']}",
@@ -1851,6 +2084,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 ),
                 product_barcode_snapshot="RESERVA",
                 product_category_snapshot="Servicios",
+                company_id=company_id,
                 branch_id=branch_id,
             )
             session.add(sale_item)
@@ -1879,6 +2113,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(FieldReservationModel.id == int(reservation["id"]))
                 .where(FieldReservationModel.company_id == company_id)
                 .where(FieldReservationModel.branch_id == branch_id)
+                .with_for_update()
             ).first()
             if reservation_model:
                 reservation_model.paid_amount = reservation["paid_amount"]
@@ -1919,6 +2154,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
     @rx.event
     def pay_reservation_balance(self):
+        block = self._require_active_subscription()
+        if block:
+            return block
         reservation = self._find_reservation_by_id(self.reservation_payment_id)
         if not reservation:
             return rx.toast("Seleccione una reserva.", duration=3000)
@@ -1932,7 +2170,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
     @rx.event
     def set_reservation_cancel_reason(self, reason: str):
-        self.reservation_cancel_reason = reason or ""
+        self.reservation_cancel_reason = sanitize_reason_preserve_spaces(reason or "")
 
     @rx.event
     def start_reservation_delete(self, reservation_id: str):
@@ -1973,6 +2211,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     def cancel_reservation(self):
         if not self.current_user["privileges"]["manage_reservations"]:
             return rx.toast("No tiene permisos.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -1983,12 +2224,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(FieldReservationModel.id == self.reservation_cancel_selection)
                 .where(FieldReservationModel.company_id == company_id)
                 .where(FieldReservationModel.branch_id == branch_id)
+                .with_for_update()
             ).first()
             
             if not reservation_model:
                 return rx.toast("Reserva no encontrada.", duration=3000)
             
-            reason = (self.reservation_cancel_reason or "").strip()
+            reason = sanitize_reason(self.reservation_cancel_reason or "").strip()
             if not reason:
                 return rx.toast("Ingrese motivo.", duration=3000)
             
