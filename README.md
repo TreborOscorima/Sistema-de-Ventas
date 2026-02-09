@@ -163,6 +163,29 @@ Sistema-de-Ventas/
 
 > **Nota:** Al primer inicio, el sistema poblará automáticamente las tablas de configuración (monedas, unidades, métodos de pago) gracias al método `ensure_default_data`.
 
+### Despliegue con Docker (producción)
+
+El proyecto incluye un stack completo para producción con **Docker Compose** (app Reflex + MySQL 8 + Redis):
+
+1. **Crear `.env`** a partir del ejemplo y ajustar valores (obligatorio en producción: `AUTH_SECRET_KEY`, `DB_PASSWORD`):
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Levantar el stack:**
+   ```bash
+   docker compose up -d
+   ```
+
+3. **Acceder a la aplicación:** `http://localhost:3000`
+
+Servicios:
+- **App:** puertos 3000 (frontend) y 8000 (API).
+- **MySQL 8:** puerto 3306, base `sistema_ventas`, usuario por defecto `app`.
+- **Redis:** puerto 6379 (rate limiting en producción).
+
+El contenedor de la app espera a MySQL y Redis, ejecuta las migraciones Alembic y luego inicia Reflex. Para producción, define en `.env`: `ENV=prod`, `AUTH_SECRET_KEY` (mín. 32 caracteres), `DB_PASSWORD` y `PUBLIC_API_URL` con la URL pública del API (ej. `https://tudominio.com:8000`).
+
 ---
 
 ## 5. 📖 Manual de Módulos

@@ -1,0 +1,73 @@
+# Sistema de Ventas - Stack de producción
+# Uso: docker compose up -d
+# App: http://localhost:3000
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: sistema_ventas_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      MYSQL_DATABASE: ${DB_NAME:-sistema_ventas}
+      MYSQL_USER: ${DB_USER:-app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: sistema_ventas_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sistema_ventas_app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+      - "8000:8000"
+    environment:
+      ENV: ${ENV:-prod}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-app}
+      DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      DB_NAME: ${DB_NAME:-sistema_ventas}
+      REDIS_URL: redis://redis:6379/0
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-min-32-chars-for-production}
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+    env_file:
+      - .env
+    # Sobrescribe variables que deben apuntar a servicios internos
+    # (DB_HOST y REDIS_URL ya están fijados arriba)
+
+volumes:
+  mysql_data:
+  redis_data:
