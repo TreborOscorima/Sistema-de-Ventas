@@ -1,5 +1,23 @@
 # Plan: Sistema Completo de Gestión de Ventas e Inventario
 
+## Qué es este archivo
+
+Este archivo es el **roadmap histórico/evolutivo** del proyecto (fases, objetivos y tareas).
+
+No es un runbook operativo de producción ni un manual técnico integral.  
+Para documentación operativa y técnica actualizada, consultar:
+
+- `docs/SYSTEM_FULL_DOCUMENTATION.md`
+- `docs/DEPLOYMENT_SECURITY.md`
+- `docs/CANARY_ROLLOUT_RUNBOOK.md`
+
+## Estado general de este plan
+
+- Fases 1 a 9: completadas.
+- Fase 10: hardening/refactorización continua.
+
+Se recomienda mantener este archivo como visión de producto y deuda técnica, no como única fuente para deploy/operación.
+
 ## Objetivo
 
 Desarrollar un sistema completo de gestión de ventas e inventario con interfaz moderna, sidebar navegable, formularios interactivos, base de datos integrada, y sistema de autenticación con control de privilegios.

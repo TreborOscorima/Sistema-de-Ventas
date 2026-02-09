@@ -19,9 +19,23 @@ class RolePermission(rx.Model, table=True):
 class Role(rx.Model, table=True):
     """Rol configurable para RBAC."""
 
-    name: str = Field(unique=True, index=True, nullable=False)
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "name",
+            name="uq_role_company_name",
+        ),
+    )
+
+    company_id: int = Field(
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    name: str = Field(index=True, nullable=False)
     description: str = Field(default="")
 
+    company: "Company" = Relationship()
     users: List["User"] = Relationship(back_populates="role")
     permissions: List["Permission"] = Relationship(
         back_populates="roles",

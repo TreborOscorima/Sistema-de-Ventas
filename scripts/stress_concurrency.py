@@ -16,6 +16,7 @@ import asyncio
 import os
 import sys
 import uuid
+from pathlib import Path
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -24,6 +25,11 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
+
+# Permite ejecutar el script directamente desde scripts/.
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 import app.models  # noqa: F401
 from app.enums import ReservationStatus, PaymentMethodType

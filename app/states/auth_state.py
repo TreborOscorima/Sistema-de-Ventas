@@ -677,7 +677,7 @@ class AuthState(MixinState):
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
                 .execution_options(tenant_company_id=company_id)
             ).all()
-            self._load_roles_cache(session)
+            self._load_roles_cache(session, company_id=company_id)
             normalized_users = []
             for user in users:
                 role_name = user.role.name if user.role else "Sin rol"
@@ -725,9 +725,17 @@ class AuthState(MixinState):
             return self._normalize_privileges(all_privileges)
         return self._normalize_privileges(permissions)
 
-    def _load_roles_cache(self, session):
+    def _load_roles_cache(self, session, company_id: int | None = None):
+        scoped_company_id = int(company_id) if company_id else None
+        if not scoped_company_id:
+            self.roles = list(DEFAULT_ROLE_TEMPLATES)
+            self.role_privileges = DEFAULT_ROLE_TEMPLATES.copy()
+            return
+
         roles = session.exec(
-            select(Role).options(selectinload(Role.permissions))
+            select(Role)
+            .where(Role.company_id == scoped_company_id)
+            .options(selectinload(Role.permissions))
         ).all()
         if not roles:
             self.roles = list(DEFAULT_ROLE_TEMPLATES)
@@ -803,13 +811,22 @@ class AuthState(MixinState):
         session.flush()
         return by_code
 
-    def _get_role_by_name(self, session, role_name: str) -> Role | None:
+    def _get_role_by_name(
+        self,
+        session,
+        role_name: str,
+        company_id: int | None = None,
+    ) -> Role | None:
         target = (role_name or "").strip().lower()
         if not target:
+            return None
+        scoped_company_id = int(company_id) if company_id else None
+        if scoped_company_id is None:
             return None
         return session.exec(
             select(Role)
             .where(func.lower(Role.name) == target)
+            .where(Role.company_id == scoped_company_id)
             .options(selectinload(Role.permissions))
         ).first()
 
@@ -818,11 +835,24 @@ class AuthState(MixinState):
         session,
         role_name: str,
         privileges: Privileges,
+        company_id: int | None = None,
         overwrite: bool = False,
     ) -> Role:
-        role = self._get_role_by_name(session, role_name)
+        scoped_company_id = int(company_id) if company_id else None
+        if scoped_company_id is None:
+            raise RuntimeError("company_id requerido para crear/editar roles.")
+
+        role = self._get_role_by_name(
+            session,
+            role_name,
+            company_id=scoped_company_id,
+        )
         if not role:
-            role = Role(name=role_name, description="")
+            role = Role(
+                company_id=scoped_company_id,
+                name=role_name,
+                description="",
+            )
             session.add(role)
             session.flush()
         if overwrite or not role.permissions:
@@ -837,26 +867,40 @@ class AuthState(MixinState):
             session.add(role)
         return role
 
-    def _bootstrap_default_roles(self, session):
-        role_count = session.exec(select(func.count(Role.id))).one()
-        if role_count and role_count > 0:
-            # Registrar permisos nuevos sin modificar roles existentes.
-            self._ensure_permissions(session, list(DEFAULT_USER_PRIVILEGES.keys()))
-            self._load_roles_cache(session)
-            return
+    def _bootstrap_default_roles(self, session, company_id: int | None):
+        scoped_company_id = int(company_id) if company_id else None
+        # Siempre asegurar catálogo de permisos global.
         permission_map = self._ensure_permissions(
             session, list(DEFAULT_USER_PRIVILEGES.keys())
         )
+        if scoped_company_id is None:
+            self._load_roles_cache(session, None)
+            return
+
+        created_any = False
         for role_name, privileges in DEFAULT_ROLE_TEMPLATES.items():
-            role = Role(name=role_name, description="")
+            existing_role = self._get_role_by_name(
+                session,
+                role_name,
+                company_id=scoped_company_id,
+            )
+            if existing_role:
+                continue
+            role = Role(
+                company_id=scoped_company_id,
+                name=role_name,
+                description="",
+            )
             role.permissions = [
                 permission_map[code]
                 for code, enabled in privileges.items()
                 if enabled
             ]
             session.add(role)
-        session.commit()
-        self._load_roles_cache(session)
+            created_any = True
+        if created_any:
+            session.flush()
+        self._load_roles_cache(session, scoped_company_id)
 
     def _role_privileges(self, role: str) -> Privileges:
         role_key = self._find_role_key(role)
@@ -903,6 +947,46 @@ class AuthState(MixinState):
         value = (os.getenv("ALLOW_DEFAULT_ADMIN") or "").strip().lower()
         return value in {"1", "true", "yes", "on"}
 
+    def _get_or_create_bootstrap_company_and_branch(
+        self,
+        session,
+    ) -> tuple[Company, Branch]:
+        company = session.exec(
+            select(Company).order_by(Company.id.asc())
+        ).first()
+        if not company:
+            now = datetime.now()
+            company = Company(
+                name="Empresa Inicial",
+                ruc=f"BOOT{time.time_ns()}",
+                is_active=True,
+                trial_ends_at=now + timedelta(days=3650),
+                created_at=now,
+                plan_type="enterprise",
+                max_branches=999,
+                max_users=999,
+                has_reservations_module=True,
+                has_electronic_billing=False,
+                subscription_status=SubscriptionStatus.ACTIVE.value,
+            )
+            session.add(company)
+            session.flush()
+
+        branch = session.exec(
+            select(Branch)
+            .where(Branch.company_id == company.id)
+            .order_by(Branch.id.asc())
+        ).first()
+        if not branch:
+            branch = Branch(
+                company_id=company.id,
+                name="Casa Matriz",
+                address="",
+            )
+            session.add(branch)
+            session.flush()
+        return company, branch
+
     def _default_route_for_privileges(self, privileges: Dict[str, bool]) -> str:
         """Determina la ruta inicial según los privilegios del usuario.
         
@@ -936,10 +1020,12 @@ class AuthState(MixinState):
 
     @rx.event
     def ensure_roles_and_permissions(self):
-        # Se ejecuta antes de tener un tenant seleccionado, por eso usamos bypass.
+        # En arranque puede no existir tenant seleccionado.
+        company_id = self._company_id()
         with tenant_bypass():
             with rx.session() as session:
-                self._bootstrap_default_roles(session)
+                self._bootstrap_default_roles(session, company_id)
+                session.commit()
                 user_count = session.exec(select(func.count(UserModel.id))).one()
                 self.needs_initial_admin = not user_count or user_count == 0
 
@@ -1359,16 +1445,24 @@ class AuthState(MixinState):
                         return
 
                 if identifier == "admin" and raw_password == initial_password:
-                    # Crear superadmin
+                    # Crear superadmin asociado a un tenant válido.
+                    company, branch = self._get_or_create_bootstrap_company_and_branch(
+                        session
+                    )
                     password_hash = bcrypt.hashpw(
                         password, bcrypt.gensalt()
                     ).decode()
-                    role = self._get_role_by_name(session, "Superadmin")
+                    role = self._get_role_by_name(
+                        session,
+                        "Superadmin",
+                        company_id=company.id,
+                    )
                     if not role:
                         role = self._ensure_role(
                             session,
                             "Superadmin",
                             self._normalize_privileges(SUPERADMIN_PRIVILEGES),
+                            company_id=company.id,
                             overwrite=True,
                         )
                     must_change_password = env == "prod"
@@ -1376,9 +1470,15 @@ class AuthState(MixinState):
                         username="admin",
                         password_hash=password_hash,
                         role_id=role.id,
+                        company_id=company.id,
+                        branch_id=branch.id,
                         must_change_password=must_change_password,
                     )
                     session.add(admin_user)
+                    session.flush()
+                    session.add(
+                        UserBranch(user_id=admin_user.id, branch_id=branch.id)
+                    )
                     session.commit()
 
                     _clear_login_attempts(identifier, ip_address=client_ip)
@@ -1387,7 +1487,7 @@ class AuthState(MixinState):
                         token_version=getattr(admin_user, "token_version", 0),
                         company_id=getattr(admin_user, "company_id", None),
                     )
-                    self.selected_branch_id = ""
+                    self.selected_branch_id = str(branch.id)
                     self.error_message = ""
                     self.password_change_error = ""
                     self.needs_initial_admin = False
@@ -1442,7 +1542,11 @@ class AuthState(MixinState):
                     fallback_role = (
                         "Superadmin" if user.username == "admin" else "Usuario"
                     )
-                    role = self._get_role_by_name(session, fallback_role)
+                    role = self._get_role_by_name(
+                        session,
+                        fallback_role,
+                        company_id=getattr(user, "company_id", None),
+                    )
                     if not role:
                         default_privileges = (
                             SUPERADMIN_PRIVILEGES
@@ -1453,6 +1557,7 @@ class AuthState(MixinState):
                             session,
                             fallback_role,
                             self._normalize_privileges(default_privileges),
+                            company_id=getattr(user, "company_id", None),
                             overwrite=True,
                         )
                     user.role_id = role.id
@@ -1481,7 +1586,10 @@ class AuthState(MixinState):
                     self.load_config_data()
                 self.error_message = ""
                 self.password_change_error = ""
-                self._load_roles_cache(session)
+                self._load_roles_cache(
+                    session,
+                    company_id=getattr(user, "company_id", None),
+                )
                 privileges = self._get_privileges_dict(user) or {}
                 if getattr(user, "must_change_password", False):
                     return rx.redirect("/cambiar-clave")
@@ -1684,14 +1792,24 @@ class AuthState(MixinState):
         existing = self._find_role_key(name)
         if existing:
             return rx.toast("Ese rol ya existe.", duration=3000)
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
         
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
+        set_tenant_context(company_id, None)
         with rx.session() as session:
-            if self._get_role_by_name(session, name):
+            if self._get_role_by_name(session, name, company_id=company_id):
                 return rx.toast("Ese rol ya existe.", duration=3000)
-            self._ensure_role(session, name, privileges, overwrite=True)
+            self._ensure_role(
+                session,
+                name,
+                privileges,
+                company_id=company_id,
+                overwrite=True,
+            )
             session.commit()
-            self._load_roles_cache(session)
+            self._load_roles_cache(session, company_id=company_id)
             
         self.new_role_name = ""
         self.new_user_data["role"] = name
@@ -1707,12 +1825,22 @@ class AuthState(MixinState):
             return rx.toast("Seleccione un rol para guardar sus privilegios.", duration=3000)
         if role.lower() == "superadmin":
             return rx.toast("No se puede modificar los privilegios de Superadmin.", duration=3000)
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
             
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
+        set_tenant_context(company_id, None)
         with rx.session() as session:
-            self._ensure_role(session, role, privileges, overwrite=True)
+            self._ensure_role(
+                session,
+                role,
+                privileges,
+                company_id=company_id,
+                overwrite=True,
+            )
             session.commit()
-            self._load_roles_cache(session)
+            self._load_roles_cache(session, company_id=company_id)
             
         return rx.toast(f"Plantilla de rol {role} actualizada.", duration=3000)
 
@@ -1749,13 +1877,18 @@ class AuthState(MixinState):
         # Gestión de usuarios: alcance por empresa (sin filtrar por sucursal actual).
         set_tenant_context(company_id, None)
         with rx.session() as session:
-            role = self._get_role_by_name(session, role_name)
+            role = self._get_role_by_name(
+                session,
+                role_name,
+                company_id=company_id,
+            )
             # CASO 1: El rol no existe -> Lo creamos nuevo con los permisos del form
             if not role:
                 role = self._ensure_role(
                     session,
                     role_name,
                     self.new_user_data["privileges"],
+                    company_id=company_id,
                     overwrite=True,
                 )
             # CASO 2: El rol YA existe y NO es Superadmin -> Actualizamos sus permisos
@@ -1765,6 +1898,7 @@ class AuthState(MixinState):
                     session,
                     role_name,
                     self.new_user_data["privileges"],
+                    company_id=company_id,
                     overwrite=True, # <--- La clave: fuerza la actualización en la DB
                 )
             if not self.editing_user:
@@ -1839,7 +1973,7 @@ class AuthState(MixinState):
                 
                 session.add(user_to_update)
                 session.commit()
-                self._load_roles_cache(session)
+                self._load_roles_cache(session, company_id=company_id)
                 
                 self.hide_user_form()
                 self.load_users()
@@ -1893,7 +2027,7 @@ class AuthState(MixinState):
                     UserBranch(user_id=new_user.id, branch_id=branch_id)
                 )
                 session.commit()
-                self._load_roles_cache(session)
+                self._load_roles_cache(session, company_id=company_id)
                 
                 self.hide_user_form()
                 self.load_users()

@@ -18,6 +18,7 @@ import gzip
 import shutil
 import argparse
 from pathlib import Path
+from shutil import which
 
 # Agregar el directorio raíz al path para importar módulos del proyecto
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -25,6 +26,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _resolve_mysql_binary(tool_name: str) -> str | None:
+    """Resuelve ruta de binarios MySQL (PATH + rutas comunes en Windows)."""
+    found = which(tool_name)
+    if found:
+        return found
+
+    candidates = [
+        Path(rf"C:\Program Files\MySQL\MySQL Server 8.0\bin\{tool_name}.exe"),
+        Path(rf"C:\Program Files\MySQL\MySQL Workbench 8.0 CE\{tool_name}.exe"),
+        Path(rf"C:\Program Files\MySQL\MySQL Server 8.4\bin\{tool_name}.exe"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return None
 
 
 def get_db_config() -> dict:
@@ -52,6 +70,15 @@ def generate_backup_filename(database: str, compress: bool = False) -> str:
     return f"{database}_backup_{timestamp}{ext}"
 
 
+def _mysql_subprocess_env(config: dict) -> dict:
+    """Construye entorno seguro para comandos MySQL sin exponer password por CLI."""
+    env = os.environ.copy()
+    password = str(config.get("password") or "").strip()
+    if password:
+        env["MYSQL_PWD"] = password
+    return env
+
+
 def run_mysqldump(config: dict, output_path: Path) -> bool:
     """
     Ejecuta mysqldump para crear el backup.
@@ -59,12 +86,20 @@ def run_mysqldump(config: dict, output_path: Path) -> bool:
     Returns:
         True si el backup fue exitoso
     """
+    mysqldump_bin = _resolve_mysql_binary("mysqldump")
+    if not mysqldump_bin:
+        print(
+            "Error: mysqldump no encontrado. "
+            "Asegúrate de que MySQL esté instalado y en el PATH.",
+            file=sys.stderr,
+        )
+        return False
+
     cmd = [
-        "mysqldump",
+        mysqldump_bin,
         f"--host={config['host']}",
         f"--port={config['port']}",
         f"--user={config['user']}",
-        f"--password={config['password']}",
         "--single-transaction",  # Consistencia para InnoDB
         "--routines",            # Incluir procedimientos almacenados
         "--triggers",            # Incluir triggers
@@ -79,6 +114,7 @@ def run_mysqldump(config: dict, output_path: Path) -> bool:
                 stdout=f,
                 stderr=subprocess.PIPE,
                 text=True,
+                env=_mysql_subprocess_env(config),
                 timeout=300,  # 5 minutos máximo
             )
         
@@ -90,9 +126,6 @@ def run_mysqldump(config: dict, output_path: Path) -> bool:
         
     except subprocess.TimeoutExpired:
         print("Error: Timeout ejecutando mysqldump", file=sys.stderr)
-        return False
-    except FileNotFoundError:
-        print("Error: mysqldump no encontrado. Asegúrate de que MySQL esté instalado y en el PATH.", file=sys.stderr)
         return False
     except Exception as e:
         print(f"Error inesperado: {e}", file=sys.stderr)
@@ -211,13 +244,19 @@ def restore_backup(backup_path: Path) -> bool:
     is_compressed = backup_path.suffix == ".gz"
     
     cmd = [
-        "mysql",
+        _resolve_mysql_binary("mysql") or "mysql",
         f"--host={config['host']}",
         f"--port={config['port']}",
         f"--user={config['user']}",
-        f"--password={config['password']}",
         config["database"],
     ]
+    if cmd[0] == "mysql":
+        print(
+            "Error: mysql no encontrado. "
+            "Asegúrate de que MySQL esté instalado y en el PATH.",
+            file=sys.stderr,
+        )
+        return False
     
     try:
         if is_compressed:
@@ -227,6 +266,7 @@ def restore_backup(backup_path: Path) -> bool:
                     cmd,
                     stdin=f,
                     stderr=subprocess.PIPE,
+                    env=_mysql_subprocess_env(config),
                     timeout=600,  # 10 minutos máximo
                 )
         else:
@@ -235,6 +275,7 @@ def restore_backup(backup_path: Path) -> bool:
                     cmd,
                     stdin=f,
                     stderr=subprocess.PIPE,
+                    env=_mysql_subprocess_env(config),
                     timeout=600,
                 )
         

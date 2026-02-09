@@ -341,3 +341,15 @@ El sistema ha pasado una auditoría integral de código (360°) con los siguient
 
 ---
 © 2025 TUWAYKIAPP. Desarrollado con ❤️ usando Reflex.
+
+---
+
+## Documentación recomendada
+
+Para documentación actualizada por capas:
+
+- Índice documental: `docs/README.md`
+- Guía completa del sistema: `docs/SYSTEM_FULL_DOCUMENTATION.md`
+- Seguridad de despliegue: `docs/DEPLOYMENT_SECURITY.md`
+- Runbook de canary/rollback: `docs/CANARY_ROLLOUT_RUNBOOK.md`
+- Roadmap histórico: `plan.md`

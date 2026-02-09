@@ -7,7 +7,7 @@ Fecha de creacion: 2026-02-05 12:00:00.000000
 """
 from typing import Sequence, Union
 
-from alembic import op
+from alembic import op, context
 import sqlalchemy as sa
 
 
@@ -66,6 +66,8 @@ def _align_code(conn, method_id: str, code: str) -> None:
 
 
 def upgrade() -> None:
+    if context.is_offline_mode():
+        return
     conn = op.get_bind()
     _rename_method(conn, "debit", "debit_card")
     _rename_method(conn, "credit", "credit_card")
@@ -74,6 +76,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if context.is_offline_mode():
+        return
     conn = op.get_bind()
     _rename_method(conn, "debit_card", "debit")
     _rename_method(conn, "credit_card", "credit")

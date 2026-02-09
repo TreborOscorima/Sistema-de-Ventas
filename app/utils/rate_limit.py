@@ -37,6 +37,15 @@ def _get_environment() -> str:
     return "prod" if env in {"prod", "production"} else "dev"
 
 
+def _allow_memory_fallback_in_prod() -> bool:
+    value = (os.getenv("ALLOW_MEMORY_RATE_LIMIT_FALLBACK") or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _strict_rate_limit_backend() -> bool:
+    return _get_environment() == "prod" and not _allow_memory_fallback_in_prod()
+
+
 def _get_redis() -> "redis.Redis | None":
     """
     Obtiene cliente Redis configurado.
@@ -46,7 +55,12 @@ def _get_redis() -> "redis.Redis | None":
     """
     global _redis_client
     
+    strict_backend = _strict_rate_limit_backend()
     if not REDIS_AVAILABLE:
+        if strict_backend:
+            logger.critical(
+                "Redis requerido en producción para rate limiting distribuido."
+            )
         return None
     
     if _redis_client is not None:
@@ -54,11 +68,11 @@ def _get_redis() -> "redis.Redis | None":
     
     redis_url = os.getenv("REDIS_URL", "").strip()
     if not redis_url:
-        # En producción, intentar localhost por defecto
-        if _get_environment() == "prod":
-            redis_url = "redis://localhost:6379/0"
-        else:
-            return None
+        if strict_backend:
+            logger.critical(
+                "REDIS_URL no configurado y fallback en memoria deshabilitado."
+            )
+        return None
     
     try:
         _redis_client = redis.from_url(
@@ -72,7 +86,13 @@ def _get_redis() -> "redis.Redis | None":
         logger.info("Redis conectado para rate limiting")
         return _redis_client
     except Exception as e:
-        logger.warning("Redis no disponible, usando memoria: %s", str(e)[:50])
+        if strict_backend:
+            logger.critical(
+                "Redis no disponible y fallback en memoria deshabilitado: %s",
+                str(e)[:120],
+            )
+        else:
+            logger.warning("Redis no disponible, usando memoria: %s", str(e)[:50])
         _redis_client = None
         return None
 
@@ -122,6 +142,9 @@ def is_rate_limited(
         return False
     
     redis_client = _get_redis()
+    if redis_client is None and _strict_rate_limit_backend():
+        # Fail-closed: en producción no se permite backend en memoria.
+        return True
     
     if redis_client is not None:
         # Modo Redis (producción)
@@ -131,7 +154,8 @@ def is_rate_limited(
             return int(attempts or 0) >= max_attempts
         except Exception as e:
             logger.error("Error Redis is_rate_limited: %s", e)
-            # Fallback a memoria
+            if _strict_rate_limit_backend():
+                return True
             return _is_rate_limited_memory(key, max_attempts, window_minutes)
     
     # Modo memoria (desarrollo)
@@ -172,6 +196,11 @@ def record_failed_attempt(
         return
     
     redis_client = _get_redis()
+    if redis_client is None and _strict_rate_limit_backend():
+        logger.error(
+            "Intento fallido no registrado: Redis no disponible en modo estricto."
+        )
+        return
     
     if redis_client is not None:
         try:
@@ -200,6 +229,8 @@ def clear_login_attempts(username: str, ip_address: str | None = None) -> None:
         return
     
     redis_client = _get_redis()
+    if redis_client is None and _strict_rate_limit_backend():
+        return
     
     if redis_client is not None:
         try:
@@ -231,6 +262,8 @@ def remaining_lockout_time(
         return 0
     
     redis_client = _get_redis()
+    if redis_client is None and _strict_rate_limit_backend():
+        return max(1, int(window_minutes))
     
     if redis_client is not None:
         try:
@@ -266,5 +299,7 @@ def get_rate_limit_status() -> dict:
         "backend": "redis" if redis_client else "memory",
         "redis_available": REDIS_AVAILABLE,
         "redis_connected": redis_client is not None,
+        "strict_backend": _strict_rate_limit_backend(),
+        "memory_fallback_allowed": _allow_memory_fallback_in_prod(),
         "memory_entries": len(_memory_store),
     }

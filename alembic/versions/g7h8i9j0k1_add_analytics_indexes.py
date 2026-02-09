@@ -7,7 +7,7 @@ Create Date: 2026-02-07 00:00:00.000000
 """
 from typing import Sequence, Union
 
-from alembic import op
+from alembic import op, context
 import sqlalchemy as sa
 
 
@@ -23,6 +23,8 @@ def _has_index(inspector, table: str, name: str) -> bool:
 
 
 def upgrade() -> None:
+    if context.is_offline_mode():
+        return
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
@@ -54,6 +56,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if context.is_offline_mode():
+        return
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 

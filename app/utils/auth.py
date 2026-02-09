@@ -18,7 +18,18 @@ def _require_env(var_name: str) -> str:
     return value
 
 
+def _is_prod_environment() -> bool:
+    value = (os.getenv("ENV") or "dev").strip().lower()
+    return value in {"prod", "production"}
+
+
 SECRET_KEY = _require_env("AUTH_SECRET_KEY")
+if _is_prod_environment():
+    secret_lower = SECRET_KEY.strip().lower()
+    if len(SECRET_KEY) < 32 or secret_lower in {"change_me", "changeme", "default"}:
+        raise RuntimeError(
+            "AUTH_SECRET_KEY insegura para producción. Usa mínimo 32 caracteres aleatorios."
+        )
 ALGORITHM = "HS256"
 
 

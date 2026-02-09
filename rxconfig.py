@@ -10,6 +10,11 @@ load_dotenv()
 env = (os.getenv("ENV") or "dev").strip().lower()
 is_prod = env in {"prod", "production"}
 api_url = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
+redis_url = (os.getenv("REDIS_URL") or "").strip()
+if is_prod and not redis_url:
+    raise RuntimeError(
+        "Missing required environment variable for production: REDIS_URL"
+    )
 
 # Helpers
 def _get_env(var_name: str, default: str | None = None) -> str | None:

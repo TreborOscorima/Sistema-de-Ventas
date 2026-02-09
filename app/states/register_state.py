@@ -1,4 +1,5 @@
 import uuid
+import os
 from datetime import datetime, timedelta
 
 import bcrypt
@@ -24,6 +25,15 @@ from .mixin_state import MixinState
 class RegisterState(MixinState):
     register_error: str = ""
     is_registering: bool = False
+
+    def _trial_days(self) -> int:
+        raw_value = (os.getenv("TRIAL_DAYS") or "15").strip()
+        try:
+            days = int(raw_value)
+        except (TypeError, ValueError):
+            days = 15
+        # Evita valores inválidos/excesivos por configuración accidental.
+        return max(1, min(days, 365))
 
     @rx.event
     def handle_registration(self, form_data: dict):
@@ -109,34 +119,13 @@ class RegisterState(MixinState):
                     _record_failed_attempt(identifier, ip_address=client_ip)
                     return
 
-                role = None
-                if hasattr(self, "_get_role_by_name"):
-                    role = self._get_role_by_name(session, "Administrador")
-                if not role:
-                    if hasattr(self, "_ensure_role") and hasattr(self, "_normalize_privileges"):
-                        role = self._ensure_role(
-                            session,
-                            "Administrador",
-                            self._normalize_privileges(ADMIN_PRIVILEGES),
-                            overwrite=True,
-                        )
-                    else:
-                        role = session.exec(
-                            select(Role).where(Role.name == "Administrador")
-                        ).first()
-                if not role:
-                    self.register_error = "No se pudo crear el rol administrador."
-                    self.is_registering = False
-                    _record_failed_attempt(identifier, ip_address=client_ip)
-                    return
-
                 now = datetime.now()
                 ruc_placeholder = f"TEMP{uuid.uuid4().hex[:11]}"
                 company = Company(
                     name=company_name,
                     ruc=ruc_placeholder,
                     is_active=True,
-                    trial_ends_at=now + timedelta(days=15),
+                    trial_ends_at=now + timedelta(days=self._trial_days()),
                     created_at=now,
                     plan_type=PlanType.TRIAL,
                     max_branches=2,
@@ -146,6 +135,34 @@ class RegisterState(MixinState):
                 )
                 session.add(company)
                 session.flush()
+
+                role = None
+                if hasattr(self, "_get_role_by_name"):
+                    role = self._get_role_by_name(
+                        session,
+                        "Administrador",
+                        company_id=company.id,
+                    )
+                if not role:
+                    if hasattr(self, "_ensure_role") and hasattr(self, "_normalize_privileges"):
+                        role = self._ensure_role(
+                            session,
+                            "Administrador",
+                            self._normalize_privileges(ADMIN_PRIVILEGES),
+                            company_id=company.id,
+                            overwrite=True,
+                        )
+                    else:
+                        role = session.exec(
+                            select(Role)
+                            .where(Role.name == "Administrador")
+                            .where(Role.company_id == company.id)
+                        ).first()
+                if not role:
+                    self.register_error = "No se pudo crear el rol administrador."
+                    self.is_registering = False
+                    _record_failed_attempt(identifier, ip_address=client_ip)
+                    return
 
                 branch = Branch(
                     company_id=company.id,

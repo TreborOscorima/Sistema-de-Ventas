@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import reflex as rx
 
 from app.enums import PaymentMethodType, ReservationStatus
-from app.models import CashboxLog, FieldReservation, Sale, SalePayment, SaleItem, User
+from app.models import CashboxLog, FieldReservation, Sale, SalePayment, SaleItem
 from app.states.services_state import ServicesState
 
 
@@ -78,7 +78,6 @@ def test_apply_reservation_payment_partial_creates_logs(monkeypatch):
     state._log_service_action = lambda *args, **kwargs: None
     state._set_last_reservation_receipt = lambda *args, **kwargs: None
 
-    user = User(username="alice", password_hash="x", role_id=1)
     reservation_model = FieldReservation(
         id=1,
         client_name="Cliente Test",
@@ -89,9 +88,7 @@ def test_apply_reservation_payment_partial_creates_logs(monkeypatch):
         paid_amount=Decimal("40.00"),
         status=ReservationStatus.PENDING,
     )
-    fake_session = FakeSession(
-        [ExecResult(first_item=user), ExecResult(first_item=reservation_model)]
-    )
+    fake_session = FakeSession([ExecResult(first_item=reservation_model)])
     monkeypatch.setattr(rx, "session", lambda: fake_session)
     monkeypatch.setattr(rx, "toast", lambda *args, **kwargs: None)
 
@@ -114,6 +111,56 @@ def test_apply_reservation_payment_partial_creates_logs(monkeypatch):
     fake_session.commit.assert_called_once()
 
 
+def test_apply_reservation_payment_uses_locked_db_balance(monkeypatch):
+    state = ServicesState()
+    state.current_user = {
+        "id": 1,
+        "username": "alice",
+        "company_id": 1,
+        "privileges": {"manage_reservations": True},
+    }
+    state.selected_branch_id = "1"
+    state.reservation_payment_id = "1"
+    state.reservation_payment_amount = "50"
+    state.payment_method = "Efectivo"
+    state.payment_method_kind = "cash"
+
+    # Snapshot en UI desactualizado (40), pero en DB ya va en 70.
+    reservation = {
+        "id": "1",
+        "status": "pendiente",
+        "total_amount": 100.0,
+        "paid_amount": 40.0,
+        "field_name": "Cancha 1",
+    }
+    state._find_reservation_by_id = lambda rid: reservation
+    state._log_service_action = lambda *args, **kwargs: None
+    state._set_last_reservation_receipt = lambda *args, **kwargs: None
+
+    reservation_model = FieldReservation(
+        id=1,
+        client_name="Cliente Test",
+        field_name="Cancha 1",
+        start_datetime=datetime.datetime(2024, 1, 1, 10, 0),
+        end_datetime=datetime.datetime(2024, 1, 1, 11, 0),
+        total_amount=Decimal("100.00"),
+        paid_amount=Decimal("70.00"),
+        status=ReservationStatus.PENDING,
+    )
+    fake_session = FakeSession([ExecResult(first_item=reservation_model)])
+    monkeypatch.setattr(rx, "session", lambda: fake_session)
+    monkeypatch.setattr(rx, "toast", lambda *args, **kwargs: None)
+
+    state.apply_reservation_payment()
+
+    assert reservation["paid_amount"] == 100.0
+    assert reservation["status"] == "pagado"
+    # Solo debe registrar 30 (balance real en DB), no 50 del snapshot.
+    sale = next(obj for obj in fake_session.added if isinstance(obj, Sale))
+    assert sale.total_amount == Decimal("30.00")
+    fake_session.commit.assert_called_once()
+
+
 def test_pay_reservation_with_payment_method_full_payment(monkeypatch):
     state = ServicesState()
     state.current_user = {
@@ -133,15 +180,14 @@ def test_pay_reservation_with_payment_method_full_payment(monkeypatch):
     reservation = {
         "id": "2",
         "status": "pendiente",
-        "total_amount": 100.0,
-        "paid_amount": 40.0,
+        "total_amount": Decimal("100.00"),
+        "paid_amount": Decimal("40.00"),
         "field_name": "Cancha 2",
     }
     state._find_reservation_by_id = lambda rid: reservation
     state._log_service_action = lambda *args, **kwargs: None
     state._set_last_reservation_receipt = lambda *args, **kwargs: None
 
-    user = User(username="bob", password_hash="x", role_id=1)
     reservation_model = FieldReservation(
         id=2,
         client_name="Cliente Dos",
@@ -152,9 +198,7 @@ def test_pay_reservation_with_payment_method_full_payment(monkeypatch):
         paid_amount=Decimal("40.00"),
         status=ReservationStatus.PENDING,
     )
-    fake_session = FakeSession(
-        [ExecResult(first_item=user), ExecResult(first_item=reservation_model)]
-    )
+    fake_session = FakeSession([ExecResult(first_item=reservation_model)])
     monkeypatch.setattr(rx, "session", lambda: fake_session)
     monkeypatch.setattr(rx, "toast", lambda *args, **kwargs: None)
 
@@ -175,3 +219,26 @@ def test_pay_reservation_with_payment_method_full_payment(monkeypatch):
     assert log.action == "Reserva"
     assert log.sale_id is not None
     fake_session.commit.assert_called_once()
+
+
+def test_set_last_reservation_receipt_handles_mixed_numeric_types():
+    state = ServicesState()
+    reservation = {
+        "id": "9",
+        "client_name": "Cliente Mixto",
+        "sport": "futbol",
+        "sport_label": "Futbol",
+        "field_name": "Cancha Mixta",
+        "start_datetime": "2024-01-01 10:00",
+        "end_datetime": "2024-01-01 11:00",
+        "total_amount": Decimal("100.00"),
+        "paid_amount": 40.0,
+        "status": "pendiente",
+    }
+
+    state._set_last_reservation_receipt(reservation)
+
+    assert state.last_reservation_receipt is not None
+    assert state.last_reservation_receipt["monto_total"] == "100.00"
+    assert state.last_reservation_receipt["monto_adelanto"] == "40.00"
+    assert state.last_reservation_receipt["saldo"] == "60.00"

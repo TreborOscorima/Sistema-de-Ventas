@@ -163,3 +163,21 @@ class TestRateLimitingWithRedis:
             status = get_rate_limit_status()
             assert status["backend"] == "redis"
             assert status["redis_connected"] is True
+
+
+class TestStrictProductionMode:
+    """Tests para modo estricto en producción (sin fallback local)."""
+
+    def setup_method(self):
+        _memory_store.clear()
+
+    def test_is_rate_limited_fail_closed_when_redis_unavailable(self):
+        with patch('app.utils.rate_limit._get_redis', return_value=None):
+            with patch('app.utils.rate_limit._strict_rate_limit_backend', return_value=True):
+                assert is_rate_limited("prod_user") is True
+
+    def test_record_failed_attempt_does_not_use_memory_in_strict_mode(self):
+        with patch('app.utils.rate_limit._get_redis', return_value=None):
+            with patch('app.utils.rate_limit._strict_rate_limit_backend', return_value=True):
+                record_failed_attempt("prod_user")
+        assert _memory_store.get("prod_user") is None

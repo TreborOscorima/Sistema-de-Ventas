@@ -1620,7 +1620,9 @@ class ServicesState(MixinState):
         self.reservation_payment_id = reservation_id or ""
         reservation = self._find_reservation_by_id(self.reservation_payment_id)
         if reservation:
-            balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+            total_amount = self._safe_amount(reservation.get("total_amount", 0))
+            paid_amount = self._safe_amount(reservation.get("paid_amount", 0))
+            balance = max(total_amount - paid_amount, 0)
             self.reservation_payment_amount = f"{balance:.2f}" if balance > 0 else ""
 
     @rx.event
@@ -1865,37 +1867,47 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         amount = self._safe_amount(self.reservation_payment_amount)
         if amount <= 0:
             return rx.toast("Ingrese un monto valido.", duration=3000)
-        
-        balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
-        if balance <= 0:
-            self.reservation_payment_amount = ""
-            return rx.toast("La reserva ya esta pagada.", duration=3000)
-        
-        applied_amount = min(amount, balance)
-        reservation["paid_amount"] = self._round_currency(reservation["paid_amount"] + applied_amount)
-        
-        if reservation["paid_amount"] >= reservation["total_amount"]:
-            reservation["status"] = self._reservation_status_to_ui(
-                ReservationStatus.PAID
-            )
-        else:
-            reservation["status"] = self._reservation_status_to_ui(
-                ReservationStatus.PENDING
-            )
-            
-        entry_type = (
-            "pago"
-            if self._reservation_status_is(reservation["status"], ReservationStatus.PAID)
-            else "adelanto"
-        )
-        notes = "Pago completado" if entry_type == "pago" else "Pago parcial registrado"
-        
+
         # Registrar venta y pago
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            reservation_model = session.exec(
+                select(FieldReservationModel)
+                .where(FieldReservationModel.id == int(reservation["id"]))
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
+                .with_for_update()
+            ).first()
+            if not reservation_model:
+                return rx.toast("Reserva no encontrada.", duration=3000)
+            if reservation_model.status == ReservationStatus.CANCELLED:
+                return rx.toast(
+                    "No se pueden registrar pagos en una reserva cancelada.",
+                    duration=3000,
+                )
+
+            db_total = self._safe_amount(getattr(reservation_model, "total_amount", 0))
+            db_paid = self._safe_amount(getattr(reservation_model, "paid_amount", 0))
+            balance = max(db_total - db_paid, 0)
+            if balance <= 0:
+                self.reservation_payment_amount = ""
+                return rx.toast("La reserva ya esta pagada.", duration=3000)
+
+            applied_amount = min(amount, balance)
+            new_paid_amount = self._round_currency(db_paid + applied_amount)
+            if new_paid_amount >= db_total:
+                new_status = ReservationStatus.PAID
+            else:
+                new_status = ReservationStatus.PENDING
+            reservation_model.paid_amount = new_paid_amount
+            reservation_model.status = new_status
+            session.add(reservation_model)
+
+            entry_type = "pago" if new_status == ReservationStatus.PAID else "adelanto"
+            notes = "Pago completado" if entry_type == "pago" else "Pago parcial registrado"
             user_id = self.current_user.get("id")
             
             # Nueva Cabecera de Venta limpia
@@ -1920,26 +1932,11 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         company_id=company_id,
                         amount=amount,
                         method_type=method_type,
-                        reference_code=f"Reserva {reservation['id']}",
+                        reference_code=f"Reserva {reservation_model.id}",
                         branch_id=branch_id,
                     )
                 )
-            
-            reservation_model = session.exec(
-                select(FieldReservationModel)
-                .where(FieldReservationModel.id == int(reservation["id"]))
-                .where(FieldReservationModel.company_id == company_id)
-                .where(FieldReservationModel.branch_id == branch_id)
-                .with_for_update()
-            ).first()
-            if reservation_model:
-                reservation_model.paid_amount = reservation["paid_amount"]
-                reservation_model.status = (
-                    self._reservation_status_to_db(reservation["status"])
-                    or ReservationStatus.PENDING
-                )
-                session.add(reservation_model)
-            
+
             # Crear Item de Servicio
             sale_item = SaleItem(
                 sale_id=new_sale.id,
@@ -1974,6 +1971,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 )
             )
             session.commit()
+
+            reservation["paid_amount"] = new_paid_amount
+            reservation["status"] = self._reservation_status_to_ui(new_status)
         
         self._log_service_action(
             reservation,
@@ -1998,46 +1998,29 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             return rx.toast("Seleccione una reserva desde Servicios -> Pagar.", duration=3000)
         if self._reservation_status_is(reservation["status"], ReservationStatus.CANCELLED):
             return rx.toast("No se puede cobrar una reserva cancelada o eliminada.", duration=3000)
-        balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
-        if balance <= 0:
+        precheck_total = self._safe_amount(reservation.get("total_amount", 0))
+        precheck_paid = self._safe_amount(reservation.get("paid_amount", 0))
+        precheck_balance = max(precheck_total - precheck_paid, 0)
+        if precheck_balance <= 0:
             return rx.toast("La reserva ya esta pagada.", duration=3000)
         if not getattr(self, "payment_method", None):
             return rx.toast("Seleccione un metodo de pago.", duration=3000)
 
         kind = (getattr(self, "payment_method_kind", "other") or "other").lower()
         if kind == "cash" and hasattr(self, "_update_cash_feedback"):
-            self._update_cash_feedback(total_override=balance)
+            self._update_cash_feedback(total_override=precheck_balance)
             if getattr(self, "payment_cash_status", "") not in ["exact", "change"]:
                 message = getattr(self, "payment_cash_message", "") or (
                     "Ingrese un monto valido en efectivo."
                 )
                 return rx.toast(message, duration=3000)
         if kind == "mixed" and hasattr(self, "_update_mixed_message"):
-            self._update_mixed_message(total_override=balance)
+            self._update_mixed_message(total_override=precheck_balance)
             if getattr(self, "payment_mixed_status", "") not in ["exact", "change"]:
                 message = getattr(self, "payment_mixed_message", "") or (
                     "Complete los montos del pago mixto."
                 )
                 return rx.toast(message, duration=3000)
-
-        applied_amount = balance
-        reservation["paid_amount"] = self._round_currency(
-            reservation["paid_amount"] + applied_amount
-        )
-        if reservation["paid_amount"] >= reservation["total_amount"]:
-            reservation["status"] = self._reservation_status_to_ui(
-                ReservationStatus.PAID
-            )
-        else:
-            reservation["status"] = self._reservation_status_to_ui(
-                ReservationStatus.PENDING
-            )
-
-        entry_type = (
-            "pago"
-            if self._reservation_status_is(reservation["status"], ReservationStatus.PAID)
-            else "adelanto"
-        )
         summary_fn = getattr(self, "_generate_payment_summary", None)
         payment_summary = summary_fn() if callable(summary_fn) else ""
 
@@ -2046,6 +2029,39 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            reservation_model = session.exec(
+                select(FieldReservationModel)
+                .where(FieldReservationModel.id == int(reservation["id"]))
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
+                .with_for_update()
+            ).first()
+            if not reservation_model:
+                return rx.toast("Reserva no encontrada.", duration=3000)
+            if reservation_model.status == ReservationStatus.CANCELLED:
+                return rx.toast(
+                    "No se puede cobrar una reserva cancelada o eliminada.",
+                    duration=3000,
+                )
+
+            db_total = self._safe_amount(getattr(reservation_model, "total_amount", 0))
+            db_paid = self._safe_amount(getattr(reservation_model, "paid_amount", 0))
+            db_balance = max(db_total - db_paid, 0)
+            if db_balance <= 0:
+                return rx.toast("La reserva ya esta pagada.", duration=3000)
+
+            applied_amount = db_balance
+            new_paid_amount = self._round_currency(db_paid + applied_amount)
+            new_status = (
+                ReservationStatus.PAID
+                if new_paid_amount >= db_total
+                else ReservationStatus.PENDING
+            )
+            reservation_model.paid_amount = new_paid_amount
+            reservation_model.status = new_status
+            session.add(reservation_model)
+
+            entry_type = "pago" if new_status == ReservationStatus.PAID else "adelanto"
             user_id = self.current_user.get("id")
 
             new_sale = Sale(
@@ -2068,7 +2084,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         company_id=company_id,
                         amount=amount,
                         method_type=method_type,
-                        reference_code=f"Reserva {reservation['id']}",
+                        reference_code=f"Reserva {reservation_model.id}",
                         branch_id=branch_id,
                     )
                 )
@@ -2107,23 +2123,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     sale_id=new_sale.id,
                 )
             )
-
-            reservation_model = session.exec(
-                select(FieldReservationModel)
-                .where(FieldReservationModel.id == int(reservation["id"]))
-                .where(FieldReservationModel.company_id == company_id)
-                .where(FieldReservationModel.branch_id == branch_id)
-                .with_for_update()
-            ).first()
-            if reservation_model:
-                reservation_model.paid_amount = reservation["paid_amount"]
-                reservation_model.status = (
-                    self._reservation_status_to_db(reservation["status"])
-                    or ReservationStatus.PENDING
-                )
-                session.add(reservation_model)
-
             session.commit()
+
+            reservation["paid_amount"] = new_paid_amount
+            reservation["status"] = self._reservation_status_to_ui(new_status)
 
         self._log_service_action(
             reservation,
@@ -2160,7 +2163,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         reservation = self._find_reservation_by_id(self.reservation_payment_id)
         if not reservation:
             return rx.toast("Seleccione una reserva.", duration=3000)
-        balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+        total_amount = self._safe_amount(reservation.get("total_amount", 0))
+        paid_amount = self._safe_amount(reservation.get("paid_amount", 0))
+        balance = max(total_amount - paid_amount, 0)
         self.reservation_payment_amount = f"{balance:.2f}"
         return self.apply_reservation_payment()
 
@@ -2336,7 +2341,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         })
 
     def _set_last_reservation_receipt(self, reservation: FieldReservation):
-        balance = max(reservation["total_amount"] - reservation["paid_amount"], 0)
+        total_amount = self._safe_amount(reservation.get("total_amount", 0))
+        paid_amount = self._safe_amount(reservation.get("paid_amount", 0))
+        balance = max(total_amount - paid_amount, 0)
         start_time = reservation["start_datetime"].split(" ")[1] if " " in reservation["start_datetime"] else ""
         end_time = reservation["end_datetime"].split(" ")[1] if " " in reservation["end_datetime"] else ""
         
@@ -2349,8 +2356,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "deporte": reservation.get("sport_label", reservation["sport"]),
             "campo": reservation["field_name"],
             "horario": f"{reservation['start_datetime'].split(' ')[0]} {start_time} - {end_time}",
-            "monto_adelanto": f"{reservation['paid_amount']:.2f}",
-            "monto_total": f"{reservation['total_amount']:.2f}",
+            "monto_adelanto": f"{paid_amount:.2f}",
+            "monto_total": f"{total_amount:.2f}",
             "saldo": f"{balance:.2f}",
             "estado": status_val,
         }
@@ -2396,10 +2403,12 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     def _safe_amount(self, value: str) -> float:
         try:
             return float(value)
-        except ValueError: return 0.0
+        except (TypeError, ValueError): return 0.0
 
     def _update_reservation_status(self, reservation: FieldReservation):
-        if reservation["paid_amount"] >= reservation["total_amount"]:
+        paid_amount = self._safe_amount(reservation.get("paid_amount", 0))
+        total_amount = self._safe_amount(reservation.get("total_amount", 0))
+        if paid_amount >= total_amount:
             reservation["status"] = self._reservation_status_to_ui(
                 ReservationStatus.PAID
             )

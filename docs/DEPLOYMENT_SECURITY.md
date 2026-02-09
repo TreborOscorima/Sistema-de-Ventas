@@ -24,12 +24,13 @@ AUTH_SECRET_KEY=<clave-secreta-minimo-32-caracteres>
 DB_HOST=localhost
 DB_PORT=3306
 DB_USER=app_user
-DB_PASS=<contraseña-segura>
+DB_PASSWORD=<contraseña-segura>
 DB_NAME=ventas_db
 REDIS_URL=redis://localhost:6379
+ALLOW_MEMORY_RATE_LIMIT_FALLBACK=0
 
 # === OPCIONALES ===
-ENVIRONMENT=production
+ENV=prod
 LOG_LEVEL=WARNING
 ALLOWED_HOSTS=tudominio.com,www.tudominio.com
 ```
@@ -196,6 +197,7 @@ El sistema ya implementa rate limiting. En producción, usar Redis:
 ```python
 # .env
 REDIS_URL=redis://localhost:6379
+ALLOW_MEMORY_RATE_LIMIT_FALLBACK=0  # En prod, deshabilitar fallback local
 
 # El sistema detecta automáticamente y usa RedisRateLimitBackend
 ```
@@ -295,7 +297,7 @@ logs/
 
 - [ ] Variables de entorno configuradas
 - [ ] AUTH_SECRET_KEY generada (mínimo 32 chars)
-- [ ] DEBUG=False o ENVIRONMENT=production
+- [ ] ENV=prod
 - [ ] Base de datos con usuario de privilegios mínimos
 - [ ] Backups automatizados configurados
 
