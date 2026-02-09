@@ -236,8 +236,8 @@ def cashbox_opening_card() -> rx.Component:
           disabled=State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
           class_name=rx.cond(
             State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
-            f"{BUTTON_STYLES['disabled']} w-full sm:w-auto min-w-[170px]",
-            f"{BUTTON_STYLES['primary']} w-full sm:w-auto min-w-[170px]",
+            f"{BUTTON_STYLES['disabled']} w-full sm:w-auto sm:min-w-[152px]",
+            f"{BUTTON_STYLES['primary']} w-full sm:w-auto sm:min-w-[152px]",
           ),
         ),
         rx.el.button(
@@ -247,8 +247,8 @@ def cashbox_opening_card() -> rx.Component:
           disabled=~State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
           class_name=rx.cond(
             State.cashbox_is_open & State.current_user["privileges"]["manage_cashbox"],
-            f"{BUTTON_STYLES['primary']} w-full sm:w-auto min-w-[150px]",
-            f"{BUTTON_STYLES['disabled']} w-full sm:w-auto min-w-[150px]",
+            f"{BUTTON_STYLES['primary']} w-full sm:w-auto sm:min-w-[136px]",
+            f"{BUTTON_STYLES['disabled']} w-full sm:w-auto sm:min-w-[136px]",
           ),
         ),
         class_name="flex flex-col sm:flex-row gap-2",
@@ -434,7 +434,7 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
         sale["sale_id"],
       ),
       on_click=lambda _, sale_id=sale["sale_id"]: State.toggle_cashbox_sale_detail(sale_id),
-      class_name="py-3.5 px-4 align-top min-w-[240px] cursor-pointer",
+      class_name="py-3.5 px-4 align-top min-w-[220px] cursor-pointer",
     ),
     rx.el.td(
       rx.el.div(
@@ -808,7 +808,7 @@ def close_cashbox_modal() -> rx.Component:
         on_click=State.close_cashbox_day,
         class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[42px]",
       ),
-      class_name="flex justify-end gap-3 mt-6",
+      class_name="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 mt-4",
     ),
   )
 
@@ -1024,20 +1024,20 @@ def petty_cash_view() -> rx.Component:
               State.currency_symbol + " " + State.cashbox_opening_amount_display,
               class_name="text-2xl font-bold text-indigo-600"
             ),
-            class_name="flex flex-col items-start justify-center bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 shadow-sm w-full sm:w-auto min-w-[160px]"
+            class_name="flex flex-col items-start justify-center bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 shadow-sm w-full sm:w-auto sm:min-w-[144px]"
           ),
           rx.el.div(
             rx.el.button(
               rx.icon("download", class_name="w-4 h-4 mr-2"),
               "Exportar",
               on_click=State.export_petty_cash_report,
-              class_name=f"{BUTTON_STYLES['success']} w-full sm:w-auto min-w-[170px]",
+              class_name=f"{BUTTON_STYLES['success']} w-full sm:w-auto sm:min-w-[148px]",
             ),
             rx.el.button(
               rx.icon("plus", class_name="w-4 h-4 mr-2"),
               "Registrar Movimiento",
               on_click=State.open_petty_cash_modal,
-              class_name=f"{BUTTON_STYLES['primary']} w-full sm:w-auto min-w-[200px]",
+              class_name=f"{BUTTON_STYLES['primary']} w-full sm:w-auto sm:min-w-[176px]",
             ),
             class_name="flex flex-col sm:flex-row gap-3 w-full sm:w-auto",
           ),
@@ -1057,7 +1057,7 @@ def petty_cash_view() -> rx.Component:
                 "Usuario", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap"
               ),
               rx.el.th(
-                "Motivo", class_name=f"{TABLE_STYLES['header_cell']} min-w-[200px]"
+                "Motivo", class_name=f"{TABLE_STYLES['header_cell']} min-w-[180px]"
               ),
               rx.el.th(
                 "Cant.", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap"

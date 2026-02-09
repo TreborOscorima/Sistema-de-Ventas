@@ -37,7 +37,7 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
                         temp_id, value
                     ),
                     disabled=item.get("is_existing_product", False),
-                    class_name="w-40 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name="w-full sm:w-40 min-w-[8rem] h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                 ),
                 rx.el.button(
                     rx.icon("pencil", class_name="h-4 w-4"),

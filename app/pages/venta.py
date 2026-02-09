@@ -398,7 +398,7 @@ def quick_add_bar() -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
-                class_name="flex flex-col gap-1 w-full sm:w-48 lg:w-56",
+                class_name="flex flex-col gap-1 w-full sm:w-56 lg:w-64",
             ),
             # Búsqueda de producto
             rx.el.div(
@@ -438,7 +438,7 @@ def quick_add_bar() -> rx.Component:
                 ),
                 class_name="relative flex-1 min-w-0",
             ),
-            class_name="flex flex-col sm:flex-row gap-1 flex-1",
+            class_name="flex flex-col sm:flex-row gap-2 flex-1",
         ),
         # Fila 2: Cantidad, Precio, Subtotal y Botón
         rx.el.div(
@@ -454,7 +454,7 @@ def quick_add_bar() -> rx.Component:
                     class_name="w-full px-3 py-2 border rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500",
                     placeholder="1",
                 ),
-                class_name="flex flex-col gap-1 w-16 sm:w-20",
+                class_name="flex flex-col gap-1 w-[88px] sm:w-20",
             ),
             # Precio
             rx.el.div(
@@ -471,7 +471,7 @@ def quick_add_bar() -> rx.Component:
                     ),
                     class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
                 ),
-                class_name="flex flex-col gap-1 w-20 sm:w-24",
+                class_name="flex flex-col gap-1 w-[122px] sm:w-28",
             ),
             # Subtotal
             rx.el.div(
@@ -484,16 +484,20 @@ def quick_add_bar() -> rx.Component:
                     ),
                     class_name="px-3 py-2 bg-slate-100 rounded-lg text-right h-[42px] flex items-center justify-end",
                 ),
-                class_name="flex flex-col gap-1 w-20 sm:w-24",
+                class_name="flex flex-col gap-1 w-[122px] sm:w-28",
             ),
             # Botón añadir
             rx.el.button(
                 rx.icon("plus", class_name="h-5 w-5"),
                 rx.el.span("Añadir", class_name="sm:hidden"),
                 on_click=State.add_item_to_sale,
-                class_name="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 h-[42px] flex-1 sm:flex-none sm:w-auto self-end",
+                class_name=(
+                    "inline-flex h-[42px] min-w-[106px] items-center justify-center gap-2 rounded-lg "
+                    "bg-indigo-600 px-3.5 text-sm font-medium text-white hover:bg-indigo-700 "
+                    "transition-colors sm:min-w-[120px]"
+                ),
             ),
-            class_name="flex items-end gap-1",
+            class_name="flex flex-wrap items-end gap-2",
         ),
         class_name="flex flex-col gap-2 p-2.5 bg-slate-50 border-b",
     )
@@ -1138,7 +1142,7 @@ def payment_sidebar() -> rx.Component:
             ),
             class_name="shrink-0 bg-white border-t",
         ),
-        class_name="w-80 bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col h-full",
+        class_name="w-full max-w-[22rem] bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col h-full",
     )
 
 def payment_mobile_section() -> rx.Component:
@@ -1589,7 +1593,7 @@ def venta_page() -> rx.Component:
         # Sidebar de pago (solo desktop grande)
         rx.el.div(
             payment_sidebar(),
-            class_name="hidden lg:block h-[calc(100vh-4rem)] sticky top-16",
+            class_name="hidden lg:block h-[calc(100vh-4rem)] sticky top-16 shrink-0",
         ),
         client_form_modal(),
         recent_moves_modal(),

@@ -453,22 +453,30 @@ class DashboardState(MixinState):
     
     def _load_sales_by_category(self):
         """Carga ventas por categoría del período seleccionado."""
+        self.dash_sales_by_category = self._query_sales_by_category(limit=10)
+
+    def _query_sales_by_category(self, limit: int | None = None) -> list[dict]:
+        """Obtiene ventas agrupadas por categoría para el período seleccionado."""
         period_start, period_end, _, _ = self._get_period_dates()
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.dash_sales_by_category = []
-            return
-        
+            return []
+
         with rx.session() as session:
-            results = session.exec(
+            category_expr = func.coalesce(
+                func.nullif(func.trim(SaleItem.product_category_snapshot), ""),
+                Product.category,
+                "Sin categoría",
+            )
+            query = (
                 select(
-                    func.coalesce(Product.category, "Sin categoría"),
-                    func.sum(SaleItem.subtotal).label("total")
+                    category_expr,
+                    func.sum(SaleItem.subtotal).label("total"),
                 )
                 .select_from(SaleItem)
-                .join(Product)
-                .join(Sale)
+                .outerjoin(Product, Product.id == SaleItem.product_id)
+                .join(Sale, Sale.id == SaleItem.sale_id)
                 .where(
                     and_(
                         Sale.timestamp >= period_start,
@@ -476,26 +484,30 @@ class DashboardState(MixinState):
                         Sale.status != SaleStatus.cancelled,
                         Sale.company_id == company_id,
                         Sale.branch_id == branch_id,
-                        Product.company_id == company_id,
-                        Product.branch_id == branch_id,
+                        SaleItem.company_id == company_id,
+                        SaleItem.branch_id == branch_id,
                     )
                 )
-                .group_by(Product.category)
+                .group_by(category_expr)
                 .order_by(func.sum(SaleItem.subtotal).desc())
-                .limit(10)
-            ).all()
-            
-            # Calcular total para porcentajes
-            total_sales = sum(float(r[1] or 0) for r in results)
-            
-            self.dash_sales_by_category = [
-                {
-                    "category": r[0] or "Sin categoría",
-                    "total": float(r[1] or 0),
-                    "percentage": round((float(r[1] or 0) / total_sales * 100), 1) if total_sales > 0 else 0,
-                }
-                for r in results
-            ]
+            )
+            if limit is not None and int(limit) > 0:
+                query = query.limit(int(limit))
+            rows = session.exec(query).all()
+
+        total_sales = sum(float(row[1] or 0) for row in rows)
+        return [
+            {
+                "category": row[0] or "Sin categoría",
+                "total": float(row[1] or 0),
+                "percentage": (
+                    round((float(row[1] or 0) / total_sales * 100), 1)
+                    if total_sales > 0
+                    else 0
+                ),
+            }
+            for row in rows
+        ]
     
     def _load_payment_breakdown(self):
         """Carga desglose de métodos de pago del período seleccionado."""
@@ -614,6 +626,7 @@ class DashboardState(MixinState):
         wb = Workbook()
         ws = wb.active
         ws.title = "Ventas por Categoría"
+        export_categories = self._query_sales_by_category(limit=None)
         
         # Estilos
         header_font = Font(bold=True, color="FFFFFF", size=11)
@@ -651,8 +664,8 @@ class DashboardState(MixinState):
             cell.border = thin_border
         
         # Datos
-        total = self.category_total_sales
-        for idx, cat in enumerate(self.dash_sales_by_category, 1):
+        total = sum(cat.get("total", 0) for cat in export_categories)
+        for idx, cat in enumerate(export_categories, 1):
             row = idx + 4
             pct = cat["total"] / total if total > 0 else 0
             
@@ -670,7 +683,7 @@ class DashboardState(MixinState):
             cell_pct.alignment = Alignment(horizontal='right')
         
         # Fila de total
-        total_row = len(self.dash_sales_by_category) + 5
+        total_row = len(export_categories) + 5
         ws.cell(row=total_row, column=1, value="").border = thin_border
         ws.cell(row=total_row, column=2, value="TOTAL").font = total_font
         ws.cell(row=total_row, column=2).fill = total_fill
@@ -697,7 +710,7 @@ class DashboardState(MixinState):
         ws.column_dimensions['D'].width = 15
         
         # Agregar gráfico de torta
-        if len(self.dash_sales_by_category) > 0:
+        if len(export_categories) > 0:
             chart = PieChart()
             chart.title = "Distribución de Ventas"
             

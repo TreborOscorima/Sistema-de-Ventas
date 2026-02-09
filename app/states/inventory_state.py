@@ -79,6 +79,7 @@ class InventoryState(MixinState):
     # inventory: Dict[str, Product] = {} # Eliminado a favor de la BD
     # categories: List[str] = ["General"] # Reemplazado por BD
     new_category_name: str = ""
+    new_category_input_key: int = 0
     inventory_search_term: str = ""
     inventory_current_page: int = 1
     inventory_items_per_page: int = 10
@@ -122,6 +123,7 @@ class InventoryState(MixinState):
     inventory_adjustment_items: List[InventoryAdjustment] = []
     inventory_adjustment_suggestions: List[Dict[str, Any]] = []
     categories: List[str] = ["General"]
+    categories_panel_expanded: bool = False
     _inventory_update_trigger: int = 0
 
     def _company_id(self) -> int | None:
@@ -279,8 +281,13 @@ class InventoryState(MixinState):
         )
         return rows
 
+    @rx.event
     def update_new_category_name(self, value: str):
         self.new_category_name = value
+
+    @rx.event
+    def toggle_categories_panel(self):
+        self.categories_panel_expanded = not self.categories_panel_expanded
 
     @rx.event
     def add_category(self):
@@ -315,6 +322,7 @@ class InventoryState(MixinState):
                     )
                     session.commit()
                     self.new_category_name = ""
+                    self.new_category_input_key += 1
                     self.load_categories()
                     return self.add_notification(
                         f"Categoría '{name}' agregada.", "success"

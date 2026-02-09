@@ -370,8 +370,8 @@ def sidebar() -> rx.Component:
     ),
     class_name=rx.cond(
         State.sidebar_open,
-        f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-64 {SHADOWS['lg']} md:shadow-none",
-        f"w-0 overflow-hidden {TRANSITIONS['slow']}",
+        f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
+        f"w-0 overflow-hidden md:relative {TRANSITIONS['slow']}",
     ),
 ),
 # Overlay móvil con blur
@@ -379,7 +379,7 @@ rx.cond(
     State.sidebar_open,
     rx.el.div(
         on_click=State.toggle_sidebar,
-        class_name="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden",
+        class_name="sidebar-overlay fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden",
     ),
     rx.fragment(),
 ),
@@ -389,7 +389,7 @@ rx.cond(
     rx.el.button(
         rx.icon("menu", class_name="h-5 w-5 text-indigo-600"),
         on_click=State.toggle_sidebar,
-        class_name=f"fixed top-4 left-4 z-50 p-2.5 bg-white/90 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['md']} hover:bg-white border border-slate-200/50 {TRANSITIONS['fast']} hover:scale-105",
+        class_name=f"fixed top-4 left-4 md:top-5 md:left-5 z-[55] p-2.5 bg-white/90 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['md']} hover:bg-white border border-slate-200/50 {TRANSITIONS['fast']} hover:scale-105",
     ),
     rx.fragment(),
 )

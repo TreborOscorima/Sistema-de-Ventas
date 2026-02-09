@@ -283,6 +283,14 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 sale_total_guess,
             )
             self._refresh_payment_feedback(total_override=sale_total_guess)
+            payment_validation_error = self._validate_payment_before_confirm(
+                sale_total_guess,
+                is_credit=self.is_credit_mode,
+            )
+            if payment_validation_error:
+                self.add_notification(payment_validation_error, "warning")
+                yield rx.toast(payment_validation_error, duration=3000)
+                return
 
             payment_summary = self._generate_payment_summary()
             payment_label, payment_breakdown = self._payment_label_and_breakdown(

@@ -804,25 +804,55 @@ def inventario_page() -> rx.Component:
       class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
     ),
     rx.el.div(
-      rx.el.h2(
-        "CATEGORIAS DE PRODUCTOS",
-        class_name="text-lg font-semibold text-slate-700 mb-4",
+      rx.el.div(
+        rx.el.div(
+          rx.el.h2(
+            "CATEGORIAS DE PRODUCTOS",
+            class_name="text-lg font-semibold text-slate-700",
+          ),
+          rx.el.span(
+            State.categories.length().to_string(),
+            " categorías",
+            class_name="text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full",
+          ),
+          class_name="flex items-center gap-3",
+        ),
+        rx.cond(
+          State.categories.length() > 6,
+          rx.el.button(
+            rx.cond(
+              State.categories_panel_expanded,
+              "Vista compacta",
+              "Ver todas",
+            ),
+            on_click=State.toggle_categories_panel,
+            class_name=(
+              "text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 "
+              "px-3 py-1.5 rounded-md hover:bg-indigo-100"
+            ),
+          ),
+          rx.fragment(),
+        ),
+        class_name="flex items-center justify-between gap-2 mb-4",
       ),
       rx.el.div(
         rx.el.input(
+          key=State.new_category_input_key.to_string(),
           placeholder="Nombre de la categoría",
-          value=State.new_category_name,
-          on_change=lambda value: State.update_new_category_name(value),
+          default_value=State.new_category_name,
+          on_change=State.update_new_category_name,
           class_name="flex-1 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-          debounce_timeout=200,
         ),
         rx.el.button(
           rx.icon("plus", class_name="h-4 w-4"),
           "Agregar",
           on_click=State.add_category,
-          class_name="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[42px]",
+          class_name=(
+            "inline-flex h-10 items-center justify-center gap-2 rounded-md "
+            "bg-indigo-600 px-3.5 text-sm font-medium text-white hover:bg-indigo-700"
+          ),
         ),
-        class_name="flex flex-wrap gap-3 mb-4",
+        class_name="flex flex-col sm:flex-row gap-3 mb-3",
       ),
       rx.el.div(
         rx.foreach(
@@ -840,10 +870,29 @@ def inventario_page() -> rx.Component:
                 class_name="text-red-500 hover:text-red-700",
               ),
             ),
-            class_name="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full",
+            class_name=(
+              "inline-flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-full "
+              "shrink-0 border border-slate-200"
+            ),
           ),
         ),
-        class_name="flex flex-wrap gap-2",
+        class_name=rx.cond(
+          State.categories_panel_expanded,
+          "flex flex-wrap gap-2 max-h-44 overflow-y-auto pr-1",
+          "flex flex-nowrap gap-2 overflow-x-auto whitespace-nowrap pb-1",
+        ),
+      ),
+      rx.cond(
+        State.categories.length() > 6,
+        rx.el.p(
+          rx.cond(
+            State.categories_panel_expanded,
+            "Vista expandida de categorías.",
+            "Vista compacta: desliza horizontalmente para ver más.",
+          ),
+          class_name="text-xs text-slate-500 mt-2",
+        ),
+        rx.fragment(),
       ),
       class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm mb-6",
     ),
@@ -859,144 +908,160 @@ def inventario_page() -> rx.Component:
             rx.icon("plus", class_name="h-4 w-4"),
             "Nuevo Producto",
             on_click=State.open_create_product_modal,
-            class_name="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[42px]",
+            class_name=(
+              "inline-flex h-9 items-center justify-center gap-1.5 rounded-md "
+              "bg-indigo-600 px-3.5 text-sm font-medium text-white shadow-sm "
+              "transition-colors duration-150 hover:bg-indigo-700"
+            ),
           ),
           rx.el.button(
             rx.icon("download", class_name="h-4 w-4"),
             "Exportar Inventario",
             on_click=State.export_inventory_to_excel,
-            class_name="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 min-h-[42px]",
+            class_name=(
+              "inline-flex h-9 items-center justify-center gap-1.5 rounded-md "
+              "bg-emerald-600 px-3.5 text-sm font-medium text-white shadow-sm "
+              "transition-colors duration-150 hover:bg-emerald-700"
+            ),
           ),
           rx.el.button(
             rx.icon("clipboard_check", class_name="h-4 w-4"),
-            "Registrar Inventario Fisico",
+            "Registrar Fisico",
             on_click=State.open_inventory_check_modal,
-            class_name="flex items-center justify-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700 min-h-[42px]",
+            class_name=(
+              "inline-flex h-9 items-center justify-center gap-1.5 rounded-md "
+              "bg-amber-600 px-3.5 text-sm font-medium text-white shadow-sm "
+              "transition-colors duration-150 hover:bg-amber-700"
+            ),
           ),
-          class_name="flex flex-col gap-2 w-full md:w-auto md:flex-row",
+          class_name="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end",
         ),
         class_name="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-4 border-b border-slate-200",
       ),
-      rx.el.table(
-        rx.el.thead(
-          rx.el.tr(
-            rx.el.th("Codigo de Barra", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Descripción", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Categoría", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th(
-              "Stock", class_name=f"{TABLE_STYLES['header_cell']} text-center"
-            ),
-            rx.el.th(
-              "Unidad", class_name=f"{TABLE_STYLES['header_cell']} text-center"
-            ),
-            rx.el.th(
-              "Precio Compra", class_name=f"{TABLE_STYLES['header_cell']} text-right"
-            ),
-            rx.el.th(
-              "Precio Venta", class_name=f"{TABLE_STYLES['header_cell']} text-right"
-            ),
-            rx.el.th(
-              "Valor Total Stock", class_name=f"{TABLE_STYLES['header_cell']} text-right"
-            ),
-            rx.el.th(
-              "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
-            ),
-            class_name=TABLE_STYLES["header"],
-          )
-        ),
-        rx.el.tbody(
-          rx.foreach(
-            State.inventory_paginated_list,
-            lambda product: rx.el.tr(
-              rx.el.td(
-                product["barcode"],
-                class_name="py-3 px-4",
+      rx.el.div(
+        rx.el.table(
+          rx.el.thead(
+            rx.el.tr(
+              rx.el.th("Codigo de Barra", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Descripción", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Categoría", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th(
+                "Stock", class_name=f"{TABLE_STYLES['header_cell']} text-center"
               ),
-              rx.el.td(
-                product["description"],
-                class_name="py-3 px-4 font-medium",
+              rx.el.th(
+                "Unidad", class_name=f"{TABLE_STYLES['header_cell']} text-center"
               ),
-              rx.el.td(
-                product["category"],
-                class_name="py-3 px-4 text-left",
+              rx.el.th(
+                "Precio Compra", class_name=f"{TABLE_STYLES['header_cell']} text-right"
               ),
-              rx.el.td(
-                rx.el.div(
-                  product["stock"].to_string(),
-                  rx.cond(
-                    product["stock_is_low"],
-                    rx.el.span(
-                      "Bajo",
-                      class_name="ml-2 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800",
+              rx.el.th(
+                "Precio Venta", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+              ),
+              rx.el.th(
+                "Valor Total Stock", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+              ),
+              rx.el.th(
+                "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+              ),
+              class_name=TABLE_STYLES["header"],
+            )
+          ),
+          rx.el.tbody(
+            rx.foreach(
+              State.inventory_paginated_list,
+              lambda product: rx.el.tr(
+                rx.el.td(
+                  product["barcode"],
+                  class_name="py-3 px-4",
+                ),
+                rx.el.td(
+                  product["description"],
+                  class_name="py-3 px-4 font-medium",
+                ),
+                rx.el.td(
+                  product["category"],
+                  class_name="py-3 px-4 text-left",
+                ),
+                rx.el.td(
+                  rx.el.div(
+                    product["stock"].to_string(),
+                    rx.cond(
+                      product["stock_is_low"],
+                      rx.el.span(
+                        "Bajo",
+                        class_name="ml-2 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800",
+                      ),
+                      rx.cond(
+                        product["stock_is_medium"],
+                        rx.el.span(
+                          "Moderado",
+                          class_name="ml-2 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800",
+                        ),
+                        rx.fragment(),
+                      ),
+                    ),
+                    class_name=rx.cond(
+                      product["stock_is_low"],
+                      "flex items-center justify-center font-bold text-red-600",
+                      "flex items-center justify-center",
+                    ),
+                  )
+                ),
+                rx.el.td(
+                  product["unit"], class_name="py-3 px-4 text-center"
+                ),
+                rx.el.td(
+                  State.currency_symbol,
+                  product["purchase_price"].to_string(),
+                  class_name="py-3 px-4 text-right",
+                ),
+                rx.el.td(
+                  State.currency_symbol,
+                  product["sale_price"].to_string(),
+                  class_name="py-3 px-4 text-right text-green-600",
+                ),
+                rx.el.td(
+                  State.currency_symbol,
+                  product["stock_total_display"],
+                  class_name="py-3 px-4 text-right font-bold",
+                ),
+                rx.el.td(
+                  rx.el.div(
+                    rx.el.button(
+                      rx.icon("pencil", class_name="h-4 w-4"),
+                      on_click=lambda: State.open_edit_product(product),
+                      class_name="p-2 text-blue-600 hover:bg-blue-50 rounded-full",
+                      title="Editar",
+                    ),
+                    rx.el.button(
+                      rx.icon("eye", class_name="h-4 w-4"),
+                      on_click=lambda: State.open_stock_details(product),
+                      class_name="p-2 text-slate-600 hover:bg-slate-100 rounded-full",
+                      title="Ver Desglose",
                     ),
                     rx.cond(
-                      product["stock_is_medium"],
-                      rx.el.span(
-                        "Moderado",
-                        class_name="ml-2 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800",
-                      ),
+                      product["is_variant"],
                       rx.fragment(),
+                      rx.el.button(
+                        rx.icon("trash-2", class_name="h-4 w-4"),
+                        on_click=lambda: State.delete_product(product["id"]),
+                        disabled=State.is_loading,
+                        loading=State.is_loading,
+                        class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
+                        title="Eliminar",
+                      ),
                     ),
+                    class_name="flex items-center justify-center gap-2",
                   ),
-                  class_name=rx.cond(
-                    product["stock_is_low"],
-                    "flex items-center justify-center font-bold text-red-600",
-                    "flex items-center justify-center",
-                  ),
-                )
-              ),
-              rx.el.td(
-                product["unit"], class_name="py-3 px-4 text-center"
-              ),
-              rx.el.td(
-                State.currency_symbol,
-                product["purchase_price"].to_string(),
-                class_name="py-3 px-4 text-right",
-              ),
-              rx.el.td(
-                State.currency_symbol,
-                product["sale_price"].to_string(),
-                class_name="py-3 px-4 text-right text-green-600",
-              ),
-              rx.el.td(
-                State.currency_symbol,
-                product["stock_total_display"],
-                class_name="py-3 px-4 text-right font-bold",
-              ),
-              rx.el.td(
-                rx.el.div(
-                  rx.el.button(
-                    rx.icon("pencil", class_name="h-4 w-4"),
-                    on_click=lambda: State.open_edit_product(product),
-                    class_name="p-2 text-blue-600 hover:bg-blue-50 rounded-full",
-                    title="Editar",
-                  ),
-                  rx.el.button(
-                    rx.icon("eye", class_name="h-4 w-4"),
-                    on_click=lambda: State.open_stock_details(product),
-                    class_name="p-2 text-slate-600 hover:bg-slate-100 rounded-full",
-                    title="Ver Desglose",
-                  ),
-                  rx.cond(
-                    product["is_variant"],
-                    rx.fragment(),
-                    rx.el.button(
-                      rx.icon("trash-2", class_name="h-4 w-4"),
-                      on_click=lambda: State.delete_product(product["id"]),
-                      disabled=State.is_loading,
-                      loading=State.is_loading,
-                      class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
-                      title="Eliminar",
-                    ),
-                  ),
-                  class_name="flex items-center justify-center gap-2",
+                  class_name="py-3 px-4",
                 ),
-                class_name="py-3 px-4",
+                class_name="border-b",
               ),
-              class_name="border-b",
-            ),
-          )
+            )
+          ),
+          class_name="min-w-[980px]",
         ),
+        class_name="w-full overflow-x-auto",
       ),
       rx.cond(
         State.inventory_list.length() == 0,
@@ -1016,12 +1081,12 @@ def inventario_page() -> rx.Component:
         ),
         rx.fragment(),
       ),
-      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto flex flex-col gap-4",
+      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4",
     ),
     inventory_adjustment_modal(),
     edit_product_modal(),
     stock_details_modal(),
-    class_name="p-4 sm:p-6 w-full flex flex-col gap-6",
+    class_name="w-full flex flex-col gap-6",
   )
   return permission_guard(
     has_permission=State.can_view_inventario,

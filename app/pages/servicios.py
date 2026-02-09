@@ -1088,72 +1088,81 @@ def reservations_table() -> rx.Component:
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.input(
-        placeholder="Buscar por cliente, campo o horario...",
-        value=State.reservation_staged_search,
-        on_change=State.set_reservation_staged_search,
-        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-        debounce_timeout=200,
+      rx.el.div(
+        rx.el.input(
+          placeholder="Buscar por cliente, campo o horario...",
+          value=State.reservation_staged_search,
+          on_change=State.set_reservation_staged_search,
+          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          debounce_timeout=200,
+        ),
+        rx.el.select(
+          rx.el.option("Todos", value="todos"),
+          rx.el.option("Pendiente", value="pendiente"),
+          rx.el.option("Pagado", value="pagado"),
+          rx.el.option("Cancelado", value="cancelado"),
+          rx.el.option("Eliminado", value="eliminado"),
+          value=State.reservation_staged_status,
+          on_change=State.set_reservation_staged_status,
+          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+        ),
+        rx.el.input(
+          type="date",
+          value=State.reservation_staged_start_date,
+          on_change=State.set_reservation_staged_start_date,
+          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+        ),
+        rx.el.input(
+          type="date",
+          value=State.reservation_staged_end_date,
+          on_change=State.set_reservation_staged_end_date,
+          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+        ),
+        class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2",
       ),
-      rx.el.select(
-        rx.el.option("Todos", value="todos"),
-        rx.el.option("Pendiente", value="pendiente"),
-        rx.el.option("Pagado", value="pagado"),
-        rx.el.option("Cancelado", value="cancelado"),
-        rx.el.option("Eliminado", value="eliminado"),
-        value=State.reservation_staged_status,
-        on_change=State.set_reservation_staged_status,
-        class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+      rx.el.div(
+        rx.el.button(
+          rx.icon("search", class_name="h-4 w-4"),
+          "Buscar",
+          on_click=State.apply_reservation_filters,
+          class_name="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white hover:bg-blue-700",
+        ),
+        rx.el.button(
+          rx.icon("rotate-ccw", class_name="h-4 w-4"),
+          "Limpiar",
+          on_click=State.reset_reservation_filters,
+          class_name="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50",
+        ),
+        rx.el.button(
+          rx.icon("download", class_name="h-4 w-4"),
+          "Exportar",
+          on_click=State.export_reservations_excel,
+          class_name="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3.5 text-sm font-medium text-white hover:bg-emerald-700",
+        ),
+        class_name="flex flex-col sm:flex-row sm:flex-wrap gap-2 xl:justify-end",
       ),
-      rx.el.input(
-        type="date",
-        value=State.reservation_staged_start_date,
-        on_change=State.set_reservation_staged_start_date,
-        class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-      ),
-      rx.el.input(
-        type="date",
-        value=State.reservation_staged_end_date,
-        on_change=State.set_reservation_staged_end_date,
-        class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-      ),
-      rx.el.button(
-        rx.icon("search", class_name="h-4 w-4"),
-        "Buscar",
-        on_click=State.apply_reservation_filters,
-        class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 min-h-[42px]",
-      ),
-      rx.el.button(
-        rx.icon("rotate-ccw", class_name="h-4 w-4"),
-        "Limpiar",
-        on_click=State.reset_reservation_filters,
-        class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-slate-700 hover:bg-slate-50 min-h-[42px]",
-      ),
-      rx.el.button(
-        rx.icon("download", class_name="h-4 w-4"),
-        "Exportar",
-        on_click=State.export_reservations_excel,
-        class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 min-h-[42px]",
-      ),
-      class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr,1fr,1fr,1fr,auto,auto,auto] gap-2 items-center",
+      class_name="flex flex-col gap-2",
     ),
-    rx.el.table(
-      rx.el.thead(
-        rx.el.tr(
-          rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Campo", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Horario", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Monto", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Acciones", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th(
-            "Saldo", class_name=f"{TABLE_STYLES['header_cell']} text-right"
-          ),
-          class_name=TABLE_STYLES["header"],
-        )
+    rx.el.div(
+      rx.el.table(
+        rx.el.thead(
+          rx.el.tr(
+            rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Campo", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Horario", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Monto", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Acciones", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th(
+              "Saldo", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+            ),
+            class_name=TABLE_STYLES["header"],
+          )
+        ),
+        rx.el.tbody(rx.foreach(State.paginated_reservations, reservation_row)),
+        class_name="min-w-[980px]",
       ),
-      rx.el.tbody(rx.foreach(State.paginated_reservations, reservation_row)),
-      class_name="min-w-full",
+      class_name="w-full overflow-x-auto rounded-lg border border-slate-200",
     ),
     rx.cond(
       State.service_reservations_for_sport.length() == 0,
@@ -1168,7 +1177,7 @@ def reservations_table() -> rx.Component:
         on_next=State.next_reservation_page,
       ),
     ),
-    class_name="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm overflow-x-auto flex flex-col gap-3",
+    class_name="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col gap-3",
   )
 
 
@@ -1497,7 +1506,7 @@ def field_prices_tab() -> rx.Component:
           rx.icon("plus", class_name="h-4 w-4"),
           "Agregar",
           on_click=State.add_field_price,
-          class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[44px]",
+          class_name="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-indigo-600 px-3.5 text-sm font-medium text-white hover:bg-indigo-700",
         ),
         rx.el.button(
           rx.icon("refresh-ccw", class_name="h-4 w-4"),
@@ -1506,11 +1515,11 @@ def field_prices_tab() -> rx.Component:
           is_disabled=rx.cond(State.editing_field_price_id == "", True, False),
           class_name=rx.cond(
             State.editing_field_price_id == "",
-            "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed min-h-[44px]",
-            "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-amber-500 text-white hover:bg-amber-600 min-h-[44px]",
+            "inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-200 px-3.5 text-sm font-medium text-slate-500 cursor-not-allowed",
+            "inline-flex h-10 items-center justify-center gap-2 rounded-md bg-amber-500 px-3.5 text-sm font-medium text-white hover:bg-amber-600",
           ),
         ),
-        class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[1fr,2fr,1fr,auto,auto] gap-3 items-center bg-white p-4 rounded-xl shadow-sm border border-slate-200",
+        class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 sm:gap-3 items-end bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-200",
       ),
       rx.el.div(
         rx.el.p(
@@ -1617,7 +1626,7 @@ def servicios_page() -> rx.Component:
       ("piscina", servicio_card("Alquiler de Piscina", "Registro y seguimiento de alquiler de piscina.")),
       servicio_card("Alquiler de Campo", "Reserva y control de alquiler de campo."),
     ),
-    class_name="min-h-screen p-4 sm:p-6 w-full flex flex-col gap-4",
+    class_name="w-full flex flex-col gap-4",
   )
   return permission_guard(
     has_permission=State.can_view_servicios,

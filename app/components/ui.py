@@ -743,9 +743,14 @@ def page_title(title: str, subtitle: str = "") -> rx.Component:
         subtitle: Subtitulo o descripcion opcional
     """
     return rx.el.div(
-        rx.el.h1(title, class_name="text-2xl font-bold text-slate-900 tracking-tight"),
-        rx.el.p(subtitle, class_name="text-sm text-slate-500") if subtitle else rx.fragment(),
-        class_name="flex flex-col gap-1 mb-6",
+        rx.el.h1(
+            title,
+            class_name="text-xl sm:text-2xl lg:text-[1.65rem] font-bold text-slate-900 tracking-tight leading-tight",
+        ),
+        rx.el.p(subtitle, class_name="text-sm sm:text-[15px] text-slate-500")
+        if subtitle
+        else rx.fragment(),
+        class_name="flex flex-col gap-1 mb-4 sm:mb-6",
     )
 
 
@@ -771,14 +776,14 @@ def modal_container(
         max_width: Clase Tailwind de max-width
     """
     header = rx.el.div(
-        rx.el.h3(title, class_name="text-lg font-semibold text-slate-800"),
+        rx.el.h3(title, class_name="text-base sm:text-lg font-semibold text-slate-800"),
         rx.el.p(description, class_name="text-sm text-slate-600") if description else rx.fragment(),
         class_name="space-y-1",
     )
     body = (
         rx.el.div(
             *children,
-            class_name="flex-1 overflow-y-auto min-h-0 space-y-4",
+            class_name="flex-1 overflow-y-auto min-h-0 space-y-3 sm:space-y-4",
         )
         if children
         else rx.fragment()
@@ -800,11 +805,11 @@ def modal_container(
             rx.el.div(
                 *modal_sections,
                 class_name=(
-                    f"relative z-10 w-full {max_width} rounded-xl bg-white p-6 shadow-xl "
-                    "max-h-[90vh] overflow-hidden flex flex-col gap-4"
+                    f"relative z-10 w-full {max_width} rounded-xl sm:rounded-2xl bg-white p-4 sm:p-6 shadow-xl "
+                    "max-h-[92vh] overflow-hidden flex flex-col gap-4"
                 ),
             ),
-            class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
+            class_name="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-3 sm:px-4 py-3 sm:py-6 overflow-hidden",
         ),
         rx.fragment(),
     )
@@ -1056,7 +1061,7 @@ def filter_section(
         *filters,
         rx.el.div(
             *buttons,
-            class_name="flex flex-col gap-2 sm:flex-row sm:flex-wrap",
+            class_name="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end",
         ),
         class_name=f"grid {grid_cols} gap-3 sm:gap-4 items-end",
     )
@@ -1227,14 +1232,18 @@ def data_table(
         empty_state_section = rx.fragment() if has_data else empty_component
     
     return rx.el.div(
-        rx.el.table(
-            rx.el.thead(
-                rx.el.tr(*header_cells, class_name=TABLE_HEADER_STYLE)
+        rx.el.div(
+            rx.el.table(
+                rx.el.thead(
+                    rx.el.tr(*header_cells, class_name=TABLE_HEADER_STYLE)
+                ),
+                rx.el.tbody(rows),
+                class_name="min-w-[640px]",
             ),
-            rx.el.tbody(rows),
+            class_name="w-full overflow-x-auto",
         ),
         empty_state_section,
-        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto flex flex-col gap-4",
+        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4",
     )
 
 

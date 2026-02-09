@@ -69,7 +69,7 @@ def _custom_date_picker() -> rx.Component:
                 ),
                 class_name="flex-1",
             ),
-            class_name="flex gap-4 mt-4 p-4 bg-slate-50 rounded-xl",
+            class_name="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-4 p-4 bg-slate-50 rounded-xl",
         ),
         rx.fragment(),
     )
@@ -244,9 +244,9 @@ def reportes_page() -> rx.Component:
                     rx.el.h3("1. SELECCIONA EL TIPO DE REPORTE", class_name="text-lg font-semibold text-slate-800 mb-4"),
                     rx.el.div(
                         rx.foreach(State.report_types, _report_type_card),
-                        class_name="grid grid-cols-2 gap-3",
+                        class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
                     ),
-                    class_name="bg-white rounded-xl border border-slate-200 p-6 shadow-sm mb-4",
+                    class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm mb-4",
                 ),
                 
                 # Período (solo para ventas y caja)
@@ -259,7 +259,7 @@ def reportes_page() -> rx.Component:
                             class_name="flex flex-wrap gap-2",
                         ),
                         _custom_date_picker(),
-                        class_name="bg-white rounded-xl border border-slate-200 p-6 shadow-sm mb-4",
+                        class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm mb-4",
                     ),
                     rx.fragment(),
                 ),
@@ -277,12 +277,12 @@ def reportes_page() -> rx.Component:
                             class_name="text-lg font-semibold text-slate-800 mb-4",
                         ),
                         _report_options(),
-                        class_name="bg-white rounded-xl border border-slate-200 p-6 shadow-sm",
+                        class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm",
                     ),
                     rx.fragment(),
                 ),
                 
-                class_name="flex-1",
+                class_name="flex-1 min-w-0",
             ),
             
             # Columna derecha: Descripción y generar
@@ -298,7 +298,7 @@ def reportes_page() -> rx.Component:
                         ),
                         class_name="mt-4",
                     ),
-                    class_name="bg-white rounded-xl border border-slate-200 p-6 shadow-sm mb-4",
+                    class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm mb-4",
                 ),
                 
                 # Resumen de selección
@@ -307,22 +307,22 @@ def reportes_page() -> rx.Component:
                     rx.el.div(
                         rx.el.div(
                             rx.el.span("Reporte:", class_name="text-slate-500"),
-                            rx.el.span(State.selected_report_label, class_name="font-medium text-slate-800 ml-2"),
-                            class_name="flex justify-between py-2 border-b border-slate-100",
+                            rx.el.span(State.selected_report_label, class_name="font-medium text-slate-800 ml-2 text-right"),
+                            class_name="flex items-start justify-between gap-3 py-2 border-b border-slate-100",
                         ),
                         rx.cond(
                             (State.report_type == "ventas") | (State.report_type == "caja"),
                             rx.el.div(
                                 rx.el.span("Período:", class_name="text-slate-500"),
-                                rx.el.span(State.report_period_label, class_name="font-medium text-slate-800 ml-2"),
-                                class_name="flex justify-between py-2 border-b border-slate-100",
+                                rx.el.span(State.report_period_label, class_name="font-medium text-slate-800 ml-2 text-right"),
+                                class_name="flex items-start justify-between gap-3 py-2 border-b border-slate-100",
                             ),
                             rx.fragment(),
                         ),
                         rx.el.div(
                             rx.el.span("Formato:", class_name="text-slate-500"),
-                            rx.el.span("Excel (.xlsx)", class_name="font-medium text-slate-800 ml-2"),
-                            class_name="flex justify-between py-2",
+                            rx.el.span("Excel (.xlsx)", class_name="font-medium text-slate-800 ml-2 text-right"),
+                            class_name="flex items-start justify-between gap-3 py-2",
                         ),
                         class_name="mb-6",
                     ),
@@ -341,16 +341,16 @@ def reportes_page() -> rx.Component:
                         rx.fragment(),
                     ),
                     _generate_button(),
-                    class_name="bg-white rounded-xl border border-slate-200 p-6 shadow-sm",
+                    class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm",
                 ),
                 
-                class_name="w-96",
+                class_name="w-full xl:w-[23rem] 2xl:w-[25rem] shrink-0",
             ),
             
-            class_name="flex gap-6",
+            class_name="flex flex-col xl:flex-row gap-4 lg:gap-6",
         ),
         
-        class_name="p-6",
+        class_name="p-3 sm:p-4 lg:p-6",
     )
     return permission_guard(
         has_permission=State.can_export_data,

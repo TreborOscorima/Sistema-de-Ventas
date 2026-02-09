@@ -18,6 +18,7 @@ from app.pages.login import login_page
 from app.pages.periodo_prueba_finalizado import periodo_prueba_finalizado_page
 from app.pages.cuenta_suspendida import cuenta_suspendida_page
 from app.pages.registro import registro_page
+from app.pages.marketing import marketing_page
 from app.pages.servicios import servicios_page
 from app.pages.cuentas import cuentas_page
 from app.pages.clientes import clientes_page
@@ -256,6 +257,9 @@ def page_cuenta_suspendida() -> rx.Component:
 def page_registro() -> rx.Component:
     return registro_page()
 
+def page_marketing() -> rx.Component:
+    return marketing_page()
+
 
 app = rx.App(
     theme=rx.theme(appearance="light"),
@@ -270,6 +274,14 @@ app = rx.App(
             """
             [data-sonner-toaster][data-x-position='right'][data-y-position='bottom'] {
                 display: none !important;
+            }
+
+            html, body {
+                overflow-x: hidden;
+            }
+
+            * {
+                -webkit-tap-highlight-color: transparent;
             }
             """
         ),
@@ -344,6 +356,11 @@ app.add_page(
     page_registro,
     route="/registro",
     title="Registro - TUWAYKIAPP",
+)
+app.add_page(
+    page_marketing,
+    route="/sitio",
+    title="TUWAYKIAPP | Sistema de Ventas para tiendas, servicios y reservas",
 )
 
 # Páginas individuales con rutas separadas

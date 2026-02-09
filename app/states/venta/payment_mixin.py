@@ -337,6 +337,49 @@ class PaymentMixin:
             self.payment_cash_message = ""
             self.payment_mixed_message = ""
 
+    def _validate_payment_before_confirm(
+        self, sale_total: float, *, is_credit: bool
+    ) -> str | None:
+        """Valida montos del pago antes de procesar la venta.
+
+        Mantiene la misma regla funcional del servicio de ventas, pero con feedback
+        inmediato en UI para evitar bloqueos silenciosos del boton confirmar.
+        """
+        kind = (self.payment_method_kind or "other").strip().lower()
+        sale_total = self._round_currency(sale_total)
+
+        if kind == "cash":
+            cash_amount = self._round_currency(self.payment_cash_amount)
+            if not is_credit and (cash_amount <= 0 or cash_amount < sale_total):
+                return (
+                    (self.payment_cash_message or "").strip()
+                    or "Ingrese un monto valido en efectivo."
+                )
+            if is_credit and cash_amount < 0:
+                return (
+                    (self.payment_cash_message or "").strip()
+                    or "Ingrese un monto valido en efectivo."
+                )
+
+        if kind == "mixed":
+            total_paid = self._round_currency(
+                self.payment_mixed_cash
+                + self.payment_mixed_card
+                + self.payment_mixed_wallet
+            )
+            if not is_credit and (total_paid <= 0 or total_paid < sale_total):
+                return (
+                    (self.payment_mixed_message or "").strip()
+                    or "Complete los montos del pago mixto."
+                )
+            if is_credit and total_paid < 0:
+                return (
+                    (self.payment_mixed_message or "").strip()
+                    or "Complete los montos del pago mixto."
+                )
+
+        return None
+
     def _set_payment_method(self, method: PaymentMethodConfig | None):
         if method:
             self.payment_method = method.get("name", "")
