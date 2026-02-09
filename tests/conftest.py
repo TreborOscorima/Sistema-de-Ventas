@@ -1,7 +1,11 @@
+import os
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+
+# Ensure auth helpers can be imported during test collection.
+os.environ.setdefault("AUTH_SECRET_KEY", "test_secret_key_for_pytest_only_32_chars_min")
 
 from app.models import Product, Sale, Unit
 from app.schemas.sale_schemas import PaymentCashDTO, PaymentInfoDTO, SaleItemDTO

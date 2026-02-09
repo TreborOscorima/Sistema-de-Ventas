@@ -26,4 +26,5 @@ jobs:
           DB_NAME: test_db
           DB_PORT: 3306
           TEST_MODE: "1"
+          AUTH_SECRET_KEY: test_secret_key_for_ci_only_32_chars_minimum
         run: python -m pytest -q
