@@ -5,11 +5,13 @@ from datetime import datetime, timedelta
 import bcrypt
 import reflex as rx
 from sqlmodel import select
+from sqlalchemy.exc import IntegrityError
 
 from app.models import Branch, Role, User as UserModel, UserBranch, CompanySettings
 from app.models.company import Company, PlanType
 from app.utils.auth import create_access_token
 from app.utils.db_seeds import seed_new_branch_data
+from app.utils.logger import get_logger
 from app.utils.validators import validate_email, validate_password
 from app.utils.sanitization import sanitize_name, sanitize_phone
 from app.utils.rate_limit import (
@@ -20,6 +22,8 @@ from app.utils.rate_limit import (
 )
 from .auth_state import ADMIN_PRIVILEGES
 from .mixin_state import MixinState
+
+logger = get_logger("RegisterState")
 
 
 class RegisterState(MixinState):
@@ -157,6 +161,7 @@ class RegisterState(MixinState):
                             select(Role)
                             .where(Role.name == "Administrador")
                             .where(Role.company_id == company.id)
+                            .execution_options(tenant_company_id=company.id)
                         ).first()
                 if not role:
                     self.register_error = "No se pudo crear el rol administrador."
@@ -206,9 +211,35 @@ class RegisterState(MixinState):
                 seed_new_branch_data(session, company_id, branch.id)
 
                 session.commit()
+            except IntegrityError as exc:
+                session.rollback()
+                message = str(getattr(exc, "orig", exc) or "").lower()
+                if "ix_user_email" in message or (
+                    "duplicate" in message and "email" in message
+                ):
+                    self.register_error = "El correo ya esta registrado."
+                elif "uq_user_company_username" in message or (
+                    "duplicate" in message and "username" in message
+                ):
+                    self.register_error = (
+                        "El usuario ya existe en esta empresa."
+                    )
+                else:
+                    self.register_error = "No se pudo completar el registro."
+                logger.error(
+                    "Conflicto de integridad al registrar empresa.",
+                    exc_info=True,
+                )
+                self.is_registering = False
+                _record_failed_attempt(identifier, ip_address=client_ip)
+                return
             except Exception:
                 session.rollback()
                 self.register_error = "No se pudo completar el registro."
+                logger.error(
+                    "Error inesperado al registrar empresa.",
+                    exc_info=True,
+                )
                 self.is_registering = False
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 return

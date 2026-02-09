@@ -828,6 +828,7 @@ class AuthState(MixinState):
             .where(func.lower(Role.name) == target)
             .where(Role.company_id == scoped_company_id)
             .options(selectinload(Role.permissions))
+            .execution_options(tenant_company_id=scoped_company_id)
         ).first()
 
     def _ensure_role(
