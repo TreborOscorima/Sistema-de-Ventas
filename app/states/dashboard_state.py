@@ -14,9 +14,17 @@ import reflex as rx
 from sqlmodel import select, func
 from sqlalchemy import and_, or_, extract
 
-from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog
+from app.models import (
+    Sale,
+    SaleItem,
+    Product,
+    Client,
+    SaleInstallment,
+    CashboxLog,
+    FieldReservation,
+)
 from .inventory_state import LOW_STOCK_THRESHOLD
-from app.enums import SaleStatus
+from app.enums import SaleStatus, ReservationStatus
 from app.services.alert_service import get_alert_summary
 from .mixin_state import MixinState
 
@@ -32,6 +40,7 @@ class DashboardState(MixinState):
     # Datos de resumen (período seleccionado)
     period_sales: float = 0.0
     period_sales_count: int = 0
+    period_reservations_count: int = 0
     period_prev_sales: float = 0.0  # Período anterior para comparación
     
     # Datos de resumen
@@ -163,6 +172,7 @@ class DashboardState(MixinState):
             self.month_sales_count = 0
             self.period_sales = 0.0
             self.period_sales_count = 0
+            self.period_reservations_count = 0
             self.period_prev_sales = 0.0
             self.avg_ticket = 0.0
             return
@@ -242,6 +252,24 @@ class DashboardState(MixinState):
             ).one()
             self.period_sales_count = period_result[0] or 0
             self.period_sales = float(period_result[1] or 0)
+
+            # Reservas del período seleccionado (agenda operativa),
+            # excluyendo anuladas/reembolsadas.
+            reservation_result = session.exec(
+                select(func.count(FieldReservation.id))
+                .where(
+                    and_(
+                        FieldReservation.start_datetime >= period_start,
+                        FieldReservation.start_datetime <= period_end,
+                        FieldReservation.status.notin_(
+                            [ReservationStatus.CANCELLED, ReservationStatus.REFUNDED]
+                        ),
+                        FieldReservation.company_id == company_id,
+                        FieldReservation.branch_id == branch_id,
+                    )
+                )
+            ).one()
+            self.period_reservations_count = int(reservation_result or 0)
             
             # Ticket promedio del período seleccionado
             if self.period_sales_count > 0:

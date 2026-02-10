@@ -71,6 +71,7 @@ def _plan_card(
     title: str,
     subtitle: str,
     points: list[str],
+    price_label: str,
     cta_label: str,
     cta_href: str,
     tone: str = "standard",
@@ -129,6 +130,27 @@ def _plan_card(
         for point in points
     ]
 
+    price_block = (
+        rx.el.div(
+            rx.el.p(
+                price_label,
+                class_name=(
+                    "mt-4 text-3xl font-extrabold tracking-tight text-white"
+                    if is_enterprise
+                    else "mt-4 text-3xl font-extrabold tracking-tight text-slate-900"
+                ),
+            ),
+            rx.el.p(
+                "USD / mes",
+                class_name="text-xs font-semibold uppercase tracking-wide text-slate-300"
+                if is_enterprise
+                else "text-xs font-semibold uppercase tracking-wide text-slate-500",
+            ),
+        )
+        if price_label
+        else rx.fragment()
+    )
+
     return rx.el.article(
         badge,
         rx.el.h3(
@@ -136,6 +158,7 @@ def _plan_card(
             class_name="mt-2 text-lg font-bold text-white" if is_enterprise else "mt-2 text-lg font-bold text-slate-900",
         ),
         rx.el.p(subtitle, class_name=subtitle_class),
+        price_block,
         rx.el.ul(*point_rows, class_name="mt-5 space-y-2"),
         rx.el.a(
             cta_label,
@@ -169,18 +192,135 @@ def _faq_item(question: str, answer: str, open_by_default: bool = False) -> rx.C
     )
 
 
+def _trust_pill(icon: str, label: str) -> rx.Component:
+    return rx.el.div(
+        rx.icon(icon, class_name="h-4 w-4 text-emerald-700"),
+        rx.el.span(label, class_name="text-xs font-semibold text-slate-700 sm:text-sm"),
+        class_name=(
+            "inline-flex items-center gap-2 rounded-xl border border-emerald-100 bg-white/90 "
+            "px-3 py-2 shadow-sm backdrop-blur"
+        ),
+    )
+
+
+def _hero_preview_card() -> rx.Component:
+    return rx.el.aside(
+        rx.el.div(
+            rx.el.div(
+                rx.el.p("Vista operativa", class_name="text-xs font-semibold uppercase tracking-wide text-slate-500"),
+                rx.el.h3("Panel de control en vivo", class_name="mt-1 text-lg font-bold text-slate-900"),
+            ),
+            rx.el.span(
+                rx.icon("badge-check", class_name="h-4 w-4"),
+                "Online",
+                class_name=(
+                    "inline-flex items-center gap-1 rounded-full border border-emerald-200 "
+                    "bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                ),
+            ),
+            class_name="flex items-start justify-between gap-4",
+        ),
+        rx.el.div(
+            rx.el.div(
+                rx.el.p("Ventas hoy", class_name="text-xs text-slate-500"),
+                rx.el.p("S/ 4,820", class_name="text-lg font-extrabold text-slate-900"),
+                class_name="rounded-xl border border-slate-200 bg-white p-3",
+            ),
+            rx.el.div(
+                rx.el.p("Tickets", class_name="text-xs text-slate-500"),
+                rx.el.p("128", class_name="text-lg font-extrabold text-slate-900"),
+                class_name="rounded-xl border border-slate-200 bg-white p-3",
+            ),
+            rx.el.div(
+                rx.el.p("Reservas", class_name="text-xs text-slate-500"),
+                rx.el.p("37", class_name="text-lg font-extrabold text-slate-900"),
+                class_name="rounded-xl border border-slate-200 bg-white p-3",
+            ),
+            class_name="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3",
+        ),
+        rx.el.div(
+            rx.el.p("Movimientos recientes", class_name="text-xs font-semibold uppercase tracking-wide text-slate-500"),
+            rx.el.div(
+                rx.el.div(
+                    rx.icon("shopping-cart", class_name="h-4 w-4 text-indigo-600"),
+                    rx.el.span("Venta de producto", class_name="text-sm font-medium text-slate-700"),
+                    rx.el.span("S/ 215", class_name="text-sm font-semibold text-slate-900"),
+                    class_name="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-white px-3 py-2",
+                ),
+                rx.el.div(
+                    rx.icon("calendar-check", class_name="h-4 w-4 text-cyan-600"),
+                    rx.el.span("Reserva confirmada", class_name="text-sm font-medium text-slate-700"),
+                    rx.el.span("S/ 70", class_name="text-sm font-semibold text-slate-900"),
+                    class_name="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-white px-3 py-2",
+                ),
+                rx.el.div(
+                    rx.icon("wallet", class_name="h-4 w-4 text-emerald-700"),
+                    rx.el.span("Cierre parcial de caja", class_name="text-sm font-medium text-slate-700"),
+                    rx.el.span("OK", class_name="text-sm font-semibold text-emerald-700"),
+                    class_name="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-white px-3 py-2",
+                ),
+                class_name="mt-3 space-y-2",
+            ),
+            class_name="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3",
+        ),
+        rx.el.div(
+            rx.el.button(
+                "Ver demo funcional",
+                class_name=(
+                    "inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 "
+                    "text-xs font-semibold text-white"
+                ),
+            ),
+            rx.el.button(
+                "Exportar reporte",
+                class_name=(
+                    "inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white "
+                    "px-3 py-2 text-xs font-semibold text-slate-700"
+                ),
+            ),
+            class_name="mt-4 flex flex-wrap items-center gap-2",
+        ),
+        class_name=(
+            "float-card relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-5 "
+            "shadow-[0_30px_80px_-35px_rgba(15,23,42,0.45)] backdrop-blur"
+        ),
+    )
+
+
+def _testimonial_card(quote: str, role: str) -> rx.Component:
+    return rx.el.article(
+        rx.el.p(
+            f'"{quote}"',
+            class_name="text-sm leading-relaxed text-slate-700",
+        ),
+        rx.el.div(
+            rx.icon("message-circle", class_name="h-4 w-4 text-emerald-700"),
+            rx.el.p(role, class_name="text-xs font-semibold uppercase tracking-wide text-slate-500"),
+            class_name="mt-4 flex items-center gap-2",
+        ),
+        class_name=(
+            "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm "
+            "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+        ),
+    )
+
+
 def marketing_page() -> rx.Component:
     demo_link = (
         "https://wa.me/5491168376517?text="
         "Hola,%20quiero%20una%20demo%20en%20vivo%20de%20TUWAYKIAPP."
     )
-    sales_link = (
+    standard_link = (
         "https://wa.me/5491168376517?text="
-        "Hola,%20quiero%20informacion%20comercial%20de%20TUWAYKIAPP."
+        "Hola,%20quiero%20el%20Plan%20Standard%20(USD%2045/mes)%20de%20TUWAYKIAPP."
+    )
+    professional_link = (
+        "https://wa.me/5491168376517?text="
+        "Hola,%20quiero%20el%20Plan%20Professional%20(USD%2075/mes)%20de%20TUWAYKIAPP."
     )
     enterprise_link = (
         "https://wa.me/5491168376517?text="
-        "Hola,%20quiero%20una%20propuesta%20del%20Plan%20Enterprise%20de%20TUWAYKIAPP."
+        "Hola,%20quiero%20el%20Plan%20Enterprise%20(USD%20175/mes)%20de%20TUWAYKIAPP."
     )
 
     return rx.el.div(
@@ -189,9 +329,11 @@ def marketing_page() -> rx.Component:
             "family=Sora:wght@400;600;700;800&family=Public+Sans:wght@400;500;600&display=swap');"
             "@keyframes floatY{0%,100%{transform:translateY(0px);}50%{transform:translateY(-16px);}}"
             "@keyframes pulseSoft{0%,100%{opacity:.35;}50%{opacity:.7;}}"
+            "@keyframes cardLift{0%,100%{transform:translateY(0px);}50%{transform:translateY(-6px);}}"
             ".orb-a{animation:floatY 10s ease-in-out infinite;}"
             ".orb-b{animation:floatY 13s ease-in-out infinite reverse;}"
             ".orb-c{animation:pulseSoft 8s ease-in-out infinite;}"
+            ".float-card{animation:cardLift 8s ease-in-out infinite;}"
         ),
         rx.el.div(
             rx.el.div(
@@ -246,94 +388,102 @@ def marketing_page() -> rx.Component:
         rx.el.main(
             rx.el.section(
                 rx.el.div(
-                    rx.el.span(
-                        "SaaS para tiendas, servicios y reservas",
-                        class_name=(
-                            "inline-flex rounded-full border border-emerald-200 bg-emerald-50 "
-                            "px-3 py-1 text-xs font-semibold text-emerald-700"
-                        ),
-                    ),
-                    rx.el.h1(
-                        "Controla ventas, caja, inventario y servicios en una sola plataforma.",
-                        class_name=(
-                            "mt-4 text-3xl font-extrabold tracking-tight text-slate-900 "
-                            "sm:text-5xl"
-                        ),
-                    ),
-                    rx.el.p(
-                        "TUWAYKIAPP ayuda a negocios multiempresa a cobrar mas rapido, "
-                        "reducir errores operativos y tomar decisiones con reportes claros.",
-                        class_name="mt-4 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg",
-                    ),
                     rx.el.div(
                         rx.el.span(
-                            "Activa demo trial de 15 dias y valida el sistema en tu operacion real.",
+                            "SaaS multiempresa para tiendas, servicios y reservas",
                             class_name=(
-                                "inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 "
-                                "text-xs font-semibold text-sky-700"
+                                "inline-flex rounded-full border border-emerald-200 bg-emerald-50 "
+                                "px-3 py-1 text-xs font-semibold text-emerald-700"
                             ),
                         ),
-                        class_name="mt-4",
-                    ),
-                    rx.el.div(
-                        rx.el.a(
-                            "Comenzar trial de 15 dias",
-                            href="/registro",
+                        rx.el.h1(
+                            "Convierte cada venta en control operativo y crecimiento rentable.",
                             class_name=(
-                                "inline-flex items-center justify-center rounded-xl bg-slate-900 "
-                                "px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 "
-                                "transition-colors duration-150"
+                                "mt-4 text-3xl font-extrabold tracking-tight text-slate-900 "
+                                "sm:text-5xl sm:leading-tight"
                             ),
                         ),
-                        rx.el.a(
-                            rx.icon("message-circle", class_name="h-4 w-4"),
-                            "Agendar demo guiada",
-                            href=demo_link,
-                            target="_blank",
-                            rel="noopener noreferrer",
-                            class_name=(
-                                "inline-flex items-center gap-2 rounded-xl border border-slate-300 "
-                                "bg-white px-5 py-3 text-sm font-semibold text-slate-700 "
-                                "hover:bg-slate-50 transition-colors duration-150"
-                            ),
+                        rx.el.p(
+                            "TUWAYKIAPP conecta ventas, caja, inventario y servicios en un solo flujo "
+                            "para que tu equipo cobre mas rapido, cometa menos errores y escale sin caos.",
+                            class_name="mt-4 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg",
                         ),
-                        class_name="mt-7 flex flex-col gap-3 sm:flex-row",
+                        rx.el.div(
+                            rx.el.div(
+                                rx.icon("badge-check", class_name="h-4 w-4 text-emerald-700"),
+                                rx.el.span("Multi-tenant con roles por empresa", class_name="text-sm text-slate-700"),
+                                class_name="flex items-center gap-2",
+                            ),
+                            rx.el.div(
+                                rx.icon("badge-check", class_name="h-4 w-4 text-emerald-700"),
+                                rx.el.span("Operativo en desktop, tablet y mobile", class_name="text-sm text-slate-700"),
+                                class_name="flex items-center gap-2",
+                            ),
+                            class_name="mt-5 space-y-2",
+                        ),
+                        rx.el.div(
+                            rx.el.a(
+                                "Comenzar trial de 15 dias",
+                                href="/registro",
+                                class_name=(
+                                    "inline-flex items-center justify-center rounded-xl bg-slate-900 "
+                                    "px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 "
+                                    "transition-colors duration-150"
+                                ),
+                            ),
+                            rx.el.a(
+                                rx.icon("message-circle", class_name="h-4 w-4"),
+                                "Agendar demo guiada",
+                                href=demo_link,
+                                target="_blank",
+                                rel="noopener noreferrer",
+                                class_name=(
+                                    "inline-flex items-center gap-2 rounded-xl border border-slate-300 "
+                                    "bg-white px-5 py-3 text-sm font-semibold text-slate-700 "
+                                    "hover:bg-slate-50 transition-colors duration-150"
+                                ),
+                            ),
+                            class_name="mt-7 flex flex-col gap-3 sm:flex-row",
+                        ),
+                        rx.el.div(
+                            _metric_card("+35%", "mejor control de caja diaria"),
+                            _metric_card("-60%", "menos diferencias de stock"),
+                            _metric_card("15 dias", "trial gratis sin tarjeta"),
+                            class_name="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3",
+                        ),
+                        class_name="max-w-2xl",
                     ),
-                    rx.el.div(
-                        _metric_card("+35%", "mejor control de caja diaria"),
-                        _metric_card("-60%", "menos diferencias de stock"),
-                        _metric_card("15 dias", "trial gratis sin tarjeta"),
-                        class_name="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3",
-                    ),
-                    class_name="max-w-3xl",
+                    _hero_preview_card(),
+                    class_name="grid grid-cols-1 items-start gap-8 lg:grid-cols-[1.05fr_0.95fr]",
                 ),
-                class_name="mx-auto w-full max-w-6xl px-4 pb-14 pt-14 sm:px-6 lg:px-8 lg:pt-20",
+                class_name="mx-auto w-full max-w-6xl px-4 pb-12 pt-14 sm:px-6 lg:px-8 lg:pt-20",
             ),
             rx.el.section(
                 rx.el.div(
-                    rx.el.p(
-                        "Pensado para operaciones reales:",
-                        class_name="text-xs font-semibold uppercase tracking-wide text-slate-500",
+                    rx.el.div(
+                        rx.el.p(
+                            "Confiado para operaciones de alta exigencia",
+                            class_name=(
+                                "text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"
+                            ),
+                        ),
+                        rx.el.h3(
+                            "Listo para desplegar en equipos con caja, inventario y reservas.",
+                            class_name="mt-2 text-xl font-bold text-slate-900 sm:text-2xl",
+                        ),
                     ),
                     rx.el.div(
-                        rx.el.div(
-                            rx.icon("building-2", class_name="h-4 w-4 text-slate-700"),
-                            rx.el.span("Tiendas con ventas rapidas", class_name="text-sm text-slate-700"),
-                            class_name="flex items-center gap-2",
-                        ),
-                        rx.el.div(
-                            rx.icon("calendar-check", class_name="h-4 w-4 text-slate-700"),
-                            rx.el.span("Negocios con reservas", class_name="text-sm text-slate-700"),
-                            class_name="flex items-center gap-2",
-                        ),
-                        rx.el.div(
-                            rx.icon("users", class_name="h-4 w-4 text-slate-700"),
-                            rx.el.span("Equipos multiusuario y sucursales", class_name="text-sm text-slate-700"),
-                            class_name="flex items-center gap-2",
-                        ),
-                        class_name="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3",
+                        _trust_pill("building-2", "Tiendas con punto de venta"),
+                        _trust_pill("calendar-check", "Negocios con reservas y servicios"),
+                        _trust_pill("users", "Equipos multiusuario y sucursales"),
+                        _trust_pill("badge-check", "Roles y permisos por tenant"),
+                        _trust_pill("pie-chart", "Reportes por periodo y categoria"),
+                        class_name="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5",
                     ),
-                    class_name="mx-auto w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-5 sm:p-6",
+                    class_name=(
+                        "mx-auto w-full max-w-6xl rounded-3xl border border-slate-200/80 bg-white/90 "
+                        "p-6 shadow-sm backdrop-blur sm:p-8"
+                    ),
                 ),
                 class_name="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8",
             ),
@@ -393,6 +543,42 @@ def marketing_page() -> rx.Component:
             ),
             rx.el.section(
                 rx.el.div(
+                    rx.el.div(
+                        rx.el.p(
+                            "Resultados de operacion",
+                            class_name="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
+                        ),
+                        rx.el.h2(
+                            "Equipos comerciales ganan velocidad y control desde la primera semana.",
+                            class_name="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
+                        ),
+                        rx.el.p(
+                            "La mejora no viene solo por software, sino por estandarizar procesos y visibilidad en tiempo real.",
+                            class_name="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
+                        ),
+                        class_name="max-w-4xl",
+                    ),
+                    rx.el.div(
+                        _testimonial_card(
+                            "Reducimos retrabajo en caja y ahora cerramos turnos con menos diferencia de efectivo.",
+                            "Operacion retail multi-caja",
+                        ),
+                        _testimonial_card(
+                            "El control de reservas con adelantos nos ordeno el flujo y disminuyo huecos de agenda.",
+                            "Negocio de servicios con reservas",
+                        ),
+                        _testimonial_card(
+                            "Con roles por tenant y reportes por sucursal pudimos delegar sin perder control.",
+                            "Operacion multi-sucursal",
+                        ),
+                        class_name="mt-7 grid grid-cols-1 gap-4 md:grid-cols-3",
+                    ),
+                    class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+                ),
+                class_name="mx-auto w-full max-w-6xl",
+            ),
+            rx.el.section(
+                rx.el.div(
                     rx.el.h2(
                         "Flujos clave que puedes ejecutar hoy",
                         class_name="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
@@ -440,34 +626,41 @@ def marketing_page() -> rx.Component:
                         class_name="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
                     ),
                     rx.el.p(
-                        "El trial/demo se activa al registrarte. Aqui eliges el plan de crecimiento comercial.",
+                        "Empieza con precios claros por mes y escala a medida que crece tu operacion.",
                         class_name="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
+                    ),
+                    rx.el.p(
+                        "Sin contratos forzosos. Te acompanamos en onboarding y activacion comercial.",
+                        class_name="mt-2 text-sm font-medium text-slate-500",
                     ),
                     rx.el.div(
                         _plan_card(
                             "Standard",
                             "Para negocios en crecimiento con operacion diaria estable.",
                             [
-                                "Mas sucursales y usuarios",
+                                "Hasta 5 sucursales y 10 usuarios",
                                 "Reportes mas profundos",
                                 "Acompanamiento de implementacion",
                                 "Soporte comercial continuo",
                             ],
+                            "$45",
                             "Hablar con ventas",
-                            sales_link,
+                            standard_link,
                             tone="standard",
                         ),
                         _plan_card(
                             "Professional",
                             "Para operaciones multi-sucursal con mayor exigencia de control.",
                             [
+                                "Hasta 10 sucursales y usuarios ilimitados",
                                 "Configuracion avanzada",
                                 "Prioridad de soporte",
                                 "Gobernanza operativa",
                                 "Escalabilidad para alto volumen",
                             ],
+                            "$75",
                             "Solicitar propuesta",
-                            sales_link,
+                            professional_link,
                             tone="professional",
                             badge_text="Mas elegido",
                         ),
@@ -475,17 +668,19 @@ def marketing_page() -> rx.Component:
                             "Enterprise",
                             "Para companias que requieren maxima escala, control y personalizacion.",
                             [
+                                "Plan totalmente personalizable",
                                 "Arquitectura y onboarding dedicado",
                                 "Soporte prioritario y SLA",
                                 "Integraciones y flujos a medida",
                                 "Estrategia de escalamiento enterprise",
                             ],
+                            "$175",
                             "Solicitar Enterprise",
                             enterprise_link,
                             tone="enterprise",
                             badge_text="Escala total",
                         ),
-                        class_name="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3",
+                        class_name="mt-8 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3",
                     ),
                     class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
                     id="planes",
@@ -521,6 +716,46 @@ def marketing_page() -> rx.Component:
                             "Si te interesa continuar, eliges Standard, Professional o Enterprise sin perder continuidad operativa.",
                         ),
                         class_name="mt-7 grid grid-cols-1 gap-3 md:grid-cols-2",
+                    ),
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.p(
+                                "Aun tienes dudas antes de activar tu trial?",
+                                class_name="text-base font-semibold text-slate-900",
+                            ),
+                            rx.el.p(
+                                "Nuestro equipo te ayuda a elegir plan y a estimar implementacion segun tu operacion.",
+                                class_name="mt-1 text-sm text-slate-600",
+                            ),
+                            class_name="flex-1",
+                        ),
+                        rx.el.div(
+                            rx.el.a(
+                                "Hablar por WhatsApp",
+                                href=demo_link,
+                                target="_blank",
+                                rel="noopener noreferrer",
+                                class_name=(
+                                    "inline-flex items-center justify-center rounded-xl bg-emerald-600 "
+                                    "px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 "
+                                    "transition-colors duration-150"
+                                ),
+                            ),
+                            rx.el.a(
+                                "Iniciar prueba",
+                                href="/registro",
+                                class_name=(
+                                    "inline-flex items-center justify-center rounded-xl border border-slate-300 "
+                                    "bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 "
+                                    "transition-colors duration-150"
+                                ),
+                            ),
+                            class_name="flex flex-col gap-2 sm:flex-row",
+                        ),
+                        class_name=(
+                            "mt-7 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 "
+                            "sm:flex-row sm:items-center sm:justify-between"
+                        ),
                     ),
                     class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
                     id="faq",
@@ -602,6 +837,8 @@ def marketing_page() -> rx.Component:
             ),
             class_name="border-t border-slate-200 bg-white",
         ),
-        class_name="relative min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100",
+        class_name=(
+            "relative min-h-screen bg-gradient-to-b from-slate-50 via-cyan-50/30 to-slate-100"
+        ),
         style={"fontFamily": "'Sora', 'Public Sans', sans-serif"},
     )

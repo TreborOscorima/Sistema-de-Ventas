@@ -465,17 +465,20 @@ def _kpis_grid() -> rx.Component:
       ),
       class_name=f"bg-gradient-to-br from-white to-indigo-50 {RADIUS['xl']} border border-slate-200 {SHADOWS['sm']} col-span-1 sm:col-span-2",
     ),
-    # Ticket Promedio con período dinámico
+    # Reservas del período con acceso directo al módulo de servicios
     rx.link(
       rx.el.div(
         rx.el.div(
           rx.el.div(
-            rx.icon("receipt", class_name="w-5 h-5"),
-            class_name=f"p-2 {RADIUS['lg']} bg-amber-50 text-amber-600",
+            rx.icon("calendar-check", class_name="w-5 h-5"),
+            class_name=f"p-2 {RADIUS['lg']} bg-cyan-50 text-cyan-600",
           ),
           rx.el.div(
-            rx.el.p("Ticket Promedio", class_name="text-sm text-slate-500"),
-            rx.el.p(State.formatted_avg_ticket, class_name="text-2xl font-bold text-slate-900 tabular-nums"),
+            rx.el.p("Reservas", class_name="text-sm text-slate-500"),
+            rx.el.p(
+              State.period_reservations_count,
+              class_name="text-2xl font-bold text-slate-900 tabular-nums",
+            ),
             rx.el.p(State.period_label, class_name="text-xs text-slate-400"),
             class_name="ml-auto text-right",
           ),
@@ -483,7 +486,7 @@ def _kpis_grid() -> rx.Component:
         ),
         class_name=f"bg-white {RADIUS['xl']} border border-slate-200 p-4 {SHADOWS['sm']} {TRANSITIONS['fast']} hover:shadow-md cursor-pointer hover:border-indigo-300",
       ),
-      href="/historial",
+      href="/servicios",
       class_name="block",
     ),
     # Cantidad de ventas del período
