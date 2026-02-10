@@ -3,11 +3,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Dependencias del sistema para PyMySQL y compilación
+# Dependencias del sistema: PyMySQL, compilación y Reflex (Bun/unzip para frontend)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     default-libmysqlclient-dev \
     pkg-config \
+    unzip \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar e instalar dependencias Python
