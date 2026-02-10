@@ -3,6 +3,7 @@
 # Un solo puerto: http://<IP-PUBLICA>:8101  (frontend + API bajo /api)
 # Más adelante: poner Nginx Proxy Manager delante con dominio.
 # MySQL y Redis no se exponen al host (solo red interna Docker).
+# Si MySQL queda "Restarting": docker compose down -v && docker compose up -d (volumen limpio). Ver: docker compose logs mysql
 
 services:
   mysql:
@@ -43,11 +44,12 @@ services:
       dockerfile: Dockerfile
     container_name: sistema_ventas_app
     restart: unless-stopped
+    # service_started: el entrypoint de la app ya espera a MySQL/Redis con reintentos
     depends_on:
       mysql:
-        condition: service_healthy
+        condition: service_started
       redis:
-        condition: service_healthy
+        condition: service_started
     environment:
       ENV: ${ENV:-prod}
       DB_HOST: mysql
