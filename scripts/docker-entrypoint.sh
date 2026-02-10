@@ -8,7 +8,7 @@ import os, sys
 import pymysql
 host = os.environ.get('DB_HOST', 'mysql')
 port = int(os.environ.get('DB_PORT', 3306))
-user = os.environ.get('DB_USER', 'root')
+user = os.environ.get('DB_USER', 'app')
 password = os.environ.get('DB_PASSWORD', '')
 try:
     pymysql.connect(host=host, port=port, user=user, password=password, connect_timeout=5)
