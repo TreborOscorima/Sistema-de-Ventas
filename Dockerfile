@@ -25,4 +25,4 @@ RUN chmod +x /docker-entrypoint.sh
 EXPOSE 3000 8000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["reflex", "run", "--loglevel", "warning", "--backend-host", "0.0.0.0", "--frontend-host", "0.0.0.0"]
+CMD ["reflex", "run", "--loglevel", "warning", "--backend-host", "0.0.0.0"]
