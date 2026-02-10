@@ -13,7 +13,8 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
       MYSQL_DATABASE: ${DB_NAME:-sistema_ventas}
-      MYSQL_USER: ${DB_USER:-app}
+      # La imagen MySQL no permite MYSQL_USER=root; usar siempre un usuario de aplicación
+      MYSQL_USER: app
       MYSQL_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
     volumes:
       - mysql_data:/var/lib/mysql
@@ -54,7 +55,7 @@ services:
       ENV: ${ENV:-prod}
       DB_HOST: mysql
       DB_PORT: 3306
-      DB_USER: ${DB_USER:-app}
+      DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
       DB_NAME: ${DB_NAME:-sistema_ventas}
       REDIS_URL: redis://redis:6379/0
