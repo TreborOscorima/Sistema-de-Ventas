@@ -957,15 +957,15 @@ def pricing_modal(
 
     standard_link = (
         "https://wa.me/5491168376517?text="
-        "Hola,%20quiero%20el%20Plan%20Standard."
+        "Hola,%20quiero%20el%20Plan%20Standard%20(USD%2045/mes)%20de%20TUWAYKIAPP."
     )
     professional_link = (
         "https://wa.me/5491168376517?text="
-        "Hola,%20quiero%20el%20Plan%20Professional."
+        "Hola,%20quiero%20el%20Plan%20Professional%20(USD%2075/mes)%20de%20TUWAYKIAPP."
     )
     enterprise_link = (
         "https://wa.me/5491168376517?text="
-        "Hola,%20busco%20una%20solucion%20Enterprise."
+        "Hola,%20quiero%20el%20Plan%20Enterprise%20(USD%20175/mes)%20de%20TUWAYKIAPP."
     )
 
     content = rx.el.div(

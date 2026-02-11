@@ -182,6 +182,31 @@ class AuthState(MixinState):
     show_user_form: bool = False
     user_form_key: int = 0
     branch_access_revision: int = 0
+    available_branches_cache: List[Dict[str, Any]] = []
+    active_branch_name_cache: str = ""
+    plan_actual_cache: str = "unknown"
+    company_has_reservations_cache: bool = False
+    subscription_snapshot_cache: Dict[str, Any] = {
+        "plan_type": "",
+        "plan_display": "PLAN",
+        "status_label": "Activo",
+        "status_tone": "success",
+        "is_trial": False,
+        "trial_days_left": 0,
+        "trial_ends_on": "",
+        "max_branches": 0,
+        "max_users": 0,
+        "branches_used": 0,
+        "users_used": 0,
+        "branches_percent": 0,
+        "users_percent": 0,
+        "branches_full": False,
+        "users_full": False,
+        "branches_limit_label": "0",
+        "users_limit_label": "0",
+        "users_unlimited": False,
+        "branches_unlimited": False,
+    }
     new_user_data: NewUser = {
         "username": "",
         "email": "",
@@ -200,6 +225,8 @@ class AuthState(MixinState):
     _cached_user: Optional[User] = rx.field(default=None, is_var=False)
     _cached_user_token: str = rx.field(default="", is_var=False)
     _cached_user_time: float = rx.field(default=0.0, is_var=False)
+    _roles_bootstrap_ts: float = rx.field(default=0.0, is_var=False)
+    _subscription_check_ts: float = rx.field(default=0.0, is_var=False)
     _USER_CACHE_TTL: float = 30.0  # Segundos de validez del cache
 
     @rx.var
@@ -313,13 +340,172 @@ class AuthState(MixinState):
         except (TypeError, ValueError):
             return None
 
-    @rx.var
-    def available_branches(self) -> List[Dict[str, Any]]:
+    def _default_subscription_snapshot(self) -> Dict[str, Any]:
+        return {
+            "plan_type": "",
+            "plan_display": "PLAN",
+            "status_label": "Activo",
+            "status_tone": "success",
+            "is_trial": False,
+            "trial_days_left": 0,
+            "trial_ends_on": "",
+            "max_branches": 0,
+            "max_users": 0,
+            "branches_used": 0,
+            "users_used": 0,
+            "branches_percent": 0,
+            "users_percent": 0,
+            "branches_full": False,
+            "users_full": False,
+            "branches_limit_label": "0",
+            "users_limit_label": "0",
+            "users_unlimited": False,
+            "branches_unlimited": False,
+        }
+
+    def _safe_int(self, value: Any, fallback: int = 0) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    def _build_subscription_snapshot(
+        self,
+        company: Company | None,
+        branches_used: int = 0,
+        users_used: int = 0,
+    ) -> Dict[str, Any]:
+        if not company:
+            return self._default_subscription_snapshot()
+
+        plan_type = getattr(company, "plan_type", "") or ""
+        if hasattr(plan_type, "value"):
+            plan_type = plan_type.value
+        plan_type = str(plan_type or "").strip().lower()
+        is_trial = plan_type == "trial"
+
+        trial_ends_at = getattr(company, "trial_ends_at", None)
+        now = datetime.now()
+        is_expired = bool(is_trial and trial_ends_at and trial_ends_at < now)
+        status_label = "Vencido" if is_expired else "Activo"
+        status_tone = "danger" if is_expired else ("warning" if is_trial else "success")
+        if not is_trial:
+            sub_status = getattr(company, "subscription_status", "")
+            if hasattr(sub_status, "value"):
+                sub_status = sub_status.value
+            sub_status = str(sub_status or "").strip().lower()
+            if sub_status == SubscriptionStatus.WARNING.value:
+                status_label = "Por vencer"
+                status_tone = "warning"
+            elif sub_status == SubscriptionStatus.PAST_DUE.value:
+                status_label = "Pago vencido"
+                status_tone = "danger"
+            elif sub_status == SubscriptionStatus.SUSPENDED.value:
+                status_label = "Suspendido"
+                status_tone = "danger"
+
+        trial_days_left = 0
+        trial_ends_on = ""
+        if is_trial and trial_ends_at:
+            trial_days_left = max((trial_ends_at.date() - now.date()).days, 0)
+            trial_ends_on = trial_ends_at.strftime("%d/%m/%Y")
+
+        max_branches = self._safe_int(getattr(company, "max_branches", 0), 0)
+        max_users = self._safe_int(getattr(company, "max_users", 0), 0)
+        branches_used = self._safe_int(branches_used, 0)
+        users_used = self._safe_int(users_used, 0)
+
+        users_unlimited = max_users < 0 or max_users >= 999
+        branches_unlimited = max_branches < 0 or max_branches >= 999
+
+        branches_percent = (
+            0
+            if branches_unlimited
+            else min(int(round((branches_used / max_branches) * 100)), 100)
+        ) if max_branches > 0 else 0
+        users_percent = (
+            0
+            if users_unlimited
+            else min(int(round((users_used / max_users) * 100)), 100)
+        ) if max_users > 0 else 0
+
+        branches_full = (
+            False if branches_unlimited else (max_branches > 0 and branches_used >= max_branches)
+        )
+        users_full = (
+            False if users_unlimited else (max_users > 0 and users_used >= max_users)
+        )
+
+        return {
+            "plan_type": plan_type,
+            "plan_display": f"PLAN {plan_type.upper()}" if plan_type else "PLAN",
+            "status_label": status_label,
+            "status_tone": status_tone,
+            "is_trial": is_trial,
+            "trial_days_left": trial_days_left,
+            "trial_ends_on": trial_ends_on,
+            "max_branches": max_branches,
+            "max_users": max_users,
+            "branches_used": branches_used,
+            "users_used": users_used,
+            "branches_percent": branches_percent,
+            "users_percent": users_percent,
+            "branches_full": branches_full,
+            "users_full": users_full,
+            "branches_limit_label": "Ilimitado" if branches_unlimited else str(max_branches),
+            "users_limit_label": "Ilimitado" if users_unlimited else str(max_users),
+            "users_unlimited": users_unlimited,
+            "branches_unlimited": branches_unlimited,
+        }
+
+    @rx.event
+    def refresh_subscription_snapshot_cache(self):
+        company_id = self._company_id()
+        if not company_id:
+            self.plan_actual_cache = "unknown"
+            self.company_has_reservations_cache = False
+            self.subscription_snapshot_cache = self._default_subscription_snapshot()
+            return
+
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+            if not company:
+                self.plan_actual_cache = "unknown"
+                self.company_has_reservations_cache = False
+                self.subscription_snapshot_cache = self._default_subscription_snapshot()
+                return
+
+            branches_used = session.exec(
+                select(func.count(Branch.id)).where(Branch.company_id == company_id)
+            ).one()
+            users_used = session.exec(
+                select(func.count(UserModel.id))
+                .where(UserModel.company_id == company_id)
+                .where(UserModel.is_active == True)
+            ).one()
+
+        self.subscription_snapshot_cache = self._build_subscription_snapshot(
+            company,
+            branches_used=self._safe_int(branches_used, 0),
+            users_used=self._safe_int(users_used, 0),
+        )
+        self.plan_actual_cache = self.subscription_snapshot_cache.get("plan_type", "") or "unknown"
+        self.company_has_reservations_cache = bool(
+            getattr(company, "has_reservations_module", False)
+        )
+
+    @rx.event
+    def refresh_branch_access_cache(self):
         _ = self.branch_access_revision
         user_id = self.current_user.get("id")
         company_id = self.current_user.get("company_id")
         if not user_id or not company_id:
-            return []
+            self.available_branches_cache = []
+            self.active_branch_name_cache = ""
+            return
+
         set_tenant_context(company_id, None)
         with rx.session() as session:
             user = session.exec(
@@ -328,45 +514,68 @@ class AuthState(MixinState):
                 .where(UserModel.company_id == company_id)
             ).first()
             if not user:
-                return []
+                self.available_branches_cache = []
+                self.active_branch_name_cache = ""
+                return
+
             branch_ids = self._user_branch_ids(session, user_id)
             if not branch_ids and getattr(user, "branch_id", None):
                 branch_ids = [int(user.branch_id)]
             if not branch_ids:
-                return []
+                self.available_branches_cache = []
+                self.active_branch_name_cache = ""
+                return
+
             rows = session.exec(
                 select(Branch)
                 .where(Branch.id.in_(branch_ids))
                 .where(Branch.company_id == company_id)
                 .order_by(Branch.name)
             ).all()
-        return [
+
+        self.available_branches_cache = [
             {"id": str(branch.id), "name": branch.name}
             for branch in rows
         ]
 
+        active_id = self.active_branch_id
+        if not active_id and self.available_branches_cache:
+            self.selected_branch_id = self.available_branches_cache[0]["id"]
+            active_id = self.active_branch_id
+
+        selected = next(
+            (
+                branch
+                for branch in self.available_branches_cache
+                if int(branch["id"]) == int(active_id)
+            ),
+            None,
+        ) if active_id else None
+        self.active_branch_name_cache = selected["name"] if selected else ""
+
+    @rx.event
+    def refresh_auth_runtime_cache(self):
+        self.refresh_subscription_snapshot_cache()
+        self.refresh_branch_access_cache()
+
+    @rx.var
+    def available_branches(self) -> List[Dict[str, Any]]:
+        return self.available_branches_cache
+
     @rx.var
     def active_branch_name(self) -> str:
-        active_id = self.active_branch_id
-        if not active_id:
-            return ""
-        company_id = self.current_user.get("company_id")
-        if not company_id:
-            return ""
-        set_tenant_context(company_id, None)
-        with rx.session() as session:
-            branch = session.exec(
-                select(Branch)
-                .where(Branch.id == active_id)
-                .where(Branch.company_id == company_id)
-            ).first()
-            return branch.name if branch else ""
+        return self.active_branch_name_cache
     
     def invalidate_user_cache(self) -> None:
         """Invalida el cache de usuario (llamar tras cambios de permisos)."""
         self._cached_user = None
         self._cached_user_token = ""
         self._cached_user_time = 0.0
+        self.available_branches_cache = []
+        self.active_branch_name_cache = ""
+        self.plan_actual_cache = "unknown"
+        self.company_has_reservations_cache = False
+        self.subscription_snapshot_cache = self._default_subscription_snapshot()
 
     # =========================================================================
     # COMPUTED VARS DE PERMISOS - Para renderizado condicional en páginas
@@ -374,20 +583,7 @@ class AuthState(MixinState):
     
     @rx.var
     def plan_actual_str(self) -> str:
-        """Devuelve el nombre del plan normalizado para comparaciones seguras."""
-        company_id = self._company_id()
-        if not company_id:
-            return "unknown"
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-        if not company:
-            return "unknown"
-        plan = getattr(company, "plan_type", "")
-        if hasattr(plan, "value"):
-            plan = plan.value
-        return str(plan or "").strip().lower() or "unknown"
+        return (self.plan_actual_cache or "").strip().lower() or "unknown"
 
     @rx.var
     def can_view_ingresos(self) -> bool:
@@ -457,158 +653,15 @@ class AuthState(MixinState):
 
     @rx.var
     def company_has_reservations(self) -> bool:
-        company_id = self._company_id()
-        if not company_id:
-            return False
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-        return bool(getattr(company, "has_reservations_module", False))
+        return bool(self.company_has_reservations_cache)
 
     @rx.var
     def plan_name(self) -> str:
-        company_id = self._company_id()
-        if not company_id:
-            return ""
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-        plan_type = getattr(company, "plan_type", "") if company else ""
-        if hasattr(plan_type, "value"):
-            plan_type = plan_type.value
-        return str(plan_type or "")
+        return str(self.subscription_snapshot.get("plan_type", "") or "")
 
     @rx.var
     def subscription_snapshot(self) -> Dict[str, Any]:
-        """Snapshot con estado del plan y uso actual para UI."""
-        default = {
-            "plan_type": "",
-            "plan_display": "PLAN",
-            "status_label": "Activo",
-            "status_tone": "success",
-            "is_trial": False,
-            "trial_days_left": 0,
-            "trial_ends_on": "",
-            "max_branches": 0,
-            "max_users": 0,
-            "branches_used": 0,
-            "users_used": 0,
-            "branches_percent": 0,
-            "users_percent": 0,
-            "branches_full": False,
-            "users_full": False,
-            "branches_limit_label": "0",
-            "users_limit_label": "0",
-            "users_unlimited": False,
-            "branches_unlimited": False,
-        }
-        company_id = self._company_id()
-        if not company_id:
-            return default
-
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-            if not company:
-                return default
-
-            branches_used = session.exec(
-                select(func.count(Branch.id)).where(Branch.company_id == company_id)
-            ).one()
-            users_used = session.exec(
-                select(func.count(UserModel.id))
-                .where(UserModel.company_id == company_id)
-                .where(UserModel.is_active == True)
-            ).one()
-
-        def _safe_int(value: Any, fallback: int = 0) -> int:
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                return fallback
-
-        plan_type = getattr(company, "plan_type", "") or ""
-        if hasattr(plan_type, "value"):
-            plan_type = plan_type.value
-        plan_type = str(plan_type or "").strip().lower()
-        is_trial = plan_type == "trial"
-
-        trial_ends_at = getattr(company, "trial_ends_at", None)
-        now = datetime.now()
-        is_expired = bool(is_trial and trial_ends_at and trial_ends_at < now)
-        status_label = "Vencido" if is_expired else "Activo"
-        status_tone = "danger" if is_expired else ("warning" if is_trial else "success")
-        if not is_trial:
-            sub_status = getattr(company, "subscription_status", "")
-            if hasattr(sub_status, "value"):
-                sub_status = sub_status.value
-            sub_status = str(sub_status or "").strip().lower()
-            if sub_status == SubscriptionStatus.WARNING.value:
-                status_label = "Por vencer"
-                status_tone = "warning"
-            elif sub_status == SubscriptionStatus.PAST_DUE.value:
-                status_label = "Pago vencido"
-                status_tone = "danger"
-            elif sub_status == SubscriptionStatus.SUSPENDED.value:
-                status_label = "Suspendido"
-                status_tone = "danger"
-        trial_days_left = 0
-        trial_ends_on = ""
-        if is_trial and trial_ends_at:
-            trial_days_left = max((trial_ends_at.date() - now.date()).days, 0)
-            trial_ends_on = trial_ends_at.strftime("%d/%m/%Y")
-
-        max_branches = _safe_int(getattr(company, "max_branches", 0), 0)
-        max_users = _safe_int(getattr(company, "max_users", 0), 0)
-
-        branches_used = _safe_int(branches_used, 0)
-        users_used = _safe_int(users_used, 0)
-
-        users_unlimited = max_users < 0 or max_users >= 999
-        branches_unlimited = max_branches < 0 or max_branches >= 999
-
-        branches_percent = (
-            0
-            if branches_unlimited
-            else min(int(round((branches_used / max_branches) * 100)), 100)
-        ) if max_branches > 0 else 0
-        users_percent = (
-            0
-            if users_unlimited
-            else min(int(round((users_used / max_users) * 100)), 100)
-        ) if max_users > 0 else 0
-
-        branches_full = (
-            False if branches_unlimited else (max_branches > 0 and branches_used >= max_branches)
-        )
-        users_full = (
-            False if users_unlimited else (max_users > 0 and users_used >= max_users)
-        )
-
-        return {
-            "plan_type": plan_type,
-            "plan_display": f"PLAN {plan_type.upper()}" if plan_type else "PLAN",
-            "status_label": status_label,
-            "status_tone": status_tone,
-            "is_trial": is_trial,
-            "trial_days_left": trial_days_left,
-            "trial_ends_on": trial_ends_on,
-            "max_branches": max_branches,
-            "max_users": max_users,
-            "branches_used": branches_used,
-            "users_used": users_used,
-            "branches_percent": branches_percent,
-            "users_percent": users_percent,
-            "branches_full": branches_full,
-            "users_full": users_full,
-            "branches_limit_label": "Ilimitado" if branches_unlimited else str(max_branches),
-            "users_limit_label": "Ilimitado" if users_unlimited else str(max_users),
-            "users_unlimited": users_unlimited,
-            "branches_unlimited": branches_unlimited,
-        }
+        return self.subscription_snapshot_cache or self._default_subscription_snapshot()
 
     @rx.var
     def payment_alert_info(self) -> Dict[str, Any]:
@@ -1021,6 +1074,11 @@ class AuthState(MixinState):
 
     @rx.event
     def ensure_roles_and_permissions(self):
+        now = time.time()
+        # Evita recalcular catálogo de roles/permisos en cada navegación.
+        if (now - self._roles_bootstrap_ts) < 300:
+            return
+        self._roles_bootstrap_ts = now
         # En arranque puede no existir tenant seleccionado.
         company_id = self._company_id()
         with tenant_bypass():
@@ -1168,6 +1226,10 @@ class AuthState(MixinState):
     def check_subscription_status(self):
         if not self.is_authenticated:
             return
+        now_epoch = time.time()
+        if (now_epoch - self._subscription_check_ts) < 20:
+            return
+        self._subscription_check_ts = now_epoch
         company_id = self.current_user.get("company_id")
         if not company_id:
             return
@@ -1231,6 +1293,7 @@ class AuthState(MixinState):
                 and current_path != "/cuenta-suspendida"
             ):
                 return rx.redirect("/cuenta-suspendida")
+        self.refresh_subscription_snapshot_cache()
 
     @rx.event
     def ensure_subscription_active(self):
@@ -1239,25 +1302,12 @@ class AuthState(MixinState):
         current_path = self.router.url.path
         if current_path in {"/cuenta-suspendida", "/periodo-prueba-finalizado"}:
             return
-        company_id = self.current_user.get("company_id")
-        if not company_id:
+        snapshot = self.subscription_snapshot
+        if bool(snapshot.get("is_trial")):
             return
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-            if not company:
-                return
-            plan_type = getattr(company, "plan_type", "")
-            if hasattr(plan_type, "value"):
-                plan_type = plan_type.value
-            if str(plan_type or "").strip().lower() == "trial":
-                return
-            status = getattr(company, "subscription_status", "")
-            if hasattr(status, "value"):
-                status = status.value
-            if str(status or "").strip().lower() == SubscriptionStatus.SUSPENDED.value:
-                return rx.redirect("/cuenta-suspendida")
+        status_label = str(snapshot.get("status_label", "") or "").strip().lower()
+        if status_label == "suspendido":
+            return rx.redirect("/cuenta-suspendida")
 
     @rx.event
     def ensure_trial_active(self):
@@ -1268,22 +1318,12 @@ class AuthState(MixinState):
         current_path = self.router.url.path
         if current_path == "/periodo-prueba-finalizado":
             return
-        company_id = self.current_user.get("company_id")
-        if not company_id:
+        snapshot = self.subscription_snapshot
+        if not bool(snapshot.get("is_trial")):
             return
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-            if not company:
-                return
-            plan_type = getattr(company, "plan_type", "")
-            if hasattr(plan_type, "value"):
-                plan_type = plan_type.value
-            if str(plan_type or "").strip().lower() != "trial":
-                return
-            if company.trial_ends_at and company.trial_ends_at < datetime.now():
-                return rx.redirect("/periodo-prueba-finalizado")
+        status_label = str(snapshot.get("status_label", "") or "").strip().lower()
+        if status_label == "vencido":
+            return rx.redirect("/periodo-prueba-finalizado")
 
     @rx.event
     def ensure_password_change(self):
@@ -1323,6 +1363,9 @@ class AuthState(MixinState):
             if not allowed:
                 return rx.toast("No tiene acceso a esta sucursal.", duration=3000)
         self.selected_branch_id = str(branch_id_int)
+        self.refresh_auth_runtime_cache()
+        if hasattr(self, "refresh_cashbox_status"):
+            self.refresh_cashbox_status()
         # Forzar refresco de datos dependientes de sucursal
         if hasattr(self, "_cashbox_update_trigger"):
             self._cashbox_update_trigger += 1
@@ -1489,6 +1532,9 @@ class AuthState(MixinState):
                         company_id=getattr(admin_user, "company_id", None),
                     )
                     self.selected_branch_id = str(branch.id)
+                    self.refresh_auth_runtime_cache()
+                    if hasattr(self, "refresh_cashbox_status"):
+                        self.refresh_cashbox_status()
                     self.error_message = ""
                     self.password_change_error = ""
                     self.needs_initial_admin = False
@@ -1581,6 +1627,9 @@ class AuthState(MixinState):
                 self.selected_branch_id = (
                     str(selected_branch) if selected_branch else ""
                 )
+                self.refresh_auth_runtime_cache()
+                if hasattr(self, "refresh_cashbox_status"):
+                    self.refresh_cashbox_status()
                 if hasattr(self, "load_settings"):
                     self.load_settings()
                 if hasattr(self, "load_config_data"):
@@ -1660,6 +1709,8 @@ class AuthState(MixinState):
         self.token = ""
         self.password_change_error = ""
         self.invalidate_user_cache()
+        if hasattr(self, "cashbox_is_open_cached"):
+            self.cashbox_is_open_cached = False
         return rx.redirect("/")
 
     @rx.event

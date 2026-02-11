@@ -18,38 +18,16 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def _index_exists(conn, table: str, index_name: str) -> bool:
-    insp = sa.inspect(conn)
-    for idx in insp.get_indexes(table):
-        if idx.get("name") == index_name:
-            return True
-    return False
-
-
-def _column_exists(conn, table: str, column: str) -> bool:
-    insp = sa.inspect(conn)
-    return column in [c["name"] for c in insp.get_columns(table)]
-
-
 def upgrade() -> None:
     """Actualizar esquema."""
-    conn = op.get_bind()
-    # cashboxlog.payment_method_id no se añadió en e6a2d1cf185c (estaba comentado); añadir aquí si falta
-    if not _column_exists(conn, "cashboxlog", "payment_method_id"):
-        op.add_column("cashboxlog", sa.Column("payment_method_id", sa.Integer(), nullable=True))
-    # Índices idempotentes (por si la migración falló a medias y se reintenta)
-    if not _index_exists(conn, "cashboxlog", "ix_cashboxlog_action"):
-        op.create_index(op.f("ix_cashboxlog_action"), "cashboxlog", ["action"], unique=False)
-    if not _index_exists(conn, "cashboxlog", "ix_cashboxlog_payment_method_id"):
-        op.create_index(op.f("ix_cashboxlog_payment_method_id"), "cashboxlog", ["payment_method_id"], unique=False)
-    if not _index_exists(conn, "cashboxlog", "ix_cashboxlog_timestamp"):
-        op.create_index(op.f("ix_cashboxlog_timestamp"), "cashboxlog", ["timestamp"], unique=False)
-    if not _index_exists(conn, "product", "ix_product_description"):
-        op.create_index(op.f("ix_product_description"), "product", ["description"], unique=False)
-    if not _index_exists(conn, "sale", "ix_sale_client_id"):
-        op.create_index(op.f("ix_sale_client_id"), "sale", ["client_id"], unique=False)
-    if not _index_exists(conn, "sale", "ix_sale_timestamp"):
-        op.create_index(op.f("ix_sale_timestamp"), "sale", ["timestamp"], unique=False)
+    # ### comandos autogenerados por Alembic - ajustar si es necesario! ###
+    op.create_index(op.f('ix_cashboxlog_action'), 'cashboxlog', ['action'], unique=False)
+    op.create_index(op.f('ix_cashboxlog_payment_method_id'), 'cashboxlog', ['payment_method_id'], unique=False)
+    op.create_index(op.f('ix_cashboxlog_timestamp'), 'cashboxlog', ['timestamp'], unique=False)
+    op.create_index(op.f('ix_product_description'), 'product', ['description'], unique=False)
+    op.create_index(op.f('ix_sale_client_id'), 'sale', ['client_id'], unique=False)
+    op.create_index(op.f('ix_sale_timestamp'), 'sale', ['timestamp'], unique=False)
+    # ### fin de comandos de Alembic ###
 
 
 def downgrade() -> None:

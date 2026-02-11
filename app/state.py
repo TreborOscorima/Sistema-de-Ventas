@@ -1,4 +1,5 @@
 import reflex as rx
+import time
 from app.states.root_state import RootState
 from app.states.types import (
     Product,
@@ -40,6 +41,8 @@ class State(RootState):
     notification_message: str = ""
     notification_type: str = "info"
     is_notification_open: bool = False
+    _last_runtime_refresh_ts: float = rx.field(default=0.0, is_var=False)
+    _runtime_refresh_ttl: float = 8.0
 
     @rx.event
     def notify(self, message: str, type: str = "info"):
@@ -66,3 +69,44 @@ class State(RootState):
             return
         async with AsyncSessionLocal() as session:
             await init_payment_methods(session, int(company_id), int(branch_id))
+
+    @rx.event
+    async def refresh_runtime_context(self, force: bool = False):
+        """Carga caches y datos base con baja frecuencia para navegación fluida."""
+        if not self.is_authenticated:
+            return
+
+        now = time.time()
+        if not force and (now - self._last_runtime_refresh_ts) < self._runtime_refresh_ttl:
+            return
+        self._last_runtime_refresh_ts = now
+
+        if hasattr(self, "refresh_auth_runtime_cache"):
+            self.refresh_auth_runtime_cache()
+
+        if hasattr(self, "refresh_cashbox_status"):
+            self.refresh_cashbox_status()
+
+        if hasattr(self, "check_overdue_alerts"):
+            self.check_overdue_alerts()
+
+        seeded_defaults = False
+        if hasattr(self, "units") and not self.units and hasattr(self, "ensure_default_data"):
+            self.ensure_default_data()
+            seeded_defaults = True
+
+        if hasattr(self, "categories") and not self.categories and hasattr(self, "load_categories"):
+            self.load_categories()
+
+        if hasattr(self, "field_prices") and not self.field_prices and hasattr(self, "load_field_prices"):
+            self.load_field_prices()
+
+        if (
+            not seeded_defaults
+            and hasattr(self, "available_currencies")
+            and hasattr(self, "payment_methods")
+            and (not self.available_currencies or not self.payment_methods)
+        ):
+            await self.ensure_payment_methods()
+            if hasattr(self, "load_config_data"):
+                self.load_config_data()
