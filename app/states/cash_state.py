@@ -120,6 +120,7 @@ class CashState(MixinState):
     cashbox_log_selected: CashboxLogEntry | None = None
     expanded_cashbox_sale_id: str = ""
     _cashbox_update_trigger: int = 0
+    cashbox_is_open_cached: bool = False
 
     @rx.event
     def toggle_cashbox_sale_detail(self, sale_id: str):
@@ -787,6 +788,25 @@ class CashState(MixinState):
             }
 
     @rx.event
+    def refresh_cashbox_status(self):
+        user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not user_id or not company_id or not branch_id:
+            self.cashbox_is_open_cached = False
+            return
+        with rx.session() as session:
+            opened = session.exec(
+                select(CashboxSessionModel.id)
+                .where(CashboxSessionModel.user_id == user_id)
+                .where(CashboxSessionModel.company_id == company_id)
+                .where(CashboxSessionModel.branch_id == branch_id)
+                .where(CashboxSessionModel.is_open == True)
+                .limit(1)
+            ).first()
+        self.cashbox_is_open_cached = opened is not None
+
+    @rx.event
     def set_cashbox_open_amount_input(self, value: float | str):
         self.cashbox_open_amount_input = str(value or "").strip()
 
@@ -854,6 +874,7 @@ class CashState(MixinState):
             
         self.cashbox_open_amount_input = ""
         self._cashbox_update_trigger += 1
+        self.cashbox_is_open_cached = True
         return rx.toast("Caja abierta. Jornada iniciada.", duration=3000)
 
     def _close_cashbox_session(self):
@@ -880,6 +901,7 @@ class CashState(MixinState):
                 cashbox_session.closing_time = datetime.datetime.now()
                 session.add(cashbox_session)
                 session.commit()
+        self.cashbox_is_open_cached = False
         
         self._cashbox_update_trigger += 1
 

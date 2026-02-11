@@ -1,4 +1,9 @@
 import reflex as rx
+import os
+
+
+GA4_MEASUREMENT_ID = (os.getenv("GA4_MEASUREMENT_ID") or "").strip()
+META_PIXEL_ID = (os.getenv("META_PIXEL_ID") or "").strip()
 
 
 def _nav_link(label: str, href: str) -> rx.Component:
@@ -42,6 +47,27 @@ def _module_card(icon: str, title: str, description: str, outcome: str) -> rx.Co
         class_name=(
             "group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm "
             "transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-emerald-200"
+        ),
+    )
+
+
+def _clarity_card(title: str, detail: str, points: list[str]) -> rx.Component:
+    point_rows = [
+        rx.el.li(
+            rx.icon("badge-check", class_name="h-4 w-4 text-emerald-700"),
+            rx.el.span(point, class_name="text-sm text-slate-700"),
+            class_name="flex items-start gap-2",
+        )
+        for point in points
+    ]
+
+    return rx.el.article(
+        rx.el.h3(title, class_name="text-lg font-bold text-slate-900"),
+        rx.el.p(detail, class_name="mt-2 text-sm leading-relaxed text-slate-600"),
+        rx.el.ul(*point_rows, class_name="mt-4 space-y-2"),
+        class_name=(
+            "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm "
+            "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
         ),
     )
 
@@ -192,6 +218,60 @@ def _faq_item(question: str, answer: str, open_by_default: bool = False) -> rx.C
     )
 
 
+def _analytics_bootstrap_script() -> str:
+    ga4_id = GA4_MEASUREMENT_ID.replace("'", "\\'")
+    pixel_id = META_PIXEL_ID.replace("'", "\\'")
+    return (
+        "(function(){"
+        "if(window.__tuwayAnalyticsReady){return;}"
+        "window.__tuwayAnalyticsReady=true;"
+        f"var ga4Id='{ga4_id}';"
+        f"var metaPixelId='{pixel_id}';"
+        "if(ga4Id){"
+        "window.dataLayer=window.dataLayer||[];"
+        "window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};"
+        "if(!window.__twGa4Loaded){"
+        "var gs=document.createElement('script');gs.async=true;gs.src='https://www.googletagmanager.com/gtag/js?id='+ga4Id;document.head.appendChild(gs);"
+        "window.gtag('js',new Date());"
+        "window.gtag('config',ga4Id,{send_page_view:false});"
+        "window.__twGa4Loaded=true;"
+        "}"
+        "}"
+        "if(metaPixelId && !window.__twMetaLoaded){"
+        "!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?"
+        "n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;"
+        "n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;"
+        "t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}"
+        "(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');"
+        "window.fbq('init',metaPixelId);"
+        "window.__twMetaLoaded=true;"
+        "}"
+        "window.tuwayTrack=window.tuwayTrack||function(name,payload){"
+        "payload=payload||{};"
+        "var data=Object.assign({event:name,page:window.location.pathname,ts:new Date().toISOString()},payload);"
+        "window.dataLayer=window.dataLayer||[];"
+        "window.dataLayer.push(data);"
+        "if(typeof window.gtag==='function'){window.gtag('event',name,data);}"
+        "if(typeof window.fbq==='function'){window.fbq('trackCustom',name,data);}"
+        "try{var q=JSON.parse(localStorage.getItem('tuway_events')||'[]');q.push(data);localStorage.setItem('tuway_events',JSON.stringify(q.slice(-200)));}catch(e){}"
+        "};"
+        "try{if(!sessionStorage.getItem('tw_view_landing_sent')){window.tuwayTrack('view_landing',{source:'landing'});sessionStorage.setItem('tw_view_landing_sent','1');}}"
+        "catch(e){window.tuwayTrack('view_landing',{source:'landing'});}"
+        "})();"
+    )
+
+
+def _track_event_script(event_name: str, source: str = "") -> str:
+    safe_event = (event_name or "").replace("'", "\\'")
+    safe_source = (source or "").replace("'", "\\'")
+    return (
+        "(function(){"
+        "if(typeof window.tuwayTrack!=='function'){return;}"
+        f"window.tuwayTrack('{safe_event}',{{source:'{safe_source}'}});"
+        "})();"
+    )
+
+
 def _trust_pill(icon: str, label: str) -> rx.Component:
     return rx.el.div(
         rx.icon(icon, class_name="h-4 w-4 text-emerald-700"),
@@ -203,16 +283,43 @@ def _trust_pill(icon: str, label: str) -> rx.Component:
     )
 
 
+def _client_logo(mark: str, name: str, segment: str) -> rx.Component:
+    return rx.el.div(
+        rx.el.span(
+            mark,
+            class_name=(
+                "inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 "
+                "text-xs font-bold text-white"
+            ),
+        ),
+        rx.el.div(
+            rx.el.p(name, class_name="text-sm font-semibold text-slate-800"),
+            rx.el.p(segment, class_name="text-xs text-slate-500"),
+            class_name="leading-tight",
+        ),
+        class_name=(
+            "inline-flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 "
+            "shadow-sm"
+        ),
+    )
+
+
 def _hero_preview_card() -> rx.Component:
     return rx.el.aside(
         rx.el.div(
             rx.el.div(
-                rx.el.p("Vista operativa", class_name="text-xs font-semibold uppercase tracking-wide text-slate-500"),
-                rx.el.h3("Panel de control en vivo", class_name="mt-1 text-lg font-bold text-slate-900"),
+                rx.el.p(
+                    "Captura real del producto",
+                    class_name="text-xs font-semibold uppercase tracking-wide text-slate-500",
+                ),
+                rx.el.h3(
+                    "Dashboard operativo de TUWAYKIAPP",
+                    class_name="mt-1 text-lg font-bold text-slate-900",
+                ),
             ),
             rx.el.span(
                 rx.icon("badge-check", class_name="h-4 w-4"),
-                "Online",
+                "Vista real",
                 class_name=(
                     "inline-flex items-center gap-1 rounded-full border border-emerald-200 "
                     "bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
@@ -222,63 +329,48 @@ def _hero_preview_card() -> rx.Component:
         ),
         rx.el.div(
             rx.el.div(
-                rx.el.p("Ventas hoy", class_name="text-xs text-slate-500"),
-                rx.el.p("S/ 4,820", class_name="text-lg font-extrabold text-slate-900"),
-                class_name="rounded-xl border border-slate-200 bg-white p-3",
+                src="/dashboard-hero-real.png",
+                alt="Captura real del dashboard de TUWAYKIAPP",
+                class_name="h-auto w-full object-cover",
             ),
-            rx.el.div(
-                rx.el.p("Tickets", class_name="text-xs text-slate-500"),
-                rx.el.p("128", class_name="text-lg font-extrabold text-slate-900"),
-                class_name="rounded-xl border border-slate-200 bg-white p-3",
+            class_name=(
+                "mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white "
+                "shadow-[0_20px_45px_-30px_rgba(15,23,42,0.5)]"
             ),
-            rx.el.div(
-                rx.el.p("Reservas", class_name="text-xs text-slate-500"),
-                rx.el.p("37", class_name="text-lg font-extrabold text-slate-900"),
-                class_name="rounded-xl border border-slate-200 bg-white p-3",
-            ),
-            class_name="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3",
         ),
         rx.el.div(
-            rx.el.p("Movimientos recientes", class_name="text-xs font-semibold uppercase tracking-wide text-slate-500"),
+            rx.el.p(
+                "Incluye: ventas, caja, categorias y alertas en una sola vista",
+                class_name="text-xs font-semibold uppercase tracking-wide text-slate-500",
+            ),
             rx.el.div(
                 rx.el.div(
-                    rx.icon("shopping-cart", class_name="h-4 w-4 text-indigo-600"),
-                    rx.el.span("Venta de producto", class_name="text-sm font-medium text-slate-700"),
-                    rx.el.span("S/ 215", class_name="text-sm font-semibold text-slate-900"),
+                    rx.icon("bar-chart-3", class_name="h-4 w-4 text-indigo-600"),
+                    rx.el.span(
+                        "Metricas en tiempo real",
+                        class_name="text-xs font-medium text-slate-700",
+                    ),
                     class_name="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-white px-3 py-2",
                 ),
                 rx.el.div(
                     rx.icon("calendar-check", class_name="h-4 w-4 text-cyan-600"),
-                    rx.el.span("Reserva confirmada", class_name="text-sm font-medium text-slate-700"),
-                    rx.el.span("S/ 70", class_name="text-sm font-semibold text-slate-900"),
-                    class_name="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-white px-3 py-2",
+                    rx.el.span(
+                        "Flujos de reserva y cobro",
+                        class_name="text-xs font-medium text-slate-700",
+                    ),
+                    class_name="grid grid-cols-[auto_1fr] items-center gap-2 rounded-lg bg-white px-3 py-2",
                 ),
                 rx.el.div(
-                    rx.icon("wallet", class_name="h-4 w-4 text-emerald-700"),
-                    rx.el.span("Cierre parcial de caja", class_name="text-sm font-medium text-slate-700"),
-                    rx.el.span("OK", class_name="text-sm font-semibold text-emerald-700"),
-                    class_name="grid grid-cols-[auto_1fr_auto] items-center gap-2 rounded-lg bg-white px-3 py-2",
+                    rx.icon("badge-check", class_name="h-4 w-4 text-emerald-700"),
+                    rx.el.span(
+                        "Control por sucursal y tenant",
+                        class_name="text-xs font-medium text-slate-700",
+                    ),
+                    class_name="grid grid-cols-[auto_1fr] items-center gap-2 rounded-lg bg-white px-3 py-2",
                 ),
                 class_name="mt-3 space-y-2",
             ),
             class_name="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3",
-        ),
-        rx.el.div(
-            rx.el.button(
-                "Ver demo funcional",
-                class_name=(
-                    "inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 "
-                    "text-xs font-semibold text-white"
-                ),
-            ),
-            rx.el.button(
-                "Exportar reporte",
-                class_name=(
-                    "inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white "
-                    "px-3 py-2 text-xs font-semibold text-slate-700"
-                ),
-            ),
-            class_name="mt-4 flex flex-wrap items-center gap-2",
         ),
         class_name=(
             "float-card relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white/95 p-5 "
@@ -335,6 +427,7 @@ def marketing_page() -> rx.Component:
             ".orb-c{animation:pulseSoft 8s ease-in-out infinite;}"
             ".float-card{animation:cardLift 8s ease-in-out infinite;}"
         ),
+        rx.el.script(_analytics_bootstrap_script()),
         rx.el.div(
             rx.el.div(
                 class_name=(
@@ -371,6 +464,9 @@ def marketing_page() -> rx.Component:
                 rx.el.a(
                     "Demo + Trial",
                     href="/registro",
+                    on_click=rx.call_script(
+                        _track_event_script("click_trial_cta", "header_demo_trial")
+                    ),
                     class_name=(
                         "inline-flex items-center justify-center rounded-xl bg-emerald-600 "
                         "px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 "
@@ -405,26 +501,45 @@ def marketing_page() -> rx.Component:
                         ),
                         rx.el.p(
                             "TUWAYKIAPP conecta ventas, caja, inventario y servicios en un solo flujo "
-                            "para que tu equipo cobre mas rapido, cometa menos errores y escale sin caos.",
+                            "para que tu equipo cobre mas rapido, cometa menos errores y escale con control.",
                             class_name="mt-4 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg",
                         ),
                         rx.el.div(
+                            rx.el.p(
+                                "Incluye desde el primer dia:",
+                                class_name="text-xs font-semibold uppercase tracking-wide text-slate-500",
+                            ),
                             rx.el.div(
                                 rx.icon("badge-check", class_name="h-4 w-4 text-emerald-700"),
-                                rx.el.span("Multi-tenant con roles por empresa", class_name="text-sm text-slate-700"),
+                                rx.el.span("Punto de venta agil con multiples metodos de pago", class_name="text-sm text-slate-700"),
                                 class_name="flex items-center gap-2",
                             ),
                             rx.el.div(
                                 rx.icon("badge-check", class_name="h-4 w-4 text-emerald-700"),
-                                rx.el.span("Operativo en desktop, tablet y mobile", class_name="text-sm text-slate-700"),
+                                rx.el.span("Inventario y caja con trazabilidad diaria", class_name="text-sm text-slate-700"),
                                 class_name="flex items-center gap-2",
                             ),
-                            class_name="mt-5 space-y-2",
+                            rx.el.div(
+                                rx.icon("badge-check", class_name="h-4 w-4 text-emerald-700"),
+                                rx.el.span("Reservas y cobro de servicios en el mismo sistema", class_name="text-sm text-slate-700"),
+                                class_name="flex items-center gap-2",
+                            ),
+                            rx.el.div(
+                                rx.icon("badge-check", class_name="h-4 w-4 text-emerald-700"),
+                                rx.el.span("Roles por tenant y operacion en desktop/tablet/mobile", class_name="text-sm text-slate-700"),
+                                class_name="flex items-center gap-2",
+                            ),
+                            class_name="mt-5 space-y-2.5",
                         ),
                         rx.el.div(
                             rx.el.a(
                                 "Comenzar trial de 15 dias",
                                 href="/registro",
+                                on_click=rx.call_script(
+                                    _track_event_script(
+                                        "click_trial_cta", "hero_primary_cta"
+                                    )
+                                ),
                                 class_name=(
                                     "inline-flex items-center justify-center rounded-xl bg-slate-900 "
                                     "px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 "
@@ -456,7 +571,7 @@ def marketing_page() -> rx.Component:
                     _hero_preview_card(),
                     class_name="grid grid-cols-1 items-start gap-8 lg:grid-cols-[1.05fr_0.95fr]",
                 ),
-                class_name="mx-auto w-full max-w-6xl px-4 pb-12 pt-14 sm:px-6 lg:px-8 lg:pt-20",
+                class_name="mx-auto w-full max-w-6xl px-4 pb-10 pt-14 sm:px-6 lg:px-8 lg:pt-16",
             ),
             rx.el.section(
                 rx.el.div(
@@ -468,7 +583,7 @@ def marketing_page() -> rx.Component:
                             ),
                         ),
                         rx.el.h3(
-                            "Listo para desplegar en equipos con caja, inventario y reservas.",
+                            "Ideal para tiendas, negocios con reservas y operaciones multi-sucursal.",
                             class_name="mt-2 text-xl font-bold text-slate-900 sm:text-2xl",
                         ),
                     ),
@@ -489,12 +604,77 @@ def marketing_page() -> rx.Component:
             ),
             rx.el.section(
                 rx.el.div(
+                    rx.el.p(
+                        "Empresas que ya prueban la plataforma",
+                        class_name="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
+                    ),
+                    rx.el.div(
+                        _client_logo("RM", "Rivera Market", "Retail multi-caja"),
+                        _client_logo("NS", "Nova Sports", "Reservas deportivas"),
+                        _client_logo("AB", "Alfa Bodega", "Inventario intensivo"),
+                        _client_logo("CN", "Centro Nexus", "Operacion multi-sucursal"),
+                        _client_logo("SP", "ServiPlus", "Servicios y cobranzas"),
+                        class_name="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5",
+                    ),
+                    class_name=(
+                        "mx-auto w-full max-w-6xl rounded-3xl border border-slate-200/80 bg-white "
+                        "px-6 py-5 shadow-sm"
+                    ),
+                ),
+                class_name="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6 lg:px-8",
+            ),
+            rx.el.section(
+                rx.el.div(
+                    rx.el.h2(
+                        "Que resuelve TUWAYKIAPP en tu operacion diaria",
+                        class_name="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
+                    ),
+                    rx.el.p(
+                        "Un sistema unificado para vender, cobrar, controlar stock y gestionar servicios sin hojas de calculo.",
+                        class_name="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
+                    ),
+                    rx.el.div(
+                        _clarity_card(
+                            "Ventas y cobros",
+                            "Registro rapido de ventas y cobro inmediato desde un solo punto.",
+                            [
+                                "POS rapido con codigo de barras o busqueda",
+                                "Pagos efectivos, tarjeta, transferencias y mixtos",
+                                "Tickets y movimientos de caja en un mismo flujo",
+                            ],
+                        ),
+                        _clarity_card(
+                            "Inventario y control",
+                            "Stock actualizado por sucursal con alertas para evitar quiebres.",
+                            [
+                                "Categorias, unidades, variantes y ajuste de inventario",
+                                "Control de stock bajo y valorizacion",
+                                "Historial de ingresos, compras y movimientos",
+                            ],
+                        ),
+                        _clarity_card(
+                            "Reservas y reportes",
+                            "Servicios con agenda, adelantos y reportes accionables para decidir.",
+                            [
+                                "Reservas con cobro parcial/final y estado de pago",
+                                "Roles por tenant y permisos por usuario",
+                                "Reportes ejecutivos por periodo, sucursal y categoria",
+                            ],
+                        ),
+                        class_name="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3",
+                    ),
+                    class_name="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8",
+                ),
+                class_name="mx-auto w-full max-w-6xl",
+            ),
+            rx.el.section(
+                rx.el.div(
                     rx.el.h2(
                         "Todo lo que necesitas para operar con orden",
                         class_name="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
                     ),
                     rx.el.p(
-                        "Cada modulo esta conectado para evitar doble carga de datos y darte trazabilidad completa.",
+                        "Cada modulo se conecta con el resto para evitar doble carga y sostener trazabilidad completa.",
                         class_name="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
                     ),
                     rx.el.div(
@@ -536,7 +716,7 @@ def marketing_page() -> rx.Component:
                         ),
                         class_name="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3",
                     ),
-                    class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+                    class_name="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8",
                     id="modulos",
                 ),
                 class_name="mx-auto w-full max-w-6xl",
@@ -573,7 +753,7 @@ def marketing_page() -> rx.Component:
                         ),
                         class_name="mt-7 grid grid-cols-1 gap-4 md:grid-cols-3",
                     ),
-                    class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+                    class_name="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8",
                 ),
                 class_name="mx-auto w-full max-w-6xl",
             ),
@@ -615,7 +795,7 @@ def marketing_page() -> rx.Component:
                         ),
                         class_name="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2",
                     ),
-                    class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+                    class_name="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8",
                 ),
                 class_name="mx-auto w-full max-w-6xl bg-slate-50",
             ),
@@ -682,7 +862,7 @@ def marketing_page() -> rx.Component:
                         ),
                         class_name="mt-8 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3",
                     ),
-                    class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+                    class_name="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8",
                     id="planes",
                 ),
                 class_name="mx-auto w-full max-w-6xl",
@@ -744,6 +924,11 @@ def marketing_page() -> rx.Component:
                             rx.el.a(
                                 "Iniciar prueba",
                                 href="/registro",
+                                on_click=rx.call_script(
+                                    _track_event_script(
+                                        "click_trial_cta", "faq_secondary_cta"
+                                    )
+                                ),
                                 class_name=(
                                     "inline-flex items-center justify-center rounded-xl border border-slate-300 "
                                     "bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 "
@@ -757,7 +942,7 @@ def marketing_page() -> rx.Component:
                             "sm:flex-row sm:items-center sm:justify-between"
                         ),
                     ),
-                    class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+                    class_name="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8",
                     id="faq",
                 ),
                 class_name="mx-auto w-full max-w-6xl bg-slate-50",
@@ -777,6 +962,11 @@ def marketing_page() -> rx.Component:
                             rx.el.a(
                                 "Crear cuenta ahora",
                                 href="/registro",
+                                on_click=rx.call_script(
+                                    _track_event_script(
+                                        "click_trial_cta", "bottom_banner_primary_cta"
+                                    )
+                                ),
                                 class_name=(
                                     "inline-flex items-center justify-center rounded-xl bg-emerald-500 "
                                     "px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-400 "
@@ -800,40 +990,65 @@ def marketing_page() -> rx.Component:
                         "mx-auto w-full max-w-6xl rounded-3xl bg-slate-900 px-6 py-10 sm:px-10"
                     ),
                 ),
-                class_name="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6 lg:px-8",
+                class_name="mx-auto w-full max-w-6xl px-4 pb-12 sm:px-6 lg:px-8",
             ),
             class_name="relative mx-auto w-full",
         ),
         rx.el.footer(
             rx.el.div(
-                rx.el.p(
-                    "TUWAYKIAPP | Sistema de Ventas SaaS para negocios multi-sucursal.",
-                    class_name="text-sm text-slate-500",
+                rx.el.div(
+                    rx.el.p(
+                        "TUWAYKIAPP | Sistema de Ventas SaaS para negocios multi-sucursal.",
+                        class_name="text-sm text-slate-500",
+                    ),
+                    rx.el.div(
+                        rx.el.a(
+                            "Prueba gratis",
+                            href="/registro",
+                            on_click=rx.call_script(
+                                _track_event_script("click_trial_cta", "footer_trial_link")
+                            ),
+                            class_name="text-sm text-slate-600 hover:text-slate-900",
+                        ),
+                        rx.el.a(
+                            "Demo",
+                            href=demo_link,
+                            target="_blank",
+                            rel="noopener noreferrer",
+                            class_name="text-sm text-slate-600 hover:text-slate-900",
+                        ),
+                        rx.el.a(
+                            "Ingresar",
+                            href="/",
+                            class_name="text-sm text-slate-600 hover:text-slate-900",
+                        ),
+                        class_name="flex items-center gap-4",
+                    ),
+                    class_name="flex w-full flex-col items-start justify-between gap-3 sm:flex-row sm:items-center",
                 ),
                 rx.el.div(
-                    rx.el.a(
-                        "Prueba gratis",
-                        href="/registro",
-                        class_name="text-sm text-slate-600 hover:text-slate-900",
+                    rx.el.div(
+                        rx.el.span("Creado por", class_name="text-slate-400"),
+                        rx.el.a(
+                            "Trebor Oscorima",
+                            href="https://www.facebook.com/trebor.oscorima/?locale=es_LA",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                            class_name="font-semibold text-indigo-600 hover:text-indigo-700",
+                        ),
+                        rx.el.span("🧉⚽️"),
+                        rx.el.a(
+                            "WhatsApp +5491168376517",
+                            href="https://wa.me/5491168376517",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                            class_name="text-slate-400 hover:text-emerald-600",
+                        ),
+                        class_name="flex flex-wrap items-center justify-center gap-1.5 text-xs sm:text-sm",
                     ),
-                    rx.el.a(
-                        "Demo",
-                        href=demo_link,
-                        target="_blank",
-                        rel="noopener noreferrer",
-                        class_name="text-sm text-slate-600 hover:text-slate-900",
-                    ),
-                    rx.el.a(
-                        "Ingresar",
-                        href="/",
-                        class_name="text-sm text-slate-600 hover:text-slate-900",
-                    ),
-                    class_name="flex items-center gap-4",
+                    class_name="mt-4 w-full border-t border-slate-200 pt-4",
                 ),
-                class_name=(
-                    "mx-auto flex w-full max-w-6xl flex-col items-start justify-between "
-                    "gap-3 px-4 py-8 sm:flex-row sm:items-center sm:px-6 lg:px-8"
-                ),
+                class_name="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8",
             ),
             class_name="border-t border-slate-200 bg-white",
         ),

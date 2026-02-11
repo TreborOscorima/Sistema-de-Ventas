@@ -52,6 +52,27 @@ Instrumentar eventos:
 - `start_checkout_plan`
 - `purchase_plan`
 
+### Configuracion productiva de tracking (GA4 + Meta Pixel)
+
+Variables de entorno para habilitar tags en la landing (`/sitio`):
+- `GA4_MEASUREMENT_ID=G-XXXXXXXXXX`
+- `META_PIXEL_ID=123456789012345`
+
+Comportamiento implementado:
+- Si `GA4_MEASUREMENT_ID` existe: carga `gtag.js` y envía eventos custom.
+- Si `META_PIXEL_ID` existe: carga `fbq` y envía `trackCustom`.
+- Siempre conserva fallback local (`dataLayer` + `localStorage`) para depuración.
+
+Eventos ya conectados en la landing:
+- `view_landing` (1 vez por sesión)
+- `click_trial_cta` (header, hero, FAQ, banner final y footer)
+
+Validacion rapida:
+1. Abrir `/sitio`.
+2. En DevTools verificar `window.dataLayer` con `view_landing`.
+3. Hacer click en CTA trial y confirmar `click_trial_cta`.
+4. En producción validar en GA4 DebugView y Meta Test Events.
+
 ## KPIs de lanzamiento
 - Conversion Landing -> Trial (%)
 - Trial -> Activado 48h (%)

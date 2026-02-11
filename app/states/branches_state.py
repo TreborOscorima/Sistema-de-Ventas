@@ -146,6 +146,8 @@ class BranchesState(MixinState):
         self.new_branch_name = ""
         self.new_branch_address = ""
         self.load_branches()
+        if hasattr(self, "refresh_auth_runtime_cache"):
+            self.refresh_auth_runtime_cache()
         return rx.toast("Sucursal creada.", duration=2500)
 
     @rx.event
@@ -219,6 +221,8 @@ class BranchesState(MixinState):
             session.commit()
         self.cancel_edit_branch()
         self.load_branches()
+        if hasattr(self, "refresh_auth_runtime_cache"):
+            self.refresh_auth_runtime_cache()
         return rx.toast("Sucursal actualizada.", duration=2500)
 
     @rx.event
@@ -275,6 +279,8 @@ class BranchesState(MixinState):
             session.delete(branch)
             session.commit()
         self.load_branches()
+        if hasattr(self, "refresh_auth_runtime_cache"):
+            self.refresh_auth_runtime_cache()
         return rx.toast("Sucursal eliminada.", duration=2500)
 
     @rx.event
@@ -403,5 +409,7 @@ class BranchesState(MixinState):
             if current_user_id in to_remove and getattr(self, "active_branch_id", None) == branch_id:
                 self.selected_branch_id = ""
         self.load_branches()
+        if hasattr(self, "refresh_auth_runtime_cache"):
+            self.refresh_auth_runtime_cache()
         self.close_branch_users()
         return rx.toast("Accesos actualizados.", duration=2500)

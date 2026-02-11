@@ -163,6 +163,21 @@ Sistema-de-Ventas/
 
 > **Nota:** Al primer inicio, el sistema poblará automáticamente las tablas de configuración (monedas, unidades, métodos de pago) gracias al método `ensure_default_data`.
 
+### Tracking de Marketing (Landing `/sitio`)
+
+Para habilitar analítica productiva en la landing:
+
+```env
+GA4_MEASUREMENT_ID=G-XXXXXXXXXX
+META_PIXEL_ID=123456789012345
+```
+
+Eventos instrumentados actualmente:
+- `view_landing` (una vez por sesión)
+- `click_trial_cta` (clics en CTAs clave de prueba)
+
+Si no configuras esos IDs, la landing sigue funcionando y guarda eventos localmente para depuración.
+
 ---
 
 ## 5. 📖 Manual de Módulos

@@ -10,24 +10,27 @@ from app.enums import PaymentMethodType
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
 
-try:  # Python 3.9+
-    from zoneinfo import available_timezones
-except Exception:  # pragma: no cover
-    available_timezones = None  # type: ignore
-
 WHATSAPP_SALES_URL = "https://wa.me/message/ULLEZ4HUFB5HA1"
 
-if available_timezones:
-    _ALL_TIMEZONES = sorted(available_timezones())
-else:
-    _ALL_TIMEZONES = sorted(
-        {
-            (get_country_config(code).get("timezone") or "UTC")
-            for code in SUPPORTED_COUNTRIES.keys()
-        }
-    )
-    if "UTC" not in _ALL_TIMEZONES:
-        _ALL_TIMEZONES.insert(0, "UTC")
+_REGIONAL_TIMEZONES = [
+    "America/Lima",
+    "America/Bogota",
+    "America/Guayaquil",
+    "America/Santiago",
+    "America/Argentina/Buenos_Aires",
+    "America/Mexico_City",
+    "America/New_York",
+    "UTC",
+]
+
+_COUNTRY_TIMEZONES = [
+    get_country_config(code).get("timezone", "UTC")
+    for code in SUPPORTED_COUNTRIES.keys()
+]
+_BASE_TIMEZONE_OPTIONS = []
+for _tz in [*_COUNTRY_TIMEZONES, *_REGIONAL_TIMEZONES]:
+    if _tz and _tz not in _BASE_TIMEZONE_OPTIONS:
+        _BASE_TIMEZONE_OPTIONS.append(_tz)
 
 class ConfigState(MixinState):
     # Configuracion de empresa
@@ -108,11 +111,12 @@ class ConfigState(MixinState):
 
     @rx.var
     def timezone_options(self) -> List[str]:
-        """Opciones IANA para selector de zona horaria."""
+        """Opciones de zona horaria optimizadas para operación LATAM."""
         current = (self.timezone or "").strip()
-        if current and current not in _ALL_TIMEZONES:
-            return [current, *_ALL_TIMEZONES]
-        return _ALL_TIMEZONES
+        options = list(_BASE_TIMEZONE_OPTIONS)
+        if current and current not in options:
+            options.insert(0, current)
+        return options
 
     def _require_manage_config(self):
         if hasattr(self, "current_user") and not self.current_user["privileges"].get(
