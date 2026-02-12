@@ -21,10 +21,19 @@ __pycache__
 # scripts/stress_*.py
 # scripts/cleanup_*.py
 
-# Backups y datos locales
+# Backups, logs y artefactos locales
 backups/
+logs/
+*.log
 *.sql
 *.sql.gz
+
+# Build/cache local de Reflex y frontend
+.web/
+.states/
+node_modules/
+dist/
+build/
 
 # Documentación y planes (no necesarios en runtime)
 docs/
