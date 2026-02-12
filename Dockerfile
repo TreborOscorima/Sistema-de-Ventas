@@ -23,8 +23,9 @@ COPY . .
 COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Puerto por defecto de Reflex (frontend + backend)
+# Puerto por defecto de Reflex (frontend 3000 + backend 8000)
 EXPOSE 3000 8000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
-CMD ["reflex", "run", "--loglevel", "warning", "--backend-host", "0.0.0.0"]
+# Modo producción: build optimizado del frontend, sin HMR ni dev server
+CMD ["reflex", "run", "--env", "prod", "--loglevel", "warning", "--backend-host", "0.0.0.0"]
