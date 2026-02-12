@@ -4,9 +4,7 @@ from typing import Any, Dict, List, Union
 
 import reflex as rx
 from decimal import Decimal
-from sqlmodel import select
 
-from app.models import FieldReservation
 from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
 from ..types import TransactionItem
@@ -71,37 +69,22 @@ class CartMixin:
 
     @rx.var
     def sale_total(self) -> float:
+        # Evita lecturas a BD durante render reactivo. Usa estado ya cargado.
         reservation_balance = 0.0
         if hasattr(self, "reservation_payment_id") and self.reservation_payment_id:
-            # Traer reserva desde BD
-            with rx.session() as session:
-                company_id = None
-                branch_id = None
-                if hasattr(self, "current_user"):
-                    company_id = self.current_user.get("company_id")
-                if hasattr(self, "_branch_id"):
-                    branch_id = self._branch_id()
-                if not company_id or not branch_id:
-                    reservation = None
-                else:
-                    # Correccion: manejar UUIDs string correctamente
-                    reservation = session.exec(
-                        select(FieldReservation)
-                        .where(FieldReservation.id == self.reservation_payment_id)
-                        .where(FieldReservation.company_id == int(company_id))
-                        .where(FieldReservation.branch_id == int(branch_id))
-                    ).first()
-
-                if reservation:
-                    reservation_balance = self._round_currency(
-                        reservation.total_amount - reservation.paid_amount
-                    )
-                    if reservation_balance < 0:
-                        reservation_balance = 0.0
-
-        # Alternativa: si no se encontro en BD (ej. UUID en memoria), usar el estado de Servicios
-        if reservation_balance == 0 and hasattr(self, "selected_reservation_balance"):
-            reservation_balance = self.selected_reservation_balance
+            if hasattr(self, "reservation_payment_amount"):
+                reservation_balance = self._safe_amount(
+                    getattr(self, "reservation_payment_amount", "0")
+                )
+            if (
+                reservation_balance <= 0
+                and hasattr(self, "selected_reservation_balance")
+            ):
+                reservation_balance = self._round_currency(
+                    float(getattr(self, "selected_reservation_balance", 0) or 0)
+                )
+            if reservation_balance < 0:
+                reservation_balance = 0.0
 
         products_total = sum((item["subtotal"] for item in self.new_sale_items))
         return self._round_currency(products_total + reservation_balance)

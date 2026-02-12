@@ -207,6 +207,11 @@ class AuthState(MixinState):
         "users_unlimited": False,
         "branches_unlimited": False,
     }
+    payment_alert_info_cache: Dict[str, Any] = {
+        "show": False,
+        "color": "yellow",
+        "message": "",
+    }
     new_user_data: NewUser = {
         "username": "",
         "email": "",
@@ -363,6 +368,9 @@ class AuthState(MixinState):
             "branches_unlimited": False,
         }
 
+    def _default_payment_alert_info(self) -> Dict[str, Any]:
+        return {"show": False, "color": "yellow", "message": ""}
+
     def _safe_int(self, value: Any, fallback: int = 0) -> int:
         try:
             return int(value)
@@ -497,6 +505,59 @@ class AuthState(MixinState):
         )
 
     @rx.event
+    def refresh_payment_alert_info_cache(self):
+        default = self._default_payment_alert_info()
+        company_id = self._company_id()
+        if not company_id:
+            self.payment_alert_info_cache = default
+            return
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+        if not company:
+            self.payment_alert_info_cache = default
+            return
+
+        plan_type = getattr(company, "plan_type", "")
+        if hasattr(plan_type, "value"):
+            plan_type = plan_type.value
+        plan_type = str(plan_type or "").strip().lower()
+        if plan_type == "trial":
+            self.payment_alert_info_cache = default
+            return
+
+        subscription_ends_at = getattr(company, "subscription_ends_at", None)
+        if not subscription_ends_at:
+            self.payment_alert_info_cache = default
+            return
+
+        now = datetime.now()
+        days_remaining = (subscription_ends_at.date() - now.date()).days
+        if days_remaining > 5:
+            self.payment_alert_info_cache = default
+            return
+        if days_remaining >= 0:
+            self.payment_alert_info_cache = {
+                "show": True,
+                "color": "yellow",
+                "message": f"Tu plan vence en {days_remaining} días.",
+            }
+            return
+        if days_remaining >= -5:
+            grace_left = max(0, 5 - abs(days_remaining))
+            self.payment_alert_info_cache = {
+                "show": True,
+                "color": "red",
+                "message": (
+                    "¡Pago vencido! "
+                    f"Tienes {grace_left} días de gracia antes del corte."
+                ),
+            }
+            return
+        self.payment_alert_info_cache = default
+
+    @rx.event
     def refresh_branch_access_cache(self):
         _ = self.branch_access_revision
         user_id = self.current_user.get("id")
@@ -556,6 +617,7 @@ class AuthState(MixinState):
     @rx.event
     def refresh_auth_runtime_cache(self):
         self.refresh_subscription_snapshot_cache()
+        self.refresh_payment_alert_info_cache()
         self.refresh_branch_access_cache()
 
     @rx.var
@@ -576,6 +638,7 @@ class AuthState(MixinState):
         self.plan_actual_cache = "unknown"
         self.company_has_reservations_cache = False
         self.subscription_snapshot_cache = self._default_subscription_snapshot()
+        self.payment_alert_info_cache = self._default_payment_alert_info()
 
     # =========================================================================
     # COMPUTED VARS DE PERMISOS - Para renderizado condicional en páginas
@@ -665,47 +728,8 @@ class AuthState(MixinState):
 
     @rx.var
     def payment_alert_info(self) -> Dict[str, Any]:
-        """Info de alerta para pagos próximos o vencidos."""
-        default = {"show": False, "color": "yellow", "message": ""}
-        company_id = self._company_id()
-        if not company_id:
-            return default
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-        if not company:
-            return default
-        plan_type = getattr(company, "plan_type", "")
-        if hasattr(plan_type, "value"):
-            plan_type = plan_type.value
-        plan_type = str(plan_type or "").strip().lower()
-        if plan_type == "trial":
-            return default
-        subscription_ends_at = getattr(company, "subscription_ends_at", None)
-        if not subscription_ends_at:
-            return default
-        now = datetime.now()
-        days_remaining = (subscription_ends_at.date() - now.date()).days
-        if days_remaining > 5:
-            return default
-        if days_remaining >= 0:
-            return {
-                "show": True,
-                "color": "yellow",
-                "message": f"Tu plan vence en {days_remaining} días.",
-            }
-        if days_remaining >= -5:
-            grace_left = max(0, 5 - abs(days_remaining))
-            return {
-                "show": True,
-                "color": "red",
-                "message": (
-                    "¡Pago vencido! "
-                    f"Tienes {grace_left} días de gracia antes del corte."
-                ),
-            }
-        return default
+        """Info de alerta para pagos próximos o vencidos (cacheada)."""
+        return self.payment_alert_info_cache or self._default_payment_alert_info()
     
     @rx.var
     def is_admin(self) -> bool:
@@ -1087,6 +1111,23 @@ class AuthState(MixinState):
                 session.commit()
                 user_count = session.exec(select(func.count(UserModel.id))).one()
                 self.needs_initial_admin = not user_count or user_count == 0
+
+    @rx.event
+    def run_common_guards(self):
+        """Agrupa validaciones globales para minimizar eventos on_load encadenados."""
+        self.ensure_roles_and_permissions()
+        redirect_action = self.check_subscription_status()
+        if redirect_action:
+            return redirect_action
+        redirect_action = self.ensure_subscription_active()
+        if redirect_action:
+            return redirect_action
+        redirect_action = self.ensure_trial_active()
+        if redirect_action:
+            return redirect_action
+        redirect_action = self.ensure_password_change()
+        if redirect_action:
+            return redirect_action
 
     @rx.event
     def ensure_view_ingresos(self):

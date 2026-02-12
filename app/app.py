@@ -316,11 +316,7 @@ app = rx.App(
 
 # Eventos de carga comunes para todas las páginas
 _common_on_load = [
-    State.ensure_roles_and_permissions,
-    State.check_subscription_status,
-    State.ensure_subscription_active,
-    State.ensure_trial_active,
-    State.ensure_password_change,
+    State.run_common_guards,
 ]
 
 # Página principal (redirige a ingreso)

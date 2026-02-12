@@ -38,7 +38,8 @@ PAGE_TO_ROUTE = {
 class UIState(MixinState):
     sidebar_open: bool = True
     current_page: str = ""  # Vacío inicialmente, se setea según privilegios
-    pending_page: str = rx.SessionStorage("")  # Selección inmediata por pestaña
+    # Compatibilidad con sesiones previas; ya no se usa para evitar eventos extra en navegación.
+    pending_page: str = rx.SessionStorage("")
     config_active_tab: str = "usuarios"
 
     @rx.event
@@ -74,18 +75,14 @@ class UIState(MixinState):
 
     @rx.var
     def active_page(self) -> str:
-        # Prioriza selección pendiente para que el sidebar reaccione inmediatamente.
-        pending = (self.pending_page or "").strip()
         route = ""
         try:
             route = self.router.url.path
         except Exception:
             route = ""
         route_page = ROUTE_TO_PAGE.get(route) if route else None
-        if pending and self._can_access_page(pending) and route_page != pending:
-            return pending
 
-        # Luego prioriza la ruta actual.
+        # Prioriza la ruta actual para evitar dependencia de eventos de click.
         if route_page and self._can_access_page(route_page):
             return route_page
 
@@ -109,7 +106,6 @@ class UIState(MixinState):
         
         previous_page = self.current_page
         self.current_page = page
-        self.pending_page = page
         
         # Logica entre modulos (asume metodos/attrs en el State principal)
         if page == "Punto de Venta" and previous_page != "Punto de Venta":
@@ -130,9 +126,8 @@ class UIState(MixinState):
 
     @rx.event
     def set_pending_page(self, page: str):
-        if not self._can_access_page(page):
-            return
-        self.pending_page = page
+        # Conservado por compatibilidad. No-op para reducir eventos durante navegación.
+        return
 
     @rx.event
     def set_config_active_tab(self, tab: str):

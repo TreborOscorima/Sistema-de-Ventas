@@ -20,3 +20,9 @@ Este directorio concentra la documentación operativa y técnica del proyecto.
 2. `docs/SYSTEM_FULL_DOCUMENTATION.md`
 3. `docs/DEPLOYMENT_SECURITY.md`
 4. `docs/CANARY_ROLLOUT_RUNBOOK.md`
+
+## Producción Docker (cloud)
+
+- `Dockerfile`: imagen de producción (`reflex run --env prod`).
+- `scripts/docker-entrypoint.sh`: espera MySQL/Redis y ejecuta `alembic upgrade head`.
+- `scripts/check_runtime_mode.sh`: verificación de runtime real (sin falsos positivos por fallback de Nginx).
