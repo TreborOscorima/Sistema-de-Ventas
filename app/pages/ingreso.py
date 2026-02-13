@@ -79,11 +79,17 @@ def ingreso_page() -> rx.Component:
             rx.el.div(
                 rx.el.div(
                     rx.el.input(
+                        id="supplier-search-input",
+                        key=State.purchase_supplier_input_key.to_string(),
                         placeholder="Buscar por Nombre de Empresa o N° de Registro",
-                        on_change=State.search_supplier_change,
-                        value=State.purchase_supplier_query,
+                        on_blur=State.search_supplier_change,
+                        on_key_down=lambda k: State.handle_supplier_search_enter(
+                            k, "supplier-search-input"
+                        ),
+                        default_value=State.purchase_supplier_query,
                         class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        debounce_timeout=600,
+                        type="text",
+                        auto_complete="off",
                     ),
                     rx.cond(
                         State.purchase_supplier_suggestions.length() > 0,
