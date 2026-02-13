@@ -1438,33 +1438,45 @@ def form_select(
 
 def form_textarea(
     label: str,
-    value: rx.Var | str,
-    on_change: Callable,
+    value: rx.Var | str | None = None,
+    on_change: Callable | None = None,
     placeholder: str = "",
     rows: int = 4,
+    default_value: rx.Var | str | None = None,
+    on_blur: Callable | None = None,
 ) -> rx.Component:
     """
     Crea un textarea con etiqueta.
 
     Parametros:
         label: Texto de la etiqueta
-        value: Valor del textarea
-        on_change: Manejador de cambio
+        value: Valor controlado del textarea (opcional)
+        on_change: Manejador en cambios por tecla (opcional)
         placeholder: Texto placeholder
         rows: Numero de filas visibles
+        default_value: Valor no controlado inicial (opcional)
+        on_blur: Manejador al perder foco (opcional)
 
     Retorna:
         Componente de textarea con etiqueta
     """
     min_height = rows * TEXTAREA_ROW_HEIGHT
+    textarea_props = {
+        "placeholder": placeholder,
+        "class_name": f"w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[{min_height}px]",
+    }
+    if default_value is not None:
+        textarea_props["default_value"] = default_value
+    elif value is not None:
+        textarea_props["value"] = value
+    if on_blur is not None:
+        textarea_props["on_blur"] = on_blur
+    elif on_change is not None:
+        textarea_props["on_change"] = on_change
+
     return rx.el.div(
         rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
-        rx.el.textarea(
-            placeholder=placeholder,
-            value=value,
-            on_change=on_change,
-            class_name=f"w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[{min_height}px]",
-        ),
+        rx.el.textarea(**textarea_props),
         class_name="flex flex-col gap-1",
     )
 

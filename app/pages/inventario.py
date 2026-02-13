@@ -35,19 +35,19 @@ def edit_product_modal() -> rx.Component:
           rx.el.div(
             rx.el.label("Código de Barra", class_name="block text-sm font-medium text-slate-700"),
             rx.el.input(
-              value=State.editing_product["barcode"],
-              on_change=lambda v: State.handle_edit_product_change("barcode", v),
+              default_value=State.editing_product["barcode"],
+              on_blur=lambda v: State.handle_edit_product_change("barcode", v),
               class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-              debounce_timeout=200,
+              debounce_timeout=600,
             ),
           ),
           rx.el.div(
             rx.el.label("Descripción", class_name="block text-sm font-medium text-slate-700"),
             rx.el.input(
-              value=State.editing_product["description"],
-              on_change=lambda v: State.handle_edit_product_change("description", v),
+              default_value=State.editing_product["description"],
+              on_blur=lambda v: State.handle_edit_product_change("description", v),
               class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-              debounce_timeout=200,
+              debounce_timeout=600,
             ),
           ),
           rx.el.div(
@@ -57,7 +57,7 @@ def edit_product_modal() -> rx.Component:
                 State.categories,
                 lambda cat: rx.el.option(cat, value=cat)
               ),
-              value=State.editing_product["category"],
+              default_value=State.editing_product["category"],
               on_change=lambda v: State.handle_edit_product_change("category", v),
               class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
@@ -84,8 +84,8 @@ def edit_product_modal() -> rx.Component:
                 ),
                 rx.el.input(
                   type="number",
-                  value=State.editing_product["stock"].to_string(),
-                  on_change=lambda v: State.handle_edit_product_change("stock", v),
+                  default_value=State.editing_product["stock"].to_string(),
+                  on_blur=lambda v: State.handle_edit_product_change("stock", v),
                   class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                 ),
               ),
@@ -99,7 +99,7 @@ def edit_product_modal() -> rx.Component:
               rx.el.option("Lt", value="Lt"),
               rx.el.option("Paquete", value="Paquete"),
               rx.el.option("Caja", value="Caja"),
-              value=State.editing_product["unit"],
+              default_value=State.editing_product["unit"],
               on_change=lambda v: State.handle_edit_product_change("unit", v),
               class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
@@ -108,8 +108,8 @@ def edit_product_modal() -> rx.Component:
             rx.el.label("Precio Compra", class_name="block text-sm font-medium text-slate-700"),
             rx.el.input(
               type="number",
-              value=State.editing_product["purchase_price"].to_string(),
-              on_change=lambda v: State.handle_edit_product_change("purchase_price", v),
+              default_value=State.editing_product["purchase_price"].to_string(),
+              on_blur=lambda v: State.handle_edit_product_change("purchase_price", v),
               class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
           ),
@@ -117,8 +117,8 @@ def edit_product_modal() -> rx.Component:
             rx.el.label("Precio Venta", class_name="block text-sm font-medium text-slate-700"),
             rx.el.input(
               type="number",
-              value=State.editing_product["sale_price"].to_string(),
-              on_change=lambda v: State.handle_edit_product_change("sale_price", v),
+              default_value=State.editing_product["sale_price"].to_string(),
+              on_blur=lambda v: State.handle_edit_product_change("sale_price", v),
               class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
           ),
@@ -207,16 +207,16 @@ def edit_product_modal() -> rx.Component:
                   ),
                   rx.el.input(
                     placeholder="Talla",
-                    value=row["size"],
-                    on_change=lambda v, index=row["index"]: State.update_variant_field(
+                    default_value=row["size"],
+                    on_blur=lambda v, index=row["index"]: State.update_variant_field(
                       index, "size", v
                     ),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                   ),
                   rx.el.input(
                     placeholder="Color",
-                    value=row["color"],
-                    on_change=lambda v, index=row["index"]: State.update_variant_field(
+                    default_value=row["color"],
+                    on_blur=lambda v, index=row["index"]: State.update_variant_field(
                       index, "color", v
                     ),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -224,8 +224,8 @@ def edit_product_modal() -> rx.Component:
                   rx.el.input(
                     type="number",
                     placeholder="0",
-                    value=row["stock"].to_string(),
-                    on_change=lambda v, index=row["index"]: State.update_variant_field(
+                    default_value=row["stock"].to_string(),
+                    on_blur=lambda v, index=row["index"]: State.update_variant_field(
                       index, "stock", v
                     ),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -279,8 +279,8 @@ def edit_product_modal() -> rx.Component:
                   rx.el.input(
                     type="number",
                     placeholder="0",
-                    value=row["min_qty"].to_string(),
-                    on_change=lambda v, index=row["index"]: State.update_tier_field(
+                    default_value=row["min_qty"].to_string(),
+                    on_blur=lambda v, index=row["index"]: State.update_tier_field(
                       index, "min_qty", v
                     ),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -288,8 +288,8 @@ def edit_product_modal() -> rx.Component:
                   rx.el.input(
                     type="number",
                     placeholder="0.00",
-                    value=row["price"].to_string(),
-                    on_change=lambda v, index=row["index"]: State.update_tier_field(
+                    default_value=row["price"].to_string(),
+                    on_blur=lambda v, index=row["index"]: State.update_tier_field(
                       index, "price", v
                     ),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -505,7 +505,7 @@ def inventory_adjustment_modal() -> rx.Component:
                   rx.input(
                     id="inventory-adjustment-search",
                     placeholder="Ej: Gaseosa 500ml o código",
-                    value=State.inventory_adjustment_item["description"],
+                    default_value=State.inventory_adjustment_item["description"],
                     on_change=lambda value: State.handle_inventory_adjustment_change(
                       "description", value
                     ),
@@ -516,7 +516,7 @@ def inventory_adjustment_modal() -> rx.Component:
                     auto_complete=False,
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                   ),
-                  debounce_timeout=250,
+                  debounce_timeout=600,
                 ),
                 rx.cond(
                   State.inventory_adjustment_suggestions.length()
@@ -600,10 +600,10 @@ def inventory_adjustment_modal() -> rx.Component:
                   type="number",
                   min="0",
                   step="0.01",
-                  value=State.inventory_adjustment_item[
+                  default_value=State.inventory_adjustment_item[
                     "adjust_quantity"
                   ].to_string(),
-                  on_change=lambda value: State.handle_inventory_adjustment_change(
+                  on_blur=lambda value: State.handle_inventory_adjustment_change(
                     "adjust_quantity", value
                   ),
                   class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -616,8 +616,8 @@ def inventory_adjustment_modal() -> rx.Component:
                 ),
                 rx.el.textarea(
                   placeholder="Ej: Producto dañado, consumo interno, vencido, etc.",
-                  value=State.inventory_adjustment_item["reason"],
-                  on_change=lambda value: State.handle_inventory_adjustment_change(
+                  default_value=State.inventory_adjustment_item["reason"],
+                  on_blur=lambda value: State.handle_inventory_adjustment_change(
                     "reason", value
                   ),
                   class_name="w-full h-24 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
@@ -728,8 +728,8 @@ def inventory_adjustment_modal() -> rx.Component:
               ),
               rx.el.textarea(
                 placeholder="Detalles adicionales que respalden el ajuste realizado.",
-                value=State.inventory_adjustment_notes,
-                on_change=lambda value: State.set_inventory_adjustment_notes(
+                default_value=State.inventory_adjustment_notes,
+                on_blur=lambda value: State.set_inventory_adjustment_notes(
                   value
                 ),
                 class_name="w-full mt-2 p-3 border rounded-lg h-32",
@@ -898,10 +898,13 @@ def inventario_page() -> rx.Component:
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.input(
-          placeholder="Buscar producto...",
-          on_change=State.set_inventory_search_term,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+        rx.debounce_input(
+          rx.input(
+            placeholder="Buscar producto...",
+            on_change=State.set_inventory_search_term,
+            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          ),
+          debounce_timeout=600,
         ),
         rx.el.div(
           rx.el.button(
@@ -1086,6 +1089,7 @@ def inventario_page() -> rx.Component:
     inventory_adjustment_modal(),
     edit_product_modal(),
     stock_details_modal(),
+    on_mount=State.refresh_inventory_cache,
     class_name="w-full flex flex-col gap-6",
   )
   return permission_guard(
@@ -1093,3 +1097,4 @@ def inventario_page() -> rx.Component:
     content=content,
     redirect_message="Acceso denegado a Inventario",
   )
+

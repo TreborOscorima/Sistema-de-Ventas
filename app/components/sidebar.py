@@ -42,14 +42,14 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         route,
     )
 
-    link = rx.link(
+    link = rx.el.a(
         rx.el.div(
             rx.icon(icon, class_name="h-5 w-5 flex-shrink-0"),
             rx.el.span(
-                text, 
+                text,
                 class_name=rx.cond(
-                    State.sidebar_open, 
-                    "opacity-100 min-w-0 flex-1 truncate", 
+                    State.sidebar_open,
+                    "opacity-100 min-w-0 flex-1 truncate",
                     "opacity-0 w-0"
                 )
             ),
@@ -68,7 +68,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
             ),
         ),
         href=target_route,
-        class_name="w-full min-w-0 no-underline block",
+        class_name="block w-full min-w-0 text-left no-underline",
     )
     return rx.cond(
         page == "Servicios",
@@ -226,7 +226,7 @@ def sidebar() -> rx.Component:
                                         rx.el.div(
                                             rx.foreach(
                                                 CONFIG_SUBSECTIONS,
-                                                lambda section: rx.el.button(
+                                                lambda section: rx.el.a(
                                                     rx.el.div(
                                                         rx.icon(
                                                             section["icon"],
@@ -238,15 +238,12 @@ def sidebar() -> rx.Component:
                                                         ),
                                                         class_name="flex items-center gap-2 min-w-0",
                                                     ),
-                                                    on_click=lambda _,
-                                                    key=section["key"]: State.go_to_config_tab(
-                                                        key
-                                                    ),
+                                                    href="/configuracion?tab=" + section["key"],
                                                     class_name=rx.cond(
                                                         State.config_active_tab
                                                         == section["key"],
-                                                        f"w-full min-w-0 text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full min-w-0 text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
+                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
@@ -260,7 +257,7 @@ def sidebar() -> rx.Component:
                                         rx.el.div(
                                             rx.foreach(
                                                 CASH_SUBSECTIONS,
-                                                lambda section: rx.el.button(
+                                                lambda section: rx.el.a(
                                                     rx.el.div(
                                                         rx.icon(
                                                             section["icon"],
@@ -272,14 +269,12 @@ def sidebar() -> rx.Component:
                                                         ),
                                                         class_name="flex items-center gap-2 min-w-0",
                                                     ),
-                                                    on_click=lambda _, key=section[
-                                                        "key"
-                                                    ]: State.set_cash_tab(key),
+                                                    href="/caja?tab=" + section["key"],
                                                     class_name=rx.cond(
                                                         State.cash_active_tab
                                                         == section["key"],
-                                                        f"w-full min-w-0 text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full min-w-0 text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
+                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),
@@ -293,7 +288,7 @@ def sidebar() -> rx.Component:
                                         rx.el.div(
                                             rx.foreach(
                                                 SERVICES_SUBSECTIONS,
-                                                lambda section: rx.el.button(
+                                                lambda section: rx.el.a(
                                                     rx.el.div(
                                                         rx.icon(
                                                             section["icon"],
@@ -305,14 +300,12 @@ def sidebar() -> rx.Component:
                                                         ),
                                                         class_name="flex items-center gap-2 min-w-0",
                                                     ),
-                                                    on_click=lambda _, key=section[
-                                                        "key"
-                                                    ]: State.set_service_tab(key),
+                                                    href="/servicios?tab=" + section["key"],
                                                     class_name=rx.cond(
                                                         State.service_active_tab
                                                         == section["key"],
-                                                        f"w-full min-w-0 text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"w-full min-w-0 text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
+                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
+                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
                                                 ),
                                             ),

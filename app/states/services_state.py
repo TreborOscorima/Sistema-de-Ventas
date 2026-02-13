@@ -911,22 +911,31 @@ class ServicesState(MixinState):
             self.new_field_price_amount = ""
         self.load_field_prices()
 
+    @rx.event
     def select_reservation_field_price(self, price_id: str):
-        self.reservation_form["selected_price_id"] = price_id
-        # Buscar en todos los precios configurados para obtener los detalles
-        price = next((p for p in self.field_prices if p["id"] == price_id), None)
+        selected_price_id = str(price_id or "")
+        form = dict(self.reservation_form or {})
+        form["selected_price_id"] = selected_price_id
+
+        # Buscar en todos los precios configurados para obtener los detalles.
+        price = next((p for p in getattr(self, "field_prices", []) if p["id"] == selected_price_id), None)
         if price:
-            self._apply_price_total(price)
-            self.reservation_form["field_name"] = price["name"]
-            self.reservation_form["sport_label"] = self._sport_label(price["sport"])
-            # Actualizar el deporte activo si el precio seleccionado pertenece a otro deporte
-            price_sport_lower = price["sport"].lower()
+            hours = self._hours_for_current_selection()
+            unit_price = self._safe_amount(price.get("price", 0))
+            total = self._round_currency(unit_price * hours)
+            form["total_amount"] = f"{total:.2f}"
+            form["field_name"] = str(price.get("name", "") or "")
+            form["sport_label"] = self._sport_label(str(price.get("sport", "")))
+
+            # Actualizar el deporte activo si el precio seleccionado pertenece a otro deporte.
+            price_sport_lower = str(price.get("sport", "")).lower()
             current_sport_lower = self.field_rental_sport.lower()
-            
             if "futbol" in price_sport_lower and "futbol" not in current_sport_lower:
-                 self.field_rental_sport = "futbol"
+                self.field_rental_sport = "futbol"
             elif "voley" in price_sport_lower and "voley" not in current_sport_lower:
-                 self.field_rental_sport = "voley"
+                self.field_rental_sport = "voley"
+
+        self.reservation_form = form
 
     @rx.var
     def reservation_delete_button_disabled(self) -> bool:
@@ -1377,6 +1386,8 @@ class ServicesState(MixinState):
     @rx.event
     def open_reservation_modal(self, start_time: str, end_time: str):
         date_str = self.schedule_selected_date or self.reservation_form.get("date", "") or TODAY_STR
+        company_id = self._company_id()
+        branch_id = self._branch_id()
         # Prepara un formulario limpio antes de decidir modo
         self.reservation_form = self._reservation_default_form()
         try:
@@ -1399,7 +1410,7 @@ class ServicesState(MixinState):
             )
         except ValueError:
             start_dt = None
-        if start_dt:
+        if start_dt and company_id and branch_id:
             with rx.session() as session:
                 existing_row = session.exec(
                     select(FieldReservationModel)
@@ -1463,12 +1474,22 @@ class ServicesState(MixinState):
 
     @rx.event
     def update_reservation_form(self, field: str, value: str):
-        if field not in self.reservation_form:
+        form = dict(self.reservation_form or {})
+        if field not in form:
             return
         normalized_value = value or ""
-        if self.reservation_form.get(field, "") == normalized_value:
+
+        # Mantener montos estables para evitar estados vacíos que rompan la UI.
+        if field in ["advance_amount", "total_amount"]:
+            if normalized_value == "":
+                normalized_value = "0"
+            else:
+                normalized_value = f"{self._safe_amount(normalized_value):.2f}"
+
+        if form.get(field, "") == normalized_value:
             return
-        self.reservation_form[field] = normalized_value
+        form[field] = normalized_value
+        self.reservation_form = form
         if field in ["start_time", "end_time"]:
             self._apply_selected_price_total()
 
@@ -2276,8 +2297,11 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
     def _apply_price_total(self, price: FieldPrice):
         hours = self._hours_for_current_selection()
-        total = self._round_currency((price.get("price") or 0) * hours)
-        self.reservation_form["total_amount"] = f"{total:.2f}"
+        unit_price = self._safe_amount(price.get("price", 0))
+        total = self._round_currency(unit_price * hours)
+        form = dict(self.reservation_form or {})
+        form["total_amount"] = f"{total:.2f}"
+        self.reservation_form = form
 
     def _apply_selected_price_total(self):
         price_id = self.reservation_form.get("selected_price_id", "")

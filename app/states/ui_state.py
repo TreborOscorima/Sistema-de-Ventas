@@ -1,5 +1,6 @@
 import reflex as rx
 from typing import List, Dict, Any
+from urllib.parse import parse_qs
 from .mixin_state import MixinState
 
 # Mapeo de rutas a páginas
@@ -34,10 +35,15 @@ PAGE_TO_ROUTE = {
     "Configuracion": "/configuracion",
 }
 
+CONFIG_TABS = {"empresa", "sucursales", "usuarios", "monedas", "unidades", "pagos", "suscripcion"}
+CASH_TABS = {"resumen", "movimientos"}
+SERVICES_TABS = {"campo", "precios_campo"}
+
 
 class UIState(MixinState):
     sidebar_open: bool = True
     current_page: str = ""  # Vacío inicialmente, se setea según privilegios
+    current_active_item: str = rx.SessionStorage("")
     # Compatibilidad con sesiones previas; ya no se usa para evitar eventos extra en navegación.
     pending_page: str = rx.SessionStorage("")
     config_active_tab: str = "usuarios"
@@ -45,20 +51,19 @@ class UIState(MixinState):
     @rx.event
     def sync_page_from_route(self):
         """Sincroniza current_page basándose en la ruta actual y privilegios."""
-        route = self.router.url.path
+        route = self._normalized_route()
         page = ROUTE_TO_PAGE.get(route)
         
         # Si la ruta tiene una página mapeada y el usuario puede accederla
         if page and self._can_access_page(page):
-            self.current_page = page
-            self.pending_page = ""
+            self._apply_page_state(page)
         # Si no, usar el primer módulo permitido
         elif self.allowed_pages:
-            self.current_page = self.allowed_pages[0]
-            self.pending_page = ""
+            self._apply_page_state(self.allowed_pages[0])
         # Fallback si no hay páginas permitidas
         else:
             self.current_page = "Ingreso"
+            self.current_active_item = "Ingreso"
             self.pending_page = ""
 
     @rx.var
@@ -75,16 +80,14 @@ class UIState(MixinState):
 
     @rx.var
     def active_page(self) -> str:
-        route = ""
-        try:
-            route = self.router.url.path
-        except Exception:
-            route = ""
-        route_page = ROUTE_TO_PAGE.get(route) if route else None
-
-        # Prioriza la ruta actual para evitar dependencia de eventos de click.
+        # Priorizar la ruta actual evita esperar un evento de click para pintar activo.
+        route_page = ROUTE_TO_PAGE.get(self._normalized_route())
         if route_page and self._can_access_page(route_page):
             return route_page
+
+        # Sidebar optimista: fallback al estado local.
+        if self.current_active_item and self._can_access_page(self.current_active_item):
+            return self.current_active_item
 
         # Fallback a current_page si es accesible.
         if self.current_page and self._can_access_page(self.current_page):
@@ -103,26 +106,13 @@ class UIState(MixinState):
     def set_page(self, page: str):
         if not self._can_access_page(page):
             return rx.toast("No tiene permisos para acceder a este modulo.", duration=3000)
-        
-        previous_page = self.current_page
-        self.current_page = page
-        
-        # Logica entre modulos (asume metodos/attrs en el State principal)
-        if page == "Punto de Venta" and previous_page != "Punto de Venta":
-            if hasattr(self, "_reset_sale_form"):
-                self._reset_sale_form()
-            if hasattr(self, "reservation_payment_routed") and not self.reservation_payment_routed:
-                if hasattr(self, "reservation_payment_id"):
-                    self.reservation_payment_id = ""
-                if hasattr(self, "reservation_payment_amount"):
-                    self.reservation_payment_amount = ""
-        
-        if page != "Servicios":
-            if hasattr(self, "service_active_tab"):
-                self.service_active_tab = "campo"
-                
-        if hasattr(self, "reservation_payment_routed"):
-            self.reservation_payment_routed = False
+        self._apply_page_state(page)
+
+    @rx.event
+    def navigate_to_page(self, page: str, route: str):
+        self.set_page(page)
+        target_route = (route or "").strip() or PAGE_TO_ROUTE.get(page, "/dashboard")
+        return rx.redirect(target_route)
 
     @rx.event
     def set_pending_page(self, page: str):
@@ -137,6 +127,91 @@ class UIState(MixinState):
     def go_to_subscription(self):
         self.config_active_tab = "suscripcion"
         return rx.redirect("/configuracion")
+
+    def _normalized_route(self) -> str:
+        route = ""
+        try:
+            route = getattr(self.router.url, "path", "") or ""
+        except Exception:
+            route = ""
+        route = (route or "").strip() or "/"
+        if route != "/" and route.endswith("/"):
+            route = route.rstrip("/")
+        return route
+
+    def _router_query(self) -> str:
+        query = ""
+        try:
+            query = getattr(self.router.url, "query", "") or ""
+        except Exception:
+            query = ""
+        if not query:
+            try:
+                router = getattr(self, "router", None)
+                raw_url = str(getattr(router, "url", ""))
+                if "?" in raw_url:
+                    query = raw_url.split("?", 1)[1]
+            except Exception:
+                query = ""
+        return (query or "").strip()
+
+    def _query_params(self) -> Dict[str, list[str]]:
+        query = self._router_query()
+        if not query:
+            return {}
+        return parse_qs(query.lstrip("?"))
+
+    def _query_tab(self) -> str:
+        params = self._query_params()
+        tab = (params.get("tab") or [""])[0]
+        return (tab or "").strip().lower()
+
+    def _apply_route_tab_state(self, page: str):
+        tab = self._query_tab()
+        if not tab:
+            return
+
+        if page == "Servicios" and hasattr(self, "service_active_tab") and tab in SERVICES_TABS:
+            self.service_active_tab = tab
+            if tab == "precios_campo" and hasattr(self, "load_field_prices"):
+                self.load_field_prices()
+            return
+
+        if page == "Gestion de Caja" and hasattr(self, "cash_active_tab") and tab in CASH_TABS:
+            self.cash_active_tab = tab
+            if hasattr(self, "_refresh_cashbox_caches"):
+                self._refresh_cashbox_caches()
+            return
+
+        if page == "Configuracion" and tab in CONFIG_TABS:
+            self.config_active_tab = tab
+
+    def _apply_page_state(self, page: str):
+        previous_page = self.current_page
+        self.current_page = page
+        self.current_active_item = page
+        self.pending_page = ""
+
+        # Logica entre modulos (asume metodos/attrs en el State principal).
+        if page == "Punto de Venta" and previous_page != "Punto de Venta":
+            if hasattr(self, "_reset_sale_form"):
+                self._reset_sale_form()
+            if (
+                hasattr(self, "reservation_payment_routed")
+                and not self.reservation_payment_routed
+            ):
+                if hasattr(self, "reservation_payment_id"):
+                    self.reservation_payment_id = ""
+                if hasattr(self, "reservation_payment_amount"):
+                    self.reservation_payment_amount = ""
+
+        if page != "Servicios" and hasattr(self, "service_active_tab"):
+            self.service_active_tab = "campo"
+
+        if hasattr(self, "reservation_payment_routed"):
+            self.reservation_payment_routed = False
+
+        self._apply_route_tab_state(page)
 
     def _navigation_items_config(self) -> List[Dict[str, str]]:
         return [

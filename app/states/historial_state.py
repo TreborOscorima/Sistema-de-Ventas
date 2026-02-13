@@ -100,6 +100,26 @@ class HistorialState(MixinState):
     selected_sale_id: str = ""
     selected_sale_summary: dict = {}
     selected_sale_items: list[dict] = []
+    filtered_history_cache: list[dict] = []
+    total_pages_cache: int = 1
+    report_method_summary_cache: list[dict] = []
+    report_detail_rows_cache: list[dict] = []
+    report_closing_rows_cache: list[dict] = []
+    payment_stats_cache: Dict[str, float] = {
+        "efectivo": 0.0,
+        "debito": 0.0,
+        "credito": 0.0,
+        "yape": 0.0,
+        "plin": 0.0,
+        "transferencia": 0.0,
+        "mixto": 0.0,
+    }
+    total_credit_cache: float = 0.0
+    credit_outstanding_cache: float = 0.0
+    dynamic_payment_cards_cache: list[dict] = []
+    productos_mas_vendidos_cache: list[dict] = []
+    productos_stock_bajo_cache: list[Dict] = []
+    sales_by_day_cache: list[dict] = []
 
     def _history_date_range(self) -> tuple[datetime.datetime | None, datetime.datetime | None]:
         start_date = None
@@ -816,25 +836,32 @@ class HistorialState(MixinState):
             count_query = self._apply_sales_filters(count_query)
             return session.exec(count_query).one()
 
-    @rx.var
-    def filtered_history(self) -> list[dict]:
+    def _refresh_history_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
-            return []
-        
-        # Dependencia para forzar actualizacion
-        _ = self._history_update_trigger
-        offset = (self.current_page_history - 1) * self.items_per_page
-        return self._fetch_sales_history(offset=offset, limit=self.items_per_page)
+            self.filtered_history_cache = []
+            self.total_pages_cache = 1
+            return
 
-    @rx.var
-    def paginated_history(self) -> list[dict]:
-        return self.filtered_history
+        total_items = int(self._sales_total_count() or 0)
+        total_pages = 1 if total_items == 0 else (total_items + self.items_per_page - 1) // self.items_per_page
+        page = min(max(self.current_page_history, 1), total_pages)
+        if page != self.current_page_history:
+            self.current_page_history = page
 
-    @rx.var
-    def report_method_summary(self) -> list[dict]:
-        _ = self._report_update_trigger
+        offset = (page - 1) * self.items_per_page
+        self.filtered_history_cache = self._fetch_sales_history(
+            offset=offset,
+            limit=self.items_per_page,
+        )
+        self.total_pages_cache = total_pages
+
+    def _refresh_report_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
-            return []
+            self.report_method_summary_cache = []
+            self.report_detail_rows_cache = []
+            self.report_closing_rows_cache = []
+            return
+
         entries = self._build_report_entries()
         totals: dict[str, dict[str, Any]] = {}
         for entry in entries:
@@ -847,7 +874,8 @@ class HistorialState(MixinState):
                 }
             totals[key]["count"] += 1
             totals[key]["total"] += Decimal(str(entry.get("amount", 0) or 0))
-        summary = []
+
+        summary: list[dict] = []
         for key in REPORT_METHOD_KEYS:
             if key in totals:
                 item = totals[key]
@@ -867,14 +895,334 @@ class HistorialState(MixinState):
                         "total": self._round_currency(float(value["total"])),
                     }
                 )
-        return summary
+
+        closings = self._build_report_closings()
+        self.report_method_summary_cache = summary
+        self.report_detail_rows_cache = entries
+        self.report_closing_rows_cache = closings
+
+        detail_total_pages = (
+            1
+            if len(entries) == 0
+            else (len(entries) + self.report_detail_items_per_page - 1)
+            // self.report_detail_items_per_page
+        )
+        if self.report_detail_current_page > detail_total_pages:
+            self.report_detail_current_page = detail_total_pages
+
+        closing_total_pages = (
+            1
+            if len(closings) == 0
+            else (len(closings) + self.report_closing_items_per_page - 1)
+            // self.report_closing_items_per_page
+        )
+        if self.report_closing_current_page > closing_total_pages:
+            self.report_closing_current_page = closing_total_pages
+
+    def _enabled_payment_kinds(self, session, company_id: int, branch_id: int) -> set[str]:
+        enabled_kinds: set[str] = set()
+        methods = session.exec(
+            select(PaymentMethod)
+            .where(PaymentMethod.enabled == True)
+            .where(PaymentMethod.company_id == company_id)
+            .where(PaymentMethod.branch_id == branch_id)
+        ).all()
+        for method in methods:
+            kind = (method.kind or method.method_id or "other").strip().lower()
+            if kind == "card":
+                kind = "credit"
+            elif kind == "wallet":
+                kind = "yape"
+            enabled_kinds.add(kind)
+        return enabled_kinds
+
+    def _build_dynamic_payment_cards_from_stats(
+        self, stats: Dict[str, float], enabled_kinds: set[str]
+    ) -> list[dict]:
+        styles = {
+            "cash": {"icon": "coins", "color": "blue"},
+            "debit": {"icon": "credit-card", "color": "indigo"},
+            "credit": {"icon": "credit-card", "color": "violet"},
+            "yape": {"icon": "qr-code", "color": "pink"},
+            "plin": {"icon": "qr-code", "color": "cyan"},
+            "transfer": {"icon": "landmark", "color": "orange"},
+            "mixed": {"icon": "layers", "color": "amber"},
+            "other": {"icon": "circle-help", "color": "gray"},
+        }
+        order_index = {
+            "cash": 0,
+            "yape": 1,
+            "plin": 2,
+            "credit": 3,
+            "debit": 4,
+            "transfer": 5,
+            "mixed": 6,
+            "other": 7,
+        }
+        cards: list[dict] = []
+
+        def _add_card(kind: str, label: str, stats_key: str) -> None:
+            amount = stats.get(stats_key, 0.0)
+            if amount == 0 and kind not in enabled_kinds:
+                return
+            style = styles.get(kind, styles["other"])
+            cards.append(
+                {
+                    "name": label,
+                    "amount": amount,
+                    "icon": style["icon"],
+                    "color": style["color"],
+                    "_sort_key": kind,
+                }
+            )
+
+        _add_card("cash", "Efectivo", "efectivo")
+        _add_card("yape", "Yape", "yape")
+        _add_card("plin", "Plin", "plin")
+        _add_card("credit", "T. Credito", "credito")
+        _add_card("debit", "T. Debito", "debito")
+        _add_card("transfer", "Transferencia", "transferencia")
+        mixed_label = "Pago Mixto" if "mixed" in enabled_kinds else "Otros"
+        if stats.get("mixto", 0) > 0:
+            _add_card("mixed", mixed_label, "mixto")
+
+        cards.sort(
+            key=lambda card: (
+                order_index.get(card.get("_sort_key") or "", 99),
+                (card.get("name") or "").strip().lower(),
+            )
+        )
+        for card in cards:
+            card.pop("_sort_key", None)
+        return cards
+
+    def _refresh_financial_cache(self):
+        if not self.current_user["privileges"]["view_historial"]:
+            self.payment_stats_cache = {
+                "efectivo": 0.0,
+                "debito": 0.0,
+                "credito": 0.0,
+                "yape": 0.0,
+                "plin": 0.0,
+                "transferencia": 0.0,
+                "mixto": 0.0,
+            }
+            self.total_credit_cache = 0.0
+            self.credit_outstanding_cache = 0.0
+            self.dynamic_payment_cards_cache = []
+            self.productos_mas_vendidos_cache = []
+            self.productos_stock_bajo_cache = []
+            self.sales_by_day_cache = []
+            return
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.payment_stats_cache = {
+                "efectivo": 0.0,
+                "debito": 0.0,
+                "credito": 0.0,
+                "yape": 0.0,
+                "plin": 0.0,
+                "transferencia": 0.0,
+                "mixto": 0.0,
+            }
+            self.total_credit_cache = 0.0
+            self.credit_outstanding_cache = 0.0
+            self.dynamic_payment_cards_cache = []
+            self.productos_mas_vendidos_cache = []
+            self.productos_stock_bajo_cache = []
+            self.sales_by_day_cache = []
+            return
+
+        start_date, end_date = self._history_date_range()
+        stats = {
+            "efectivo": Decimal("0.00"),
+            "debito": Decimal("0.00"),
+            "credito": Decimal("0.00"),
+            "yape": Decimal("0.00"),
+            "plin": Decimal("0.00"),
+            "transferencia": Decimal("0.00"),
+            "mixto": Decimal("0.00"),
+        }
+        total_credit = Decimal("0.00")
+        pending_total = Decimal("0.00")
+
+        with rx.session() as session:
+            payment_query = (
+                select(
+                    SalePayment.method_type,
+                    sa.func.sum(SalePayment.amount),
+                )
+                .join(Sale, SalePayment.sale_id == Sale.id)
+                .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+            )
+            if start_date:
+                payment_query = payment_query.where(
+                    SalePayment.created_at >= start_date
+                )
+            if end_date:
+                payment_query = payment_query.where(
+                    SalePayment.created_at <= end_date
+                )
+            payment_query = payment_query.group_by(SalePayment.method_type)
+            for method_type, amount in session.exec(payment_query).all():
+                key = self._payment_method_key(method_type)
+                if not key:
+                    continue
+                self._add_to_stats(stats, key, Decimal(str(amount or 0)))
+
+            query_log = (
+                select(
+                    CashboxLog.payment_method,
+                    sa.func.sum(CashboxLog.amount),
+                )
+                .where(CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS))
+                .where(CashboxLog.is_voided == False)
+                .where(CashboxLog.company_id == company_id)
+                .where(CashboxLog.branch_id == branch_id)
+            )
+            if start_date:
+                query_log = query_log.where(CashboxLog.timestamp >= start_date)
+            if end_date:
+                query_log = query_log.where(CashboxLog.timestamp <= end_date)
+            query_log = query_log.group_by(CashboxLog.payment_method)
+            for payment_label, amount in session.exec(query_log).all():
+                method_key = self._method_key_from_label(payment_label or "")
+                self._add_to_stats(stats, method_key, Decimal(str(amount or 0)))
+
+            credit_sales_query = (
+                select(Sale)
+                .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+                .options(selectinload(Sale.payments), selectinload(Sale.installments))
+            )
+            if start_date:
+                credit_sales_query = credit_sales_query.where(Sale.timestamp >= start_date)
+            if end_date:
+                credit_sales_query = credit_sales_query.where(Sale.timestamp <= end_date)
+
+            sales = session.exec(credit_sales_query).all()
+            for sale in sales:
+                payments = sale.payments or []
+                payment_method = self._payment_method_display(payments)
+                if payment_method.strip() in {"", "-"}:
+                    payment_method = "No especificado"
+                payment_method = self._sale_payment_method_label(
+                    sale, payments, payment_method
+                )
+                if self._is_credit_label(payment_method):
+                    total_credit += Decimal(str(sale.total_amount or 0))
+
+                payment_condition = (sale.payment_condition or "").strip().lower()
+                is_credit = payment_condition == "credito" or self._is_credit_label(
+                    payment_method
+                )
+                if not is_credit:
+                    continue
+                total_amount = Decimal(str(sale.total_amount or 0))
+                paid_initial = sum(
+                    Decimal(str(getattr(payment, "amount", 0) or 0))
+                    for payment in payments
+                )
+                paid_installments = sum(
+                    Decimal(str(getattr(installment, "paid_amount", 0) or 0))
+                    for installment in (sale.installments or [])
+                )
+                pending = total_amount - paid_initial - paid_installments
+                if pending > 0:
+                    pending_total += pending
+
+            enabled_kinds = self._enabled_payment_kinds(session, company_id, branch_id)
+
+            top_products_stmt = (
+                select(
+                    SaleItem.product_name_snapshot,
+                    sa.func.sum(SaleItem.quantity).label("total_qty"),
+                )
+                .join(Sale, SaleItem.sale_id == Sale.id)
+                .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+                .group_by(SaleItem.product_name_snapshot)
+                .order_by(sa.desc("total_qty"))
+                .limit(5)
+            )
+            top_products = session.exec(top_products_stmt).all()
+
+            low_stock_products = session.exec(
+                select(Product)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.stock <= 10)
+                .order_by(Product.stock)
+            ).all()
+
+            date_col = sa.func.date(Sale.timestamp)
+            sales_day_query = (
+                select(date_col, sa.func.sum(Sale.total_amount))
+                .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+                .group_by(date_col)
+                .order_by(date_col.desc())
+                .limit(7)
+            )
+            sales_day_rows = list(reversed(session.exec(sales_day_query).all()))
+
+        rounded_stats = {k: self._round_currency(v) for k, v in stats.items()}
+        self.payment_stats_cache = rounded_stats
+        self.total_credit_cache = self._round_currency(total_credit)
+        self.credit_outstanding_cache = self._round_currency(pending_total)
+        self.dynamic_payment_cards_cache = self._build_dynamic_payment_cards_from_stats(
+            rounded_stats, enabled_kinds
+        )
+        self.productos_mas_vendidos_cache = [
+            {"description": name, "cantidad_vendida": qty}
+            for name, qty in top_products
+        ]
+        self.productos_stock_bajo_cache = [
+            {
+                "barcode": p.barcode,
+                "description": p.description,
+                "stock": p.stock,
+                "unit": p.unit,
+            }
+            for p in low_stock_products
+        ]
+        self.sales_by_day_cache = [
+            {
+                "date": day.strftime("%Y-%m-%d")
+                if hasattr(day, "strftime")
+                else str(day or ""),
+                "total": self._round_currency(float(total or 0)),
+            }
+            for day, total in sales_day_rows
+        ]
+
+    def _refresh_historial_cache(self):
+        self._refresh_history_cache()
+        self._refresh_report_cache()
+        self._refresh_financial_cache()
+
+    @rx.var
+    def filtered_history(self) -> list[dict]:
+        return self.filtered_history_cache
+
+    @rx.var
+    def paginated_history(self) -> list[dict]:
+        return self.filtered_history
+
+    @rx.var
+    def report_method_summary(self) -> list[dict]:
+        return self.report_method_summary_cache
 
     @rx.var
     def report_detail_rows(self) -> list[dict]:
-        _ = self._report_update_trigger
-        if not self.current_user["privileges"]["view_historial"]:
-            return []
-        return self._build_report_entries()
+        return self.report_detail_rows_cache
 
     @rx.var
     def report_detail_total_pages(self) -> int:
@@ -901,10 +1249,7 @@ class HistorialState(MixinState):
 
     @rx.var
     def report_closing_rows(self) -> list[dict]:
-        _ = self._report_update_trigger
-        if not self.current_user["privileges"]["view_historial"]:
-            return []
-        return self._build_report_closings()
+        return self.report_closing_rows_cache
 
     @rx.var
     def report_closing_total_pages(self) -> int:
@@ -931,16 +1276,13 @@ class HistorialState(MixinState):
 
     @rx.var
     def total_pages(self) -> int:
-        _ = self._history_update_trigger
-        total_items = self._sales_total_count()
-        if total_items == 0:
-            return 1
-        return (total_items + self.items_per_page - 1) // self.items_per_page
+        return self.total_pages_cache
 
     @rx.event
     def set_history_page(self, page_num: int):
-        if 1 <= page_num <= self.total_pages:
+        if 1 <= page_num <= self.total_pages_cache:
             self.current_page_history = page_num
+            self._refresh_history_cache()
 
 
     @rx.event
@@ -952,6 +1294,8 @@ class HistorialState(MixinState):
         self.history_filter_end_date = self.staged_history_filter_end_date
         self.current_page_history = 1
         self._history_update_trigger += 1
+        self._refresh_history_cache()
+        self._refresh_financial_cache()
 
     @rx.event
     def reload_history(self):
@@ -959,6 +1303,7 @@ class HistorialState(MixinState):
         self._load_report_options()
         self._history_update_trigger += 1
         self._report_update_trigger += 1
+        self._refresh_historial_cache()
         # print("Reloading history...") # Depuracion
 
     @rx.event(background=True)
@@ -1001,6 +1346,7 @@ class HistorialState(MixinState):
         self.report_active_tab = value or "metodos"
         self.report_detail_current_page = 1
         self.report_closing_current_page = 1
+        self._refresh_report_cache()
 
     @rx.event
     def apply_report_filters(self):
@@ -1012,6 +1358,7 @@ class HistorialState(MixinState):
         self.report_detail_current_page = 1
         self.report_closing_current_page = 1
         self._report_update_trigger += 1
+        self._refresh_report_cache()
 
     @rx.event
     def reset_report_filters(self):
@@ -1685,86 +2032,7 @@ class HistorialState(MixinState):
 
     @rx.var
     def payment_stats(self) -> Dict[str, float]:
-        # Dependencia para forzar actualizacion
-        _ = self._history_update_trigger
-
-        stats = {
-            "efectivo": Decimal("0.00"),
-            "debito": Decimal("0.00"),
-            "credito": Decimal("0.00"),
-            "yape": Decimal("0.00"),
-            "plin": Decimal("0.00"),
-            "transferencia": Decimal("0.00"),
-            "mixto": Decimal("0.00"),
-        }
-
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return {k: self._round_currency(v) for k, v in stats.items()}
-
-        start_date, end_date = self._history_date_range()
-
-        with rx.session() as session:
-            # -------------------------------------------------------
-            # 1. INGRESOS REALES (SalePayment)
-            # -------------------------------------------------------
-            payment_query = (
-                select(
-                    SalePayment.method_type,
-                    sa.func.sum(SalePayment.amount),
-                )
-                .join(Sale, SalePayment.sale_id == Sale.id)
-                .where(Sale.status != SaleStatus.cancelled)
-                .where(Sale.company_id == company_id)
-                .where(Sale.branch_id == branch_id)
-            )
-            if start_date:
-                payment_query = payment_query.where(
-                    SalePayment.created_at >= start_date
-                )
-            if end_date:
-                payment_query = payment_query.where(
-                    SalePayment.created_at <= end_date
-                )
-            payment_query = payment_query.group_by(SalePayment.method_type)
-
-            payment_rows = session.exec(payment_query).all()
-            for method_type, amount in payment_rows:
-                key = self._payment_method_key(method_type)
-                if not key:
-                    continue
-                amount = Decimal(str(amount or 0))
-                self._add_to_stats(stats, key, amount)
-
-            # -------------------------------------------------------
-            # 2. COBROS DE CUOTAS (CashboxLog)
-            # -------------------------------------------------------
-            query_log = (
-                select(
-                    CashboxLog.payment_method,
-                    sa.func.sum(CashboxLog.amount),
-                )
-                .where(CashboxLog.action.in_(REPORT_CASHBOX_ACTIONS))
-                .where(CashboxLog.is_voided == False)
-                .where(CashboxLog.company_id == company_id)
-                .where(CashboxLog.branch_id == branch_id)
-            )
-            if start_date:
-                query_log = query_log.where(CashboxLog.timestamp >= start_date)
-            if end_date:
-                query_log = query_log.where(CashboxLog.timestamp <= end_date)
-            query_log = query_log.group_by(CashboxLog.payment_method)
-
-            log_rows = session.exec(query_log).all()
-            for payment_label, amount in log_rows:
-                amount = Decimal(str(amount or 0))
-                method_key = self._method_key_from_label(
-                    payment_label or ""
-                )
-                self._add_to_stats(stats, method_key, amount)
-
-        return {k: self._round_currency(v) for k, v in stats.items()}
+        return self.payment_stats_cache
 
     def _add_to_stats(self, stats: dict, key: str, amount: Decimal):
         """Helper para sumar montos usando las keys del Enum."""
@@ -1785,175 +2053,15 @@ class HistorialState(MixinState):
 
     @rx.var
     def total_credit(self) -> float:
-        _ = self._history_update_trigger
-        total_credit = Decimal("0.00")
-        start_date, end_date = self._history_date_range()
-
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return 0.0
-        with rx.session() as session:
-            query = (
-                select(Sale)
-                .where(Sale.status != SaleStatus.cancelled)
-                .where(Sale.company_id == company_id)
-                .where(Sale.branch_id == branch_id)
-                .options(selectinload(Sale.payments))
-            )
-            if start_date:
-                query = query.where(Sale.timestamp >= start_date)
-            if end_date:
-                query = query.where(Sale.timestamp <= end_date)
-
-            sales = session.exec(query).all()
-            for sale in sales:
-                payments = sale.payments or []
-                payment_method = self._payment_method_display(payments)
-                if payment_method.strip() in {"", "-"}:
-                    payment_method = "No especificado"
-                payment_method = self._sale_payment_method_label(
-                    sale, payments, payment_method
-                )
-                if self._is_credit_label(payment_method):
-                    total_credit += Decimal(str(sale.total_amount or 0))
-
-        return self._round_currency(total_credit)
+        return self.total_credit_cache
 
     @rx.var
     def credit_outstanding(self) -> float:
-        _ = self._history_update_trigger
-        start_date, end_date = self._history_date_range()
-        pending_total = Decimal("0.00")
-
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return 0.0
-        with rx.session() as session:
-            query = (
-                select(Sale)
-                .where(Sale.status != SaleStatus.cancelled)
-                .where(Sale.company_id == company_id)
-                .where(Sale.branch_id == branch_id)
-                .options(
-                    selectinload(Sale.payments),
-                    selectinload(Sale.installments),
-                )
-            )
-            if start_date:
-                query = query.where(Sale.timestamp >= start_date)
-            if end_date:
-                query = query.where(Sale.timestamp <= end_date)
-
-            sales = session.exec(query).all()
-            for sale in sales:
-                payment_condition = (sale.payment_condition or "").strip().lower()
-                payments = sale.payments or []
-                payment_method = self._payment_method_display(payments)
-                if payment_method.strip() in {"", "-"}:
-                    payment_method = "No especificado"
-                payment_method = self._sale_payment_method_label(
-                    sale, payments, payment_method
-                )
-                is_credit = payment_condition == "credito" or self._is_credit_label(
-                    payment_method
-                )
-                if not is_credit:
-                    continue
-                total_amount = Decimal(str(sale.total_amount or 0))
-                paid_initial = sum(
-                    Decimal(str(getattr(payment, "amount", 0) or 0))
-                    for payment in (sale.payments or [])
-                )
-                paid_installments = sum(
-                    Decimal(str(getattr(installment, "paid_amount", 0) or 0))
-                    for installment in (sale.installments or [])
-                )
-                pending = total_amount - paid_initial - paid_installments
-                if pending > 0:
-                    pending_total += pending
-
-        return self._round_currency(pending_total)
+        return self.credit_outstanding_cache
 
     @rx.var
     def dynamic_payment_cards(self) -> list[dict]:
-        stats = self.payment_stats
-        styles = {
-            "cash": {"icon": "coins", "color": "blue"},
-            "debit": {"icon": "credit-card", "color": "indigo"},
-            "credit": {"icon": "credit-card", "color": "violet"},
-            "yape": {"icon": "qr-code", "color": "pink"},
-            "plin": {"icon": "qr-code", "color": "cyan"},
-            "transfer": {"icon": "landmark", "color": "orange"},
-            "mixed": {"icon": "layers", "color": "amber"},
-            "other": {"icon": "circle-help", "color": "gray"},
-        }
-        enabled_kinds: set[str] = set()
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return []
-        with rx.session() as session:
-            methods = session.exec(
-                select(PaymentMethod)
-                .where(PaymentMethod.enabled == True)
-                .where(PaymentMethod.company_id == company_id)
-                .where(PaymentMethod.branch_id == branch_id)
-            ).all()
-        for method in methods:
-            kind = (method.kind or method.method_id or "other").strip().lower()
-            if kind == "card":
-                kind = "credit"
-            elif kind == "wallet":
-                kind = "yape"
-            enabled_kinds.add(kind)
-
-        def _add_card(kind: str, label: str, stats_key: str) -> None:
-            amount = stats.get(stats_key, 0.0)
-            if amount == 0 and kind not in enabled_kinds:
-                return
-            style = styles.get(kind, styles["other"])
-            cards.append(
-                {
-                    "name": label,
-                    "amount": amount,
-                    "icon": style["icon"],
-                    "color": style["color"],
-                    "_sort_key": kind,
-                }
-            )
-        order_index = {
-            "cash": 0,
-            "yape": 1,
-            "plin": 2,
-            "credit": 3,
-            "debit": 4,
-            "transfer": 5,
-            "mixed": 6,
-            "other": 7,
-        }
-
-        cards: list[dict] = []
-        _add_card("cash", "Efectivo", "efectivo")
-        _add_card("yape", "Yape", "yape")
-        _add_card("plin", "Plin", "plin")
-        _add_card("credit", "T. Credito", "credito")
-        _add_card("debit", "T. Debito", "debito")
-        _add_card("transfer", "Transferencia", "transferencia")
-        mixed_label = "Pago Mixto" if "mixed" in enabled_kinds else "Otros"
-        if stats.get("mixto", 0) > 0:
-            _add_card("mixed", mixed_label, "mixto")
-
-        def _sorter(card: dict) -> tuple[int, str]:
-            name = (card.get("name") or "").strip().lower()
-            key = card.get("_sort_key") or ""
-            return (order_index.get(key, 99), name)
-
-        cards.sort(key=_sorter)
-        for card in cards:
-            card.pop("_sort_key", None)
-        return cards
+        return self.dynamic_payment_cards_cache
 
     @rx.var
     def total_ventas_efectivo(self) -> float:
@@ -1991,83 +2099,12 @@ class HistorialState(MixinState):
 
     @rx.var
     def productos_mas_vendidos(self) -> list[dict]:
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return []
-        with rx.session() as session:
-            statement = select(
-                SaleItem.product_name_snapshot, 
-                sa.func.sum(SaleItem.quantity).label("total_qty"),
-            ).join(Sale, SaleItem.sale_id == Sale.id)
-            statement = (
-                statement
-                .where(Sale.status != SaleStatus.cancelled)
-                .where(Sale.company_id == company_id)
-                .where(Sale.branch_id == branch_id)
-                .group_by(SaleItem.product_name_snapshot)
-                .order_by(sa.desc("total_qty"))
-                .limit(5)
-            )
-            
-            results = session.exec(statement).all()
-            return [
-                {"description": name, "cantidad_vendida": qty} for name, qty in results
-            ]
+        return self.productos_mas_vendidos_cache
 
     @rx.var
     def productos_stock_bajo(self) -> list[Dict]:
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return []
-        with rx.session() as session:
-            products = session.exec(
-                select(Product)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-                .where(Product.stock <= 10)
-                .order_by(Product.stock)
-            ).all()
-            return [
-                {
-                    "barcode": p.barcode,
-                    "description": p.description,
-                    "stock": p.stock,
-                    "unit": p.unit
-                }
-                for p in products
-            ]
+        return self.productos_stock_bajo_cache
 
     @rx.var
     def sales_by_day(self) -> list[dict]:
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return []
-        with rx.session() as session:
-            date_col = sa.func.date(Sale.timestamp)
-            query = (
-                select(date_col, sa.func.sum(Sale.total_amount))
-                .where(Sale.status != SaleStatus.cancelled)
-                .where(Sale.company_id == company_id)
-                .where(Sale.branch_id == branch_id)
-                .group_by(date_col)
-                .order_by(date_col.desc())
-                .limit(7)
-            )
-            rows = session.exec(query).all()
-            rows = list(reversed(rows))
-            result = []
-            for day, total in rows:
-                if hasattr(day, "strftime"):
-                    day_label = day.strftime("%Y-%m-%d")
-                else:
-                    day_label = str(day or "")
-                result.append(
-                    {
-                        "date": day_label,
-                        "total": self._round_currency(float(total or 0)),
-                    }
-                )
-            return result
+        return self.sales_by_day_cache

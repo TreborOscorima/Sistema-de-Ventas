@@ -76,44 +76,40 @@ def client_form_modal() -> rx.Component:
         rx.el.div(
           rx.el.label("Nombre", class_name="text-sm font-medium text-slate-700"),
           rx.el.input(
-            value=State.current_client["name"],
-            on_change=lambda v: State.update_current_client("name", v),
+            default_value=State.current_client["name"],
+            on_blur=lambda v: State.update_current_client("name", v),
             placeholder="Nombre completo",
             class_name=INPUT_STYLES["default"],
-            debounce_timeout=200,
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
           rx.el.label(State.personal_id_label, class_name="text-sm font-medium text-slate-700"),
           rx.el.input(
-            value=State.current_client["dni"],
-            on_change=lambda v: State.update_current_client("dni", v),
+            default_value=State.current_client["dni"],
+            on_blur=lambda v: State.update_current_client("dni", v),
             placeholder=State.personal_id_placeholder,
             class_name=INPUT_STYLES["default"],
-            debounce_timeout=200,
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
           rx.el.label("Telefono", class_name="text-sm font-medium text-slate-700"),
           rx.el.input(
-            value=State.current_client["phone"],
-            on_change=lambda v: State.update_current_client("phone", v),
+            default_value=State.current_client["phone"],
+            on_blur=lambda v: State.update_current_client("phone", v),
             placeholder="Numero de contacto",
             class_name=INPUT_STYLES["default"],
-            debounce_timeout=200,
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
           rx.el.label("Direccion", class_name="text-sm font-medium text-slate-700"),
           rx.el.input(
-            value=State.current_client["address"],
-            on_change=lambda v: State.update_current_client("address", v),
+            default_value=State.current_client["address"],
+            on_blur=lambda v: State.update_current_client("address", v),
             placeholder="Direccion del cliente",
             class_name=INPUT_STYLES["default"],
-            debounce_timeout=200,
           ),
           class_name="flex flex-col gap-1",
         ),
@@ -125,8 +121,8 @@ def client_form_modal() -> rx.Component:
             type="number",
             step="0.01",
             min="0",
-            value=State.current_client["credit_limit"],
-            on_change=lambda v: State.update_current_client("credit_limit", v),
+            default_value=State.current_client["credit_limit"],
+            on_blur=lambda v: State.update_current_client("credit_limit", v),
             placeholder="0.00",
             class_name=INPUT_STYLES["default"],
           ),
@@ -171,16 +167,18 @@ def clientes_page() -> rx.Component:
         ],
       ),
       rx.el.div(
-        rx.el.input(
-          placeholder=rx.cond(
-            State.personal_id_label == "DNI",
-            "Buscar por nombre, DNI o teléfono...",
-            "Buscar por nombre, documento o teléfono..."
+        rx.debounce_input(
+          rx.input(
+            placeholder=rx.cond(
+              State.personal_id_label == "DNI",
+              "Buscar por nombre, DNI o teléfono...",
+              "Buscar por nombre, documento o teléfono..."
+            ),
+            value=State.search_query,
+            on_change=State.set_search_query,
+            class_name=INPUT_STYLES["search"],
           ),
-          value=State.search_query,
-          on_change=State.set_search_query,
-          class_name=INPUT_STYLES["search"],
-          debounce_timeout=200,
+          debounce_timeout=600,
         ),
         class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm",
       ),

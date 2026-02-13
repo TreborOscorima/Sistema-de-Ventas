@@ -39,6 +39,8 @@ class PurchasesState(MixinState):
     purchase_edit_supplier_suggestions: list[dict[str, Any]] = []
     purchase_delete_target: dict[str, Any] | None = None
     _purchase_update_trigger: int = 0
+    purchase_records_cache: list[dict[str, Any]] = []
+    purchase_total_pages_cache: int = 1
 
     def _empty_purchase_edit_form(self) -> dict[str, Any]:
         return {
@@ -57,36 +59,43 @@ class PurchasesState(MixinState):
     def set_purchases_tab(self, tab: str):
         if tab in {"registro", "proveedores"}:
             self.purchases_active_tab = tab
+            self._refresh_purchase_cache()
 
     @rx.event
     def set_purchase_search_term(self, value: str):
         self.purchase_search_term = value or ""
         self.purchase_current_page = 1
+        self._refresh_purchase_cache()
 
     @rx.event
     def set_purchase_start_date(self, value: str):
         self.purchase_start_date = value or ""
         self.purchase_current_page = 1
+        self._refresh_purchase_cache()
 
     @rx.event
     def set_purchase_end_date(self, value: str):
         self.purchase_end_date = value or ""
         self.purchase_current_page = 1
+        self._refresh_purchase_cache()
 
     @rx.event
     def set_purchase_page(self, page: int):
-        if 1 <= page <= self.purchase_total_pages:
+        if 1 <= page <= self.purchase_total_pages_cache:
             self.purchase_current_page = page
+            self._refresh_purchase_cache()
 
     @rx.event
     def prev_purchase_page(self):
         if self.purchase_current_page > 1:
             self.purchase_current_page -= 1
+            self._refresh_purchase_cache()
 
     @rx.event
     def next_purchase_page(self):
-        if self.purchase_current_page < self.purchase_total_pages:
+        if self.purchase_current_page < self.purchase_total_pages_cache:
             self.purchase_current_page += 1
+            self._refresh_purchase_cache()
 
     @rx.event
     def reset_purchase_filters(self):
@@ -94,6 +103,89 @@ class PurchasesState(MixinState):
         self.purchase_start_date = ""
         self.purchase_end_date = ""
         self.purchase_current_page = 1
+        self._refresh_purchase_cache()
+
+    def _refresh_purchase_cache(self):
+        privileges = self.current_user["privileges"]
+        if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
+            self.purchase_records_cache = []
+            self.purchase_total_pages_cache = 1
+            return
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.purchase_records_cache = []
+            self.purchase_total_pages_cache = 1
+            return
+
+        per_page = max(self.purchase_items_per_page, 1)
+        page = max(self.purchase_current_page, 1)
+
+        with rx.session() as session:
+            count_query = select(func.count(Purchase.id)).select_from(Purchase).join(
+                Supplier, isouter=True
+            )
+            count_query = count_query.where(Purchase.company_id == company_id)
+            count_query = count_query.where(Purchase.branch_id == branch_id)
+            for clause in self._purchase_filters():
+                count_query = count_query.where(clause)
+            total = int(session.exec(count_query).one() or 0)
+
+            total_pages = (
+                1 if total == 0 else (total + per_page - 1) // per_page
+            )
+            if page > total_pages:
+                page = total_pages
+                self.purchase_current_page = page
+            offset = (page - 1) * per_page
+
+            records = session.exec(
+                self._purchase_query().offset(offset).limit(per_page)
+            ).all()
+
+        rows: list[dict[str, Any]] = []
+        for purchase in records:
+            supplier = purchase.supplier
+            user = purchase.user
+            doc_type = (purchase.doc_type or "").upper() or "-"
+            series = purchase.series or ""
+            number = purchase.number or ""
+            series_display = series if series else "-"
+            number_display = number if number else "-"
+            if series:
+                doc_label = f"{doc_type} {series}-{number}"
+            else:
+                doc_label = f"{doc_type} {number}"
+            rows.append(
+                {
+                    "id": purchase.id,
+                    "issue_date": purchase.issue_date.strftime("%Y-%m-%d")
+                    if purchase.issue_date
+                    else "",
+                    "registered_time": purchase.created_at.strftime("%H:%M")
+                    if purchase.created_at
+                    else "",
+                    "doc_type": doc_type,
+                    "series": series_display,
+                    "number": number_display,
+                    "doc_label": doc_label,
+                    "supplier_name": supplier.name if supplier else "",
+                    "supplier_tax_id": supplier.tax_id if supplier else "",
+                    "total_amount": float(purchase.total_amount or 0),
+                    "currency_code": purchase.currency_code or "",
+                    "user": user.username if user else "Sistema",
+                    "items_count": len(purchase.items or []),
+                    "notes": purchase.notes or "",
+                }
+            )
+
+        self.purchase_records_cache = rows
+        self.purchase_total_pages_cache = total_pages
+
+    @rx.event
+    def refresh_purchase_cache(self):
+        self._refresh_purchase_cache()
 
     def _parse_date(self, value: str, end: bool = False) -> datetime.datetime | None:
         if not value:
@@ -151,76 +243,11 @@ class PurchasesState(MixinState):
 
     @rx.var
     def purchase_records(self) -> list[dict[str, Any]]:
-        _ = self._purchase_update_trigger
-        privileges = self.current_user["privileges"]
-        if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
-            return []
-        page = max(self.purchase_current_page, 1)
-        per_page = max(self.purchase_items_per_page, 1)
-        offset = (page - 1) * per_page
-        with rx.session() as session:
-            records = session.exec(
-                self._purchase_query().offset(offset).limit(per_page)
-            ).all()
-        rows = []
-        for purchase in records:
-            supplier = purchase.supplier
-            user = purchase.user
-            doc_type = (purchase.doc_type or "").upper() or "-"
-            series = purchase.series or ""
-            number = purchase.number or ""
-            series_display = series if series else "-"
-            number_display = number if number else "-"
-            if series:
-                doc_label = f"{doc_type} {series}-{number}"
-            else:
-                doc_label = f"{doc_type} {number}"
-            rows.append(
-                {
-                    "id": purchase.id,
-                    "issue_date": purchase.issue_date.strftime("%Y-%m-%d")
-                    if purchase.issue_date
-                    else "",
-                    "registered_time": purchase.created_at.strftime("%H:%M")
-                    if purchase.created_at
-                    else "",
-                    "doc_type": doc_type,
-                    "series": series_display,
-                    "number": number_display,
-                    "doc_label": doc_label,
-                    "supplier_name": supplier.name if supplier else "",
-                    "supplier_tax_id": supplier.tax_id if supplier else "",
-                    "total_amount": float(purchase.total_amount or 0),
-                    "currency_code": purchase.currency_code or "",
-                    "user": user.username if user else "Sistema",
-                    "items_count": len(purchase.items or []),
-                    "notes": purchase.notes or "",
-                }
-            )
-        return rows
+        return self.purchase_records_cache
 
     @rx.var
     def purchase_total_pages(self) -> int:
-        _ = self._purchase_update_trigger
-        privileges = self.current_user["privileges"]
-        if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
-            return 1
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return 1
-        with rx.session() as session:
-            count_query = select(func.count(Purchase.id)).select_from(Purchase).join(
-                Supplier, isouter=True
-            )
-            count_query = count_query.where(Purchase.company_id == company_id)
-            count_query = count_query.where(Purchase.branch_id == branch_id)
-            for clause in self._purchase_filters():
-                count_query = count_query.where(clause)
-            total = session.exec(count_query).one() or 0
-        if total == 0:
-            return 1
-        return (total + self.purchase_items_per_page - 1) // self.purchase_items_per_page
+        return self.purchase_total_pages_cache
 
     @rx.event
     def open_purchase_detail(self, purchase_id: int):
@@ -490,6 +517,7 @@ class PurchasesState(MixinState):
             session.commit()
 
         self._purchase_update_trigger += 1
+        self._refresh_purchase_cache()
         self.close_purchase_edit_modal()
         return rx.toast("Compra actualizada.", duration=3000)
 
@@ -616,6 +644,7 @@ class PurchasesState(MixinState):
             session.commit()
 
         self._purchase_update_trigger += 1
+        self._refresh_purchase_cache()
         if hasattr(self, "_inventory_update_trigger"):
             self._inventory_update_trigger += 1
         self.close_purchase_delete_modal()

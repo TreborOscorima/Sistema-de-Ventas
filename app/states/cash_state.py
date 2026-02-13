@@ -121,6 +121,20 @@ class CashState(MixinState):
     expanded_cashbox_sale_id: str = ""
     _cashbox_update_trigger: int = 0
     cashbox_is_open_cached: bool = False
+    current_cashbox_session_cache: CashboxSession = {
+        "opening_amount": 0.0,
+        "opening_time": "",
+        "closing_time": "",
+        "is_open": False,
+        "opened_by": "guest",
+    }
+    cashbox_opening_amount_cache: float = 0.0
+    petty_cash_movements_cache: List[CashboxLogEntry] = []
+    petty_cash_total_pages_cache: int = 1
+    filtered_cashbox_logs_cache: list[CashboxLogEntry] = []
+    cashbox_log_total_pages_cache: int = 1
+    filtered_cashbox_sales_cache: list[CashboxSale] = []
+    cashbox_total_pages_cache: int = 1
 
     @rx.event
     def toggle_cashbox_sale_detail(self, sale_id: str):
@@ -146,16 +160,19 @@ class CashState(MixinState):
     def set_petty_cash_page(self, page: int):
         if 1 <= page <= self.petty_cash_total_pages:
             self.petty_cash_current_page = page
+            self._refresh_cashbox_caches()
 
     @rx.event
     def prev_petty_cash_page(self):
         if self.petty_cash_current_page > 1:
             self.petty_cash_current_page -= 1
+            self._refresh_cashbox_caches()
 
     @rx.event
     def next_petty_cash_page(self):
         if self.petty_cash_current_page < self.petty_cash_total_pages:
             self.petty_cash_current_page += 1
+            self._refresh_cashbox_caches()
 
     @rx.event
     def open_petty_cash_modal(self):
@@ -168,6 +185,7 @@ class CashState(MixinState):
     @rx.event
     def set_cash_tab(self, tab: str):
         self.cash_active_tab = tab
+        self._refresh_cashbox_caches()
 
     @rx.event
     def set_petty_cash_amount(self, value: str | int | float):
@@ -255,6 +273,7 @@ class CashState(MixinState):
         self.petty_cash_reason = ""
         self.petty_cash_modal_open = False
         self._cashbox_update_trigger += 1
+        self._refresh_cashbox_caches()
         return rx.toast("Movimiento registrado correctamente.", duration=3000)
 
     def _petty_cash_query(self):
@@ -329,59 +348,25 @@ class CashState(MixinState):
                 filtered.append(entry)
             return filtered
 
-    @rx.var
-    def petty_cash_movements(self) -> List[CashboxLogEntry]:
-        _ = self._cashbox_update_trigger
-        page = max(self.petty_cash_current_page, 1)
-        per_page = max(self.petty_cash_items_per_page, 1)
-        offset = (page - 1) * per_page
-        return self._fetch_petty_cash(offset=offset, limit=per_page)
-
-    @rx.var
-    def paginated_petty_cash_movements(self) -> List[CashboxLogEntry]:
-        return self.petty_cash_movements
-
-    @rx.var
-    def petty_cash_total_pages(self) -> int:
-        _ = self._cashbox_update_trigger
-        total = self._petty_cash_count()
-        if total == 0:
-            return 1
-        return (total + self.petty_cash_items_per_page - 1) // self.petty_cash_items_per_page
-
-    @rx.var
-    def cashbox_opening_amount_display(self) -> str:
-        return f"{self.cashbox_opening_amount:.2f}"
-
-    @rx.var
-    def current_cashbox_session(self) -> CashboxSession:
-        # Dependencia para forzar actualizacion
-        _ = self._cashbox_update_trigger
-        
+    def _empty_cashbox_session_data(self) -> CashboxSession:
         username = "guest"
-        user_id = None
         if hasattr(self, "current_user") and self.current_user:
-             username = self.current_user.get("username", "guest")
-             user_id = self.current_user.get("id")
-        
-        if not user_id:
-            return {
-                "opening_amount": 0.0,
-                "opening_time": "",
-                "closing_time": "",
-                "is_open": False,
-                "opened_by": username,
-            }
+            username = self.current_user.get("username", "guest")
+        return {
+            "opening_amount": 0.0,
+            "opening_time": "",
+            "closing_time": "",
+            "is_open": False,
+            "opened_by": username,
+        }
+
+    def _load_current_cashbox_session_data(self) -> CashboxSession:
+        session_data = self._empty_cashbox_session_data()
+        user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
         company_id = self._company_id()
         branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return {
-                "opening_amount": 0.0,
-                "opening_time": "",
-                "closing_time": "",
-                "is_open": False,
-                "opened_by": username,
-            }
+        if not user_id or not company_id or not branch_id:
+            return session_data
 
         with rx.session() as session:
             cashbox_session = session.exec(
@@ -391,23 +376,143 @@ class CashState(MixinState):
                 .where(CashboxSessionModel.branch_id == branch_id)
                 .where(CashboxSessionModel.is_open == True)
             ).first()
-            
-            if cashbox_session:
-                return {
-                    "opening_amount": cashbox_session.opening_amount,
-                    "opening_time": cashbox_session.opening_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "closing_time": "",
-                    "is_open": True,
-                    "opened_by": username,
-                }
-            
-            return {
-                "opening_amount": 0.0,
-                "opening_time": "",
-                "closing_time": "",
-                "is_open": False,
-                "opened_by": username,
-            }
+
+        if not cashbox_session:
+            return session_data
+
+        session_data["opening_amount"] = float(cashbox_session.opening_amount or 0)
+        session_data["opening_time"] = cashbox_session.opening_time.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        session_data["closing_time"] = ""
+        session_data["is_open"] = True
+        return session_data
+
+    def _compute_cashbox_opening_amount(self, session_data: CashboxSession) -> float:
+        if not session_data.get("is_open"):
+            return 0.0
+
+        opening_amount = float(session_data.get("opening_amount", 0) or 0)
+        opening_time_str = session_data.get("opening_time")
+        if not opening_time_str:
+            return opening_amount
+
+        try:
+            opening_time = datetime.datetime.strptime(
+                opening_time_str, "%Y-%m-%d %H:%M:%S"
+            )
+        except ValueError:
+            return opening_amount
+
+        user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not user_id or not company_id or not branch_id:
+            return opening_amount
+
+        with rx.session() as session:
+            expenses = session.exec(
+                select(sqlalchemy.func.sum(CashboxLogModel.amount)).where(
+                    CashboxLogModel.user_id == user_id,
+                    CashboxLogModel.action == "gasto_caja_chica",
+                    CashboxLogModel.timestamp >= opening_time,
+                    CashboxLogModel.company_id == company_id,
+                    CashboxLogModel.branch_id == branch_id,
+                )
+            ).one()
+        return opening_amount - float(expenses or 0)
+
+    def _refresh_cashbox_caches(self):
+        session_data = self._load_current_cashbox_session_data()
+        self.current_cashbox_session_cache = session_data
+        self.cashbox_is_open_cached = bool(session_data.get("is_open"))
+        self.cashbox_opening_amount_cache = self._compute_cashbox_opening_amount(
+            session_data
+        )
+
+        if not self.current_user["privileges"]["view_cashbox"]:
+            self.petty_cash_movements_cache = []
+            self.petty_cash_total_pages_cache = 1
+            self.filtered_cashbox_logs_cache = []
+            self.cashbox_log_total_pages_cache = 1
+            self.filtered_cashbox_sales_cache = []
+            self.cashbox_total_pages_cache = 1
+            return
+
+        petty_total = int(self._petty_cash_count() or 0)
+        petty_total_pages = (
+            1
+            if petty_total == 0
+            else (petty_total + self.petty_cash_items_per_page - 1)
+            // self.petty_cash_items_per_page
+        )
+        petty_page = min(max(self.petty_cash_current_page, 1), petty_total_pages)
+        if petty_page != self.petty_cash_current_page:
+            self.petty_cash_current_page = petty_page
+        petty_offset = (petty_page - 1) * max(self.petty_cash_items_per_page, 1)
+        self.petty_cash_movements_cache = self._fetch_petty_cash(
+            offset=petty_offset,
+            limit=max(self.petty_cash_items_per_page, 1),
+        )
+        self.petty_cash_total_pages_cache = petty_total_pages
+
+        log_total = int(self._cashbox_logs_count() or 0)
+        log_total_pages = (
+            1
+            if log_total == 0
+            else (log_total + self.cashbox_log_items_per_page - 1)
+            // self.cashbox_log_items_per_page
+        )
+        log_page = min(max(self.cashbox_log_current_page, 1), log_total_pages)
+        if log_page != self.cashbox_log_current_page:
+            self.cashbox_log_current_page = log_page
+        log_offset = (log_page - 1) * max(self.cashbox_log_items_per_page, 1)
+        self.filtered_cashbox_logs_cache = self._fetch_cashbox_logs(
+            offset=log_offset,
+            limit=max(self.cashbox_log_items_per_page, 1),
+        )
+        self.cashbox_log_total_pages_cache = log_total_pages
+
+        sales_total = int(self._cashbox_sales_count() or 0)
+        sales_total_pages = (
+            1
+            if sales_total == 0
+            else (sales_total + self.cashbox_items_per_page - 1)
+            // self.cashbox_items_per_page
+        )
+        sales_page = min(max(self.cashbox_current_page, 1), sales_total_pages)
+        if sales_page != self.cashbox_current_page:
+            self.cashbox_current_page = sales_page
+        sales_offset = (sales_page - 1) * max(self.cashbox_items_per_page, 1)
+        self.filtered_cashbox_sales_cache = self._fetch_cashbox_sales(
+            offset=sales_offset,
+            limit=max(self.cashbox_items_per_page, 1),
+        )
+        self.cashbox_total_pages_cache = sales_total_pages
+
+    @rx.event
+    def refresh_cashbox_data(self):
+        self._refresh_cashbox_caches()
+
+    @rx.var
+    def petty_cash_movements(self) -> List[CashboxLogEntry]:
+        return self.petty_cash_movements_cache
+
+    @rx.var
+    def paginated_petty_cash_movements(self) -> List[CashboxLogEntry]:
+        return self.petty_cash_movements
+
+    @rx.var
+    def petty_cash_total_pages(self) -> int:
+        return self.petty_cash_total_pages_cache
+
+    @rx.var
+    def cashbox_opening_amount_display(self) -> str:
+        return f"{self.cashbox_opening_amount:.2f}"
+
+    @rx.var
+    def current_cashbox_session(self) -> CashboxSession:
+        return self.current_cashbox_session_cache
 
     @rx.var
     def cashbox_is_open(self) -> bool:
@@ -415,41 +520,7 @@ class CashState(MixinState):
 
     @rx.var
     def cashbox_opening_amount(self) -> float:
-        session_data = self.current_cashbox_session
-        if not session_data.get("is_open"):
-             return 0.0
-        
-        opening_amount = float(session_data.get("opening_amount", 0))
-        opening_time_str = session_data.get("opening_time")
-        if not opening_time_str:
-            return opening_amount
-
-        try:
-            opening_time = datetime.datetime.strptime(opening_time_str, "%Y-%m-%d %H:%M:%S")
-        except ValueError:
-            return opening_amount
-
-        user_id = self.current_user.get("id")
-        if not user_id:
-            return opening_amount
-
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return opening_amount
-
-        with rx.session() as session:
-            # Sumar gastos
-            statement = select(sqlalchemy.func.sum(CashboxLogModel.amount)).where(
-                CashboxLogModel.user_id == user_id,
-                CashboxLogModel.action == "gasto_caja_chica",
-                CashboxLogModel.timestamp >= opening_time,
-                CashboxLogModel.company_id == company_id,
-                CashboxLogModel.branch_id == branch_id,
-            )
-            expenses = session.exec(statement).one()
-            expenses_value = float(expenses or 0)
-            return opening_amount - expenses_value
+        return self.cashbox_opening_amount_cache
 
     @rx.var
     def cashbox_opening_time(self) -> str:
@@ -789,22 +860,7 @@ class CashState(MixinState):
 
     @rx.event
     def refresh_cashbox_status(self):
-        user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not user_id or not company_id or not branch_id:
-            self.cashbox_is_open_cached = False
-            return
-        with rx.session() as session:
-            opened = session.exec(
-                select(CashboxSessionModel.id)
-                .where(CashboxSessionModel.user_id == user_id)
-                .where(CashboxSessionModel.company_id == company_id)
-                .where(CashboxSessionModel.branch_id == branch_id)
-                .where(CashboxSessionModel.is_open == True)
-                .limit(1)
-            ).first()
-        self.cashbox_is_open_cached = opened is not None
+        self._refresh_cashbox_caches()
 
     @rx.event
     def set_cashbox_open_amount_input(self, value: float | str):
@@ -874,7 +930,7 @@ class CashState(MixinState):
             
         self.cashbox_open_amount_input = ""
         self._cashbox_update_trigger += 1
-        self.cashbox_is_open_cached = True
+        self._refresh_cashbox_caches()
         return rx.toast("Caja abierta. Jornada iniciada.", duration=3000)
 
     def _close_cashbox_session(self):
@@ -901,9 +957,8 @@ class CashState(MixinState):
                 cashbox_session.closing_time = datetime.datetime.now()
                 session.add(cashbox_session)
                 session.commit()
-        self.cashbox_is_open_cached = False
-        
         self._cashbox_update_trigger += 1
+        self._refresh_cashbox_caches()
 
     def _cashbox_logs_query(self):
         company_id = self._company_id()
@@ -1009,13 +1064,7 @@ class CashState(MixinState):
 
     @rx.var
     def filtered_cashbox_logs(self) -> list[CashboxLogEntry]:
-        _ = self._cashbox_update_trigger
-        if not self.current_user["privileges"]["view_cashbox"]:
-            return []
-        page = max(self.cashbox_log_current_page, 1)
-        per_page = max(self.cashbox_log_items_per_page, 1)
-        offset = (page - 1) * per_page
-        return self._fetch_cashbox_logs(offset=offset, limit=per_page)
+        return self.filtered_cashbox_logs_cache
 
     @rx.var
     def paginated_cashbox_logs(self) -> list[CashboxLogEntry]:
@@ -1023,11 +1072,7 @@ class CashState(MixinState):
 
     @rx.var
     def cashbox_log_total_pages(self) -> int:
-        _ = self._cashbox_update_trigger
-        total = self._cashbox_logs_count()
-        if total == 0:
-            return 1
-        return (total + self.cashbox_log_items_per_page - 1) // self.cashbox_log_items_per_page
+        return self.cashbox_log_total_pages_cache
 
     @rx.event
     def set_cashbox_staged_start_date(self, value: str):
@@ -1051,6 +1096,7 @@ class CashState(MixinState):
         self.cashbox_filter_start_date = self.cashbox_staged_start_date
         self.cashbox_filter_end_date = self.cashbox_staged_end_date
         self.cashbox_current_page = 1
+        self._refresh_cashbox_caches()
 
     @rx.event
     def reset_cashbox_filters(self):
@@ -1062,6 +1108,7 @@ class CashState(MixinState):
         self.cashbox_staged_start_date = ""
         self.cashbox_staged_end_date = ""
         self.cashbox_current_page = 1
+        self._refresh_cashbox_caches()
 
     @rx.event
     def set_cashbox_log_staged_start_date(self, value: str):
@@ -1082,6 +1129,7 @@ class CashState(MixinState):
         self.cashbox_log_filter_start_date = self.cashbox_log_staged_start_date
         self.cashbox_log_filter_end_date = self.cashbox_log_staged_end_date
         self.cashbox_log_current_page = 1
+        self._refresh_cashbox_caches()
 
     @rx.event
     def reset_cashbox_log_filters(self):
@@ -1092,6 +1140,7 @@ class CashState(MixinState):
         self.cashbox_log_staged_start_date = ""
         self.cashbox_log_staged_end_date = ""
         self.cashbox_log_current_page = 1
+        self._refresh_cashbox_caches()
 
     @rx.event
     def set_cashbox_log_page(self, page: int):
@@ -1099,6 +1148,7 @@ class CashState(MixinState):
             return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
         if 1 <= page <= self.cashbox_log_total_pages:
             self.cashbox_log_current_page = page
+            self._refresh_cashbox_caches()
 
     @rx.event
     def prev_cashbox_log_page(self):
@@ -1106,6 +1156,7 @@ class CashState(MixinState):
             return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
         if self.cashbox_log_current_page > 1:
             self.cashbox_log_current_page -= 1
+            self._refresh_cashbox_caches()
 
     @rx.event
     def next_cashbox_log_page(self):
@@ -1113,6 +1164,7 @@ class CashState(MixinState):
             return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
         if self.cashbox_log_current_page < self.cashbox_log_total_pages:
             self.cashbox_log_current_page += 1
+            self._refresh_cashbox_caches()
 
     @rx.event
     def set_cashbox_page(self, page: int):
@@ -1121,6 +1173,7 @@ class CashState(MixinState):
             return denial
         if 1 <= page <= self.cashbox_total_pages:
             self.cashbox_current_page = page
+            self._refresh_cashbox_caches()
 
     @rx.event
     def set_show_cashbox_advances(self, value: bool | str):
@@ -1130,6 +1183,8 @@ class CashState(MixinState):
         if isinstance(value, str):
             value = value.lower() in ["true", "1", "on", "yes"]
         self.show_cashbox_advances = bool(value)
+        self.cashbox_current_page = 1
+        self._refresh_cashbox_caches()
 
     @rx.event
     def prev_cashbox_page(self):
@@ -1138,6 +1193,7 @@ class CashState(MixinState):
             return denial
         if self.cashbox_current_page > 1:
             self.cashbox_current_page -= 1
+            self._refresh_cashbox_caches()
 
     @rx.event
     def next_cashbox_page(self):
@@ -1147,6 +1203,7 @@ class CashState(MixinState):
         total_pages = self.cashbox_total_pages
         if self.cashbox_current_page < total_pages:
             self.cashbox_current_page += 1
+            self._refresh_cashbox_caches()
 
     def _cashbox_sales_query(self):
         company_id = self._company_id()
@@ -1444,13 +1501,7 @@ class CashState(MixinState):
 
     @rx.var
     def filtered_cashbox_sales(self) -> list[CashboxSale]:
-        _ = self._cashbox_update_trigger
-        if not self.current_user["privileges"]["view_cashbox"]:
-            return []
-        page = max(self.cashbox_current_page, 1)
-        per_page = max(self.cashbox_items_per_page, 1)
-        offset = (page - 1) * per_page
-        return self._fetch_cashbox_sales(offset=offset, limit=per_page)
+        return self.filtered_cashbox_sales_cache
 
     @rx.var
     def paginated_cashbox_sales(self) -> list[CashboxSale]:
@@ -1458,11 +1509,7 @@ class CashState(MixinState):
 
     @rx.var
     def cashbox_total_pages(self) -> int:
-        _ = self._cashbox_update_trigger
-        total = self._cashbox_sales_count()
-        if total == 0:
-            return 1
-        return (total + self.cashbox_items_per_page - 1) // self.cashbox_items_per_page
+        return self.cashbox_total_pages_cache
 
     @rx.var
     def cashbox_close_totals(self) -> list[dict[str, str]]:
@@ -2751,6 +2798,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             session.commit()
         
         self._cashbox_update_trigger += 1
+        self._refresh_cashbox_caches()
         self.close_sale_delete_modal()
         return rx.toast("Venta eliminada correctamente.", duration=3000)
 
