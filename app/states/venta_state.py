@@ -77,25 +77,10 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         if not self.selected_client:
             return 0.0
         balance = None
-        client_id = None
         if isinstance(self.selected_client, dict):
             balance = self.selected_client.get("balance")
-            client_id = self.selected_client.get("id")
-        if balance is None and client_id:
-            with rx.session() as session:
-                company_id = self.current_user.get("company_id")
-                branch_id = self._branch_id()
-                if not company_id or not branch_id:
-                    return 0.0
-                client = session.exec(
-                    select(Client)
-                    .where(Client.id == client_id)
-                    .where(Client.company_id == company_id)
-                    .where(Client.branch_id == branch_id)
-                ).first()
-                if not client:
-                    return 0.0
-                balance = client.credit_limit - client.current_debt
+            if balance is None:
+                balance = self.selected_client.get("credit_available")
         if balance is None:
             return 0.0
         available = float(balance)

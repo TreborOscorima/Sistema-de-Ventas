@@ -125,6 +125,12 @@ class InventoryState(MixinState):
     categories: List[str] = ["General"]
     categories_panel_expanded: bool = False
     _inventory_update_trigger: int = 0
+    inventory_list_cache: list[dict] = []
+    inventory_total_pages_cache: int = 1
+    inventory_total_products_cache: int = 0
+    inventory_in_stock_count_cache: int = 0
+    inventory_low_stock_count_cache: int = 0
+    inventory_out_of_stock_count_cache: int = 0
 
     def _company_id(self) -> int | None:
         company_id, branch_id = self._tenant_ids()
@@ -281,6 +287,128 @@ class InventoryState(MixinState):
         )
         return rows
 
+    def _refresh_inventory_cache(self):
+        privileges = self.current_user["privileges"]
+        if not privileges.get("view_inventario"):
+            self.inventory_list_cache = []
+            self.inventory_total_pages_cache = 1
+            self.inventory_total_products_cache = 0
+            self.inventory_in_stock_count_cache = 0
+            self.inventory_low_stock_count_cache = 0
+            self.inventory_out_of_stock_count_cache = 0
+            return
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.inventory_list_cache = []
+            self.inventory_total_pages_cache = 1
+            self.inventory_total_products_cache = 0
+            self.inventory_in_stock_count_cache = 0
+            self.inventory_low_stock_count_cache = 0
+            self.inventory_out_of_stock_count_cache = 0
+            return
+
+        search = (self.inventory_search_term or "").strip().lower()
+        per_page = max(self.inventory_items_per_page, 1)
+        page = max(self.inventory_current_page, 1)
+
+        with rx.session() as session:
+            if search:
+                rows = self._inventory_search_rows(
+                    session, search, company_id, branch_id
+                )
+                total_items = len(rows)
+                total_pages = (
+                    1 if total_items == 0 else (total_items + per_page - 1) // per_page
+                )
+                if page > total_pages:
+                    page = total_pages
+                    self.inventory_current_page = page
+                offset = (page - 1) * per_page
+                page_rows = rows[offset : offset + per_page]
+            else:
+                total_items = int(
+                    session.exec(
+                        select(func.count(Product.id))
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    ).one()
+                    or 0
+                )
+                total_pages = (
+                    1 if total_items == 0 else (total_items + per_page - 1) // per_page
+                )
+                if page > total_pages:
+                    page = total_pages
+                    self.inventory_current_page = page
+                offset = (page - 1) * per_page
+                query = (
+                    select(Product)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .order_by(Product.description, Product.id)
+                    .offset(offset)
+                    .limit(per_page)
+                )
+                page_rows = [
+                    self._inventory_row_from_product(product)
+                    for product in session.exec(query).all()
+                ]
+
+            total_products = int(
+                session.exec(
+                    select(func.count(Product.id))
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                ).one()
+                or 0
+            )
+            in_stock_count = int(
+                session.exec(
+                    select(func.count(Product.id))
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(Product.stock > LOW_STOCK_THRESHOLD)
+                ).one()
+                or 0
+            )
+            low_stock_count = int(
+                session.exec(
+                    select(func.count(Product.id))
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(
+                        and_(
+                            Product.stock > 0,
+                            Product.stock <= LOW_STOCK_THRESHOLD,
+                        )
+                    )
+                ).one()
+                or 0
+            )
+            out_of_stock_count = int(
+                session.exec(
+                    select(func.count(Product.id))
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(Product.stock <= 0)
+                ).one()
+                or 0
+            )
+
+        self.inventory_list_cache = page_rows
+        self.inventory_total_pages_cache = total_pages
+        self.inventory_total_products_cache = total_products
+        self.inventory_in_stock_count_cache = in_stock_count
+        self.inventory_low_stock_count_cache = low_stock_count
+        self.inventory_out_of_stock_count_cache = out_of_stock_count
+
+    @rx.event
+    def refresh_inventory_cache(self):
+        self.load_categories()
+        self._refresh_inventory_cache()
+
     @rx.event
     def update_new_category_name(self, value: str):
         self.new_category_name = value
@@ -393,102 +521,11 @@ class InventoryState(MixinState):
 
     @rx.var
     def inventory_list(self) -> list[dict]:
-        # Usar trigger para forzar recálculo
-        _ = self._inventory_update_trigger
-        if not self.current_user["privileges"]["view_inventario"]:
-            return []
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return []
-
-        search = (self.inventory_search_term or "").strip().lower()
-        offset = (self.inventory_current_page - 1) * self.inventory_items_per_page
-        
-        with rx.session() as session:
-            if search:
-                rows = self._inventory_search_rows(
-                    session, search, company_id, branch_id
-                )
-                return rows[offset : offset + self.inventory_items_per_page]
-
-            query = (
-                select(Product)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-            )
-
-            # Ordenar por descripción de manera determinista
-            query = query.order_by(Product.description, Product.id)
-
-            # Aplicar paginación SQL
-            query = query.offset(offset).limit(self.inventory_items_per_page)
-
-            return [
-                self._inventory_row_from_product(product)
-                for product in session.exec(query).all()
-            ]
+        return self.inventory_list_cache
 
     @rx.var
     def inventory_total_pages(self) -> int:
-        search = (self.inventory_search_term or "").strip().lower()
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return 1
-        with rx.session() as session:
-            if search:
-                term = f"%{search}%"
-                variant_count_query = (
-                    select(func.count())
-                    .select_from(ProductVariant)
-                    .join(Product, ProductVariant.product_id == Product.id)
-                    .where(ProductVariant.company_id == company_id)
-                    .where(ProductVariant.branch_id == branch_id)
-                    .where(Product.company_id == company_id)
-                    .where(Product.branch_id == branch_id)
-                    .where(
-                        or_(
-                            ProductVariant.sku.ilike(term),
-                            ProductVariant.size.ilike(term),
-                            ProductVariant.color.ilike(term),
-                            Product.description.ilike(term),
-                            Product.barcode.ilike(term),
-                            Product.category.ilike(term),
-                        )
-                    )
-                )
-                variant_count = session.exec(variant_count_query).one() or 0
-
-                no_variant = ~exists().where(ProductVariant.product_id == Product.id).where(
-                    ProductVariant.company_id == company_id
-                ).where(ProductVariant.branch_id == branch_id)
-                product_count_query = (
-                    select(func.count(Product.id))
-                    .where(Product.company_id == company_id)
-                    .where(Product.branch_id == branch_id)
-                    .where(no_variant)
-                    .where(
-                        or_(
-                            Product.description.ilike(term),
-                            Product.barcode.ilike(term),
-                            Product.category.ilike(term),
-                        )
-                    )
-                )
-                product_count = session.exec(product_count_query).one() or 0
-                total_items = int(variant_count) + int(product_count)
-            else:
-                query = (
-                    select(func.count(Product.id))
-                    .where(Product.company_id == company_id)
-                    .where(Product.branch_id == branch_id)
-                )
-                total_items = session.exec(query).one() or 0
-            
-        if total_items == 0:
-            return 1
-        return (total_items + self.inventory_items_per_page - 1) // self.inventory_items_per_page
+        return self.inventory_total_pages_cache
 
     @rx.var
     def inventory_display_page(self) -> int:
@@ -505,84 +542,31 @@ class InventoryState(MixinState):
 
     @rx.var
     def inventory_total_products(self) -> int:
-        _ = self._inventory_update_trigger
-        if not self.current_user["privileges"]["view_inventario"]:
-            return 0
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return 0
-        with rx.session() as session:
-            total = session.exec(
-                select(func.count(Product.id))
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-            ).one() or 0
-        return int(total)
+        return self.inventory_total_products_cache
 
     @rx.var
     def inventory_in_stock_count(self) -> int:
-        _ = self._inventory_update_trigger
-        if not self.current_user["privileges"]["view_inventario"]:
-            return 0
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return 0
-        with rx.session() as session:
-            total = session.exec(
-                select(func.count(Product.id))
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-                .where(Product.stock > LOW_STOCK_THRESHOLD)
-            ).one() or 0
-        return int(total)
+        return self.inventory_in_stock_count_cache
 
     @rx.var
     def inventory_low_stock_count(self) -> int:
-        _ = self._inventory_update_trigger
-        if not self.current_user["privileges"]["view_inventario"]:
-            return 0
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return 0
-        with rx.session() as session:
-            total = session.exec(
-                select(func.count(Product.id))
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-                .where(and_(Product.stock > 0, Product.stock <= LOW_STOCK_THRESHOLD))
-            ).one() or 0
-        return int(total)
+        return self.inventory_low_stock_count_cache
 
     @rx.var
     def inventory_out_of_stock_count(self) -> int:
-        _ = self._inventory_update_trigger
-        if not self.current_user["privileges"]["view_inventario"]:
-            return 0
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return 0
-        with rx.session() as session:
-            total = session.exec(
-                select(func.count(Product.id))
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-                .where(Product.stock <= 0)
-            ).one() or 0
-        return int(total)
+        return self.inventory_out_of_stock_count_cache
 
     @rx.event
     def set_inventory_search_term(self, value: str):
         self.inventory_search_term = value or ""
         self.inventory_current_page = 1
+        self._refresh_inventory_cache()
 
     @rx.event
     def set_inventory_page(self, page_num: int):
-        if 1 <= page_num <= self.inventory_total_pages:
+        if 1 <= page_num <= self.inventory_total_pages_cache:
             self.inventory_current_page = page_num
+            self._refresh_inventory_cache()
 
     @rx.event
     def open_edit_product(self, product: Product | Dict[str, Any] | None = None):
@@ -1150,6 +1134,7 @@ class InventoryState(MixinState):
             self.is_loading = False
 
         self._inventory_update_trigger += 1
+        self._refresh_inventory_cache()
         self.is_editing_product = False
         self.show_variants = False
         self.show_wholesale = False
@@ -1173,6 +1158,7 @@ class InventoryState(MixinState):
 
         self.is_loading = True
         yield
+        deleted = False
 
         try:
             with rx.session() as session:
@@ -1197,10 +1183,15 @@ class InventoryState(MixinState):
                     session.delete(product)
                     session.commit()
                     self._inventory_update_trigger += 1
-                    return self.add_notification("Producto eliminado.", "success")
-                return self.add_notification("Producto no encontrado.", "error")
+                    deleted = True
+                else:
+                    return self.add_notification("Producto no encontrado.", "error")
         finally:
             self.is_loading = False
+
+        if deleted:
+            self._refresh_inventory_cache()
+            return self.add_notification("Producto eliminado.", "success")
 
     @rx.event
     def open_inventory_check_modal(self):
@@ -1678,6 +1669,7 @@ class InventoryState(MixinState):
 
         self.is_loading = True
         yield
+        refresh_needed = False
 
         success_message = "Registro de inventario guardado."
         try:
@@ -1894,6 +1886,7 @@ class InventoryState(MixinState):
                     if recorded:
                         session.commit()
                         self._inventory_update_trigger += 1
+                        refresh_needed = True
                     else:
                         return self.add_notification(
                             "No se pudo registrar el re ajuste. Verifique los productos.",
@@ -1907,6 +1900,8 @@ class InventoryState(MixinState):
         self.inventory_adjustment_notes = ""
         self.inventory_adjustment_items = []
         self._reset_inventory_adjustment_form()
+        if refresh_needed:
+            self._refresh_inventory_cache()
         return self.add_notification(success_message, "success")
 
     @rx.event

@@ -83,7 +83,7 @@ def ingreso_page() -> rx.Component:
                         on_change=State.search_supplier_change,
                         value=State.purchase_supplier_query,
                         class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        debounce_timeout=200,
+                        debounce_timeout=600,
                     ),
                     rx.cond(
                         State.purchase_supplier_suggestions.length() > 0,
@@ -170,7 +170,7 @@ def ingreso_page() -> rx.Component:
             rx.el.select(
                 rx.el.option("Boleta", value="boleta"),
                 rx.el.option("Factura", value="factura"),
-                value=State.purchase_doc_type,
+                default_value=State.purchase_doc_type,
                 on_change=State.set_purchase_doc_type,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
@@ -183,10 +183,10 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 placeholder="Ej: F001",
-                on_change=State.set_purchase_series,
-                value=State.purchase_series,
+                on_blur=State.set_purchase_series,
+                default_value=State.purchase_series,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                debounce_timeout=200,
+                debounce_timeout=600,
             ),
             class_name="w-full",
         ),
@@ -197,10 +197,10 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 placeholder="Ej: 000123",
-                on_change=State.set_purchase_number,
-                value=State.purchase_number,
+                on_blur=State.set_purchase_number,
+                default_value=State.purchase_number,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                debounce_timeout=200,
+                debounce_timeout=600,
             ),
             class_name="w-full",
         ),
@@ -211,8 +211,8 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 type="date",
-                on_change=State.set_purchase_issue_date,
-                value=State.purchase_issue_date,
+                on_blur=State.set_purchase_issue_date,
+                default_value=State.purchase_issue_date,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
             class_name="w-full",
@@ -238,7 +238,7 @@ def ingreso_page() -> rx.Component:
                     variant["label"], value=variant["id"]
                 ),
             ),
-            value=State.selected_variant_id,
+            default_value=State.selected_variant_id,
             on_change=State.set_selected_variant,
             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
         ),
@@ -253,8 +253,8 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 placeholder="Ej: 40",
-                on_change=State.set_variant_size,
-                value=State.variant_size,
+                on_blur=State.set_variant_size,
+                default_value=State.variant_size,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
             class_name="w-full",
@@ -266,8 +266,8 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 placeholder="Ej: Negro",
-                on_change=State.set_variant_color,
-                value=State.variant_color,
+                on_blur=State.set_variant_color,
+                default_value=State.variant_color,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
             class_name="w-full",
@@ -283,8 +283,8 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 placeholder="Ej: L123",
-                on_change=State.set_batch_code,
-                value=State.batch_code,
+                on_blur=State.set_batch_code,
+                default_value=State.batch_code,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
             class_name="w-full",
@@ -296,8 +296,8 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 type="date",
-                on_change=State.set_batch_date,
-                value=State.batch_date,
+                on_blur=State.set_batch_date,
+                default_value=State.batch_date,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
             class_name="w-full",
@@ -312,9 +312,9 @@ def ingreso_page() -> rx.Component:
         ),
         rx.el.input(
             type="number",
-            on_change=lambda val: State.handle_entry_change("quantity", val),
+            on_blur=lambda val: State.handle_entry_change("quantity", val),
             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-            value=State.new_entry_item["quantity"].to_string(),
+            default_value=State.new_entry_item["quantity"].to_string(),
         ),
         class_name="w-full",
     )
@@ -337,7 +337,7 @@ def ingreso_page() -> rx.Component:
                 rx.el.option("Estándar", value="standard"),
                 rx.el.option("Variantes", value="variant"),
                 rx.el.option("Lotes", value="batch"),
-                value=State.entry_mode,
+                default_value=State.entry_mode,
                 on_change=State.set_entry_mode,
                 class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             ),
@@ -385,7 +385,7 @@ def ingreso_page() -> rx.Component:
                         class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                         is_read_only=State.is_existing_product,
                     ),
-                    debounce_timeout=200,
+                    debounce_timeout=600,
                 ),
                 rx.cond(
                     State.entry_autocomplete_suggestions.length() > 0,
@@ -431,7 +431,7 @@ def ingreso_page() -> rx.Component:
                     rx.foreach(
                         State.units, lambda unit: rx.el.option(unit, value=unit)
                     ),
-                    value=State.new_entry_item["unit"],
+                    default_value=State.new_entry_item["unit"],
                     on_change=lambda val: State.handle_entry_change("unit", val),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                 ),
@@ -444,9 +444,9 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.el.input(
                     type="number",
-                    on_change=lambda val: State.handle_entry_change("price", val),
+                    on_blur=lambda val: State.handle_entry_change("price", val),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                    value=State.new_entry_item["price"].to_string(),
+                    default_value=State.new_entry_item["price"].to_string(),
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
             ),
@@ -457,9 +457,9 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.el.input(
                     type="number",
-                    on_change=lambda val: State.handle_entry_change("sale_price", val),
+                    on_blur=lambda val: State.handle_entry_change("sale_price", val),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                    value=State.new_entry_item["sale_price"].to_string(),
+                    default_value=State.new_entry_item["sale_price"].to_string(),
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
             ),
@@ -587,3 +587,4 @@ def ingreso_page() -> rx.Component:
         content=content,
         redirect_message="Acceso denegado a Ingresos",
     )
+

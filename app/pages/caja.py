@@ -219,8 +219,8 @@ def cashbox_opening_card() -> rx.Component:
         rx.el.input(
           type="number",
           step="0.01",
-          value=State.cashbox_open_amount_input,
-          on_change=State.set_cashbox_open_amount_input,
+          default_value=State.cashbox_open_amount_input,
+          on_blur=State.set_cashbox_open_amount_input,
           placeholder="Ej: 150.00",
           disabled=State.cashbox_is_open,
           class_name=rx.cond(
@@ -602,8 +602,8 @@ def delete_sale_modal() -> rx.Component:
     children=[
       form_textarea(
         label="Motivo de eliminación",
-        value=State.sale_delete_reason,
-        on_change=State.set_sale_delete_reason,
+        default_value=State.sale_delete_reason,
+        on_blur=State.set_sale_delete_reason,
         placeholder="Detalle aquí el motivo...",
       )
     ],
@@ -920,8 +920,8 @@ def petty_cash_modal() -> rx.Component:
       rx.el.div(
         form_textarea(
           label="Motivo / Descripción",
-          value=State.petty_cash_reason,
-          on_change=State.set_petty_cash_reason,
+          default_value=State.petty_cash_reason,
+          on_blur=State.set_petty_cash_reason,
           placeholder="Ej: Compra de útiles de limpieza",
         ),
         rx.el.div(
@@ -930,8 +930,8 @@ def petty_cash_modal() -> rx.Component:
             rx.el.input(
               type="number",
               step="0.01",
-              value=State.petty_cash_quantity,
-              on_change=State.set_petty_cash_quantity,
+              default_value=State.petty_cash_quantity,
+              on_blur=State.set_petty_cash_quantity,
               class_name=INPUT_STYLES,
             ),
             class_name="flex flex-col gap-2"
@@ -945,7 +945,7 @@ def petty_cash_modal() -> rx.Component:
               rx.el.option("Paquete", value="Paquete"),
               rx.el.option("Caja", value="Caja"),
               rx.el.option("Otro", value="Otro"),
-              value=State.petty_cash_unit,
+              default_value=State.petty_cash_unit,
               on_change=State.set_petty_cash_unit,
               class_name=INPUT_STYLES,
             ),
@@ -961,8 +961,8 @@ def petty_cash_modal() -> rx.Component:
               rx.el.input(
                 type="number",
                 step="0.01",
-                value=State.petty_cash_cost,
-                on_change=State.set_petty_cash_cost,
+                default_value=State.petty_cash_cost,
+                on_blur=State.set_petty_cash_cost,
                 placeholder="0.00",
                 class_name="w-full h-10 pl-8 pr-4 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all",
               ),
@@ -978,7 +978,7 @@ def petty_cash_modal() -> rx.Component:
                 type="number",
                 step="0.01",
                 value=State.petty_cash_amount,
-                on_change=State.set_petty_cash_amount,
+                read_only=True,
                 placeholder="0.00",
                 class_name="w-full h-10 pl-8 pr-4 text-sm bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all",
               ),
@@ -1189,6 +1189,7 @@ def cashbox_page() -> rx.Component:
         class_name="flex flex-col gap-6",
       ),
     ),
+    on_mount=State.refresh_cashbox_data,
     class_name="flex flex-col gap-6 p-4 sm:p-6 w-full",
   )
   return permission_guard(
