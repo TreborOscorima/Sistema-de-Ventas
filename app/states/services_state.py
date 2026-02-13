@@ -1465,7 +1465,10 @@ class ServicesState(MixinState):
     def update_reservation_form(self, field: str, value: str):
         if field not in self.reservation_form:
             return
-        self.reservation_form[field] = value or ""
+        normalized_value = value or ""
+        if self.reservation_form.get(field, "") == normalized_value:
+            return
+        self.reservation_form[field] = normalized_value
         if field in ["start_time", "end_time"]:
             self._apply_selected_price_total()
 

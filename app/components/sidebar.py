@@ -68,7 +68,6 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
             ),
         ),
         href=target_route,
-        on_click=lambda _: State.set_pending_page(page),
         class_name="w-full min-w-0 no-underline block",
     )
     return rx.cond(
