@@ -31,6 +31,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         & (State.overdue_alerts_count > 0)
     )
     show_badge = has_overdue & State.sidebar_open
+    current_path = State.router.page.path
     
     # Estilos para item activo vs inactivo
     active_class = f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
@@ -40,6 +41,11 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         has_overdue,
         "/cuentas?filter=overdue",
         route,
+    )
+    is_active = rx.cond(
+        route == "/ingreso",
+        (current_path == "/ingreso") | (current_path == "/"),
+        current_path == route,
     )
 
     link = rx.el.a(
@@ -62,7 +68,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
                 rx.fragment(),
             ),
             class_name=rx.cond(
-                State.active_page == page,
+                is_active,
                 active_class,
                 inactive_class,
             ),
@@ -222,7 +228,7 @@ def sidebar() -> rx.Component:
                                     nav_item(item["label"], item["icon"], item["page"], item["route"]),
                                     rx.cond(
                                         (item["page"] == "Configuracion")
-                                        & (State.active_page == "Configuracion"),
+                                        & (State.router.page.path == "/configuracion"),
                                         rx.el.div(
                                             rx.foreach(
                                                 CONFIG_SUBSECTIONS,
@@ -240,8 +246,17 @@ def sidebar() -> rx.Component:
                                                     ),
                                                     href="/configuracion?tab=" + section["key"],
                                                     class_name=rx.cond(
-                                                        State.config_active_tab
-                                                        == section["key"],
+                                                        (State.router.page.path == "/configuracion")
+                                                        & (
+                                                            (State.router.page.params["tab"] == section["key"])
+                                                            | (
+                                                                (section["key"] == "usuarios")
+                                                                & (
+                                                                    (State.router.page.params["tab"] == "")
+                                                                    | (State.router.page.params["tab"] == None)
+                                                                )
+                                                            )
+                                                        ),
                                                         f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
                                                         f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
@@ -253,7 +268,7 @@ def sidebar() -> rx.Component:
                                     ),
                                     rx.cond(
                                         (item["page"] == "Gestion de Caja")
-                                        & (State.active_page == "Gestion de Caja"),
+                                        & (State.router.page.path == "/caja"),
                                         rx.el.div(
                                             rx.foreach(
                                                 CASH_SUBSECTIONS,
@@ -271,8 +286,17 @@ def sidebar() -> rx.Component:
                                                     ),
                                                     href="/caja?tab=" + section["key"],
                                                     class_name=rx.cond(
-                                                        State.cash_active_tab
-                                                        == section["key"],
+                                                        (State.router.page.path == "/caja")
+                                                        & (
+                                                            (State.router.page.params["tab"] == section["key"])
+                                                            | (
+                                                                (section["key"] == "resumen")
+                                                                & (
+                                                                    (State.router.page.params["tab"] == "")
+                                                                    | (State.router.page.params["tab"] == None)
+                                                                )
+                                                            )
+                                                        ),
                                                         f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
                                                         f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
@@ -284,7 +308,7 @@ def sidebar() -> rx.Component:
                                     ),
                                     rx.cond(
                                         (item["page"] == "Servicios")
-                                        & (State.active_page == "Servicios"),
+                                        & (State.router.page.path == "/servicios"),
                                         rx.el.div(
                                             rx.foreach(
                                                 SERVICES_SUBSECTIONS,
@@ -302,8 +326,17 @@ def sidebar() -> rx.Component:
                                                     ),
                                                     href="/servicios?tab=" + section["key"],
                                                     class_name=rx.cond(
-                                                        State.service_active_tab
-                                                        == section["key"],
+                                                        (State.router.page.path == "/servicios")
+                                                        & (
+                                                            (State.router.page.params["tab"] == section["key"])
+                                                            | (
+                                                                (section["key"] == "campo")
+                                                                & (
+                                                                    (State.router.page.params["tab"] == "")
+                                                                    | (State.router.page.params["tab"] == None)
+                                                                )
+                                                            )
+                                                        ),
                                                         f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
                                                         f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
                                                     ),
