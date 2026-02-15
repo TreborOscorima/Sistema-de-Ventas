@@ -66,7 +66,7 @@ class UIState(MixinState):
             self.current_active_item = "Ingreso"
             self.pending_page = ""
 
-    @rx.var
+    @rx.var(cache=True)
     def navigation_items(self) -> List[Dict[str, str]]:
         return [
             item
@@ -74,7 +74,7 @@ class UIState(MixinState):
             if self._can_access_page(item["page"])
         ]
 
-    @rx.var
+    @rx.var(cache=True)
     def allowed_pages(self) -> List[str]:
         return [item["page"] for item in self.navigation_items]
 

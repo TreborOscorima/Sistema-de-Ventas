@@ -29,6 +29,7 @@ class IngresoState(MixinState):
     purchase_notes: str = ""
     purchase_supplier_query: str = ""
     purchase_supplier_suggestions: List[Dict[str, Any]] = []
+    purchase_supplier_input_key: int = 0
     selected_supplier: Optional[Dict[str, Any]] = None
     is_existing_product: bool = False
     has_variants: bool = False
@@ -185,6 +186,11 @@ class IngresoState(MixinState):
         ]
 
     @rx.event
+    def handle_supplier_search_enter(self, key: str, input_id: str):
+        if key == "Enter":
+            return rx.call_script(f"document.getElementById('{input_id}').blur()")
+
+    @rx.event
     def select_supplier(self, supplier_data: dict | Supplier):
         selected = None
         if isinstance(supplier_data, Supplier):
@@ -198,6 +204,7 @@ class IngresoState(MixinState):
         self.selected_supplier = selected
         self.purchase_supplier_query = ""
         self.purchase_supplier_suggestions = []
+        self.purchase_supplier_input_key += 1
 
     @rx.event
     def clear_selected_supplier(self):
@@ -208,6 +215,7 @@ class IngresoState(MixinState):
         self.selected_supplier = None
         self.purchase_supplier_query = ""
         self.purchase_supplier_suggestions = []
+        self.purchase_supplier_input_key += 1
 
     def _reset_purchase_form(self):
         self.purchase_doc_type = "boleta"
@@ -217,6 +225,7 @@ class IngresoState(MixinState):
         self.purchase_notes = ""
         self.purchase_supplier_query = ""
         self.purchase_supplier_suggestions = []
+        self.purchase_supplier_input_key += 1
         self.selected_supplier = None
 
     def _set_new_product_mode(self):
