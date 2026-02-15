@@ -186,11 +186,6 @@ class IngresoState(MixinState):
         ]
 
     @rx.event
-    def handle_supplier_search_enter(self, key: str, input_id: str):
-        if key == "Enter":
-            return rx.call_script(f"document.getElementById('{input_id}').blur()")
-
-    @rx.event
     def select_supplier(self, supplier_data: dict | Supplier):
         selected = None
         if isinstance(supplier_data, Supplier):
