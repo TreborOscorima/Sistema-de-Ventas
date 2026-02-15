@@ -356,6 +356,7 @@ async def search_products(
     term = (query or "").strip()
     if not term:
         return []
+    description_prefix = f"{term}%"
     like_search = f"%{term}%"
     barcode_prefix = f"{term}%"
     limit_value = max(int(limit or 10), 1)
@@ -363,7 +364,7 @@ async def search_products(
     async def _run(current_session: AsyncSession) -> list[dict[str, Any]]:
         product_query = select(Product).where(
             or_(
-                Product.description.ilike(like_search),
+                Product.description.ilike(description_prefix),
                 Product.barcode.ilike(barcode_prefix),
             )
         )
@@ -392,6 +393,23 @@ async def search_products(
         for product in products:
             _append_unique(_adapt_product_payload(product))
 
+        if len(term) >= 3 and len(results) < limit_value:
+            remaining = limit_value - len(results)
+            fallback_query = select(Product).where(
+                Product.description.ilike(like_search)
+            )
+            fallback_query = _apply_tenant_filters(
+                fallback_query, Product, company_id, branch_id
+            )
+            fallback_query = fallback_query.order_by(Product.description).limit(remaining)
+            fallback_products = (
+                await current_session.exec(fallback_query)
+            ).all()
+            for product in fallback_products:
+                _append_unique(_adapt_product_payload(product))
+                if len(results) >= limit_value:
+                    break
+
         # La búsqueda de variantes es más costosa; omitirla en términos muy cortos.
         if len(term) >= 3 and len(results) < limit_value:
             variant_query = (
@@ -400,9 +418,9 @@ async def search_products(
                 .where(
                     or_(
                         ProductVariant.sku.ilike(barcode_prefix),
-                        ProductVariant.size.ilike(like_search),
-                        ProductVariant.color.ilike(like_search),
-                        Product.description.ilike(like_search),
+                        ProductVariant.size.ilike(description_prefix),
+                        ProductVariant.color.ilike(description_prefix),
+                        Product.description.ilike(description_prefix),
                     )
                 )
             )

@@ -376,20 +376,22 @@ def quick_add_bar() -> rx.Component:
             rx.el.div(
                 rx.el.div(
                     rx.icon("scan-barcode", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
-                    rx.el.input(
-                        id="venta_barcode_input",
-                        key=State.sale_form_key.to_string(),
-                        default_value=State.new_sale_item["barcode"],
-                        on_blur=lambda value: State.process_sale_barcode_from_input(
-                            value
+                    rx.debounce_input(
+                        rx.input(
+                            id="venta_barcode_input",
+                            key=State.sale_form_key.to_string(),
+                            default_value=State.new_sale_item["barcode"],
+                            on_change=State.process_sale_barcode_from_input,
+                            on_blur=State.process_sale_barcode_from_input,
+                            placeholder="Código...",
+                            on_key_down=lambda k: State.handle_sale_barcode_enter(
+                                k, "venta_barcode_input"
+                            ),
+                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
+                            type="text",
+                            auto_complete=False,
                         ),
-                        placeholder="Código...",
-                        on_key_down=lambda k: State.handle_sale_barcode_enter(
-                            k, "venta_barcode_input"
-                        ),
-                        class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
-                        type="text",
-                        auto_complete="off",
+                        debounce_timeout=120,
                     ),
                     class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                 ),

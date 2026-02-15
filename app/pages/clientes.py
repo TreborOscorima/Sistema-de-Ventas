@@ -178,7 +178,7 @@ def clientes_page() -> rx.Component:
             on_change=State.set_search_query,
             class_name=INPUT_STYLES["search"],
           ),
-          debounce_timeout=600,
+          debounce_timeout=250,
         ),
         class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm",
       ),

@@ -156,7 +156,8 @@ class InventoryState(MixinState):
             self.categories = names
 
     def _inventory_search_clause(self, search: str, company_id: int, branch_id: int):
-        term = f"%{search}%"
+        prefix = f"{search}%"
+        contains = f"%{search}%"
         variant_match = (
             exists()
             .where(ProductVariant.product_id == Product.id)
@@ -164,18 +165,21 @@ class InventoryState(MixinState):
             .where(ProductVariant.branch_id == branch_id)
             .where(
                 or_(
-                    ProductVariant.sku.ilike(term),
-                    ProductVariant.size.ilike(term),
-                    ProductVariant.color.ilike(term),
+                    ProductVariant.sku.ilike(prefix),
+                    ProductVariant.size.ilike(prefix),
+                    ProductVariant.color.ilike(prefix),
                 )
             )
         )
-        return or_(
-            Product.description.ilike(term),
-            Product.barcode.ilike(term),
-            Product.category.ilike(term),
+        base_clause = or_(
+            Product.description.ilike(prefix),
+            Product.barcode.ilike(prefix),
+            Product.category.ilike(prefix),
             variant_match,
         )
+        if len(search) >= 4:
+            return or_(base_clause, Product.description.ilike(contains))
+        return base_clause
 
     def _inventory_row_from_product(self, product: Product) -> Dict[str, Any]:
         stock_value = float(product.stock or 0)
@@ -230,7 +234,9 @@ class InventoryState(MixinState):
         company_id: int,
         branch_id: int,
     ) -> List[Dict[str, Any]]:
-        term = f"%{search}%"
+        prefix = f"{search}%"
+        contains = f"%{search}%"
+        limit_rows = 150
         variant_query = (
             select(ProductVariant, Product)
             .join(Product, ProductVariant.product_id == Product.id)
@@ -240,15 +246,16 @@ class InventoryState(MixinState):
             .where(Product.branch_id == branch_id)
             .where(
                 or_(
-                    ProductVariant.sku.ilike(term),
-                    ProductVariant.size.ilike(term),
-                    ProductVariant.color.ilike(term),
-                    Product.description.ilike(term),
-                    Product.barcode.ilike(term),
-                    Product.category.ilike(term),
+                    ProductVariant.sku.ilike(prefix),
+                    ProductVariant.size.ilike(prefix),
+                    ProductVariant.color.ilike(prefix),
+                    Product.description.ilike(prefix),
+                    Product.barcode.ilike(prefix),
+                    Product.category.ilike(prefix),
                 )
             )
             .order_by(Product.description, ProductVariant.sku)
+            .limit(limit_rows)
         )
 
         variant_rows = [
@@ -266,17 +273,32 @@ class InventoryState(MixinState):
             .where(no_variant)
             .where(
                 or_(
-                    Product.description.ilike(term),
-                    Product.barcode.ilike(term),
-                    Product.category.ilike(term),
+                    Product.description.ilike(prefix),
+                    Product.barcode.ilike(prefix),
+                    Product.category.ilike(prefix),
                 )
             )
             .order_by(Product.description, Product.id)
+            .limit(limit_rows)
         )
         product_rows = [
             self._inventory_row_from_product(product)
             for product in session.exec(product_query).all()
         ]
+
+        if len(search) >= 4 and not (variant_rows or product_rows):
+            fallback_query = (
+                select(Product)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.description.ilike(contains))
+                .order_by(Product.description, Product.id)
+                .limit(limit_rows)
+            )
+            product_rows = [
+                self._inventory_row_from_product(product)
+                for product in session.exec(fallback_query).all()
+            ]
 
         rows = [*variant_rows, *product_rows]
         rows.sort(
@@ -1436,7 +1458,7 @@ class InventoryState(MixinState):
                     self.inventory_adjustment_suggestions = []
                     return
 
-        search_term = term.lower()
+        search_term = term.strip()
         if len(search_term) < 2:
             self.inventory_adjustment_suggestions = []
             return
@@ -1446,28 +1468,37 @@ class InventoryState(MixinState):
             self.inventory_adjustment_suggestions = []
             return
         with rx.session() as session:
-            search = f"%{search_term}%"
+            prefix = f"{search_term}%"
+            contains = f"%{search_term}%"
             products = session.exec(
                 select(Product)
                 .where(
                     or_(
-                        Product.description.ilike(search),
-                        Product.barcode.ilike(search),
+                        Product.description.ilike(prefix),
+                        Product.barcode.ilike(prefix),
                     )
                 )
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
                 .limit(8)
             ).all()
+            if not products and len(search_term) >= 4:
+                products = session.exec(
+                    select(Product)
+                    .where(Product.description.ilike(contains))
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .limit(8)
+                ).all()
             variant_rows = session.exec(
                 select(ProductVariant, Product)
                 .join(Product, ProductVariant.product_id == Product.id)
                 .where(
                     or_(
-                        ProductVariant.sku.ilike(search),
-                        ProductVariant.size.ilike(search),
-                        ProductVariant.color.ilike(search),
-                        Product.description.ilike(search),
+                        ProductVariant.sku.ilike(prefix),
+                        ProductVariant.size.ilike(prefix),
+                        ProductVariant.color.ilike(prefix),
+                        Product.description.ilike(prefix),
                     )
                 )
                 .where(ProductVariant.company_id == company_id)

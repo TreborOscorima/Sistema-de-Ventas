@@ -66,6 +66,7 @@ class IngresoState(MixinState):
     }
     new_entry_items: List[TransactionItem] = []
     entry_autocomplete_suggestions: List[str] = []
+    last_processed_entry_barcode: str = ""
 
     @rx.var
     def entry_subtotal(self) -> float:
@@ -105,7 +106,8 @@ class IngresoState(MixinState):
             if field == "description":
                 term = (str(value) if value is not None else "").strip()
                 if len(term) >= 2:
-                    search = f"%{term}%"
+                    description_prefix = f"{term}%"
+                    description_contains = f"%{term}%"
                     barcode_prefix = f"{term}%"
                     company_id = self._company_id()
                     branch_id = self._branch_id()
@@ -117,7 +119,7 @@ class IngresoState(MixinState):
                             select(Product)
                             .where(
                                 or_(
-                                    Product.description.ilike(search),
+                                    Product.description.ilike(description_prefix),
                                     Product.barcode.ilike(barcode_prefix),
                                 )
                             )
@@ -126,6 +128,15 @@ class IngresoState(MixinState):
                             .order_by(Product.description)
                             .limit(8)
                         ).all()
+                        if not products and len(term) >= 4:
+                            products = session.exec(
+                                select(Product)
+                                .where(Product.description.ilike(description_contains))
+                                .where(Product.company_id == company_id)
+                                .where(Product.branch_id == branch_id)
+                                .order_by(Product.description)
+                                .limit(8)
+                            ).all()
                         self.entry_autocomplete_suggestions = [p.description for p in products]
                 else:
                     self.entry_autocomplete_suggestions = []
@@ -164,6 +175,7 @@ class IngresoState(MixinState):
         if len(term) < 2:
             self.purchase_supplier_suggestions = []
             return
+        name_prefix = f"{term}%"
         name_search = f"%{term}%"
         tax_id_prefix = f"{term}%"
         company_id = self._company_id()
@@ -176,7 +188,7 @@ class IngresoState(MixinState):
                 select(Supplier)
                 .where(
                     or_(
-                        Supplier.name.ilike(name_search),
+                        Supplier.name.ilike(name_prefix),
                         Supplier.tax_id.ilike(tax_id_prefix),
                     )
                 )
@@ -185,6 +197,15 @@ class IngresoState(MixinState):
                 .order_by(Supplier.name)
                 .limit(6)
             ).all()
+            if not suppliers and len(term) >= 4:
+                suppliers = session.exec(
+                    select(Supplier)
+                    .where(Supplier.name.ilike(name_search))
+                    .where(Supplier.company_id == company_id)
+                    .where(Supplier.branch_id == branch_id)
+                    .order_by(Supplier.name)
+                    .limit(6)
+                ).all()
         self.purchase_supplier_suggestions = [
             {
                 "id": supplier.id,
@@ -325,8 +346,9 @@ class IngresoState(MixinState):
         self.variant_color = ""
 
     def _process_entry_barcode(self, barcode_value: str | None):
-        self.new_entry_item["barcode"] = str(barcode_value) if barcode_value else ""
-        if not barcode_value or not str(barcode_value).strip():
+        raw_barcode = str(barcode_value) if barcode_value is not None else ""
+        self.new_entry_item["barcode"] = raw_barcode
+        if not raw_barcode.strip():
             self.new_entry_item["barcode"] = ""
             self.new_entry_item["description"] = ""
             self.new_entry_item["quantity"] = 0
@@ -334,18 +356,26 @@ class IngresoState(MixinState):
             self.new_entry_item["sale_price"] = 0
             self.new_entry_item["subtotal"] = 0
             self.entry_autocomplete_suggestions = []
+            self.last_processed_entry_barcode = ""
             self._set_new_product_mode()
             return
 
-        code = clean_barcode(str(barcode_value))
+        code = clean_barcode(raw_barcode)
+        if not code:
+            return
+        if code == self.last_processed_entry_barcode:
+            return
+        if len(code) < 6:
+            return
         if validate_barcode(code):
             product = self._find_product_by_barcode(code)
+            self.last_processed_entry_barcode = code
             if product:
                 self._apply_existing_product_context(product)
                 self.entry_autocomplete_suggestions = []
                 return rx.toast(
                     f"Producto '{product['description']}' cargado",
-                    duration=2000,
+                    duration=1500,
                 )
         self._set_new_product_mode()
 
@@ -1030,6 +1060,7 @@ class IngresoState(MixinState):
             "requires_batches": False,
         }
         self.entry_autocomplete_suggestions = []
+        self.last_processed_entry_barcode = ""
         self._set_new_product_mode()
 
     def _find_product_by_barcode(self, barcode: str) -> Optional[Dict[str, Any]]:

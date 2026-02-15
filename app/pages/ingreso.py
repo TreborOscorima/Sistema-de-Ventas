@@ -361,18 +361,22 @@ def ingreso_page() -> rx.Component:
                     "Codigo de Barra",
                     class_name="block text-sm font-medium text-slate-600 mb-1",
                 ),
-                rx.el.input(
-                    id="barcode-input-entry",
-                    key=State.entry_form_key.to_string(),
-                    default_value=State.new_entry_item["barcode"],
-                    placeholder="Ej: 7791234567890",
-                    on_blur=lambda e: State.process_entry_barcode_from_input(e),
-                    on_key_down=lambda k: State.handle_barcode_enter(
-                        k, "barcode-input-entry"
+                rx.debounce_input(
+                    rx.input(
+                        id="barcode-input-entry",
+                        key=State.entry_form_key.to_string(),
+                        default_value=State.new_entry_item["barcode"],
+                        placeholder="Ej: 7791234567890",
+                        on_change=State.process_entry_barcode_from_input,
+                        on_blur=State.process_entry_barcode_from_input,
+                        on_key_down=lambda k: State.handle_barcode_enter(
+                            k, "barcode-input-entry"
+                        ),
+                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        type="text",
+                        auto_complete=False,
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                    type="text",
-                    auto_complete="off",
+                    debounce_timeout=120,
                 ),
                 class_name="col-span-12 sm:col-span-4 lg:col-span-3",
             ),

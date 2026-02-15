@@ -516,7 +516,7 @@ def inventory_adjustment_modal() -> rx.Component:
                     auto_complete=False,
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                   ),
-                  debounce_timeout=600,
+                  debounce_timeout=180,
                 ),
                 rx.cond(
                   State.inventory_adjustment_suggestions.length()
@@ -904,7 +904,7 @@ def inventario_page() -> rx.Component:
             on_change=State.set_inventory_search_term,
             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
           ),
-          debounce_timeout=600,
+          debounce_timeout=250,
         ),
         rx.el.div(
           rx.el.button(

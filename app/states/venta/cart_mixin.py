@@ -30,6 +30,7 @@ class CartMixin:
     autocomplete_selected_index: int = -1
     selected_product: Dict[str, Any] | None = None
     last_scanned_label: str = ""
+    last_processed_sale_barcode: str = ""
 
     @rx.event
     async def handle_key_down(self, key: str):
@@ -229,6 +230,7 @@ class CartMixin:
         self.autocomplete_selected_index = -1
         self.selected_product = None
         self.last_scanned_label = ""
+        self.last_processed_sale_barcode = ""
 
     @rx.event
     async def handle_sale_change(self, field: str, value: Union[str, float]):
@@ -361,18 +363,26 @@ class CartMixin:
 
     @rx.event
     async def process_sale_barcode_from_input(self, barcode_value):
-        self.new_sale_item["barcode"] = str(barcode_value) if barcode_value else ""
+        raw_barcode = str(barcode_value) if barcode_value is not None else ""
+        self.new_sale_item["barcode"] = raw_barcode
 
-        if not barcode_value or not str(barcode_value).strip():
+        if not raw_barcode.strip():
             self.new_sale_item["description"] = ""
             self.new_sale_item["quantity"] = 0
             self.new_sale_item["price"] = 0
             self.new_sale_item["subtotal"] = 0
             self.autocomplete_suggestions = []
             self.autocomplete_results = []
+            self.last_processed_sale_barcode = ""
             return
 
-        code = clean_barcode(str(barcode_value))
+        code = clean_barcode(raw_barcode)
+        if not code:
+            return
+        if code == self.last_processed_sale_barcode:
+            return
+        if len(code) < 6:
+            return
         if validate_barcode(code):
             company_id = None
             branch_id = None
@@ -387,6 +397,7 @@ class CartMixin:
                 int(company_id),
                 int(branch_id),
             )
+            self.last_processed_sale_barcode = code
             if product:
                 if self.new_sale_item.get("quantity", 0) <= 0:
                     self.new_sale_item["quantity"] = 1
@@ -481,9 +492,6 @@ class CartMixin:
                 or self.new_sale_item.get("price", 0) <= 0
             ):
                 self._fill_sale_item_from_product(product_override, keep_quantity=True)
-        if product_override:
-            await self._apply_price_tier(product_override)
-
         description = self.new_sale_item["description"].strip()
         barcode = str(self.new_sale_item.get("barcode", "") or "").strip()
 
@@ -555,7 +563,6 @@ class CartMixin:
         if product:
             if not self.new_sale_item["description"] or self.new_sale_item["price"] <= 0:
                 self._fill_sale_item_from_product(product, keep_quantity=True)
-                await self._apply_price_tier(product)
             if isinstance(product, dict):
                 self.selected_product = dict(product)
 
@@ -594,13 +601,17 @@ class CartMixin:
             self._product_value(product, "id", None),
         )
         variant_id = self._product_value(product, "variant_id", None)
-        available_stock = await SaleService.get_available_stock(
-            int(product_id) if product_id else None,
-            int(variant_id) if variant_id else None,
-            int(company_id),
-            int(branch_id),
-        )
-        product_stock = Decimal(str(available_stock or 0))
+        stock_hint = self._product_value(product, "stock", None)
+        if stock_hint is not None:
+            product_stock = Decimal(str(stock_hint or 0))
+        else:
+            available_stock = await SaleService.get_available_stock(
+                int(product_id) if product_id else None,
+                int(variant_id) if variant_id else None,
+                int(company_id),
+                int(branch_id),
+            )
+            product_stock = Decimal(str(available_stock or 0))
         if product_stock < Decimal(str(total_qty)):
             remaining = max(product_stock - Decimal(str(existing_qty)), Decimal("0"))
             unit = self._product_value(

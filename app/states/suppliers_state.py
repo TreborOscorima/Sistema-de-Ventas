@@ -64,15 +64,20 @@ class SuppliersState(MixinState):
                 .where(Supplier.branch_id == branch_id)
             )
             if term:
-                like = f"%{term}%"
+                name_prefix = f"{term}%"
+                tax_prefix = f"{term}%"
+                contact_like = f"%{term}%"
                 query = query.where(
                     or_(
-                        Supplier.name.ilike(like),
-                        Supplier.tax_id.ilike(like),
-                        Supplier.phone.ilike(like),
-                        Supplier.email.ilike(like),
+                        Supplier.name.ilike(name_prefix),
+                        Supplier.tax_id.ilike(tax_prefix),
+                        Supplier.phone.ilike(contact_like),
+                        Supplier.email.ilike(contact_like),
                     )
                 )
+                query = query.limit(150)
+            else:
+                query = query.limit(300)
             query = query.order_by(Supplier.name)
             results = session.exec(query).all()
             self.suppliers = [

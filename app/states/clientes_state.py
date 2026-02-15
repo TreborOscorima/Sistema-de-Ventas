@@ -143,15 +143,21 @@ class ClientesState(MixinState):
                 .where(Client.branch_id == branch_id)
             )
             if term:
-                like = f"%{term}%"
+                name_prefix = f"{term}%"
+                dni_prefix = f"{term}%"
+                phone_prefix = f"{term}%"
+                address_like = f"%{term}%"
                 query = query.where(
                     or_(
-                        Client.name.ilike(like),
-                        Client.dni.ilike(like),
-                        Client.phone.ilike(like),
-                        Client.address.ilike(like),
+                        Client.name.ilike(name_prefix),
+                        Client.dni.ilike(dni_prefix),
+                        Client.phone.ilike(phone_prefix),
+                        Client.address.ilike(address_like),
                     )
                 )
+                query = query.limit(150)
+            else:
+                query = query.limit(300)
             query = query.order_by(Client.name)
             results = session.exec(query).all()
             self.clients = [
