@@ -89,7 +89,7 @@ def ingreso_page() -> rx.Component:
                             type="text",
                             auto_complete=False,
                         ),
-                        debounce_timeout=250,
+                        debounce_timeout=650,
                     ),
                     rx.cond(
                         State.purchase_supplier_suggestions.length() > 0,
@@ -391,7 +391,7 @@ def ingreso_page() -> rx.Component:
                         class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                         is_read_only=State.is_existing_product,
                     ),
-                    debounce_timeout=250,
+                    debounce_timeout=600,
                 ),
                 rx.cond(
                     State.entry_autocomplete_suggestions.length() > 0,
