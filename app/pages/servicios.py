@@ -1090,7 +1090,7 @@ def reservations_table() -> rx.Component:
             on_change=State.set_reservation_staged_search,
             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
           ),
-          debounce_timeout=250,
+          debounce_timeout=600,
         ),
         rx.el.select(
           rx.el.option("Todos", value="todos"),

@@ -202,14 +202,13 @@ class PurchasesState(MixinState):
         term = (self.purchase_search_term or "").strip()
         filters = []
         if term:
-            number_prefix = f"{term}%"
-            supplier_name_like = f"%{term}%"
+            like = f"%{term}%"
             filters.append(
                 or_(
-                    Purchase.number.ilike(number_prefix),
-                    Purchase.series.ilike(number_prefix),
-                    Supplier.tax_id.ilike(number_prefix),
-                    Supplier.name.ilike(supplier_name_like),
+                    Purchase.number.ilike(like),
+                    Purchase.series.ilike(like),
+                    Supplier.name.ilike(like),
+                    Supplier.tax_id.ilike(like),
                 )
             )
         start_dt = self._parse_date(self.purchase_start_date)
@@ -386,9 +385,7 @@ class PurchasesState(MixinState):
             self.purchase_edit_supplier_suggestions = []
             return
 
-        name_prefix = f"{term}%"
-        name_search = f"%{term}%"
-        tax_id_prefix = f"{term}%"
+        search = f"%{term}%"
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -399,8 +396,8 @@ class PurchasesState(MixinState):
                 select(Supplier)
                 .where(
                     or_(
-                        Supplier.name.ilike(name_prefix),
-                        Supplier.tax_id.ilike(tax_id_prefix),
+                        Supplier.name.ilike(search),
+                        Supplier.tax_id.ilike(search),
                     )
                 )
                 .where(Supplier.company_id == company_id)
@@ -408,15 +405,6 @@ class PurchasesState(MixinState):
                 .order_by(Supplier.name)
                 .limit(6)
             ).all()
-            if not suppliers and len(term) >= 4:
-                suppliers = session.exec(
-                    select(Supplier)
-                    .where(Supplier.name.ilike(name_search))
-                    .where(Supplier.company_id == company_id)
-                    .where(Supplier.branch_id == branch_id)
-                    .order_by(Supplier.name)
-                    .limit(6)
-                ).all()
 
         self.purchase_edit_supplier_suggestions = [
             {

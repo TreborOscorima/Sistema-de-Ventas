@@ -116,7 +116,6 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         if len(term) < 2:
             self.client_suggestions = []
             return
-        name_prefix = f"{term}%"
         name_search = f"%{term}%"
         dni_prefix = f"{term}%"
         company_id = self.current_user.get("company_id")
@@ -129,7 +128,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 select(Client)
                 .where(
                     or_(
-                        Client.name.ilike(name_prefix),
+                        Client.name.ilike(name_search),
                         Client.dni.ilike(dni_prefix),
                     )
                 )
@@ -137,14 +136,6 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 .where(Client.branch_id == branch_id)
                 .limit(6)
             ).all()
-            if not clients and len(term) >= 4:
-                clients = session.exec(
-                    select(Client)
-                    .where(Client.name.ilike(name_search))
-                    .where(Client.company_id == company_id)
-                    .where(Client.branch_id == branch_id)
-                    .limit(6)
-                ).all()
         self.client_suggestions = [
             {
                 "id": client.id,
