@@ -319,7 +319,7 @@ def client_selector() -> rx.Component:
                             placeholder="Buscar cliente (DNI o nombre)...",
                             class_name="flex-1 px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500",
                         ),
-                        debounce_timeout=600,
+                        debounce_timeout=300,
                     ),
                     rx.el.button(
                         rx.icon("plus", class_name="h-4 w-4"),
@@ -380,10 +380,13 @@ def quick_add_bar() -> rx.Component:
                         id="venta_barcode_input",
                         key=State.sale_form_key.to_string(),
                         default_value=State.new_sale_item["barcode"],
-                        on_change=lambda val: State.handle_sale_change("barcode", val),
-                        debounce_timeout=600,
+                        on_blur=lambda value: State.process_sale_barcode_from_input(
+                            value
+                        ),
                         placeholder="Código...",
-                        on_key_down=lambda k: State.handle_key_down(k),
+                        on_key_down=lambda k: State.handle_sale_barcode_enter(
+                            k, "venta_barcode_input"
+                        ),
                         class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
                         type="text",
                         auto_complete="off",
@@ -412,7 +415,7 @@ def quick_add_bar() -> rx.Component:
                             placeholder="Buscar producto...",
                             class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
                         ),
-                        debounce_timeout=600,
+                        debounce_timeout=250,
                     ),
                     class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                 ),

@@ -357,58 +357,72 @@ async def search_products(
     if not term:
         return []
     like_search = f"%{term}%"
+    barcode_prefix = f"{term}%"
+    limit_value = max(int(limit or 10), 1)
 
     async def _run(current_session: AsyncSession) -> list[dict[str, Any]]:
         product_query = select(Product).where(
             or_(
                 Product.description.ilike(like_search),
-                Product.barcode.ilike(like_search),
+                Product.barcode.ilike(barcode_prefix),
             )
         )
         product_query = _apply_tenant_filters(
             product_query, Product, company_id, branch_id
         )
+        product_query = product_query.order_by(Product.description)
         products = (
-            await current_session.exec(product_query.limit(limit))
+            await current_session.exec(product_query.limit(limit_value))
         ).all()
 
-        variant_query = (
-            select(ProductVariant, Product)
-            .join(Product, Product.id == ProductVariant.product_id)
-            .where(
-                or_(
-                    ProductVariant.sku.ilike(like_search),
-                    ProductVariant.size.ilike(like_search),
-                    ProductVariant.color.ilike(like_search),
-                    Product.description.ilike(like_search),
-                    func.concat(
-                        Product.description,
-                        " (",
-                        func.coalesce(ProductVariant.size, ""),
-                        " ",
-                        func.coalesce(ProductVariant.color, ""),
-                        ")",
-                    ).ilike(like_search),
+        results: list[dict[str, Any]] = []
+        seen: set[tuple[Any, Any, Any]] = set()
+
+        def _append_unique(payload: dict[str, Any]):
+            key = (
+                payload.get("product_id") or payload.get("id"),
+                payload.get("variant_id"),
+                payload.get("barcode"),
+            )
+            if key in seen:
+                return
+            seen.add(key)
+            results.append(payload)
+
+        for product in products:
+            _append_unique(_adapt_product_payload(product))
+
+        # La búsqueda de variantes es más costosa; omitirla en términos muy cortos.
+        if len(term) >= 3 and len(results) < limit_value:
+            variant_query = (
+                select(ProductVariant, Product)
+                .join(Product, Product.id == ProductVariant.product_id)
+                .where(
+                    or_(
+                        ProductVariant.sku.ilike(barcode_prefix),
+                        ProductVariant.size.ilike(like_search),
+                        ProductVariant.color.ilike(like_search),
+                        Product.description.ilike(like_search),
+                    )
                 )
             )
-        )
-        variant_query = _apply_tenant_filters(
-            variant_query, ProductVariant, company_id, branch_id
-        )
-        variant_query = _apply_tenant_filters(
-            variant_query, Product, company_id, branch_id
-        )
-        variant_rows = (
-            await current_session.exec(variant_query.limit(limit))
-        ).all()
+            variant_query = _apply_tenant_filters(
+                variant_query, ProductVariant, company_id, branch_id
+            )
+            variant_query = _apply_tenant_filters(
+                variant_query, Product, company_id, branch_id
+            )
+            variant_query = variant_query.order_by(Product.description)
+            variant_rows = (
+                await current_session.exec(variant_query.limit(limit_value))
+            ).all()
+            for variant, parent in variant_rows:
+                if parent:
+                    _append_unique(_adapt_variant_payload(variant, parent))
+                    if len(results) >= limit_value:
+                        break
 
-        results: list[dict[str, Any]] = [
-            _adapt_product_payload(product) for product in products
-        ]
-        for variant, parent in variant_rows:
-            if parent:
-                results.append(_adapt_variant_payload(variant, parent))
-        return results
+        return results[:limit_value]
 
     if session is not None:
         return await _run(session)

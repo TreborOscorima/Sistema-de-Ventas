@@ -103,8 +103,10 @@ class IngresoState(MixinState):
                 float(self.new_entry_item["quantity"]) * float(self.new_entry_item["price"])
             )
             if field == "description":
-                if value:
-                    search = str(value).lower()
+                term = (str(value) if value is not None else "").strip()
+                if len(term) >= 2:
+                    search = f"%{term}%"
+                    barcode_prefix = f"{term}%"
                     company_id = self._company_id()
                     branch_id = self._branch_id()
                     if not company_id or not branch_id:
@@ -113,10 +115,16 @@ class IngresoState(MixinState):
                     with rx.session() as session:
                         products = session.exec(
                             select(Product)
-                            .where(Product.description.contains(search))
+                            .where(
+                                or_(
+                                    Product.description.ilike(search),
+                                    Product.barcode.ilike(barcode_prefix),
+                                )
+                            )
                             .where(Product.company_id == company_id)
                             .where(Product.branch_id == branch_id)
-                            .limit(5)
+                            .order_by(Product.description)
+                            .limit(8)
                         ).all()
                         self.entry_autocomplete_suggestions = [p.description for p in products]
                 else:
@@ -156,7 +164,8 @@ class IngresoState(MixinState):
         if len(term) < 2:
             self.purchase_supplier_suggestions = []
             return
-        search = f"%{term}%"
+        name_search = f"%{term}%"
+        tax_id_prefix = f"{term}%"
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -167,8 +176,8 @@ class IngresoState(MixinState):
                 select(Supplier)
                 .where(
                     or_(
-                        Supplier.name.ilike(search),
-                        Supplier.tax_id.ilike(search),
+                        Supplier.name.ilike(name_search),
+                        Supplier.tax_id.ilike(tax_id_prefix),
                     )
                 )
                 .where(Supplier.company_id == company_id)
@@ -1033,33 +1042,6 @@ class IngresoState(MixinState):
         if not company_id or not branch_id:
             return None
         with rx.session() as session:
-            variant = session.exec(
-                select(ProductVariant)
-                .where(ProductVariant.sku == code)
-                .where(ProductVariant.company_id == company_id)
-                .where(ProductVariant.branch_id == branch_id)
-            ).first()
-            if variant:
-                parent = session.exec(
-                    select(Product)
-                    .where(Product.id == variant.product_id)
-                    .where(Product.company_id == company_id)
-                    .where(Product.branch_id == branch_id)
-                ).first()
-                if parent:
-                    return {
-                        "id": str(parent.id),
-                        "product_id": parent.id,
-                        "variant_id": variant.id,
-                        "barcode": variant.sku,
-                        "description": parent.description,
-                        "category": parent.category,
-                        "stock": variant.stock,
-                        "unit": parent.unit,
-                        "purchase_price": parent.purchase_price,
-                        "sale_price": parent.sale_price,
-                    }
-
             p = session.exec(
                 select(Product)
                 .where(Product.barcode == code)
@@ -1078,6 +1060,30 @@ class IngresoState(MixinState):
                     "unit": p.unit,
                     "purchase_price": p.purchase_price,
                     "sale_price": p.sale_price,
+                }
+
+            variant_row = session.exec(
+                select(ProductVariant, Product)
+                .join(Product, Product.id == ProductVariant.product_id)
+                .where(ProductVariant.sku == code)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).first()
+            if variant_row:
+                variant, parent = variant_row
+                return {
+                    "id": str(parent.id),
+                    "product_id": parent.id,
+                    "variant_id": variant.id,
+                    "barcode": variant.sku,
+                    "description": parent.description,
+                    "category": parent.category,
+                    "stock": variant.stock,
+                    "unit": parent.unit,
+                    "purchase_price": parent.purchase_price,
+                    "sale_price": parent.sale_price,
                 }
         return None
 

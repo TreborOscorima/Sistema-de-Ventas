@@ -33,7 +33,7 @@ class CartMixin:
 
     @rx.event
     async def handle_key_down(self, key: str):
-        if key == "Enter":
+        if key in ("Enter", "NumpadEnter"):
             barcode = str(self.new_sale_item.get("barcode", "") or "").strip()
             if barcode:
                 company_id = None
@@ -62,6 +62,13 @@ class CartMixin:
                     duration=3000,
                 )
             return await self.add_item_to_sale()
+
+    @rx.event
+    def handle_sale_barcode_enter(self, key: str, input_id: str):
+        if key in ("Enter", "NumpadEnter"):
+            return rx.call_script(
+                f"const el = document.getElementById('{input_id}'); if (el) {{ el.blur(); }}"
+            )
 
     @rx.var
     def sale_subtotal(self) -> float:

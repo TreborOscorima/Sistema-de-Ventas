@@ -113,10 +113,11 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     def search_client_change(self, query: str):
         self.client_search_query = query or ""
         term = (query or "").strip()
-        if len(term) <= 2:
+        if len(term) < 2:
             self.client_suggestions = []
             return
-        like_search = f"%{term}%"
+        name_search = f"%{term}%"
+        dni_prefix = f"{term}%"
         company_id = self.current_user.get("company_id")
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -127,8 +128,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 select(Client)
                 .where(
                     or_(
-                        Client.name.ilike(like_search),
-                        Client.dni.ilike(like_search),
+                        Client.name.ilike(name_search),
+                        Client.dni.ilike(dni_prefix),
                     )
                 )
                 .where(Client.company_id == company_id)
