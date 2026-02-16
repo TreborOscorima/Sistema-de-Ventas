@@ -204,6 +204,9 @@ class CartMixin:
         if isinstance(product, dict):
             self.selected_product = dict(product)
 
+        # Incrementa key para forzar re-render de inputs uncontrolled
+        self.sale_form_key += 1
+
         if not keep_quantity:
             self.autocomplete_suggestions = []
             self.autocomplete_results = []

@@ -1523,9 +1523,9 @@ class HistorialState(MixinState):
         period_start = start_dt.strftime("%d/%m/%Y") if start_dt else "Inicio"
         period_end = end_dt.strftime("%d/%m/%Y") if end_dt else "Actual"
         period_label = f"Período: {period_start} a {period_end}"
-        
+
         wb, ws = create_excel_workbook("Historial de Ventas")
-        
+
         # Encabezado profesional
         row = add_company_header(
             ws,
@@ -1534,7 +1534,7 @@ class HistorialState(MixinState):
             period_label,
             columns=11,
         )
-        
+
         headers = [
             "Fecha y Hora",
             "Nº Venta",
@@ -1682,7 +1682,7 @@ class HistorialState(MixinState):
                     ws.cell(row=row, column=9, value=float(quantity)).number_format = NUMBER_FORMAT
                     ws.cell(row=row, column=10, value=float(unit_price)).number_format = currency_format
                     ws.cell(row=row, column=11, value=float(subtotal)).number_format = currency_format
-                    
+
                     for col in range(1, 12):
                         ws.cell(row=row, column=col).border = THIN_BORDER
                     row += 1
@@ -1702,7 +1702,7 @@ class HistorialState(MixinState):
             {"type": "text", "value": ""},
             {"type": "sum", "col_letter": "K", "number_format": currency_format},
         ])
-        
+
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Nº Venta: Identificador único de la transacción en el sistema.",
@@ -1712,7 +1712,7 @@ class HistorialState(MixinState):
             "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
             "Venta al contado: Cliente no identificado, pago inmediato.",
         ], columns=11)
-        
+
         auto_adjust_column_widths(ws)
 
         output = io.BytesIO()
@@ -1733,7 +1733,7 @@ class HistorialState(MixinState):
         period_start = start_dt.strftime("%d/%m/%Y") if start_dt else "Inicio"
         period_end = end_dt.strftime("%d/%m/%Y") if end_dt else "Actual"
         period_label = f"Período: {period_start} a {period_end}"
-        
+
         active_tab = self.report_active_tab or "metodos"
         if active_tab == "cierres":
             rows = self._build_report_closings()
@@ -1741,7 +1741,7 @@ class HistorialState(MixinState):
                 return rx.toast("No hay cierres para exportar.", duration=3000)
 
             wb, ws = create_excel_workbook("Cierres de Caja")
-            
+
             # Encabezado profesional
             row = add_company_header(
                 ws,
@@ -1750,7 +1750,7 @@ class HistorialState(MixinState):
                 period_label,
                 columns=5,
             )
-            
+
             headers = [
                 "Fecha y Hora",
                 "Tipo Operación",
@@ -1761,21 +1761,21 @@ class HistorialState(MixinState):
             style_header_row(ws, row, headers)
             data_start = row + 1
             row += 1
-            
+
             for item in rows:
                 action = item.get("action", "")
                 action_display = "Apertura de Caja" if action.lower() == "apertura" else "Cierre de Caja" if action.lower() == "cierre" else action.capitalize()
-                
+
                 ws.cell(row=row, column=1, value=item.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=action_display)
                 ws.cell(row=row, column=3, value=item.get("user", "Desconocido"))
                 ws.cell(row=row, column=4, value=float(item.get("amount", 0) or 0)).number_format = currency_format
                 ws.cell(row=row, column=5, value=item.get("notes", "") or "Sin observaciones")
-                
+
                 for col in range(1, 6):
                     ws.cell(row=row, column=col).border = THIN_BORDER
                 row += 1
-            
+
             # Totales
             totals_row = row
             add_totals_row_with_formulas(ws, totals_row, data_start, [
@@ -1785,12 +1785,12 @@ class HistorialState(MixinState):
                 {"type": "sum", "col_letter": "D", "number_format": currency_format},
                 {"type": "text", "value": ""},
             ])
-            
+
             add_notes_section(ws, totals_row, [
                 "Apertura de Caja: Monto inicial del día.",
                 "Cierre de Caja: Monto contado al finalizar.",
             ], columns=5)
-            
+
             auto_adjust_column_widths(ws)
 
             output = io.BytesIO()
@@ -1804,7 +1804,7 @@ class HistorialState(MixinState):
 
         if active_tab == "detalle":
             wb, ws = create_excel_workbook("Detalle de Cobros")
-            
+
             # Encabezado profesional
             row = add_company_header(
                 ws,
@@ -1813,7 +1813,7 @@ class HistorialState(MixinState):
                 period_label,
                 columns=6,
             )
-            
+
             detail_headers = [
                 "Fecha y Hora",
                 "Origen/Tipo",
@@ -1825,7 +1825,7 @@ class HistorialState(MixinState):
             style_header_row(ws, row, detail_headers)
             data_start = row + 1
             row += 1
-            
+
             for entry in entries:
                 ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
@@ -1833,11 +1833,11 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = currency_format
                 ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
                 ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
-                
+
                 for col in range(1, 7):
                     ws.cell(row=row, column=col).border = THIN_BORDER
                 row += 1
-            
+
             # Totales
             totals_row = row
             add_totals_row_with_formulas(ws, totals_row, data_start, [
@@ -1848,12 +1848,12 @@ class HistorialState(MixinState):
                 {"type": "text", "value": ""},
                 {"type": "text", "value": ""},
             ])
-            
+
             add_notes_section(ws, totals_row, [
                 "Origen: Tipo de transacción (Venta, Cobro de Cuota, Reserva, etc.).",
                 "Referencia: Información adicional del pago.",
             ], columns=6)
-            
+
             auto_adjust_column_widths(ws)
 
             output = io.BytesIO()
@@ -1877,7 +1877,7 @@ class HistorialState(MixinState):
             )
 
         wb, ws = create_excel_workbook("Resumen por Método")
-        
+
         # Encabezado profesional
         row = add_company_header(
             ws,
@@ -1886,7 +1886,7 @@ class HistorialState(MixinState):
             period_label,
             columns=4,
         )
-        
+
         summary_headers = [
             "Método de Pago",
             "Nº Operaciones",
@@ -1905,18 +1905,18 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=3, value=float(summary["total"])).number_format = currency_format
                 # Participación se calculará después
                 ws.cell(row=row, column=4, value=float(summary["total"])).number_format = currency_format
-                
+
                 for col in range(1, 5):
                     ws.cell(row=row, column=col).border = THIN_BORDER
                 row += 1
-                
+
         for key, summary in summary_totals.items():
             if key not in REPORT_METHOD_KEYS:
                 ws.cell(row=row, column=1, value=summary["method_label"])
                 ws.cell(row=row, column=2, value=summary["count"])
                 ws.cell(row=row, column=3, value=float(summary["total"])).number_format = currency_format
                 ws.cell(row=row, column=4, value=float(summary["total"])).number_format = currency_format
-                
+
                 for col in range(1, 5):
                     ws.cell(row=row, column=col).border = THIN_BORDER
                 row += 1
@@ -1929,18 +1929,18 @@ class HistorialState(MixinState):
             {"type": "sum", "col_letter": "C", "number_format": currency_format},
             {"type": "text", "value": "100.00%"},
         ])
-        
+
         # Actualizar participación con fórmulas
         from openpyxl.styles import Font
         PERCENT_FORMAT_LOCAL = '0.00%'
         for r in range(data_start, totals_row):
             ws.cell(row=r, column=4, value=f"=IF($C${totals_row}>0,C{r}/$C${totals_row},0)").number_format = PERCENT_FORMAT_LOCAL
-        
+
         add_notes_section(ws, totals_row, [
             "Total Recaudado: Suma de todos los pagos por método.",
             "Participación = Monto del Método ÷ Total General × 100.",
         ], columns=4)
-        
+
         auto_adjust_column_widths(ws)
 
         # Segunda hoja: Detalle
@@ -1952,7 +1952,7 @@ class HistorialState(MixinState):
             period_label,
             columns=6,
         )
-        
+
         detail_headers = [
             "Fecha y Hora",
             "Origen/Tipo",
@@ -1964,7 +1964,7 @@ class HistorialState(MixinState):
         style_header_row(detail_ws, row, detail_headers)
         detail_data_start = row + 1
         row += 1
-        
+
         for entry in entries:
             detail_ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
             detail_ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
@@ -1972,11 +1972,11 @@ class HistorialState(MixinState):
             detail_ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = currency_format
             detail_ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
             detail_ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
-            
+
             for col in range(1, 7):
                 detail_ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
-        
+
         # Totales en detalle
         detail_totals_row = row
         add_totals_row_with_formulas(detail_ws, detail_totals_row, detail_data_start, [
@@ -1987,7 +1987,7 @@ class HistorialState(MixinState):
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
         ])
-        
+
         auto_adjust_column_widths(detail_ws)
 
         output = io.BytesIO()
@@ -2001,16 +2001,16 @@ class HistorialState(MixinState):
         try:
             # Normalizar separadores.
             # Formato en BD: "Pagos Mixtos - Efectivo S/ 15.00 / Plin S/ 20.00 / Montos completos."
-            
+
             # Reemplazar " / " (barra con espacios) por pipe
             text = text.replace(" / ", "|")
             # Reemplazar " - " (guion con espacios) por pipe
             text = text.replace(" - ", "|")
             # Reemplazar "/" (barra sin espacios) por si acaso
             text = text.replace("/", "|")
-            
+
             parts = text.split("|")
-            
+
             for part in parts:
                 part = part.strip()
                 if keyword.lower() in part.lower():

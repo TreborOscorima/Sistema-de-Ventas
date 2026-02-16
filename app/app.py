@@ -323,7 +323,7 @@ _common_on_load = [
 app.add_page(
     index,
     route="/",
-    on_load=[State.refresh_runtime_context, State.sync_page_from_route] + _common_on_load,
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context] + _common_on_load,
 )
 
 # Cambio de contrasena (solo cuando aplica)
@@ -331,7 +331,7 @@ app.add_page(
     page_cambiar_contrasena,
     route="/cambiar-clave",
     title="Cambiar Contrasena - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_trial_active, State.ensure_password_change],
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_trial_active, State.ensure_password_change],
 )
 
 app.add_page(
@@ -363,9 +363,9 @@ app.add_page(
     route="/ingreso",
     title="Ingreso - TUWAYKIAPP",
     on_load=[
+        State.sync_page_from_route,
         State.refresh_runtime_context,
         State.ensure_view_ingresos,
-        State.sync_page_from_route,
     ] + _common_on_load,
 )
 app.add_page(
@@ -373,10 +373,10 @@ app.add_page(
     route="/compras",
     title="Compras - TUWAYKIAPP",
     on_load=[
+        State.sync_page_from_route,
         State.refresh_runtime_context,
         State.ensure_view_compras,
         State.load_suppliers,
-        State.sync_page_from_route,
     ]
     + _common_on_load,
 )
@@ -384,55 +384,55 @@ app.add_page(
     page_venta,
     route="/venta",
     title="Venta - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_view_ventas, State.sync_page_from_route]
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_ventas]
     + _common_on_load,
 )
 app.add_page(
     page_caja,
     route="/caja",
     title="Gestión de Caja - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_view_cashbox, State.sync_page_from_route]
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_cashbox]
     + _common_on_load,
 )
 app.add_page(
     page_clientes,
     route="/clientes",
     title="Clientes | Sistema de Ventas",
-    on_load=[State.refresh_runtime_context, State.ensure_view_clientes, State.sync_page_from_route]
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_clientes]
     + _common_on_load,
 )
 app.add_page(
     page_cuentas,
     route="/cuentas",
     title="Cuentas Corrientes | Sistema de Ventas",
-    on_load=[State.refresh_runtime_context, State.ensure_view_cuentas, State.sync_page_from_route]
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_cuentas]
     + _common_on_load,
 )
 app.add_page(
     page_dashboard,
     route="/dashboard",
     title="Dashboard - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.sync_page_from_route] + _common_on_load,
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context] + _common_on_load,
 )
 app.add_page(
     page_inventario,
     route="/inventario",
     title="Inventario - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_view_inventario, State.sync_page_from_route]
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_inventario]
     + _common_on_load,
 )
 app.add_page(
     page_historial,
     route="/historial",
     title="Historial - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_view_historial, State.sync_page_from_route]
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_historial]
     + _common_on_load,
 )
 app.add_page(
     page_reportes,
     route="/reportes",
     title="Reportes - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_export_data, State.sync_page_from_route]
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_export_data]
     + _common_on_load,
 )
 app.add_page(
@@ -440,9 +440,9 @@ app.add_page(
     route="/servicios",
     title="Servicios - TUWAYKIAPP",
     on_load=[
+        State.sync_page_from_route,
         State.refresh_runtime_context,
         State.ensure_view_servicios,
-        State.sync_page_from_route,
         State.load_reservations,
     ] + _common_on_load,
 )
@@ -450,6 +450,6 @@ app.add_page(
     page_configuracion,
     route="/configuracion",
     title="Configuración - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_admin_access, State.load_users, State.sync_page_from_route]
+    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_admin_access, State.load_users]
     + _common_on_load,
 )

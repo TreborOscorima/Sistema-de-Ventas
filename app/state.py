@@ -42,7 +42,7 @@ class State(RootState):
     notification_type: str = "info"
     is_notification_open: bool = False
     _last_runtime_refresh_ts: float = rx.field(default=0.0, is_var=False)
-    _runtime_refresh_ttl: float = 8.0
+    _runtime_refresh_ttl: float = 30.0
 
     @rx.event
     def notify(self, message: str, type: str = "info"):
@@ -72,7 +72,11 @@ class State(RootState):
 
     @rx.event
     async def refresh_runtime_context(self, force: bool = False):
-        """Carga caches y datos base con baja frecuencia para navegación fluida."""
+        """Carga caches y datos base con baja frecuencia para navegación fluida.
+
+        Usa yield para enviar deltas parciales y que el UI responda
+        progresivamente en vez de esperar a que termine todo.
+        """
         if not self.is_authenticated:
             return
 
@@ -81,15 +85,20 @@ class State(RootState):
             return
         self._last_runtime_refresh_ts = now
 
+        # --- Bloque 1: auth (permisos, sidebar, badge trial) ---
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
+        yield  # delta parcial: permisos + sidebar actualizados
 
+        # --- Bloque 2: caja + alertas (badge sidebar) ---
         if hasattr(self, "refresh_cashbox_status"):
             self.refresh_cashbox_status()
 
         if hasattr(self, "check_overdue_alerts"):
             self.check_overdue_alerts()
+        yield  # delta parcial: estado de caja + alertas
 
+        # --- Bloque 3: datos base (solo primer carga) ---
         seeded_defaults = False
         if hasattr(self, "units") and not self.units and hasattr(self, "ensure_default_data"):
             self.ensure_default_data()

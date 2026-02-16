@@ -346,6 +346,13 @@ class IngresoState(MixinState):
         self._set_new_product_mode()
 
     @rx.event
+    def handle_entry_barcode_form_submit(self, form_data: dict):
+        """Procesa el barcode desde el formulario (Enter o scanner)."""
+        barcode = str(form_data.get("barcode", "") or "").strip()
+        if barcode:
+            return self._process_entry_barcode(barcode)
+
+    @rx.event
     def process_entry_barcode_from_input(self, barcode_value):
         """Procesa el barcode del input cuando pierde el foco"""
         return self._process_entry_barcode(barcode_value)

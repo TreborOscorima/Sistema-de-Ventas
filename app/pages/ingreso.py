@@ -78,18 +78,16 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.div(
-                    rx.el.input(
-                        id="supplier-search-input",
-                        key=State.purchase_supplier_input_key.to_string(),
-                        placeholder="Buscar por Nombre de Empresa o N° de Registro",
-                        on_blur=State.search_supplier_change,
-                        on_key_down=lambda k: State.handle_supplier_search_enter(
-                            k, "supplier-search-input"
+                    rx.debounce_input(
+                        rx.input(
+                            id="supplier-search-input",
+                            placeholder="Buscar por Nombre de Empresa o N° de Registro",
+                            value=State.purchase_supplier_query,
+                            on_change=State.search_supplier_change,
+                            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                            auto_complete=False,
                         ),
-                        default_value=State.purchase_supplier_query,
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        type="text",
-                        auto_complete="off",
+                        debounce_timeout=400,
                     ),
                     rx.cond(
                         State.purchase_supplier_suggestions.length() > 0,
@@ -361,18 +359,18 @@ def ingreso_page() -> rx.Component:
                     "Codigo de Barra",
                     class_name="block text-sm font-medium text-slate-600 mb-1",
                 ),
-                rx.el.input(
-                    id="barcode-input-entry",
-                    key=State.entry_form_key.to_string(),
-                    default_value=State.new_entry_item["barcode"],
-                    placeholder="Ej: 7791234567890",
-                    on_blur=lambda e: State.process_entry_barcode_from_input(e),
-                    on_key_down=lambda k: State.handle_barcode_enter(
-                        k, "barcode-input-entry"
+                rx.el.form(
+                    rx.el.input(
+                        name="barcode",
+                        id="barcode-input-entry",
+                        key=State.entry_form_key.to_string(),
+                        default_value=State.new_entry_item["barcode"],
+                        placeholder="Ej: 7791234567890",
+                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        type="text",
+                        auto_complete="off",
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                    type="text",
-                    auto_complete="off",
+                    on_submit=State.handle_entry_barcode_form_submit,
                 ),
                 class_name="col-span-12 sm:col-span-4 lg:col-span-3",
             ),

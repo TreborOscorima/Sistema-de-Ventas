@@ -146,10 +146,10 @@ logger = get_logger("AuthState")
 
 class AuthState(MixinState):
     """Estado de autenticación y gestión de usuarios.
-    
+
     Maneja login, logout, sesiones JWT y administración de usuarios.
     Implementa RBAC (Role-Based Access Control) con permisos granulares.
-    
+
     Attributes:
         token: JWT almacenado en LocalStorage del navegador
         roles: Lista de nombres de roles disponibles
@@ -158,11 +158,11 @@ class AuthState(MixinState):
         show_user_form: Estado del modal de crear/editar usuario
         new_user_data: Datos del formulario de usuario
         editing_user: Usuario siendo editado (None = crear nuevo)
-        
+
     Variables computadas (rx.var):
         is_authenticated: True si hay sesión válida
         current_user: Usuario actual con permisos (cacheado 30s)
-        
+
     Eventos principales:
         login(form_data): Inicia sesión
         logout(): Cierra sesión
@@ -175,7 +175,7 @@ class AuthState(MixinState):
     # users: Dict[str, User] = {} # Eliminado a favor de la BD
     roles: List[str] = ["Superadmin", "Administrador", "Usuario", "Cajero"]
     role_privileges: Dict[str, Privileges] = DEFAULT_ROLE_TEMPLATES.copy()
-    
+
     error_message: str = ""
     password_change_error: str = ""
     needs_initial_admin: bool = False
@@ -224,7 +224,7 @@ class AuthState(MixinState):
     new_role_name: str = ""
     show_user_limit_modal: bool = False
     user_limit_modal_message: str = ""
-    
+
     # Cache de usuario para evitar consultas repetidas a BD (backend-only).
     # Usamos campos no-reactivos para evitar recursión al calcular vars.
     _cached_user: Optional[User] = rx.field(default=None, is_var=False)
@@ -249,7 +249,7 @@ class AuthState(MixinState):
             and (now - self._cached_user_time) < self._USER_CACHE_TTL
         ):
             return self._cached_user
-        
+
         # Cache inválido, recargar
         payload = decode_token(self.token)
         if not payload:
@@ -257,7 +257,7 @@ class AuthState(MixinState):
             self._cached_user_token = self.token
             self._cached_user_time = now
             return self._cached_user
-        
+
         subject = payload.get("sub")
         if subject is None:
             self._cached_user = self._guest_user()
@@ -277,7 +277,7 @@ class AuthState(MixinState):
             token_version = int(token_version or 0)
         except (TypeError, ValueError):
             token_version = 0
-        
+
         user_id = None
         try:
             user_id = int(subject_str)
@@ -307,7 +307,7 @@ class AuthState(MixinState):
                     ).all()
                     if len(users) == 1:
                         user = users[0]
-            
+
             if user and user.is_active:
                 if getattr(user, "token_version", 0) != token_version:
                     self._cached_user = self._guest_user()
@@ -330,7 +330,7 @@ class AuthState(MixinState):
                     }
             else:
                 self._cached_user = self._guest_user()
-        
+
         self._cached_user_token = self.token
         self._cached_user_time = now
         return self._cached_user
@@ -625,7 +625,7 @@ class AuthState(MixinState):
     @rx.var(cache=True)
     def active_branch_name(self) -> str:
         return self.active_branch_name_cache
-    
+
     def invalidate_user_cache(self) -> None:
         """Invalida el cache de usuario (llamar tras cambios de permisos)."""
         self._cached_user = None
@@ -641,7 +641,7 @@ class AuthState(MixinState):
     # =========================================================================
     # COMPUTED VARS DE PERMISOS - Para renderizado condicional en páginas
     # =========================================================================
-    
+
     @rx.var(cache=True)
     def plan_actual_str(self) -> str:
         return (self.plan_actual_cache or "").strip().lower() or "unknown"
@@ -658,27 +658,27 @@ class AuthState(MixinState):
     @rx.var(cache=True)
     def can_manage_compras(self) -> bool:
         return bool(self.current_user["privileges"].get("create_ingresos"))
-    
+
     @rx.var(cache=True)
     def can_view_ventas(self) -> bool:
         return bool(self.current_user["privileges"].get("view_ventas"))
-    
+
     @rx.var(cache=True)
     def can_view_cashbox(self) -> bool:
         return bool(self.current_user["privileges"].get("view_cashbox"))
-    
+
     @rx.var(cache=True)
     def can_view_inventario(self) -> bool:
         return bool(self.current_user["privileges"].get("view_inventario"))
-    
+
     @rx.var(cache=True)
     def can_view_historial(self) -> bool:
         return bool(self.current_user["privileges"].get("view_historial"))
-    
+
     @rx.var(cache=True)
     def can_export_data(self) -> bool:
         return bool(self.current_user["privileges"].get("export_data"))
-    
+
     @rx.var(cache=True)
     def can_view_servicios(self) -> bool:
         plan = self.plan_actual_str
@@ -688,7 +688,7 @@ class AuthState(MixinState):
             self.current_user["privileges"].get("view_servicios")
             and self.company_has_reservations
         )
-    
+
     @rx.var(cache=True)
     def can_view_clientes(self) -> bool:
         if self.plan_actual_str == "standard":
@@ -701,13 +701,13 @@ class AuthState(MixinState):
         return bool(
             privileges.get("manage_proveedores") or privileges.get("manage_clientes")
         )
-    
+
     @rx.var(cache=True)
     def can_view_cuentas(self) -> bool:
         if self.plan_actual_str == "standard":
             return False
         return bool(self.current_user["privileges"].get("view_cuentas"))
-    
+
     @rx.var(cache=True)
     def can_manage_config(self) -> bool:
         return bool(self.current_user["privileges"].get("manage_config"))
@@ -728,11 +728,11 @@ class AuthState(MixinState):
     def payment_alert_info(self) -> Dict[str, Any]:
         """Info de alerta para pagos próximos o vencidos (cacheada)."""
         return self.payment_alert_info_cache or self._default_payment_alert_info()
-    
+
     @rx.var(cache=True)
     def is_admin(self) -> bool:
         return self.current_user["role"] in ["Superadmin", "Administrador"]
-    
+
     users_list: List[User] = []
 
     def load_users(self):
@@ -1055,7 +1055,7 @@ class AuthState(MixinState):
 
     def _default_route_for_privileges(self, privileges: Dict[str, bool]) -> str:
         """Determina la ruta inicial según los privilegios del usuario.
-        
+
         El Dashboard es accesible para todos, por lo que siempre es una opción válida.
         La prioridad es: Dashboard > Ingreso > Venta > Caja > etc.
         """
@@ -1639,7 +1639,7 @@ class AuthState(MixinState):
                     user.role_id = role.id
                     session.add(user)
                     session.commit()
-                
+
                 # Login exitoso: limpiar intentos fallidos
                 _clear_login_attempts(identifier, ip_address=client_ip)
                 self.token = create_access_token(
@@ -1753,13 +1753,13 @@ class AuthState(MixinState):
     def _open_user_editor(self, user: User):
         merged_privileges = self._normalize_privileges(user.get("privileges", {}))
         role_key = self._find_role_key(user["role"]) or user["role"]
-        
+
         # Asegurar que el rol exista en nuestro registro
         if role_key not in self.role_privileges:
             self.role_privileges[role_key] = merged_privileges.copy()
             if role_key not in self.roles:
                 self.roles.append(role_key)
-                
+
         self.new_user_data = {
             "username": user["username"],
             "email": (user.get("email") or ""),
@@ -1788,7 +1788,7 @@ class AuthState(MixinState):
             return rx.toast("Empresa no definida.", duration=3000)
         # La edición de usuarios es a nivel empresa, no de sucursal.
         set_tenant_context(company_id, None)
-        
+
         with rx.session() as session:
             user = session.exec(
                 select(UserModel)
@@ -1797,10 +1797,10 @@ class AuthState(MixinState):
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
                 .execution_options(tenant_company_id=company_id)
             ).first()
-            
+
             if not user:
                 return rx.toast("Usuario a editar no encontrado.", duration=3000)
-            
+
             # Convertir a dict
             role_name = user.role.name if user.role else "Sin rol"
             user_dict = {
@@ -1876,7 +1876,7 @@ class AuthState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        
+
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
         set_tenant_context(company_id, None)
         with rx.session() as session:
@@ -1891,7 +1891,7 @@ class AuthState(MixinState):
             )
             session.commit()
             self._load_roles_cache(session, company_id=company_id)
-            
+
         self.new_role_name = ""
         self.new_user_data["role"] = name
         self.new_user_data["privileges"] = privileges.copy()
@@ -1909,7 +1909,7 @@ class AuthState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-            
+
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
         set_tenant_context(company_id, None)
         with rx.session() as session:
@@ -1922,7 +1922,7 @@ class AuthState(MixinState):
             )
             session.commit()
             self._load_roles_cache(session, company_id=company_id)
-            
+
         return rx.toast(f"Plantilla de rol {role} actualizada.", duration=3000)
 
     @rx.event
@@ -1932,7 +1932,7 @@ class AuthState(MixinState):
         block = self._require_active_subscription()
         if block:
             return block
-            
+
         username = self.new_user_data["username"].lower().strip()
         if not username:
             return rx.toast("El nombre de usuario no puede estar vacío.", duration=3000)
@@ -1950,7 +1950,7 @@ class AuthState(MixinState):
             return rx.toast("El correo es obligatorio.", duration=3000)
         if email and not validate_email(email):
             return rx.toast("Ingrese un correo valido.", duration=3000)
-            
+
         self.new_user_data["privileges"] = self._normalize_privileges(
             self.new_user_data["privileges"]
         )
@@ -2017,7 +2017,7 @@ class AuthState(MixinState):
                     .where(UserModel.username == self.editing_user["username"])
                     .where(UserModel.company_id == company_id)
                 ).first()
-                
+
                 if not user_to_update:
                     return rx.toast("Usuario a editar no encontrado.", duration=3000)
                 if email:
@@ -2027,7 +2027,7 @@ class AuthState(MixinState):
                     if existing_email and existing_email.id != user_to_update.id:
                         return rx.toast("El correo ya esta registrado.", duration=3000)
                     user_to_update.email = email
-                    
+
                 if self.new_user_data["password"]:
                     password = self.new_user_data["password"]
                     is_valid, error = validate_password(password)
@@ -2049,13 +2049,13 @@ class AuthState(MixinState):
                     user_to_update.token_version = (
                         getattr(user_to_update, "token_version", 0) or 0
                     ) + 1
-                    
+
                 user_to_update.role_id = role.id
-                
+
                 session.add(user_to_update)
                 session.commit()
                 self._load_roles_cache(session, company_id=company_id)
-                
+
                 self.hide_user_form()
                 self.load_users()
                 return rx.toast(f"Usuario {username} actualizado.", duration=3000)
@@ -2066,7 +2066,7 @@ class AuthState(MixinState):
                     .where(UserModel.username == username)
                     .where(UserModel.company_id == company_id)
                 ).first()
-                
+
                 if existing_user:
                     return rx.toast("El nombre de usuario ya existe.", duration=3000)
                 existing_email = session.exec(
@@ -2093,7 +2093,7 @@ class AuthState(MixinState):
                 password_hash = bcrypt.hashpw(
                     password.encode(), bcrypt.gensalt()
                 ).decode()
-                
+
                 new_user = UserModel(
                     username=username,
                     email=email or None,
@@ -2109,7 +2109,7 @@ class AuthState(MixinState):
                 )
                 session.commit()
                 self._load_roles_cache(session, company_id=company_id)
-                
+
                 self.hide_user_form()
                 self.load_users()
                 return rx.toast(f"Usuario {username} creado.", duration=3000)
@@ -2126,7 +2126,7 @@ class AuthState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        
+
         # Eliminación de usuarios: alcance por empresa (sin filtrar por sucursal actual).
         set_tenant_context(company_id, None)
         with rx.session() as session:
@@ -2137,7 +2137,7 @@ class AuthState(MixinState):
                 .options(selectinload(UserModel.role))
                 .execution_options(tenant_company_id=company_id)
             ).first()
-            
+
             if not user:
                 return rx.toast(f"Usuario {username} no encontrado.", duration=3000)
             role_name = (user.role.name if user.role else "").strip().lower()
@@ -2147,5 +2147,5 @@ class AuthState(MixinState):
             session.commit()
             self.load_users()
             return rx.toast(f"Usuario {username} eliminado.", duration=3000)
-                
+
         return rx.toast(f"Usuario {username} no encontrado.", duration=3000)

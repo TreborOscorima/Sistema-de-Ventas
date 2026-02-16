@@ -215,43 +215,47 @@ def cashbox_opening_card() -> rx.Component:
     ),
     rx.el.div(
       rx.el.label("Caja inicial", class_name="text-sm font-medium text-slate-800"),
-      rx.el.div(
-        rx.el.input(
-          type="number",
-          step="0.01",
-          default_value=State.cashbox_open_amount_input,
-          on_blur=State.set_cashbox_open_amount_input,
-          placeholder="Ej: 150.00",
-          disabled=State.cashbox_is_open,
-          class_name=rx.cond(
-            State.cashbox_is_open,
-            f"{INPUT_STYLES['disabled']} py-2 text-sm",
-            f"{INPUT_STYLES['default']} py-2 text-sm",
+      rx.el.form(
+        rx.el.div(
+          rx.el.input(
+            name="amount",
+            type="number",
+            step="0.01",
+            default_value=State.cashbox_open_amount_input,
+            placeholder="Ej: 150.00",
+            disabled=State.cashbox_is_open,
+            class_name=rx.cond(
+              State.cashbox_is_open,
+              f"{INPUT_STYLES['disabled']} py-2 text-sm",
+              f"{INPUT_STYLES['default']} py-2 text-sm",
+            ),
           ),
-        ),
-        rx.el.button(
-          rx.icon("play", class_name="h-4 w-4"),
-          rx.cond(State.cashbox_is_open, "Caja abierta", "Aperturar caja"),
-          on_click=State.open_cashbox_session,
-          disabled=State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
-          class_name=rx.cond(
-            State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
-            f"{BUTTON_STYLES['disabled']} w-full sm:w-auto sm:min-w-[152px]",
-            f"{BUTTON_STYLES['primary']} w-full sm:w-auto sm:min-w-[152px]",
+          rx.el.button(
+            rx.icon("play", class_name="h-4 w-4"),
+            rx.cond(State.cashbox_is_open, "Caja abierta", "Aperturar caja"),
+            type="submit",
+            disabled=State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
+            class_name=rx.cond(
+              State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
+              f"{BUTTON_STYLES['disabled']} w-full sm:w-auto sm:min-w-[152px]",
+              f"{BUTTON_STYLES['primary']} w-full sm:w-auto sm:min-w-[152px]",
+            ),
           ),
-        ),
-        rx.el.button(
-          rx.icon("lock", class_name="h-4 w-4"),
-          "Cerrar Caja",
-          on_click=State.open_cashbox_close_modal,
-          disabled=~State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
-          class_name=rx.cond(
-            State.cashbox_is_open & State.current_user["privileges"]["manage_cashbox"],
-            f"{BUTTON_STYLES['primary']} w-full sm:w-auto sm:min-w-[136px]",
-            f"{BUTTON_STYLES['disabled']} w-full sm:w-auto sm:min-w-[136px]",
+          rx.el.button(
+            rx.icon("lock", class_name="h-4 w-4"),
+            "Cerrar Caja",
+            type="button",
+            on_click=State.open_cashbox_close_modal,
+            disabled=~State.cashbox_is_open | ~State.current_user["privileges"]["manage_cashbox"],
+            class_name=rx.cond(
+              State.cashbox_is_open & State.current_user["privileges"]["manage_cashbox"],
+              f"{BUTTON_STYLES['primary']} w-full sm:w-auto sm:min-w-[136px]",
+              f"{BUTTON_STYLES['disabled']} w-full sm:w-auto sm:min-w-[136px]",
+            ),
           ),
+          class_name="flex flex-col sm:flex-row gap-2",
         ),
-        class_name="flex flex-col sm:flex-row gap-2",
+        on_submit=State.handle_cashbox_form_submit,
       ),
       rx.el.p(
         "Consejo: registra el efectivo inicial real para un cuadre correcto al cierre.",
