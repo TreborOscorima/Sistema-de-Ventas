@@ -86,7 +86,7 @@ class DashboardState(MixinState):
         self._load_top_products()
         self._load_sales_by_category()
         self._load_payment_breakdown()
-        self.last_refresh = datetime.now().strftime("%H:%M:%S")
+        self.last_refresh = self._tz_now().strftime("%H:%M:%S")
 
     def _tz_now(self) -> datetime:
         """Devuelve datetime.now() en la zona horaria de la empresa.
@@ -418,7 +418,7 @@ class DashboardState(MixinState):
 
     def _load_sales_by_day(self):
         """Carga ventas de los últimos 7 días para gráfico."""
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = self._tz_now().replace(hour=0, minute=0, second=0, microsecond=0)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -714,7 +714,7 @@ class DashboardState(MixinState):
         ws['A1'].alignment = Alignment(horizontal='center')
 
         ws.merge_cells('A2:D2')
-        ws['A2'] = f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+        ws['A2'] = f"Generado: {self._tz_now().strftime('%d/%m/%Y %H:%M:%S')}"
         ws['A2'].alignment = Alignment(horizontal='center')
         ws['A2'].font = Font(italic=True, color="666666")
 
@@ -799,7 +799,7 @@ class DashboardState(MixinState):
 
         # Crear data URL para descarga directa
         b64_data = base64.b64encode(excel_bytes).decode('utf-8')
-        filename = f"ventas_categoria_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"ventas_categoria_{self._tz_now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         # Usar JavaScript para descargar el archivo
         js_code = f"""
