@@ -27,7 +27,7 @@ def cashbox_filters() -> rx.Component:
     on_start_change=State.set_cashbox_staged_start_date,
     on_end_change=State.set_cashbox_staged_end_date,
   )
-  
+
   toggle_section = rx.el.div(
     rx.el.label("Mostrar adelantos", class_name="text-sm font-medium text-slate-600"),
     rx.el.div(
@@ -71,7 +71,7 @@ def cashbox_log_filters() -> rx.Component:
     on_start_change=State.set_cashbox_log_staged_start_date,
     on_end_change=State.set_cashbox_log_staged_end_date,
   )
-  
+
   return rx.el.div(
     start_filter,
     end_filter,

@@ -997,13 +997,13 @@ class IngresoState(MixinState):
                     "Error al registrar el ingreso. Verifique los datos.",
                     duration=4000,
                 )
-        
+
         # Forzar actualización del inventario en la UI
         if hasattr(self, "_inventory_update_trigger"):
             self._inventory_update_trigger += 1
         if hasattr(self, "_purchase_update_trigger"):
             self._purchase_update_trigger += 1
-            
+
         self.new_entry_items = []
         self._reset_entry_form()
         self._reset_purchase_form()
@@ -1126,7 +1126,7 @@ class IngresoState(MixinState):
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
             ).first()
-            
+
             if product:
                 self._apply_existing_product_context(
                     {
