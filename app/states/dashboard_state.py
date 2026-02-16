@@ -26,6 +26,7 @@ from app.models import (
 from .inventory_state import LOW_STOCK_THRESHOLD
 from app.enums import SaleStatus, ReservationStatus
 from app.services.alert_service import get_alert_summary
+from app.utils.timezone import country_now
 from .mixin_state import MixinState
 
 
@@ -87,9 +88,26 @@ class DashboardState(MixinState):
         self._load_payment_breakdown()
         self.last_refresh = datetime.now().strftime("%H:%M:%S")
     
+    def _tz_now(self) -> datetime:
+        """Devuelve datetime.now() en la zona horaria de la empresa.
+
+        Usa la configuración de país/timezone del tenant.
+        Si no hay config disponible, cae a datetime.now() (hora local del server).
+        """
+        settings = {}
+        if hasattr(self, "_company_settings_snapshot"):
+            settings = self._company_settings_snapshot()
+        country_code = settings.get("country_code") or getattr(
+            self, "selected_country_code", None
+        )
+        timezone = settings.get("timezone")
+        now = country_now(country_code, timezone=timezone)
+        # Stripea tzinfo para comparar naive con naive (DB almacena naive)
+        return now.replace(tzinfo=None)
+
     def _get_period_dates(self) -> tuple[datetime, datetime, datetime, datetime]:
         """Obtiene fechas de inicio y fin del período seleccionado y período anterior."""
-        now = datetime.now()
+        now = self._tz_now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         
         if self.selected_period == "today":
@@ -116,6 +134,19 @@ class DashboardState(MixinState):
             prev_end = start
         
         return start, end, prev_start, prev_end
+
+    def _get_reservation_period_end(self, today_start: datetime) -> datetime:
+        """Devuelve fin de día actual (23:59:59) para contar reservas.
+
+        Las reservas se agendan a futuro, así que una reserva hoy a las 20:00
+        debe contarse incluso si ahora son las 15:00.  Para el período custom
+        se respeta el end seleccionado por el usuario.
+        """
+        if self.selected_period == "custom" and self.custom_end_date:
+            return datetime.strptime(self.custom_end_date, "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59
+            )
+        return today_start.replace(hour=23, minute=59, second=59)
     
     @rx.event
     def set_period(self, period: str):
@@ -157,7 +188,7 @@ class DashboardState(MixinState):
     
     def _load_sales_summary(self):
         """Carga resumen de ventas por período."""
-        now = datetime.now()
+        now = self._tz_now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = today_start - timedelta(days=today_start.weekday())
         month_start = today_start.replace(day=1)
@@ -253,14 +284,19 @@ class DashboardState(MixinState):
             self.period_sales_count = period_result[0] or 0
             self.period_sales = float(period_result[1] or 0)
 
-            # Reservas del período seleccionado (agenda operativa),
-            # excluyendo anuladas/reembolsadas.
+            # Reservas del período seleccionado (agenda operativa).
+            # Se usa end-of-day para incluir reservas futuras del día actual,
+            # ya que start_datetime es la hora agendada (no la hora de creación).
+            # Excluye estados cancelled y refunded.
+            reservation_end = self._get_reservation_period_end(
+                now.replace(hour=0, minute=0, second=0, microsecond=0)
+            )
             reservation_result = session.exec(
                 select(func.count(FieldReservation.id))
                 .where(
                     and_(
                         FieldReservation.start_datetime >= period_start,
-                        FieldReservation.start_datetime <= period_end,
+                        FieldReservation.start_datetime <= reservation_end,
                         FieldReservation.status.notin_(
                             [ReservationStatus.CANCELLED, ReservationStatus.REFUNDED]
                         ),
