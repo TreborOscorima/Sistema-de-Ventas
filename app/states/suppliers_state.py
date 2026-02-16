@@ -34,7 +34,7 @@ class SuppliersState(MixinState):
             "is_active": True,
         }
 
-    @rx.var
+    @rx.var(cache=True)
     def suppliers_view(self) -> list[dict[str, Any]]:
         return [
             {

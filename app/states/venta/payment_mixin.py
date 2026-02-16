@@ -2,41 +2,13 @@ import uuid
 from typing import List
 
 import reflex as rx
-from sqlmodel import select
 
-from app.models import PaymentMethod
 from ..types import PaymentBreakdownItem, PaymentMethodConfig
 
 
 class PaymentMixin:
-    @rx.var
-    def payment_methods(self) -> List[PaymentMethodConfig]:
-        company_id = None
-        branch_id = None
-        if hasattr(self, "current_user"):
-            company_id = self.current_user.get("company_id")
-        if hasattr(self, "_branch_id"):
-            branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return []
-        with rx.session() as session:
-            methods = session.exec(
-                select(PaymentMethod)
-                .where(PaymentMethod.company_id == company_id)
-                .where(PaymentMethod.branch_id == branch_id)
-            ).all()
-            if not methods:
-                return []
-            return [
-                {
-                    "id": m.method_id,
-                    "name": m.name,
-                    "description": m.description,
-                    "kind": m.kind,
-                    "enabled": m.enabled,
-                }
-                for m in methods
-            ]
+    # payment_methods se declara y carga en ConfigState.load_config_data().
+    # NO redeclarar aquí para evitar conflictos MRO.
 
     payment_method: str = "Efectivo"
     payment_method_description: str = "Billetes, Monedas"
@@ -58,15 +30,15 @@ class PaymentMixin:
     new_payment_method_description: str = ""
     new_payment_method_kind: str = "other"
 
-    @rx.var
+    @rx.var(cache=True)
     def enabled_payment_methods(self) -> list[PaymentMethodConfig]:
         return [m for m in self.payment_methods if m.get("enabled", True)]
 
-    @rx.var
+    @rx.var(cache=True)
     def payment_summary(self) -> str:
         return self._generate_payment_summary()
 
-    @rx.var
+    @rx.var(cache=True)
     def payment_mixed_complement(self) -> float:
         total = self._mixed_effective_total()
         paid_cash = self._round_currency(self.payment_mixed_cash)

@@ -573,12 +573,12 @@ class DashboardState(MixinState):
                 for r in results
             ]
     
-    @rx.var
+    @rx.var(cache=True)
     def has_critical_alerts(self) -> bool:
         """Indica si hay alertas críticas."""
         return any(a.get("severity") in ("critical", "error") for a in self.alerts)
     
-    @rx.var
+    @rx.var(cache=True)
     def period_label(self) -> str:
         """Etiqueta del período seleccionado."""
         labels = {
@@ -589,19 +589,19 @@ class DashboardState(MixinState):
         }
         return labels.get(self.selected_period, "Este Mes")
     
-    @rx.var
+    @rx.var(cache=True)
     def sales_change_percent(self) -> float:
         """Porcentaje de cambio vs período anterior."""
         if self.period_prev_sales > 0:
             return ((self.period_sales - self.period_prev_sales) / self.period_prev_sales) * 100
         return 0.0
     
-    @rx.var
+    @rx.var(cache=True)
     def sales_trend_up(self) -> bool:
         """Indica si las ventas van en aumento."""
         return self.period_sales >= self.period_prev_sales
     
-    @rx.var
+    @rx.var(cache=True)
     def formatted_sales_change(self) -> str:
         """Cambio formateado con signo."""
         change = self.sales_change_percent
@@ -609,36 +609,36 @@ class DashboardState(MixinState):
             return f"+{change:.1f}%"
         return f"{change:.1f}%"
     
-    @rx.var
+    @rx.var(cache=True)
     def formatted_today_sales(self) -> str:
         return f"{self.currency_symbol}{self.today_sales:,.2f}"
     
-    @rx.var
+    @rx.var(cache=True)
     def formatted_week_sales(self) -> str:
         return f"{self.currency_symbol}{self.week_sales:,.2f}"
     
-    @rx.var
+    @rx.var(cache=True)
     def formatted_month_sales(self) -> str:
         return f"{self.currency_symbol}{self.month_sales:,.2f}"
     
-    @rx.var
+    @rx.var(cache=True)
     def formatted_avg_ticket(self) -> str:
         return f"{self.currency_symbol}{self.avg_ticket:,.2f}"
     
-    @rx.var
+    @rx.var(cache=True)
     def formatted_pending_debt(self) -> str:
         return f"{self.currency_symbol}{self.pending_debt:,.2f}"
     
-    @rx.var
+    @rx.var(cache=True)
     def formatted_period_sales(self) -> str:
         return f"{self.currency_symbol}{self.period_sales:,.2f}"
     
-    @rx.var
+    @rx.var(cache=True)
     def category_total_sales(self) -> float:
         """Total de ventas de todas las categorías."""
         return sum(c.get("total", 0) for c in self.dash_sales_by_category)
     
-    @rx.var
+    @rx.var(cache=True)
     def formatted_category_total(self) -> str:
         return f"{self.currency_symbol}{self.category_total_sales:,.2f}"
     

@@ -241,11 +241,11 @@ class PurchasesState(MixinState):
             query = query.where(clause)
         return query
 
-    @rx.var
+    @rx.var(cache=True)
     def purchase_records(self) -> list[dict[str, Any]]:
         return self.purchase_records_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def purchase_total_pages(self) -> int:
         return self.purchase_total_pages_cache
 
@@ -650,7 +650,7 @@ class PurchasesState(MixinState):
         self.close_purchase_delete_modal()
         return rx.toast("Compra eliminada.", duration=3000)
 
-    @rx.var
+    @rx.var(cache=True)
     def purchase_detail_items(self) -> list[dict[str, Any]]:
         detail = self.purchase_detail or {}
         items = detail.get("items")

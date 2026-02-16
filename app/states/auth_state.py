@@ -234,12 +234,12 @@ class AuthState(MixinState):
     _subscription_check_ts: float = rx.field(default=0.0, is_var=False)
     _USER_CACHE_TTL: float = 30.0  # Segundos de validez del cache
 
-    @rx.var
+    @rx.var(cache=True)
     def is_authenticated(self) -> bool:
         user = self.current_user
         return bool(user and user.get("username") != "Invitado")
 
-    @rx.var
+    @rx.var(cache=True)
     def current_user(self) -> User:
         # Verificar cache válido
         now = time.time()
@@ -335,7 +335,7 @@ class AuthState(MixinState):
         self._cached_user_time = now
         return self._cached_user
 
-    @rx.var
+    @rx.var(cache=True)
     def active_branch_id(self) -> int | None:
         value = self.selected_branch_id
         if not value:
@@ -580,8 +580,6 @@ class AuthState(MixinState):
                 return
 
             branch_ids = self._user_branch_ids(session, user_id)
-            if not branch_ids and getattr(user, "branch_id", None):
-                branch_ids = [int(user.branch_id)]
             if not branch_ids:
                 self.available_branches_cache = []
                 self.active_branch_name_cache = ""
@@ -620,11 +618,11 @@ class AuthState(MixinState):
         self.refresh_payment_alert_info_cache()
         self.refresh_branch_access_cache()
 
-    @rx.var
+    @rx.var(cache=True)
     def available_branches(self) -> List[Dict[str, Any]]:
         return self.available_branches_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def active_branch_name(self) -> str:
         return self.active_branch_name_cache
     
@@ -644,44 +642,44 @@ class AuthState(MixinState):
     # COMPUTED VARS DE PERMISOS - Para renderizado condicional en páginas
     # =========================================================================
     
-    @rx.var
+    @rx.var(cache=True)
     def plan_actual_str(self) -> str:
         return (self.plan_actual_cache or "").strip().lower() or "unknown"
 
-    @rx.var
+    @rx.var(cache=True)
     def can_view_ingresos(self) -> bool:
         return bool(self.current_user["privileges"].get("view_ingresos"))
 
-    @rx.var
+    @rx.var(cache=True)
     def can_view_compras(self) -> bool:
         privileges = self.current_user["privileges"]
         return bool(privileges.get("view_compras") or privileges.get("view_ingresos"))
 
-    @rx.var
+    @rx.var(cache=True)
     def can_manage_compras(self) -> bool:
         return bool(self.current_user["privileges"].get("create_ingresos"))
     
-    @rx.var
+    @rx.var(cache=True)
     def can_view_ventas(self) -> bool:
         return bool(self.current_user["privileges"].get("view_ventas"))
     
-    @rx.var
+    @rx.var(cache=True)
     def can_view_cashbox(self) -> bool:
         return bool(self.current_user["privileges"].get("view_cashbox"))
     
-    @rx.var
+    @rx.var(cache=True)
     def can_view_inventario(self) -> bool:
         return bool(self.current_user["privileges"].get("view_inventario"))
     
-    @rx.var
+    @rx.var(cache=True)
     def can_view_historial(self) -> bool:
         return bool(self.current_user["privileges"].get("view_historial"))
     
-    @rx.var
+    @rx.var(cache=True)
     def can_export_data(self) -> bool:
         return bool(self.current_user["privileges"].get("export_data"))
     
-    @rx.var
+    @rx.var(cache=True)
     def can_view_servicios(self) -> bool:
         plan = self.plan_actual_str
         if plan == "standard":
@@ -691,47 +689,47 @@ class AuthState(MixinState):
             and self.company_has_reservations
         )
     
-    @rx.var
+    @rx.var(cache=True)
     def can_view_clientes(self) -> bool:
         if self.plan_actual_str == "standard":
             return False
         return bool(self.current_user["privileges"].get("view_clientes"))
 
-    @rx.var
+    @rx.var(cache=True)
     def can_manage_proveedores(self) -> bool:
         privileges = self.current_user["privileges"]
         return bool(
             privileges.get("manage_proveedores") or privileges.get("manage_clientes")
         )
     
-    @rx.var
+    @rx.var(cache=True)
     def can_view_cuentas(self) -> bool:
         if self.plan_actual_str == "standard":
             return False
         return bool(self.current_user["privileges"].get("view_cuentas"))
     
-    @rx.var
+    @rx.var(cache=True)
     def can_manage_config(self) -> bool:
         return bool(self.current_user["privileges"].get("manage_config"))
 
-    @rx.var
+    @rx.var(cache=True)
     def company_has_reservations(self) -> bool:
         return bool(self.company_has_reservations_cache)
 
-    @rx.var
+    @rx.var(cache=True)
     def plan_name(self) -> str:
         return str(self.subscription_snapshot.get("plan_type", "") or "")
 
-    @rx.var
+    @rx.var(cache=True)
     def subscription_snapshot(self) -> Dict[str, Any]:
         return self.subscription_snapshot_cache or self._default_subscription_snapshot()
 
-    @rx.var
+    @rx.var(cache=True)
     def payment_alert_info(self) -> Dict[str, Any]:
         """Info de alerta para pagos próximos o vencidos (cacheada)."""
         return self.payment_alert_info_cache or self._default_payment_alert_info()
     
-    @rx.var
+    @rx.var(cache=True)
     def is_admin(self) -> bool:
         return self.current_user["role"] in ["Superadmin", "Administrador"]
     
@@ -841,17 +839,7 @@ class AuthState(MixinState):
     def _ensure_user_branch_access(self, session, user: UserModel) -> tuple[list[int], bool]:
         if not user:
             return [], False
-        branch_ids = self._user_branch_ids(session, user.id)
-        default_branch_id = getattr(user, "branch_id", None)
-        changed = False
-        if default_branch_id and default_branch_id not in branch_ids:
-            session.add(
-                UserBranch(user_id=user.id, branch_id=int(default_branch_id))
-            )
-            session.flush()
-            branch_ids.append(int(default_branch_id))
-            changed = True
-        return branch_ids, changed
+        return self._user_branch_ids(session, user.id), False
 
     def _select_default_branch(
         self,

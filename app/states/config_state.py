@@ -65,7 +65,7 @@ class ConfigState(MixinState):
     unit_rows: List[Dict[str, Any]] = []
     payment_methods: List[PaymentMethodConfig] = []
     
-    @rx.var
+    @rx.var(cache=True)
     def available_countries(self) -> List[Dict[str, str]]:
         """Lista de países soportados para el selector."""
         return [
@@ -73,12 +73,12 @@ class ConfigState(MixinState):
             for code, info in SUPPORTED_COUNTRIES.items()
         ]
     
-    @rx.var
+    @rx.var(cache=True)
     def country_config(self) -> Dict[str, Any]:
         """Configuración completa del país actual."""
         return get_country_config(self.selected_country_code)
     
-    @rx.var
+    @rx.var(cache=True)
     def tax_id_label(self) -> str:
         """Label para identificación tributaria según el país.
         
@@ -86,7 +86,7 @@ class ConfigState(MixinState):
         """
         return get_country_config(self.selected_country_code).get("tax_id_label", "ID Fiscal")
     
-    @rx.var
+    @rx.var(cache=True)
     def personal_id_label(self) -> str:
         """Label para documento de identidad personal según el país.
         
@@ -94,22 +94,22 @@ class ConfigState(MixinState):
         """
         return get_country_config(self.selected_country_code).get("personal_id_label", "Documento")
     
-    @rx.var
+    @rx.var(cache=True)
     def tax_id_placeholder(self) -> str:
         """Placeholder para el campo de ID tributario."""
         return get_country_config(self.selected_country_code).get("tax_id_placeholder", "")
     
-    @rx.var
+    @rx.var(cache=True)
     def personal_id_placeholder(self) -> str:
         """Placeholder para el campo de documento personal."""
         return get_country_config(self.selected_country_code).get("personal_id_placeholder", "")
 
-    @rx.var
+    @rx.var(cache=True)
     def timezone_placeholder(self) -> str:
         """Zona horaria sugerida según el país."""
         return get_country_config(self.selected_country_code).get("timezone", "UTC")
 
-    @rx.var
+    @rx.var(cache=True)
     def timezone_options(self) -> List[str]:
         """Opciones de zona horaria optimizadas para operación LATAM."""
         current = (self.timezone or "").strip()
@@ -711,7 +711,7 @@ class ConfigState(MixinState):
     new_payment_method_description: str = ""
     new_payment_method_kind: str = "other"
 
-    @rx.var
+    @rx.var(cache=True)
     def currency_symbol(self) -> str:
         match = next(
             (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
@@ -723,7 +723,7 @@ class ConfigState(MixinState):
         config = get_country_config(self.selected_country_code)
         return f"{config.get('currency_symbol', '$')} "
 
-    @rx.var
+    @rx.var(cache=True)
     def currency_name(self) -> str:
         match = next(
             (c for c in self.available_currencies if c["code"] == self.selected_currency_code),

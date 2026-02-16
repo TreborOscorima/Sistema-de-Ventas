@@ -519,15 +519,15 @@ class InventoryState(MixinState):
                 f"const el=document.getElementById('{input_id}'); if(el) el.blur();"
             )
 
-    @rx.var
+    @rx.var(cache=True)
     def inventory_list(self) -> list[dict]:
         return self.inventory_list_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def inventory_total_pages(self) -> int:
         return self.inventory_total_pages_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def inventory_display_page(self) -> int:
         if self.inventory_current_page < 1:
             return 1
@@ -535,24 +535,24 @@ class InventoryState(MixinState):
             return self.inventory_total_pages
         return self.inventory_current_page
 
-    @rx.var
+    @rx.var(cache=True)
     def inventory_paginated_list(self) -> list[dict]:
         # Alias para compatibilidad con UI existente, ya que inventory_list ahora está paginado
         return self.inventory_list
 
-    @rx.var
+    @rx.var(cache=True)
     def inventory_total_products(self) -> int:
         return self.inventory_total_products_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def inventory_in_stock_count(self) -> int:
         return self.inventory_in_stock_count_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def inventory_low_stock_count(self) -> int:
         return self.inventory_low_stock_count_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def inventory_out_of_stock_count(self) -> int:
         return self.inventory_out_of_stock_count_cache
 
@@ -786,7 +786,7 @@ class InventoryState(MixinState):
         else:
             self.editing_product[field] = value
 
-    @rx.var
+    @rx.var(cache=True)
     def variant_rows(self) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         for index, variant in enumerate(self.variants):
@@ -795,7 +795,7 @@ class InventoryState(MixinState):
             rows.append(row)
         return rows
 
-    @rx.var
+    @rx.var(cache=True)
     def price_tier_rows(self) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         for index, tier in enumerate(self.price_tiers):
@@ -804,7 +804,7 @@ class InventoryState(MixinState):
             rows.append(row)
         return rows
 
-    @rx.var
+    @rx.var(cache=True)
     def variants_stock_total(self) -> float:
         total = 0.0
         for variant in self.variants:

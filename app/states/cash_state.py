@@ -494,35 +494,35 @@ class CashState(MixinState):
     def refresh_cashbox_data(self):
         self._refresh_cashbox_caches()
 
-    @rx.var
+    @rx.var(cache=True)
     def petty_cash_movements(self) -> List[CashboxLogEntry]:
         return self.petty_cash_movements_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_petty_cash_movements(self) -> List[CashboxLogEntry]:
         return self.petty_cash_movements
 
-    @rx.var
+    @rx.var(cache=True)
     def petty_cash_total_pages(self) -> int:
         return self.petty_cash_total_pages_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_opening_amount_display(self) -> str:
         return f"{self.cashbox_opening_amount:.2f}"
 
-    @rx.var
+    @rx.var(cache=True)
     def current_cashbox_session(self) -> CashboxSession:
         return self.current_cashbox_session_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_is_open(self) -> bool:
         return bool(self.current_cashbox_session.get("is_open"))
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_opening_amount(self) -> float:
         return self.cashbox_opening_amount_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_opening_time(self) -> str:
         return self.current_cashbox_session.get("opening_time", "")
 
@@ -1062,15 +1062,15 @@ class CashState(MixinState):
 
             return filtered
 
-    @rx.var
+    @rx.var(cache=True)
     def filtered_cashbox_logs(self) -> list[CashboxLogEntry]:
         return self.filtered_cashbox_logs_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_cashbox_logs(self) -> list[CashboxLogEntry]:
         return self.filtered_cashbox_logs
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_log_total_pages(self) -> int:
         return self.cashbox_log_total_pages_cache
 
@@ -1499,19 +1499,19 @@ class CashState(MixinState):
                 for sale, user in sales_results
             ]
 
-    @rx.var
+    @rx.var(cache=True)
     def filtered_cashbox_sales(self) -> list[CashboxSale]:
         return self.filtered_cashbox_sales_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_cashbox_sales(self) -> list[CashboxSale]:
         return self.filtered_cashbox_sales
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_total_pages(self) -> int:
         return self.cashbox_total_pages_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_close_totals(self) -> list[dict[str, str]]:
         if not self.current_user["privileges"]["view_cashbox"]:
             return []
@@ -1525,30 +1525,30 @@ class CashState(MixinState):
             if item.get("total", 0) > 0
         ]
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_close_total_amount(self) -> str:
         total_value = self.cashbox_close_expected_total
         if total_value == 0 and self.summary_by_method:
             total_value = sum(item.get("total", 0) for item in self.summary_by_method)
         return self._format_currency(total_value)
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_close_opening_amount_display(self) -> str:
         return self._format_currency(self.cashbox_close_opening_amount)
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_close_income_total_display(self) -> str:
         return self._format_currency(self.cashbox_close_income_total)
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_close_expense_total_display(self) -> str:
         return self._format_currency(self.cashbox_close_expense_total)
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_close_expected_total_display(self) -> str:
         return self._format_currency(self.cashbox_close_expected_total)
 
-    @rx.var
+    @rx.var(cache=True)
     def cashbox_close_sales(self) -> list[CashboxSale]:
         if not self.current_user["privileges"]["view_cashbox"]:
             return []
@@ -1559,12 +1559,20 @@ class CashState(MixinState):
         denial = self._cashbox_guard()
         if denial:
             return denial
+        # Abrir el modal inmediatamente para feedback visual rápido
+        self.cashbox_close_modal_open = True
+        self.cashbox_close_summary_sales = []
+        self.summary_by_method = {}
+        yield
+        # Ahora calcular los datos pesados (5-6 DB queries)
         today = datetime.datetime.now().strftime("%Y-%m-%d")
         breakdown = self._build_cashbox_close_breakdown(today)
         day_sales = self._get_day_sales(today)
         summary = breakdown["summary"]
         if not day_sales and not summary and breakdown["opening_amount"] == 0:
-            return rx.toast("No hay movimientos de caja hoy.", duration=3000)
+            self.cashbox_close_modal_open = False
+            yield rx.toast("No hay movimientos de caja hoy.", duration=3000)
+            return
         self.summary_by_method = summary
         self.cashbox_close_summary_sales = day_sales
         self.cashbox_close_summary_date = today
@@ -1572,7 +1580,6 @@ class CashState(MixinState):
         self.cashbox_close_income_total = breakdown["income_total"]
         self.cashbox_close_expense_total = breakdown["expense_total"]
         self.cashbox_close_expected_total = breakdown["expected_total"]
-        self.cashbox_close_modal_open = True
 
     @rx.event
     def close_cashbox_close_modal(self):

@@ -1208,23 +1208,23 @@ class HistorialState(MixinState):
         self._refresh_report_cache()
         self._refresh_financial_cache()
 
-    @rx.var
+    @rx.var(cache=True)
     def filtered_history(self) -> list[dict]:
         return self.filtered_history_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_history(self) -> list[dict]:
         return self.filtered_history
 
-    @rx.var
+    @rx.var(cache=True)
     def report_method_summary(self) -> list[dict]:
         return self.report_method_summary_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def report_detail_rows(self) -> list[dict]:
         return self.report_detail_rows_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def report_detail_total_pages(self) -> int:
         _ = self._report_update_trigger
         total_items = len(self.report_detail_rows)
@@ -1234,7 +1234,7 @@ class HistorialState(MixinState):
             total_items + self.report_detail_items_per_page - 1
         ) // self.report_detail_items_per_page
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_report_detail_rows(self) -> list[dict]:
         _ = self._report_update_trigger
         if not self.current_user["privileges"]["view_historial"]:
@@ -1247,11 +1247,11 @@ class HistorialState(MixinState):
         offset = (page - 1) * per_page
         return self.report_detail_rows[offset : offset + per_page]
 
-    @rx.var
+    @rx.var(cache=True)
     def report_closing_rows(self) -> list[dict]:
         return self.report_closing_rows_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def report_closing_total_pages(self) -> int:
         _ = self._report_update_trigger
         total_items = len(self.report_closing_rows)
@@ -1261,7 +1261,7 @@ class HistorialState(MixinState):
             total_items + self.report_closing_items_per_page - 1
         ) // self.report_closing_items_per_page
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_report_closing_rows(self) -> list[dict]:
         _ = self._report_update_trigger
         if not self.current_user["privileges"]["view_historial"]:
@@ -1274,7 +1274,7 @@ class HistorialState(MixinState):
         offset = (page - 1) * per_page
         return self.report_closing_rows[offset : offset + per_page]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_pages(self) -> int:
         return self.total_pages_cache
 
@@ -1503,7 +1503,7 @@ class HistorialState(MixinState):
         else:
             self.close_sale_detail()
 
-    @rx.var
+    @rx.var(cache=True)
     def selected_sale_items_view(self) -> list[dict]:
         return list(self.selected_sale_items or [])
 
@@ -2030,7 +2030,7 @@ class HistorialState(MixinState):
             pass
         return Decimal("0.00")
 
-    @rx.var
+    @rx.var(cache=True)
     def payment_stats(self) -> Dict[str, float]:
         return self.payment_stats_cache
 
@@ -2051,60 +2051,60 @@ class HistorialState(MixinState):
         else:
             stats["mixto"] += amount
 
-    @rx.var
+    @rx.var(cache=True)
     def total_credit(self) -> float:
         return self.total_credit_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def credit_outstanding(self) -> float:
         return self.credit_outstanding_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def dynamic_payment_cards(self) -> list[dict]:
         return self.dynamic_payment_cards_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_efectivo(self) -> float:
         return self.payment_stats["efectivo"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_debito(self) -> float:
         return self.payment_stats["debito"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_credito(self) -> float:
         return self.payment_stats["credito"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_yape(self) -> float:
         return self.payment_stats["yape"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_plin(self) -> float:
         return self.payment_stats["plin"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_tarjeta(self) -> float:
         return self._round_currency(
             self.payment_stats["debito"] + self.payment_stats["credito"]
         )
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_transferencia(self) -> float:
         return self.payment_stats["transferencia"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_mixtas(self) -> float:
         return self.payment_stats["mixto"]
 
-    @rx.var
+    @rx.var(cache=True)
     def productos_mas_vendidos(self) -> list[dict]:
         return self.productos_mas_vendidos_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def productos_stock_bajo(self) -> list[Dict]:
         return self.productos_stock_bajo_cache
 
-    @rx.var
+    @rx.var(cache=True)
     def sales_by_day(self) -> list[dict]:
         return self.sales_by_day_cache

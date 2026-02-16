@@ -558,7 +558,7 @@ def user_form() -> rx.Component:
             rx.el.label("Nombre de Usuario", class_name="text-sm font-medium text-slate-700"),
             rx.el.input(
               default_value=State.new_user_data["username"],
-              on_change=lambda v: State.handle_new_user_change(
+              on_blur=lambda v: State.handle_new_user_change(
                 "username", v
               ),
               is_disabled=rx.cond(State.editing_user, True, False),
@@ -572,7 +572,7 @@ def user_form() -> rx.Component:
               type="email",
               placeholder="usuario@empresa.com",
               default_value=State.new_user_data["email"],
-              on_change=lambda v: State.handle_new_user_change(
+              on_blur=lambda v: State.handle_new_user_change(
                 "email", v
               ),
               class_name=f"{INPUT_STYLES['default']} mt-1",
@@ -602,7 +602,7 @@ def user_form() -> rx.Component:
               rx.el.input(
                 placeholder="Ej: Administrador, Cajero, Auditor",
                 default_value=State.new_role_name,
-                on_change=State.update_new_role_name,
+                on_blur=lambda v: State.update_new_role_name(v),
                 class_name=f"flex-1 {INPUT_STYLES['default']}",
               ),
               rx.el.button(
@@ -624,7 +624,7 @@ def user_form() -> rx.Component:
                 "",
               ),
               default_value=State.new_user_data["password"],
-              on_change=lambda v: State.handle_new_user_change(
+              on_blur=lambda v: State.handle_new_user_change(
                 "password", v
               ),
               class_name=f"{INPUT_STYLES['default']} mt-1",
@@ -636,7 +636,7 @@ def user_form() -> rx.Component:
             rx.el.input(
               type="password",
               default_value=State.new_user_data["confirm_password"],
-              on_change=lambda v: State.handle_new_user_change(
+              on_blur=lambda v: State.handle_new_user_change(
                 "confirm_password", v
               ),
               class_name=f"{INPUT_STYLES['default']} mt-1",

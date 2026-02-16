@@ -67,11 +67,11 @@ class IngresoState(MixinState):
     new_entry_items: List[TransactionItem] = []
     entry_autocomplete_suggestions: List[str] = []
 
-    @rx.var
+    @rx.var(cache=True)
     def entry_subtotal(self) -> float:
         return self.new_entry_item["subtotal"]
 
-    @rx.var
+    @rx.var(cache=True)
     def entry_total(self) -> float:
         return self._round_currency(
             sum((item["subtotal"] for item in self.new_entry_items))

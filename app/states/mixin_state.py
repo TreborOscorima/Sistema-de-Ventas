@@ -469,7 +469,7 @@ class MixinState:
             "timezone": timezone_value,
         }
 
-    @rx.var
+    @rx.var(cache=True)
     def currency_symbol(self) -> str:
         """Obtiene el símbolo de la moneda actual.
         
@@ -494,7 +494,7 @@ class MixinState:
         config = get_country_config(country)
         return f"{config.get('currency_symbol', '$')} "
 
-    @rx.var
+    @rx.var(cache=True)
     def currency_name(self) -> str:
         """Obtiene el nombre de la moneda actual."""
         if not hasattr(self, "available_currencies") or not hasattr(self, "selected_currency_code"):

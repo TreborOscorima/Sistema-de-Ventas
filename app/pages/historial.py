@@ -53,7 +53,7 @@ def history_filters() -> rx.Component:
         ),
         rx.el.input(
           placeholder="Descripción del producto",
-          on_change=State.set_staged_history_filter_product,
+          on_blur=lambda v: State.set_staged_history_filter_product(v),
           class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
           default_value=State.staged_history_filter_product,
         ),

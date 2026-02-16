@@ -51,7 +51,7 @@ class ReportState(MixinState):
     # Nombre de empresa (configurable)
     company_name: str = "TUWAYKIAPP"
     
-    @rx.var
+    @rx.var(cache=True)
     def period_options(self) -> list[dict[str, str]]:
         """Opciones de período disponibles."""
         return [
@@ -63,7 +63,7 @@ class ReportState(MixinState):
             {"value": "custom", "label": "Personalizado"},
         ]
     
-    @rx.var
+    @rx.var(cache=True)
     def report_types(self) -> list[dict[str, str]]:
         """Tipos de reportes disponibles."""
         return [
@@ -73,7 +73,7 @@ class ReportState(MixinState):
             {"value": "caja", "label": "Gestión de Caja", "icon": "banknote"},
         ]
     
-    @rx.var
+    @rx.var(cache=True)
     def selected_report_label(self) -> str:
         """Etiqueta del reporte seleccionado."""
         for rt in self.report_types:
@@ -81,7 +81,7 @@ class ReportState(MixinState):
                 return rt["label"]
         return "Reporte"
     
-    @rx.var
+    @rx.var(cache=True)
     def period_label(self) -> str:
         """Etiqueta del período seleccionado."""
         labels = {
@@ -94,7 +94,7 @@ class ReportState(MixinState):
         }
         return labels.get(self.report_period, "Este Mes")
 
-    @rx.var
+    @rx.var(cache=True)
     def report_period_label(self) -> str:
         """Etiqueta del período para reportes (no colisiona con Dashboard)."""
         if self.report_period == "custom":

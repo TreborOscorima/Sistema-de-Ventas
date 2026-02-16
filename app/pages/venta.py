@@ -372,23 +372,25 @@ def quick_add_bar() -> rx.Component:
     return rx.el.div(
         # Fila 1: Código de barra y Búsqueda (siempre visible)
         rx.el.div(
-            # Código de barra
+            # Código de barra — form-based: solo dispara evento al presionar Enter
             rx.el.div(
-                rx.el.div(
-                    rx.icon("scan-barcode", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
-                    rx.el.input(
-                        id="venta_barcode_input",
-                        key=State.sale_form_key.to_string(),
-                        default_value=State.new_sale_item["barcode"],
-                        on_change=lambda val: State.handle_sale_change("barcode", val),
-                        debounce_timeout=600,
-                        placeholder="Código...",
-                        on_key_down=lambda k: State.handle_key_down(k),
-                        class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
-                        type="text",
-                        auto_complete="off",
+                rx.el.form(
+                    rx.el.div(
+                        rx.icon("scan-barcode", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
+                        rx.el.input(
+                            name="barcode",
+                            id="venta_barcode_input",
+                            key=State.sale_form_key.to_string(),
+                            placeholder="Código...",
+                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
+                            type="text",
+                            auto_complete="off",
+                        ),
+                        class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                     ),
-                    class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
+                    on_submit=State.handle_barcode_form_submit,
+                    reset_on_submit=True,
+                    class_name="w-full",
                 ),
                 rx.cond(
                     State.last_scanned_label != "",

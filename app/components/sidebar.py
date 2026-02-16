@@ -103,6 +103,62 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     )
 
 
+_SUBMENU_ACTIVE = (
+    f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} "
+    f"bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500"
+)
+_SUBMENU_INACTIVE = (
+    f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} "
+    f"px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}"
+)
+
+
+def _submenu_section(
+    item: rx.Var[dict],
+    page_label: str,
+    route: str,
+    subsections: list,
+    default_key: str,
+) -> rx.Component:
+    """Renderiza un bloque de submenú si la página y ruta coinciden."""
+    return rx.cond(
+        (item["page"] == page_label) & (State.router.page.path == route),
+        rx.el.div(
+            rx.foreach(
+                subsections,
+                lambda section: rx.el.a(
+                    rx.el.div(
+                        rx.icon(section["icon"], class_name="h-4 w-4"),
+                        rx.el.span(
+                            section["label"],
+                            class_name="text-sm min-w-0 flex-1 truncate",
+                        ),
+                        class_name="flex items-center gap-2 min-w-0",
+                    ),
+                    href=route + "?tab=" + section["key"],
+                    class_name=rx.cond(
+                        (State.router.page.path == route)
+                        & (
+                            (State.router.page.params["tab"] == section["key"])
+                            | (
+                                (section["key"] == default_key)
+                                & (
+                                    (State.router.page.params["tab"] == "")
+                                    | (State.router.page.params["tab"] == None)
+                                )
+                            )
+                        ),
+                        _SUBMENU_ACTIVE,
+                        _SUBMENU_INACTIVE,
+                    ),
+                ),
+            ),
+            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-slate-200",
+        ),
+        rx.fragment(),
+    )
+
+
 def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.Component:
     """Botón de submenú con estilo mejorado."""
     active_class = f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500"
@@ -226,126 +282,9 @@ def sidebar() -> rx.Component:
                                 State.navigation_items,
                                 lambda item: rx.el.div(
                                     nav_item(item["label"], item["icon"], item["page"], item["route"]),
-                                    rx.cond(
-                                        (item["page"] == "Configuracion")
-                                        & (State.router.page.path == "/configuracion"),
-                                        rx.el.div(
-                                            rx.foreach(
-                                                CONFIG_SUBSECTIONS,
-                                                lambda section: rx.el.a(
-                                                    rx.el.div(
-                                                        rx.icon(
-                                                            section["icon"],
-                                                            class_name="h-4 w-4",
-                                                        ),
-                                                        rx.el.span(
-                                                            section["label"],
-                                                            class_name="text-sm min-w-0 flex-1 truncate",
-                                                        ),
-                                                        class_name="flex items-center gap-2 min-w-0",
-                                                    ),
-                                                    href="/configuracion?tab=" + section["key"],
-                                                    class_name=rx.cond(
-                                                        (State.router.page.path == "/configuracion")
-                                                        & (
-                                                            (State.router.page.params["tab"] == section["key"])
-                                                            | (
-                                                                (section["key"] == "usuarios")
-                                                                & (
-                                                                    (State.router.page.params["tab"] == "")
-                                                                    | (State.router.page.params["tab"] == None)
-                                                                )
-                                                            )
-                                                        ),
-                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
-                                                    ),
-                                                ),
-                                            ),
-                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-slate-200",
-                                        ),
-                                        rx.fragment(),
-                                    ),
-                                    rx.cond(
-                                        (item["page"] == "Gestion de Caja")
-                                        & (State.router.page.path == "/caja"),
-                                        rx.el.div(
-                                            rx.foreach(
-                                                CASH_SUBSECTIONS,
-                                                lambda section: rx.el.a(
-                                                    rx.el.div(
-                                                        rx.icon(
-                                                            section["icon"],
-                                                            class_name="h-4 w-4",
-                                                        ),
-                                                        rx.el.span(
-                                                            section["label"],
-                                                            class_name="text-sm min-w-0 flex-1 truncate",
-                                                        ),
-                                                        class_name="flex items-center gap-2 min-w-0",
-                                                    ),
-                                                    href="/caja?tab=" + section["key"],
-                                                    class_name=rx.cond(
-                                                        (State.router.page.path == "/caja")
-                                                        & (
-                                                            (State.router.page.params["tab"] == section["key"])
-                                                            | (
-                                                                (section["key"] == "resumen")
-                                                                & (
-                                                                    (State.router.page.params["tab"] == "")
-                                                                    | (State.router.page.params["tab"] == None)
-                                                                )
-                                                            )
-                                                        ),
-                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
-                                                    ),
-                                                ),
-                                            ),
-                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-slate-200",
-                                        ),
-                                        rx.fragment(),
-                                    ),
-                                    rx.cond(
-                                        (item["page"] == "Servicios")
-                                        & (State.router.page.path == "/servicios"),
-                                        rx.el.div(
-                                            rx.foreach(
-                                                SERVICES_SUBSECTIONS,
-                                                lambda section: rx.el.a(
-                                                    rx.el.div(
-                                                        rx.icon(
-                                                            section["icon"],
-                                                            class_name="h-4 w-4",
-                                                        ),
-                                                        rx.el.span(
-                                                            section["label"],
-                                                            class_name="text-sm min-w-0 flex-1 truncate",
-                                                        ),
-                                                        class_name="flex items-center gap-2 min-w-0",
-                                                    ),
-                                                    href="/servicios?tab=" + section["key"],
-                                                    class_name=rx.cond(
-                                                        (State.router.page.path == "/servicios")
-                                                        & (
-                                                            (State.router.page.params["tab"] == section["key"])
-                                                            | (
-                                                                (section["key"] == "campo")
-                                                                & (
-                                                                    (State.router.page.params["tab"] == "")
-                                                                    | (State.router.page.params["tab"] == None)
-                                                                )
-                                                            )
-                                                        ),
-                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500",
-                                                        f"block w-full min-w-0 text-left no-underline {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}",
-                                                    ),
-                                                ),
-                                            ),
-                                            class_name="mt-1 ml-3 pl-3 flex flex-col gap-0.5 border-l border-slate-200",
-                                        ),
-                                        rx.fragment(),
-                                    ),
+                                    _submenu_section(item, "Configuracion", "/configuracion", CONFIG_SUBSECTIONS, "usuarios"),
+                                    _submenu_section(item, "Gestion de Caja", "/caja", CASH_SUBSECTIONS, "resumen"),
+                                    _submenu_section(item, "Servicios", "/servicios", SERVICES_SUBSECTIONS, "campo"),
                             class_name="flex flex-col gap-0.5 pt-2",
                         ),
                     ),

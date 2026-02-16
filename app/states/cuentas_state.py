@@ -231,7 +231,7 @@ class CuentasState(MixinState):
         self.total_pagadas = int(paid_result.one() or 0)
         self.total_pendientes = int(pending_result.one() or 0)
 
-    @rx.var
+    @rx.var(cache=True)
     def selected_client_id(self) -> int | None:
         if isinstance(self.selected_client, dict):
             client_id = self.selected_client.get("id")
@@ -243,7 +243,7 @@ class CuentasState(MixinState):
             return client_id
         return None
 
-    @rx.var
+    @rx.var(cache=True)
     def client_installments_view(self) -> list[dict]:
         rows: list[dict] = []
         today = self._country_today()
@@ -485,7 +485,7 @@ class CuentasState(MixinState):
             "})()"
         )
 
-    @rx.var
+    @rx.var(cache=True)
     def debtors_total_pages(self) -> int:
         total_items = len(self.debtors or [])
         if total_items == 0:
@@ -493,7 +493,7 @@ class CuentasState(MixinState):
         per_page = max(self.debtors_items_per_page, 1)
         return (total_items + per_page - 1) // per_page
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_debtors(self) -> list[dict]:
         total_pages = self.debtors_total_pages
         page = min(max(self.debtors_page, 1), total_pages)
@@ -501,7 +501,7 @@ class CuentasState(MixinState):
         offset = (page - 1) * per_page
         return (self.debtors or [])[offset : offset + per_page]
 
-    @rx.var
+    @rx.var(cache=True)
     def installments_total_pages(self) -> int:
         total_items = len(self.installments_rows or [])
         if total_items == 0:
@@ -509,7 +509,7 @@ class CuentasState(MixinState):
         per_page = max(self.installments_items_per_page, 1)
         return (total_items + per_page - 1) // per_page
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_installments_rows(self) -> list[dict]:
         total_pages = self.installments_total_pages
         page = min(max(self.installments_page, 1), total_pages)

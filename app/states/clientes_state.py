@@ -89,7 +89,7 @@ class ClientesState(MixinState):
         set_tenant_context(company_id, branch_id)
         return company_id
 
-    @rx.var
+    @rx.var(cache=True)
     def clients_view(self) -> list[dict]:
         rows: list[dict] = []
         for client in self.clients:

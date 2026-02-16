@@ -491,13 +491,13 @@ class ServicesState(MixinState):
                 self._reservation_to_dict(reservation) for reservation in reservations
             ]
     
-    @rx.var
+    @rx.var(cache=True)
     def reservation_selected_for_payment(self) -> FieldReservation | None:
         if not self.reservation_payment_id:
             return None
         return self._find_reservation_by_id(self.reservation_payment_id)
 
-    @rx.var
+    @rx.var(cache=True)
     def selected_reservation_balance(self) -> float:
         if not self.reservation_selected_for_payment:
             return 0.0
@@ -937,28 +937,28 @@ class ServicesState(MixinState):
 
         self.reservation_form = form
 
-    @rx.var
+    @rx.var(cache=True)
     def reservation_delete_button_disabled(self) -> bool:
         return not self.reservation_delete_selection or not self.reservation_delete_reason
 
-    @rx.var
+    @rx.var(cache=True)
     def reservation_selected_for_delete(self) -> FieldReservation | None:
         if not self.reservation_delete_selection:
             return None
         return self._find_reservation_by_id(self.reservation_delete_selection)
 
-    @rx.var
+    @rx.var(cache=True)
     def service_reservations_for_sport(self) -> list[FieldReservation]:
         return self.service_reservations
 
-    @rx.var
+    @rx.var(cache=True)
     def reservation_total_pages(self) -> int:
         total = self.reservation_total_count
         if total == 0:
             return 1
         return (total + self.reservation_items_per_page - 1) // self.reservation_items_per_page
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_reservations(self) -> list[FieldReservation]:
         return self.service_reservations
 
@@ -980,7 +980,7 @@ class ServicesState(MixinState):
             self.reservation_current_page += 1
             self.load_reservations()
 
-    @rx.var
+    @rx.var(cache=True)
     def field_prices_for_current_sport(self) -> list[FieldPrice]:
         if hasattr(self, "field_prices"):
             return [
@@ -989,13 +989,13 @@ class ServicesState(MixinState):
             ]
         return []
 
-    @rx.var
+    @rx.var(cache=True)
     def modal_reservation(self) -> FieldReservation | None:
         if not self.reservation_modal_reservation_id:
             return None
         return self._find_reservation_by_id(self.reservation_modal_reservation_id)
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_week_days(self) -> list[dict[str, str]]:
         if not self.schedule_selected_week:
             return []
@@ -1018,7 +1018,7 @@ class ServicesState(MixinState):
         except ValueError:
             return []
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_month_days(self) -> list[dict[str, str]]:
         if not self.schedule_selected_month:
             return []
@@ -1037,7 +1037,7 @@ class ServicesState(MixinState):
         except (ValueError, IndexError):
             return []
 
-    @rx.var
+    @rx.var(cache=True)
     def display_month_label(self) -> str:
         if not self.display_month:
             return ""
@@ -1048,7 +1048,7 @@ class ServicesState(MixinState):
             month_name = str(self.display_month.month)
         return f"{month_name} {self.display_month.year}"
 
-    @rx.var
+    @rx.var(cache=True)
     def selected_date_label(self) -> str:
         if not self.selected_date:
             return ""
@@ -1067,7 +1067,7 @@ class ServicesState(MixinState):
             f"{self.selected_date.year}"
         ).strip().strip(",")
 
-    @rx.var
+    @rx.var(cache=True)
     def calendar_grid(self) -> list[list[dict[str, Any]]]:
         if not self.display_month:
             return []
@@ -1092,15 +1092,15 @@ class ServicesState(MixinState):
             weeks.append(week_cells)
         return weeks
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_selected_slots_count(self) -> int:
         return len(self.schedule_selected_slots)
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_selection_valid(self) -> bool:
         return self._selection_range() is not None
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_selection_label(self) -> str:
         if not self.schedule_selected_slots:
             return "Sin horarios seleccionados"
@@ -1113,7 +1113,7 @@ class ServicesState(MixinState):
         suffix = "hora" if hours == 1 else "horas"
         return f"{start} - {end} ({hours} {suffix})"
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_slots(self) -> list[dict]:
         _ = self.services_refresh_token
         date_str = (
@@ -1403,6 +1403,16 @@ class ServicesState(MixinState):
         self.reservation_form["end_time"] = end_time
         self.reservation_form["sport_label"] = self._sport_label(self.field_rental_sport)
         self.reservation_form["selected_price_id"] = ""
+        # Abrir modal inmediatamente en modo "new" para feedback rápido
+        self.reservation_modal_mode = "new"
+        self.reservation_modal_reservation_id = ""
+        # Preselecciona el deporte actual en el selector si existe precio
+        current_prices = self.field_prices_for_current_sport
+        if current_prices:
+            self.select_reservation_field_price(current_prices[0]["id"])
+        self.reservation_modal_open = True
+        yield
+        # Ahora verificar si ya existe una reserva (query DB)
         existing = None
         try:
             start_dt = datetime.datetime.strptime(
@@ -1427,14 +1437,6 @@ class ServicesState(MixinState):
             self.reservation_modal_reservation_id = existing["id"]
             self.reservation_cancel_selection = existing["id"]
             self.reservation_cancel_reason = ""
-        else:
-            self.reservation_modal_mode = "new"
-            self.reservation_modal_reservation_id = ""
-        # Preselecciona el deporte actual en el selector si existe precio
-        current_prices = self.field_prices_for_current_sport
-        if current_prices:
-            self.select_reservation_field_price(current_prices[0]["id"])
-        self.reservation_modal_open = True
 
     @rx.event
     def close_reservation_modal(self):

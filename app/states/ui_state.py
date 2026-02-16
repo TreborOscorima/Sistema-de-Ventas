@@ -78,7 +78,7 @@ class UIState(MixinState):
     def allowed_pages(self) -> List[str]:
         return [item["page"] for item in self.navigation_items]
 
-    @rx.var
+    @rx.var(cache=True)
     def active_page(self) -> str:
         # Priorizar la ruta actual evita esperar un evento de click para pintar activo.
         route_page = ROUTE_TO_PAGE.get(self._normalized_route())

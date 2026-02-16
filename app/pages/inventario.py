@@ -840,7 +840,7 @@ def inventario_page() -> rx.Component:
           key=State.new_category_input_key.to_string(),
           placeholder="Nombre de la categoría",
           default_value=State.new_category_name,
-          on_change=State.update_new_category_name,
+          on_blur=lambda v: State.update_new_category_name(v),
           class_name="flex-1 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
         ),
         rx.el.button(
