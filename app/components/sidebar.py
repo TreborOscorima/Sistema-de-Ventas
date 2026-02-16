@@ -32,11 +32,11 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     )
     show_badge = has_overdue & State.sidebar_open
     current_path = State.router.page.path
-    
+
     # Estilos para item activo vs inactivo
     active_class = f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
     inactive_class = f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}"
-    
+
     target_route = rx.cond(
         has_overdue,
         "/cuentas?filter=overdue",
@@ -163,7 +163,7 @@ def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.C
     """Botón de submenú con estilo mejorado."""
     active_class = f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500"
     inactive_class = f"w-full text-left {RADIUS['lg']} px-3 py-1.5 text-slate-500 hover:bg-white/60 hover:text-slate-700 {TRANSITIONS['fast']}"
-    
+
     return rx.el.button(
         rx.el.div(
             rx.icon(section["icon"], class_name="h-4 w-4"),
@@ -309,7 +309,7 @@ def sidebar() -> rx.Component:
                     State.sidebar_open,
                     rx.el.div(
                         rx.el.p(
-                            State.current_user["username"], 
+                            State.current_user["username"],
                             class_name="font-semibold text-slate-900 text-sm truncate"
                         ),
                         rx.el.p(

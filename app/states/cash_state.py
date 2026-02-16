@@ -74,10 +74,10 @@ from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
 
 class CashState(MixinState):
     """Estado de gestión de caja registradora.
-    
+
     Maneja sesiones de caja, movimientos, reportes y exportaciones.
     Requiere permisos 'view_cashbox' y 'manage_cashbox' según la operación.
-    
+
     Attributes:
         cashbox_filter_start_date: Filtro de fecha inicio para ventas
         cashbox_filter_end_date: Filtro de fecha fin para ventas
@@ -145,7 +145,7 @@ class CashState(MixinState):
             self.expanded_cashbox_sale_id = ""
         else:
             self.expanded_cashbox_sale_id = value
-    
+
     cash_active_tab: str = "resumen"
     petty_cash_amount: str = "" # Este será el Total calculado o manual
     petty_cash_quantity: str = "1"
@@ -230,27 +230,27 @@ class CashState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        
+
         try:
             amount = float(self.petty_cash_amount)
             if amount <= 0:
                 return rx.toast("El monto total debe ser mayor a 0.", duration=3000)
-            
+
             quantity = float(self.petty_cash_quantity) if self.petty_cash_quantity else 1.0
             cost = float(self.petty_cash_cost) if self.petty_cash_cost else amount
-            
+
         except ValueError:
             return rx.toast("Valores numéricos inválidos.", duration=3000)
-            
+
         if not self.petty_cash_reason:
             return rx.toast("Ingrese un motivo.", duration=3000)
-            
+
         user_id = self.current_user.get("id")
         if not user_id:
             return rx.toast("Usuario no encontrado.", duration=3000)
-        
+
         with rx.session() as session:
-                
+
             log = CashboxLogModel(
                 company_id=company_id,
                 branch_id=branch_id,
@@ -265,7 +265,7 @@ class CashState(MixinState):
             )
             session.add(log)
             session.commit()
-            
+
         self.petty_cash_amount = ""
         self.petty_cash_quantity = "1"
         self.petty_cash_cost = ""
@@ -880,16 +880,16 @@ class CashState(MixinState):
             return rx.toast("Empresa no definida.", duration=3000)
         if self.current_user["role"].lower() == "cajero" and not hasattr(self, "token"):
             return rx.toast("Inicie sesión para abrir caja.", duration=3000)
-        
+
         try:
             amount = float(self.cashbox_open_amount_input) if self.cashbox_open_amount_input else 0
         except ValueError:
             amount = 0
         amount = self._round_currency(amount)
-        
+
         if amount < 0:
             return rx.toast("Ingrese un monto válido para la caja inicial.", duration=3000)
-            
+
         if not user_id:
             return rx.toast("Usuario no encontrado.", duration=3000)
         with rx.session() as session:
@@ -900,7 +900,7 @@ class CashState(MixinState):
                 .where(CashboxSessionModel.branch_id == branch_id)
                 .where(CashboxSessionModel.is_open == True)
             ).first()
-            
+
             if existing:
                  return rx.toast("Ya existe una caja abierta.", duration=3000)
 
@@ -915,7 +915,7 @@ class CashState(MixinState):
             session.add(new_session)
             session.commit()
             session.refresh(new_session)
-            
+
             log = CashboxLogModel(
                 company_id=company_id,
                 branch_id=branch_id,
@@ -927,7 +927,7 @@ class CashState(MixinState):
             )
             session.add(log)
             session.commit()
-            
+
         self.cashbox_open_amount_input = ""
         self._cashbox_update_trigger += 1
         self._refresh_cashbox_caches()
@@ -935,7 +935,7 @@ class CashState(MixinState):
 
     def _close_cashbox_session(self):
         user_id = self.current_user.get("id")
-        
+
         if not user_id:
             return
         company_id = self._company_id()
@@ -951,7 +951,7 @@ class CashState(MixinState):
                 .where(CashboxSessionModel.branch_id == branch_id)
                 .where(CashboxSessionModel.is_open == True)
             ).first()
-            
+
             if cashbox_session:
                 cashbox_session.is_open = False
                 cashbox_session.closing_time = datetime.datetime.now()
@@ -1635,7 +1635,7 @@ class CashState(MixinState):
             total_pendiente += max(total_amount - paid_amount, 0)
 
         wb, ws = create_excel_workbook("Resumen de Caja")
-        
+
         # Agregar encabezado profesional
         row = add_company_header(
             ws,
@@ -1667,7 +1667,7 @@ class CashState(MixinState):
         ws.cell(row=row, column=2, value=total_pendiente).number_format = currency_format
 
         row += 2
-        
+
         headers = [
             "Fecha y Hora",
             "Vendedor",
@@ -1681,7 +1681,7 @@ class CashState(MixinState):
         style_header_row(ws, row, headers)
         data_start = row + 1
         row += 1
-        
+
         invalid_labels = {"", "-", "no especificado"}
         for sale in sales:
             if sale.get("is_deleted"):
@@ -1750,7 +1750,7 @@ class CashState(MixinState):
                 price_display = self._format_currency(unit_price or 0)
                 item_parts.append(f"{name} (x{quantity}) - {price_display}")
             details = "\n".join(item_parts) if item_parts else "Sin detalle"
-            
+
             ws.cell(row=row, column=1, value=sale["timestamp"])
             ws.cell(row=row, column=2, value=sale["user"])
             ws.cell(row=row, column=3, value=method_raw)
@@ -1759,14 +1759,14 @@ class CashState(MixinState):
             ws.cell(row=row, column=6, value=float(sale["total"] or 0)).number_format = currency_format
             ws.cell(row=row, column=7, value=float(sale.get("amount", 0) or 0)).number_format = currency_format
             ws.cell(row=row, column=8, value=details)
-            
+
             for col in range(1, 9):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
 
         if row > data_start:
             apply_wrap_text(ws, [8], data_start, row - 1)
-        
+
         # Fila de totales con fórmulas
         totals_row = row
         add_totals_row_with_formulas(ws, totals_row, data_start, [
@@ -1779,7 +1779,7 @@ class CashState(MixinState):
             {"type": "sum", "col_letter": "G", "number_format": currency_format},
             {"type": "text", "value": ""},
         ])
-        
+
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Monto Total: Precio total de la venta según productos.",
@@ -1788,13 +1788,13 @@ class CashState(MixinState):
             "Crédito (Adelanto): El cliente realizó un pago parcial.",
             "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
         ], columns=8)
-        
+
         auto_adjust_column_widths(ws)
-        
+
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        
+
         return rx.download(data=output.getvalue(), filename="resumen_gestion_caja.xlsx")
 
     @rx.event
@@ -2268,9 +2268,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             elif action == "cierre":
                 closing_count += 1
                 closing_total += closing_amount
-        
+
         wb, ws = create_excel_workbook("Aperturas y Cierres")
-        
+
         # Encabezado profesional
         row = add_company_header(
             ws,
@@ -2298,7 +2298,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         ws.cell(row=row, column=1, value=f"Total cierres ({currency_label}):")
         ws.cell(row=row, column=2, value=closing_total).number_format = currency_format
         row += 2
-        
+
         headers = [
             "Fecha y Hora",
             "Tipo de Operación",
@@ -2311,10 +2311,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         style_header_row(ws, row, headers)
         data_start = row + 1
         row += 1
-        
+
         total_aperturas = 0.0
         total_cierres = 0.0
-        
+
         for log in logs:
             action = (log.get("action") or "").lower()
             action_display = (
@@ -2324,21 +2324,21 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 if action == "cierre"
                 else str(action).replace("_", " ").strip().title()
             )
-            
+
             opening_amount = float(log.get("opening_amount", 0) or 0)
             closing_amount = float(log.get("closing_total", 0) or 0)
-            
+
             if action == "apertura":
                 total_aperturas += opening_amount
             elif action == "cierre":
                 total_cierres += closing_amount
-            
+
             totals_detail = ", ".join(
                 f"{item.get('method', 'Otro')}: {self._format_currency(item.get('amount', 0))}"
                 for item in log.get("totals_by_method", [])
                 if item.get("amount", 0)
             ) or "Sin desglose"
-            
+
             ws.cell(row=row, column=1, value=log.get("timestamp", ""))
             ws.cell(row=row, column=2, value=action_display)
             ws.cell(row=row, column=3, value=log.get("user", "Desconocido"))
@@ -2346,11 +2346,11 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             ws.cell(row=row, column=5, value=closing_amount).number_format = currency_format
             ws.cell(row=row, column=6, value=totals_detail)
             ws.cell(row=row, column=7, value=log.get("notes", "") or "Sin observaciones")
-            
+
             for col in range(1, 8):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
-        
+
         # Fila de totales
         totals_row = row
         add_totals_row_with_formulas(ws, totals_row, data_start, [
@@ -2362,7 +2362,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
         ])
-        
+
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Apertura de Caja: Monto inicial con el que se inicia la jornada.",
@@ -2370,13 +2370,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "Desglose por Método: Distribución del dinero según forma de pago (solo en cierres).",
             "La diferencia entre Cierres y Aperturas debe coincidir con las ventas del día.",
         ], columns=7)
-        
+
         auto_adjust_column_widths(ws)
-        
+
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        
+
         return rx.download(
             data=output.getvalue(), filename="aperturas_cierres_caja.xlsx"
         )
@@ -2427,7 +2427,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         )
 
         wb, ws = create_excel_workbook("Caja Chica")
-        
+
         # Encabezado profesional
         row = add_company_header(
             ws,
@@ -2467,7 +2467,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             # Extraer valores numéricos para las fórmulas
             quantity = _parse_numeric(item.get("formatted_quantity", "0"))
             cost = _parse_numeric(item.get("formatted_cost", "0"))
-            
+
             ws.cell(row=row, column=1, value=item.get("timestamp", ""))
             ws.cell(row=row, column=2, value=item.get("user", "Desconocido"))
             ws.cell(row=row, column=3, value=item.get("notes", "") or "Sin motivo especificado")
@@ -2476,11 +2476,11 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             ws.cell(row=row, column=6, value=cost).number_format = currency_format
             # Total = Fórmula: Cantidad × Costo Unitario
             ws.cell(row=row, column=7, value=f"=D{row}*F{row}").number_format = currency_format
-            
+
             for col in range(1, 8):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
-        
+
         # Fila de totales
         totals_row = row
         add_totals_row_with_formulas(ws, totals_row, data_start, [
@@ -2492,7 +2492,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             {"type": "text", "value": ""},
             {"type": "sum", "col_letter": "G", "number_format": currency_format},
         ])
-        
+
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Caja Chica: Fondo destinado a gastos menores del día a día.",
@@ -2500,13 +2500,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "Total Egreso = Cantidad × Costo Unitario (fórmula verificable).",
             "Este monto se descuenta del efectivo al momento del cierre de caja.",
         ], columns=7)
-        
+
         auto_adjust_column_widths(ws)
-        
+
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        
+
         return rx.download(
             data=output.getvalue(), filename="movimientos_caja_chica.xlsx"
         )
@@ -2528,11 +2528,11 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             ).first()
             if not log:
                 return rx.toast("Registro de caja no encontrado.", duration=3000)
-            
+
             # Obtener username via user_id
             user = session.get(UserModel, log.user_id)
             username = user.username if user else "Unknown"
-            
+
             self.cashbox_log_selected = {
                 "id": str(log.id),
                 "action": log.action,
@@ -2604,25 +2604,25 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             return rx.toast(
                 "Ingrese el motivo de la eliminación de la venta.", duration=3000
             )
-        
+
         with rx.session() as session:
             try:
                 sale_db_id = int(sale_id)
             except ValueError:
                 return rx.toast("ID de venta inválido.", duration=3000)
-                
+
             sale_db = session.exec(
                 select(Sale)
                 .where(Sale.id == sale_db_id)
                 .where(Sale.company_id == company_id)
                 .where(Sale.branch_id == branch_id)
             ).first()
-            
+
             if not sale_db:
                 return rx.toast("Venta no encontrada en BD.", duration=3000)
             if sale_db.status == SaleStatus.cancelled:
                 return rx.toast("La venta ya fue anulada.", duration=3000)
-            
+
             # Marcar como cancelado en BD
             sale_db.status = SaleStatus.cancelled
             sale_db.delete_reason = reason
@@ -2643,7 +2643,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     if suffix not in (log.notes or ""):
                         log.notes = f"{log.notes or ''}{suffix}".strip()
                 session.add(log)
-            
+
             # Restaurar stock
             products_recalc_variants: set[int] = set()
             products_recalc_batches: set[int] = set()
@@ -2803,7 +2803,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         product_row.stock = total_stock
                         session.add(product_row)
             session.commit()
-        
+
         self._cashbox_update_trigger += 1
         self._refresh_cashbox_caches()
         self.close_sale_delete_modal()
@@ -2813,7 +2813,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     def reprint_sale_receipt(self, sale_id: str):
         if not self.current_user["privileges"]["view_cashbox"]:
             return rx.toast("No tiene permisos para ver comprobantes.", duration=3000)
-        
+
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -2843,7 +2843,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                             "price": item.unit_price,
                             "subtotal": item.subtotal
                         })
-                    
+
                     sale_data = {
                         "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
                         "total": sale.total_amount,
@@ -2858,20 +2858,20 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     }
             except ValueError:
                 pass
-        
+
         if not sale_data:
             return rx.toast("Venta no encontrada.", duration=3000)
-        
+
         receipt_width = self._receipt_width()
         paper_width_mm = self._receipt_paper_mm()
 
         # Funciones auxiliares para formato de texto plano
         def center(text, width=receipt_width):
             return text.center(width)
-        
+
         def line(width=receipt_width):
             return "-" * width
-        
+
         def row(left, right, width=receipt_width):
             spaces = width - len(left) - len(right)
             return left + " " * max(spaces, 1) + right
@@ -2884,12 +2884,12 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         phone = (company.get("phone") or "").strip()
         footer_message = (company.get("footer_message") or "").strip()
         address_lines = self._wrap_receipt_lines(address, receipt_width)
-        
+
         items = sale_data.get("items", [])
         payment_summary = self._payment_details_text(
             sale_data.get("payment_details")
         ) or sale_data.get("payment_method", "")
-        
+
         # Construir recibo línea por línea
         receipt_lines = [""]
         if company_name:
@@ -2919,7 +2919,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 line(),
             ]
         )
-        
+
         # Agregar ítems
         for item in items:
             receipt_lines.append("")
@@ -2941,7 +2941,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 receipt_lines.append(row("", right_text, receipt_width))
             receipt_lines.append("")
             receipt_lines.append(line())
-        
+
         # Total y método de pago
         receipt_lines.append("")
         receipt_lines.append(
@@ -2960,10 +2960,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             for footer_line in self._wrap_receipt_lines(footer_message, receipt_width):
                 receipt_lines.append(center(footer_line))
         receipt_lines.extend([" ", " ", " "])
-        
+
         receipt_text = chr(10).join(receipt_lines)
         safe_receipt_text = html.escape(receipt_text)
-        
+
         html_content = f"""<html>
 <head>
 <meta charset='utf-8'/>
@@ -2978,7 +2978,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 <pre>{safe_receipt_text}</pre>
 </body>
 </html>"""
-        
+
         script = f"""
         const receiptWindow = window.open('', '_blank');
         receiptWindow.document.write({json.dumps(html_content)});
@@ -3027,7 +3027,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         income_total = breakdown["income_total"]
         expense_total = breakdown["expense_total"]
         closing_total = breakdown["expected_total"]
-        
+
         user_id = self.current_user.get("id")
         if user_id:
             with rx.session() as session:
@@ -3039,13 +3039,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     .where(CashboxSessionModel.branch_id == branch_id)
                     .where(CashboxSessionModel.is_open == True)
                 ).first()
-                
+
                 if cashbox_session:
                     cashbox_session.is_open = False
                     cashbox_session.closing_time = datetime.datetime.now()
                     cashbox_session.closing_amount = closing_total
                     session.add(cashbox_session)
-                
+
                 # Crear log
                 log = CashboxLogModel(
                     company_id=company_id,
@@ -3058,21 +3058,21 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 )
                 session.add(log)
                 session.commit()
-        
+
         receipt_width = self._receipt_width()
         paper_width_mm = self._receipt_paper_mm()
 
         # Funciones auxiliares para formato de texto plano
         def center(text, width=receipt_width):
             return text.center(width)
-        
+
         def line(width=receipt_width):
             return "-" * width
-        
+
         def row(left, right, width=receipt_width):
             spaces = width - len(left) - len(right)
             return left + " " * max(spaces, 1) + right
-        
+
         # Construir recibo línea por línea
         company = self._company_settings_snapshot()
         company_name = (company.get("company_name") or "").strip()
@@ -3124,7 +3124,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 "",
             ]
         )
-        
+
         # Agregar totales por método
         for item in summary:
             amount = item.get("total", 0)
@@ -3134,7 +3134,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     row(f"{method}:", self._format_currency(amount))
                 )
                 receipt_lines.append("")
-        
+
         receipt_lines.append(
             row("TOTAL CIERRE:", self._format_currency(closing_total))
         )
@@ -3143,7 +3143,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         receipt_lines.append("")
         receipt_lines.append("DETALLE DE INGRESOS")
         receipt_lines.append("")
-        
+
         # Agregar detalle de ventas con método de pago completo
         import re
         sales_rows = [sale for sale in day_sales if not sale.get("is_deleted")]
@@ -3177,7 +3177,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             receipt_lines.append(row("Total:", self._format_currency(sale['total'])))
             receipt_lines.append(line())
             seq -= 1
-        
+
         receipt_lines.extend([
             "",
             center("FIN DEL REPORTE"),
@@ -3185,10 +3185,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             " ",
             " ",
         ])
-        
+
         receipt_text = chr(10).join(receipt_lines)
         safe_receipt_text = html.escape(receipt_text)
-        
+
         html_content = f"""<html>
 <head>
 <meta charset='utf-8'/>
@@ -3203,7 +3203,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 <pre>{safe_receipt_text}</pre>
 </body>
 </html>"""
-        
+
         script = f"""
         const cashboxWindow = window.open('', '_blank');
         cashboxWindow.document.write({json.dumps(html_content)});
@@ -3372,7 +3372,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return
-        
+
         description = (
             f"Adelanto {reservation['field_name']} "
             f"({reservation['start_datetime']} - {reservation['end_datetime']})"
@@ -3386,7 +3386,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not payment_label:
             method_kind = (getattr(self, "payment_method_kind", "") or "cash").lower()
             payment_label = self._payment_method_label(method_kind)
-        
+
         with rx.session() as session:
             timestamp = datetime.datetime.now()
             # Crear venta por adelanto
@@ -3420,7 +3420,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         branch_id=branch_id,
                     )
                 )
-            
+
             # Crear SaleItem (Servicio)
             sale_item = SaleItem(
                 sale_id=new_sale.id,
