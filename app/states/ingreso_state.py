@@ -463,6 +463,25 @@ class IngresoState(MixinState):
         self._apply_item_rounding(item_copy)
         self.new_entry_items.append(item_copy)
         self._reset_entry_form()
+        return rx.call_script(
+            "setTimeout(() => { const el = document.getElementById('barcode-input-entry'); if (el) { el.focus(); el.select(); } }, 50);"
+        )
+
+    @rx.event
+    def clear_entry_item_form(self):
+        """Limpia el formulario de AÑADIR PRODUCTOS sin afectar la lista."""
+        self._reset_entry_form()
+        return rx.call_script(
+            "setTimeout(() => { const el = document.getElementById('barcode-input-entry'); if (el) { el.focus(); el.select(); } }, 50);"
+        )
+
+    @rx.event
+    def handle_entry_field_keydown(self, key: str):
+        """Si se presiona Enter en cantidad/precio, blur + click Añadir."""
+        if key == "Enter":
+            return rx.call_script(
+                "document.activeElement.blur(); setTimeout(() => { const btn = document.getElementById('entry-add-btn'); if (btn) btn.click(); }, 100);"
+            )
 
     @rx.event
     def remove_item_from_entry(self, temp_id: str):
