@@ -3,6 +3,16 @@ from app.state import State
 from app.components.ui import INPUT_STYLES, BUTTON_STYLES, RADIUS, SHADOWS, TRANSITIONS
 
 
+COUNTRY_DIAL_OPTIONS = [
+    ("PE (+51)", "+51"),
+    ("AR (+54)", "+54"),
+    ("EC (+593)", "+593"),
+    ("CO (+57)", "+57"),
+    ("CL (+56)", "+56"),
+    ("MX (+52)", "+52"),
+]
+
+
 def registro_page() -> rx.Component:
     return rx.el.div(
         rx.el.div(
@@ -72,12 +82,32 @@ def registro_page() -> rx.Component:
                         "Número de contacto",
                         class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
-                    rx.el.input(
-                        placeholder="+54 9 11 1234 5678",
-                        name="contact_phone",
-                        type="tel",
-                        auto_complete="tel",
-                        class_name=INPUT_STYLES["default"],
+                    rx.el.div(
+                        rx.el.select(
+                            *[
+                                rx.el.option(label, value=value)
+                                for label, value in COUNTRY_DIAL_OPTIONS
+                            ],
+                            name="contact_phone_country",
+                            default_value="+54",
+                            class_name=(
+                                INPUT_STYLES["default"]
+                                + " !w-full !px-2 sm:!px-3 text-xs sm:text-sm"
+                            ),
+                        ),
+                        rx.el.input(
+                            placeholder="9 11 1234 5678",
+                            name="contact_phone_number",
+                            type="tel",
+                            auto_complete="tel-national",
+                            input_mode="numeric",
+                            class_name=INPUT_STYLES["default"] + " !w-full",
+                        ),
+                        class_name="grid grid-cols-[116px_1fr] sm:grid-cols-[130px_1fr] items-center gap-2",
+                    ),
+                    rx.el.p(
+                        "Selecciona el código de país y luego escribe tu número.",
+                        class_name="text-xs text-slate-500",
                     ),
                     class_name="space-y-1",
                 ),
@@ -86,12 +116,43 @@ def registro_page() -> rx.Component:
                         "Contraseña",
                         class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
-                    rx.el.input(
-                        placeholder="••••••••",
-                        name="password",
-                        type="password",
-                        auto_complete="new-password",
-                        class_name=INPUT_STYLES["default"],
+                    rx.el.div(
+                        rx.el.input(
+                            placeholder="••••••••",
+                            name="password",
+                            type=rx.cond(
+                                State.show_register_password,
+                                "text",
+                                "password",
+                            ),
+                            auto_complete="new-password",
+                            class_name=INPUT_STYLES["default"] + " pr-11",
+                        ),
+                        rx.el.button(
+                            rx.cond(
+                                State.show_register_password,
+                                rx.icon("eye_off", class_name="h-4 w-4"),
+                                rx.icon("eye", class_name="h-4 w-4"),
+                            ),
+                            type="button",
+                            on_click=State.toggle_register_password_visibility,
+                            class_name=(
+                                "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                                "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                                "hover:text-slate-700 transition-colors duration-150"
+                            ),
+                            aria_label=rx.cond(
+                                State.show_register_password,
+                                "Ocultar contraseña",
+                                "Mostrar contraseña",
+                            ),
+                            title=rx.cond(
+                                State.show_register_password,
+                                "Ocultar contraseña",
+                                "Mostrar contraseña",
+                            ),
+                        ),
+                        class_name="relative",
                     ),
                     class_name="space-y-1",
                 ),
@@ -100,12 +161,43 @@ def registro_page() -> rx.Component:
                         "Confirmar Contraseña",
                         class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
-                    rx.el.input(
-                        placeholder="••••••••",
-                        name="confirm_password",
-                        type="password",
-                        auto_complete="new-password",
-                        class_name=INPUT_STYLES["default"],
+                    rx.el.div(
+                        rx.el.input(
+                            placeholder="••••••••",
+                            name="confirm_password",
+                            type=rx.cond(
+                                State.show_register_confirm_password,
+                                "text",
+                                "password",
+                            ),
+                            auto_complete="new-password",
+                            class_name=INPUT_STYLES["default"] + " pr-11",
+                        ),
+                        rx.el.button(
+                            rx.cond(
+                                State.show_register_confirm_password,
+                                rx.icon("eye_off", class_name="h-4 w-4"),
+                                rx.icon("eye", class_name="h-4 w-4"),
+                            ),
+                            type="button",
+                            on_click=State.toggle_register_confirm_password_visibility,
+                            class_name=(
+                                "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                                "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                                "hover:text-slate-700 transition-colors duration-150"
+                            ),
+                            aria_label=rx.cond(
+                                State.show_register_confirm_password,
+                                "Ocultar contraseña",
+                                "Mostrar contraseña",
+                            ),
+                            title=rx.cond(
+                                State.show_register_confirm_password,
+                                "Ocultar contraseña",
+                                "Mostrar contraseña",
+                            ),
+                        ),
+                        class_name="relative",
                     ),
                     class_name="space-y-1",
                 ),
@@ -143,7 +235,7 @@ def registro_page() -> rx.Component:
                     href="/",
                     class_name=f"text-indigo-600 hover:text-indigo-700 {TRANSITIONS['fast']} font-medium",
                 ),
-                class_name="mt-8 pt-6 border-t border-slate-100 flex items-center justify-center gap-2 text-xs text-center",
+                class_name="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-xs text-center",
             ),
             class_name=f"w-full max-w-md p-8 bg-white {RADIUS['xl']} {SHADOWS['xl']} border border-slate-100",
         ),

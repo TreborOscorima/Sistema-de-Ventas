@@ -29,6 +29,16 @@ logger = get_logger("RegisterState")
 class RegisterState(MixinState):
     register_error: str = ""
     is_registering: bool = False
+    show_register_password: bool = False
+    show_register_confirm_password: bool = False
+
+    @rx.event
+    def toggle_register_password_visibility(self):
+        self.show_register_password = not self.show_register_password
+
+    @rx.event
+    def toggle_register_confirm_password_visibility(self):
+        self.show_register_confirm_password = not self.show_register_confirm_password
 
     def _trial_days(self) -> int:
         raw_value = (os.getenv("TRIAL_DAYS") or "15").strip()
@@ -48,7 +58,20 @@ class RegisterState(MixinState):
         company_name = sanitize_name(form_data.get("company_name") or "").strip()
         username = sanitize_name(form_data.get("username") or "").strip().lower()
         email = (form_data.get("email") or "").strip().lower()
-        contact_phone = sanitize_phone(form_data.get("contact_phone") or "").strip()
+        contact_phone_country = sanitize_phone(
+            form_data.get("contact_phone_country") or ""
+        ).strip()
+        contact_phone_number = sanitize_phone(
+            form_data.get("contact_phone_number") or ""
+        ).strip()
+        legacy_contact_phone = sanitize_phone(form_data.get("contact_phone") or "").strip()
+        if contact_phone_country and not contact_phone_country.startswith("+"):
+            contact_phone_country = f"+{contact_phone_country.lstrip('+')}"
+        local_phone_digits = "".join(ch for ch in contact_phone_number if ch.isdigit())
+        if contact_phone_country and local_phone_digits:
+            contact_phone = f"{contact_phone_country} {local_phone_digits}"
+        else:
+            contact_phone = legacy_contact_phone
         password = form_data.get("password") or ""
         confirm_password = form_data.get("confirm_password") or ""
 
