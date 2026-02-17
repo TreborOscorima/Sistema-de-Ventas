@@ -63,6 +63,7 @@ config = rx.Config(
     plugins=[rx.plugins.TailwindV3Plugin()],
     disable_plugins=["reflex.plugins.sitemap.SitemapPlugin"],
     telemetry_enabled=not is_prod,
+    show_built_with_reflex=False,
     theme=rx.theme(
         has_background=True,
         radius="medium",
