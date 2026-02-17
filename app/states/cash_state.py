@@ -860,7 +860,18 @@ class CashState(MixinState):
 
     @rx.event
     def refresh_cashbox_status(self):
-        self._refresh_cashbox_caches()
+        self._refresh_cashbox_status_light()
+
+    def _refresh_cashbox_status_light(self):
+        """Carga solo is_open + monto de apertura (2 queries).
+        Para data completa (logs, ventas, gastos) usar _refresh_cashbox_caches().
+        """
+        session_data = self._load_current_cashbox_session_data()
+        self.current_cashbox_session_cache = session_data
+        self.cashbox_is_open_cached = bool(session_data.get("is_open"))
+        self.cashbox_opening_amount_cache = self._compute_cashbox_opening_amount(
+            session_data
+        )
 
     @rx.event
     def set_cashbox_open_amount_input(self, value: float | str):

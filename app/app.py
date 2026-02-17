@@ -238,7 +238,7 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                     ),
                     class_name="flex h-screen w-full bg-slate-50 overflow-hidden",
                 ),
-                class_name="text-slate-900 w-full h-screen",
+                class_name="text-slate-900 w-full h-screen fade-in-up",
                 style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
             ),
             rx.fragment(NotificationHolder(), login_page()),
@@ -338,6 +338,14 @@ app = rx.App(
             * {
                 -webkit-tap-highlight-color: transparent;
             }
+
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(6px); }
+                to   { opacity: 1; transform: translateY(0); }
+            }
+            .fade-in-up {
+                animation: fadeInUp 0.3s cubic-bezier(.16,1,.3,1) both;
+            }
             """
         ),
         rx.script(
@@ -369,16 +377,11 @@ app = rx.App(
     ],
 )
 
-# Eventos de carga comunes para todas las páginas
-_common_on_load = [
-    State.run_common_guards,
-]
-
 # Página principal (redirige a ingreso)
 app.add_page(
     index,
     route="/",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context] + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_default],
 )
 
 # Cambio de contrasena (solo cuando aplica)
@@ -386,7 +389,7 @@ app.add_page(
     page_cambiar_contrasena,
     route="/cambiar-clave",
     title="Cambiar Contrasena - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_trial_active, State.ensure_password_change],
+    on_load=[State.refresh_runtime_context, State.page_init_cambiar_clave],
 )
 
 app.add_page(
@@ -417,94 +420,71 @@ app.add_page(
     page_ingreso,
     route="/ingreso",
     title="Ingreso - TUWAYKIAPP",
-    on_load=[
-        State.sync_page_from_route,
-        State.refresh_runtime_context,
-        State.ensure_view_ingresos,
-    ] + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_ingreso],
 )
 app.add_page(
     page_compras,
     route="/compras",
     title="Compras - TUWAYKIAPP",
-    on_load=[
-        State.sync_page_from_route,
-        State.refresh_runtime_context,
-        State.ensure_view_compras,
-        State.load_suppliers,
-    ]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_compras],
 )
 app.add_page(
     page_venta,
     route="/venta",
     title="Venta - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_ventas]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_venta],
 )
 app.add_page(
     page_caja,
     route="/caja",
     title="Gestión de Caja - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_cashbox]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_caja],
 )
 app.add_page(
     page_clientes,
     route="/clientes",
     title="Clientes | Sistema de Ventas",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_clientes]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_clientes],
 )
 app.add_page(
     page_cuentas,
     route="/cuentas",
     title="Cuentas Corrientes | Sistema de Ventas",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_cuentas]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_cuentas],
 )
 app.add_page(
     page_dashboard,
     route="/dashboard",
     title="Dashboard - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context] + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_default],
 )
 app.add_page(
     page_inventario,
     route="/inventario",
     title="Inventario - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_inventario]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_inventario],
 )
 app.add_page(
     page_historial,
     route="/historial",
     title="Historial - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_view_historial]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_historial],
 )
 app.add_page(
     page_reportes,
     route="/reportes",
     title="Reportes - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_export_data]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_reportes],
 )
 app.add_page(
     page_servicios,
     route="/servicios",
     title="Servicios - TUWAYKIAPP",
-    on_load=[
-        State.sync_page_from_route,
-        State.refresh_runtime_context,
-        State.ensure_view_servicios,
-        State.load_reservations,
-    ] + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_servicios],
 )
 app.add_page(
     page_configuracion,
     route="/configuracion",
     title="Configuración - TUWAYKIAPP",
-    on_load=[State.sync_page_from_route, State.refresh_runtime_context, State.ensure_admin_access, State.load_users]
-    + _common_on_load,
+    on_load=[State.refresh_runtime_context, State.page_init_configuracion],
 )

@@ -45,6 +45,13 @@ class State(RootState):
     _last_runtime_refresh_ts: float = rx.field(default=0.0, is_var=False)
     _runtime_refresh_ttl: float = 30.0
 
+    # TTL para cargas de datos de página (evita recargas innecesarias en nav SPA)
+    _last_suppliers_load_ts: float = 0.0
+    _last_reservations_load_ts: float = 0.0
+    _last_users_load_ts: float = 0.0
+    _last_cashbox_data_ts: float = 0.0
+    _PAGE_DATA_TTL: float = 15.0
+
     @rx.event
     def notify(self, message: str, type: str = "info"):
         normalized_type = (type or "info").strip().lower()
@@ -120,3 +127,243 @@ class State(RootState):
             await self.ensure_payment_methods()
             if hasattr(self, "load_config_data"):
                 self.load_config_data()
+
+    # ------------------------------------------------------------------
+    # Consolidated page-init handlers
+    # Merge sync_page + ensure_view + page-specific loads + common_guards
+    # into ONE event per page → 1 delta instead of 3-5 separate events.
+    # ------------------------------------------------------------------
+
+    def _check_auth_and_privilege(self, privilege_key: str, deny_msg: str):
+        """Helper: returns redirect events if denied, else None."""
+        if not self.is_authenticated:
+            return [rx.redirect("/")]
+        if not self.current_user["privileges"].get(privilege_key):
+            return [
+                rx.toast(deny_msg, duration=3000),
+                rx.redirect("/dashboard"),
+            ]
+        return None
+
+    @rx.event
+    def page_init_default(self):
+        """on_load for / and /dashboard (no privilege gate)."""
+        self.sync_page_from_route()
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_ingreso(self):
+        self.sync_page_from_route()
+        denied = self._check_auth_and_privilege(
+            "view_ingresos",
+            "Acceso denegado: No tienes permiso para ver Ingresos.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_compras(self):
+        self.sync_page_from_route()
+        if not self.is_authenticated:
+            yield rx.redirect("/")
+            return
+        privileges = self.current_user["privileges"]
+        if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Compras.",
+                duration=3000,
+            )
+            yield rx.redirect("/dashboard")
+            return
+        # load_suppliers con TTL (solo recarga on_load)
+        now = time.time()
+        if (now - self._last_suppliers_load_ts) >= self._PAGE_DATA_TTL:
+            self._last_suppliers_load_ts = now
+            self.load_suppliers()
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_venta(self):
+        self.sync_page_from_route()
+        denied = self._check_auth_and_privilege(
+            "view_ventas",
+            "Acceso denegado: No tienes permiso para ver Ventas.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_caja(self):
+        self.sync_page_from_route()
+        denied = self._check_auth_and_privilege(
+            "view_cashbox",
+            "Acceso denegado: No tienes permiso para ver Caja.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        # refresh_cashbox_data con TTL
+        now = time.time()
+        if (now - self._last_cashbox_data_ts) >= self._PAGE_DATA_TTL:
+            self._last_cashbox_data_ts = now
+            self.refresh_cashbox_data()
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_clientes(self):
+        self.sync_page_from_route()
+        if not self.is_authenticated:
+            yield rx.redirect("/")
+            return
+        # can_view_clientes inline: plan != standard + privilege
+        plan = (self.plan_actual_cache or "").strip().lower()
+        if plan == "standard" or not self.current_user["privileges"].get("view_clientes"):
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Clientes.",
+                duration=3000,
+            )
+            yield rx.redirect("/dashboard")
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_cuentas(self):
+        self.sync_page_from_route()
+        if not self.is_authenticated:
+            yield rx.redirect("/")
+            return
+        plan = (self.plan_actual_cache or "").strip().lower()
+        if plan == "standard" or not self.current_user["privileges"].get("view_cuentas"):
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Cuentas.",
+                duration=3000,
+            )
+            yield rx.redirect("/dashboard")
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_inventario(self):
+        self.sync_page_from_route()
+        denied = self._check_auth_and_privilege(
+            "view_inventario",
+            "Acceso denegado: No tienes permiso para ver Inventario.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_historial(self):
+        self.sync_page_from_route()
+        denied = self._check_auth_and_privilege(
+            "view_historial",
+            "Acceso denegado: No tienes permiso para ver Historial.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_reportes(self):
+        self.sync_page_from_route()
+        denied = self._check_auth_and_privilege(
+            "export_data",
+            "Acceso denegado: No tienes permiso para exportar reportes.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_servicios(self):
+        self.sync_page_from_route()
+        if not self.is_authenticated:
+            yield rx.redirect("/")
+            return
+        # can_view_servicios inline
+        plan = (self.plan_actual_cache or "").strip().lower()
+        has_privilege = self.current_user["privileges"].get("view_servicios")
+        has_reservations = self.company_has_reservations_cache
+        if plan == "standard" or not (has_privilege and has_reservations):
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Servicios.",
+                duration=3000,
+            )
+            yield rx.redirect("/dashboard")
+            return
+        # load_reservations con TTL
+        now = time.time()
+        if (now - self._last_reservations_load_ts) >= self._PAGE_DATA_TTL:
+            self._last_reservations_load_ts = now
+            self.load_reservations()
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_configuracion(self):
+        self.sync_page_from_route()
+        if not self.is_authenticated:
+            yield rx.redirect("/")
+            return
+        if self.current_user["role"] not in ["Superadmin", "Administrador"]:
+            yield rx.toast(
+                "Acceso denegado: Se requiere nivel de Administrador.",
+                duration=3000,
+            )
+            yield rx.redirect("/dashboard")
+            return
+        # load_users con TTL
+        now = time.time()
+        if (now - self._last_users_load_ts) >= self._PAGE_DATA_TTL:
+            self._last_users_load_ts = now
+            self.load_users()
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+
+    @rx.event
+    def page_init_cambiar_clave(self):
+        """on_load for /cambiar-clave."""
+        self.sync_page_from_route()
+        redirect = self.ensure_trial_active()
+        if redirect:
+            yield redirect
+            return
+        redirect = self.ensure_password_change()
+        if redirect:
+            yield redirect

@@ -631,9 +631,89 @@ class AuthState(MixinState):
 
     @rx.event
     def refresh_auth_runtime_cache(self):
-        self.refresh_subscription_snapshot_cache()
-        self.refresh_payment_alert_info_cache()
+        self._refresh_subscription_and_payment_alert()
         self.refresh_branch_access_cache()
+
+    def _refresh_subscription_and_payment_alert(self):
+        """Consolidar Company query: subscription + payment alert en una sola lectura."""
+        company_id = self._company_id()
+        default_alert = self._default_payment_alert_info()
+        if not company_id:
+            self.plan_actual_cache = "unknown"
+            self.company_has_reservations_cache = False
+            self.subscription_snapshot_cache = self._default_subscription_snapshot()
+            self.payment_alert_info_cache = default_alert
+            return
+
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+            if not company:
+                self.plan_actual_cache = "unknown"
+                self.company_has_reservations_cache = False
+                self.subscription_snapshot_cache = self._default_subscription_snapshot()
+                self.payment_alert_info_cache = default_alert
+                return
+
+            branches_used = session.exec(
+                select(func.count(Branch.id)).where(Branch.company_id == company_id)
+            ).one()
+            users_used = session.exec(
+                select(func.count(UserModel.id))
+                .where(UserModel.company_id == company_id)
+                .where(UserModel.is_active == True)
+            ).one()
+
+        # --- Subscription snapshot ---
+        self.subscription_snapshot_cache = self._build_subscription_snapshot(
+            company,
+            branches_used=self._safe_int(branches_used, 0),
+            users_used=self._safe_int(users_used, 0),
+        )
+        self.plan_actual_cache = self.subscription_snapshot_cache.get("plan_type", "") or "unknown"
+        self.company_has_reservations_cache = bool(
+            getattr(company, "has_reservations_module", False)
+        )
+
+        # --- Payment alert (reutiliza el mismo company object) ---
+        plan_type = getattr(company, "plan_type", "")
+        if hasattr(plan_type, "value"):
+            plan_type = plan_type.value
+        plan_type = str(plan_type or "").strip().lower()
+        if plan_type == "trial":
+            self.payment_alert_info_cache = default_alert
+            return
+
+        subscription_ends_at = getattr(company, "subscription_ends_at", None)
+        if not subscription_ends_at:
+            self.payment_alert_info_cache = default_alert
+            return
+
+        now = datetime.now()
+        days_remaining = (subscription_ends_at.date() - now.date()).days
+        if days_remaining > 5:
+            self.payment_alert_info_cache = default_alert
+            return
+        if days_remaining >= 0:
+            self.payment_alert_info_cache = {
+                "show": True,
+                "color": "yellow",
+                "message": f"Tu plan vence en {days_remaining} días.",
+            }
+            return
+        if days_remaining >= -5:
+            grace_left = max(0, 5 - abs(days_remaining))
+            self.payment_alert_info_cache = {
+                "show": True,
+                "color": "red",
+                "message": (
+                    "¡Pago vencido! "
+                    f"Tienes {grace_left} días de gracia antes del corte."
+                ),
+            }
+            return
+        self.payment_alert_info_cache = default_alert
 
     @rx.var(cache=True)
     def available_branches(self) -> List[Dict[str, Any]]:
@@ -1275,7 +1355,7 @@ class AuthState(MixinState):
         if not self.is_authenticated:
             return
         now_epoch = time.time()
-        if (now_epoch - self._subscription_check_ts) < 20:
+        if (now_epoch - self._subscription_check_ts) < 30:
             return
         self._subscription_check_ts = now_epoch
         company_id = self.current_user.get("company_id")
