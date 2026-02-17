@@ -48,21 +48,21 @@ def cashbox_banner() -> rx.Component:
                     ),
                     class_name="flex items-start gap-3",
                 ),
-                rx.el.div(
+                rx.el.form(
                     rx.el.input(
+                        name="amount",
                         type="number",
                         step="0.01",
                         placeholder="Caja inicial (ej: 150.00)",
-                        value=State.cashbox_open_amount_input,
-                        on_change=State.set_cashbox_open_amount_input,
                         class_name="w-full md:w-52 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     ),
                     rx.el.button(
                         rx.icon("play", class_name="h-4 w-4"),
                         "Aperturar caja",
-                        on_click=State.open_cashbox_session,
+                        type="submit",
                         class_name="flex items-center gap-2 h-10 px-4 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700",
                     ),
+                    on_submit=State.handle_cashbox_form_submit,
                     class_name="flex flex-col md:flex-row items-stretch md:items-center gap-3",
                 ),
                 class_name="flex flex-col md:flex-row justify-between gap-4",
