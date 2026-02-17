@@ -41,8 +41,8 @@ class ReportState(MixinState):
     report_loading: bool = False
     report_error: str = ""
     report_ready: bool = False
-    report_download_data: bytes = b""
-    report_download_filename: str = ""
+    _report_download_data: bytes = b""
+    _report_download_filename: str = ""
 
     # Opciones de reporte
     include_cancelled: bool = False
@@ -196,8 +196,8 @@ class ReportState(MixinState):
             self.report_loading = True
             self.report_error = ""
             self.report_ready = False
-            self.report_download_data = b""
-            self.report_download_filename = ""
+            self._report_download_data = b""
+            self._report_download_filename = ""
 
             try:
                 company_id = self._company_id()
@@ -345,8 +345,8 @@ class ReportState(MixinState):
                         self.report_error = "Tipo de reporte no válido."
                         return
 
-                self.report_download_data = output.getvalue()
-                self.report_download_filename = filename
+                self._report_download_data = output.getvalue()
+                self._report_download_filename = filename
                 self.report_ready = True
             except Exception as e:
                 self.report_error = str(e)
@@ -357,13 +357,13 @@ class ReportState(MixinState):
 
     @rx.event
     def download_report(self):
-        if not self.report_ready or not self.report_download_data:
+        if not self.report_ready or not self._report_download_data:
             return rx.toast.error(
                 "No hay reporte disponible para descargar.", duration=3000
             )
-        data = self.report_download_data
-        filename = self.report_download_filename or "reporte.xlsx"
+        data = self._report_download_data
+        filename = self._report_download_filename or "reporte.xlsx"
         self.report_ready = False
-        self.report_download_data = b""
-        self.report_download_filename = ""
+        self._report_download_data = b""
+        self._report_download_filename = ""
         return rx.download(data=data, filename=filename)

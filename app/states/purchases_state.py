@@ -39,8 +39,8 @@ class PurchasesState(MixinState):
     purchase_edit_supplier_suggestions: list[dict[str, Any]] = []
     purchase_delete_target: dict[str, Any] | None = None
     _purchase_update_trigger: int = 0
-    purchase_records_cache: list[dict[str, Any]] = []
-    purchase_total_pages_cache: int = 1
+    purchase_records: list[dict[str, Any]] = []
+    purchase_total_pages: int = 1
 
     def _empty_purchase_edit_form(self) -> dict[str, Any]:
         return {
@@ -81,7 +81,7 @@ class PurchasesState(MixinState):
 
     @rx.event
     def set_purchase_page(self, page: int):
-        if 1 <= page <= self.purchase_total_pages_cache:
+        if 1 <= page <= self.purchase_total_pages:
             self.purchase_current_page = page
             self._refresh_purchase_cache()
 
@@ -93,7 +93,7 @@ class PurchasesState(MixinState):
 
     @rx.event
     def next_purchase_page(self):
-        if self.purchase_current_page < self.purchase_total_pages_cache:
+        if self.purchase_current_page < self.purchase_total_pages:
             self.purchase_current_page += 1
             self._refresh_purchase_cache()
 
@@ -108,15 +108,15 @@ class PurchasesState(MixinState):
     def _refresh_purchase_cache(self):
         privileges = self.current_user["privileges"]
         if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
-            self.purchase_records_cache = []
-            self.purchase_total_pages_cache = 1
+            self.purchase_records = []
+            self.purchase_total_pages = 1
             return
 
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.purchase_records_cache = []
-            self.purchase_total_pages_cache = 1
+            self.purchase_records = []
+            self.purchase_total_pages = 1
             return
 
         per_page = max(self.purchase_items_per_page, 1)
@@ -180,8 +180,8 @@ class PurchasesState(MixinState):
                 }
             )
 
-        self.purchase_records_cache = rows
-        self.purchase_total_pages_cache = total_pages
+        self.purchase_records = rows
+        self.purchase_total_pages = total_pages
 
     @rx.event
     def refresh_purchase_cache(self):
@@ -240,14 +240,6 @@ class PurchasesState(MixinState):
         for clause in filters:
             query = query.where(clause)
         return query
-
-    @rx.var(cache=True)
-    def purchase_records(self) -> list[dict[str, Any]]:
-        return self.purchase_records_cache
-
-    @rx.var(cache=True)
-    def purchase_total_pages(self) -> int:
-        return self.purchase_total_pages_cache
 
     @rx.event
     def open_purchase_detail(self, purchase_id: int):

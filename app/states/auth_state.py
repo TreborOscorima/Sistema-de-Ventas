@@ -185,11 +185,11 @@ class AuthState(MixinState):
     show_user_form: bool = False
     user_form_key: int = 0
     branch_access_revision: int = 0
-    available_branches_cache: List[Dict[str, Any]] = []
-    active_branch_name_cache: str = ""
-    plan_actual_cache: str = "unknown"
-    company_has_reservations_cache: bool = False
-    subscription_snapshot_cache: Dict[str, Any] = {
+    available_branches: List[Dict[str, Any]] = []
+    active_branch_name: str = ""
+    plan_actual: str = "unknown"
+    company_has_reservations: bool = False
+    subscription_snapshot: Dict[str, Any] = {
         "plan_type": "",
         "plan_display": "PLAN",
         "status_label": "Activo",
@@ -210,7 +210,7 @@ class AuthState(MixinState):
         "users_unlimited": False,
         "branches_unlimited": False,
     }
-    payment_alert_info_cache: Dict[str, Any] = {
+    payment_alert_info: Dict[str, Any] = {
         "show": False,
         "color": "yellow",
         "message": "",
@@ -484,12 +484,12 @@ class AuthState(MixinState):
         }
 
     @rx.event
-    def refresh_subscription_snapshot_cache(self):
+    def refresh_subscription_snapshot(self):
         company_id = self._company_id()
         if not company_id:
-            self.plan_actual_cache = "unknown"
-            self.company_has_reservations_cache = False
-            self.subscription_snapshot_cache = self._default_subscription_snapshot()
+            self.plan_actual = "unknown"
+            self.company_has_reservations = False
+            self.subscription_snapshot = self._default_subscription_snapshot()
             return
 
         with rx.session() as session:
@@ -497,9 +497,9 @@ class AuthState(MixinState):
                 select(Company).where(Company.id == company_id)
             ).first()
             if not company:
-                self.plan_actual_cache = "unknown"
-                self.company_has_reservations_cache = False
-                self.subscription_snapshot_cache = self._default_subscription_snapshot()
+                self.plan_actual = "unknown"
+                self.company_has_reservations = False
+                self.subscription_snapshot = self._default_subscription_snapshot()
                 return
 
             branches_used = session.exec(
@@ -511,29 +511,29 @@ class AuthState(MixinState):
                 .where(UserModel.is_active == True)
             ).one()
 
-        self.subscription_snapshot_cache = self._build_subscription_snapshot(
+        self.subscription_snapshot = self._build_subscription_snapshot(
             company,
             branches_used=self._safe_int(branches_used, 0),
             users_used=self._safe_int(users_used, 0),
         )
-        self.plan_actual_cache = self.subscription_snapshot_cache.get("plan_type", "") or "unknown"
-        self.company_has_reservations_cache = bool(
+        self.plan_actual = self.subscription_snapshot.get("plan_type", "") or "unknown"
+        self.company_has_reservations = bool(
             getattr(company, "has_reservations_module", False)
         )
 
     @rx.event
-    def refresh_payment_alert_info_cache(self):
+    def refresh_payment_alert_info(self):
         default = self._default_payment_alert_info()
         company_id = self._company_id()
         if not company_id:
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
         with rx.session() as session:
             company = session.exec(
                 select(Company).where(Company.id == company_id)
             ).first()
         if not company:
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
 
         plan_type = getattr(company, "plan_type", "")
@@ -541,21 +541,21 @@ class AuthState(MixinState):
             plan_type = plan_type.value
         plan_type = str(plan_type or "").strip().lower()
         if plan_type == "trial":
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
 
         subscription_ends_at = getattr(company, "subscription_ends_at", None)
         if not subscription_ends_at:
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
 
         now = datetime.now()
         days_remaining = (subscription_ends_at.date() - now.date()).days
         if days_remaining > 5:
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
         if days_remaining >= 0:
-            self.payment_alert_info_cache = {
+            self.payment_alert_info = {
                 "show": True,
                 "color": "yellow",
                 "message": f"Tu plan vence en {days_remaining} días.",
@@ -563,7 +563,7 @@ class AuthState(MixinState):
             return
         if days_remaining >= -5:
             grace_left = max(0, 5 - abs(days_remaining))
-            self.payment_alert_info_cache = {
+            self.payment_alert_info = {
                 "show": True,
                 "color": "red",
                 "message": (
@@ -572,7 +572,7 @@ class AuthState(MixinState):
                 ),
             }
             return
-        self.payment_alert_info_cache = default
+        self.payment_alert_info = default
 
     @rx.event
     def refresh_branch_access_cache(self):
@@ -580,8 +580,8 @@ class AuthState(MixinState):
         user_id = self.current_user.get("id")
         company_id = self.current_user.get("company_id")
         if not user_id or not company_id:
-            self.available_branches_cache = []
-            self.active_branch_name_cache = ""
+            self.available_branches = []
+            self.active_branch_name = ""
             return
 
         set_tenant_context(company_id, None)
@@ -592,14 +592,14 @@ class AuthState(MixinState):
                 .where(UserModel.company_id == company_id)
             ).first()
             if not user:
-                self.available_branches_cache = []
-                self.active_branch_name_cache = ""
+                self.available_branches = []
+                self.active_branch_name = ""
                 return
 
             branch_ids = self._user_branch_ids(session, user_id)
             if not branch_ids:
-                self.available_branches_cache = []
-                self.active_branch_name_cache = ""
+                self.available_branches = []
+                self.active_branch_name = ""
                 return
 
             rows = session.exec(
@@ -609,25 +609,25 @@ class AuthState(MixinState):
                 .order_by(Branch.name)
             ).all()
 
-        self.available_branches_cache = [
+        self.available_branches = [
             {"id": str(branch.id), "name": branch.name}
             for branch in rows
         ]
 
         active_id = self.active_branch_id
-        if not active_id and self.available_branches_cache:
-            self.selected_branch_id = self.available_branches_cache[0]["id"]
+        if not active_id and self.available_branches:
+            self.selected_branch_id = self.available_branches[0]["id"]
             active_id = self.active_branch_id
 
         selected = next(
             (
                 branch
-                for branch in self.available_branches_cache
+                for branch in self.available_branches
                 if int(branch["id"]) == int(active_id)
             ),
             None,
         ) if active_id else None
-        self.active_branch_name_cache = selected["name"] if selected else ""
+        self.active_branch_name = selected["name"] if selected else ""
 
     @rx.event
     def refresh_auth_runtime_cache(self):
@@ -639,10 +639,10 @@ class AuthState(MixinState):
         company_id = self._company_id()
         default_alert = self._default_payment_alert_info()
         if not company_id:
-            self.plan_actual_cache = "unknown"
-            self.company_has_reservations_cache = False
-            self.subscription_snapshot_cache = self._default_subscription_snapshot()
-            self.payment_alert_info_cache = default_alert
+            self.plan_actual = "unknown"
+            self.company_has_reservations = False
+            self.subscription_snapshot = self._default_subscription_snapshot()
+            self.payment_alert_info = default_alert
             return
 
         with rx.session() as session:
@@ -650,10 +650,10 @@ class AuthState(MixinState):
                 select(Company).where(Company.id == company_id)
             ).first()
             if not company:
-                self.plan_actual_cache = "unknown"
-                self.company_has_reservations_cache = False
-                self.subscription_snapshot_cache = self._default_subscription_snapshot()
-                self.payment_alert_info_cache = default_alert
+                self.plan_actual = "unknown"
+                self.company_has_reservations = False
+                self.subscription_snapshot = self._default_subscription_snapshot()
+                self.payment_alert_info = default_alert
                 return
 
             branches_used = session.exec(
@@ -666,13 +666,13 @@ class AuthState(MixinState):
             ).one()
 
         # --- Subscription snapshot ---
-        self.subscription_snapshot_cache = self._build_subscription_snapshot(
+        self.subscription_snapshot = self._build_subscription_snapshot(
             company,
             branches_used=self._safe_int(branches_used, 0),
             users_used=self._safe_int(users_used, 0),
         )
-        self.plan_actual_cache = self.subscription_snapshot_cache.get("plan_type", "") or "unknown"
-        self.company_has_reservations_cache = bool(
+        self.plan_actual = self.subscription_snapshot.get("plan_type", "") or "unknown"
+        self.company_has_reservations = bool(
             getattr(company, "has_reservations_module", False)
         )
 
@@ -682,21 +682,21 @@ class AuthState(MixinState):
             plan_type = plan_type.value
         plan_type = str(plan_type or "").strip().lower()
         if plan_type == "trial":
-            self.payment_alert_info_cache = default_alert
+            self.payment_alert_info = default_alert
             return
 
         subscription_ends_at = getattr(company, "subscription_ends_at", None)
         if not subscription_ends_at:
-            self.payment_alert_info_cache = default_alert
+            self.payment_alert_info = default_alert
             return
 
         now = datetime.now()
         days_remaining = (subscription_ends_at.date() - now.date()).days
         if days_remaining > 5:
-            self.payment_alert_info_cache = default_alert
+            self.payment_alert_info = default_alert
             return
         if days_remaining >= 0:
-            self.payment_alert_info_cache = {
+            self.payment_alert_info = {
                 "show": True,
                 "color": "yellow",
                 "message": f"Tu plan vence en {days_remaining} días.",
@@ -704,7 +704,7 @@ class AuthState(MixinState):
             return
         if days_remaining >= -5:
             grace_left = max(0, 5 - abs(days_remaining))
-            self.payment_alert_info_cache = {
+            self.payment_alert_info = {
                 "show": True,
                 "color": "red",
                 "message": (
@@ -713,27 +713,19 @@ class AuthState(MixinState):
                 ),
             }
             return
-        self.payment_alert_info_cache = default_alert
-
-    @rx.var(cache=True)
-    def available_branches(self) -> List[Dict[str, Any]]:
-        return self.available_branches_cache
-
-    @rx.var(cache=True)
-    def active_branch_name(self) -> str:
-        return self.active_branch_name_cache
+        self.payment_alert_info = default_alert
 
     def invalidate_user_cache(self) -> None:
         """Invalida el cache de usuario (llamar tras cambios de permisos)."""
         self._cached_user = None
         self._cached_user_token = ""
         self._cached_user_time = 0.0
-        self.available_branches_cache = []
-        self.active_branch_name_cache = ""
-        self.plan_actual_cache = "unknown"
-        self.company_has_reservations_cache = False
-        self.subscription_snapshot_cache = self._default_subscription_snapshot()
-        self.payment_alert_info_cache = self._default_payment_alert_info()
+        self.available_branches = []
+        self.active_branch_name = ""
+        self.plan_actual = "unknown"
+        self.company_has_reservations = False
+        self.subscription_snapshot = self._default_subscription_snapshot()
+        self.payment_alert_info = self._default_payment_alert_info()
 
     # =========================================================================
     # COMPUTED VARS DE PERMISOS - Para renderizado condicional en páginas
@@ -741,7 +733,7 @@ class AuthState(MixinState):
 
     @rx.var(cache=True)
     def plan_actual_str(self) -> str:
-        return (self.plan_actual_cache or "").strip().lower() or "unknown"
+        return (self.plan_actual or "").strip().lower() or "unknown"
 
     @rx.var(cache=True)
     def can_view_ingresos(self) -> bool:
@@ -810,21 +802,8 @@ class AuthState(MixinState):
         return bool(self.current_user["privileges"].get("manage_config"))
 
     @rx.var(cache=True)
-    def company_has_reservations(self) -> bool:
-        return bool(self.company_has_reservations_cache)
-
-    @rx.var(cache=True)
     def plan_name(self) -> str:
         return str(self.subscription_snapshot.get("plan_type", "") or "")
-
-    @rx.var(cache=True)
-    def subscription_snapshot(self) -> Dict[str, Any]:
-        return self.subscription_snapshot_cache or self._default_subscription_snapshot()
-
-    @rx.var(cache=True)
-    def payment_alert_info(self) -> Dict[str, Any]:
-        """Info de alerta para pagos próximos o vencidos (cacheada)."""
-        return self.payment_alert_info_cache or self._default_payment_alert_info()
 
     @rx.var(cache=True)
     def is_admin(self) -> bool:
@@ -1421,7 +1400,7 @@ class AuthState(MixinState):
                 and current_path != "/cuenta-suspendida"
             ):
                 return rx.redirect("/cuenta-suspendida")
-        self.refresh_subscription_snapshot_cache()
+        self.refresh_subscription_snapshot()
 
     @rx.event
     def ensure_subscription_active(self):

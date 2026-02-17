@@ -100,12 +100,12 @@ class HistorialState(MixinState):
     selected_sale_id: str = ""
     selected_sale_summary: dict = {}
     selected_sale_items: list[dict] = []
-    filtered_history_cache: list[dict] = []
-    total_pages_cache: int = 1
-    report_method_summary_cache: list[dict] = []
-    report_detail_rows_cache: list[dict] = []
-    report_closing_rows_cache: list[dict] = []
-    payment_stats_cache: Dict[str, float] = {
+    filtered_history: list[dict] = []
+    total_pages: int = 1
+    report_method_summary: list[dict] = []
+    report_detail_rows: list[dict] = []
+    report_closing_rows: list[dict] = []
+    payment_stats: Dict[str, float] = {
         "efectivo": 0.0,
         "debito": 0.0,
         "credito": 0.0,
@@ -114,12 +114,12 @@ class HistorialState(MixinState):
         "transferencia": 0.0,
         "mixto": 0.0,
     }
-    total_credit_cache: float = 0.0
-    credit_outstanding_cache: float = 0.0
-    dynamic_payment_cards_cache: list[dict] = []
-    productos_mas_vendidos_cache: list[dict] = []
-    productos_stock_bajo_cache: list[Dict] = []
-    sales_by_day_cache: list[dict] = []
+    total_credit: float = 0.0
+    credit_outstanding: float = 0.0
+    dynamic_payment_cards: list[dict] = []
+    productos_mas_vendidos: list[dict] = []
+    productos_stock_bajo: list[Dict] = []
+    sales_by_day: list[dict] = []
 
     def _history_date_range(self) -> tuple[datetime.datetime | None, datetime.datetime | None]:
         start_date = None
@@ -838,8 +838,8 @@ class HistorialState(MixinState):
 
     def _refresh_history_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
-            self.filtered_history_cache = []
-            self.total_pages_cache = 1
+            self.filtered_history = []
+            self.total_pages = 1
             return
 
         total_items = int(self._sales_total_count() or 0)
@@ -849,17 +849,17 @@ class HistorialState(MixinState):
             self.current_page_history = page
 
         offset = (page - 1) * self.items_per_page
-        self.filtered_history_cache = self._fetch_sales_history(
+        self.filtered_history = self._fetch_sales_history(
             offset=offset,
             limit=self.items_per_page,
         )
-        self.total_pages_cache = total_pages
+        self.total_pages = total_pages
 
     def _refresh_report_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
-            self.report_method_summary_cache = []
-            self.report_detail_rows_cache = []
-            self.report_closing_rows_cache = []
+            self.report_method_summary = []
+            self.report_detail_rows = []
+            self.report_closing_rows = []
             return
 
         entries = self._build_report_entries()
@@ -897,9 +897,9 @@ class HistorialState(MixinState):
                 )
 
         closings = self._build_report_closings()
-        self.report_method_summary_cache = summary
-        self.report_detail_rows_cache = entries
-        self.report_closing_rows_cache = closings
+        self.report_method_summary = summary
+        self.report_detail_rows = entries
+        self.report_closing_rows = closings
 
         detail_total_pages = (
             1
@@ -998,7 +998,7 @@ class HistorialState(MixinState):
 
     def _refresh_financial_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
-            self.payment_stats_cache = {
+            self.payment_stats = {
                 "efectivo": 0.0,
                 "debito": 0.0,
                 "credito": 0.0,
@@ -1007,18 +1007,18 @@ class HistorialState(MixinState):
                 "transferencia": 0.0,
                 "mixto": 0.0,
             }
-            self.total_credit_cache = 0.0
-            self.credit_outstanding_cache = 0.0
-            self.dynamic_payment_cards_cache = []
-            self.productos_mas_vendidos_cache = []
-            self.productos_stock_bajo_cache = []
-            self.sales_by_day_cache = []
+            self.total_credit = 0.0
+            self.credit_outstanding = 0.0
+            self.dynamic_payment_cards = []
+            self.productos_mas_vendidos = []
+            self.productos_stock_bajo = []
+            self.sales_by_day = []
             return
 
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.payment_stats_cache = {
+            self.payment_stats = {
                 "efectivo": 0.0,
                 "debito": 0.0,
                 "credito": 0.0,
@@ -1027,12 +1027,12 @@ class HistorialState(MixinState):
                 "transferencia": 0.0,
                 "mixto": 0.0,
             }
-            self.total_credit_cache = 0.0
-            self.credit_outstanding_cache = 0.0
-            self.dynamic_payment_cards_cache = []
-            self.productos_mas_vendidos_cache = []
-            self.productos_stock_bajo_cache = []
-            self.sales_by_day_cache = []
+            self.total_credit = 0.0
+            self.credit_outstanding = 0.0
+            self.dynamic_payment_cards = []
+            self.productos_mas_vendidos = []
+            self.productos_stock_bajo = []
+            self.sales_by_day = []
             return
 
         start_date, end_date = self._history_date_range()
@@ -1174,17 +1174,17 @@ class HistorialState(MixinState):
             sales_day_rows = list(reversed(session.exec(sales_day_query).all()))
 
         rounded_stats = {k: self._round_currency(v) for k, v in stats.items()}
-        self.payment_stats_cache = rounded_stats
-        self.total_credit_cache = self._round_currency(total_credit)
-        self.credit_outstanding_cache = self._round_currency(pending_total)
-        self.dynamic_payment_cards_cache = self._build_dynamic_payment_cards_from_stats(
+        self.payment_stats = rounded_stats
+        self.total_credit = self._round_currency(total_credit)
+        self.credit_outstanding = self._round_currency(pending_total)
+        self.dynamic_payment_cards = self._build_dynamic_payment_cards_from_stats(
             rounded_stats, enabled_kinds
         )
-        self.productos_mas_vendidos_cache = [
+        self.productos_mas_vendidos = [
             {"description": name, "cantidad_vendida": qty}
             for name, qty in top_products
         ]
-        self.productos_stock_bajo_cache = [
+        self.productos_stock_bajo = [
             {
                 "barcode": p.barcode,
                 "description": p.description,
@@ -1193,7 +1193,7 @@ class HistorialState(MixinState):
             }
             for p in low_stock_products
         ]
-        self.sales_by_day_cache = [
+        self.sales_by_day = [
             {
                 "date": day.strftime("%Y-%m-%d")
                 if hasattr(day, "strftime")
@@ -1207,22 +1207,6 @@ class HistorialState(MixinState):
         self._refresh_history_cache()
         self._refresh_report_cache()
         self._refresh_financial_cache()
-
-    @rx.var(cache=True)
-    def filtered_history(self) -> list[dict]:
-        return self.filtered_history_cache
-
-    @rx.var(cache=True)
-    def paginated_history(self) -> list[dict]:
-        return self.filtered_history
-
-    @rx.var(cache=True)
-    def report_method_summary(self) -> list[dict]:
-        return self.report_method_summary_cache
-
-    @rx.var(cache=True)
-    def report_detail_rows(self) -> list[dict]:
-        return self.report_detail_rows_cache
 
     @rx.var(cache=True)
     def report_detail_total_pages(self) -> int:
@@ -1248,10 +1232,6 @@ class HistorialState(MixinState):
         return self.report_detail_rows[offset : offset + per_page]
 
     @rx.var(cache=True)
-    def report_closing_rows(self) -> list[dict]:
-        return self.report_closing_rows_cache
-
-    @rx.var(cache=True)
     def report_closing_total_pages(self) -> int:
         _ = self._report_update_trigger
         total_items = len(self.report_closing_rows)
@@ -1274,13 +1254,9 @@ class HistorialState(MixinState):
         offset = (page - 1) * per_page
         return self.report_closing_rows[offset : offset + per_page]
 
-    @rx.var(cache=True)
-    def total_pages(self) -> int:
-        return self.total_pages_cache
-
     @rx.event
     def set_history_page(self, page_num: int):
-        if 1 <= page_num <= self.total_pages_cache:
+        if 1 <= page_num <= self.total_pages:
             self.current_page_history = page_num
             self._refresh_history_cache()
 
@@ -2030,10 +2006,6 @@ class HistorialState(MixinState):
             pass
         return Decimal("0.00")
 
-    @rx.var(cache=True)
-    def payment_stats(self) -> Dict[str, float]:
-        return self.payment_stats_cache
-
     def _add_to_stats(self, stats: dict, key: str, amount: Decimal):
         """Helper para sumar montos usando las keys del Enum."""
         if key == PaymentMethodType.cash.value:
@@ -2050,18 +2022,6 @@ class HistorialState(MixinState):
             stats["transferencia"] += amount
         else:
             stats["mixto"] += amount
-
-    @rx.var(cache=True)
-    def total_credit(self) -> float:
-        return self.total_credit_cache
-
-    @rx.var(cache=True)
-    def credit_outstanding(self) -> float:
-        return self.credit_outstanding_cache
-
-    @rx.var(cache=True)
-    def dynamic_payment_cards(self) -> list[dict]:
-        return self.dynamic_payment_cards_cache
 
     @rx.var(cache=True)
     def total_ventas_efectivo(self) -> float:
@@ -2097,14 +2057,3 @@ class HistorialState(MixinState):
     def total_ventas_mixtas(self) -> float:
         return self.payment_stats["mixto"]
 
-    @rx.var(cache=True)
-    def productos_mas_vendidos(self) -> list[dict]:
-        return self.productos_mas_vendidos_cache
-
-    @rx.var(cache=True)
-    def productos_stock_bajo(self) -> list[Dict]:
-        return self.productos_stock_bajo_cache
-
-    @rx.var(cache=True)
-    def sales_by_day(self) -> list[dict]:
-        return self.sales_by_day_cache

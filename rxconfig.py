@@ -71,3 +71,13 @@ config = rx.Config(
         transitions="gentle",
     ),
 )
+
+# Pool de conexiones DB optimizado via env vars de Reflex/SQLAlchemy.
+# Estos se leen automáticamente por Reflex (ver reflex.config.environment).
+_pool_defaults = {
+    "SQLALCHEMY_POOL_SIZE": "20",
+    "SQLALCHEMY_POOL_RECYCLE": "1800",
+}
+for _k, _v in _pool_defaults.items():
+    if not os.environ.get(_k):
+        os.environ[_k] = _v

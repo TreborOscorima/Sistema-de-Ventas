@@ -571,7 +571,7 @@ def cashbox_logs_section() -> rx.Component:
             class_name=TABLE_STYLES["header"],
           )
         ),
-        rx.el.tbody(rx.foreach(State.paginated_cashbox_logs, cashbox_log_row)),
+        rx.el.tbody(rx.foreach(State.filtered_cashbox_logs, cashbox_log_row)),
         class_name="min-w-full",
       ),
       class_name="overflow-x-auto rounded-lg border border-slate-200",
@@ -1080,7 +1080,7 @@ def petty_cash_view() -> rx.Component:
           ),
           rx.el.tbody(
             rx.foreach(
-              State.paginated_petty_cash_movements,
+              State.petty_cash_movements,
               lambda item: rx.el.tr(
                 rx.el.td(item["timestamp"], class_name="py-3 px-4 whitespace-nowrap"),
                 rx.el.td(item["user"], class_name="py-3 px-4 whitespace-nowrap"),
@@ -1164,7 +1164,7 @@ def cashbox_page() -> rx.Component:
                 )
               ),
               rx.el.tbody(
-                rx.foreach(State.paginated_cashbox_sales, sale_row),
+                rx.foreach(State.filtered_cashbox_sales, sale_row),
               ),
               class_name="min-w-full",
             ),

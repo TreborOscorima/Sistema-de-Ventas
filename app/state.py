@@ -233,7 +233,7 @@ class State(RootState):
             yield rx.redirect("/")
             return
         # can_view_clientes inline: plan != standard + privilege
-        plan = (self.plan_actual_cache or "").strip().lower()
+        plan = (self.plan_actual or "").strip().lower()
         if plan == "standard" or not self.current_user["privileges"].get("view_clientes"):
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Clientes.",
@@ -251,7 +251,7 @@ class State(RootState):
         if not self.is_authenticated:
             yield rx.redirect("/")
             return
-        plan = (self.plan_actual_cache or "").strip().lower()
+        plan = (self.plan_actual or "").strip().lower()
         if plan == "standard" or not self.current_user["privileges"].get("view_cuentas"):
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Cuentas.",
@@ -315,9 +315,9 @@ class State(RootState):
             yield rx.redirect("/")
             return
         # can_view_servicios inline
-        plan = (self.plan_actual_cache or "").strip().lower()
+        plan = (self.plan_actual or "").strip().lower()
         has_privilege = self.current_user["privileges"].get("view_servicios")
-        has_reservations = self.company_has_reservations_cache
+        has_reservations = self.company_has_reservations
         if plan == "standard" or not (has_privilege and has_reservations):
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Servicios.",

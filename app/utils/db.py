@@ -37,6 +37,9 @@ ASYNC_DATABASE_URL = (
 async_engine: AsyncEngine = create_async_engine(
     ASYNC_DATABASE_URL,
     pool_pre_ping=True,
+    pool_size=20,
+    max_overflow=30,
+    pool_recycle=1800,
 )
 
 AsyncSessionLocal = async_sessionmaker(

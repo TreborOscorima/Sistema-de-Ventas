@@ -455,7 +455,7 @@ def historial_page() -> rx.Component:
               class_name=TABLE_STYLES["header"],
             )
           ),
-          rx.el.tbody(rx.foreach(State.paginated_history, history_table_row)),
+          rx.el.tbody(rx.foreach(State.filtered_history, history_table_row)),
         ),
         rx.cond(
           State.filtered_history.length() == 0,

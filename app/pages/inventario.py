@@ -971,7 +971,7 @@ def inventario_page() -> rx.Component:
           ),
           rx.el.tbody(
             rx.foreach(
-              State.inventory_paginated_list,
+              State.inventory_list,
               lambda product: rx.el.tr(
                 rx.el.td(
                   product["barcode"],
