@@ -59,12 +59,43 @@ def login_page() -> rx.Component:
                         "Contraseña",
                         class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
-                    rx.el.input(
-                        placeholder="••••••••",
-                        name="password",
-                        type="password",
-                        auto_complete="current-password",
-                        class_name=INPUT_STYLES["default"],
+                    rx.el.div(
+                        rx.el.input(
+                            placeholder="••••••••",
+                            name="password",
+                            type=rx.cond(
+                                State.show_login_password,
+                                "text",
+                                "password",
+                            ),
+                            auto_complete="current-password",
+                            class_name=INPUT_STYLES["default"] + " pr-11",
+                        ),
+                        rx.el.button(
+                            rx.cond(
+                                State.show_login_password,
+                                rx.icon("eye_off", class_name="h-4 w-4"),
+                                rx.icon("eye", class_name="h-4 w-4"),
+                            ),
+                            type="button",
+                            on_click=State.toggle_login_password_visibility,
+                            class_name=(
+                                "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                                "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                                "hover:text-slate-700 transition-colors duration-150"
+                            ),
+                            aria_label=rx.cond(
+                                State.show_login_password,
+                                "Ocultar contraseña",
+                                "Mostrar contraseña",
+                            ),
+                            title=rx.cond(
+                                State.show_login_password,
+                                "Ocultar contraseña",
+                                "Mostrar contraseña",
+                            ),
+                        ),
+                        class_name="relative",
                     ),
                     class_name="space-y-1",
                 ),

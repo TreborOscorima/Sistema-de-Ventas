@@ -178,6 +178,9 @@ class AuthState(MixinState):
 
     error_message: str = ""
     password_change_error: str = ""
+    show_login_password: bool = False
+    show_user_form_password: bool = False
+    show_user_form_confirm_password: bool = False
     needs_initial_admin: bool = False
     show_user_form: bool = False
     user_form_key: int = 0
@@ -233,6 +236,20 @@ class AuthState(MixinState):
     _roles_bootstrap_ts: float = rx.field(default=0.0, is_var=False)
     _subscription_check_ts: float = rx.field(default=0.0, is_var=False)
     _USER_CACHE_TTL: float = 30.0  # Segundos de validez del cache
+
+    @rx.event
+    def toggle_login_password_visibility(self):
+        self.show_login_password = not self.show_login_password
+
+    @rx.event
+    def toggle_user_form_password_visibility(self):
+        self.show_user_form_password = not self.show_user_form_password
+
+    @rx.event
+    def toggle_user_form_confirm_password_visibility(self):
+        self.show_user_form_confirm_password = (
+            not self.show_user_form_confirm_password
+        )
 
     @rx.var(cache=True)
     def is_authenticated(self) -> bool:
@@ -992,6 +1009,8 @@ class AuthState(MixinState):
         }
         self.editing_user = None
         self.new_role_name = ""
+        self.show_user_form_password = False
+        self.show_user_form_confirm_password = False
 
     def _resolve_env(self) -> str:
         value = (os.getenv("ENV") or "dev").strip().lower()
@@ -1770,6 +1789,8 @@ class AuthState(MixinState):
         }
         self.user_form_key += 1
         self.editing_user = user
+        self.show_user_form_password = False
+        self.show_user_form_confirm_password = False
         self.show_user_form = True
 
     @rx.event

@@ -616,30 +616,92 @@ def user_form() -> rx.Component:
           ),
           rx.el.div(
             rx.el.label("Contraseña", class_name="text-sm font-medium text-slate-700"),
-            rx.el.input(
-              type="password",
-              placeholder=rx.cond(
-                State.editing_user,
-                "Dejar en blanco para no cambiar",
-                "",
+            rx.el.div(
+              rx.el.input(
+                type=rx.cond(
+                  State.show_user_form_password,
+                  "text",
+                  "password",
+                ),
+                placeholder=rx.cond(
+                  State.editing_user,
+                  "Dejar en blanco para no cambiar",
+                  "",
+                ),
+                default_value=State.new_user_data["password"],
+                on_blur=lambda v: State.handle_new_user_change(
+                  "password", v
+                ),
+                class_name=f"{INPUT_STYLES['default']} pr-11",
               ),
-              default_value=State.new_user_data["password"],
-              on_blur=lambda v: State.handle_new_user_change(
-                "password", v
+              rx.el.button(
+                rx.cond(
+                  State.show_user_form_password,
+                  rx.icon("eye_off", class_name="h-4 w-4"),
+                  rx.icon("eye", class_name="h-4 w-4"),
+                ),
+                type="button",
+                on_click=State.toggle_user_form_password_visibility,
+                class_name=(
+                  "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                  "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                  "hover:text-slate-700 transition-colors duration-150"
+                ),
+                aria_label=rx.cond(
+                  State.show_user_form_password,
+                  "Ocultar contraseña",
+                  "Mostrar contraseña",
+                ),
+                title=rx.cond(
+                  State.show_user_form_password,
+                  "Ocultar contraseña",
+                  "Mostrar contraseña",
+                ),
               ),
-              class_name=f"{INPUT_STYLES['default']} mt-1",
+              class_name="relative mt-1",
             ),
             class_name="mb-4",
           ),
           rx.el.div(
             rx.el.label("Confirmar Contraseña", class_name="text-sm font-medium text-slate-700"),
-            rx.el.input(
-              type="password",
-              default_value=State.new_user_data["confirm_password"],
-              on_blur=lambda v: State.handle_new_user_change(
-                "confirm_password", v
+            rx.el.div(
+              rx.el.input(
+                type=rx.cond(
+                  State.show_user_form_confirm_password,
+                  "text",
+                  "password",
+                ),
+                default_value=State.new_user_data["confirm_password"],
+                on_blur=lambda v: State.handle_new_user_change(
+                  "confirm_password", v
+                ),
+                class_name=f"{INPUT_STYLES['default']} pr-11",
               ),
-              class_name=f"{INPUT_STYLES['default']} mt-1",
+              rx.el.button(
+                rx.cond(
+                  State.show_user_form_confirm_password,
+                  rx.icon("eye_off", class_name="h-4 w-4"),
+                  rx.icon("eye", class_name="h-4 w-4"),
+                ),
+                type="button",
+                on_click=State.toggle_user_form_confirm_password_visibility,
+                class_name=(
+                  "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                  "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                  "hover:text-slate-700 transition-colors duration-150"
+                ),
+                aria_label=rx.cond(
+                  State.show_user_form_confirm_password,
+                  "Ocultar contraseña",
+                  "Mostrar contraseña",
+                ),
+                title=rx.cond(
+                  State.show_user_form_confirm_password,
+                  "Ocultar contraseña",
+                  "Mostrar contraseña",
+                ),
+              ),
+              class_name="relative mt-1",
             ),
             class_name="mb-4",
           ),
@@ -1385,4 +1447,3 @@ def configuracion_page() -> rx.Component:
     content=content,
     redirect_message="Acceso denegado a Configuración",
   )
-
