@@ -41,6 +41,7 @@ class State(RootState):
     notification_message: str = ""
     notification_type: str = "info"
     is_notification_open: bool = False
+    _runtime_ctx_loaded: bool = False
     _last_runtime_refresh_ts: float = rx.field(default=0.0, is_var=False)
     _runtime_refresh_ttl: float = 30.0
 
@@ -85,18 +86,18 @@ class State(RootState):
             return
         self._last_runtime_refresh_ts = now
 
-        # --- Bloque 1: auth (permisos, sidebar, badge trial) ---
+        # --- Bloque 1: auth + caja + alertas (un solo delta) ---
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
-        yield  # delta parcial: permisos + sidebar actualizados
 
-        # --- Bloque 2: caja + alertas (badge sidebar) ---
         if hasattr(self, "refresh_cashbox_status"):
             self.refresh_cashbox_status()
 
         if hasattr(self, "check_overdue_alerts"):
             self.check_overdue_alerts()
-        yield  # delta parcial: estado de caja + alertas
+
+        self._runtime_ctx_loaded = True
+        yield  # delta parcial: permisos + caja + alertas (todo junto)
 
         # --- Bloque 3: datos base (solo primer carga) ---
         seeded_defaults = False
