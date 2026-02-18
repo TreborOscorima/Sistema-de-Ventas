@@ -72,6 +72,8 @@ class DashboardState(MixinState):
     # Estado de carga
     dashboard_loading: bool = False
     last_refresh: str = ""
+    _last_dashboard_load_ts: float = 0.0
+    _DASHBOARD_TTL: float = 30.0
 
     def set_loading(self, loading: bool):
         """Establece el estado de carga."""
@@ -176,8 +178,13 @@ class DashboardState(MixinState):
 
     @rx.event(background=True)
     async def load_dashboard_background(self):
-        """Carga el dashboard en segundo plano para mejorar la navegación."""
+        """Carga el dashboard en segundo plano con TTL para evitar recargas innecesarias."""
+        import time as _time
         async with self:
+            now_ts = _time.time()
+            if (now_ts - self._last_dashboard_load_ts) < self._DASHBOARD_TTL:
+                return  # TTL vigente, no recargar
+            self._last_dashboard_load_ts = now_ts
             self.dashboard_loading = True
             try:
                 self._load_dashboard_data()

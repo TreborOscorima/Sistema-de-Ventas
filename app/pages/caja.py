@@ -1136,7 +1136,7 @@ def cashbox_page() -> rx.Component:
       "Controla la apertura, cierre y movimientos de dinero en caja.",
     ),
     rx.cond(
-      State.cash_tab == "movimientos",
+      State.router.page.params["tab"] == "movimientos",
       petty_cash_view(),
       rx.el.div(
         cashbox_opening_card(),

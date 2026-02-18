@@ -1616,11 +1616,11 @@ def servicios_page() -> rx.Component:
       "Gestiona reservas, precios de campo, adelantos, cancelaciones y registros administrativos.",
     ),
     rx.match(
-      State.service_tab,
+      State.router.page.params["tab"],
       ("campo", campo_tab()),
       ("precios_campo", field_prices_tab()),
       ("piscina", servicio_card("Alquiler de Piscina", "Registro y seguimiento de alquiler de piscina.")),
-      servicio_card("Alquiler de Campo", "Reserva y control de alquiler de campo."),
+      campo_tab(),
     ),
     class_name="w-full flex flex-col gap-4",
   )

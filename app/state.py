@@ -78,12 +78,11 @@ class State(RootState):
         async with AsyncSessionLocal() as session:
             await init_payment_methods(session, int(company_id), int(branch_id))
 
-    @rx.event
-    async def refresh_runtime_context(self, force: bool = False):
-        """Carga caches y datos base con baja frecuencia para navegación fluida.
+    async def _do_runtime_refresh(self, force: bool = False):
+        """Helper interno: refresca caches de runtime SIN yield.
 
-        Usa yield para enviar deltas parciales y que el UI responda
-        progresivamente en vez de esperar a que termine todo.
+        Al no hacer yield, todo el delta se envía junto al final del
+        evento page_init_*, eliminando un roundtrip WS adicional.
         """
         if not self.is_authenticated:
             return
@@ -93,7 +92,7 @@ class State(RootState):
             return
         self._last_runtime_refresh_ts = now
 
-        # --- Bloque 1: auth + caja + alertas (un solo delta) ---
+        # --- auth + caja + alertas ---
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
 
@@ -104,9 +103,8 @@ class State(RootState):
             self.check_overdue_alerts()
 
         self._runtime_ctx_loaded = True
-        yield  # delta parcial: permisos + caja + alertas (todo junto)
 
-        # --- Bloque 3: datos base (solo primer carga) ---
+        # --- datos base (solo primer carga) ---
         seeded_defaults = False
         if hasattr(self, "units") and not self.units and hasattr(self, "ensure_default_data"):
             self.ensure_default_data()
@@ -128,6 +126,11 @@ class State(RootState):
             if hasattr(self, "load_config_data"):
                 self.load_config_data()
 
+    @rx.event
+    async def refresh_runtime_context(self, force: bool = False):
+        """Evento público de refresh (backward compat)."""
+        await self._do_runtime_refresh(force)
+
     # ------------------------------------------------------------------
     # Consolidated page-init handlers
     # Merge sync_page + ensure_view + page-specific loads + common_guards
@@ -146,15 +149,17 @@ class State(RootState):
         return None
 
     @rx.event
-    def page_init_default(self):
+    async def page_init_default(self):
         """on_load for / and /dashboard (no privilege gate)."""
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
 
     @rx.event
-    def page_init_ingreso(self):
+    async def page_init_ingreso(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
             "view_ingresos",
@@ -169,7 +174,8 @@ class State(RootState):
             yield redirect
 
     @rx.event
-    def page_init_compras(self):
+    async def page_init_compras(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
             yield rx.redirect("/")
@@ -182,17 +188,20 @@ class State(RootState):
             )
             yield rx.redirect("/dashboard")
             return
-        # load_suppliers con TTL (solo recarga on_load)
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        # Enviar delta parcial (la UI renderiza la página de inmediato)
+        yield
+        # Cargar proveedores en segundo plano (segundo delta)
         now = time.time()
         if (now - self._last_suppliers_load_ts) >= self._PAGE_DATA_TTL:
             self._last_suppliers_load_ts = now
             self.load_suppliers()
-        redirect = self.run_common_guards()
-        if redirect:
-            yield redirect
 
     @rx.event
-    def page_init_venta(self):
+    async def page_init_venta(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
             "view_ventas",
@@ -207,7 +216,8 @@ class State(RootState):
             yield redirect
 
     @rx.event
-    def page_init_caja(self):
+    async def page_init_caja(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
             "view_cashbox",
@@ -217,17 +227,20 @@ class State(RootState):
             for ev in denied:
                 yield ev
             return
-        # refresh_cashbox_data con TTL
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        # Enviar delta parcial (UI renderiza estructura de caja)
+        yield
+        # Cargar datos de caja en segundo plano
         now = time.time()
         if (now - self._last_cashbox_data_ts) >= self._PAGE_DATA_TTL:
             self._last_cashbox_data_ts = now
             self.refresh_cashbox_data()
-        redirect = self.run_common_guards()
-        if redirect:
-            yield redirect
 
     @rx.event
-    def page_init_clientes(self):
+    async def page_init_clientes(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
             yield rx.redirect("/")
@@ -246,7 +259,8 @@ class State(RootState):
             yield redirect
 
     @rx.event
-    def page_init_cuentas(self):
+    async def page_init_cuentas(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
             yield rx.redirect("/")
@@ -264,7 +278,8 @@ class State(RootState):
             yield redirect
 
     @rx.event
-    def page_init_inventario(self):
+    async def page_init_inventario(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
             "view_inventario",
@@ -279,7 +294,8 @@ class State(RootState):
             yield redirect
 
     @rx.event
-    def page_init_historial(self):
+    async def page_init_historial(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
             "view_historial",
@@ -294,7 +310,8 @@ class State(RootState):
             yield redirect
 
     @rx.event
-    def page_init_reportes(self):
+    async def page_init_reportes(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
             "export_data",
@@ -309,7 +326,8 @@ class State(RootState):
             yield redirect
 
     @rx.event
-    def page_init_servicios(self):
+    async def page_init_servicios(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
             yield rx.redirect("/")
@@ -325,17 +343,20 @@ class State(RootState):
             )
             yield rx.redirect("/dashboard")
             return
-        # load_reservations con TTL
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        # Enviar delta parcial (UI renderiza estructura de servicios)
+        yield
+        # Cargar reservaciones en segundo plano
         now = time.time()
         if (now - self._last_reservations_load_ts) >= self._PAGE_DATA_TTL:
             self._last_reservations_load_ts = now
             self.load_reservations()
-        redirect = self.run_common_guards()
-        if redirect:
-            yield redirect
 
     @rx.event
-    def page_init_configuracion(self):
+    async def page_init_configuracion(self):
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
             yield rx.redirect("/")
@@ -347,18 +368,21 @@ class State(RootState):
             )
             yield rx.redirect("/dashboard")
             return
-        # load_users con TTL
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        # Enviar delta parcial (UI renderiza estructura de config)
+        yield
+        # Cargar usuarios en segundo plano
         now = time.time()
         if (now - self._last_users_load_ts) >= self._PAGE_DATA_TTL:
             self._last_users_load_ts = now
             self.load_users()
-        redirect = self.run_common_guards()
-        if redirect:
-            yield redirect
 
     @rx.event
-    def page_init_cambiar_clave(self):
+    async def page_init_cambiar_clave(self):
         """on_load for /cambiar-clave."""
+        await self._do_runtime_refresh()
         self.sync_page_from_route()
         redirect = self.ensure_trial_active()
         if redirect:

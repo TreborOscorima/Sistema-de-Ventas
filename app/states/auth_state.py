@@ -1457,7 +1457,22 @@ class AuthState(MixinState):
         self.refresh_auth_runtime_cache()
         if hasattr(self, "refresh_cashbox_status"):
             self.refresh_cashbox_status()
-        # Forzar refresco de datos dependientes de sucursal
+
+        # Invalidar TTLs para que page_init_* recargue datos al navegar
+        if hasattr(self, "_last_suppliers_load_ts"):
+            self._last_suppliers_load_ts = 0.0
+        if hasattr(self, "_last_reservations_load_ts"):
+            self._last_reservations_load_ts = 0.0
+        if hasattr(self, "_last_users_load_ts"):
+            self._last_users_load_ts = 0.0
+        if hasattr(self, "_last_cashbox_data_ts"):
+            self._last_cashbox_data_ts = 0.0
+        if hasattr(self, "_last_dashboard_load_ts"):
+            self._last_dashboard_load_ts = 0.0
+        if hasattr(self, "_last_overdue_check_ts"):
+            self._last_overdue_check_ts = 0.0
+
+        # Forzar refresco de triggers reactivos
         if hasattr(self, "_cashbox_update_trigger"):
             self._cashbox_update_trigger += 1
         if hasattr(self, "_inventory_update_trigger"):
@@ -1468,34 +1483,44 @@ class AuthState(MixinState):
             self._history_update_trigger += 1
         if hasattr(self, "_report_update_trigger"):
             self._report_update_trigger += 1
-        if hasattr(self, "load_clients"):
-            self.load_clients()
-        if hasattr(self, "load_suppliers"):
-            self.load_suppliers()
+
+        # Cargar solo datos comunes esenciales + datos del módulo activo
         if hasattr(self, "load_categories"):
             self.load_categories()
-        if hasattr(self, "reload_history"):
-            self.reload_history()
-        if hasattr(self, "load_reservations"):
-            self.load_reservations()
-        if hasattr(self, "load_field_prices"):
-            self.load_field_prices()
-        if hasattr(self, "refresh_service_state"):
-            self.refresh_service_state()
-        if hasattr(self, "load_users"):
-            self.load_users()
-        if hasattr(self, "load_branches"):
-            self.load_branches()
-        if hasattr(self, "load_debtors"):
-            await self.load_debtors()
-        if hasattr(self, "load_dashboard"):
-            self.load_dashboard()
-        if hasattr(self, "load_settings"):
-            self.load_settings()
-        if hasattr(self, "load_config_data"):
-            self.load_config_data()
         if hasattr(self, "check_overdue_alerts"):
             self.check_overdue_alerts()
+
+        current = getattr(self, "current_page", "")
+        if current == "Dashboard" and hasattr(self, "load_dashboard"):
+            self.load_dashboard()
+        elif current == "Gestion de Caja":
+            if hasattr(self, "_refresh_cashbox_caches"):
+                self._refresh_cashbox_caches()
+        elif current == "Historial" and hasattr(self, "reload_history"):
+            self.reload_history()
+        elif current == "Inventario":
+            pass  # triggers reactivos ya invalidan
+        elif current == "Compras" and hasattr(self, "load_suppliers"):
+            self.load_suppliers()
+        elif current == "Servicios":
+            if hasattr(self, "load_reservations"):
+                self.load_reservations()
+            if hasattr(self, "load_field_prices"):
+                self.load_field_prices()
+        elif current == "Configuracion":
+            if hasattr(self, "load_users"):
+                self.load_users()
+            if hasattr(self, "load_branches"):
+                self.load_branches()
+            if hasattr(self, "load_config_data"):
+                self.load_config_data()
+        elif current == "Clientes" and hasattr(self, "load_clients"):
+            self.load_clients()
+        elif current == "Cuentas Corrientes" and hasattr(self, "load_debtors"):
+            import asyncio
+            asyncio.ensure_future(self.load_debtors())
+
+        # Reset paginación de caja
         if hasattr(self, "cashbox_current_page"):
             self.cashbox_current_page = 1
         if hasattr(self, "cashbox_log_current_page"):

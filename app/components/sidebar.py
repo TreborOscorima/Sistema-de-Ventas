@@ -337,8 +337,8 @@ def sidebar() -> rx.Component:
     ),
     class_name=rx.cond(
         State.sidebar_open,
-        f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
-        f"w-0 overflow-hidden md:relative {TRANSITIONS['slow']}",
+        f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
+        f"fixed inset-y-0 left-0 z-50 w-0 overflow-hidden {TRANSITIONS['slow']}",
     ),
     key="sidebar-root",
 ),
@@ -351,13 +351,80 @@ rx.cond(
     ),
     rx.fragment(),
 ),
-# Botón flotante para abrir sidebar
+# Zona de hover invisible (izquierda) + botón flotante con auto-hide
 rx.cond(
     ~State.sidebar_open,
-    rx.el.button(
-        rx.icon("menu", class_name="h-5 w-5 text-indigo-600"),
-        on_click=State.toggle_sidebar,
-        class_name=f"fixed top-4 left-4 md:top-5 md:left-5 z-[55] p-2.5 bg-white/90 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['md']} hover:bg-white border border-slate-200/50 {TRANSITIONS['fast']} hover:scale-105",
+    rx.el.div(
+        # Zona sensible invisible en el borde izquierdo
+        rx.el.div(
+            class_name="sidebar-hover-zone fixed top-0 left-0 z-[54] w-6 h-32",
+        ),
+        # Botón de menú: aparece al hover y se auto-oculta tras 2s
+        rx.el.button(
+            rx.icon("menu", class_name="h-4 w-4 text-indigo-500"),
+            on_click=State.toggle_sidebar,
+            class_name=(
+                f"sidebar-toggle-btn fixed top-4 left-4 md:top-5 md:left-5 z-[55] "
+                f"p-2 bg-white/80 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['sm']} "
+                f"hover:bg-white border border-slate-200/40 {TRANSITIONS['fast']} "
+                f"hover:scale-105 hover:shadow-md hover:border-slate-300/60 "
+                f"opacity-0 pointer-events-none"
+            ),
+        ),
+        # CSS + JS para auto-hide y hover-reveal
+        rx.script("""
+            (function(){
+                if(window.__sidebarToggleAttached) return;
+                window.__sidebarToggleAttached = true;
+                var hideTimer = null;
+                function showBtn(){
+                    var btn = document.querySelector('.sidebar-toggle-btn');
+                    if(!btn) return;
+                    btn.style.opacity = '1';
+                    btn.style.pointerEvents = 'auto';
+                    btn.style.transition = 'opacity 0.2s ease';
+                }
+                function hideBtn(){
+                    var btn = document.querySelector('.sidebar-toggle-btn');
+                    if(!btn) return;
+                    btn.style.opacity = '0';
+                    btn.style.pointerEvents = 'none';
+                    btn.style.transition = 'opacity 0.5s ease';
+                }
+                function scheduleHide(){
+                    clearTimeout(hideTimer);
+                    hideTimer = setTimeout(hideBtn, 2000);
+                }
+                // Mostrar al inicio brevemente
+                setTimeout(function(){
+                    showBtn();
+                    scheduleHide();
+                }, 300);
+                // Hover en la zona izquierda → mostrar
+                document.addEventListener('mousemove', function(e){
+                    var zone = document.querySelector('.sidebar-hover-zone');
+                    if(!zone) return;
+                    var rect = zone.getBoundingClientRect();
+                    if(e.clientX <= rect.right && e.clientY <= rect.bottom){
+                        showBtn();
+                        clearTimeout(hideTimer);
+                    }
+                });
+                // Al salir del botón → auto-ocultar
+                document.addEventListener('mouseover', function(e){
+                    var btn = document.querySelector('.sidebar-toggle-btn');
+                    if(btn && btn.contains(e.target)){
+                        clearTimeout(hideTimer);
+                    }
+                });
+                document.addEventListener('mouseout', function(e){
+                    var btn = document.querySelector('.sidebar-toggle-btn');
+                    if(btn && btn.contains(e.target)){
+                        scheduleHide();
+                    }
+                });
+            })();
+        """),
     ),
     rx.fragment(),
 )
