@@ -172,19 +172,7 @@ def _loading_skeleton() -> rx.Component:
                 class_name="hidden lg:flex flex-col w-56 border-r border-slate-200 bg-white h-screen flex-shrink-0",
             ),
             # Content skeleton
-            rx.el.div(
-                rx.el.div(
-                    rx.el.div(class_name="h-6 w-48 rounded bg-slate-200 animate-pulse"),
-                    rx.el.div(class_name="h-4 w-32 rounded bg-slate-200/60 animate-pulse mt-2"),
-                    rx.el.div(
-                        *[rx.el.div(class_name="h-24 rounded-xl bg-slate-200/40 animate-pulse") for _ in range(3)],
-                        class_name="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6",
-                    ),
-                    rx.el.div(class_name="h-64 rounded-xl bg-slate-200/30 animate-pulse mt-6"),
-                    class_name="w-full max-w-5xl p-4 sm:p-6",
-                ),
-                class_name="flex-1 h-full overflow-y-auto",
-            ),
+            _content_skeleton(),
             class_name="flex h-screen w-full bg-slate-50 overflow-hidden",
         ),
         class_name="text-slate-900 w-full h-screen",
@@ -192,8 +180,29 @@ def _loading_skeleton() -> rx.Component:
     )
 
 
+def _content_skeleton() -> rx.Component:
+    """Skeleton solo para el área de contenido (sin sidebar)."""
+    return rx.el.div(
+        rx.el.div(
+            rx.el.div(class_name="h-6 w-48 rounded bg-slate-200 animate-pulse"),
+            rx.el.div(class_name="h-4 w-32 rounded bg-slate-200/60 animate-pulse mt-2"),
+            rx.el.div(
+                *[rx.el.div(class_name="h-24 rounded-xl bg-slate-200/40 animate-pulse") for _ in range(3)],
+                class_name="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6",
+            ),
+            rx.el.div(class_name="h-64 rounded-xl bg-slate-200/30 animate-pulse mt-6"),
+            class_name="w-full max-w-5xl p-4 sm:p-6",
+        ),
+        class_name="flex-1 h-full overflow-y-auto",
+    )
+
+
 def authenticated_layout(page_content: rx.Component) -> rx.Component:
-    """Layout wrapper para páginas autenticadas."""
+    """Layout wrapper para páginas autenticadas.
+
+    El sidebar es PERSISTENTE — nunca desaparece durante la navegación.
+    Solo el área de contenido muestra skeleton durante la hidratación inicial.
+    """
     return rx.cond(
         State.is_hydrated,
         # --- Ya hidratado: decidir entre login o contenido ---
@@ -346,6 +355,45 @@ app = rx.App(
             .fade-in-up {
                 animation: fadeInUp 0.3s cubic-bezier(.16,1,.3,1) both;
             }
+            """
+        ),
+        rx.script(
+            """
+            (function(){
+                var K='__sb_scroll',_lock=false;
+                // 1. Guardar posición de scroll continuamente (fase captura)
+                //    Solo si no estamos en proceso de restauración
+                document.addEventListener('scroll',function(e){
+                    if(!_lock&&e.target&&e.target.id==='sidebar-nav'){
+                        sessionStorage.setItem(K,String(e.target.scrollTop));
+                    }
+                },true);
+                // 2. Restaurar al cargar página
+                window.addEventListener('load',function(){
+                    var nav=document.getElementById('sidebar-nav');
+                    var s=sessionStorage.getItem(K);
+                    if(nav&&s) nav.scrollTop=parseInt(s,10);
+                });
+                // 3. Al hacer clic en link del sidebar: restaurar SOLO si
+                //    React resetea scrollTop a ~0 (no si el usuario scrollea)
+                document.addEventListener('click',function(e){
+                    var sb=document.getElementById('sidebar-nav');
+                    if(!sb||!sb.contains(e.target)||!e.target.closest('a')) return;
+                    var s=sessionStorage.getItem(K);
+                    if(!s) return;
+                    var t=parseInt(s,10);
+                    if(t<10) return;
+                    _lock=true;
+                    function r(){
+                        var nav=document.getElementById('sidebar-nav');
+                        if(nav&&nav.scrollTop<10) nav.scrollTop=t;
+                    }
+                    setTimeout(r,0);
+                    setTimeout(r,80);
+                    setTimeout(r,200);
+                    setTimeout(function(){r();_lock=false;},400);
+                },true);
+            })();
             """
         ),
         rx.script(

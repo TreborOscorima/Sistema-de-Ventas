@@ -48,7 +48,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         current_path == route,
     )
 
-    link = rx.el.a(
+    link = rx.link(
         rx.el.div(
             rx.icon(icon, class_name="h-5 w-5 flex-shrink-0"),
             rx.el.span(
@@ -74,7 +74,8 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
             ),
         ),
         href=target_route,
-        class_name="block w-full min-w-0 text-left no-underline",
+        underline="none",
+        class_name="block w-full min-w-0 text-left",
     )
     return rx.cond(
         page == "Servicios",
@@ -126,7 +127,7 @@ def _submenu_section(
         rx.el.div(
             rx.foreach(
                 subsections,
-                lambda section: rx.el.a(
+                lambda section: rx.link(
                     rx.el.div(
                         rx.icon(section["icon"], class_name="h-4 w-4"),
                         rx.el.span(
@@ -136,6 +137,7 @@ def _submenu_section(
                         class_name="flex items-center gap-2 min-w-0",
                     ),
                     href=route + "?tab=" + section["key"],
+                    underline="none",
                     class_name=rx.cond(
                         (State.router.page.path == route)
                         & (
@@ -292,6 +294,7 @@ def sidebar() -> rx.Component:
                 ),
             ),
         ),
+        id="sidebar-nav",
         class_name="flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
     ),
     # Footer con usuario
