@@ -90,6 +90,7 @@ def test_delete_sale_marks_logs_voided_and_restores_stock(monkeypatch):
     state.sale_delete_reason = "Error"
     state._cashbox_update_trigger = 0
     state._cashbox_guard = lambda: None
+    monkeypatch.setattr(CashState, "_refresh_cashbox_caches", lambda self: None)
 
     state.delete_sale()
 
