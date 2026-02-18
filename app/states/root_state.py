@@ -122,7 +122,7 @@ for _mixin in _mixins:
     # Unir anotaciones
     if hasattr(_mixin, "__annotations__"):
         _class_dict["__annotations__"].update(_mixin.__annotations__)
-    
+
     # Unir atributos y metodos
     for _name, _value in _mixin.__dict__.items():
         if _name.startswith("__"): continue

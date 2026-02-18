@@ -19,14 +19,14 @@ Ejemplo de uso::
 
     from app.states import require_permission, require_cashbox_open
     from app.states.mixin_state import MixinState
-    
+
     class MyState(MixinState):
         @rx.event
         @require_permission("edit_inventario")
         def update_stock(self):
             # Solo ejecuta si tiene el permiso
             ...
-        
+
         @rx.event
         @require_cashbox_open()
         def register_sale(self):
@@ -57,18 +57,18 @@ def require_permission(
 ) -> Callable[[F], F]:
     """
     Decorador para verificar permisos antes de ejecutar un método de evento.
-    
+
     Uso:
         @rx.event
         @require_permission("manage_cashbox")
         def add_petty_cash_movement(self):
             # Lógica sin validación manual
-    
+
     Args:
         permission: Nombre del permiso requerido (key en privileges dict)
         message: Mensaje personalizado para el toast (opcional)
         redirect_to: Ruta a redirigir si no tiene permiso (opcional)
-    
+
     Returns:
         Decorador que envuelve el método
     """
@@ -95,7 +95,7 @@ def require_permission(
         "view_clientes": "ver clientes",
         "view_cuentas": "ver cuentas",
     }
-    
+
     def decorator(method: F) -> F:
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
@@ -108,7 +108,7 @@ def require_permission(
                 else:
                     action_desc = PERMISSION_MESSAGES.get(permission, permission)
                     error_msg = f"No tiene permisos para {action_desc}."
-                
+
                 # Retornar toast y opcionalmente redirigir
                 if redirect_to:
                     return [
@@ -116,12 +116,12 @@ def require_permission(
                         rx.redirect(redirect_to),
                     ]
                 return rx.toast(error_msg, duration=3000)
-            
+
             # Tiene permiso, ejecutar método original
             return method(self, *args, **kwargs)
-        
+
         return wrapper  # type: ignore
-    
+
     return decorator
 
 
@@ -130,7 +130,7 @@ def require_cashbox_open(
 ) -> Callable[[F], F]:
     """
     Decorador para verificar que la caja esté abierta antes de ejecutar.
-    
+
     Uso:
         @rx.event
         @require_cashbox_open()
@@ -144,9 +144,9 @@ def require_cashbox_open(
             if not cashbox_is_open:
                 return rx.toast(message, duration=3000)
             return method(self, *args, **kwargs)
-        
+
         return wrapper  # type: ignore
-    
+
     return decorator
 
 
@@ -483,7 +483,7 @@ class MixinState:
     @rx.var(cache=True)
     def currency_symbol(self) -> str:
         """Obtiene el símbolo de la moneda actual.
-        
+
         Usa la moneda seleccionada del país configurado.
         Fallback dinámico basado en el país de operación.
         """
