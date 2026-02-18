@@ -89,7 +89,7 @@ class UIState(MixinState):
         """Sincroniza current_page basándose en la ruta actual y privilegios."""
         route = self._normalized_route()
         page = ROUTE_TO_PAGE.get(route)
-        
+
         # Si la ruta tiene una página mapeada y el usuario puede accederla
         if page and self._can_access_page(page):
             self._apply_page_state(page)
@@ -203,7 +203,7 @@ class UIState(MixinState):
 
     def _apply_route_tab_state(self, page: str):
         """Ejecuta side-effects basados en el tab del query param.
-        
+
         Ya NO muta config_active_tab, cash_active_tab ni service_active_tab
         porque las páginas ahora leen el tab directamente de router.page.params
         vía computed vars (config_tab, cash_tab, service_tab).

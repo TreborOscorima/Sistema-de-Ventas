@@ -1371,7 +1371,7 @@ def admin_log_filters() -> rx.Component:
     start_label="Fecha inicio",
     end_label="Fecha fin",
   )
-  
+
   return rx.el.div(
     start_filter,
     end_filter,
