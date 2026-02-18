@@ -513,7 +513,7 @@ class ConfigState(MixinState):
 
     @rx.event
     def go_to_config_tab(self, tab: str):
-        self.config_active_tab = tab
+        return rx.redirect(f"/configuracion?tab={tab}")
 
     def add_unit(self):
         toast = self._require_manage_config()

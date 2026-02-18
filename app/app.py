@@ -360,39 +360,33 @@ app = rx.App(
         rx.script(
             """
             (function(){
-                var K='__sb_scroll',_lock=false;
-                // 1. Guardar posición de scroll continuamente (fase captura)
-                //    Solo si no estamos en proceso de restauración
+                var K='__sb_scroll',_skip=false;
+                // Guardar scroll del sidebar continuamente (fase captura, sobrevive a React)
                 document.addEventListener('scroll',function(e){
-                    if(!_lock&&e.target&&e.target.id==='sidebar-nav'){
+                    if(!_skip&&e.target&&e.target.id==='sidebar-nav'){
                         sessionStorage.setItem(K,String(e.target.scrollTop));
                     }
                 },true);
-                // 2. Restaurar al cargar página
+                // Restaurar al cargar
                 window.addEventListener('load',function(){
-                    var nav=document.getElementById('sidebar-nav');
+                    var n=document.getElementById('sidebar-nav');
                     var s=sessionStorage.getItem(K);
-                    if(nav&&s) nav.scrollTop=parseInt(s,10);
+                    if(n&&s) n.scrollTop=parseInt(s,10);
                 });
-                // 3. Al hacer clic en link del sidebar: restaurar SOLO si
-                //    React resetea scrollTop a ~0 (no si el usuario scrollea)
-                document.addEventListener('click',function(e){
-                    var sb=document.getElementById('sidebar-nav');
-                    if(!sb||!sb.contains(e.target)||!e.target.closest('a')) return;
+                // Observar cuando React reemplaza el contenido del sidebar
+                // y restaurar scroll si se reseteo a 0 (no si el usuario scrolleo)
+                new MutationObserver(function(){
+                    var n=document.getElementById('sidebar-nav');
                     var s=sessionStorage.getItem(K);
-                    if(!s) return;
-                    var t=parseInt(s,10);
-                    if(t<10) return;
-                    _lock=true;
-                    function r(){
-                        var nav=document.getElementById('sidebar-nav');
-                        if(nav&&nav.scrollTop<10) nav.scrollTop=t;
+                    if(n&&s){
+                        var t=parseInt(s,10);
+                        if(t>5&&n.scrollTop<5){
+                            _skip=true;
+                            n.scrollTop=t;
+                            setTimeout(function(){_skip=false;},50);
+                        }
                     }
-                    setTimeout(r,0);
-                    setTimeout(r,80);
-                    setTimeout(r,200);
-                    setTimeout(function(){r();_lock=false;},400);
-                },true);
+                }).observe(document.body,{childList:true,subtree:true});
             })();
             """
         ),

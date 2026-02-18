@@ -340,6 +340,7 @@ def sidebar() -> rx.Component:
         f"fixed md:relative inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
         f"w-0 overflow-hidden md:relative {TRANSITIONS['slow']}",
     ),
+    key="sidebar-root",
 ),
 # Overlay móvil con blur
 rx.cond(

@@ -1331,76 +1331,60 @@ class AuthState(MixinState):
 
     @rx.event
     def check_subscription_status(self):
+        """Verifica el estado de suscripción usando el snapshot cacheado.
+
+        Solo hace query a DB si necesita MODIFICAR el estado de suscripción
+        (trial expirado, plan vencido). En caso normal, lee del snapshot
+        que ya cargó refresh_auth_runtime_cache() — sin query extra.
+        """
         if not self.is_authenticated:
             return
         now_epoch = time.time()
         if (now_epoch - self._subscription_check_ts) < 30:
             return
         self._subscription_check_ts = now_epoch
-        company_id = self.current_user.get("company_id")
-        if not company_id:
-            return
+
+        # Usar el snapshot que ya cargó refresh_auth_runtime_cache (sin DB query)
+        snapshot = self.subscription_snapshot
         current_path = self.router.url.path
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-            if not company:
-                return
-            plan_type = getattr(company, "plan_type", "")
-            if hasattr(plan_type, "value"):
-                plan_type = plan_type.value
-            plan_type = str(plan_type or "").strip().lower()
-            now = datetime.now()
-            new_status = None
+        status_label = str(snapshot.get("status_label", "") or "").strip().lower()
+        is_trial = bool(snapshot.get("is_trial"))
+        plan_type = str(snapshot.get("plan_type", "") or "").strip().lower()
 
-            if plan_type == "trial":
-                trial_ends_at = getattr(company, "trial_ends_at", None)
-                if trial_ends_at and trial_ends_at < now:
-                    new_status = SubscriptionStatus.SUSPENDED.value
-                    current_status = getattr(company, "subscription_status", "")
-                    if hasattr(current_status, "value"):
-                        current_status = current_status.value
-                    if str(current_status or "") != new_status:
-                        company.subscription_status = new_status
-                        session.add(company)
-                        session.commit()
-                    if current_path != "/periodo-prueba-finalizado":
-                        return rx.redirect("/periodo-prueba-finalizado")
-                    return
-                new_status = SubscriptionStatus.ACTIVE.value
-            else:
-                subscription_ends_at = getattr(company, "subscription_ends_at", None)
-                if subscription_ends_at:
-                    days_remaining = (
-                        subscription_ends_at.date() - now.date()
-                    ).days
-                    if days_remaining > 5:
-                        new_status = SubscriptionStatus.ACTIVE.value
-                    elif days_remaining >= 0:
-                        new_status = SubscriptionStatus.WARNING.value
-                    elif days_remaining >= -5:
-                        new_status = SubscriptionStatus.PAST_DUE.value
-                    else:
-                        new_status = SubscriptionStatus.SUSPENDED.value
-                else:
-                    new_status = SubscriptionStatus.ACTIVE.value
+        # --- Trial expirado: necesita ir a DB para actualizar status ---
+        if is_trial:
+            trial_end = snapshot.get("trial_ends_on", "")
+            if trial_end:
+                try:
+                    from datetime import datetime as dt_cls
+                    trial_ends_at = dt_cls.strptime(trial_end, "%d/%m/%Y")
+                    if trial_ends_at < datetime.now():
+                        # Trial expirado — actualizar en DB
+                        company_id = self.current_user.get("company_id")
+                        if company_id:
+                            with rx.session() as session:
+                                company = session.exec(
+                                    select(Company).where(Company.id == company_id)
+                                ).first()
+                                if company:
+                                    current_status = getattr(company, "subscription_status", "")
+                                    if hasattr(current_status, "value"):
+                                        current_status = current_status.value
+                                    if str(current_status or "") != SubscriptionStatus.SUSPENDED.value:
+                                        company.subscription_status = SubscriptionStatus.SUSPENDED.value
+                                        session.add(company)
+                                        session.commit()
+                                    self.refresh_subscription_snapshot()
+                        if current_path != "/periodo-prueba-finalizado":
+                            return rx.redirect("/periodo-prueba-finalizado")
+                        return
+                except (ValueError, TypeError):
+                    pass
+            return  # Trial activo, nada que hacer
 
-            current_status = getattr(company, "subscription_status", "")
-            if hasattr(current_status, "value"):
-                current_status = current_status.value
-            current_status = str(current_status or "")
-            if new_status and current_status != new_status:
-                company.subscription_status = new_status
-                session.add(company)
-                session.commit()
-
-            if (
-                new_status == SubscriptionStatus.SUSPENDED.value
-                and current_path != "/cuenta-suspendida"
-            ):
-                return rx.redirect("/cuenta-suspendida")
-        self.refresh_subscription_snapshot()
+        # --- Plan pago: verificar vencimiento desde snapshot ---
+        if status_label == "suspendido" and current_path != "/cuenta-suspendida":
+            return rx.redirect("/cuenta-suspendida")
 
     @rx.event
     def ensure_subscription_active(self):

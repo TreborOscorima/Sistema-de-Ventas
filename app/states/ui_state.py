@@ -40,13 +40,49 @@ CASH_TABS = {"resumen", "movimientos"}
 SERVICES_TABS = {"campo", "precios_campo"}
 
 
+# Valores por defecto para tabs (cuando no hay query param)
+_CONFIG_DEFAULT = "usuarios"
+_CASH_DEFAULT = "resumen"
+_SERVICES_DEFAULT = "campo"
+
+
 class UIState(MixinState):
     sidebar_open: bool = True
     current_page: str = ""  # Vacío inicialmente, se setea según privilegios
     current_active_item: str = rx.SessionStorage("")
     # Compatibilidad con sesiones previas; ya no se usa para evitar eventos extra en navegación.
     pending_page: str = rx.SessionStorage("")
-    config_active_tab: str = "usuarios"
+    # LEGACY: solo se conservan para set programático (go_to_subscription, etc.)
+    # Las páginas leen el tab del @rx.var que deriva de router.page.params
+    config_active_tab: str = _CONFIG_DEFAULT
+
+    # ---- Computed vars para tabs desde query params (sin roundtrip WS) ----
+    @rx.var(cache=True)
+    def config_tab(self) -> str:
+        """Tab activo de Configuración, derivado de ?tab= en la URL."""
+        tab = self._safe_query_tab()
+        return tab if tab in CONFIG_TABS else _CONFIG_DEFAULT
+
+    @rx.var(cache=True)
+    def cash_tab(self) -> str:
+        """Tab activo de Caja, derivado de ?tab= en la URL."""
+        tab = self._safe_query_tab()
+        return tab if tab in CASH_TABS else _CASH_DEFAULT
+
+    @rx.var(cache=True)
+    def service_tab(self) -> str:
+        """Tab activo de Servicios, derivado de ?tab= en la URL."""
+        tab = self._safe_query_tab()
+        return tab if tab in SERVICES_TABS else _SERVICES_DEFAULT
+
+    def _safe_query_tab(self) -> str:
+        """Lee el param 'tab' de la URL actual de forma segura."""
+        try:
+            qp = self.router.url.query_parameters
+            v = qp.get("tab", "") if isinstance(qp, dict) else ""
+            return str(v or "").strip().lower()
+        except Exception:
+            return ""
 
     @rx.event
     def sync_page_from_route(self):
@@ -125,8 +161,7 @@ class UIState(MixinState):
 
     @rx.event
     def go_to_subscription(self):
-        self.config_active_tab = "suscripcion"
-        return rx.redirect("/configuracion")
+        return rx.redirect("/configuracion?tab=suscripcion")
 
     def _normalized_route(self) -> str:
         route = ""
@@ -167,30 +202,35 @@ class UIState(MixinState):
         return (tab or "").strip().lower()
 
     def _apply_route_tab_state(self, page: str):
+        """Ejecuta side-effects basados en el tab del query param.
+        
+        Ya NO muta config_active_tab, cash_active_tab ni service_active_tab
+        porque las páginas ahora leen el tab directamente de router.page.params
+        vía computed vars (config_tab, cash_tab, service_tab).
+        """
         tab = self._query_tab()
         if not tab:
             return
 
-        if page == "Servicios" and hasattr(self, "service_active_tab") and tab in SERVICES_TABS:
-            self.service_active_tab = tab
-            if tab == "precios_campo" and hasattr(self, "load_field_prices"):
+        if page == "Servicios" and tab == "precios_campo":
+            if hasattr(self, "load_field_prices"):
                 self.load_field_prices()
             return
 
-        if page == "Gestion de Caja" and hasattr(self, "cash_active_tab") and tab in CASH_TABS:
-            self.cash_active_tab = tab
+        if page == "Gestion de Caja" and tab in CASH_TABS:
             if hasattr(self, "_refresh_cashbox_caches"):
                 self._refresh_cashbox_caches()
             return
 
-        if page == "Configuracion" and tab in CONFIG_TABS:
-            self.config_active_tab = tab
-
     def _apply_page_state(self, page: str):
         previous_page = self.current_page
-        self.current_page = page
-        self.current_active_item = page
-        self.pending_page = ""
+        # Solo mutar si realmente cambió (evita deltas innecesarios)
+        if self.current_page != page:
+            self.current_page = page
+        if self.current_active_item != page:
+            self.current_active_item = page
+        if self.pending_page:
+            self.pending_page = ""
 
         # Logica entre modulos (asume metodos/attrs en el State principal).
         if page == "Punto de Venta" and previous_page != "Punto de Venta":

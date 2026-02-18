@@ -192,7 +192,7 @@ def config_nav() -> rx.Component:
     ),
     rx.el.div(
       *[
-        rx.el.button(
+        rx.link(
           rx.el.div(
             rx.icon(section["icon"], class_name="h-5 w-5"),
             rx.el.div(
@@ -205,9 +205,10 @@ def config_nav() -> rx.Component:
             ),
             class_name="flex items-center gap-3",
           ),
-          on_click=lambda _, key=section["key"]: State.set_config_active_tab(key),
+          href=f"/configuracion?tab={section['key']}",
+          underline="none",
           class_name=rx.cond(
-            State.config_active_tab == section["key"],
+            State.config_tab == section["key"],
                         "w-full text-left bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-md shadow-sm",
                         "w-full text-left bg-white text-slate-700 border px-3 py-2 rounded-md hover:bg-slate-50",
           ),
@@ -1409,7 +1410,7 @@ def configuracion_page() -> rx.Component:
       ),
       rx.el.div(
           rx.match(
-            State.config_active_tab,
+            State.config_tab,
             ("empresa", company_settings_section()),
             ("sucursales", branch_section()),
             ("usuarios", user_section()),
