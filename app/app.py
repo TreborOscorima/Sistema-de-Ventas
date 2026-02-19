@@ -48,21 +48,21 @@ def cashbox_banner() -> rx.Component:
                     ),
                     class_name="flex items-start gap-3",
                 ),
-                rx.el.div(
+                rx.el.form(
                     rx.el.input(
+                        name="amount",
                         type="number",
                         step="0.01",
                         placeholder="Caja inicial (ej: 150.00)",
-                        value=State.cashbox_open_amount_input,
-                        on_change=State.set_cashbox_open_amount_input,
                         class_name="w-full md:w-52 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     ),
                     rx.el.button(
                         rx.icon("play", class_name="h-4 w-4"),
                         "Aperturar caja",
-                        on_click=State.open_cashbox_session,
+                        type="submit",
                         class_name="flex items-center gap-2 h-10 px-4 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700",
                     ),
+                    on_submit=State.handle_cashbox_form_submit,
                     class_name="flex flex-col md:flex-row items-stretch md:items-center gap-3",
                 ),
                 class_name="flex flex-col md:flex-row justify-between gap-4",
@@ -147,24 +147,89 @@ PAGE_TO_ROUTE = {
 }
 
 
-def authenticated_layout(page_content: rx.Component) -> rx.Component:
-    """Layout wrapper para páginas autenticadas."""
-    return rx.cond(
-        State.is_authenticated,
-        rx.el.main(
-            rx.el.div(
-                class_name=(
-                    "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
-                    "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
-                ),
+def _loading_skeleton() -> rx.Component:
+    """Skeleton que se muestra mientras el estado hidrata (nueva pestaña)."""
+    return rx.el.div(
+        # Barra superior gradiente
+        rx.el.div(
+            class_name=(
+                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
+                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
             ),
-            _toast_provider(),
-            NotificationHolder(),
+        ),
+        # Sidebar skeleton (fixed, coincide con la posición del sidebar real)
+        rx.el.div(
             rx.el.div(
+                rx.el.div(class_name="h-8 w-8 rounded-lg bg-slate-200 animate-pulse"),
+                rx.el.div(class_name="h-4 w-24 rounded bg-slate-200 animate-pulse"),
+                class_name="flex items-center gap-3 px-4 pt-5 pb-4",
+            ),
+            rx.el.div(
+                *[rx.el.div(class_name="h-9 w-full rounded-lg bg-slate-200/60 animate-pulse") for _ in range(6)],
+                class_name="flex flex-col gap-2 px-3 mt-4",
+            ),
+            class_name="hidden md:flex flex-col fixed inset-y-0 left-0 z-50 md:w-64 xl:w-72 border-r border-slate-200 bg-white h-screen",
+        ),
+        # Content skeleton (con margin-left que coincide con sidebar real)
+        rx.el.div(
+            _content_skeleton(),
+            class_name="h-screen w-full bg-slate-50 overflow-hidden md:ml-64 xl:ml-72",
+        ),
+        class_name="text-slate-900 w-full h-screen",
+        style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
+    )
+
+
+def _content_skeleton() -> rx.Component:
+    """Skeleton solo para el área de contenido (sin sidebar)."""
+    return rx.el.div(
+        rx.el.div(
+            rx.el.div(class_name="h-6 w-48 rounded bg-slate-200 animate-pulse"),
+            rx.el.div(class_name="h-4 w-32 rounded bg-slate-200/60 animate-pulse mt-2"),
+            rx.el.div(
+                *[rx.el.div(class_name="h-24 rounded-xl bg-slate-200/40 animate-pulse") for _ in range(3)],
+                class_name="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6",
+            ),
+            rx.el.div(class_name="h-64 rounded-xl bg-slate-200/30 animate-pulse mt-6"),
+            class_name="w-full max-w-5xl p-4 sm:p-6",
+        ),
+        class_name="flex-1 h-full overflow-y-auto",
+    )
+
+
+def authenticated_layout(page_content: rx.Component) -> rx.Component:
+    """Layout wrapper para páginas autenticadas.
+
+    El sidebar se renderiza DENTRO del layout como hermano fijo del
+    contenido.  React reconcilia su DOM y lo mantiene estable entre
+    navegaciones SPA (misma posición en el árbol, mismo key='sidebar-root').
+    """
+    return rx.cond(
+        State.is_hydrated,
+        # --- Ya hidratado: decidir entre login o contenido ---
+        rx.cond(
+            State.is_authenticated,
+            rx.el.div(
+                # Barra gradiente superior (fixed, fuera de flujo)
+                rx.el.div(
+                    class_name=(
+                        "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
+                        "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
+                    ),
+                ),
+                # Sidebar persistente (fixed, fuera de flujo, key='sidebar-root')
                 sidebar(),
+                _toast_provider(),
+                NotificationHolder(),
+                # Área de contenido — SIN w-full para evitar desbordamiento
+                # Un div block sin width explícito auto-rellena (parent - margin)
                 rx.el.div(
                     rx.el.div(
-                        cashbox_banner(),
+                        rx.cond(
+                            State._runtime_ctx_loaded,
+                            cashbox_banner(),
+                            rx.fragment(),
+                        ),
                         rx.cond(
                             State.navigation_items.length() == 0,
                             rx.el.div(
@@ -182,14 +247,19 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                         ),
                         class_name="w-full h-full flex flex-col gap-4 p-4 sm:p-6",
                     ),
-                    class_name="flex-1 h-full overflow-y-auto",
+                    class_name=rx.cond(
+                        State.sidebar_open,
+                        "h-screen bg-slate-50 overflow-y-auto transition-[margin] duration-300 md:ml-64 xl:ml-72",
+                        "h-screen bg-slate-50 overflow-y-auto transition-[margin] duration-300",
+                    ),
                 ),
-                class_name="flex h-screen w-full bg-slate-50 overflow-hidden",
+                class_name="text-slate-900 w-full h-screen",
+                style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
             ),
-            class_name="text-slate-900 w-full h-screen",
-            style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
+            rx.fragment(NotificationHolder(), login_page()),
         ),
-        rx.fragment(NotificationHolder(), login_page()),
+        # --- Aún no hidratado: skeleton de carga ---
+        _loading_skeleton(),
     )
 
 
@@ -283,6 +353,47 @@ app = rx.App(
             * {
                 -webkit-tap-highlight-color: transparent;
             }
+
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(6px); }
+                to   { opacity: 1; transform: translateY(0); }
+            }
+            .fade-in-up {
+                animation: fadeInUp 0.3s cubic-bezier(.16,1,.3,1) both;
+            }
+            """
+        ),
+        rx.script(
+            """
+            (function(){
+                var K='__sb_scroll',_skip=false;
+                // Guardar scroll del sidebar continuamente (fase captura, sobrevive a React)
+                document.addEventListener('scroll',function(e){
+                    if(!_skip&&e.target&&e.target.id==='sidebar-nav'){
+                        sessionStorage.setItem(K,String(e.target.scrollTop));
+                    }
+                },true);
+                // Restaurar al cargar
+                window.addEventListener('load',function(){
+                    var n=document.getElementById('sidebar-nav');
+                    var s=sessionStorage.getItem(K);
+                    if(n&&s) n.scrollTop=parseInt(s,10);
+                });
+                // Observar cuando React reemplaza el contenido del sidebar
+                // y restaurar scroll si se reseteo a 0 (no si el usuario scrolleo)
+                new MutationObserver(function(){
+                    var n=document.getElementById('sidebar-nav');
+                    var s=sessionStorage.getItem(K);
+                    if(n&&s){
+                        var t=parseInt(s,10);
+                        if(t>5&&n.scrollTop<5){
+                            _skip=true;
+                            n.scrollTop=t;
+                            setTimeout(function(){_skip=false;},50);
+                        }
+                    }
+                }).observe(document.body,{childList:true,subtree:true});
+            })();
             """
         ),
         rx.script(
@@ -314,16 +425,11 @@ app = rx.App(
     ],
 )
 
-# Eventos de carga comunes para todas las páginas
-_common_on_load = [
-    State.run_common_guards,
-]
-
 # Página principal (redirige a ingreso)
 app.add_page(
     index,
     route="/",
-    on_load=[State.refresh_runtime_context, State.sync_page_from_route] + _common_on_load,
+    on_load=State.page_init_default,
 )
 
 # Cambio de contrasena (solo cuando aplica)
@@ -331,7 +437,7 @@ app.add_page(
     page_cambiar_contrasena,
     route="/cambiar-clave",
     title="Cambiar Contrasena - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_trial_active, State.ensure_password_change],
+    on_load=State.page_init_cambiar_clave,
 )
 
 app.add_page(
@@ -362,94 +468,71 @@ app.add_page(
     page_ingreso,
     route="/ingreso",
     title="Ingreso - TUWAYKIAPP",
-    on_load=[
-        State.refresh_runtime_context,
-        State.ensure_view_ingresos,
-        State.sync_page_from_route,
-    ] + _common_on_load,
+    on_load=State.page_init_ingreso,
 )
 app.add_page(
     page_compras,
     route="/compras",
     title="Compras - TUWAYKIAPP",
-    on_load=[
-        State.refresh_runtime_context,
-        State.ensure_view_compras,
-        State.load_suppliers,
-        State.sync_page_from_route,
-    ]
-    + _common_on_load,
+    on_load=State.page_init_compras,
 )
 app.add_page(
     page_venta,
     route="/venta",
     title="Venta - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_view_ventas, State.sync_page_from_route]
-    + _common_on_load,
+    on_load=State.page_init_venta,
 )
 app.add_page(
     page_caja,
     route="/caja",
     title="Gestión de Caja - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_view_cashbox, State.sync_page_from_route]
-    + _common_on_load,
+    on_load=State.page_init_caja,
 )
 app.add_page(
     page_clientes,
     route="/clientes",
     title="Clientes | Sistema de Ventas",
-    on_load=[State.refresh_runtime_context, State.ensure_view_clientes, State.sync_page_from_route]
-    + _common_on_load,
+    on_load=State.page_init_clientes,
 )
 app.add_page(
     page_cuentas,
     route="/cuentas",
     title="Cuentas Corrientes | Sistema de Ventas",
-    on_load=[State.refresh_runtime_context, State.ensure_view_cuentas, State.sync_page_from_route]
-    + _common_on_load,
+    on_load=State.page_init_cuentas,
 )
 app.add_page(
     page_dashboard,
     route="/dashboard",
     title="Dashboard - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.sync_page_from_route] + _common_on_load,
+    on_load=State.page_init_default,
 )
 app.add_page(
     page_inventario,
     route="/inventario",
     title="Inventario - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_view_inventario, State.sync_page_from_route]
-    + _common_on_load,
+    on_load=State.page_init_inventario,
 )
 app.add_page(
     page_historial,
     route="/historial",
     title="Historial - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_view_historial, State.sync_page_from_route]
-    + _common_on_load,
+    on_load=State.page_init_historial,
 )
 app.add_page(
     page_reportes,
     route="/reportes",
     title="Reportes - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_export_data, State.sync_page_from_route]
-    + _common_on_load,
+    on_load=State.page_init_reportes,
 )
 app.add_page(
     page_servicios,
     route="/servicios",
     title="Servicios - TUWAYKIAPP",
-    on_load=[
-        State.refresh_runtime_context,
-        State.ensure_view_servicios,
-        State.sync_page_from_route,
-        State.load_reservations,
-    ] + _common_on_load,
+    on_load=State.page_init_servicios,
 )
 app.add_page(
     page_configuracion,
     route="/configuracion",
     title="Configuración - TUWAYKIAPP",
-    on_load=[State.refresh_runtime_context, State.ensure_admin_access, State.load_users, State.sync_page_from_route]
-    + _common_on_load,
+    on_load=State.page_init_configuracion,
 )

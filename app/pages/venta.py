@@ -372,23 +372,26 @@ def quick_add_bar() -> rx.Component:
     return rx.el.div(
         # Fila 1: Código de barra y Búsqueda (siempre visible)
         rx.el.div(
-            # Código de barra
+            # Código de barra — form-based: solo dispara evento al presionar Enter
             rx.el.div(
-                rx.el.div(
-                    rx.icon("scan-barcode", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
-                    rx.el.input(
-                        id="venta_barcode_input",
-                        key=State.sale_form_key.to_string(),
-                        default_value=State.new_sale_item["barcode"],
-                        on_change=lambda val: State.handle_sale_change("barcode", val),
-                        debounce_timeout=600,
-                        placeholder="Código...",
-                        on_key_down=lambda k: State.handle_key_down(k),
-                        class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
-                        type="text",
-                        auto_complete="off",
+                rx.el.form(
+                    rx.el.div(
+                        rx.icon("scan-barcode", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
+                        rx.el.input(
+                            name="barcode",
+                            id="venta_barcode_input",
+                            key=State.sale_form_key.to_string(),
+                            default_value=State.new_sale_item["barcode"],
+                            placeholder="Código...",
+                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
+                            type="text",
+                            auto_complete="off",
+                        ),
+                        class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                     ),
-                    class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
+                    on_submit=State.handle_barcode_form_submit,
+                    reset_on_submit=True,
+                    class_name="w-full",
                 ),
                 rx.cond(
                     State.last_scanned_label != "",
@@ -432,10 +435,12 @@ def quick_add_bar() -> rx.Component:
                                 ),
                             ),
                         ),
+                        custom_attrs={"data-autocomplete-dropdown": "1"},
                         class_name="absolute z-20 left-0 right-0 mt-1 bg-white border rounded-lg shadow-xl max-h-60 overflow-y-auto",
                     ),
                     rx.fragment(),
                 ),
+                custom_attrs={"data-product-search": "1"},
                 class_name="relative flex-1 min-w-0",
             ),
             class_name="flex flex-col sm:flex-row gap-2 flex-1",
@@ -449,6 +454,7 @@ def quick_add_bar() -> rx.Component:
                     type="number",
                     min="0.01",
                     step="0.01",
+                    key=State.sale_form_key.to_string() + "_qty",
                     default_value=State.new_sale_item["quantity"].to_string(),
                     on_blur=lambda val: State.handle_sale_change("quantity", val),
                     class_name="w-full px-3 py-2 border rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500",
@@ -465,6 +471,7 @@ def quick_add_bar() -> rx.Component:
                         type="number",
                         min="0",
                         step="0.01",
+                        key=State.sale_form_key.to_string() + "_price",
                         default_value=State.new_sale_item["price"].to_string(),
                         on_blur=lambda val: State.handle_sale_change("price", val),
                         class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
@@ -491,6 +498,7 @@ def quick_add_bar() -> rx.Component:
                 rx.icon("plus", class_name="h-5 w-5"),
                 rx.el.span("Añadir", class_name="sm:hidden"),
                 on_click=State.add_item_to_sale,
+                custom_attrs={"data-venta-add-btn": "1"},
                 class_name=(
                     "inline-flex h-[42px] min-w-[106px] items-center justify-center gap-2 rounded-lg "
                     "bg-indigo-600 px-3.5 text-sm font-medium text-white hover:bg-indigo-700 "
@@ -499,6 +507,7 @@ def quick_add_bar() -> rx.Component:
             ),
             class_name="flex flex-wrap items-end gap-2",
         ),
+        custom_attrs={"data-quick-add-bar": "1"},
         class_name="flex flex-col gap-2 p-2.5 bg-slate-50 border-b",
     )
 
@@ -1550,8 +1559,82 @@ def payment_mobile_section() -> rx.Component:
     )
 
 
+def _venta_keyboard_shortcuts() -> rx.Component:
+    """Atajos de teclado para Punto de Venta.
+
+    F11         → Abrir modal Movimientos Recientes
+    Enter       → Añadir producto (solo si autocomplete cerrado)
+    Arrow Up/Down → Navegar sugerencias de autocomplete (preventDefault + scrollIntoView)
+    """
+    return rx.script(
+        """
+        (function(){
+            if(window.__ventaKbAttached) return;
+            window.__ventaKbAttached = true;
+            document.addEventListener('keydown', function(e){
+                // F11 → abrir modal Movimientos Recientes
+                if(e.key === 'F11'){
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var btn = document.querySelector('[data-venta-recent-btn]');
+                    if(btn) btn.click();
+                    return;
+                }
+
+                // Arrow Up/Down → navegar sugerencias de autocomplete
+                if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+                    var el = document.activeElement;
+                    if(!el) return;
+                    var searchDiv = el.closest('[data-product-search]');
+                    if(!searchDiv) return;
+                    var dropdown = searchDiv.querySelector('[data-autocomplete-dropdown]');
+                    if(!dropdown || dropdown.children.length === 0) return;
+                    // Prevenir que el cursor del input se mueva
+                    e.preventDefault();
+                    // Scroll al elemento seleccionado después del re-render de Reflex
+                    setTimeout(function(){
+                        if(!dropdown) return;
+                        var items = dropdown.querySelectorAll('button');
+                        for(var i = 0; i < items.length; i++){
+                            // El item seleccionado tiene clase 'bg-indigo-50' (sin hover:)
+                            var cls = ' ' + items[i].className + ' ';
+                            if(cls.indexOf(' bg-indigo-50 ') > -1){
+                                items[i].scrollIntoView({block:'nearest'});
+                                break;
+                            }
+                        }
+                    }, 80);
+                    return;
+                }
+
+                // Enter → añadir producto o seleccionar autocomplete
+                if(e.key === 'Enter'){
+                    var el = document.activeElement;
+                    if(!el) return;
+                    var bar = el.closest('[data-quick-add-bar]');
+                    if(!bar) return;
+                    // No interferir con el form de barcode (tiene su propio on_submit)
+                    if(el.id === 'venta_barcode_input') return;
+                    // Si el autocomplete está abierto, dejar que Reflex on_key_down
+                    // maneje la selección — NO hacer click en añadir
+                    var searchDiv = el.closest('[data-product-search]');
+                    if(searchDiv){
+                        var dropdown = searchDiv.querySelector('[data-autocomplete-dropdown]');
+                        if(dropdown && dropdown.children.length > 0) return;
+                    }
+                    e.preventDefault();
+                    var addBtn = document.querySelector('[data-venta-add-btn]');
+                    if(addBtn) addBtn.click();
+                }
+            });
+        })();
+        """
+    )
+
+
 def venta_page() -> rx.Component:
     content = rx.el.div(
+        _venta_keyboard_shortcuts(),
         # Contenido principal
         rx.el.div(
             rx.cond(
@@ -1571,8 +1654,9 @@ def venta_page() -> rx.Component:
                     ),
                     rx.el.button(
                         rx.icon("history", class_name="h-4 w-4"),
-                        rx.el.span("Movimientos recientes"),
+                        rx.el.span("Movimientos recientes(F11)"),
                         on_click=State.toggle_recent_modal(True),
+                        custom_attrs={"data-venta-recent-btn": "1"},
                         class_name=(
                             "flex items-center gap-2 px-3 py-2 text-sm border border-slate-200 "
                             "rounded-lg text-slate-700 hover:bg-slate-50"

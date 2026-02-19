@@ -19,14 +19,14 @@ Ejemplo de uso::
 
     from app.states import require_permission, require_cashbox_open
     from app.states.mixin_state import MixinState
-    
+
     class MyState(MixinState):
         @rx.event
         @require_permission("edit_inventario")
         def update_stock(self):
             # Solo ejecuta si tiene el permiso
             ...
-        
+
         @rx.event
         @require_cashbox_open()
         def register_sale(self):
@@ -34,6 +34,7 @@ Ejemplo de uso::
             ...
 """
 import os
+import time
 import functools
 import datetime
 from contextlib import contextmanager
@@ -56,18 +57,18 @@ def require_permission(
 ) -> Callable[[F], F]:
     """
     Decorador para verificar permisos antes de ejecutar un método de evento.
-    
+
     Uso:
         @rx.event
         @require_permission("manage_cashbox")
         def add_petty_cash_movement(self):
             # Lógica sin validación manual
-    
+
     Args:
         permission: Nombre del permiso requerido (key en privileges dict)
         message: Mensaje personalizado para el toast (opcional)
         redirect_to: Ruta a redirigir si no tiene permiso (opcional)
-    
+
     Returns:
         Decorador que envuelve el método
     """
@@ -94,7 +95,7 @@ def require_permission(
         "view_clientes": "ver clientes",
         "view_cuentas": "ver cuentas",
     }
-    
+
     def decorator(method: F) -> F:
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
@@ -107,7 +108,7 @@ def require_permission(
                 else:
                     action_desc = PERMISSION_MESSAGES.get(permission, permission)
                     error_msg = f"No tiene permisos para {action_desc}."
-                
+
                 # Retornar toast y opcionalmente redirigir
                 if redirect_to:
                     return [
@@ -115,12 +116,12 @@ def require_permission(
                         rx.redirect(redirect_to),
                     ]
                 return rx.toast(error_msg, duration=3000)
-            
+
             # Tiene permiso, ejecutar método original
             return method(self, *args, **kwargs)
-        
+
         return wrapper  # type: ignore
-    
+
     return decorator
 
 
@@ -129,7 +130,7 @@ def require_cashbox_open(
 ) -> Callable[[F], F]:
     """
     Decorador para verificar que la caja esté abierta antes de ejecutar.
-    
+
     Uso:
         @rx.event
         @require_cashbox_open()
@@ -143,14 +144,18 @@ def require_cashbox_open(
             if not cashbox_is_open:
                 return rx.toast(message, duration=3000)
             return method(self, *args, **kwargs)
-        
+
         return wrapper  # type: ignore
-    
+
     return decorator
 
 
 class MixinState:
     is_loading: bool = False
+    # Cache privado para _company_settings_snapshot (TTL 60s)
+    _settings_snapshot_cache: dict = {}
+    _settings_snapshot_ts: float = 0.0
+    _settings_snapshot_bid: int = 0
 
     def set_loading(self, value: bool) -> None:
         """Activa o desactiva el estado global de carga."""
@@ -208,14 +213,11 @@ class MixinState:
             yield session
 
     def _require_active_subscription(self):
-        """Bloquea acciones si la suscripción está suspendida o el trial expiró."""
+        """Bloquea acciones si la suscripción está suspendida o el trial expiró.
+
+        Usa subscription_snapshot (ya en memoria) en lugar de hacer query a DB.
+        """
         if os.getenv("PYTEST_CURRENT_TEST"):
-            return None
-        try:
-            from sqlmodel import select
-            from app.models import Company
-            from app.models.company import SubscriptionStatus
-        except Exception:
             return None
 
         if not hasattr(self, "current_user"):
@@ -225,23 +227,14 @@ class MixinState:
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
 
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-
-        if not company:
+        snapshot = getattr(self, "subscription_snapshot", None) or {}
+        if not snapshot or not snapshot.get("plan_type"):
             return rx.toast("Empresa no definida.", duration=3000)
 
-        plan_type = getattr(company, "plan_type", "")
-        if hasattr(plan_type, "value"):
-            plan_type = plan_type.value
-        plan_type = str(plan_type or "").strip().lower()
+        status_label = str(snapshot.get("status_label") or "").strip().lower()
 
-        now = datetime.datetime.now()
-        if plan_type == "trial":
-            trial_ends_at = getattr(company, "trial_ends_at", None)
-            if trial_ends_at and trial_ends_at < now:
+        if snapshot.get("is_trial"):
+            if status_label == "vencido":
                 return [
                     rx.toast(
                         "Periodo de prueba finalizado.", duration=3000
@@ -249,11 +242,7 @@ class MixinState:
                     rx.redirect("/periodo-prueba-finalizado"),
                 ]
 
-        status = getattr(company, "subscription_status", "")
-        if hasattr(status, "value"):
-            status = status.value
-        status = str(status or "").strip().lower()
-        if status == SubscriptionStatus.SUSPENDED.value:
+        if status_label == "suspendido":
             return [
                 rx.toast("Cuenta suspendida.", duration=3000),
                 rx.redirect("/cuenta-suspendida"),
@@ -373,12 +362,30 @@ class MixinState:
         return 58 if width <= 34 else 80
 
     def _company_settings_snapshot(self, branch_id: int | None = None) -> Dict[str, Any]:
-        """Obtiene snapshot de configuración de empresa con labels fiscales dinámicos."""
+        """Obtiene snapshot de configuración de empresa con labels fiscales dinámicos.
+
+        Usa cache TTL de 60 s para evitar 2-3 DB queries repetitivas.
+        """
         from app.utils.db_seeds import get_country_config
-        
+
+        # --- Resolver branch_id efectivo para cache key ---
+        effective_bid = branch_id
+        if effective_bid is None and hasattr(self, "_branch_id"):
+            effective_bid = self._branch_id()
+        effective_bid = effective_bid or 0
+
+        # --- Cache TTL (60 s) ---
+        now = time.time()
+        if (
+            self._settings_snapshot_cache
+            and self._settings_snapshot_bid == effective_bid
+            and (now - self._settings_snapshot_ts) < 60.0
+        ):
+            return self._settings_snapshot_cache
+
         country_code = getattr(self, "selected_country_code", "PE")
         config = get_country_config(country_code)
-        
+
         defaults = {
             "company_name": "",
             "ruc": "",
@@ -399,42 +406,40 @@ class MixinState:
         company_id = self._company_id() if hasattr(self, "_company_id") else None
         if not company_id:
             return defaults
-        if branch_id is None and hasattr(self, "_branch_id"):
-            branch_id = self._branch_id()
         try:
             with rx.session() as session:
                 settings_stmt = select(CompanySettings).where(
                     CompanySettings.company_id == company_id
                 )
-                if branch_id:
+                if effective_bid:
                     settings_stmt = settings_stmt.where(
-                        CompanySettings.branch_id == branch_id
+                        CompanySettings.branch_id == effective_bid
                     )
                 settings = session.exec(
                     settings_stmt.order_by(CompanySettings.branch_id, CompanySettings.id)
                 ).first()
-                if not settings and branch_id:
+                if not settings and effective_bid:
                     settings = session.exec(
                         select(CompanySettings)
                         .where(CompanySettings.company_id == company_id)
                         .order_by(CompanySettings.branch_id, CompanySettings.id)
                     ).first()
                 branch = None
-                if branch_id:
+                if effective_bid:
                     branch = session.exec(
                         select(Branch)
                         .where(Branch.company_id == company_id)
-                        .where(Branch.id == branch_id)
+                        .where(Branch.id == effective_bid)
                     ).first()
         except Exception:
             return defaults
         if not settings:
             return defaults
-        
+
         # Actualizar label según el país guardado en settings
         if hasattr(settings, "country_code") and settings.country_code:
             config = get_country_config(settings.country_code)
-        
+
         branch_name = ""
         branch_address = ""
         if branch:
@@ -450,7 +455,7 @@ class MixinState:
         else:
             timezone_value = config.get("timezone", "")
 
-        return {
+        result = {
             "company_name": settings.company_name or "",
             "ruc": settings.ruc or "",
             "address": address,
@@ -469,10 +474,16 @@ class MixinState:
             "timezone": timezone_value,
         }
 
-    @rx.var
+        # Guardar en cache
+        self._settings_snapshot_cache = result
+        self._settings_snapshot_ts = now
+        self._settings_snapshot_bid = effective_bid
+        return result
+
+    @rx.var(cache=True)
     def currency_symbol(self) -> str:
         """Obtiene el símbolo de la moneda actual.
-        
+
         Usa la moneda seleccionada del país configurado.
         Fallback dinámico basado en el país de operación.
         """
@@ -494,7 +505,7 @@ class MixinState:
         config = get_country_config(country)
         return f"{config.get('currency_symbol', '$')} "
 
-    @rx.var
+    @rx.var(cache=True)
     def currency_name(self) -> str:
         """Obtiene el nombre de la moneda actual."""
         if not hasattr(self, "available_currencies") or not hasattr(self, "selected_currency_code"):

@@ -321,7 +321,6 @@ class BranchesState(MixinState):
                         "role": user.role.name if user.role else "Sin rol",
                         "email": getattr(user, "email", "") or "",
                         "has_access": user.id in existing_ids,
-                        "is_default": getattr(user, "branch_id", None) == branch_id_int,
                     }
                 )
             self.branch_users_rows = rows
@@ -334,10 +333,7 @@ class BranchesState(MixinState):
         updated = []
         for row in self.branch_users_rows:
             if int(row["id"]) == int(user_id):
-                if row.get("is_default") and not value:
-                    updated.append({**row, "has_access": True})
-                else:
-                    updated.append({**row, "has_access": bool(value)})
+                updated.append({**row, "has_access": bool(value)})
             else:
                 updated.append(row)
         self.branch_users_rows = updated
@@ -374,6 +370,50 @@ class BranchesState(MixinState):
             int(row["id"]) for row in self.branch_users_rows if row.get("has_access")
         }
         with rx.session() as session:
+            company_users = session.exec(
+                select(UserModel.id, UserModel.username)
+                .where(UserModel.company_id == company_id)
+            ).all()
+            company_user_ids = {int(row[0]) for row in company_users if row and row[0]}
+            username_by_id = {
+                int(row[0]): str(row[1] or row[0])
+                for row in company_users
+                if row and row[0]
+            }
+            all_access = session.exec(
+                select(UserBranch.user_id, UserBranch.branch_id)
+                .join(Branch, Branch.id == UserBranch.branch_id)
+                .where(Branch.company_id == company_id)
+            ).all()
+            simulated_access = {user_id: set() for user_id in company_user_ids}
+            for user_id, row_branch_id in all_access:
+                user_id_int = int(user_id)
+                if user_id_int in simulated_access and row_branch_id:
+                    simulated_access[user_id_int].add(int(row_branch_id))
+
+            for user_id in company_user_ids:
+                if user_id in desired_ids:
+                    simulated_access[user_id].add(branch_id)
+                else:
+                    simulated_access[user_id].discard(branch_id)
+
+            users_without_access = [
+                user_id
+                for user_id, user_branches in simulated_access.items()
+                if not user_branches
+            ]
+            if users_without_access:
+                sample_names = ", ".join(
+                    username_by_id.get(user_id, str(user_id))
+                    for user_id in users_without_access[:3]
+                )
+                suffix = "..." if len(users_without_access) > 3 else ""
+                return rx.toast(
+                    "Cada usuario debe tener acceso al menos a una sucursal. "
+                    f"Revisa: {sample_names}{suffix}",
+                    duration=3500,
+                )
+
             existing = session.exec(
                 select(UserBranch).where(UserBranch.branch_id == branch_id)
             ).all()
@@ -386,18 +426,8 @@ class BranchesState(MixinState):
                 session.add(UserBranch(user_id=user_id, branch_id=branch_id))
 
             if to_remove:
-                default_users = {
-                    int(u.id)
-                    for u in session.exec(
-                        select(UserModel.id)
-                        .where(UserModel.company_id == company_id)
-                        .where(UserModel.branch_id == branch_id)
-                    ).all()
-                }
                 for member in existing:
                     if member.user_id in to_remove:
-                        if member.user_id in default_users:
-                            continue
                         session.delete(member)
             session.commit()
         if current_user_id is not None and (

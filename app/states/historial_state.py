@@ -100,12 +100,12 @@ class HistorialState(MixinState):
     selected_sale_id: str = ""
     selected_sale_summary: dict = {}
     selected_sale_items: list[dict] = []
-    filtered_history_cache: list[dict] = []
-    total_pages_cache: int = 1
-    report_method_summary_cache: list[dict] = []
-    report_detail_rows_cache: list[dict] = []
-    report_closing_rows_cache: list[dict] = []
-    payment_stats_cache: Dict[str, float] = {
+    filtered_history: list[dict] = []
+    total_pages: int = 1
+    report_method_summary: list[dict] = []
+    report_detail_rows: list[dict] = []
+    report_closing_rows: list[dict] = []
+    payment_stats: Dict[str, float] = {
         "efectivo": 0.0,
         "debito": 0.0,
         "credito": 0.0,
@@ -114,12 +114,12 @@ class HistorialState(MixinState):
         "transferencia": 0.0,
         "mixto": 0.0,
     }
-    total_credit_cache: float = 0.0
-    credit_outstanding_cache: float = 0.0
-    dynamic_payment_cards_cache: list[dict] = []
-    productos_mas_vendidos_cache: list[dict] = []
-    productos_stock_bajo_cache: list[Dict] = []
-    sales_by_day_cache: list[dict] = []
+    total_credit: float = 0.0
+    credit_outstanding: float = 0.0
+    dynamic_payment_cards: list[dict] = []
+    productos_mas_vendidos: list[dict] = []
+    productos_stock_bajo: list[Dict] = []
+    sales_by_day: list[dict] = []
 
     def _history_date_range(self) -> tuple[datetime.datetime | None, datetime.datetime | None]:
         start_date = None
@@ -838,8 +838,8 @@ class HistorialState(MixinState):
 
     def _refresh_history_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
-            self.filtered_history_cache = []
-            self.total_pages_cache = 1
+            self.filtered_history = []
+            self.total_pages = 1
             return
 
         total_items = int(self._sales_total_count() or 0)
@@ -849,17 +849,17 @@ class HistorialState(MixinState):
             self.current_page_history = page
 
         offset = (page - 1) * self.items_per_page
-        self.filtered_history_cache = self._fetch_sales_history(
+        self.filtered_history = self._fetch_sales_history(
             offset=offset,
             limit=self.items_per_page,
         )
-        self.total_pages_cache = total_pages
+        self.total_pages = total_pages
 
     def _refresh_report_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
-            self.report_method_summary_cache = []
-            self.report_detail_rows_cache = []
-            self.report_closing_rows_cache = []
+            self.report_method_summary = []
+            self.report_detail_rows = []
+            self.report_closing_rows = []
             return
 
         entries = self._build_report_entries()
@@ -897,9 +897,9 @@ class HistorialState(MixinState):
                 )
 
         closings = self._build_report_closings()
-        self.report_method_summary_cache = summary
-        self.report_detail_rows_cache = entries
-        self.report_closing_rows_cache = closings
+        self.report_method_summary = summary
+        self.report_detail_rows = entries
+        self.report_closing_rows = closings
 
         detail_total_pages = (
             1
@@ -998,7 +998,7 @@ class HistorialState(MixinState):
 
     def _refresh_financial_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
-            self.payment_stats_cache = {
+            self.payment_stats = {
                 "efectivo": 0.0,
                 "debito": 0.0,
                 "credito": 0.0,
@@ -1007,18 +1007,18 @@ class HistorialState(MixinState):
                 "transferencia": 0.0,
                 "mixto": 0.0,
             }
-            self.total_credit_cache = 0.0
-            self.credit_outstanding_cache = 0.0
-            self.dynamic_payment_cards_cache = []
-            self.productos_mas_vendidos_cache = []
-            self.productos_stock_bajo_cache = []
-            self.sales_by_day_cache = []
+            self.total_credit = 0.0
+            self.credit_outstanding = 0.0
+            self.dynamic_payment_cards = []
+            self.productos_mas_vendidos = []
+            self.productos_stock_bajo = []
+            self.sales_by_day = []
             return
 
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.payment_stats_cache = {
+            self.payment_stats = {
                 "efectivo": 0.0,
                 "debito": 0.0,
                 "credito": 0.0,
@@ -1027,12 +1027,12 @@ class HistorialState(MixinState):
                 "transferencia": 0.0,
                 "mixto": 0.0,
             }
-            self.total_credit_cache = 0.0
-            self.credit_outstanding_cache = 0.0
-            self.dynamic_payment_cards_cache = []
-            self.productos_mas_vendidos_cache = []
-            self.productos_stock_bajo_cache = []
-            self.sales_by_day_cache = []
+            self.total_credit = 0.0
+            self.credit_outstanding = 0.0
+            self.dynamic_payment_cards = []
+            self.productos_mas_vendidos = []
+            self.productos_stock_bajo = []
+            self.sales_by_day = []
             return
 
         start_date, end_date = self._history_date_range()
@@ -1174,17 +1174,17 @@ class HistorialState(MixinState):
             sales_day_rows = list(reversed(session.exec(sales_day_query).all()))
 
         rounded_stats = {k: self._round_currency(v) for k, v in stats.items()}
-        self.payment_stats_cache = rounded_stats
-        self.total_credit_cache = self._round_currency(total_credit)
-        self.credit_outstanding_cache = self._round_currency(pending_total)
-        self.dynamic_payment_cards_cache = self._build_dynamic_payment_cards_from_stats(
+        self.payment_stats = rounded_stats
+        self.total_credit = self._round_currency(total_credit)
+        self.credit_outstanding = self._round_currency(pending_total)
+        self.dynamic_payment_cards = self._build_dynamic_payment_cards_from_stats(
             rounded_stats, enabled_kinds
         )
-        self.productos_mas_vendidos_cache = [
+        self.productos_mas_vendidos = [
             {"description": name, "cantidad_vendida": qty}
             for name, qty in top_products
         ]
-        self.productos_stock_bajo_cache = [
+        self.productos_stock_bajo = [
             {
                 "barcode": p.barcode,
                 "description": p.description,
@@ -1193,7 +1193,7 @@ class HistorialState(MixinState):
             }
             for p in low_stock_products
         ]
-        self.sales_by_day_cache = [
+        self.sales_by_day = [
             {
                 "date": day.strftime("%Y-%m-%d")
                 if hasattr(day, "strftime")
@@ -1208,23 +1208,7 @@ class HistorialState(MixinState):
         self._refresh_report_cache()
         self._refresh_financial_cache()
 
-    @rx.var
-    def filtered_history(self) -> list[dict]:
-        return self.filtered_history_cache
-
-    @rx.var
-    def paginated_history(self) -> list[dict]:
-        return self.filtered_history
-
-    @rx.var
-    def report_method_summary(self) -> list[dict]:
-        return self.report_method_summary_cache
-
-    @rx.var
-    def report_detail_rows(self) -> list[dict]:
-        return self.report_detail_rows_cache
-
-    @rx.var
+    @rx.var(cache=True)
     def report_detail_total_pages(self) -> int:
         _ = self._report_update_trigger
         total_items = len(self.report_detail_rows)
@@ -1234,7 +1218,7 @@ class HistorialState(MixinState):
             total_items + self.report_detail_items_per_page - 1
         ) // self.report_detail_items_per_page
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_report_detail_rows(self) -> list[dict]:
         _ = self._report_update_trigger
         if not self.current_user["privileges"]["view_historial"]:
@@ -1247,11 +1231,7 @@ class HistorialState(MixinState):
         offset = (page - 1) * per_page
         return self.report_detail_rows[offset : offset + per_page]
 
-    @rx.var
-    def report_closing_rows(self) -> list[dict]:
-        return self.report_closing_rows_cache
-
-    @rx.var
+    @rx.var(cache=True)
     def report_closing_total_pages(self) -> int:
         _ = self._report_update_trigger
         total_items = len(self.report_closing_rows)
@@ -1261,7 +1241,7 @@ class HistorialState(MixinState):
             total_items + self.report_closing_items_per_page - 1
         ) // self.report_closing_items_per_page
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_report_closing_rows(self) -> list[dict]:
         _ = self._report_update_trigger
         if not self.current_user["privileges"]["view_historial"]:
@@ -1274,13 +1254,9 @@ class HistorialState(MixinState):
         offset = (page - 1) * per_page
         return self.report_closing_rows[offset : offset + per_page]
 
-    @rx.var
-    def total_pages(self) -> int:
-        return self.total_pages_cache
-
     @rx.event
     def set_history_page(self, page_num: int):
-        if 1 <= page_num <= self.total_pages_cache:
+        if 1 <= page_num <= self.total_pages:
             self.current_page_history = page_num
             self._refresh_history_cache()
 
@@ -1503,7 +1479,7 @@ class HistorialState(MixinState):
         else:
             self.close_sale_detail()
 
-    @rx.var
+    @rx.var(cache=True)
     def selected_sale_items_view(self) -> list[dict]:
         return list(self.selected_sale_items or [])
 
@@ -1523,9 +1499,9 @@ class HistorialState(MixinState):
         period_start = start_dt.strftime("%d/%m/%Y") if start_dt else "Inicio"
         period_end = end_dt.strftime("%d/%m/%Y") if end_dt else "Actual"
         period_label = f"Período: {period_start} a {period_end}"
-        
+
         wb, ws = create_excel_workbook("Historial de Ventas")
-        
+
         # Encabezado profesional
         row = add_company_header(
             ws,
@@ -1534,7 +1510,7 @@ class HistorialState(MixinState):
             period_label,
             columns=11,
         )
-        
+
         headers = [
             "Fecha y Hora",
             "Nº Venta",
@@ -1682,7 +1658,7 @@ class HistorialState(MixinState):
                     ws.cell(row=row, column=9, value=float(quantity)).number_format = NUMBER_FORMAT
                     ws.cell(row=row, column=10, value=float(unit_price)).number_format = currency_format
                     ws.cell(row=row, column=11, value=float(subtotal)).number_format = currency_format
-                    
+
                     for col in range(1, 12):
                         ws.cell(row=row, column=col).border = THIN_BORDER
                     row += 1
@@ -1702,7 +1678,7 @@ class HistorialState(MixinState):
             {"type": "text", "value": ""},
             {"type": "sum", "col_letter": "K", "number_format": currency_format},
         ])
-        
+
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Nº Venta: Identificador único de la transacción en el sistema.",
@@ -1712,7 +1688,7 @@ class HistorialState(MixinState):
             "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
             "Venta al contado: Cliente no identificado, pago inmediato.",
         ], columns=11)
-        
+
         auto_adjust_column_widths(ws)
 
         output = io.BytesIO()
@@ -1733,7 +1709,7 @@ class HistorialState(MixinState):
         period_start = start_dt.strftime("%d/%m/%Y") if start_dt else "Inicio"
         period_end = end_dt.strftime("%d/%m/%Y") if end_dt else "Actual"
         period_label = f"Período: {period_start} a {period_end}"
-        
+
         active_tab = self.report_active_tab or "metodos"
         if active_tab == "cierres":
             rows = self._build_report_closings()
@@ -1741,7 +1717,7 @@ class HistorialState(MixinState):
                 return rx.toast("No hay cierres para exportar.", duration=3000)
 
             wb, ws = create_excel_workbook("Cierres de Caja")
-            
+
             # Encabezado profesional
             row = add_company_header(
                 ws,
@@ -1750,7 +1726,7 @@ class HistorialState(MixinState):
                 period_label,
                 columns=5,
             )
-            
+
             headers = [
                 "Fecha y Hora",
                 "Tipo Operación",
@@ -1761,21 +1737,21 @@ class HistorialState(MixinState):
             style_header_row(ws, row, headers)
             data_start = row + 1
             row += 1
-            
+
             for item in rows:
                 action = item.get("action", "")
                 action_display = "Apertura de Caja" if action.lower() == "apertura" else "Cierre de Caja" if action.lower() == "cierre" else action.capitalize()
-                
+
                 ws.cell(row=row, column=1, value=item.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=action_display)
                 ws.cell(row=row, column=3, value=item.get("user", "Desconocido"))
                 ws.cell(row=row, column=4, value=float(item.get("amount", 0) or 0)).number_format = currency_format
                 ws.cell(row=row, column=5, value=item.get("notes", "") or "Sin observaciones")
-                
+
                 for col in range(1, 6):
                     ws.cell(row=row, column=col).border = THIN_BORDER
                 row += 1
-            
+
             # Totales
             totals_row = row
             add_totals_row_with_formulas(ws, totals_row, data_start, [
@@ -1785,12 +1761,12 @@ class HistorialState(MixinState):
                 {"type": "sum", "col_letter": "D", "number_format": currency_format},
                 {"type": "text", "value": ""},
             ])
-            
+
             add_notes_section(ws, totals_row, [
                 "Apertura de Caja: Monto inicial del día.",
                 "Cierre de Caja: Monto contado al finalizar.",
             ], columns=5)
-            
+
             auto_adjust_column_widths(ws)
 
             output = io.BytesIO()
@@ -1804,7 +1780,7 @@ class HistorialState(MixinState):
 
         if active_tab == "detalle":
             wb, ws = create_excel_workbook("Detalle de Cobros")
-            
+
             # Encabezado profesional
             row = add_company_header(
                 ws,
@@ -1813,7 +1789,7 @@ class HistorialState(MixinState):
                 period_label,
                 columns=6,
             )
-            
+
             detail_headers = [
                 "Fecha y Hora",
                 "Origen/Tipo",
@@ -1825,7 +1801,7 @@ class HistorialState(MixinState):
             style_header_row(ws, row, detail_headers)
             data_start = row + 1
             row += 1
-            
+
             for entry in entries:
                 ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
@@ -1833,11 +1809,11 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = currency_format
                 ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
                 ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
-                
+
                 for col in range(1, 7):
                     ws.cell(row=row, column=col).border = THIN_BORDER
                 row += 1
-            
+
             # Totales
             totals_row = row
             add_totals_row_with_formulas(ws, totals_row, data_start, [
@@ -1848,12 +1824,12 @@ class HistorialState(MixinState):
                 {"type": "text", "value": ""},
                 {"type": "text", "value": ""},
             ])
-            
+
             add_notes_section(ws, totals_row, [
                 "Origen: Tipo de transacción (Venta, Cobro de Cuota, Reserva, etc.).",
                 "Referencia: Información adicional del pago.",
             ], columns=6)
-            
+
             auto_adjust_column_widths(ws)
 
             output = io.BytesIO()
@@ -1877,7 +1853,7 @@ class HistorialState(MixinState):
             )
 
         wb, ws = create_excel_workbook("Resumen por Método")
-        
+
         # Encabezado profesional
         row = add_company_header(
             ws,
@@ -1886,7 +1862,7 @@ class HistorialState(MixinState):
             period_label,
             columns=4,
         )
-        
+
         summary_headers = [
             "Método de Pago",
             "Nº Operaciones",
@@ -1905,18 +1881,18 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=3, value=float(summary["total"])).number_format = currency_format
                 # Participación se calculará después
                 ws.cell(row=row, column=4, value=float(summary["total"])).number_format = currency_format
-                
+
                 for col in range(1, 5):
                     ws.cell(row=row, column=col).border = THIN_BORDER
                 row += 1
-                
+
         for key, summary in summary_totals.items():
             if key not in REPORT_METHOD_KEYS:
                 ws.cell(row=row, column=1, value=summary["method_label"])
                 ws.cell(row=row, column=2, value=summary["count"])
                 ws.cell(row=row, column=3, value=float(summary["total"])).number_format = currency_format
                 ws.cell(row=row, column=4, value=float(summary["total"])).number_format = currency_format
-                
+
                 for col in range(1, 5):
                     ws.cell(row=row, column=col).border = THIN_BORDER
                 row += 1
@@ -1929,18 +1905,18 @@ class HistorialState(MixinState):
             {"type": "sum", "col_letter": "C", "number_format": currency_format},
             {"type": "text", "value": "100.00%"},
         ])
-        
+
         # Actualizar participación con fórmulas
         from openpyxl.styles import Font
         PERCENT_FORMAT_LOCAL = '0.00%'
         for r in range(data_start, totals_row):
             ws.cell(row=r, column=4, value=f"=IF($C${totals_row}>0,C{r}/$C${totals_row},0)").number_format = PERCENT_FORMAT_LOCAL
-        
+
         add_notes_section(ws, totals_row, [
             "Total Recaudado: Suma de todos los pagos por método.",
             "Participación = Monto del Método ÷ Total General × 100.",
         ], columns=4)
-        
+
         auto_adjust_column_widths(ws)
 
         # Segunda hoja: Detalle
@@ -1952,7 +1928,7 @@ class HistorialState(MixinState):
             period_label,
             columns=6,
         )
-        
+
         detail_headers = [
             "Fecha y Hora",
             "Origen/Tipo",
@@ -1964,7 +1940,7 @@ class HistorialState(MixinState):
         style_header_row(detail_ws, row, detail_headers)
         detail_data_start = row + 1
         row += 1
-        
+
         for entry in entries:
             detail_ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
             detail_ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
@@ -1972,11 +1948,11 @@ class HistorialState(MixinState):
             detail_ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = currency_format
             detail_ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
             detail_ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
-            
+
             for col in range(1, 7):
                 detail_ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
-        
+
         # Totales en detalle
         detail_totals_row = row
         add_totals_row_with_formulas(detail_ws, detail_totals_row, detail_data_start, [
@@ -1987,7 +1963,7 @@ class HistorialState(MixinState):
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
         ])
-        
+
         auto_adjust_column_widths(detail_ws)
 
         output = io.BytesIO()
@@ -2001,16 +1977,16 @@ class HistorialState(MixinState):
         try:
             # Normalizar separadores.
             # Formato en BD: "Pagos Mixtos - Efectivo S/ 15.00 / Plin S/ 20.00 / Montos completos."
-            
+
             # Reemplazar " / " (barra con espacios) por pipe
             text = text.replace(" / ", "|")
             # Reemplazar " - " (guion con espacios) por pipe
             text = text.replace(" - ", "|")
             # Reemplazar "/" (barra sin espacios) por si acaso
             text = text.replace("/", "|")
-            
+
             parts = text.split("|")
-            
+
             for part in parts:
                 part = part.strip()
                 if keyword.lower() in part.lower():
@@ -2030,10 +2006,6 @@ class HistorialState(MixinState):
             pass
         return Decimal("0.00")
 
-    @rx.var
-    def payment_stats(self) -> Dict[str, float]:
-        return self.payment_stats_cache
-
     def _add_to_stats(self, stats: dict, key: str, amount: Decimal):
         """Helper para sumar montos usando las keys del Enum."""
         if key == PaymentMethodType.cash.value:
@@ -2051,60 +2023,37 @@ class HistorialState(MixinState):
         else:
             stats["mixto"] += amount
 
-    @rx.var
-    def total_credit(self) -> float:
-        return self.total_credit_cache
-
-    @rx.var
-    def credit_outstanding(self) -> float:
-        return self.credit_outstanding_cache
-
-    @rx.var
-    def dynamic_payment_cards(self) -> list[dict]:
-        return self.dynamic_payment_cards_cache
-
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_efectivo(self) -> float:
         return self.payment_stats["efectivo"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_debito(self) -> float:
         return self.payment_stats["debito"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_credito(self) -> float:
         return self.payment_stats["credito"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_yape(self) -> float:
         return self.payment_stats["yape"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_plin(self) -> float:
         return self.payment_stats["plin"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_tarjeta(self) -> float:
         return self._round_currency(
             self.payment_stats["debito"] + self.payment_stats["credito"]
         )
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_transferencia(self) -> float:
         return self.payment_stats["transferencia"]
 
-    @rx.var
+    @rx.var(cache=True)
     def total_ventas_mixtas(self) -> float:
         return self.payment_stats["mixto"]
 
-    @rx.var
-    def productos_mas_vendidos(self) -> list[dict]:
-        return self.productos_mas_vendidos_cache
-
-    @rx.var
-    def productos_stock_bajo(self) -> list[Dict]:
-        return self.productos_stock_bajo_cache
-
-    @rx.var
-    def sales_by_day(self) -> list[dict]:
-        return self.sales_by_day_cache

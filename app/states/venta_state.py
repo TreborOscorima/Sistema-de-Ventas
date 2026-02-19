@@ -72,7 +72,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     credit_initial_payment: str = "0"
     is_processing_sale: bool = False
 
-    @rx.var
+    @rx.var(cache=True)
     def selected_client_credit_available(self) -> float:
         if not self.selected_client:
             return 0.0
@@ -88,7 +88,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             available = 0
         return self._round_currency(available)
 
-    @rx.var
+    @rx.var(cache=True)
     def credit_financed_amount(self) -> float:
         if not self.is_credit_mode:
             return 0.0
@@ -102,7 +102,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             financed = Decimal("0")
         return self._round_currency(float(financed))
 
-    @rx.var
+    @rx.var(cache=True)
     def credit_installment_amount(self) -> float:
         if not self.is_credit_mode:
             return 0.0

@@ -45,7 +45,7 @@ class ConfigState(MixinState):
     company_form_key: int = 0
     show_upgrade_modal: bool = False
     show_pricing_modal: bool = False
-    
+
     # País de operación
     selected_country_code: str = "PE"
 
@@ -54,62 +54,62 @@ class ConfigState(MixinState):
     new_currency_name: str = ""
     new_currency_code: str = ""
     new_currency_symbol: str = ""
-    
+
     # Unidades
     new_unit_name: str = ""
     new_unit_allows_decimal: bool = False
-    
+
     available_currencies: List[CurrencyOption] = []
     units: List[str] = []
     decimal_units: Set[str] = set()
     unit_rows: List[Dict[str, Any]] = []
     payment_methods: List[PaymentMethodConfig] = []
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def available_countries(self) -> List[Dict[str, str]]:
         """Lista de países soportados para el selector."""
         return [
             {"code": code, "name": info["name"], "currency": info["currency"]}
             for code, info in SUPPORTED_COUNTRIES.items()
         ]
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def country_config(self) -> Dict[str, Any]:
         """Configuración completa del país actual."""
         return get_country_config(self.selected_country_code)
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def tax_id_label(self) -> str:
         """Label para identificación tributaria según el país.
-        
+
         Perú/Ecuador: RUC, Argentina: CUIT, Colombia: NIT, Chile: RUT, México: RFC
         """
         return get_country_config(self.selected_country_code).get("tax_id_label", "ID Fiscal")
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def personal_id_label(self) -> str:
         """Label para documento de identidad personal según el país.
-        
+
         Perú/Argentina: DNI, Ecuador: Cédula, Colombia: C.C., Chile: RUN, México: CURP
         """
         return get_country_config(self.selected_country_code).get("personal_id_label", "Documento")
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def tax_id_placeholder(self) -> str:
         """Placeholder para el campo de ID tributario."""
         return get_country_config(self.selected_country_code).get("tax_id_placeholder", "")
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def personal_id_placeholder(self) -> str:
         """Placeholder para el campo de documento personal."""
         return get_country_config(self.selected_country_code).get("personal_id_placeholder", "")
 
-    @rx.var
+    @rx.var(cache=True)
     def timezone_placeholder(self) -> str:
         """Zona horaria sugerida según el país."""
         return get_country_config(self.selected_country_code).get("timezone", "UTC")
 
-    @rx.var
+    @rx.var(cache=True)
     def timezone_options(self) -> List[str]:
         """Opciones de zona horaria optimizadas para operación LATAM."""
         current = (self.timezone or "").strip()
@@ -181,7 +181,7 @@ class ConfigState(MixinState):
     @rx.event
     def load_settings(self):
         """Carga la configuración de la empresa desde la base de datos.
-        
+
         Incluye nombre, RUC, dirección, teléfono, mensaje de pie,
         configuración de recibo y la moneda por defecto del negocio.
         """
@@ -286,12 +286,12 @@ class ConfigState(MixinState):
     @rx.event
     def set_country(self, code: str):
         """Establece el país de operación y carga los métodos de pago correspondientes.
-        
+
         Al cambiar de país:
         1. Se actualiza el país en CompanySettings
         2. Se actualiza la moneda por defecto del país
         3. Se cargan los métodos de pago específicos del país
-        
+
         Args:
             code: Código ISO del país (ej: 'PE', 'AR', 'EC')
         """
@@ -302,14 +302,14 @@ class ConfigState(MixinState):
         branch_id = self._branch_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-            
+
         code = (code or "PE").upper()
         if code not in SUPPORTED_COUNTRIES:
             return rx.toast("País no soportado.", duration=3000)
-        
+
         country_info = SUPPORTED_COUNTRIES[code]
         new_currency = country_info["currency"]
-        
+
         with rx.session() as session:
             # Actualizar CompanySettings
             settings_list = session.exec(
@@ -331,7 +331,7 @@ class ConfigState(MixinState):
                         default_currency_code=new_currency,
                     )
                 )
-            
+
             # Limpiar métodos de pago existentes
             existing_methods = session.exec(
                 select(PaymentMethod)
@@ -340,7 +340,7 @@ class ConfigState(MixinState):
             ).all()
             for method in existing_methods:
                 session.delete(method)
-            
+
             # Insertar métodos de pago del nuevo país
             new_methods = get_payment_methods_for_country(code)
             for data in new_methods:
@@ -357,13 +357,13 @@ class ConfigState(MixinState):
                     branch_id=branch_id,
                 )
                 session.add(method)
-            
+
             session.commit()
-        
+
         self.selected_country_code = code
         self.selected_currency_code = new_currency
         self.load_config_data()  # Recargar métodos de pago
-        
+
         return rx.toast(
             f"País cambiado a {country_info['name']}. Moneda: {new_currency}. "
             f"Métodos de pago actualizados.",
@@ -513,7 +513,7 @@ class ConfigState(MixinState):
 
     @rx.event
     def go_to_config_tab(self, tab: str):
-        self.config_active_tab = tab
+        return rx.redirect(f"/configuracion?tab={tab}")
 
     def add_unit(self):
         toast = self._require_manage_config()
@@ -526,7 +526,7 @@ class ConfigState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
-            
+
         with rx.session() as session:
             existing = session.exec(
                 select(Unit)
@@ -600,7 +600,7 @@ class ConfigState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return
-        
+
         with rx.session() as session:
             # Unidades (universales)
             if not session.exec(
@@ -619,7 +619,7 @@ class ConfigState(MixinState):
                             branch_id=branch_id,
                         )
                     )
-            
+
             # Currencies - basadas en el país configurado
             if not session.exec(select(Currency)).first():
                 # Agregar moneda del país actual
@@ -703,7 +703,7 @@ class ConfigState(MixinState):
                         branch_id=branch_id,
                     )
                 )
-            
+
             session.commit()
         self.load_config_data()
 
@@ -711,7 +711,7 @@ class ConfigState(MixinState):
     new_payment_method_description: str = ""
     new_payment_method_kind: str = "other"
 
-    @rx.var
+    @rx.var(cache=True)
     def currency_symbol(self) -> str:
         match = next(
             (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
@@ -723,7 +723,7 @@ class ConfigState(MixinState):
         config = get_country_config(self.selected_country_code)
         return f"{config.get('currency_symbol', '$')} "
 
-    @rx.var
+    @rx.var(cache=True)
     def currency_name(self) -> str:
         match = next(
             (c for c in self.available_currencies if c["code"] == self.selected_currency_code),
@@ -741,10 +741,10 @@ class ConfigState(MixinState):
     @rx.event
     def set_currency(self, code: str):
         """Establece y persiste la moneda del negocio.
-        
+
         La moneda se guarda en CompanySettings para que sea global
         para todos los usuarios de la instalación.
-        
+
         Args:
             code: Código ISO de la moneda (ej: 'PEN', 'USD', 'ARS')
         """
@@ -752,7 +752,7 @@ class ConfigState(MixinState):
         match = next((c for c in self.available_currencies if c["code"] == code), None)
         if not match:
             return rx.toast("Moneda no soportada.", duration=3000)
-        
+
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -775,7 +775,7 @@ class ConfigState(MixinState):
                 )
                 session.add(settings)
             session.commit()
-        
+
         self.selected_currency_code = code
         if hasattr(self, "_refresh_payment_feedback"):
             self._refresh_payment_feedback()
@@ -805,12 +805,12 @@ class ConfigState(MixinState):
             return rx.toast("Complete codigo, nombre y simbolo.", duration=3000)
         if any(c["code"] == code for c in self.available_currencies):
             return rx.toast("La moneda ya existe.", duration=3000)
-        
+
         with rx.session() as session:
             new_currency = Currency(code=code, name=name, symbol=symbol)
             session.add(new_currency)
             session.commit()
-        
+
         self.load_config_data()
         self.selected_currency_code = code
         self.new_currency_code = ""
@@ -830,13 +830,13 @@ class ConfigState(MixinState):
             return rx.toast("Debe quedar al menos una moneda.", duration=3000)
         if not any(c["code"] == code for c in self.available_currencies):
             return
-        
+
         with rx.session() as session:
             currency_db = session.exec(select(Currency).where(Currency.code == code)).first()
             if currency_db:
                 session.delete(currency_db)
                 session.commit()
-        
+
         self.load_config_data()
         if self.selected_currency_code == code and self.available_currencies:
             self.selected_currency_code = self.available_currencies[0]["code"]
@@ -876,7 +876,7 @@ class ConfigState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        
+
         with rx.session() as session:
             existing_unit = session.exec(
                 select(Unit)
@@ -896,7 +896,7 @@ class ConfigState(MixinState):
                 )
                 session.add(new_unit)
             session.commit()
-        
+
         self.load_config_data()
         self.new_unit_name = ""
         self.new_unit_allows_decimal = False
@@ -956,7 +956,7 @@ class ConfigState(MixinState):
             if hasattr(self, "payment_method_kind"):
                 self.payment_method_kind = "other"
             return
-        
+
         # Verificar si la seleccion actual es valida
         current_name = getattr(self, "payment_method", "")
         if not any(m["name"] == current_name for m in available):
@@ -999,7 +999,7 @@ class ConfigState(MixinState):
             kind = "other"
         if any(m["name"].lower() == name.lower() for m in self.payment_methods):
             return rx.toast("Ya existe un metodo con ese nombre.", duration=3000)
-        
+
         method_id = str(uuid.uuid4())
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -1020,7 +1020,7 @@ class ConfigState(MixinState):
             )
             session.add(new_method)
             session.commit()
-        
+
         self.load_config_data()
         self.new_payment_method_name = ""
         self.new_payment_method_description = ""
@@ -1043,14 +1043,14 @@ class ConfigState(MixinState):
         if isinstance(enabled, str):
             enabled = enabled.lower() in ["true", "1", "on", "yes"]
         active_methods = self._enabled_payment_methods_list()
-        
+
         method = self._payment_method_by_identifier(method_id)
         if not method:
             return
-        
+
         if not enabled and method.get("enabled", True) and len(active_methods) <= 1:
             return rx.toast("Debe haber al menos un metodo activo.", duration=3000)
-        
+
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -1067,7 +1067,7 @@ class ConfigState(MixinState):
                 method_db.is_active = enabled
                 session.add(method_db)
                 session.commit()
-        
+
         self.load_config_data()
         self._ensure_payment_method_selected()
 
@@ -1095,7 +1095,7 @@ class ConfigState(MixinState):
             if method_db:
                 session.delete(method_db)
                 session.commit()
-        
+
         self.load_config_data()
         self._ensure_payment_method_selected()
         return rx.toast(f"Metodo {method['name']} eliminado.", duration=2500)

@@ -78,18 +78,16 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.div(
-                    rx.el.input(
-                        id="supplier-search-input",
-                        key=State.purchase_supplier_input_key.to_string(),
-                        placeholder="Buscar por Nombre de Empresa o N° de Registro",
-                        on_blur=State.search_supplier_change,
-                        on_key_down=lambda k: State.handle_supplier_search_enter(
-                            k, "supplier-search-input"
+                    rx.debounce_input(
+                        rx.input(
+                            id="supplier-search-input",
+                            placeholder="Buscar por Nombre de Empresa o N° de Registro",
+                            value=State.purchase_supplier_query,
+                            on_change=State.search_supplier_change,
+                            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                            auto_complete=False,
                         ),
-                        default_value=State.purchase_supplier_query,
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                        type="text",
-                        auto_complete="off",
+                        debounce_timeout=400,
                     ),
                     rx.cond(
                         State.purchase_supplier_suggestions.length() > 0,
@@ -318,7 +316,9 @@ def ingreso_page() -> rx.Component:
         ),
         rx.el.input(
             type="number",
+            key=State.entry_form_key.to_string() + "_qty",
             on_blur=lambda val: State.handle_entry_change("quantity", val),
+            on_key_down=lambda key: State.handle_entry_field_keydown(key),
             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
             default_value=State.new_entry_item["quantity"].to_string(),
         ),
@@ -352,8 +352,18 @@ def ingreso_page() -> rx.Component:
     )
 
     entry_item_form = rx.el.div(
-        rx.el.h2(
-            "AÑADIR PRODUCTOS", class_name="text-lg font-semibold text-slate-700 mb-4"
+        rx.el.div(
+            rx.el.h2(
+                "AÑADIR PRODUCTOS", class_name="text-lg font-semibold text-slate-700"
+            ),
+            rx.el.button(
+                rx.icon("eraser", class_name="h-4 w-4"),
+                "Limpiar",
+                on_click=State.clear_entry_item_form,
+                type="button",
+                class_name="flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-200 bg-white text-slate-600 text-sm hover:bg-slate-50",
+            ),
+            class_name="flex items-center justify-between mb-4",
         ),
         rx.el.div(
             rx.el.div(
@@ -361,18 +371,18 @@ def ingreso_page() -> rx.Component:
                     "Codigo de Barra",
                     class_name="block text-sm font-medium text-slate-600 mb-1",
                 ),
-                rx.el.input(
-                    id="barcode-input-entry",
-                    key=State.entry_form_key.to_string(),
-                    default_value=State.new_entry_item["barcode"],
-                    placeholder="Ej: 7791234567890",
-                    on_blur=lambda e: State.process_entry_barcode_from_input(e),
-                    on_key_down=lambda k: State.handle_barcode_enter(
-                        k, "barcode-input-entry"
+                rx.el.form(
+                    rx.el.input(
+                        name="barcode",
+                        id="barcode-input-entry",
+                        key=State.entry_form_key.to_string(),
+                        default_value=State.new_entry_item["barcode"],
+                        placeholder="Ej: 7791234567890",
+                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        type="text",
+                        auto_complete="off",
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                    type="text",
-                    auto_complete="off",
+                    on_submit=State.handle_entry_barcode_form_submit,
                 ),
                 class_name="col-span-12 sm:col-span-4 lg:col-span-3",
             ),
@@ -450,7 +460,9 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.el.input(
                     type="number",
+                    key=State.entry_form_key.to_string() + "_price",
                     on_blur=lambda val: State.handle_entry_change("price", val),
+                    on_key_down=lambda key: State.handle_entry_field_keydown(key),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     default_value=State.new_entry_item["price"].to_string(),
                 ),
@@ -463,7 +475,9 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.el.input(
                     type="number",
+                    key=State.entry_form_key.to_string() + "_sprice",
                     on_blur=lambda val: State.handle_entry_change("sale_price", val),
+                    on_key_down=lambda key: State.handle_entry_field_keydown(key),
                     class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     default_value=State.new_entry_item["sale_price"].to_string(),
                 ),
@@ -485,6 +499,7 @@ def ingreso_page() -> rx.Component:
                 rx.el.button(
                     rx.icon("plus", class_name="h-5 w-5"),
                     "Añadir",
+                    id="entry-add-btn",
                     on_click=State.add_item_to_entry,
                     class_name="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-indigo-600 text-white font-medium hover:bg-indigo-700",
                 ),

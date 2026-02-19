@@ -67,11 +67,11 @@ class IngresoState(MixinState):
     new_entry_items: List[TransactionItem] = []
     entry_autocomplete_suggestions: List[str] = []
 
-    @rx.var
+    @rx.var(cache=True)
     def entry_subtotal(self) -> float:
         return self.new_entry_item["subtotal"]
 
-    @rx.var
+    @rx.var(cache=True)
     def entry_total(self) -> float:
         return self._round_currency(
             sum((item["subtotal"] for item in self.new_entry_items))
@@ -346,6 +346,13 @@ class IngresoState(MixinState):
         self._set_new_product_mode()
 
     @rx.event
+    def handle_entry_barcode_form_submit(self, form_data: dict):
+        """Procesa el barcode desde el formulario (Enter o scanner)."""
+        barcode = str(form_data.get("barcode", "") or "").strip()
+        if barcode:
+            return self._process_entry_barcode(barcode)
+
+    @rx.event
     def process_entry_barcode_from_input(self, barcode_value):
         """Procesa el barcode del input cuando pierde el foco"""
         return self._process_entry_barcode(barcode_value)
@@ -456,6 +463,25 @@ class IngresoState(MixinState):
         self._apply_item_rounding(item_copy)
         self.new_entry_items.append(item_copy)
         self._reset_entry_form()
+        return rx.call_script(
+            "setTimeout(() => { const el = document.getElementById('barcode-input-entry'); if (el) { el.focus(); el.select(); } }, 50);"
+        )
+
+    @rx.event
+    def clear_entry_item_form(self):
+        """Limpia el formulario de AÑADIR PRODUCTOS sin afectar la lista."""
+        self._reset_entry_form()
+        return rx.call_script(
+            "setTimeout(() => { const el = document.getElementById('barcode-input-entry'); if (el) { el.focus(); el.select(); } }, 50);"
+        )
+
+    @rx.event
+    def handle_entry_field_keydown(self, key: str):
+        """Si se presiona Enter en cantidad/precio, blur + click Añadir."""
+        if key == "Enter":
+            return rx.call_script(
+                "document.activeElement.blur(); setTimeout(() => { const btn = document.getElementById('entry-add-btn'); if (btn) btn.click(); }, 100);"
+            )
 
     @rx.event
     def remove_item_from_entry(self, temp_id: str):
@@ -990,13 +1016,13 @@ class IngresoState(MixinState):
                     "Error al registrar el ingreso. Verifique los datos.",
                     duration=4000,
                 )
-        
+
         # Forzar actualización del inventario en la UI
         if hasattr(self, "_inventory_update_trigger"):
             self._inventory_update_trigger += 1
         if hasattr(self, "_purchase_update_trigger"):
             self._purchase_update_trigger += 1
-            
+
         self.new_entry_items = []
         self._reset_entry_form()
         self._reset_purchase_form()
@@ -1119,7 +1145,7 @@ class IngresoState(MixinState):
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
             ).first()
-            
+
             if product:
                 self._apply_existing_product_context(
                     {

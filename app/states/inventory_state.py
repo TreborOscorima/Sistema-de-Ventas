@@ -125,12 +125,12 @@ class InventoryState(MixinState):
     categories: List[str] = ["General"]
     categories_panel_expanded: bool = False
     _inventory_update_trigger: int = 0
-    inventory_list_cache: list[dict] = []
-    inventory_total_pages_cache: int = 1
-    inventory_total_products_cache: int = 0
-    inventory_in_stock_count_cache: int = 0
-    inventory_low_stock_count_cache: int = 0
-    inventory_out_of_stock_count_cache: int = 0
+    inventory_list: list[dict] = []
+    inventory_total_pages: int = 1
+    inventory_total_products: int = 0
+    inventory_in_stock_count: int = 0
+    inventory_low_stock_count: int = 0
+    inventory_out_of_stock_count: int = 0
 
     def _company_id(self) -> int | None:
         company_id, branch_id = self._tenant_ids()
@@ -290,23 +290,23 @@ class InventoryState(MixinState):
     def _refresh_inventory_cache(self):
         privileges = self.current_user["privileges"]
         if not privileges.get("view_inventario"):
-            self.inventory_list_cache = []
-            self.inventory_total_pages_cache = 1
-            self.inventory_total_products_cache = 0
-            self.inventory_in_stock_count_cache = 0
-            self.inventory_low_stock_count_cache = 0
-            self.inventory_out_of_stock_count_cache = 0
+            self.inventory_list = []
+            self.inventory_total_pages = 1
+            self.inventory_total_products = 0
+            self.inventory_in_stock_count = 0
+            self.inventory_low_stock_count = 0
+            self.inventory_out_of_stock_count = 0
             return
 
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.inventory_list_cache = []
-            self.inventory_total_pages_cache = 1
-            self.inventory_total_products_cache = 0
-            self.inventory_in_stock_count_cache = 0
-            self.inventory_low_stock_count_cache = 0
-            self.inventory_out_of_stock_count_cache = 0
+            self.inventory_list = []
+            self.inventory_total_pages = 1
+            self.inventory_total_products = 0
+            self.inventory_in_stock_count = 0
+            self.inventory_low_stock_count = 0
+            self.inventory_out_of_stock_count = 0
             return
 
         search = (self.inventory_search_term or "").strip().lower()
@@ -397,12 +397,12 @@ class InventoryState(MixinState):
                 or 0
             )
 
-        self.inventory_list_cache = page_rows
-        self.inventory_total_pages_cache = total_pages
-        self.inventory_total_products_cache = total_products
-        self.inventory_in_stock_count_cache = in_stock_count
-        self.inventory_low_stock_count_cache = low_stock_count
-        self.inventory_out_of_stock_count_cache = out_of_stock_count
+        self.inventory_list = page_rows
+        self.inventory_total_pages = total_pages
+        self.inventory_total_products = total_products
+        self.inventory_in_stock_count = in_stock_count
+        self.inventory_low_stock_count = low_stock_count
+        self.inventory_out_of_stock_count = out_of_stock_count
 
     @rx.event
     def refresh_inventory_cache(self):
@@ -519,42 +519,13 @@ class InventoryState(MixinState):
                 f"const el=document.getElementById('{input_id}'); if(el) el.blur();"
             )
 
-    @rx.var
-    def inventory_list(self) -> list[dict]:
-        return self.inventory_list_cache
-
-    @rx.var
-    def inventory_total_pages(self) -> int:
-        return self.inventory_total_pages_cache
-
-    @rx.var
+    @rx.var(cache=True)
     def inventory_display_page(self) -> int:
         if self.inventory_current_page < 1:
             return 1
         if self.inventory_current_page > self.inventory_total_pages:
             return self.inventory_total_pages
         return self.inventory_current_page
-
-    @rx.var
-    def inventory_paginated_list(self) -> list[dict]:
-        # Alias para compatibilidad con UI existente, ya que inventory_list ahora está paginado
-        return self.inventory_list
-
-    @rx.var
-    def inventory_total_products(self) -> int:
-        return self.inventory_total_products_cache
-
-    @rx.var
-    def inventory_in_stock_count(self) -> int:
-        return self.inventory_in_stock_count_cache
-
-    @rx.var
-    def inventory_low_stock_count(self) -> int:
-        return self.inventory_low_stock_count_cache
-
-    @rx.var
-    def inventory_out_of_stock_count(self) -> int:
-        return self.inventory_out_of_stock_count_cache
 
     @rx.event
     def set_inventory_search_term(self, value: str):
@@ -564,7 +535,7 @@ class InventoryState(MixinState):
 
     @rx.event
     def set_inventory_page(self, page_num: int):
-        if 1 <= page_num <= self.inventory_total_pages_cache:
+        if 1 <= page_num <= self.inventory_total_pages:
             self.inventory_current_page = page_num
             self._refresh_inventory_cache()
 
@@ -786,7 +757,7 @@ class InventoryState(MixinState):
         else:
             self.editing_product[field] = value
 
-    @rx.var
+    @rx.var(cache=True)
     def variant_rows(self) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         for index, variant in enumerate(self.variants):
@@ -795,7 +766,7 @@ class InventoryState(MixinState):
             rows.append(row)
         return rows
 
-    @rx.var
+    @rx.var(cache=True)
     def price_tier_rows(self) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         for index, tier in enumerate(self.price_tiers):
@@ -804,7 +775,7 @@ class InventoryState(MixinState):
             rows.append(row)
         return rows
 
-    @rx.var
+    @rx.var(cache=True)
     def variants_stock_total(self) -> float:
         total = 0.0
         for variant in self.variants:

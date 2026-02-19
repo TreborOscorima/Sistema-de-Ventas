@@ -339,18 +339,18 @@ class ServicesState(MixinState):
     ) -> None:
         """
         Registra el adelanto inicial de una reserva en CashboxLog y SalePayment.
-        
+
         Se llama cuando se crea una nueva reserva con adelanto > 0.
         Garantiza que todos los pagos queden registrados para reportes contables.
         Usa el método de pago seleccionado en el formulario (payment_method/payment_method_kind).
         """
         if advance_amount <= 0:
             return
-        
+
         # Obtener método de pago seleccionado
         payment_label = (getattr(self, "payment_method", "") or "").strip() or "Efectivo"
         payment_kind = (getattr(self, "payment_method_kind", "") or "cash").lower()
-        
+
         # Determinar el PaymentMethodType según el método seleccionado
         payment_allocations = self._build_reservation_payments(advance_amount)
         company_id = self._company_id()
@@ -360,7 +360,7 @@ class ServicesState(MixinState):
 
         with rx.session() as session:
             user_id = self.current_user.get("id")
-            
+
             # Crear venta para asociar el pago
             new_sale = Sale(
                 timestamp=datetime.datetime.now(),
@@ -372,7 +372,7 @@ class ServicesState(MixinState):
             )
             session.add(new_sale)
             session.flush()
-            
+
             # Registrar SalePayment con el método de pago seleccionado
             for method_type, amount in payment_allocations:
                 if amount <= 0:
@@ -387,7 +387,7 @@ class ServicesState(MixinState):
                         branch_id=branch_id,
                     )
                 )
-            
+
             # Crear SaleItem para el servicio
             session.add(
                 SaleItem(
@@ -403,7 +403,7 @@ class ServicesState(MixinState):
                     branch_id=branch_id,
                 )
             )
-            
+
             # Registrar en CashboxLog para el flujo de caja
             session.add(
                 CashboxLog(
@@ -418,7 +418,7 @@ class ServicesState(MixinState):
                     sale_id=new_sale.id,
                 )
             )
-            
+
             session.commit()
 
     def _apply_reservation_filters(self, query):
@@ -430,12 +430,12 @@ class ServicesState(MixinState):
             query = query.where(FieldReservationModel.company_id == company_id)
         if branch_id:
             query = query.where(FieldReservationModel.branch_id == branch_id)
-        
+
         if self.reservation_filter_status != "todos":
             db_status = self._reservation_status_to_db(self.reservation_filter_status)
             if db_status is not None:
                 query = query.where(FieldReservationModel.status == db_status)
-            
+
         if self.reservation_search:
             search = f"%{self.reservation_search.strip()}%"
             query = query.where(
@@ -490,14 +490,14 @@ class ServicesState(MixinState):
             self.service_reservations = [
                 self._reservation_to_dict(reservation) for reservation in reservations
             ]
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def reservation_selected_for_payment(self) -> FieldReservation | None:
         if not self.reservation_payment_id:
             return None
         return self._find_reservation_by_id(self.reservation_payment_id)
 
-    @rx.var
+    @rx.var(cache=True)
     def selected_reservation_balance(self) -> float:
         if not self.reservation_selected_for_payment:
             return 0.0
@@ -519,11 +519,11 @@ class ServicesState(MixinState):
     reservation_staged_end_date: str = ""
     reservation_payment_routed: bool = False
     last_reservation_receipt: ReservationReceipt | None = None
-    
+
     # Paginación de reservas
     reservation_current_page: int = 1
     reservation_items_per_page: int = 10
-    
+
     def set_reservation_staged_search(self, value: str):
         self.reservation_staged_search = value
 
@@ -570,7 +570,7 @@ class ServicesState(MixinState):
             data_query = self._apply_reservation_filters(data_query)
             reservations = session.exec(data_query).all()
             data = [self._reservation_to_dict(reservation) for reservation in reservations]
-        
+
         if not data:
             return rx.toast("No hay datos para exportar.", duration=3000)
 
@@ -729,13 +729,13 @@ class ServicesState(MixinState):
         )
 
         auto_adjust_column_widths(ws)
-        
+
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        
+
         return rx.download(
-            data=output.getvalue(), 
+            data=output.getvalue(),
             filename=f"reservas_{self.field_rental_sport}_{TODAY_STR}.xlsx"
         )
 
@@ -798,7 +798,7 @@ class ServicesState(MixinState):
                     )
                     session.add(new_price)
                     session.commit()
-                
+
                 self.new_field_price_name = ""
                 self.new_field_price_amount = ""
                 self.load_field_prices()
@@ -811,7 +811,7 @@ class ServicesState(MixinState):
             return toast
         if not self.editing_field_price_id:
             return
-        
+
         try:
             price_val = float(self.new_field_price_amount)
             company_id = self._company_id()
@@ -831,7 +831,7 @@ class ServicesState(MixinState):
                     price.sport = self.new_field_price_sport
                     session.add(price)
                     session.commit()
-            
+
             # Reiniciar estado de edicion
             self.editing_field_price_id = ""
             self.new_field_price_name = ""
@@ -904,7 +904,7 @@ class ServicesState(MixinState):
             if price:
                 session.delete(price)
                 session.commit()
-        
+
         if self.editing_field_price_id == price_id:
             self.editing_field_price_id = ""
             self.new_field_price_name = ""
@@ -937,28 +937,28 @@ class ServicesState(MixinState):
 
         self.reservation_form = form
 
-    @rx.var
+    @rx.var(cache=True)
     def reservation_delete_button_disabled(self) -> bool:
         return not self.reservation_delete_selection or not self.reservation_delete_reason
 
-    @rx.var
+    @rx.var(cache=True)
     def reservation_selected_for_delete(self) -> FieldReservation | None:
         if not self.reservation_delete_selection:
             return None
         return self._find_reservation_by_id(self.reservation_delete_selection)
 
-    @rx.var
+    @rx.var(cache=True)
     def service_reservations_for_sport(self) -> list[FieldReservation]:
         return self.service_reservations
 
-    @rx.var
+    @rx.var(cache=True)
     def reservation_total_pages(self) -> int:
         total = self.reservation_total_count
         if total == 0:
             return 1
         return (total + self.reservation_items_per_page - 1) // self.reservation_items_per_page
 
-    @rx.var
+    @rx.var(cache=True)
     def paginated_reservations(self) -> list[FieldReservation]:
         return self.service_reservations
 
@@ -980,22 +980,22 @@ class ServicesState(MixinState):
             self.reservation_current_page += 1
             self.load_reservations()
 
-    @rx.var
+    @rx.var(cache=True)
     def field_prices_for_current_sport(self) -> list[FieldPrice]:
         if hasattr(self, "field_prices"):
             return [
-                p for p in self.field_prices 
+                p for p in self.field_prices
                 if self.field_rental_sport.lower() in p["sport"].lower()
             ]
         return []
 
-    @rx.var
+    @rx.var(cache=True)
     def modal_reservation(self) -> FieldReservation | None:
         if not self.reservation_modal_reservation_id:
             return None
         return self._find_reservation_by_id(self.reservation_modal_reservation_id)
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_week_days(self) -> list[dict[str, str]]:
         if not self.schedule_selected_week:
             return []
@@ -1018,7 +1018,7 @@ class ServicesState(MixinState):
         except ValueError:
             return []
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_month_days(self) -> list[dict[str, str]]:
         if not self.schedule_selected_month:
             return []
@@ -1037,7 +1037,7 @@ class ServicesState(MixinState):
         except (ValueError, IndexError):
             return []
 
-    @rx.var
+    @rx.var(cache=True)
     def display_month_label(self) -> str:
         if not self.display_month:
             return ""
@@ -1048,7 +1048,7 @@ class ServicesState(MixinState):
             month_name = str(self.display_month.month)
         return f"{month_name} {self.display_month.year}"
 
-    @rx.var
+    @rx.var(cache=True)
     def selected_date_label(self) -> str:
         if not self.selected_date:
             return ""
@@ -1067,7 +1067,7 @@ class ServicesState(MixinState):
             f"{self.selected_date.year}"
         ).strip().strip(",")
 
-    @rx.var
+    @rx.var(cache=True)
     def calendar_grid(self) -> list[list[dict[str, Any]]]:
         if not self.display_month:
             return []
@@ -1092,15 +1092,15 @@ class ServicesState(MixinState):
             weeks.append(week_cells)
         return weeks
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_selected_slots_count(self) -> int:
         return len(self.schedule_selected_slots)
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_selection_valid(self) -> bool:
         return self._selection_range() is not None
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_selection_label(self) -> str:
         if not self.schedule_selected_slots:
             return "Sin horarios seleccionados"
@@ -1113,7 +1113,7 @@ class ServicesState(MixinState):
         suffix = "hora" if hours == 1 else "horas"
         return f"{start} - {end} ({hours} {suffix})"
 
-    @rx.var
+    @rx.var(cache=True)
     def schedule_slots(self) -> list[dict]:
         _ = self.services_refresh_token
         date_str = (
@@ -1403,6 +1403,16 @@ class ServicesState(MixinState):
         self.reservation_form["end_time"] = end_time
         self.reservation_form["sport_label"] = self._sport_label(self.field_rental_sport)
         self.reservation_form["selected_price_id"] = ""
+        # Abrir modal inmediatamente en modo "new" para feedback rápido
+        self.reservation_modal_mode = "new"
+        self.reservation_modal_reservation_id = ""
+        # Preselecciona el deporte actual en el selector si existe precio
+        current_prices = self.field_prices_for_current_sport
+        if current_prices:
+            self.select_reservation_field_price(current_prices[0]["id"])
+        self.reservation_modal_open = True
+        yield
+        # Ahora verificar si ya existe una reserva (query DB)
         existing = None
         try:
             start_dt = datetime.datetime.strptime(
@@ -1427,14 +1437,6 @@ class ServicesState(MixinState):
             self.reservation_modal_reservation_id = existing["id"]
             self.reservation_cancel_selection = existing["id"]
             self.reservation_cancel_reason = ""
-        else:
-            self.reservation_modal_mode = "new"
-            self.reservation_modal_reservation_id = ""
-        # Preselecciona el deporte actual en el selector si existe precio
-        current_prices = self.field_prices_for_current_sport
-        if current_prices:
-            self.select_reservation_field_price(current_prices[0]["id"])
-        self.reservation_modal_open = True
 
     @rx.event
     def close_reservation_modal(self):
@@ -1512,9 +1514,9 @@ class ServicesState(MixinState):
         end_time = form.get("end_time", "").strip()
         total_amount = self._safe_amount(form.get("total_amount", "0"))
         advance_amount = self._safe_amount(form.get("advance_amount", "0"))
-        
+
         status = ReservationStatus.PENDING
-        
+
         if not name or not date or not start_time or not end_time:
             return rx.toast("Complete los datos obligatorios de la reserva.", duration=3000)
         if total_amount <= 0:
@@ -1528,7 +1530,7 @@ class ServicesState(MixinState):
             return rx.toast("Formato de fecha u hora invalido.", duration=3000)
         if self._slot_has_conflict(date, start_time, end_time, self.field_rental_sport):
             return rx.toast("El horario seleccionado ya esta reservado.", duration=3000)
-        
+
         paid_amount = min(advance_amount, total_amount)
         if paid_amount >= total_amount:
             status = ReservationStatus.PAID
@@ -1536,7 +1538,7 @@ class ServicesState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        
+
         lock_key = self._reservation_lock_key(date, self.field_rental_sport)
         with rx.session() as session:
             if not self._acquire_named_lock(session, lock_key, timeout=5):
@@ -1614,10 +1616,10 @@ class ServicesState(MixinState):
                 }
             finally:
                 self._release_named_lock(session, lock_key)
-        
+
         self.load_reservations()
         self._log_service_action(reservation, "reserva", 0, notes="Reserva creada", status=str(reservation["status"]))
-        
+
         if paid_amount > 0:
             self._log_service_action(
                 reservation,
@@ -1628,7 +1630,7 @@ class ServicesState(MixinState):
             )
             if hasattr(self, "_register_reservation_advance_in_cashbox"):
                 self._register_reservation_advance_in_cashbox(reservation, paid_amount)
-                
+
         self.reservation_payment_id = ""
         self.reservation_payment_amount = ""
         self.reservation_cancel_selection = ""
@@ -1636,7 +1638,7 @@ class ServicesState(MixinState):
         self._clear_schedule_selection()
         self.reservation_form = self._reservation_default_form()
         self.reservation_modal_open = False
-        
+
         return self.print_reservation_receipt(reservation["id"])
 
     @rx.event
@@ -1688,13 +1690,13 @@ class ServicesState(MixinState):
 
         if reservation:
             return self._print_reservation_proof(reservation)
-            
+
         return rx.toast("Reserva no encontrada.", duration=3000)
 
     def _print_reservation_proof(self, reservation: FieldReservation):
         import html
         import json
-        
+
         total = float(reservation['total_amount'])
         paid = float(reservation['paid_amount'])
         saldo = max(total - paid, 0)
@@ -1702,14 +1704,14 @@ class ServicesState(MixinState):
 
         receipt_width = self._receipt_width()
         paper_width_mm = self._receipt_paper_mm()
-        
+
         # Funcion para centrar texto segun el ancho configurado.
         def center(text, width=receipt_width):
             return text.center(width)
-        
+
         def line(width=receipt_width):
             return "-" * width
-        
+
         def row(left, right, width=receipt_width):
             spaces = width - len(left) - len(right)
             return left + " " * max(spaces, 1) + right
@@ -1722,7 +1724,7 @@ class ServicesState(MixinState):
         phone = (company.get("phone") or "").strip()
         footer_message = (company.get("footer_message") or "").strip()
         address_lines = self._wrap_receipt_lines(address, receipt_width)
-        
+
         receipt_lines = [""]
         if company_name:
             for name_line in self._wrap_receipt_lines(company_name, receipt_width):
@@ -1807,10 +1809,10 @@ class ServicesState(MixinState):
             for footer_line in footer_lines:
                 receipt_lines.append(center(footer_line))
         receipt_lines.extend([" ", " ", " "])
-        
+
         receipt_text = chr(10).join(receipt_lines)
         safe_receipt_text = html.escape(receipt_text)
-        
+
         html_content = f"""<html>
 <head>
 <meta charset='utf-8'/>
@@ -1825,7 +1827,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 <pre>{safe_receipt_text}</pre>
 </body>
 </html>"""
-        
+
         script = f"""
         const receiptWindow = window.open('', '_blank');
         receiptWindow.document.write({json.dumps(html_content)});
@@ -1851,7 +1853,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             date_part = reservation.get("start_datetime", "").split(" ")[0] if reservation.get("start_datetime") else TODAY_STR
             start_time = reservation.get("start_datetime", "").split(" ")[1] if " " in reservation.get("start_datetime", "") else ""
             end_time = reservation.get("end_datetime", "").split(" ")[1] if " " in reservation.get("end_datetime", "") else ""
-        
+
         status_val = self._reservation_status_to_ui(
             reservation.get("status", "pendiente")
         )
@@ -1887,7 +1889,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             reservation["status"], ReservationStatus.CANCELLED
         ):
             return rx.toast("No se pueden registrar pagos en una reserva cancelada.", duration=3000)
-        
+
         amount = self._safe_amount(self.reservation_payment_amount)
         if amount <= 0:
             return rx.toast("Ingrese un monto valido.", duration=3000)
@@ -1933,7 +1935,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             entry_type = "pago" if new_status == ReservationStatus.PAID else "adelanto"
             notes = "Pago completado" if entry_type == "pago" else "Pago parcial registrado"
             user_id = self.current_user.get("id")
-            
+
             # Nueva Cabecera de Venta limpia
             new_sale = Sale(
                 timestamp=datetime.datetime.now(),
@@ -1945,7 +1947,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             )
             session.add(new_sale)
             session.flush()
-            
+
             allocations = self._build_reservation_payments(applied_amount)
             for method_type, amount in allocations:
                 if amount <= 0:
@@ -1998,7 +2000,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
             reservation["paid_amount"] = new_paid_amount
             reservation["status"] = self._reservation_status_to_ui(new_status)
-        
+
         self._log_service_action(
             reservation,
             entry_type,
@@ -2255,19 +2257,19 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(FieldReservationModel.branch_id == branch_id)
                 .with_for_update()
             ).first()
-            
+
             if not reservation_model:
                 return rx.toast("Reserva no encontrada.", duration=3000)
-            
+
             reason = sanitize_reason(self.reservation_cancel_reason or "").strip()
             if not reason:
                 return rx.toast("Ingrese motivo.", duration=3000)
-            
+
             reservation_model.status = ReservationStatus.CANCELLED
             reservation_model.cancellation_reason = reason
             session.add(reservation_model)
             session.commit()
-            
+
         self.load_reservations()
         self.reservation_modal_open = False
         return rx.toast("Reserva cancelada.", duration=3000)
@@ -2373,7 +2375,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         balance = max(total_amount - paid_amount, 0)
         start_time = reservation["start_datetime"].split(" ")[1] if " " in reservation["start_datetime"] else ""
         end_time = reservation["end_datetime"].split(" ")[1] if " " in reservation["end_datetime"] else ""
-        
+
         status_val = self._reservation_status_to_ui(
             reservation.get("status", "pendiente")
         )

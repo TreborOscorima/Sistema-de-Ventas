@@ -146,10 +146,10 @@ logger = get_logger("AuthState")
 
 class AuthState(MixinState):
     """Estado de autenticación y gestión de usuarios.
-    
+
     Maneja login, logout, sesiones JWT y administración de usuarios.
     Implementa RBAC (Role-Based Access Control) con permisos granulares.
-    
+
     Attributes:
         token: JWT almacenado en LocalStorage del navegador
         roles: Lista de nombres de roles disponibles
@@ -158,11 +158,11 @@ class AuthState(MixinState):
         show_user_form: Estado del modal de crear/editar usuario
         new_user_data: Datos del formulario de usuario
         editing_user: Usuario siendo editado (None = crear nuevo)
-        
+
     Variables computadas (rx.var):
         is_authenticated: True si hay sesión válida
         current_user: Usuario actual con permisos (cacheado 30s)
-        
+
     Eventos principales:
         login(form_data): Inicia sesión
         logout(): Cierra sesión
@@ -175,18 +175,21 @@ class AuthState(MixinState):
     # users: Dict[str, User] = {} # Eliminado a favor de la BD
     roles: List[str] = ["Superadmin", "Administrador", "Usuario", "Cajero"]
     role_privileges: Dict[str, Privileges] = DEFAULT_ROLE_TEMPLATES.copy()
-    
+
     error_message: str = ""
     password_change_error: str = ""
+    show_login_password: bool = False
+    show_user_form_password: bool = False
+    show_user_form_confirm_password: bool = False
     needs_initial_admin: bool = False
     show_user_form: bool = False
     user_form_key: int = 0
     branch_access_revision: int = 0
-    available_branches_cache: List[Dict[str, Any]] = []
-    active_branch_name_cache: str = ""
-    plan_actual_cache: str = "unknown"
-    company_has_reservations_cache: bool = False
-    subscription_snapshot_cache: Dict[str, Any] = {
+    available_branches: List[Dict[str, Any]] = []
+    active_branch_name: str = ""
+    plan_actual: str = "unknown"
+    company_has_reservations: bool = False
+    subscription_snapshot: Dict[str, Any] = {
         "plan_type": "",
         "plan_display": "PLAN",
         "status_label": "Activo",
@@ -207,7 +210,7 @@ class AuthState(MixinState):
         "users_unlimited": False,
         "branches_unlimited": False,
     }
-    payment_alert_info_cache: Dict[str, Any] = {
+    payment_alert_info: Dict[str, Any] = {
         "show": False,
         "color": "yellow",
         "message": "",
@@ -224,7 +227,7 @@ class AuthState(MixinState):
     new_role_name: str = ""
     show_user_limit_modal: bool = False
     user_limit_modal_message: str = ""
-    
+
     # Cache de usuario para evitar consultas repetidas a BD (backend-only).
     # Usamos campos no-reactivos para evitar recursión al calcular vars.
     _cached_user: Optional[User] = rx.field(default=None, is_var=False)
@@ -234,12 +237,26 @@ class AuthState(MixinState):
     _subscription_check_ts: float = rx.field(default=0.0, is_var=False)
     _USER_CACHE_TTL: float = 30.0  # Segundos de validez del cache
 
-    @rx.var
+    @rx.event
+    def toggle_login_password_visibility(self):
+        self.show_login_password = not self.show_login_password
+
+    @rx.event
+    def toggle_user_form_password_visibility(self):
+        self.show_user_form_password = not self.show_user_form_password
+
+    @rx.event
+    def toggle_user_form_confirm_password_visibility(self):
+        self.show_user_form_confirm_password = (
+            not self.show_user_form_confirm_password
+        )
+
+    @rx.var(cache=True)
     def is_authenticated(self) -> bool:
         user = self.current_user
         return bool(user and user.get("username") != "Invitado")
 
-    @rx.var
+    @rx.var(cache=True)
     def current_user(self) -> User:
         # Verificar cache válido
         now = time.time()
@@ -249,7 +266,7 @@ class AuthState(MixinState):
             and (now - self._cached_user_time) < self._USER_CACHE_TTL
         ):
             return self._cached_user
-        
+
         # Cache inválido, recargar
         payload = decode_token(self.token)
         if not payload:
@@ -257,7 +274,7 @@ class AuthState(MixinState):
             self._cached_user_token = self.token
             self._cached_user_time = now
             return self._cached_user
-        
+
         subject = payload.get("sub")
         if subject is None:
             self._cached_user = self._guest_user()
@@ -277,7 +294,7 @@ class AuthState(MixinState):
             token_version = int(token_version or 0)
         except (TypeError, ValueError):
             token_version = 0
-        
+
         user_id = None
         try:
             user_id = int(subject_str)
@@ -307,7 +324,7 @@ class AuthState(MixinState):
                     ).all()
                     if len(users) == 1:
                         user = users[0]
-            
+
             if user and user.is_active:
                 if getattr(user, "token_version", 0) != token_version:
                     self._cached_user = self._guest_user()
@@ -330,12 +347,12 @@ class AuthState(MixinState):
                     }
             else:
                 self._cached_user = self._guest_user()
-        
+
         self._cached_user_token = self.token
         self._cached_user_time = now
         return self._cached_user
 
-    @rx.var
+    @rx.var(cache=True)
     def active_branch_id(self) -> int | None:
         value = self.selected_branch_id
         if not value:
@@ -467,12 +484,12 @@ class AuthState(MixinState):
         }
 
     @rx.event
-    def refresh_subscription_snapshot_cache(self):
+    def refresh_subscription_snapshot(self):
         company_id = self._company_id()
         if not company_id:
-            self.plan_actual_cache = "unknown"
-            self.company_has_reservations_cache = False
-            self.subscription_snapshot_cache = self._default_subscription_snapshot()
+            self.plan_actual = "unknown"
+            self.company_has_reservations = False
+            self.subscription_snapshot = self._default_subscription_snapshot()
             return
 
         with rx.session() as session:
@@ -480,9 +497,9 @@ class AuthState(MixinState):
                 select(Company).where(Company.id == company_id)
             ).first()
             if not company:
-                self.plan_actual_cache = "unknown"
-                self.company_has_reservations_cache = False
-                self.subscription_snapshot_cache = self._default_subscription_snapshot()
+                self.plan_actual = "unknown"
+                self.company_has_reservations = False
+                self.subscription_snapshot = self._default_subscription_snapshot()
                 return
 
             branches_used = session.exec(
@@ -494,29 +511,29 @@ class AuthState(MixinState):
                 .where(UserModel.is_active == True)
             ).one()
 
-        self.subscription_snapshot_cache = self._build_subscription_snapshot(
+        self.subscription_snapshot = self._build_subscription_snapshot(
             company,
             branches_used=self._safe_int(branches_used, 0),
             users_used=self._safe_int(users_used, 0),
         )
-        self.plan_actual_cache = self.subscription_snapshot_cache.get("plan_type", "") or "unknown"
-        self.company_has_reservations_cache = bool(
+        self.plan_actual = self.subscription_snapshot.get("plan_type", "") or "unknown"
+        self.company_has_reservations = bool(
             getattr(company, "has_reservations_module", False)
         )
 
     @rx.event
-    def refresh_payment_alert_info_cache(self):
+    def refresh_payment_alert_info(self):
         default = self._default_payment_alert_info()
         company_id = self._company_id()
         if not company_id:
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
         with rx.session() as session:
             company = session.exec(
                 select(Company).where(Company.id == company_id)
             ).first()
         if not company:
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
 
         plan_type = getattr(company, "plan_type", "")
@@ -524,21 +541,21 @@ class AuthState(MixinState):
             plan_type = plan_type.value
         plan_type = str(plan_type or "").strip().lower()
         if plan_type == "trial":
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
 
         subscription_ends_at = getattr(company, "subscription_ends_at", None)
         if not subscription_ends_at:
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
 
         now = datetime.now()
         days_remaining = (subscription_ends_at.date() - now.date()).days
         if days_remaining > 5:
-            self.payment_alert_info_cache = default
+            self.payment_alert_info = default
             return
         if days_remaining >= 0:
-            self.payment_alert_info_cache = {
+            self.payment_alert_info = {
                 "show": True,
                 "color": "yellow",
                 "message": f"Tu plan vence en {days_remaining} días.",
@@ -546,7 +563,7 @@ class AuthState(MixinState):
             return
         if days_remaining >= -5:
             grace_left = max(0, 5 - abs(days_remaining))
-            self.payment_alert_info_cache = {
+            self.payment_alert_info = {
                 "show": True,
                 "color": "red",
                 "message": (
@@ -555,7 +572,7 @@ class AuthState(MixinState):
                 ),
             }
             return
-        self.payment_alert_info_cache = default
+        self.payment_alert_info = default
 
     @rx.event
     def refresh_branch_access_cache(self):
@@ -563,8 +580,8 @@ class AuthState(MixinState):
         user_id = self.current_user.get("id")
         company_id = self.current_user.get("company_id")
         if not user_id or not company_id:
-            self.available_branches_cache = []
-            self.active_branch_name_cache = ""
+            self.available_branches = []
+            self.active_branch_name = ""
             return
 
         set_tenant_context(company_id, None)
@@ -575,16 +592,14 @@ class AuthState(MixinState):
                 .where(UserModel.company_id == company_id)
             ).first()
             if not user:
-                self.available_branches_cache = []
-                self.active_branch_name_cache = ""
+                self.available_branches = []
+                self.active_branch_name = ""
                 return
 
             branch_ids = self._user_branch_ids(session, user_id)
-            if not branch_ids and getattr(user, "branch_id", None):
-                branch_ids = [int(user.branch_id)]
             if not branch_ids:
-                self.available_branches_cache = []
-                self.active_branch_name_cache = ""
+                self.available_branches = []
+                self.active_branch_name = ""
                 return
 
             rows = session.exec(
@@ -594,94 +609,166 @@ class AuthState(MixinState):
                 .order_by(Branch.name)
             ).all()
 
-        self.available_branches_cache = [
+        self.available_branches = [
             {"id": str(branch.id), "name": branch.name}
             for branch in rows
         ]
 
         active_id = self.active_branch_id
-        if not active_id and self.available_branches_cache:
-            self.selected_branch_id = self.available_branches_cache[0]["id"]
+        if not active_id and self.available_branches:
+            self.selected_branch_id = self.available_branches[0]["id"]
             active_id = self.active_branch_id
 
         selected = next(
             (
                 branch
-                for branch in self.available_branches_cache
+                for branch in self.available_branches
                 if int(branch["id"]) == int(active_id)
             ),
             None,
         ) if active_id else None
-        self.active_branch_name_cache = selected["name"] if selected else ""
+        self.active_branch_name = selected["name"] if selected else ""
 
     @rx.event
     def refresh_auth_runtime_cache(self):
-        self.refresh_subscription_snapshot_cache()
-        self.refresh_payment_alert_info_cache()
+        self._refresh_subscription_and_payment_alert()
         self.refresh_branch_access_cache()
 
-    @rx.var
-    def available_branches(self) -> List[Dict[str, Any]]:
-        return self.available_branches_cache
+    def _refresh_subscription_and_payment_alert(self):
+        """Consolidar Company query: subscription + payment alert en una sola lectura."""
+        company_id = self._company_id()
+        default_alert = self._default_payment_alert_info()
+        if not company_id:
+            self.plan_actual = "unknown"
+            self.company_has_reservations = False
+            self.subscription_snapshot = self._default_subscription_snapshot()
+            self.payment_alert_info = default_alert
+            return
 
-    @rx.var
-    def active_branch_name(self) -> str:
-        return self.active_branch_name_cache
-    
+        with rx.session() as session:
+            company = session.exec(
+                select(Company).where(Company.id == company_id)
+            ).first()
+            if not company:
+                self.plan_actual = "unknown"
+                self.company_has_reservations = False
+                self.subscription_snapshot = self._default_subscription_snapshot()
+                self.payment_alert_info = default_alert
+                return
+
+            branches_used = session.exec(
+                select(func.count(Branch.id)).where(Branch.company_id == company_id)
+            ).one()
+            users_used = session.exec(
+                select(func.count(UserModel.id))
+                .where(UserModel.company_id == company_id)
+                .where(UserModel.is_active == True)
+            ).one()
+
+        # --- Subscription snapshot ---
+        self.subscription_snapshot = self._build_subscription_snapshot(
+            company,
+            branches_used=self._safe_int(branches_used, 0),
+            users_used=self._safe_int(users_used, 0),
+        )
+        self.plan_actual = self.subscription_snapshot.get("plan_type", "") or "unknown"
+        self.company_has_reservations = bool(
+            getattr(company, "has_reservations_module", False)
+        )
+
+        # --- Payment alert (reutiliza el mismo company object) ---
+        plan_type = getattr(company, "plan_type", "")
+        if hasattr(plan_type, "value"):
+            plan_type = plan_type.value
+        plan_type = str(plan_type or "").strip().lower()
+        if plan_type == "trial":
+            self.payment_alert_info = default_alert
+            return
+
+        subscription_ends_at = getattr(company, "subscription_ends_at", None)
+        if not subscription_ends_at:
+            self.payment_alert_info = default_alert
+            return
+
+        now = datetime.now()
+        days_remaining = (subscription_ends_at.date() - now.date()).days
+        if days_remaining > 5:
+            self.payment_alert_info = default_alert
+            return
+        if days_remaining >= 0:
+            self.payment_alert_info = {
+                "show": True,
+                "color": "yellow",
+                "message": f"Tu plan vence en {days_remaining} días.",
+            }
+            return
+        if days_remaining >= -5:
+            grace_left = max(0, 5 - abs(days_remaining))
+            self.payment_alert_info = {
+                "show": True,
+                "color": "red",
+                "message": (
+                    "¡Pago vencido! "
+                    f"Tienes {grace_left} días de gracia antes del corte."
+                ),
+            }
+            return
+        self.payment_alert_info = default_alert
+
     def invalidate_user_cache(self) -> None:
         """Invalida el cache de usuario (llamar tras cambios de permisos)."""
         self._cached_user = None
         self._cached_user_token = ""
         self._cached_user_time = 0.0
-        self.available_branches_cache = []
-        self.active_branch_name_cache = ""
-        self.plan_actual_cache = "unknown"
-        self.company_has_reservations_cache = False
-        self.subscription_snapshot_cache = self._default_subscription_snapshot()
-        self.payment_alert_info_cache = self._default_payment_alert_info()
+        self.available_branches = []
+        self.active_branch_name = ""
+        self.plan_actual = "unknown"
+        self.company_has_reservations = False
+        self.subscription_snapshot = self._default_subscription_snapshot()
+        self.payment_alert_info = self._default_payment_alert_info()
 
     # =========================================================================
     # COMPUTED VARS DE PERMISOS - Para renderizado condicional en páginas
     # =========================================================================
-    
-    @rx.var
-    def plan_actual_str(self) -> str:
-        return (self.plan_actual_cache or "").strip().lower() or "unknown"
 
-    @rx.var
+    @rx.var(cache=True)
+    def plan_actual_str(self) -> str:
+        return (self.plan_actual or "").strip().lower() or "unknown"
+
+    @rx.var(cache=True)
     def can_view_ingresos(self) -> bool:
         return bool(self.current_user["privileges"].get("view_ingresos"))
 
-    @rx.var
+    @rx.var(cache=True)
     def can_view_compras(self) -> bool:
         privileges = self.current_user["privileges"]
         return bool(privileges.get("view_compras") or privileges.get("view_ingresos"))
 
-    @rx.var
+    @rx.var(cache=True)
     def can_manage_compras(self) -> bool:
         return bool(self.current_user["privileges"].get("create_ingresos"))
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_view_ventas(self) -> bool:
         return bool(self.current_user["privileges"].get("view_ventas"))
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_view_cashbox(self) -> bool:
         return bool(self.current_user["privileges"].get("view_cashbox"))
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_view_inventario(self) -> bool:
         return bool(self.current_user["privileges"].get("view_inventario"))
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_view_historial(self) -> bool:
         return bool(self.current_user["privileges"].get("view_historial"))
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_export_data(self) -> bool:
         return bool(self.current_user["privileges"].get("export_data"))
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_view_servicios(self) -> bool:
         plan = self.plan_actual_str
         if plan == "standard":
@@ -690,51 +777,38 @@ class AuthState(MixinState):
             self.current_user["privileges"].get("view_servicios")
             and self.company_has_reservations
         )
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_view_clientes(self) -> bool:
         if self.plan_actual_str == "standard":
             return False
         return bool(self.current_user["privileges"].get("view_clientes"))
 
-    @rx.var
+    @rx.var(cache=True)
     def can_manage_proveedores(self) -> bool:
         privileges = self.current_user["privileges"]
         return bool(
             privileges.get("manage_proveedores") or privileges.get("manage_clientes")
         )
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_view_cuentas(self) -> bool:
         if self.plan_actual_str == "standard":
             return False
         return bool(self.current_user["privileges"].get("view_cuentas"))
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def can_manage_config(self) -> bool:
         return bool(self.current_user["privileges"].get("manage_config"))
 
-    @rx.var
-    def company_has_reservations(self) -> bool:
-        return bool(self.company_has_reservations_cache)
-
-    @rx.var
+    @rx.var(cache=True)
     def plan_name(self) -> str:
         return str(self.subscription_snapshot.get("plan_type", "") or "")
 
-    @rx.var
-    def subscription_snapshot(self) -> Dict[str, Any]:
-        return self.subscription_snapshot_cache or self._default_subscription_snapshot()
-
-    @rx.var
-    def payment_alert_info(self) -> Dict[str, Any]:
-        """Info de alerta para pagos próximos o vencidos (cacheada)."""
-        return self.payment_alert_info_cache or self._default_payment_alert_info()
-    
-    @rx.var
+    @rx.var(cache=True)
     def is_admin(self) -> bool:
         return self.current_user["role"] in ["Superadmin", "Administrador"]
-    
+
     users_list: List[User] = []
 
     def load_users(self):
@@ -841,17 +915,7 @@ class AuthState(MixinState):
     def _ensure_user_branch_access(self, session, user: UserModel) -> tuple[list[int], bool]:
         if not user:
             return [], False
-        branch_ids = self._user_branch_ids(session, user.id)
-        default_branch_id = getattr(user, "branch_id", None)
-        changed = False
-        if default_branch_id and default_branch_id not in branch_ids:
-            session.add(
-                UserBranch(user_id=user.id, branch_id=int(default_branch_id))
-            )
-            session.flush()
-            branch_ids.append(int(default_branch_id))
-            changed = True
-        return branch_ids, changed
+        return self._user_branch_ids(session, user.id), False
 
     def _select_default_branch(
         self,
@@ -1004,6 +1068,8 @@ class AuthState(MixinState):
         }
         self.editing_user = None
         self.new_role_name = ""
+        self.show_user_form_password = False
+        self.show_user_form_confirm_password = False
 
     def _resolve_env(self) -> str:
         value = (os.getenv("ENV") or "dev").strip().lower()
@@ -1067,7 +1133,7 @@ class AuthState(MixinState):
 
     def _default_route_for_privileges(self, privileges: Dict[str, bool]) -> str:
         """Determina la ruta inicial según los privilegios del usuario.
-        
+
         El Dashboard es accesible para todos, por lo que siempre es una opción válida.
         La prioridad es: Dashboard > Ingreso > Venta > Caja > etc.
         """
@@ -1265,76 +1331,60 @@ class AuthState(MixinState):
 
     @rx.event
     def check_subscription_status(self):
+        """Verifica el estado de suscripción usando el snapshot cacheado.
+
+        Solo hace query a DB si necesita MODIFICAR el estado de suscripción
+        (trial expirado, plan vencido). En caso normal, lee del snapshot
+        que ya cargó refresh_auth_runtime_cache() — sin query extra.
+        """
         if not self.is_authenticated:
             return
         now_epoch = time.time()
-        if (now_epoch - self._subscription_check_ts) < 20:
+        if (now_epoch - self._subscription_check_ts) < 30:
             return
         self._subscription_check_ts = now_epoch
-        company_id = self.current_user.get("company_id")
-        if not company_id:
-            return
+
+        # Usar el snapshot que ya cargó refresh_auth_runtime_cache (sin DB query)
+        snapshot = self.subscription_snapshot
         current_path = self.router.url.path
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-            if not company:
-                return
-            plan_type = getattr(company, "plan_type", "")
-            if hasattr(plan_type, "value"):
-                plan_type = plan_type.value
-            plan_type = str(plan_type or "").strip().lower()
-            now = datetime.now()
-            new_status = None
+        status_label = str(snapshot.get("status_label", "") or "").strip().lower()
+        is_trial = bool(snapshot.get("is_trial"))
+        plan_type = str(snapshot.get("plan_type", "") or "").strip().lower()
 
-            if plan_type == "trial":
-                trial_ends_at = getattr(company, "trial_ends_at", None)
-                if trial_ends_at and trial_ends_at < now:
-                    new_status = SubscriptionStatus.SUSPENDED.value
-                    current_status = getattr(company, "subscription_status", "")
-                    if hasattr(current_status, "value"):
-                        current_status = current_status.value
-                    if str(current_status or "") != new_status:
-                        company.subscription_status = new_status
-                        session.add(company)
-                        session.commit()
-                    if current_path != "/periodo-prueba-finalizado":
-                        return rx.redirect("/periodo-prueba-finalizado")
-                    return
-                new_status = SubscriptionStatus.ACTIVE.value
-            else:
-                subscription_ends_at = getattr(company, "subscription_ends_at", None)
-                if subscription_ends_at:
-                    days_remaining = (
-                        subscription_ends_at.date() - now.date()
-                    ).days
-                    if days_remaining > 5:
-                        new_status = SubscriptionStatus.ACTIVE.value
-                    elif days_remaining >= 0:
-                        new_status = SubscriptionStatus.WARNING.value
-                    elif days_remaining >= -5:
-                        new_status = SubscriptionStatus.PAST_DUE.value
-                    else:
-                        new_status = SubscriptionStatus.SUSPENDED.value
-                else:
-                    new_status = SubscriptionStatus.ACTIVE.value
+        # --- Trial expirado: necesita ir a DB para actualizar status ---
+        if is_trial:
+            trial_end = snapshot.get("trial_ends_on", "")
+            if trial_end:
+                try:
+                    from datetime import datetime as dt_cls
+                    trial_ends_at = dt_cls.strptime(trial_end, "%d/%m/%Y")
+                    if trial_ends_at < datetime.now():
+                        # Trial expirado — actualizar en DB
+                        company_id = self.current_user.get("company_id")
+                        if company_id:
+                            with rx.session() as session:
+                                company = session.exec(
+                                    select(Company).where(Company.id == company_id)
+                                ).first()
+                                if company:
+                                    current_status = getattr(company, "subscription_status", "")
+                                    if hasattr(current_status, "value"):
+                                        current_status = current_status.value
+                                    if str(current_status or "") != SubscriptionStatus.SUSPENDED.value:
+                                        company.subscription_status = SubscriptionStatus.SUSPENDED.value
+                                        session.add(company)
+                                        session.commit()
+                                    self.refresh_subscription_snapshot()
+                        if current_path != "/periodo-prueba-finalizado":
+                            return rx.redirect("/periodo-prueba-finalizado")
+                        return
+                except (ValueError, TypeError):
+                    pass
+            return  # Trial activo, nada que hacer
 
-            current_status = getattr(company, "subscription_status", "")
-            if hasattr(current_status, "value"):
-                current_status = current_status.value
-            current_status = str(current_status or "")
-            if new_status and current_status != new_status:
-                company.subscription_status = new_status
-                session.add(company)
-                session.commit()
-
-            if (
-                new_status == SubscriptionStatus.SUSPENDED.value
-                and current_path != "/cuenta-suspendida"
-            ):
-                return rx.redirect("/cuenta-suspendida")
-        self.refresh_subscription_snapshot_cache()
+        # --- Plan pago: verificar vencimiento desde snapshot ---
+        if status_label == "suspendido" and current_path != "/cuenta-suspendida":
+            return rx.redirect("/cuenta-suspendida")
 
     @rx.event
     def ensure_subscription_active(self):
@@ -1407,7 +1457,22 @@ class AuthState(MixinState):
         self.refresh_auth_runtime_cache()
         if hasattr(self, "refresh_cashbox_status"):
             self.refresh_cashbox_status()
-        # Forzar refresco de datos dependientes de sucursal
+
+        # Invalidar TTLs para que page_init_* recargue datos al navegar
+        if hasattr(self, "_last_suppliers_load_ts"):
+            self._last_suppliers_load_ts = 0.0
+        if hasattr(self, "_last_reservations_load_ts"):
+            self._last_reservations_load_ts = 0.0
+        if hasattr(self, "_last_users_load_ts"):
+            self._last_users_load_ts = 0.0
+        if hasattr(self, "_last_cashbox_data_ts"):
+            self._last_cashbox_data_ts = 0.0
+        if hasattr(self, "_last_dashboard_load_ts"):
+            self._last_dashboard_load_ts = 0.0
+        if hasattr(self, "_last_overdue_check_ts"):
+            self._last_overdue_check_ts = 0.0
+
+        # Forzar refresco de triggers reactivos
         if hasattr(self, "_cashbox_update_trigger"):
             self._cashbox_update_trigger += 1
         if hasattr(self, "_inventory_update_trigger"):
@@ -1418,34 +1483,44 @@ class AuthState(MixinState):
             self._history_update_trigger += 1
         if hasattr(self, "_report_update_trigger"):
             self._report_update_trigger += 1
-        if hasattr(self, "load_clients"):
-            self.load_clients()
-        if hasattr(self, "load_suppliers"):
-            self.load_suppliers()
+
+        # Cargar solo datos comunes esenciales + datos del módulo activo
         if hasattr(self, "load_categories"):
             self.load_categories()
-        if hasattr(self, "reload_history"):
-            self.reload_history()
-        if hasattr(self, "load_reservations"):
-            self.load_reservations()
-        if hasattr(self, "load_field_prices"):
-            self.load_field_prices()
-        if hasattr(self, "refresh_service_state"):
-            self.refresh_service_state()
-        if hasattr(self, "load_users"):
-            self.load_users()
-        if hasattr(self, "load_branches"):
-            self.load_branches()
-        if hasattr(self, "load_debtors"):
-            await self.load_debtors()
-        if hasattr(self, "load_dashboard"):
-            self.load_dashboard()
-        if hasattr(self, "load_settings"):
-            self.load_settings()
-        if hasattr(self, "load_config_data"):
-            self.load_config_data()
         if hasattr(self, "check_overdue_alerts"):
             self.check_overdue_alerts()
+
+        current = getattr(self, "current_page", "")
+        if current == "Dashboard" and hasattr(self, "load_dashboard"):
+            self.load_dashboard()
+        elif current == "Gestion de Caja":
+            if hasattr(self, "_refresh_cashbox_caches"):
+                self._refresh_cashbox_caches()
+        elif current == "Historial" and hasattr(self, "reload_history"):
+            self.reload_history()
+        elif current == "Inventario":
+            pass  # triggers reactivos ya invalidan
+        elif current == "Compras" and hasattr(self, "load_suppliers"):
+            self.load_suppliers()
+        elif current == "Servicios":
+            if hasattr(self, "load_reservations"):
+                self.load_reservations()
+            if hasattr(self, "load_field_prices"):
+                self.load_field_prices()
+        elif current == "Configuracion":
+            if hasattr(self, "load_users"):
+                self.load_users()
+            if hasattr(self, "load_branches"):
+                self.load_branches()
+            if hasattr(self, "load_config_data"):
+                self.load_config_data()
+        elif current == "Clientes" and hasattr(self, "load_clients"):
+            self.load_clients()
+        elif current == "Cuentas Corrientes" and hasattr(self, "load_debtors"):
+            import asyncio
+            asyncio.ensure_future(self.load_debtors())
+
+        # Reset paginación de caja
         if hasattr(self, "cashbox_current_page"):
             self.cashbox_current_page = 1
         if hasattr(self, "cashbox_log_current_page"):
@@ -1651,7 +1726,7 @@ class AuthState(MixinState):
                     user.role_id = role.id
                     session.add(user)
                     session.commit()
-                
+
                 # Login exitoso: limpiar intentos fallidos
                 _clear_login_attempts(identifier, ip_address=client_ip)
                 self.token = create_access_token(
@@ -1765,13 +1840,13 @@ class AuthState(MixinState):
     def _open_user_editor(self, user: User):
         merged_privileges = self._normalize_privileges(user.get("privileges", {}))
         role_key = self._find_role_key(user["role"]) or user["role"]
-        
+
         # Asegurar que el rol exista en nuestro registro
         if role_key not in self.role_privileges:
             self.role_privileges[role_key] = merged_privileges.copy()
             if role_key not in self.roles:
                 self.roles.append(role_key)
-                
+
         self.new_user_data = {
             "username": user["username"],
             "email": (user.get("email") or ""),
@@ -1782,6 +1857,8 @@ class AuthState(MixinState):
         }
         self.user_form_key += 1
         self.editing_user = user
+        self.show_user_form_password = False
+        self.show_user_form_confirm_password = False
         self.show_user_form = True
 
     @rx.event
@@ -1800,7 +1877,7 @@ class AuthState(MixinState):
             return rx.toast("Empresa no definida.", duration=3000)
         # La edición de usuarios es a nivel empresa, no de sucursal.
         set_tenant_context(company_id, None)
-        
+
         with rx.session() as session:
             user = session.exec(
                 select(UserModel)
@@ -1809,10 +1886,10 @@ class AuthState(MixinState):
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
                 .execution_options(tenant_company_id=company_id)
             ).first()
-            
+
             if not user:
                 return rx.toast("Usuario a editar no encontrado.", duration=3000)
-            
+
             # Convertir a dict
             role_name = user.role.name if user.role else "Sin rol"
             user_dict = {
@@ -1888,7 +1965,7 @@ class AuthState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        
+
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
         set_tenant_context(company_id, None)
         with rx.session() as session:
@@ -1903,7 +1980,7 @@ class AuthState(MixinState):
             )
             session.commit()
             self._load_roles_cache(session, company_id=company_id)
-            
+
         self.new_role_name = ""
         self.new_user_data["role"] = name
         self.new_user_data["privileges"] = privileges.copy()
@@ -1921,7 +1998,7 @@ class AuthState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-            
+
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
         set_tenant_context(company_id, None)
         with rx.session() as session:
@@ -1934,7 +2011,7 @@ class AuthState(MixinState):
             )
             session.commit()
             self._load_roles_cache(session, company_id=company_id)
-            
+
         return rx.toast(f"Plantilla de rol {role} actualizada.", duration=3000)
 
     @rx.event
@@ -1944,7 +2021,7 @@ class AuthState(MixinState):
         block = self._require_active_subscription()
         if block:
             return block
-            
+
         username = self.new_user_data["username"].lower().strip()
         if not username:
             return rx.toast("El nombre de usuario no puede estar vacío.", duration=3000)
@@ -1962,7 +2039,7 @@ class AuthState(MixinState):
             return rx.toast("El correo es obligatorio.", duration=3000)
         if email and not validate_email(email):
             return rx.toast("Ingrese un correo valido.", duration=3000)
-            
+
         self.new_user_data["privileges"] = self._normalize_privileges(
             self.new_user_data["privileges"]
         )
@@ -2029,7 +2106,7 @@ class AuthState(MixinState):
                     .where(UserModel.username == self.editing_user["username"])
                     .where(UserModel.company_id == company_id)
                 ).first()
-                
+
                 if not user_to_update:
                     return rx.toast("Usuario a editar no encontrado.", duration=3000)
                 if email:
@@ -2039,7 +2116,7 @@ class AuthState(MixinState):
                     if existing_email and existing_email.id != user_to_update.id:
                         return rx.toast("El correo ya esta registrado.", duration=3000)
                     user_to_update.email = email
-                    
+
                 if self.new_user_data["password"]:
                     password = self.new_user_data["password"]
                     is_valid, error = validate_password(password)
@@ -2061,13 +2138,13 @@ class AuthState(MixinState):
                     user_to_update.token_version = (
                         getattr(user_to_update, "token_version", 0) or 0
                     ) + 1
-                    
+
                 user_to_update.role_id = role.id
-                
+
                 session.add(user_to_update)
                 session.commit()
                 self._load_roles_cache(session, company_id=company_id)
-                
+
                 self.hide_user_form()
                 self.load_users()
                 return rx.toast(f"Usuario {username} actualizado.", duration=3000)
@@ -2078,7 +2155,7 @@ class AuthState(MixinState):
                     .where(UserModel.username == username)
                     .where(UserModel.company_id == company_id)
                 ).first()
-                
+
                 if existing_user:
                     return rx.toast("El nombre de usuario ya existe.", duration=3000)
                 existing_email = session.exec(
@@ -2105,7 +2182,7 @@ class AuthState(MixinState):
                 password_hash = bcrypt.hashpw(
                     password.encode(), bcrypt.gensalt()
                 ).decode()
-                
+
                 new_user = UserModel(
                     username=username,
                     email=email or None,
@@ -2121,7 +2198,7 @@ class AuthState(MixinState):
                 )
                 session.commit()
                 self._load_roles_cache(session, company_id=company_id)
-                
+
                 self.hide_user_form()
                 self.load_users()
                 return rx.toast(f"Usuario {username} creado.", duration=3000)
@@ -2138,7 +2215,7 @@ class AuthState(MixinState):
         company_id = self._company_id()
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        
+
         # Eliminación de usuarios: alcance por empresa (sin filtrar por sucursal actual).
         set_tenant_context(company_id, None)
         with rx.session() as session:
@@ -2149,7 +2226,7 @@ class AuthState(MixinState):
                 .options(selectinload(UserModel.role))
                 .execution_options(tenant_company_id=company_id)
             ).first()
-            
+
             if not user:
                 return rx.toast(f"Usuario {username} no encontrado.", duration=3000)
             role_name = (user.role.name if user.role else "").strip().lower()
@@ -2159,5 +2236,5 @@ class AuthState(MixinState):
             session.commit()
             self.load_users()
             return rx.toast(f"Usuario {username} eliminado.", duration=3000)
-                
+
         return rx.toast(f"Usuario {username} no encontrado.", duration=3000)

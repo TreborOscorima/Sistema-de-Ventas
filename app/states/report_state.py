@@ -30,28 +30,28 @@ logger = logging.getLogger(__name__)
 
 class ReportState(MixinState):
     """Estado para generación de reportes."""
-    
+
     # Configuración del reporte
     report_type: str = "ventas"  # ventas, inventario, cuentas, caja
     report_period: str = "month"  # today, week, month, quarter, year, custom
     custom_start_date: str = ""
     custom_end_date: str = ""
-    
+
     # Estado de generación
     report_loading: bool = False
     report_error: str = ""
     report_ready: bool = False
-    report_download_data: bytes = b""
-    report_download_filename: str = ""
-    
+    _report_download_data: bytes = b""
+    _report_download_filename: str = ""
+
     # Opciones de reporte
     include_cancelled: bool = False
     include_zero_stock: bool = True
-    
+
     # Nombre de empresa (configurable)
     company_name: str = "TUWAYKIAPP"
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def period_options(self) -> list[dict[str, str]]:
         """Opciones de período disponibles."""
         return [
@@ -62,8 +62,8 @@ class ReportState(MixinState):
             {"value": "year", "label": "Este Año"},
             {"value": "custom", "label": "Personalizado"},
         ]
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def report_types(self) -> list[dict[str, str]]:
         """Tipos de reportes disponibles."""
         return [
@@ -72,16 +72,16 @@ class ReportState(MixinState):
             {"value": "cuentas", "label": "Cuentas por Cobrar", "icon": "credit-card"},
             {"value": "caja", "label": "Gestión de Caja", "icon": "banknote"},
         ]
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def selected_report_label(self) -> str:
         """Etiqueta del reporte seleccionado."""
         for rt in self.report_types:
             if rt["value"] == self.report_type:
                 return rt["label"]
         return "Reporte"
-    
-    @rx.var
+
+    @rx.var(cache=True)
     def period_label(self) -> str:
         """Etiqueta del período seleccionado."""
         labels = {
@@ -94,7 +94,7 @@ class ReportState(MixinState):
         }
         return labels.get(self.report_period, "Este Mes")
 
-    @rx.var
+    @rx.var(cache=True)
     def report_period_label(self) -> str:
         """Etiqueta del período para reportes (no colisiona con Dashboard)."""
         if self.report_period == "custom":
@@ -114,47 +114,47 @@ class ReportState(MixinState):
             "year": "Este Año",
         }
         return labels.get(self.report_period, "Este Mes")
-    
+
     @rx.event
     def set_report_type(self, value: str):
         """Establece el tipo de reporte."""
         self.report_type = value
         self.report_error = ""
-    
+
     @rx.event
     def set_report_period(self, value: str):
         """Establece el período del reporte."""
         self.report_period = value
         self.report_error = ""
-    
+
     @rx.event
     def set_custom_start(self, value: str):
         """Establece fecha inicio personalizada."""
         self.custom_start_date = value
-    
+
     @rx.event
     def set_custom_end(self, value: str):
         """Establece fecha fin personalizada."""
         self.custom_end_date = value
-    
+
     @rx.event
     def toggle_include_cancelled(self):
         """Alterna inclusión de ventas anuladas."""
         self.include_cancelled = not self.include_cancelled
-    
+
     @rx.event
     def toggle_include_zero_stock(self):
         """Alterna inclusión de productos sin stock."""
         self.include_zero_stock = not self.include_zero_stock
-    
+
     def _calculate_period_dates(self):
         """Calcula fechas de inicio y fin del período seleccionado."""
         now = datetime.now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
+
         period = self.report_period
-        
+
         if period == "today":
             return (today_start, today_end)
         elif period == "week":
@@ -184,7 +184,7 @@ class ReportState(MixinState):
             # Por defecto: este mes
             start = today_start.replace(day=1)
             return (start, today_end)
-    
+
     @rx.event(background=True)
     async def generate_report(self):
         """Genera el reporte seleccionado."""
@@ -196,8 +196,8 @@ class ReportState(MixinState):
             self.report_loading = True
             self.report_error = ""
             self.report_ready = False
-            self.report_download_data = b""
-            self.report_download_filename = ""
+            self._report_download_data = b""
+            self._report_download_filename = ""
 
             try:
                 company_id = self._company_id()
@@ -345,8 +345,8 @@ class ReportState(MixinState):
                         self.report_error = "Tipo de reporte no válido."
                         return
 
-                self.report_download_data = output.getvalue()
-                self.report_download_filename = filename
+                self._report_download_data = output.getvalue()
+                self._report_download_filename = filename
                 self.report_ready = True
             except Exception as e:
                 self.report_error = str(e)
@@ -357,13 +357,13 @@ class ReportState(MixinState):
 
     @rx.event
     def download_report(self):
-        if not self.report_ready or not self.report_download_data:
+        if not self.report_ready or not self._report_download_data:
             return rx.toast.error(
                 "No hay reporte disponible para descargar.", duration=3000
             )
-        data = self.report_download_data
-        filename = self.report_download_filename or "reporte.xlsx"
+        data = self._report_download_data
+        filename = self._report_download_filename or "reporte.xlsx"
         self.report_ready = False
-        self.report_download_data = b""
-        self.report_download_filename = ""
+        self._report_download_data = b""
+        self._report_download_filename = ""
         return rx.download(data=data, filename=filename)

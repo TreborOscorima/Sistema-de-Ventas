@@ -192,7 +192,7 @@ def config_nav() -> rx.Component:
     ),
     rx.el.div(
       *[
-        rx.el.button(
+        rx.link(
           rx.el.div(
             rx.icon(section["icon"], class_name="h-5 w-5"),
             rx.el.div(
@@ -205,11 +205,19 @@ def config_nav() -> rx.Component:
             ),
             class_name="flex items-center gap-3",
           ),
-          on_click=lambda _, key=section["key"]: State.set_config_active_tab(key),
+          href=f"/configuracion?tab={section['key']}",
+          underline="none",
           class_name=rx.cond(
-            State.config_active_tab == section["key"],
-                        "w-full text-left bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-md shadow-sm",
-                        "w-full text-left bg-white text-slate-700 border px-3 py-2 rounded-md hover:bg-slate-50",
+            (State.router.page.params["tab"] == section["key"])
+            | (
+                (section["key"] == "usuarios")
+                & (
+                    (State.router.page.params["tab"] == "")
+                    | (State.router.page.params["tab"] == None)
+                )
+            ),
+            "w-full text-left bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-md shadow-sm",
+            "w-full text-left bg-white text-slate-700 border px-3 py-2 rounded-md hover:bg-slate-50",
           ),
         )
         for section in CONFIG_SECTIONS
@@ -558,7 +566,7 @@ def user_form() -> rx.Component:
             rx.el.label("Nombre de Usuario", class_name="text-sm font-medium text-slate-700"),
             rx.el.input(
               default_value=State.new_user_data["username"],
-              on_change=lambda v: State.handle_new_user_change(
+              on_blur=lambda v: State.handle_new_user_change(
                 "username", v
               ),
               is_disabled=rx.cond(State.editing_user, True, False),
@@ -572,7 +580,7 @@ def user_form() -> rx.Component:
               type="email",
               placeholder="usuario@empresa.com",
               default_value=State.new_user_data["email"],
-              on_change=lambda v: State.handle_new_user_change(
+              on_blur=lambda v: State.handle_new_user_change(
                 "email", v
               ),
               class_name=f"{INPUT_STYLES['default']} mt-1",
@@ -602,7 +610,7 @@ def user_form() -> rx.Component:
               rx.el.input(
                 placeholder="Ej: Administrador, Cajero, Auditor",
                 default_value=State.new_role_name,
-                on_change=State.update_new_role_name,
+                on_blur=lambda v: State.update_new_role_name(v),
                 class_name=f"flex-1 {INPUT_STYLES['default']}",
               ),
               rx.el.button(
@@ -616,30 +624,92 @@ def user_form() -> rx.Component:
           ),
           rx.el.div(
             rx.el.label("Contraseña", class_name="text-sm font-medium text-slate-700"),
-            rx.el.input(
-              type="password",
-              placeholder=rx.cond(
-                State.editing_user,
-                "Dejar en blanco para no cambiar",
-                "",
+            rx.el.div(
+              rx.el.input(
+                type=rx.cond(
+                  State.show_user_form_password,
+                  "text",
+                  "password",
+                ),
+                placeholder=rx.cond(
+                  State.editing_user,
+                  "Dejar en blanco para no cambiar",
+                  "",
+                ),
+                default_value=State.new_user_data["password"],
+                on_blur=lambda v: State.handle_new_user_change(
+                  "password", v
+                ),
+                class_name=f"{INPUT_STYLES['default']} pr-11",
               ),
-              default_value=State.new_user_data["password"],
-              on_change=lambda v: State.handle_new_user_change(
-                "password", v
+              rx.el.button(
+                rx.cond(
+                  State.show_user_form_password,
+                  rx.icon("eye_off", class_name="h-4 w-4"),
+                  rx.icon("eye", class_name="h-4 w-4"),
+                ),
+                type="button",
+                on_click=State.toggle_user_form_password_visibility,
+                class_name=(
+                  "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                  "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                  "hover:text-slate-700 transition-colors duration-150"
+                ),
+                aria_label=rx.cond(
+                  State.show_user_form_password,
+                  "Ocultar contraseña",
+                  "Mostrar contraseña",
+                ),
+                title=rx.cond(
+                  State.show_user_form_password,
+                  "Ocultar contraseña",
+                  "Mostrar contraseña",
+                ),
               ),
-              class_name=f"{INPUT_STYLES['default']} mt-1",
+              class_name="relative mt-1",
             ),
             class_name="mb-4",
           ),
           rx.el.div(
             rx.el.label("Confirmar Contraseña", class_name="text-sm font-medium text-slate-700"),
-            rx.el.input(
-              type="password",
-              default_value=State.new_user_data["confirm_password"],
-              on_change=lambda v: State.handle_new_user_change(
-                "confirm_password", v
+            rx.el.div(
+              rx.el.input(
+                type=rx.cond(
+                  State.show_user_form_confirm_password,
+                  "text",
+                  "password",
+                ),
+                default_value=State.new_user_data["confirm_password"],
+                on_blur=lambda v: State.handle_new_user_change(
+                  "confirm_password", v
+                ),
+                class_name=f"{INPUT_STYLES['default']} pr-11",
               ),
-              class_name=f"{INPUT_STYLES['default']} mt-1",
+              rx.el.button(
+                rx.cond(
+                  State.show_user_form_confirm_password,
+                  rx.icon("eye_off", class_name="h-4 w-4"),
+                  rx.icon("eye", class_name="h-4 w-4"),
+                ),
+                type="button",
+                on_click=State.toggle_user_form_confirm_password_visibility,
+                class_name=(
+                  "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                  "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                  "hover:text-slate-700 transition-colors duration-150"
+                ),
+                aria_label=rx.cond(
+                  State.show_user_form_confirm_password,
+                  "Ocultar contraseña",
+                  "Mostrar contraseña",
+                ),
+                title=rx.cond(
+                  State.show_user_form_confirm_password,
+                  "Ocultar contraseña",
+                  "Mostrar contraseña",
+                ),
+              ),
+              class_name="relative mt-1",
             ),
             class_name="mb-4",
           ),
@@ -1347,7 +1417,7 @@ def configuracion_page() -> rx.Component:
       ),
       rx.el.div(
           rx.match(
-            State.config_active_tab,
+            State.router.page.params["tab"],
             ("empresa", company_settings_section()),
             ("sucursales", branch_section()),
             ("usuarios", user_section()),
@@ -1385,4 +1455,3 @@ def configuracion_page() -> rx.Component:
     content=content,
     redirect_message="Acceso denegado a Configuración",
   )
-

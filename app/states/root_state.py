@@ -54,8 +54,17 @@ _mixins = [
     AuthState,
 ]
 
+_OVERDUE_CHECK_TTL: float = 60.0  # Segundos entre checks de cuotas vencidas
+
 @rx.event
 def check_overdue_alerts(self):
+    import time as _time
+    now_ts = _time.time()
+    last_ts = getattr(self, "_last_overdue_check_ts", 0.0)
+    if (now_ts - last_ts) < _OVERDUE_CHECK_TTL:
+        return  # TTL vigente, no re-consultar
+    self._last_overdue_check_ts = now_ts
+
     company_id = self._company_id() if hasattr(self, "_company_id") else None
     branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
     if not company_id:
@@ -113,7 +122,7 @@ for _mixin in _mixins:
     # Unir anotaciones
     if hasattr(_mixin, "__annotations__"):
         _class_dict["__annotations__"].update(_mixin.__annotations__)
-    
+
     # Unir atributos y metodos
     for _name, _value in _mixin.__dict__.items():
         if _name.startswith("__"): continue
@@ -121,6 +130,8 @@ for _mixin in _mixins:
 
 _class_dict["__annotations__"]["overdue_alerts_count"] = int
 _class_dict["overdue_alerts_count"] = 0
+_class_dict["__annotations__"]["_last_overdue_check_ts"] = float
+_class_dict["_last_overdue_check_ts"] = 0.0
 _class_dict["__annotations__"]["is_loading"] = bool
 _class_dict["is_loading"] = False
 _class_dict["check_overdue_alerts"] = check_overdue_alerts

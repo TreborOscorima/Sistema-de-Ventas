@@ -31,43 +31,55 @@ class CartMixin:
     selected_product: Dict[str, Any] | None = None
     last_scanned_label: str = ""
 
+    async def _process_barcode(self, barcode: str):
+        """Lógica compartida para procesar un código de barras."""
+        company_id = None
+        branch_id = None
+        if hasattr(self, "current_user"):
+            company_id = self.current_user.get("company_id")
+        if hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast(
+                "Empresa o sucursal no definida.",
+                duration=3000,
+            )
+        product = await SaleService.get_product_by_barcode(
+            barcode,
+            int(company_id),
+            int(branch_id),
+        )
+        if product:
+            if self.new_sale_item.get("quantity", 0) <= 0:
+                self.new_sale_item["quantity"] = 1
+            self._set_last_scanned_label(product)
+            return await self.add_item_to_sale(product_override=product)
+        return rx.toast(
+            "Producto no encontrado o sin stock disponible.",
+            duration=3000,
+        )
+
+    @rx.event
+    async def handle_barcode_form_submit(self, form_data: dict):
+        """Maneja el submit del formulario de código de barras (Enter del scanner)."""
+        barcode = str(form_data.get("barcode", "") or "").strip()
+        if barcode:
+            return await self._process_barcode(barcode)
+        return await self.add_item_to_sale()
+
     @rx.event
     async def handle_key_down(self, key: str):
         if key == "Enter":
             barcode = str(self.new_sale_item.get("barcode", "") or "").strip()
             if barcode:
-                company_id = None
-                branch_id = None
-                if hasattr(self, "current_user"):
-                    company_id = self.current_user.get("company_id")
-                if hasattr(self, "_branch_id"):
-                    branch_id = self._branch_id()
-                if not company_id or not branch_id:
-                    return rx.toast(
-                        "Empresa o sucursal no definida.",
-                        duration=3000,
-                    )
-                product = await SaleService.get_product_by_barcode(
-                    barcode,
-                    int(company_id),
-                    int(branch_id),
-                )
-                if product:
-                    if self.new_sale_item.get("quantity", 0) <= 0:
-                        self.new_sale_item["quantity"] = 1
-                    self._set_last_scanned_label(product)
-                    return await self.add_item_to_sale(product_override=product)
-                return rx.toast(
-                    "Producto no encontrado o sin stock disponible.",
-                    duration=3000,
-                )
+                return await self._process_barcode(barcode)
             return await self.add_item_to_sale()
 
-    @rx.var
+    @rx.var(cache=True)
     def sale_subtotal(self) -> float:
         return self.new_sale_item["subtotal"]
 
-    @rx.var
+    @rx.var(cache=True)
     def sale_total(self) -> float:
         # Evita lecturas a BD durante render reactivo. Usa estado ya cargado.
         reservation_balance = 0.0
@@ -191,6 +203,9 @@ class CartMixin:
         )
         if isinstance(product, dict):
             self.selected_product = dict(product)
+
+        # Incrementa key para forzar re-render de inputs uncontrolled
+        self.sale_form_key += 1
 
         if not keep_quantity:
             self.autocomplete_suggestions = []
@@ -445,7 +460,7 @@ class CartMixin:
         self.autocomplete_results = []
         self.autocomplete_selected_index = -1
 
-    @rx.var
+    @rx.var(cache=True)
     def autocomplete_rows(self) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
         for index, result in enumerate(self.autocomplete_results):
