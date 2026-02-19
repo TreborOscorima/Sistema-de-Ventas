@@ -156,6 +156,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
 
     @rx.event
     async def page_init_ingreso(self):
@@ -172,6 +174,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
 
     @rx.event
     async def page_init_compras(self):
@@ -214,6 +218,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
 
     @rx.event
     async def page_init_caja(self):
@@ -257,6 +263,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
 
     @rx.event
     async def page_init_cuentas(self):
@@ -276,6 +284,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
 
     @rx.event
     async def page_init_inventario(self):
@@ -292,6 +302,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
 
     @rx.event
     async def page_init_historial(self):
@@ -308,6 +320,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
 
     @rx.event
     async def page_init_reportes(self):
@@ -324,6 +338,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
 
     @rx.event
     async def page_init_servicios(self):
@@ -391,3 +407,5 @@ class State(RootState):
         redirect = self.ensure_password_change()
         if redirect:
             yield redirect
+        # Delta parcial: renderiza la UI de inmediato
+        yield
