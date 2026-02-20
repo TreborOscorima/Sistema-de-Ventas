@@ -21,18 +21,18 @@ def _get_environment() -> str:
 def get_logger(name: str) -> logging.Logger:
     """
     Obtiene un logger configurado según el entorno.
-    
+
     En producción:
     - Nivel WARNING (menos verboso)
     - No incluye nombre del módulo en el formato
-    
+
     En desarrollo:
     - Nivel INFO (más detallado)
     - Incluye nombre del módulo para debugging
-    
+
     Parámetros:
         name: Nombre del módulo/componente
-        
+
     Retorna:
         Logger configurado
     """
@@ -44,7 +44,7 @@ def get_logger(name: str) -> logging.Logger:
 
     env = _get_environment()
     is_prod = env == "prod"
-    
+
     # Formato según entorno
     log_format = LOG_FORMAT_PROD if is_prod else LOG_FORMAT
     formatter = logging.Formatter(log_format)
@@ -63,7 +63,7 @@ def get_logger(name: str) -> logging.Logger:
     # Nivel según entorno: menos verboso en producción
     log_level = logging.WARNING if is_prod else logging.INFO
     logger.setLevel(log_level)
-    
+
     logger.addHandler(stream_handler)
     logger.addHandler(file_handler)
     logger.propagate = False

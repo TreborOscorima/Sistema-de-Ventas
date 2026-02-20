@@ -20,7 +20,7 @@ def normalize_payment_method_kind(kind: str) -> PaymentMethodType:
         PaymentMethodType correspondiente
     """
     normalized = (kind or "").strip().lower()
-    
+
     mapping = {
         "cash": PaymentMethodType.cash,
         "efectivo": PaymentMethodType.cash,
@@ -39,7 +39,7 @@ def normalize_payment_method_kind(kind: str) -> PaymentMethodType:
         "wallet": PaymentMethodType.yape,
         "billetera": PaymentMethodType.yape,
     }
-    
+
     return mapping.get(normalized, PaymentMethodType.other)
 
 
@@ -54,10 +54,10 @@ def card_method_type(card_type: str) -> PaymentMethodType:
         PaymentMethodType.debit o PaymentMethodType.credit
     """
     value = (card_type or "").strip().lower()
-    
+
     if "deb" in value or "debito" in value or "débito" in value:
         return PaymentMethodType.debit
-    
+
     return PaymentMethodType.credit
 
 
@@ -72,10 +72,10 @@ def wallet_method_type(provider: str) -> PaymentMethodType:
         PaymentMethodType correspondiente
     """
     value = (provider or "").strip().lower()
-    
+
     if "plin" in value:
         return PaymentMethodType.plin
-    
+
     return PaymentMethodType.yape
 
 
@@ -97,7 +97,7 @@ def payment_method_code(method_type: PaymentMethodType) -> str | None:
         PaymentMethodType.debit: "debit_card",
         PaymentMethodType.credit: "credit_card",
     }
-    
+
     return mapping.get(method_type)
 
 
@@ -112,7 +112,7 @@ def payment_method_label(kind: str) -> str:
         Etiqueta en español
     """
     normalized = (kind or "").strip().lower()
-    
+
     labels = {
         "cash": "Efectivo",
         "debit": "Tarjeta de Débito",
@@ -125,7 +125,7 @@ def payment_method_label(kind: str) -> str:
         "wallet": "Billetera Digital (Yape)",
         "other": "Otros",
     }
-    
+
     return labels.get(normalized, "Otros")
 
 
@@ -142,9 +142,9 @@ def normalize_wallet_label(label: str) -> str:
     value = (label or "").strip()
     if not value:
         return value
-    
+
     key = value.lower()
-    
+
     mapping = {
         "cash": "Efectivo",
         "debit": "Tarjeta de Débito",
@@ -155,15 +155,15 @@ def normalize_wallet_label(label: str) -> str:
         "mixed": "Pago Mixto",
         "other": "Otros",
     }
-    
+
     if key in mapping:
         return mapping[key]
-    
+
     if key == "card":
         return mapping["credit"]
     if key == "wallet":
         return mapping["yape"]
-    
+
     # Detección por contenido
     if "mixto" in key and "(" in value and ")" in value:
         suffix = value[value.find("("):].strip()
@@ -184,7 +184,7 @@ def normalize_wallet_label(label: str) -> str:
         return mapping["transfer"]
     if "efectivo" in key:
         return mapping["cash"]
-    
+
     return value
 
 
@@ -201,7 +201,7 @@ def payment_category(method: str, kind: str = "") -> str:
     """
     normalized_kind = (kind or "").lower()
     label = method.lower() if method else ""
-    
+
     mapping = {
         "cash": "Efectivo",
         "debit": "Tarjeta de Débito",
@@ -212,7 +212,7 @@ def payment_category(method: str, kind: str = "") -> str:
         "mixed": "Pago Mixto",
         "other": "Otros",
     }
-    
+
     if normalized_kind == "mixed" or "mixto" in label:
         return mapping["mixed"]
     if normalized_kind == "debit" or "debito" in label or "débito" in label:
@@ -227,5 +227,5 @@ def payment_category(method: str, kind: str = "") -> str:
         return mapping["transfer"]
     if normalized_kind == "cash" or "efectivo" in label:
         return mapping["cash"]
-    
+
     return mapping["other"]

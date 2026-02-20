@@ -49,12 +49,12 @@ def _strict_rate_limit_backend() -> bool:
 def _get_redis() -> "redis.Redis | None":
     """
     Obtiene cliente Redis configurado.
-    
+
     Retorna:
         Cliente Redis o None si no está disponible/configurado
     """
     global _redis_client
-    
+
     strict_backend = _strict_rate_limit_backend()
     if not REDIS_AVAILABLE:
         if strict_backend:
@@ -62,10 +62,10 @@ def _get_redis() -> "redis.Redis | None":
                 "Redis requerido en producción para rate limiting distribuido."
             )
         return None
-    
+
     if _redis_client is not None:
         return _redis_client
-    
+
     redis_url = os.getenv("REDIS_URL", "").strip()
     if not redis_url:
         if strict_backend:
@@ -73,7 +73,7 @@ def _get_redis() -> "redis.Redis | None":
                 "REDIS_URL no configurado y fallback en memoria deshabilitado."
             )
         return None
-    
+
     try:
         _redis_client = redis.from_url(
             redis_url,
@@ -128,24 +128,24 @@ def is_rate_limited(
 ) -> bool:
     """
     Verifica si un usuario está bloqueado por demasiados intentos fallidos.
-    
+
     Parámetros:
         username: Nombre de usuario a verificar
         max_attempts: Número máximo de intentos permitidos
         window_minutes: Ventana de tiempo en minutos
-        
+
     Retorna:
         True si está bloqueado, False si puede intentar
     """
     key = _build_key(username, ip_address)
     if not key:
         return False
-    
+
     redis_client = _get_redis()
     if redis_client is None and _strict_rate_limit_backend():
         # Fail-closed: en producción no se permite backend en memoria.
         return True
-    
+
     if redis_client is not None:
         # Modo Redis (producción)
         try:
@@ -157,7 +157,7 @@ def is_rate_limited(
             if _strict_rate_limit_backend():
                 return True
             return _is_rate_limited_memory(key, max_attempts, window_minutes)
-    
+
     # Modo memoria (desarrollo)
     return _is_rate_limited_memory(key, max_attempts, window_minutes)
 
@@ -170,12 +170,12 @@ def _is_rate_limited_memory(
     """Limitación de tasa en memoria (un solo worker)."""
     now = datetime.now()
     cutoff = now - timedelta(minutes=window_minutes)
-    
+
     # Limpiar intentos antiguos
     _memory_store[username] = [
         t for t in _memory_store[username] if t > cutoff
     ]
-    
+
     return len(_memory_store[username]) >= max_attempts
 
 
@@ -186,7 +186,7 @@ def record_failed_attempt(
 ) -> None:
     """
     Registra un intento de login fallido.
-    
+
     Parámetros:
         username: Nombre de usuario
         window_minutes: Tiempo de expiración del registro
@@ -194,14 +194,14 @@ def record_failed_attempt(
     key = _build_key(username, ip_address)
     if not key:
         return
-    
+
     redis_client = _get_redis()
     if redis_client is None and _strict_rate_limit_backend():
         logger.error(
             "Intento fallido no registrado: Redis no disponible en modo estricto."
         )
         return
-    
+
     if redis_client is not None:
         try:
             redis_key = f"login_attempts:{key}"
@@ -212,7 +212,7 @@ def record_failed_attempt(
             return
         except Exception as e:
             logger.error("Error Redis record_failed_attempt: %s", e)
-    
+
     # Fallback a memoria
     _memory_store[key].append(datetime.now())
 
@@ -220,24 +220,24 @@ def record_failed_attempt(
 def clear_login_attempts(username: str, ip_address: str | None = None) -> None:
     """
     Limpia los intentos fallidos tras login exitoso.
-    
+
     Parámetros:
         username: Nombre de usuario
     """
     key = _build_key(username, ip_address)
     if not key:
         return
-    
+
     redis_client = _get_redis()
     if redis_client is None and _strict_rate_limit_backend():
         return
-    
+
     if redis_client is not None:
         try:
             redis_client.delete(f"login_attempts:{key}")
         except Exception as e:
             logger.error("Error Redis clear_login_attempts: %s", e)
-    
+
     # Limpiar también en memoria (por si hubo fallback)
     _memory_store.pop(key, None)
 
@@ -249,22 +249,22 @@ def remaining_lockout_time(
 ) -> int:
     """
     Calcula los minutos restantes de bloqueo.
-    
+
     Parámetros:
         username: Nombre de usuario
         window_minutes: Ventana de tiempo original
-        
+
     Retorna:
         Minutos restantes o 0 si no está bloqueado
     """
     key = _build_key(username, ip_address)
     if not key:
         return 0
-    
+
     redis_client = _get_redis()
     if redis_client is None and _strict_rate_limit_backend():
         return max(1, int(window_minutes))
-    
+
     if redis_client is not None:
         try:
             redis_key = f"login_attempts:{key}"
@@ -274,27 +274,27 @@ def remaining_lockout_time(
             return 0
         except Exception as e:
             logger.error("Error Redis remaining_lockout_time: %s", e)
-    
+
     # Modo memoria
     if not _memory_store.get(key):
         return 0
-    
+
     oldest_attempt = min(_memory_store[key])
     unlock_time = oldest_attempt + timedelta(minutes=window_minutes)
     remaining = (unlock_time - datetime.now()).total_seconds() / 60
-    
+
     return max(0, int(remaining) + 1)
 
 
 def get_rate_limit_status() -> dict:
     """
     Obtiene estado del sistema de limitación de tasa (para depuración).
-    
+
     Retorna:
         Dict con información del estado actual
     """
     redis_client = _get_redis()
-    
+
     return {
         "backend": "redis" if redis_client else "memory",
         "redis_available": REDIS_AVAILABLE,
