@@ -222,6 +222,15 @@ def _global_styles() -> str:
   border: 2px solid rgba(16,185,129,0.45);
   animation: pulseRing 1.8s ease-out infinite;
 }
+.tab-btn {
+  color: #64748b;
+  background: transparent;
+}
+.tab-btn.active {
+  color: #4f46e5;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
 """
 
 
@@ -571,6 +580,7 @@ def _footer_link(
 def marketing_page() -> rx.Component:
     """Página de marketing y landing page pública."""
     demo_link = _wa_link("Hola, quiero una demo en vivo de TUWAYKIAPP.")
+    local_link = _wa_link("Hola, me interesa TUWAYKIAPP en modalidad Local (pago anual). Quiero coordinar precio y detalles.")
     standard_link = _wa_link("Hola, quiero el Plan Standard (USD 45/mes) de TUWAYKIAPP.")
     professional_link = _wa_link("Hola, quiero el Plan Professional (USD 75/mes) de TUWAYKIAPP.")
     enterprise_link = _wa_link("Hola, quiero el Plan Enterprise (USD 175/mes) de TUWAYKIAPP.")
@@ -1023,64 +1033,272 @@ def marketing_page() -> rx.Component:
             rx.el.section(
                 rx.el.div(
                     rx.el.h2(
-                        "Planes claros para cada etapa de crecimiento",
+                        "Elige como quieres usar TUWAYKIAPP",
                         class_name="reveal text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
                     ),
                     rx.el.p(
-                        "Elige tu plan, activa onboarding y escala sin cambiar de plataforma.",
+                        "Dos modalidades, el mismo sistema completo. Elige la que mejor se adapte a tu negocio.",
                         class_name="reveal mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
                     ),
+                    # ── Tabs selector ──
                     rx.el.div(
-                        _plan_card(
-                            "Standard",
-                            "Ideal para negocios que quieren orden operativo desde el inicio.",
-                            "$45",
-                            [
-                                "Hasta 5 sucursales",
-                                "Hasta 10 usuarios",
-                                "Punto de venta + caja + inventario",
-                                "Reportes base y soporte comercial",
-                            ],
-                            "Elegir Standard",
-                            standard_link,
-                            "click_plan_standard",
-                            tone="standard",
+                        rx.el.button(
+                            rx.icon("cloud", class_name="h-4 w-4"),
+                            "Servicio en la Nube",
+                            id="tab-nube",
+                            class_name="tab-btn active inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 cursor-pointer",
+                            on_click=rx.call_script(
+                                "document.getElementById('panel-nube').style.display='block';"
+                                "document.getElementById('panel-local').style.display='none';"
+                                "document.getElementById('tab-nube').classList.add('active');"
+                                "document.getElementById('tab-local').classList.remove('active');"
+                            ),
                         ),
-                        _plan_card(
-                            "Professional",
-                            "Para operaciones de mayor volumen y necesidad de control avanzado.",
-                            "$75",
-                            [
-                                "Hasta 10 sucursales",
-                                "Usuarios ilimitados",
-                                "Configuraciones avanzadas",
-                                "Prioridad de soporte",
-                                "Mayor profundidad de reportes",
-                            ],
-                            "Elegir Professional",
-                            professional_link,
-                            "click_plan_professional",
-                            tone="professional",
-                            badge_text="Mas elegido",
+                        rx.el.button(
+                            rx.icon("hard-drive", class_name="h-4 w-4"),
+                            "Instalacion Local",
+                            id="tab-local",
+                            class_name="tab-btn inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all duration-200 cursor-pointer",
+                            on_click=rx.call_script(
+                                "document.getElementById('panel-local').style.display='block';"
+                                "document.getElementById('panel-nube').style.display='none';"
+                                "document.getElementById('tab-local').classList.add('active');"
+                                "document.getElementById('tab-nube').classList.remove('active');"
+                            ),
                         ),
-                        _plan_card(
-                            "Enterprise",
-                            "Para companias con demanda de escala, personalizacion y SLA dedicado.",
-                            "$175",
-                            [
-                                "Plan personalizable por operacion",
-                                "Onboarding y arquitectura dedicada",
-                                "Integraciones y flujos a medida",
-                                "Acompanamiento prioritario",
-                                "Gobernanza enterprise",
-                            ],
-                            "Solicitar Enterprise",
-                            enterprise_link,
-                            "click_plan_enterprise",
-                            tone="enterprise",
-                            badge_text="Escala total",
+                        class_name="reveal mt-8 inline-flex gap-2 rounded-xl bg-slate-100 p-1.5",
+                    ),
+                    # ── Panel NUBE ──
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.div(
+                                    rx.icon("check-circle", class_name="h-5 w-5 text-emerald-600"),
+                                    rx.el.span("Ventajas", class_name="text-sm font-bold text-slate-900"),
+                                    class_name="flex items-center gap-2 mb-3",
+                                ),
+                                rx.el.ul(
+                                    *[
+                                        rx.el.li(
+                                            rx.icon("check", class_name="h-3.5 w-3.5 text-emerald-600 mt-0.5"),
+                                            rx.el.span(t, class_name="text-sm text-slate-700"),
+                                            class_name="flex items-start gap-2",
+                                        )
+                                        for t in [
+                                            "Accede desde cualquier dispositivo con internet",
+                                            "Actualizaciones automaticas sin intervencion",
+                                            "Backups diarios en la nube incluidos",
+                                            "Soporte tecnico remoto inmediato",
+                                            "Escalable: crece sin cambiar de infraestructura",
+                                            "Sin costos de hardware ni mantenimiento de servidor",
+                                        ]
+                                    ],
+                                    class_name="space-y-1.5",
+                                ),
+                                class_name="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4",
+                            ),
+                            rx.el.div(
+                                rx.el.div(
+                                    rx.icon("alert-circle", class_name="h-5 w-5 text-amber-600"),
+                                    rx.el.span("Consideraciones", class_name="text-sm font-bold text-slate-900"),
+                                    class_name="flex items-center gap-2 mb-3",
+                                ),
+                                rx.el.ul(
+                                    *[
+                                        rx.el.li(
+                                            rx.icon("minus", class_name="h-3.5 w-3.5 text-amber-600 mt-0.5"),
+                                            rx.el.span(t, class_name="text-sm text-slate-600"),
+                                            class_name="flex items-start gap-2",
+                                        )
+                                        for t in [
+                                            "Requiere conexion a internet estable",
+                                            "Pago mensual recurrente segun el plan",
+                                            "Los datos se alojan en servidores externos",
+                                        ]
+                                    ],
+                                    class_name="space-y-1.5",
+                                ),
+                                class_name="rounded-xl border border-amber-200 bg-amber-50/50 p-4",
+                            ),
+                            class_name="grid grid-cols-1 gap-4 sm:grid-cols-2 mt-6",
                         ),
-                        class_name="reveal-stagger mt-8 grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3",
+                        rx.el.div(
+                            rx.el.p("Planes disponibles", class_name="text-lg font-bold text-slate-900 mb-4"),
+                            rx.el.div(
+                                _plan_card(
+                                    "Standard",
+                                    "Ideal para negocios que quieren orden operativo desde el inicio.",
+                                    "$45",
+                                    [
+                                        "Hasta 5 sucursales",
+                                        "Hasta 10 usuarios",
+                                        "Punto de venta + caja + inventario",
+                                        "Reportes base y soporte comercial",
+                                    ],
+                                    "Elegir Standard",
+                                    standard_link,
+                                    "click_plan_standard",
+                                    tone="standard",
+                                ),
+                                _plan_card(
+                                    "Professional",
+                                    "Para operaciones de mayor volumen y necesidad de control avanzado.",
+                                    "$75",
+                                    [
+                                        "Hasta 10 sucursales",
+                                        "Usuarios ilimitados",
+                                        "Configuraciones avanzadas",
+                                        "Prioridad de soporte",
+                                        "Mayor profundidad de reportes",
+                                    ],
+                                    "Elegir Professional",
+                                    professional_link,
+                                    "click_plan_professional",
+                                    tone="professional",
+                                    badge_text="Mas elegido",
+                                ),
+                                _plan_card(
+                                    "Enterprise",
+                                    "Para companias con demanda de escala, personalizacion y SLA dedicado.",
+                                    "$175",
+                                    [
+                                        "Plan personalizable por operacion",
+                                        "Onboarding y arquitectura dedicada",
+                                        "Integraciones y flujos a medida",
+                                        "Acompanamiento prioritario",
+                                        "Gobernanza enterprise",
+                                    ],
+                                    "Solicitar Enterprise",
+                                    enterprise_link,
+                                    "click_plan_enterprise",
+                                    tone="enterprise",
+                                    badge_text="Escala total",
+                                ),
+                                class_name="reveal-stagger grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3",
+                            ),
+                            class_name="mt-6",
+                        ),
+                        id="panel-nube",
+                        style={"display": "block"},
+                    ),
+                    # ── Panel LOCAL ──
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.div(
+                                    rx.icon("check-circle", class_name="h-5 w-5 text-emerald-600"),
+                                    rx.el.span("Ventajas", class_name="text-sm font-bold text-slate-900"),
+                                    class_name="flex items-center gap-2 mb-3",
+                                ),
+                                rx.el.ul(
+                                    *[
+                                        rx.el.li(
+                                            rx.icon("check", class_name="h-3.5 w-3.5 text-emerald-600 mt-0.5"),
+                                            rx.el.span(t, class_name="text-sm text-slate-700"),
+                                            class_name="flex items-start gap-2",
+                                        )
+                                        for t in [
+                                            "Funciona sin conexion a internet",
+                                            "Pago unico anual — sin mensualidades",
+                                            "Tus datos permanecen 100% en tu equipo",
+                                            "Control total sobre tu infraestructura",
+                                            "Ideal para zonas con internet inestable",
+                                            "Rendimiento optimo sin depender de la red",
+                                        ]
+                                    ],
+                                    class_name="space-y-1.5",
+                                ),
+                                class_name="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4",
+                            ),
+                            rx.el.div(
+                                rx.el.div(
+                                    rx.icon("alert-circle", class_name="h-5 w-5 text-amber-600"),
+                                    rx.el.span("Consideraciones", class_name="text-sm font-bold text-slate-900"),
+                                    class_name="flex items-center gap-2 mb-3",
+                                ),
+                                rx.el.ul(
+                                    *[
+                                        rx.el.li(
+                                            rx.icon("minus", class_name="h-3.5 w-3.5 text-amber-600 mt-0.5"),
+                                            rx.el.span(t, class_name="text-sm text-slate-600"),
+                                            class_name="flex items-start gap-2",
+                                        )
+                                        for t in [
+                                            "Requiere un equipo dedicado (PC o servidor local)",
+                                            "Los backups y mantenimiento los gestiona tu equipo",
+                                            "Solo se accede desde la red local (sin acceso remoto)",
+                                            "Las actualizaciones requieren instalacion manual",
+                                        ]
+                                    ],
+                                    class_name="space-y-1.5",
+                                ),
+                                class_name="rounded-xl border border-amber-200 bg-amber-50/50 p-4",
+                            ),
+                            class_name="grid grid-cols-1 gap-4 sm:grid-cols-2 mt-6",
+                        ),
+                        rx.el.div(
+                            rx.el.article(
+                                rx.el.span(
+                                    "Pago unico",
+                                    class_name="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700",
+                                ),
+                                rx.el.h3("Licencia Local", class_name="mt-2 text-lg font-bold text-slate-900"),
+                                rx.el.p(
+                                    "Instalamos el sistema en tu equipo. Un solo pago anual con soporte incluido.",
+                                    class_name="mt-2 text-sm text-slate-600",
+                                ),
+                                rx.el.div(
+                                    rx.el.p(
+                                        "Consultar",
+                                        class_name="mt-4 text-4xl font-extrabold tracking-tight text-slate-900",
+                                    ),
+                                    rx.el.p(
+                                        "USD / pago anual",
+                                        class_name="text-xs font-semibold uppercase tracking-wide text-slate-500",
+                                    ),
+                                ),
+                                rx.el.ul(
+                                    *[
+                                        rx.el.li(
+                                            rx.icon("check", class_name="h-4 w-4 text-indigo-600"),
+                                            rx.el.span(t, class_name="text-sm text-slate-700"),
+                                            class_name="flex items-start gap-2",
+                                        )
+                                        for t in [
+                                            "Sistema completo (ventas, caja, inventario, reportes)",
+                                            "Instalacion y configuracion inicial incluida",
+                                            "Soporte tecnico por 12 meses",
+                                            "Capacitacion inicial para tu equipo",
+                                            "Actualizaciones durante el periodo contratado",
+                                        ]
+                                    ],
+                                    class_name="mt-5 space-y-2",
+                                ),
+                                rx.el.a(
+                                    rx.icon("message-circle", class_name="h-4 w-4"),
+                                    "Consultar precio por WhatsApp",
+                                    href=local_link,
+                                    target="_blank",
+                                    rel="noopener noreferrer",
+                                    on_click=rx.call_script(
+                                        _track_event_script("click_plan_local", "plan_local")
+                                    ),
+                                    class_name=(
+                                        "mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl "
+                                        "bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white "
+                                        "transition-colors duration-150 hover:bg-indigo-700"
+                                    ),
+                                ),
+                                class_name=(
+                                    "glow-card rounded-2xl border border-indigo-200 ring-2 ring-indigo-400 "
+                                    "bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 "
+                                    "hover:shadow-xl max-w-md mx-auto"
+                                ),
+                            ),
+                            class_name="mt-6",
+                        ),
+                        id="panel-local",
+                        style={"display": "none"},
                     ),
                     class_name="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:px-8",
                     id="planes",
