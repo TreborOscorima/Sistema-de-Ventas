@@ -3,10 +3,10 @@ from urllib.parse import quote
 
 import reflex as rx
 
+from app.constants import WHATSAPP_NUMBER
 
 GA4_MEASUREMENT_ID = (os.getenv("GA4_MEASUREMENT_ID") or "").strip()
 META_PIXEL_ID = (os.getenv("META_PIXEL_ID") or "").strip()
-WHATSAPP_NUMBER = "5491168376517"
 
 
 def _wa_link(message: str) -> str:

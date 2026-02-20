@@ -13,6 +13,8 @@ Design System v2.0 - Estandarización UI/UX:
 import reflex as rx
 from typing import Callable
 
+from app.constants import WHATSAPP_NUMBER
+
 
 # =============================================================================
 # DESIGN TOKENS - Valores centralizados para consistencia global
@@ -45,7 +47,6 @@ TRANSITIONS = {
 
 # Focus states para accesibilidad
 FOCUS_RING = "focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-FOCUS_WITHIN = "focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500"
 
 
 # =============================================================================
@@ -75,11 +76,6 @@ BUTTON_STYLES = {
     "icon_indigo": f"p-2 text-indigo-500 hover:bg-indigo-100 active:bg-indigo-200 {RADIUS['full']} {TRANSITIONS['fast']}",
     "icon_ghost": f"p-2 text-slate-500 hover:bg-slate-100 active:bg-slate-200 {RADIUS['full']} {TRANSITIONS['fast']}",
 }
-
-# Alias de estilos para botones frecuentes
-blue_button = BUTTON_STYLES["primary"]
-green_button = BUTTON_STYLES["success"]
-
 
 # =============================================================================
 # INPUT STYLES - Con focus states mejorados
@@ -122,10 +118,6 @@ TABLE_STYLES = {
     "cell_currency": "py-4 px-4 text-sm font-semibold text-slate-900 tabular-nums text-right",
 }
 
-# Alias para compatibilidad
-TABLE_HEADER_STYLE = TABLE_STYLES["header"]
-TABLE_ROW_STYLE = TABLE_STYLES["row"]
-
 # Alto de fila de textarea (en pixeles) para calcular min-height
 TEXTAREA_ROW_HEIGHT = 24
 
@@ -133,94 +125,6 @@ TEXTAREA_ROW_HEIGHT = 24
 # =============================================================================
 # REUSABLE COMPONENTS - Componentes con estilos consistentes
 # =============================================================================
-
-# Tamaños para currency_display
-_CURRENCY_SIZES = {
-    "sm": "text-sm font-medium",
-    "md": "text-base font-semibold", 
-    "lg": "text-lg font-bold",
-    "xl": "text-2xl font-bold",
-    "2xl": "text-3xl font-extrabold",
-}
-
-
-def currency_display(
-    value: rx.Var | str,
-    symbol: rx.Var | str = "S/",
-    size: str = "lg",
-    color: str = "text-slate-900",
-    show_symbol: bool = True,
-) -> rx.Component:
-    """
-    Muestra valores monetarios con formato consistente.
-    
-    Usa tabular-nums para alineación perfecta en columnas.
-    
-    Args:
-        value: Valor numérico formateado (ej: "1,234.56")
-        symbol: Símbolo de moneda (ej: "S/", "$", "€")
-        size: sm | md | lg | xl | 2xl
-        color: Clase de color Tailwind
-        show_symbol: Si mostrar el símbolo de moneda
-    
-    Returns:
-        Componente con valor monetario estilizado
-    """
-    size_class = _CURRENCY_SIZES.get(size, _CURRENCY_SIZES["lg"])
-    
-    return rx.el.span(
-        rx.cond(
-            show_symbol,
-            rx.el.span(symbol, class_name="text-slate-500 mr-0.5"),
-            rx.fragment(),
-        ),
-        rx.el.span(value),
-        class_name=f"{size_class} {color} tabular-nums tracking-tight",
-    )
-
-
-# Tamaños para loading_spinner
-_SPINNER_SIZES = {
-    "sm": "h-4 w-4",
-    "md": "h-6 w-6",
-    "lg": "h-8 w-8",
-    "xl": "h-12 w-12",
-}
-
-
-def loading_spinner(
-    size: str = "md",
-    color: str = "text-indigo-600",
-    label: str | None = None,
-) -> rx.Component:
-    """
-    Spinner de carga con animación suave.
-    
-    Args:
-        size: sm | md | lg | xl
-        color: Clase de color Tailwind
-        label: Texto opcional debajo del spinner
-    
-    Returns:
-        Componente de spinner animado
-    """
-    size_class = _SPINNER_SIZES.get(size, _SPINNER_SIZES["md"])
-    
-    spinner = rx.el.div(
-        rx.el.div(
-            class_name=f"{size_class} {color} animate-spin rounded-full border-2 border-current border-t-transparent",
-        ),
-        class_name="flex justify-center",
-    )
-    
-    if label:
-        return rx.el.div(
-            spinner,
-            rx.el.p(label, class_name="mt-2 text-sm text-slate-500 text-center"),
-            class_name="flex flex-col items-center",
-        )
-    
-    return spinner
 
 
 def permission_guard(
@@ -326,127 +230,6 @@ def page_header(
     )
 
 
-def empty_state(
-    icon: str = "inbox",
-    title: str = "Sin datos",
-    description: str | None = None,
-    action: rx.Component | None = None,
-) -> rx.Component:
-    """
-    Estado vacío para listas y tablas sin datos.
-    
-    Args:
-        icon: Nombre del icono Lucide
-        title: Título del estado vacío
-        description: Descripción opcional
-        action: Botón de acción opcional
-    
-    Returns:
-        Componente de estado vacío centrado
-    """
-    content = [
-        rx.el.div(
-            rx.icon(icon, class_name="h-12 w-12 text-slate-300"),
-            class_name="mb-4",
-        ),
-        rx.el.h3(title, class_name="text-sm font-medium text-slate-900"),
-    ]
-    
-    if description:
-        content.append(
-            rx.el.p(description, class_name="mt-1 text-sm text-slate-500")
-        )
-    
-    if action:
-        content.append(
-            rx.el.div(action, class_name="mt-4")
-        )
-    
-    return rx.el.div(
-        *content,
-        class_name="flex flex-col items-center justify-center py-12 text-center",
-    )
-
-
-def stat_card(
-    label: str,
-    value: rx.Var | str,
-    icon: str | None = None,
-    trend: rx.Var | str | None = None,
-    trend_up: rx.Var | bool | None = None,
-    variant: str = "default",
-) -> rx.Component:
-    """
-    Tarjeta de estadística para dashboards.
-    
-    Args:
-        label: Etiqueta de la métrica
-        value: Valor principal
-        icon: Icono Lucide opcional
-        trend: Texto de tendencia (ej: "+12%")
-        trend_up: Si la tendencia es positiva
-        variant: default | highlight
-    
-    Returns:
-        Componente de tarjeta de estadística
-    """
-    card_class = CARD_STYLES.get(variant, CARD_STYLES["default"])
-    
-    header = []
-    if icon:
-        header.append(
-            rx.el.div(
-                rx.icon(icon, class_name="h-5 w-5 text-slate-400"),
-                class_name=f"p-2 bg-slate-100 {RADIUS['lg']}",
-            )
-        )
-    
-    header.append(
-        rx.el.span(label, class_name="text-sm font-medium text-slate-500")
-    )
-    
-    value_section = [
-        rx.el.span(value, class_name="text-2xl font-bold text-slate-900 tabular-nums")
-    ]
-    
-    if trend is not None and trend_up is not None:
-        trend_color = rx.cond(
-            trend_up,
-            "text-emerald-600 bg-emerald-50",
-            "text-red-600 bg-red-50",
-        ) if isinstance(trend_up, rx.Var) else (
-            "text-emerald-600 bg-emerald-50" if trend_up else "text-red-600 bg-red-50"
-        )
-        trend_icon = rx.cond(
-            trend_up,
-            rx.icon("trending-up", class_name="h-3 w-3"),
-            rx.icon("trending-down", class_name="h-3 w-3"),
-        ) if isinstance(trend_up, rx.Var) else (
-            rx.icon("trending-up", class_name="h-3 w-3") if trend_up 
-            else rx.icon("trending-down", class_name="h-3 w-3")
-        )
-        
-        value_section.append(
-            rx.el.span(
-                trend_icon,
-                rx.el.span(trend, class_name="ml-1"),
-                class_name=f"ml-2 inline-flex items-center px-2 py-0.5 text-xs font-medium {RADIUS['full']} {trend_color}",
-            )
-        )
-    
-    return rx.el.div(
-        rx.el.div(
-            *header,
-            class_name="flex items-center gap-3 mb-3",
-        ),
-        rx.el.div(
-            *value_section,
-            class_name="flex items-baseline",
-        ),
-        class_name=card_class,
-    )
-
-
 def action_button(
     text: str | rx.Component,
     on_click: Callable,
@@ -510,32 +293,6 @@ def action_button(
     )
 
 
-def icon_button(
-    icon: str,
-    on_click: Callable,
-    variant: str = "icon_primary",
-    disabled: rx.Var | bool = False,
-    aria_label: str = "",
-) -> rx.Component:
-    """
-    Crea un boton circular solo con icono.
-
-    Parametros:
-        icon: Nombre del icono (lucide)
-        on_click: Manejador de click
-        variant: Variante de estilo en BUTTON_STYLES
-        disabled: Si el boton esta deshabilitado
-        aria_label: Etiqueta de accesibilidad
-    """
-    return rx.el.button(
-        rx.icon(icon, class_name="h-4 w-4"),
-        on_click=on_click,
-        disabled=disabled,
-        aria_label=aria_label,
-        class_name=BUTTON_STYLES.get(variant, BUTTON_STYLES["icon_primary"]),
-    )
-
-
 def form_field(
     label: str,
     input_component: rx.Component,
@@ -592,76 +349,6 @@ def toggle_switch(
         ),
         rx.el.span(rx.el.span(class_name=thumb_class), class_name=track_class),
         class_name=f"inline-flex items-center cursor-pointer {class_name}".strip(),
-    )
-
-
-def text_input(
-    placeholder: str = "",
-    value: rx.Var | str = "",
-    on_change: Callable | None = None,
-    input_type: str = "text",
-    disabled: bool = False,
-    style: str = "default",
-    debounce_timeout: int = 300,
-) -> rx.Component:
-    """
-    Crea un input de texto con estilo.
-
-    Parametros:
-        placeholder: Texto placeholder
-        value: Valor del input (puede ser reactivo)
-        on_change: Manejador de cambio
-        input_type: Tipo de input HTML
-        disabled: Si el input esta deshabilitado
-        style: Clave de estilo en INPUT_STYLES
-        debounce_timeout: Tiempo de debounce en ms
-    """
-    return rx.el.input(
-        type=input_type,
-        placeholder=placeholder,
-        value=value,
-        on_change=on_change,
-        disabled=disabled,
-        class_name=INPUT_STYLES.get(
-            "disabled" if disabled else style, 
-            INPUT_STYLES["default"]
-        ),
-        debounce_timeout=debounce_timeout,
-    )
-
-
-def section_card(
-    title: str,
-    description: str = "",
-    children: list[rx.Component] | None = None,
-    style: str = "bordered",
-) -> rx.Component:
-    """
-    Crea una seccion en formato card con titulo y descripcion opcional.
-
-    Parametros:
-        title: Titulo de la seccion
-        description: Texto de descripcion opcional
-        children: Componentes hijos
-        style: Clave de estilo en CARD_STYLES
-    """
-    header_parts = [
-        rx.el.h3(title, class_name="text-lg font-semibold text-slate-800"),
-    ]
-    if description:
-        header_parts.append(
-            rx.el.p(description, class_name="text-sm text-slate-600")
-        )
-    
-    content_parts = [
-        rx.el.div(*header_parts, class_name="flex flex-col gap-1"),
-    ]
-    if children:
-        content_parts.extend(children)
-    
-    return rx.el.div(
-        *content_parts,
-        class_name=f"{CARD_STYLES.get(style, CARD_STYLES['default'])} flex flex-col gap-4",
     )
 
 
@@ -956,15 +643,15 @@ def pricing_modal(
         )
 
     standard_link = (
-        "https://wa.me/5491168376517?text="
+        f"https://wa.me/{WHATSAPP_NUMBER}?text="
         "Hola,%20quiero%20el%20Plan%20Standard%20(USD%2045/mes)%20de%20TUWAYKIAPP."
     )
     professional_link = (
-        "https://wa.me/5491168376517?text="
+        f"https://wa.me/{WHATSAPP_NUMBER}?text="
         "Hola,%20quiero%20el%20Plan%20Professional%20(USD%2075/mes)%20de%20TUWAYKIAPP."
     )
     enterprise_link = (
-        "https://wa.me/5491168376517?text="
+        f"https://wa.me/{WHATSAPP_NUMBER}?text="
         "Hola,%20quiero%20el%20Plan%20Enterprise%20(USD%20175/mes)%20de%20TUWAYKIAPP."
     )
 
@@ -1033,37 +720,55 @@ def pricing_modal(
     )
 
 
-def filter_section(
-    filters: list[rx.Component],
-    on_search: Callable,
-    on_reset: Callable,
-    extra_buttons: list[rx.Component] | None = None,
-    grid_cols: str = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
-) -> rx.Component:
-    """
-    Crea una seccion de filtros estandarizada.
+# =============================================================================
+# PAYMENT METHOD BADGE - Componente unificado para badges de método de pago
+# =============================================================================
 
-    Parametros:
-        filters: Lista de componentes de filtro
-        on_search: Manejador del boton buscar
-        on_reset: Manejador del boton limpiar
-        extra_buttons: Botones de accion adicionales
-        grid_cols: Clases Tailwind para columnas del grid
-    """
-    buttons = [
-        action_button("Buscar", on_search, variant="primary", icon="search"),
-        action_button("Limpiar", on_reset, variant="secondary"),
-    ]
-    if extra_buttons:
-        buttons.extend(extra_buttons)
-    
-    return rx.el.div(
-        *filters,
-        rx.el.div(
-            *buttons,
-            class_name="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end",
+def _method_chip(label: rx.Var | str, color_classes: str) -> rx.Component:
+    """Chip estilizado para representar un método de pago."""
+    return rx.el.span(
+        label,
+        class_name=(
+            "inline-flex items-center rounded-full px-2 py-0.5 "
+            f"text-[11px] font-semibold tracking-wide {color_classes}"
         ),
-        class_name=f"grid {grid_cols} gap-3 sm:gap-4 items-end",
+    )
+
+
+def payment_method_badge(method: rx.Var[str]) -> rx.Component:
+    """Badge unificado para mostrar el método de pago con colores distintivos."""
+    is_empty = (method == None) | (method == "") | (method == "-") | (method == "No especificado")  # noqa: E711
+    return rx.cond(
+        is_empty,
+        _method_chip("No especificado", "bg-slate-100 text-slate-500"),
+        rx.match(
+            method,
+            # Crédito / Fiado
+            ("Crédito", _method_chip("Crédito", "bg-amber-100 text-amber-700")),
+            ("Credito", _method_chip("Crédito", "bg-amber-100 text-amber-700")),
+            ("Crédito c/ Inicial", _method_chip("Crédito c/ Inicial", "bg-amber-100 text-amber-700")),
+            ("Credito c/ Inicial", _method_chip("Crédito c/ Inicial", "bg-amber-100 text-amber-700")),
+            # Efectivo
+            ("Efectivo", _method_chip("Efectivo", "bg-emerald-100 text-emerald-700")),
+            # Billeteras digitales
+            ("Yape", _method_chip("Yape", "bg-violet-100 text-violet-700")),
+            ("Billetera Digital (Yape)", _method_chip("Yape", "bg-violet-100 text-violet-700")),
+            ("Plin", _method_chip("Plin", "bg-violet-100 text-violet-700")),
+            ("Billetera Digital (Plin)", _method_chip("Plin", "bg-violet-100 text-violet-700")),
+            # Transferencia
+            ("Transferencia", _method_chip("Transferencia", "bg-sky-100 text-sky-700")),
+            ("Transferencia Bancaria", _method_chip("Transferencia", "bg-sky-100 text-sky-700")),
+            # Tarjetas
+            ("Tarjeta", _method_chip(method, "bg-blue-100 text-blue-700")),
+            ("T. Debito", _method_chip("T. Débito", "bg-blue-100 text-blue-700")),
+            ("T. Credito", _method_chip("T. Crédito", "bg-blue-100 text-blue-700")),
+            ("Tarjeta de Débito", _method_chip("Tarjeta Débito", "bg-blue-100 text-blue-700")),
+            ("Tarjeta de Crédito", _method_chip("Tarjeta Crédito", "bg-blue-100 text-blue-700")),
+            # Pago mixto
+            ("Pago Mixto", _method_chip("Mixto", "bg-amber-100 text-amber-700")),
+            # Fallback
+            _method_chip(method, "bg-slate-100 text-slate-600"),
+        ),
     )
 
 
@@ -1108,38 +813,6 @@ def date_range_filter(
                 class_name=INPUT_STYLES["default"],
             ),
         ),
-    )
-
-
-def stat_card(
-    icon: str,
-    title: str,
-    value: rx.Var | rx.Component,
-    icon_color: str = "text-slate-600",
-) -> rx.Component:
-    """
-    Crea una card de estadistica con icono, titulo y valor.
-
-    Parametros:
-        icon: Nombre del icono (lucide)
-        title: Titulo o etiqueta de la card
-        value: Valor a mostrar (puede ser var reactiva o componente)
-        icon_color: Clase Tailwind de color para el icono
-
-    Retorna:
-        Componente de card con estilo
-    """
-    return rx.el.div(
-        rx.el.div(
-            rx.icon(icon, class_name=f"h-6 w-6 {icon_color}"),
-            class_name="p-3 bg-slate-100 rounded-lg",
-        ),
-        rx.el.div(
-            rx.el.p(title, class_name="text-sm font-medium text-slate-500"),
-            rx.el.p(value, class_name="text-2xl font-bold text-slate-800"),
-            class_name="flex-grow",
-        ),
-        class_name="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border",
     )
 
 
@@ -1190,60 +863,6 @@ def pagination_controls(
             ),
         ),
         class_name="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 mt-6",
-    )
-
-
-def data_table(
-    headers: list[tuple[str, str]],
-    rows: rx.Component,
-    empty_message: str = "No hay datos disponibles.",
-    has_data: rx.Var | bool = True,
-) -> rx.Component:
-    """
-    Crea una tabla de datos con estilo.
-
-    Parametros:
-        headers: Lista de tuplas (texto, clase de alineacion)
-        rows: Contenido de tbody (usualmente rx.foreach)
-        empty_message: Mensaje cuando la tabla esta vacia
-        has_data: Si hay datos para mostrar (puede ser var reactiva)
-
-    Retorna:
-        Componente de tabla con estilo
-    """
-    header_cells = [
-        rx.el.th(text, class_name=f"{TABLE_STYLES['header_cell']} {align}")
-        for text, align in headers
-    ]
-    
-    # Construir el componente de estado vacio
-    empty_component = rx.el.p(empty_message, class_name="text-slate-500 text-center py-8")
-    
-    # Manejar has_data reactivo o estatico
-    if isinstance(has_data, rx.Var):
-        # Para vars reactivas, usar rx.cond
-        empty_state_section = rx.cond(
-            has_data,
-            rx.fragment(),
-            empty_component,
-        )
-    else:
-        # Para booleanos estaticos, incluir condicionalmente el componente
-        empty_state_section = rx.fragment() if has_data else empty_component
-    
-    return rx.el.div(
-        rx.el.div(
-            rx.el.table(
-                rx.el.thead(
-                    rx.el.tr(*header_cells, class_name=TABLE_HEADER_STYLE)
-                ),
-                rx.el.tbody(rows),
-                class_name="min-w-[640px]",
-            ),
-            class_name="w-full overflow-x-auto",
-        ),
-        empty_state_section,
-        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4",
     )
 
 
@@ -1335,104 +954,6 @@ def info_badge(
     return rx.el.span(
         text,
         class_name=f"px-2 py-1 text-xs font-semibold rounded-full {style_class}",
-    )
-
-
-def form_input(
-    label: str,
-    value: rx.Var | str,
-    on_change: Callable,
-    input_type: str = "text",
-    placeholder: str = "",
-    disabled: bool = False,
-    step: str | None = None,
-) -> rx.Component:
-    """
-    Crea un input con etiqueta.
-
-    Parametros:
-        label: Texto de la etiqueta
-        value: Valor del input (puede ser reactivo)
-        on_change: Manejador de cambio
-        input_type: Tipo de input HTML (text, number, date, etc.)
-        placeholder: Texto placeholder
-        disabled: Si el input esta deshabilitado
-        step: Step para inputs numericos
-
-    Retorna:
-        Componente de input con etiqueta
-    """
-    input_props = {
-        "type": input_type,
-        "placeholder": placeholder,
-        "value": value,
-        "on_change": on_change,
-        "disabled": disabled,
-        "class_name": INPUT_STYLES["disabled"] if disabled else INPUT_STYLES["default"],
-    }
-    if step:
-        input_props["step"] = step
-    
-    return rx.el.div(
-        rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
-        rx.el.input(**input_props),
-        class_name="flex flex-col gap-1",
-    )
-
-
-def form_select(
-    label: str,
-    options: list[tuple[str, str]] | rx.Var,
-    value: rx.Var | str,
-    on_change: Callable,
-    placeholder: str | None = None,
-) -> rx.Component:
-    """
-    Crea un select con etiqueta.
-
-    Parametros:
-        label: Texto de la etiqueta del select
-        options: Lista de tuplas (texto, valor) o var reactiva
-        value: Valor seleccionado
-        on_change: Manejador de cambio
-        placeholder: Opcion placeholder opcional
-
-    Retorna:
-        Componente de select con etiqueta
-    """
-    option_elements = []
-    if placeholder:
-        option_elements.append(rx.el.option(placeholder, value=""))
-    
-    # Manejar lista estatica o var reactiva de opciones
-    if isinstance(options, rx.Var):
-        return rx.el.div(
-            rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
-            rx.el.select(
-                rx.el.option(placeholder, value="") if placeholder else rx.fragment(),
-                rx.foreach(
-                    options,
-                    lambda opt: rx.el.option(opt[0], value=opt[1]),
-                ),
-                value=value,
-                on_change=on_change,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-            ),
-            class_name="flex flex-col gap-1",
-        )
-    
-    for display_text, opt_value in options:
-        option_elements.append(rx.el.option(display_text, value=opt_value))
-    
-    return rx.el.div(
-        rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
-        rx.el.select(
-            *option_elements,
-            value=value,
-            on_change=on_change,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-        ),
-        class_name="flex flex-col gap-1",
     )
 
 

@@ -15,7 +15,7 @@ from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from typing import Any
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 
 # Estilos por defecto para exportaciones Excel
@@ -60,12 +60,12 @@ def _sanitize_excel_value(value: Any) -> Any:
 
 
 def _safe_decimal(value: Any) -> Decimal:
-    """Convierte un valor a Decimal de forma segura."""
+    """Convierte un valor a Decimal de forma segura, evitando corrupción de datos."""
     if value is None:
         return Decimal("0")
     try:
         return Decimal(str(value))
-    except:
+    except (ValueError, TypeError, InvalidOperation):
         return Decimal("0")
 
 
@@ -256,17 +256,6 @@ def add_data_rows(
                 cell.border = THIN_BORDER
         current_row += 1
     return current_row
-
-
-def add_simple_headers(ws: Worksheet, headers: list[str]) -> None:
-    """
-    Agrega encabezados simples a la primera fila (sin estilo).
-    
-    Parametros:
-        ws: Hoja a modificar
-        headers: Lista de encabezados
-    """
-    ws.append(headers)
 
 
 def auto_adjust_column_widths(ws: Worksheet, min_width: int = 10, max_width: int = 50) -> None:

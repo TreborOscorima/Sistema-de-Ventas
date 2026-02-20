@@ -10,6 +10,11 @@ from sqlmodel import select
 from sqlalchemy import func, or_, text
 from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel, SalePayment, CashboxLog
 from app.enums import SaleStatus, ReservationStatus, PaymentMethodType
+from app.utils.payment import (
+    normalize_payment_method_kind,
+    card_method_type,
+    wallet_method_type,
+)
 from app.utils.sanitization import (
     sanitize_name,
     sanitize_dni,
@@ -190,38 +195,13 @@ class ServicesState(MixinState):
         return db_status == target
 
     def _payment_method_type_from_kind(self, kind: str) -> PaymentMethodType:
-        normalized = (kind or "").strip().lower()
-        if normalized == "cash":
-            return PaymentMethodType.CASH
-        if normalized == "debit":
-            return PaymentMethodType.DEBIT
-        if normalized == "credit":
-            return PaymentMethodType.CREDIT
-        if normalized == "yape":
-            return PaymentMethodType.YAPE
-        if normalized == "plin":
-            return PaymentMethodType.PLIN
-        if normalized == "transfer":
-            return PaymentMethodType.TRANSFER
-        if normalized == "mixed":
-            return PaymentMethodType.MIXED
-        if normalized == "card":
-            return PaymentMethodType.CREDIT
-        if normalized == "wallet":
-            return PaymentMethodType.YAPE
-        return PaymentMethodType.OTHER
+        return normalize_payment_method_kind(kind)
 
     def _card_method_type(self, card_type: str) -> PaymentMethodType:
-        value = (card_type or "").strip().lower()
-        if "deb" in value:
-            return PaymentMethodType.DEBIT
-        return PaymentMethodType.CREDIT
+        return card_method_type(card_type)
 
     def _wallet_method_type(self, provider: str) -> PaymentMethodType:
-        value = (provider or "").strip().lower()
-        if "plin" in value:
-            return PaymentMethodType.PLIN
-        return PaymentMethodType.YAPE
+        return wallet_method_type(provider)
 
     def _build_reservation_payments(
         self, total: float

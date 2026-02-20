@@ -9,8 +9,7 @@ from app.utils.timezone import is_valid_timezone
 from app.enums import PaymentMethodType
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
-
-WHATSAPP_SALES_URL = "https://wa.me/message/ULLEZ4HUFB5HA1"
+from app.constants import WHATSAPP_SALES_URL
 
 _REGIONAL_TIMEZONES = [
     "America/Lima",

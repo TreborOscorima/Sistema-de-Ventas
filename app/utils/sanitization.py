@@ -78,21 +78,6 @@ def sanitize_notes_preserve_spaces(value: Any) -> str:
     return sanitize_text_preserve_spaces(value, max_length=250)
 
 
-def sanitize_description(value: Any) -> str:
-    """
-    Sanitiza descripciones de productos o servicios.
-
-    Límite de 200 caracteres.
-
-    Args:
-        value: Descripción a sanitizar
-
-    Returns:
-        String sanitizado
-    """
-    return sanitize_text(value, max_length=200)
-
-
 def sanitize_name(value: Any) -> str:
     """
     Sanitiza nombres (clientes, usuarios, etc).
@@ -152,21 +137,6 @@ def sanitize_dni(value: Any) -> str:
     return cleaned[:20]
 
 
-def sanitize_address(value: Any) -> str:
-    """
-    Sanitiza direcciones.
-
-    Límite de 300 caracteres.
-
-    Args:
-        value: Dirección a sanitizar
-
-    Returns:
-        String sanitizado
-    """
-    return sanitize_text(value, max_length=300)
-
-
 def sanitize_barcode(value: Any) -> str:
     """
     Sanitiza códigos de barra.
@@ -207,41 +177,6 @@ def sanitize_reason(value: Any) -> str:
 def sanitize_reason_preserve_spaces(value: Any) -> str:
     """Sanitiza razones sin eliminar espacios al final (para inputs en vivo)."""
     return sanitize_text_preserve_spaces(value, max_length=200)
-
-
-def validate_positive_decimal(value: Any) -> bool:
-    """
-    Valida que un valor sea un decimal positivo.
-
-    Args:
-        value: Valor a validar
-
-    Returns:
-        True si es un decimal positivo válido
-    """
-    try:
-        from decimal import Decimal, InvalidOperation
-        parsed = Decimal(str(value or 0))
-        return parsed >= 0
-    except (InvalidOperation, ValueError, TypeError):
-        return False
-
-
-def validate_positive_integer(value: Any) -> bool:
-    """
-    Valida que un valor sea un entero positivo.
-
-    Args:
-        value: Valor a validar
-
-    Returns:
-        True si es un entero positivo válido
-    """
-    try:
-        parsed = int(value)
-        return parsed >= 0
-    except (ValueError, TypeError):
-        return False
 
 
 def is_valid_phone(phone: str, country_code: str = "PE") -> bool:
@@ -292,35 +227,6 @@ def is_valid_personal_id(id_value: str, country_code: str = "PE") -> bool:
     
     config = get_country_config(country_code)
     min_len, max_len = config.get("personal_id_length", (6, 12))
-    return min_len <= len(cleaned) <= max_len
-
-
-def is_valid_tax_id(tax_id: str, country_code: str = "PE") -> bool:
-    """
-    Valida formato de identificación tributaria según el país.
-    
-    - Perú: RUC (11 dígitos)
-    - Argentina: CUIT (11 dígitos)
-    - Ecuador: RUC (13 dígitos)
-    - Colombia: NIT (9-10 dígitos)
-    - Chile: RUT (8-9 caracteres)
-    - México: RFC (12-13 caracteres)
-
-    Args:
-        tax_id: Identificación tributaria a validar
-        country_code: Código ISO del país (default: PE)
-
-    Returns:
-        True si es un formato válido para el país
-    """
-    from app.utils.db_seeds import get_country_config
-    
-    cleaned = re.sub(r"[^A-Za-z0-9]", "", tax_id or "")
-    if not cleaned:
-        return True  # Campo opcional, vacío es válido
-    
-    config = get_country_config(country_code)
-    min_len, max_len = config.get("tax_id_length", (8, 13))
     return min_len <= len(cleaned) <= max_len
 
 

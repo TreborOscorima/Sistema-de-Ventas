@@ -2,25 +2,14 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
-
-try:
-    from pydantic import ConfigDict
-except ImportError:  # Pydantic v1 (compatibilidad)
-    ConfigDict = None
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BaseSchema(BaseModel):
-    if ConfigDict is not None:
-        model_config = ConfigDict(extra="ignore")
-    else:
-        class Config:
-            extra = "ignore"
+    model_config = ConfigDict(extra="ignore")
 
     def to_dict(self) -> dict:
-        if hasattr(self, "model_dump"):
-            return self.model_dump()
-        return self.dict()
+        return self.model_dump()
 
 
 class SaleItemDTO(BaseSchema):

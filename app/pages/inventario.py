@@ -163,6 +163,42 @@ def edit_product_modal() -> rx.Component:
           ),
           class_name="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4",
         ),
+        # Modal de confirmación para desactivar mayoreo
+        rx.cond(
+          State.confirm_disable_wholesale,
+          rx.el.div(
+            rx.el.div(
+              rx.el.div(
+                rx.icon("triangle-alert", class_name="h-5 w-5 text-amber-500"),
+                rx.el.h4(
+                  "¿Desactivar precios mayoristas?",
+                  class_name="text-sm font-semibold text-slate-800",
+                ),
+                class_name="flex items-center gap-2",
+              ),
+              rx.el.p(
+                "Se eliminarán todas las escalas de precio configuradas para este producto. Esta acción no se puede deshacer.",
+                class_name="text-xs text-slate-500 mt-2",
+              ),
+              rx.el.div(
+                rx.el.button(
+                  "Cancelar",
+                  on_click=State.confirm_disable_wholesale_no,
+                  class_name="px-3 py-1.5 text-xs rounded-md border text-slate-700 hover:bg-slate-50",
+                ),
+                rx.el.button(
+                  "Sí, desactivar",
+                  on_click=State.confirm_disable_wholesale_yes,
+                  class_name="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700",
+                ),
+                class_name="flex justify-end gap-2 mt-3",
+              ),
+              class_name="p-4 bg-amber-50 border border-amber-200 rounded-lg",
+            ),
+            class_name="mt-3",
+          ),
+          rx.fragment(),
+        ),
         rx.cond(
           State.show_variants,
           rx.el.div(

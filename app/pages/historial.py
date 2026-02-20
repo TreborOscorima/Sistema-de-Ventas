@@ -5,6 +5,7 @@ from app.components.ui import (
   empty_state,
   select_filter,
   date_range_filter,
+  payment_method_badge,
   BUTTON_STYLES,
   TABLE_STYLES,
   page_title,
@@ -98,68 +99,6 @@ def history_filters() -> rx.Component:
       class_name="flex flex-wrap gap-2 justify-end",
     ),
     class_name="flex flex-col gap-3 pb-4 border-b border-slate-200",
-  )
-
-
-def payment_method_badge(method: rx.Var[str]) -> rx.Component:
-  return rx.cond(
-    method,
-    rx.match(
-      method,
-      (
-        "No especificado",
-        rx.el.span(
-          "No especificado",
-          class_name="text-xs font-semibold text-slate-400",
-        ),
-      ),
-      ("-", rx.el.span("-", class_name="text-xs font-semibold text-slate-400")),
-      ("Crédito", rx.badge("Crédito", color_scheme="yellow")),
-      ("Credito", rx.badge("Crédito", color_scheme="yellow")),
-      (
-        "Crédito c/ Inicial",
-        rx.badge("Crédito c/ Inicial", color_scheme="yellow"),
-      ),
-      (
-        "Credito c/ Inicial",
-        rx.badge("Crédito c/ Inicial", color_scheme="yellow"),
-      ),
-      ("Efectivo", rx.badge("Efectivo", color_scheme="green")),
-      ("Yape", rx.badge("Yape", color_scheme="purple")),
-      (
-        "Billetera Digital (Yape)",
-        rx.badge("Yape", color_scheme="purple"),
-      ),
-      ("Plin", rx.badge("Plin", color_scheme="pink")),
-      (
-        "Billetera Digital (Plin)",
-        rx.badge("Plin", color_scheme="pink"),
-      ),
-      (
-        "Transferencia",
-        rx.badge("Transferencia", color_scheme="orange"),
-      ),
-      (
-        "Transferencia Bancaria",
-        rx.badge("Transferencia", color_scheme="orange"),
-      ),
-      ("Pago Mixto", rx.badge("Pago Mixto", color_scheme="orange")),
-      ("T. Debito", rx.badge("T. Debito", color_scheme="blue")),
-      ("T. Credito", rx.badge("T. Credito", color_scheme="blue")),
-      (
-        "Tarjeta de Débito",
-        rx.badge("Tarjeta de Débito", color_scheme="blue"),
-      ),
-      (
-        "Tarjeta de Crédito",
-        rx.badge("Tarjeta de Crédito", color_scheme="blue"),
-      ),
-      rx.badge(method, color_scheme="gray"),
-    ),
-    rx.el.span(
-      "No especificado",
-      class_name="text-xs font-semibold text-slate-400",
-    ),
   )
 
 

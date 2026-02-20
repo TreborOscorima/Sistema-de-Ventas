@@ -2,7 +2,7 @@ import reflex as rx
 
 from app.state import State
 from app.components.ui import BUTTON_STYLES, RADIUS, SHADOWS, TRANSITIONS
-from app.states.config_state import WHATSAPP_SALES_URL
+from app.constants import WHATSAPP_SALES_URL
 
 
 def cuenta_suspendida_page() -> rx.Component:

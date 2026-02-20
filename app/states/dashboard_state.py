@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import reflex as rx
 from sqlmodel import select, func
-from sqlalchemy import and_, or_, extract
+from sqlalchemy import and_
 
 from app.models import (
     Sale,

@@ -1,11 +1,10 @@
 import reflex as rx
 from app.state import State
 from app.components.ui import (
+    BUTTON_STYLES,
     INPUT_STYLES,
     TABLE_STYLES,
     action_button,
-    blue_button,
-    green_button,
     modal_container,
     toggle_switch,
     permission_guard,
@@ -226,13 +225,13 @@ def sale_receipt_modal() -> rx.Component:
             rx.icon("download", class_name="h-4 w-4"),
             "Descargar PDF",
             on_click=State.download_pdf_receipt,
-            class_name=f"{blue_button} flex-1",
+            class_name=f"{BUTTON_STYLES['primary']} flex-1",
         ),
         rx.el.button(
             rx.icon("printer", class_name="h-4 w-4"),
             "Imprimir Ticket",
             on_click=State.print_receipt,
-            class_name=f"{green_button} flex-1",
+            class_name=f"{BUTTON_STYLES['success']} flex-1",
         ),
         spacing="2",
         class_name="w-full",
@@ -464,7 +463,18 @@ def quick_add_bar() -> rx.Component:
             ),
             # Precio
             rx.el.div(
-                rx.el.label("Precio", class_name="text-xs text-slate-500 sm:hidden"),
+                rx.el.div(
+                    rx.el.label("Precio", class_name="text-xs text-slate-500 sm:hidden"),
+                    rx.cond(
+                        State.wholesale_price_applied,
+                        rx.el.span(
+                            "Mayorista",
+                            class_name="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 leading-none",
+                        ),
+                        rx.fragment(),
+                    ),
+                    class_name="flex items-center gap-1.5",
+                ),
                 rx.el.div(
                     rx.el.span(State.currency_symbol, class_name="text-slate-400 text-sm"),
                     rx.el.input(
@@ -476,7 +486,11 @@ def quick_add_bar() -> rx.Component:
                         on_blur=lambda val: State.handle_sale_change("price", val),
                         class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
                     ),
-                    class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
+                    class_name=rx.cond(
+                        State.wholesale_price_applied,
+                        "flex items-center gap-1 px-3 py-2 border border-amber-300 rounded-lg bg-amber-50/50 focus-within:ring-2 focus-within:ring-amber-500",
+                        "flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
+                    ),
                 ),
                 class_name="flex flex-col gap-1 w-[122px] sm:w-28",
             ),

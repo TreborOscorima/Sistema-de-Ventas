@@ -29,13 +29,3 @@ def calculate_total(items: List[Dict[str, Any]], key: str = "subtotal") -> Decim
         total += _to_decimal(item.get(key, 0))
 
     return total.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
-
-
-def calculate_change(payment: Decimal, total: Decimal) -> Decimal:
-    """
-    Calcula el vuelto a devolver al cliente.
-    """
-    change = _to_decimal(payment) - _to_decimal(total)
-    if change <= 0:
-        return Decimal("0.00")
-    return change.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)

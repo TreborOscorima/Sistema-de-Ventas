@@ -7,23 +7,22 @@ contables y financieras con el nivel de detalle requerido.
 import io
 import re
 from datetime import datetime, timedelta
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
-import openpyxl
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, NamedStyle
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from openpyxl.chart import PieChart, BarChart, Reference
 
 from sqlmodel import select, func
-from sqlalchemy import and_, or_
+from sqlalchemy import and_
 from sqlalchemy.orm import selectinload
 
 from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User
 from app.enums import SaleStatus, PaymentMethodType
 from app.utils.tenant import set_tenant_context, tenant_bypass
+from app.utils.exports import _safe_decimal, _sanitize_excel_value
 
 
 # =============================================================================
@@ -145,15 +144,6 @@ def _style_header_row(ws: Worksheet, row: int, columns: list[str]) -> None:
         cell.border = THIN_BORDER
 
 
-def _add_totals_row(ws: Worksheet, row: int, data: list[Any], label_col: int = 1) -> None:
-    """Agrega fila de totales con estilo."""
-    for col_idx, value in enumerate(data, start=1):
-        cell = ws.cell(row=row, column=col_idx, value=value)
-        cell.font = Font(bold=True)
-        cell.fill = TOTAL_FILL
-        cell.border = THICK_BORDER_BOTTOM
-
-
 def _add_totals_row_with_formulas(
     ws: Worksheet, 
     row: int, 
@@ -230,26 +220,6 @@ def _add_notes_section(ws: Worksheet, row: int, notes: list[str], columns: int =
         row += 1
     
     return row
-
-
-def _safe_decimal(value: Any) -> Decimal:
-    """Convierte un valor a Decimal de forma segura, evitando corrupción de datos."""
-    if value is None:
-        return Decimal("0")
-    try:
-        return Decimal(str(value))
-    except (ValueError, TypeError, InvalidOperation):
-        return Decimal("0")
-
-
-def _sanitize_excel_value(value: Any) -> Any:
-    """Previene inyección de fórmulas en Excel."""
-    if not isinstance(value, str):
-        return value
-    stripped = value.lstrip()
-    if stripped.startswith(("=", "+", "-", "@")):
-        return f"'{value}"
-    return value
 
 
 def _safe_int(value: Any) -> int:
@@ -467,29 +437,6 @@ def _translate_payment_method(method: str) -> str:
     
     method_lower = method.lower().strip()
     return translations.get(method_lower, method.capitalize())
-
-
-def _translate_sale_status(status: str) -> str:
-    """
-    Traduce estados de venta a español legible.
-    
-    Args:
-        status: Código del estado
-    
-    Returns:
-        Estado en español
-    """
-    translations = {
-        "completed": "Completada",
-        "pending": "Pendiente",
-        "cancelled": "Anulada",
-        "voided": "Anulada",
-        "partial": "Parcial",
-        "credit": "A Crédito",
-        "paid": "Pagada",
-    }
-    
-    return translations.get(status.lower().strip(), status.capitalize())
 
 
 def _auto_adjust_columns(ws: Worksheet, min_width: int = 12, max_width: int = 50) -> None:

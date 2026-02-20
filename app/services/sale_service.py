@@ -66,6 +66,12 @@ from app.utils.calculations import calculate_subtotal, calculate_total
 from app.utils.db import get_async_session as get_session
 from app.utils.logger import get_logger
 from app.utils.tenant import set_tenant_context
+from app.utils.payment import (
+    normalize_payment_method_kind as _method_type_from_kind,
+    card_method_type as _card_method_type,
+    wallet_method_type as _wallet_method_type,
+    payment_method_code as _payment_method_code,
+)
 
 # Nota: get_session es un alias de get_async_session para uso interno.
 
@@ -422,21 +428,33 @@ async def calculate_item_price(
     company_id: int | None,
     branch_id: int | None,
     session: AsyncSession | None = None,
+    variant_id: int | None = None,
 ) -> Decimal:
     set_tenant_context(company_id, branch_id)
     if not product_id:
         return Decimal("0.00")
 
     async def _run(current_session: AsyncSession) -> Decimal:
-        tier_query = select(PriceTier).where(
-            PriceTier.product_id == product_id,
-            PriceTier.min_quantity <= qty,
+        # Buscar primero por variante si se proporcionó
+        if variant_id:
+            tier = await _get_price_tier(
+                current_session,
+                variant_id=variant_id,
+                qty=qty,
+                company_id=company_id,
+                branch_id=branch_id,
+            )
+            if tier and tier.unit_price is not None:
+                return _round_money(tier.unit_price)
+
+        # Luego buscar por producto
+        tier = await _get_price_tier(
+            current_session,
+            product_id=product_id,
+            qty=qty,
+            company_id=company_id,
+            branch_id=branch_id,
         )
-        tier_query = _apply_tenant_filters(
-            tier_query, PriceTier, company_id, branch_id
-        )
-        tier_query = tier_query.order_by(PriceTier.min_quantity.desc())
-        tier = (await current_session.exec(tier_query)).first()
         if tier and tier.unit_price is not None:
             return _round_money(tier.unit_price)
 
@@ -744,43 +762,6 @@ def _reservation_status_value(status: Any) -> str:
     return str(status or "").strip().lower()
 
 
-def _method_type_from_kind(kind: str) -> PaymentMethodType:
-    normalized = (kind or "").strip().lower()
-    if normalized == "cash":
-        return PaymentMethodType.cash
-    if normalized == "debit":
-        return PaymentMethodType.debit
-    if normalized == "credit":
-        return PaymentMethodType.credit
-    if normalized == "yape":
-        return PaymentMethodType.yape
-    if normalized == "plin":
-        return PaymentMethodType.plin
-    if normalized == "transfer":
-        return PaymentMethodType.transfer
-    if normalized == "mixed":
-        return PaymentMethodType.mixed
-    if normalized == "card":
-        return PaymentMethodType.credit
-    if normalized == "wallet":
-        return PaymentMethodType.yape
-    return PaymentMethodType.other
-
-
-def _card_method_type(card_type: str) -> PaymentMethodType:
-    value = (card_type or "").strip().lower()
-    if "deb" in value:
-        return PaymentMethodType.debit
-    return PaymentMethodType.credit
-
-
-def _wallet_method_type(provider: str) -> PaymentMethodType:
-    value = (provider or "").strip().lower()
-    if "plin" in value:
-        return PaymentMethodType.plin
-    return PaymentMethodType.yape
-
-
 def _allocate_mixed_payments(
     sale_total: Decimal,
     cash_amount: Decimal,
@@ -851,22 +832,6 @@ def _build_sale_payments(
     else:
         amount = sale_total
     return [(method_type, _round_money(amount))]
-
-
-def _payment_method_code(method_type: PaymentMethodType) -> str | None:
-    if method_type == PaymentMethodType.cash:
-        return "cash"
-    if method_type == PaymentMethodType.yape:
-        return "yape"
-    if method_type == PaymentMethodType.plin:
-        return "plin"
-    if method_type == PaymentMethodType.transfer:
-        return "transfer"
-    if method_type == PaymentMethodType.debit:
-        return "debit_card"
-    if method_type == PaymentMethodType.credit:
-        return "credit_card"
-    return None
 
 
 def _split_installments(total: Decimal, count: int) -> list[Decimal]:
@@ -952,6 +917,7 @@ class SaleService:
         company_id: int | None,
         branch_id: int | None,
         session: AsyncSession | None = None,
+        variant_id: int | None = None,
     ) -> Decimal:
         return await calculate_item_price(
             product_id,
@@ -959,6 +925,7 @@ class SaleService:
             company_id,
             branch_id,
             session=session,
+            variant_id=variant_id,
         )
 
     @staticmethod

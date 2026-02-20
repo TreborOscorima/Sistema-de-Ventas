@@ -4,7 +4,6 @@ from app.components.ui import (
   date_range_filter,
   select_filter,
   section_header,
-  card_container,
   BUTTON_STYLES,
   TABLE_STYLES,
   pagination_controls,

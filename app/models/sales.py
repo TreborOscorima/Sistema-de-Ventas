@@ -444,7 +444,3 @@ class CompanySettings(rx.Model, table=True):
     default_currency_code: str = Field(default="PEN", nullable=False)
     country_code: str = Field(default="PE", nullable=False)
     timezone: Optional[str] = Field(default=None)
-
-
-# Reexportación para compatibilidad con importaciones heredadas.
-from .inventory import PriceTier  # noqa: E402  pylint: disable=wrong-import-position

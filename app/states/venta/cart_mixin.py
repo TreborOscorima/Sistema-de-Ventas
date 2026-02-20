@@ -30,6 +30,7 @@ class CartMixin:
     autocomplete_selected_index: int = -1
     selected_product: Dict[str, Any] | None = None
     last_scanned_label: str = ""
+    wholesale_price_applied: bool = False
 
     async def _process_barcode(self, barcode: str):
         """Lógica compartida para procesar un código de barras."""
@@ -143,6 +144,9 @@ class CartMixin:
         )
         if not product_id:
             return None
+        variant_id = self._product_value(product, "variant_id", None)
+        if variant_id is None:
+            variant_id = self.new_sale_item.get("variant_id")
         qty = quantity_override
         if qty is None:
             qty = self.new_sale_item.get("quantity", 0)
@@ -152,11 +156,16 @@ class CartMixin:
         branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
         if not company_id or not branch_id:
             return None
+
+        # Guardar precio original para detectar si se aplicó tier
+        original_sale_price = self._product_value(product, "sale_price", 0)
+
         tier_price = await SaleService.calculate_item_price(
             int(product_id),
             Decimal(str(qty)),
             int(company_id),
             int(branch_id),
+            variant_id=int(variant_id) if variant_id else None,
         )
         if tier_price and tier_price > 0:
             self.new_sale_item["price"] = self._round_currency(tier_price)
@@ -164,6 +173,17 @@ class CartMixin:
             self.new_sale_item["subtotal"] = self._round_currency(
                 self.new_sale_item["quantity"] * self.new_sale_item["price"]
             )
+            # Indicar si el precio aplicado es mayorista (distinto al precio normal)
+            try:
+                is_wholesale = (
+                    original_sale_price
+                    and float(tier_price) != float(original_sale_price)
+                )
+            except (TypeError, ValueError):
+                is_wholesale = False
+            self.wholesale_price_applied = bool(is_wholesale)
+        else:
+            self.wholesale_price_applied = False
         return tier_price
 
     def _fill_sale_item_from_product(
@@ -237,8 +257,7 @@ class CartMixin:
         self.autocomplete_selected_index = -1
         self.selected_product = None
         self.last_scanned_label = ""
-
-    @rx.event
+        self.wholesale_price_applied = False
     async def handle_sale_change(self, field: str, value: Union[str, float]):
         try:
             if field in ["quantity", "price"]:

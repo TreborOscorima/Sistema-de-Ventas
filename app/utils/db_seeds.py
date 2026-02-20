@@ -393,18 +393,6 @@ def seed_new_branch_data(
         )
 
 
-def seed_new_company_data(
-    session: Session,
-    company_id: int,
-    branch_id: int | None = None,
-) -> None:
-    """Compatibilidad: carga datos base para una empresa/sucursal."""
-    if not company_id:
-        return
-    if branch_id:
-        seed_new_branch_data(session, company_id, branch_id)
-
-
 async def init_payment_methods(
     session: AsyncSession,
     company_id: int,

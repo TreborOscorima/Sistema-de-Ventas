@@ -98,6 +98,7 @@ class InventoryState(MixinState):
     is_editing_product: bool = False
     show_variants: bool = False
     show_wholesale: bool = False
+    confirm_disable_wholesale: bool = False
     variants: List[Dict[str, Any]] = []
     price_tiers: List[Dict[str, Any]] = []
     stock_details_open: bool = False
@@ -648,6 +649,7 @@ class InventoryState(MixinState):
         }
         self.show_variants = False
         self.show_wholesale = False
+        self.confirm_disable_wholesale = False
         self.variants = []
         self.price_tiers = []
         self.is_editing_product = True
@@ -741,6 +743,7 @@ class InventoryState(MixinState):
         }
         self.show_variants = False
         self.show_wholesale = False
+        self.confirm_disable_wholesale = False
         self.variants = []
         self.price_tiers = []
 
@@ -797,9 +800,25 @@ class InventoryState(MixinState):
     def set_show_wholesale(self, value: bool | str):
         if isinstance(value, str):
             value = value.lower() in ["true", "1", "on", "yes"]
+        if not bool(value) and self.price_tiers:
+            # Pedir confirmación antes de desactivar si hay tiers configurados
+            self.confirm_disable_wholesale = True
+            return
         self.show_wholesale = bool(value)
         if self.show_wholesale and not self.price_tiers:
             self.add_tier_row()
+
+    @rx.event
+    def confirm_disable_wholesale_yes(self):
+        """El usuario confirmó que quiere desactivar mayoreo."""
+        self.show_wholesale = False
+        self.price_tiers = []
+        self.confirm_disable_wholesale = False
+
+    @rx.event
+    def confirm_disable_wholesale_no(self):
+        """El usuario canceló la desactivación de mayoreo."""
+        self.confirm_disable_wholesale = False
 
     @rx.event
     def add_variant_row(self):
@@ -900,6 +919,22 @@ class InventoryState(MixinState):
             return self.add_notification(
                 "El código de barras no puede estar vacío.", "error"
             )
+
+        if self.show_wholesale and self.price_tiers:
+            min_qtys = []
+            for tier in self.price_tiers:
+                mq = tier.get("min_qty", 0) or 0
+                try:
+                    mq = int(mq)
+                except (TypeError, ValueError):
+                    mq = 0
+                if mq > 0:
+                    if mq in min_qtys:
+                        return self.add_notification(
+                            f"Hay cantidades mínimas duplicadas ({mq}) en las escalas de mayoreo.",
+                            "error",
+                        )
+                    min_qtys.append(mq)
 
         if self.show_variants:
             skus = [

@@ -7,6 +7,7 @@ from app.components.ui import (
     SHADOWS,
     TRANSITIONS,
 )
+from app.constants import WHATSAPP_NUMBER
 
 
 def login_page() -> rx.Component:
@@ -132,8 +133,8 @@ def login_page() -> rx.Component:
                     class_name="flex items-center gap-1.5",
                 ),
                 rx.el.a(
-                    "WhatsApp +5491168376517",
-                    href="https://wa.me/5491168376517",
+                    f"WhatsApp +{WHATSAPP_NUMBER}",
+                    href=f"https://wa.me/{WHATSAPP_NUMBER}",
                     target="_blank",
                     rel="noopener noreferrer",
                     class_name=f"text-slate-400 hover:text-emerald-600 {TRANSITIONS['fast']}",

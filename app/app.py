@@ -72,31 +72,6 @@ def cashbox_banner() -> rx.Component:
     )
 
 
-def currency_selector() -> rx.Component:
-    return rx.el.div(
-        rx.el.div(
-            rx.icon("coins", class_name="h-5 w-5 text-amber-600"),
-            rx.el.span("Moneda de trabajo", class_name="text-sm font-semibold text-slate-800"),
-            class_name="flex items-center gap-2",
-        ),
-        rx.el.select(
-            rx.foreach(
-                State.available_currencies,
-                lambda currency: rx.el.option(currency["name"], value=currency["code"]),
-            ),
-            value=State.selected_currency_code,
-            on_change=State.set_currency,
-            class_name="w-full sm:w-auto h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-        ),
-        rx.el.span(
-            "Mostrando importes en ",
-            rx.el.span(State.currency_name, class_name="font-semibold"),
-            class_name="text-sm text-slate-600",
-        ),
-        class_name="flex flex-col sm:flex-row sm:items-center gap-3 bg-white border border-slate-200 rounded-xl shadow-sm p-4",
-    )
-
-
 def _toast_provider() -> rx.Component:
     return rx.toast.provider(
         position="bottom-center",
@@ -115,68 +90,6 @@ def _toast_provider() -> rx.Component:
                 "textAlign": "center",
             },
         ),
-    )
-
-
-# Mapeo de rutas a páginas
-ROUTE_TO_PAGE = {
-    "/": "Ingreso",
-    "/ingreso": "Ingreso",
-    "/compras": "Compras",
-    "/venta": "Venta",
-    "/caja": "Gestion de Caja",
-    "/clientes": "Clientes",
-    "/cuentas": "Cuentas Corrientes",
-    "/inventario": "Inventario",
-    "/historial": "Historial",
-    "/servicios": "Servicios",
-    "/configuracion": "Configuracion",
-}
-
-PAGE_TO_ROUTE = {
-    "Ingreso": "/ingreso",
-    "Compras": "/compras",
-    "Venta": "/venta",
-    "Gestion de Caja": "/caja",
-    "Clientes": "/clientes",
-    "Cuentas Corrientes": "/cuentas",
-    "Inventario": "/inventario",
-    "Historial": "/historial",
-    "Servicios": "/servicios",
-    "Configuracion": "/configuracion",
-}
-
-
-def _loading_skeleton() -> rx.Component:
-    """Skeleton que se muestra mientras el estado hidrata (nueva pestaña)."""
-    return rx.el.div(
-        # Barra superior gradiente
-        rx.el.div(
-            class_name=(
-                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
-                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
-            ),
-        ),
-        # Sidebar skeleton (fixed, coincide con la posición del sidebar real)
-        rx.el.div(
-            rx.el.div(
-                rx.el.div(class_name="h-8 w-8 rounded-lg bg-slate-200 animate-pulse"),
-                rx.el.div(class_name="h-4 w-24 rounded bg-slate-200 animate-pulse"),
-                class_name="flex items-center gap-3 px-4 pt-5 pb-4",
-            ),
-            rx.el.div(
-                *[rx.el.div(class_name="h-9 w-full rounded-lg bg-slate-200/60 animate-pulse") for _ in range(6)],
-                class_name="flex flex-col gap-2 px-3 mt-4",
-            ),
-            class_name="hidden md:flex flex-col fixed inset-y-0 left-0 z-50 md:w-64 xl:w-72 border-r border-slate-200 bg-white h-screen",
-        ),
-        # Content skeleton (con margin-left que coincide con sidebar real)
-        rx.el.div(
-            _content_skeleton(),
-            class_name="h-screen w-full bg-slate-50 overflow-hidden md:ml-64 xl:ml-72",
-        ),
-        class_name="text-slate-900 w-full h-screen",
-        style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
     )
 
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.models import Sale
 from app.services.receipt_service import ReceiptService
 from app.utils.db import get_async_session
+from app.utils.payment import payment_method_label
 
 
 class ReceiptMixin:
@@ -33,17 +34,7 @@ class ReceiptMixin:
         return key
 
     def _payment_method_label(self, method_key: str) -> str:
-        mapping = {
-            "cash": "Efectivo",
-            "debit": "Tarjeta de Débito",
-            "credit": "Tarjeta de Crédito",
-            "yape": "Billetera Digital (Yape)",
-            "plin": "Billetera Digital (Plin)",
-            "transfer": "Transferencia Bancaria",
-            "mixed": "Pago Mixto",
-            "other": "Otros",
-        }
-        return mapping.get(method_key, "Otros")
+        return payment_method_label(method_key)
 
     def _sorted_payment_keys(self, keys: list[str]) -> list[str]:
         order = [
