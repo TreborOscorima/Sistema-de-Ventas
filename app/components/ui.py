@@ -41,7 +41,7 @@ SHADOWS = {
 # Transiciones suaves
 TRANSITIONS = {
     "fast": "transition-all duration-150 ease-out",
-    "normal": "transition-all duration-200 ease-out", 
+    "normal": "transition-all duration-200 ease-out",
     "slow": "transition-all duration-300 ease-out",
 }
 
@@ -134,15 +134,15 @@ def permission_guard(
 ) -> rx.Component:
     """
     Componente guard que muestra contenido solo si el usuario tiene permisos.
-    
+
     Si no tiene permisos, muestra un mensaje de acceso denegado con animación
     de fade mientras la redirección ocurre.
-    
+
     Args:
         has_permission: Variable reactiva booleana de permiso
         content: Componente a mostrar si tiene permiso
         redirect_message: Mensaje a mostrar si no tiene permiso
-    
+
     Returns:
         Componente condicional basado en permisos
     """
@@ -165,7 +165,7 @@ def permission_guard(
         ),
         class_name="flex items-center justify-center min-h-[60vh] animate-in fade-in duration-300",
     )
-    
+
     return rx.cond(
         has_permission,
         content,
@@ -181,13 +181,13 @@ def page_header(
 ) -> rx.Component:
     """
     Encabezado de página estandarizado con soporte para acciones y breadcrumbs.
-    
+
     Args:
         title: Título principal de la página
         subtitle: Descripción opcional
         actions: Lista de componentes de acción (botones)
         breadcrumb: Texto de breadcrumb opcional
-    
+
     Returns:
         Componente de encabezado de página
     """
@@ -197,9 +197,9 @@ def page_header(
         rx.el.p(subtitle, class_name="text-sm text-slate-500") if subtitle else rx.fragment(),
         class_name="flex flex-col gap-1",
     )
-    
+
     content = []
-    
+
     # Breadcrumb
     if breadcrumb:
         content.append(
@@ -208,7 +208,7 @@ def page_header(
                 class_name="mb-2",
             )
         )
-    
+
     # Layout principal
     if actions:
         content.append(
@@ -223,7 +223,7 @@ def page_header(
         )
     else:
         content.append(title_section)
-    
+
     return rx.el.header(
         *content,
         class_name="mb-6",
@@ -263,7 +263,7 @@ def action_button(
         content.append(rx.el.span(text))
     else:
         content.append(text)
-    
+
     if isinstance(variant, rx.Var):
         base_style = variant
     else:
@@ -274,7 +274,7 @@ def action_button(
         BUTTON_STYLES.get(disabled_variant, BUTTON_STYLES["disabled"]),
         base_style,
     ) if isinstance(disabled, rx.Var) else (
-        BUTTON_STYLES.get(disabled_variant, BUTTON_STYLES["disabled"]) if disabled 
+        BUTTON_STYLES.get(disabled_variant, BUTTON_STYLES["disabled"]) if disabled
         else base_style
     )
 
@@ -371,7 +371,7 @@ def status_badge(
             "cancelado": ("bg-red-100", "text-red-700"),
             "eliminado": ("bg-slate-200", "text-slate-700"),
         }
-    
+
     # Para estado reactivo se usan cadenas de rx.cond
     if isinstance(status, rx.Var):
         return rx.cond(
@@ -399,7 +399,7 @@ def status_badge(
                 ),
             ),
         )
-    
+
     # Para estado estatico
     colors = status_colors.get(status.lower(), ("bg-slate-100", "text-slate-700"))
     return rx.el.span(
@@ -481,7 +481,7 @@ def modal_container(
         modal_sections.extend([rx.divider(color="slate-100"), body])
     if footer:
         modal_sections.extend([rx.divider(color="slate-100"), footer_component])
-    
+
     return rx.cond(
         is_open,
         rx.el.div(
@@ -887,7 +887,7 @@ def card_container(
         Componente de card con estilo
     """
     content_parts = []
-    
+
     if title or description:
         header_parts = []
         if title:
@@ -901,9 +901,9 @@ def card_container(
         content_parts.append(
             rx.el.div(*header_parts, class_name="flex flex-col gap-1")
         )
-    
+
     content_parts.extend(children)
-    
+
     return rx.el.div(
         *content_parts,
         class_name=f"{CARD_STYLES.get(style, CARD_STYLES['bordered'])} flex flex-col {gap}",
@@ -924,7 +924,7 @@ def section_header(title: str, description: str = "") -> rx.Component:
     parts = [rx.el.h2(title, class_name="text-lg font-semibold text-slate-800")]
     if description:
         parts.append(rx.el.p(description, class_name="text-sm text-slate-600"))
-    
+
     return rx.el.div(*parts, class_name="flex flex-col gap-1")
 
 
@@ -950,7 +950,7 @@ def info_badge(
         "info": "bg-blue-100 text-blue-700",
     }
     style_class = variant_styles.get(variant, variant_styles["default"])
-    
+
     return rx.el.span(
         text,
         class_name=f"px-2 py-1 text-xs font-semibold rounded-full {style_class}",
@@ -1037,7 +1037,7 @@ def filter_action_buttons(
             class_name=BUTTON_STYLES["secondary"],
         ),
     ]
-    
+
     if on_export:
         buttons.append(
             rx.el.button(
@@ -1047,7 +1047,7 @@ def filter_action_buttons(
                 class_name=BUTTON_STYLES["success"],
             )
         )
-    
+
     return rx.el.div(
         *buttons,
         class_name="flex flex-col gap-2 sm:flex-row sm:flex-wrap",
@@ -1076,7 +1076,7 @@ def select_filter(
         rx.el.option(display_text, value=opt_value)
         for display_text, opt_value in options
     ]
-    
+
     return rx.el.div(
         rx.el.label(label, class_name="text-sm font-medium text-slate-600"),
         rx.el.select(

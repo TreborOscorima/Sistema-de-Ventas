@@ -286,10 +286,10 @@ SUPPORTED_COUNTRIES = {
 
 def get_country_config(country_code: str) -> dict:
     """Obtiene la configuración completa de un país.
-    
+
     Args:
         country_code: Código ISO del país (ej: 'PE', 'AR', 'EC')
-        
+
     Returns:
         Diccionario con toda la configuración del país
     """
@@ -299,10 +299,10 @@ def get_country_config(country_code: str) -> dict:
 
 def get_payment_methods_for_country(country_code: str) -> list[dict]:
     """Obtiene los métodos de pago para un país específico.
-    
+
     Args:
         country_code: Código ISO del país (ej: 'PE', 'AR', 'EC')
-        
+
     Returns:
         Lista de métodos de pago (universales + específicos del país)
     """

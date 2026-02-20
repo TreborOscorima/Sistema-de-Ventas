@@ -63,10 +63,10 @@ LOW_STOCK_THRESHOLD = 5
 
 class InventoryState(MixinState):
     """Estado de gestión de inventario y productos.
-    
+
     Maneja productos, categorías, ajustes de stock y reportes.
     Los productos se persisten en BD, no en memoria de estado.
-    
+
     Attributes:
         new_category_name: Nombre para nueva categoría
         inventory_search_term: Término de búsqueda actual
@@ -84,7 +84,7 @@ class InventoryState(MixinState):
     inventory_current_page: int = 1
     inventory_items_per_page: int = 10
     inventory_recent_limit: int = 100
-    
+
     editing_product: Dict[str, Any] = { # Tipo cambiado a Dict para manejo de formularios
         "id": None,
         "barcode": "",
@@ -105,7 +105,7 @@ class InventoryState(MixinState):
     stock_details_title: str = ""
     stock_details_mode: str = "simple"
     selected_product_details: List[Dict[str, Any]] = []
-    
+
     inventory_check_modal_open: bool = False
     inventory_check_status: str = "perfecto"
     inventory_adjustment_notes: str = ""
@@ -436,7 +436,7 @@ class InventoryState(MixinState):
             return self.add_notification("Empresa no definida.", "error")
 
         self.is_loading = True
-        
+
         try:
             with rx.session() as session:
                 existing = session.exec(
@@ -479,7 +479,7 @@ class InventoryState(MixinState):
             return self.add_notification("Empresa no definida.", "error")
 
         self.is_loading = True
-            
+
         try:
             with rx.session() as session:
                 cat = session.exec(
@@ -502,7 +502,7 @@ class InventoryState(MixinState):
     @rx.event
     def handle_inventory_adjustment_change(self, field: str, value: Any):
         self.inventory_adjustment_item[field] = value
-        
+
         # Buscar productos cuando se escribe en el campo descripción
         if field == "description":
             self._process_inventory_adjustment_search(value)
@@ -756,7 +756,7 @@ class InventoryState(MixinState):
                 else:
                     self.editing_product[field] = float(value)
             except ValueError:
-                pass 
+                pass
         else:
             self.editing_product[field] = value
 
@@ -901,7 +901,7 @@ class InventoryState(MixinState):
         block = self._require_active_subscription()
         if block:
             return block
-        
+
         product_data = self.editing_product
         product_id = product_data.get("id")
         barcode = product_data.get("barcode", "").strip()
@@ -910,7 +910,7 @@ class InventoryState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return self.add_notification("Empresa no definida.", "error")
-        
+
         if not description:
             return self.add_notification(
                 "La descripción no puede estar vacía.", "error"
@@ -964,7 +964,7 @@ class InventoryState(MixinState):
                     .where(Product.company_id == company_id)
                     .where(Product.branch_id == branch_id)
                 ).first()
-                
+
                 if existing and (product_id is None or existing.id != product_id):
                     return self.add_notification(
                         "Ya existe un producto con ese código de barras.",
@@ -1005,7 +1005,7 @@ class InventoryState(MixinState):
                     ).first()
                     if not product:
                         return self.add_notification("Producto no encontrado.", "error")
-                    
+
                     product.barcode = barcode
                     product.description = description
                     product.category = product_data.get("category", "General")
@@ -1017,7 +1017,7 @@ class InventoryState(MixinState):
                     product.unit = product_data.get("unit", "Unidad")
                     product.purchase_price = product_data.get("purchase_price", 0)
                     product.sale_price = product_data.get("sale_price", 0)
-                    
+
                     session.add(product)
                     msg = "Producto actualizado correctamente."
                 else:
@@ -1130,7 +1130,7 @@ class InventoryState(MixinState):
                         ).all()
                         for tier in existing_tiers:
                             session.delete(tier)
-                
+
                 session.commit()
         except Exception:
             return self.add_notification(
@@ -1566,7 +1566,7 @@ class InventoryState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        
+
         with rx.session() as session:
             if description and not barcode:
                 duplicate_count = session.exec(
@@ -1625,7 +1625,7 @@ class InventoryState(MixinState):
                 return rx.toast(
                     "La cantidad supera el stock disponible.", duration=3000
                 )
-            
+
             item_copy = self.inventory_adjustment_item.copy()
             item_copy["temp_id"] = str(uuid.uuid4())
             item_copy["product_id"] = product.id
@@ -1643,7 +1643,7 @@ class InventoryState(MixinState):
                 item_copy["description"] = (
                     f"{product.description} ({label})" if label else product.description
                 )
-                
+
             self.inventory_adjustment_items.append(item_copy)
             self._reset_inventory_adjustment_form()
 
@@ -1686,7 +1686,7 @@ class InventoryState(MixinState):
                     return self.add_notification(
                         "Agregue los productos que requieren re ajuste.", "error"
                     )
-                
+
                 recorded = False
                 def _to_decimal(value: Any, default: Decimal = Decimal("0")) -> Decimal:
                     try:
@@ -1703,7 +1703,7 @@ class InventoryState(MixinState):
                         barcode = (item.get("barcode") or "").strip()
                         if not description and not barcode:
                             continue
-                        
+
                         product, variant = self._find_adjustment_product(
                             session,
                             barcode,
@@ -1718,7 +1718,7 @@ class InventoryState(MixinState):
                             session, product.id, company_id, branch_id
                         ):
                             continue
-                        
+
                         quantity = _to_decimal(item.get("adjust_quantity", 0) or 0)
                         if quantity <= 0:
                             continue
@@ -1779,7 +1779,7 @@ class InventoryState(MixinState):
                             else:
                                 product.stock = max(available - qty, Decimal("0"))
                                 session.add(product)
-                        
+
                         # Crear StockMovement
                         detail_parts = []
                         if item.get("reason"):
@@ -1791,7 +1791,7 @@ class InventoryState(MixinState):
                             if detail_parts
                             else "Ajuste inventario"
                         )
-                        
+
                         movement = StockMovement(
                             product_id=product.id,
                             user_id=self.current_user.get("id"),
@@ -1924,12 +1924,12 @@ class InventoryState(MixinState):
 
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = datetime.datetime.now().strftime("%d/%m/%Y")
-        
+
         wb, ws = create_excel_workbook("Inventario Valorizado")
-        
+
         # Encabezado profesional
         row = add_company_header(ws, company_name, "INVENTARIO VALORIZADO ACTUAL", f"Al {today}", columns=12)
-        
+
         headers = [
             "Código/SKU",
             "Descripción del Producto",
@@ -1944,7 +1944,7 @@ class InventoryState(MixinState):
             f"Valor a Venta ({currency_label})",
             "Estado Stock",
         ]
-        
+
         with rx.session() as session:
             products = session.exec(
                 select(Product)
@@ -2092,7 +2092,7 @@ class InventoryState(MixinState):
             for col in range(1, 13):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
-        
+
         # Fila de totales
         totals_row = row
         add_totals_row_with_formulas(ws, totals_row, data_start, [
@@ -2109,7 +2109,7 @@ class InventoryState(MixinState):
             {"type": "sum", "col_letter": "K", "number_format": currency_format},
             {"type": "text", "value": ""},
         ])
-        
+
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Costo Unitario: Precio al que se compró el producto al proveedor.",
@@ -2120,11 +2120,11 @@ class InventoryState(MixinState):
             "Valor a Venta: Potencial de ventas = Stock × Precio Venta.",
             "SIN STOCK: Producto agotado. CRÍTICO: ≤5 unidades. BAJO: ≤10 unidades.",
         ], columns=12)
-        
+
         auto_adjust_column_widths(ws)
-        
+
         output = io.BytesIO()
         wb.save(output)
         output.seek(0)
-        
+
         return rx.download(data=output.getvalue(), filename="inventario_valorizado.xlsx")

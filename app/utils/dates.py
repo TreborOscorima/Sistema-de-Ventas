@@ -10,7 +10,7 @@ import logging
 def get_today_str() -> str:
     """
     Obtiene la fecha de hoy en formato YYYY-MM-DD.
-    
+
     Retorna:
         Fecha de hoy como string
     """
@@ -20,7 +20,7 @@ def get_today_str() -> str:
 def get_current_month_str() -> str:
     """
     Obtiene el mes actual en formato YYYY-MM.
-    
+
     Retorna:
         Mes actual como string
     """
@@ -30,7 +30,7 @@ def get_current_month_str() -> str:
 def get_current_week_str() -> str:
     """
     Obtiene la semana ISO actual en formato YYYY-WNN.
-    
+
     Retorna:
         Semana actual como string (ej. "2024-W52")
     """

@@ -24,19 +24,19 @@ def sanitize_text(value: Any, max_length: int = 500) -> str:
     """
     if value is None:
         return ""
-    
+
     # Convertir a string y limpiar espacios
     cleaned = str(value).strip()
-    
+
     # Eliminado html.escape para evitar doble codificación en BD y reportes.
     # En su lugar, removemos tags HTML para sanitización real (limpieza).
     if "<" in cleaned and ">" in cleaned:
         cleaned = re.sub(r"<[^>]*>", "", cleaned)
-    
+
     # Limitar longitud
     if len(cleaned) > max_length:
         cleaned = cleaned[:max_length]
-    
+
     return cleaned
 
 
@@ -107,11 +107,11 @@ def sanitize_phone(value: Any) -> str:
     """
     if value is None:
         return ""
-    
+
     cleaned = str(value).strip()
     # Solo permitir dígitos, espacios, guiones y +
     cleaned = re.sub(r"[^\d\s\-+]", "", cleaned)
-    
+
     return cleaned[:20]  # Límite razonable para teléfonos
 
 
@@ -129,11 +129,11 @@ def sanitize_dni(value: Any) -> str:
     """
     if value is None:
         return ""
-    
+
     cleaned = str(value).strip().upper()
     # Solo permitir alfanuméricos y guiones
     cleaned = re.sub(r"[^A-Z0-9\-]", "", cleaned)
-    
+
     return cleaned[:20]
 
 
@@ -151,11 +151,11 @@ def sanitize_barcode(value: Any) -> str:
     """
     if value is None:
         return ""
-    
+
     cleaned = str(value).strip()
     # Solo alfanuméricos para códigos de barra
     cleaned = re.sub(r"[^A-Za-z0-9]", "", cleaned)
-    
+
     return cleaned[:50]
 
 
@@ -191,11 +191,11 @@ def is_valid_phone(phone: str, country_code: str = "PE") -> bool:
         True si es un formato válido para el país
     """
     from app.utils.db_seeds import get_country_config
-    
+
     digits = re.sub(r"\D", "", phone or "")
     if not digits:
         return False
-    
+
     config = get_country_config(country_code)
     valid_lengths = config.get("phone_digits", [9, 11])
     return len(digits) in valid_lengths
@@ -204,7 +204,7 @@ def is_valid_phone(phone: str, country_code: str = "PE") -> bool:
 def is_valid_personal_id(id_value: str, country_code: str = "PE") -> bool:
     """
     Valida formato de documento de identidad personal según el país.
-    
+
     - Perú: DNI (8 dígitos)
     - Argentina: DNI (7-8 dígitos)
     - Ecuador: Cédula (10 dígitos)
@@ -220,11 +220,11 @@ def is_valid_personal_id(id_value: str, country_code: str = "PE") -> bool:
         True si es un formato válido para el país
     """
     from app.utils.db_seeds import get_country_config
-    
+
     cleaned = re.sub(r"[^A-Za-z0-9]", "", id_value or "")
     if not cleaned:
         return False
-    
+
     config = get_country_config(country_code)
     min_len, max_len = config.get("personal_id_length", (6, 12))
     return min_len <= len(cleaned) <= max_len
@@ -234,7 +234,7 @@ def is_valid_personal_id(id_value: str, country_code: str = "PE") -> bool:
 def is_valid_dni(dni: str, country_code: str = "PE") -> bool:
     """
     Alias de is_valid_personal_id para compatibilidad.
-    
+
     Args:
         dni: Documento a validar
         country_code: Código ISO del país (default: PE)

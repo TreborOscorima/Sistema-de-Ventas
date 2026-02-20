@@ -411,7 +411,7 @@ class Currency(rx.Model, table=True):
 
 class CompanySettings(rx.Model, table=True):
     """Configuracion de datos de empresa (singleton).
-    
+
     Almacena la configuración global del negocio incluyendo
     país de operación, moneda y datos fiscales.
     """
