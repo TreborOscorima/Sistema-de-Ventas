@@ -41,7 +41,7 @@ class State(RootState):
     notification_message: str = ""
     notification_type: str = "info"
     is_notification_open: bool = False
-    _runtime_ctx_loaded: bool = False
+    runtime_ctx_loaded: bool = False
     _last_runtime_refresh_ts: float = rx.field(default=0.0, is_var=False)
     _runtime_refresh_ttl: float = 30.0
 
@@ -102,7 +102,7 @@ class State(RootState):
         if hasattr(self, "check_overdue_alerts"):
             self.check_overdue_alerts()
 
-        self._runtime_ctx_loaded = True
+        self.runtime_ctx_loaded = True
 
         # --- datos base (solo primer carga) ---
         seeded_defaults = False

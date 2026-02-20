@@ -224,7 +224,7 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                 rx.cond(
                     State.is_authenticated,
                     rx.el.div(
-                        rx.cond(State._runtime_ctx_loaded, cashbox_banner(), rx.fragment()),
+                        rx.cond(State.runtime_ctx_loaded, cashbox_banner(), rx.fragment()),
                         rx.cond(
                             State.navigation_items.length() == 0,
                             rx.el.div(
