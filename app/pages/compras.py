@@ -145,14 +145,6 @@ def supplier_row(supplier: rx.Var[dict]) -> rx.Component:
 def purchase_detail_modal() -> rx.Component:
   summary_grid = rx.el.div(
     rx.el.div(
-      rx.el.p("Tipo de documento", class_name="text-xs text-slate-500"),
-      rx.el.p(
-        State.purchase_detail["doc_type"],
-        class_name="font-semibold",
-      ),
-      class_name="flex flex-col gap-1",
-    ),
-    rx.el.div(
       rx.el.p("Proveedor", class_name="text-xs text-slate-500"),
       rx.el.p(
         State.purchase_detail["supplier_name"],
@@ -161,6 +153,50 @@ def purchase_detail_modal() -> rx.Component:
       rx.el.p(
         State.purchase_detail["supplier_tax_id"],
         class_name="text-xs text-slate-500",
+      ),
+      class_name="flex flex-col gap-1",
+    ),
+    rx.el.div(
+      rx.el.p("Tipo de documento", class_name="text-xs text-slate-500"),
+      rx.el.p(
+        State.purchase_detail["doc_type"],
+        class_name="font-semibold",
+      ),
+      class_name="flex flex-col gap-1",
+    ),
+    rx.el.div(
+      rx.el.p("Serie", class_name="text-xs text-slate-500"),
+      rx.el.p(
+        State.purchase_detail["series"],
+        class_name="font-semibold",
+      ),
+      class_name="flex flex-col gap-1",
+    ),
+    rx.el.div(
+      rx.el.p("Numero", class_name="text-xs text-slate-500"),
+      rx.el.p(
+        State.purchase_detail["number"],
+        class_name="font-semibold",
+      ),
+      class_name="flex flex-col gap-1",
+    ),
+    class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
+  )
+
+  secondary_grid = rx.el.div(
+    rx.el.div(
+      rx.el.p("Usuario", class_name="text-xs text-slate-500"),
+      rx.el.p(
+        State.purchase_detail["user"],
+        class_name="font-semibold",
+      ),
+      class_name="flex flex-col gap-1",
+    ),
+    rx.el.div(
+      rx.el.p("Items", class_name="text-xs text-slate-500"),
+      rx.el.p(
+        State.purchase_detail["items_count"].to_string(),
+        class_name="font-semibold",
       ),
       class_name="flex flex-col gap-1",
     ),
@@ -196,61 +232,8 @@ def purchase_detail_modal() -> rx.Component:
     class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
   )
 
-  secondary_grid = rx.el.div(
-    rx.el.div(
-      rx.el.p("Serie", class_name="text-xs text-slate-500"),
-      rx.el.p(
-        State.purchase_detail["series"],
-        class_name="font-semibold",
-      ),
-      class_name="flex flex-col gap-1",
-    ),
-    rx.el.div(
-      rx.el.p("Numero", class_name="text-xs text-slate-500"),
-      rx.el.p(
-        State.purchase_detail["number"],
-        class_name="font-semibold",
-      ),
-      class_name="flex flex-col gap-1",
-    ),
-    rx.el.div(
-      rx.el.p("Usuario", class_name="text-xs text-slate-500"),
-      rx.el.p(
-        State.purchase_detail["user"],
-        class_name="font-semibold",
-      ),
-      class_name="flex flex-col gap-1",
-    ),
-    rx.el.div(
-      rx.el.p("Items", class_name="text-xs text-slate-500"),
-      rx.el.p(
-        State.purchase_detail["items_count"].to_string(),
-        class_name="font-semibold",
-      ),
-      class_name="flex flex-col gap-1",
-    ),
-    class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4",
-  )
-
-  notes_block = rx.el.div(
-    rx.el.p("Notas", class_name="text-xs text-slate-500"),
-    rx.cond(
-      State.purchase_detail["notes"] != "",
-      rx.el.p(
-        State.purchase_detail["notes"],
-        class_name="text-sm text-slate-700",
-      ),
-      rx.el.p(
-        "Sin observaciones",
-        class_name="text-sm text-slate-700",
-      ),
-    ),
-    class_name="flex flex-col gap-1",
-  )
-
   detail_section = rx.el.div(
     secondary_grid,
-    notes_block,
     class_name="flex flex-col gap-4 pt-4 mt-1 border-t border-slate-100",
   )
 
