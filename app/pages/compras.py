@@ -68,10 +68,10 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       purchase["doc_type"],
-      class_name="py-3 px-4 text-left font-medium",
+      class_name="py-3 px-4 text-left font-medium hidden md:table-cell",
     ),
-    rx.el.td(purchase["series"], class_name="py-3 px-4 text-left"),
-    rx.el.td(purchase["number"], class_name="py-3 px-4 text-left"),
+    rx.el.td(purchase["series"], class_name="py-3 px-4 text-left hidden md:table-cell"),
+    rx.el.td(purchase["number"], class_name="py-3 px-4 text-left hidden md:table-cell"),
     rx.el.td(
       rx.el.div(
         State.currency_symbol,
@@ -84,7 +84,7 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
       ),
       class_name="py-3 px-4 text-right",
     ),
-    rx.el.td(purchase["user"], class_name="py-3 px-4 text-left"),
+    rx.el.td(purchase["user"], class_name="py-3 px-4 text-left hidden md:table-cell"),
     rx.el.td(
       purchase["items_count"].to_string(),
       class_name="py-3 px-4 text-center",
@@ -120,15 +120,15 @@ def supplier_row(supplier: rx.Var[dict]) -> rx.Component:
     rx.el.td(supplier["tax_id"], class_name="py-3 px-4"),
     rx.el.td(
       rx.cond(supplier["phone"] != "", supplier["phone"], "-"),
-      class_name="py-3 px-4",
+      class_name="py-3 px-4 hidden md:table-cell",
     ),
     rx.el.td(
       rx.cond(supplier["email"] != "", supplier["email"], "-"),
-      class_name="py-3 px-4",
+      class_name="py-3 px-4 hidden md:table-cell",
     ),
     rx.el.td(
       rx.cond(supplier["address"] != "", supplier["address"], "-"),
-      class_name="py-3 px-4",
+      class_name="py-3 px-4 hidden md:table-cell",
     ),
     rx.el.td(
       rx.cond(
@@ -765,11 +765,11 @@ def compras_page() -> rx.Component:
           rx.el.tr(
             rx.el.th("Fecha", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("Proveedor", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Documento", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Serie", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Numero", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Documento", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Serie", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Numero", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
             rx.el.th("Total", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
-            rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
             rx.el.th("Items", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
             rx.el.th("Accion", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
           ),
@@ -839,9 +839,9 @@ def compras_page() -> rx.Component:
           rx.el.tr(
             rx.el.th("Proveedor", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("N° de Registro de Empresa", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Telefono", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Email", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Direccion", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Telefono", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Email", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Direccion", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
             rx.el.th("Accion", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
           ),
           class_name=TABLE_STYLES["header"],

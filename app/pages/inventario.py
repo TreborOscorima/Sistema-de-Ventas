@@ -326,7 +326,7 @@ def edit_product_modal() -> rx.Component:
           ),
           class_name="flex flex-col sm:flex-row sm:justify-end gap-3 mt-6",
         ),
-        class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
+        class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto",
       ),
       class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
     ),
@@ -431,7 +431,7 @@ def stock_details_modal() -> rx.Component:
           ),
           class_name="flex justify-end mt-6",
         ),
-        class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
+        class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto",
       ),
       class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
     ),
@@ -945,23 +945,23 @@ def inventario_page() -> rx.Component:
         rx.el.table(
           rx.el.thead(
             rx.el.tr(
-              rx.el.th("Codigo de Barra", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Codigo de Barra", class_name=f"{TABLE_STYLES['header_cell']} hidden lg:table-cell"),
               rx.el.th("Descripción", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th("Categoría", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Categoría", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
               rx.el.th(
                 "Stock", class_name=f"{TABLE_STYLES['header_cell']} text-center"
               ),
               rx.el.th(
-                "Unidad", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+                "Unidad", class_name=f"{TABLE_STYLES['header_cell']} text-center hidden md:table-cell"
               ),
               rx.el.th(
-                "Precio Compra", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+                "Precio Compra", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell"
               ),
               rx.el.th(
                 "Precio Venta", class_name=f"{TABLE_STYLES['header_cell']} text-right"
               ),
               rx.el.th(
-                "Valor Total Stock", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+                "Valor Total Stock", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell"
               ),
               rx.el.th(
                 "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
@@ -975,7 +975,7 @@ def inventario_page() -> rx.Component:
               lambda product: rx.el.tr(
                 rx.el.td(
                   product["barcode"],
-                  class_name="py-3 px-4",
+                  class_name="py-3 px-4 hidden lg:table-cell",
                 ),
                 rx.el.td(
                   product["description"],
@@ -983,7 +983,7 @@ def inventario_page() -> rx.Component:
                 ),
                 rx.el.td(
                   product["category"],
-                  class_name="py-3 px-4 text-left",
+                  class_name="py-3 px-4 text-left hidden md:table-cell",
                 ),
                 rx.el.td(
                   rx.el.div(
@@ -1011,12 +1011,12 @@ def inventario_page() -> rx.Component:
                   )
                 ),
                 rx.el.td(
-                  product["unit"], class_name="py-3 px-4 text-center"
+                  product["unit"], class_name="py-3 px-4 text-center hidden md:table-cell"
                 ),
                 rx.el.td(
                   State.currency_symbol,
                   product["purchase_price"].to_string(),
-                  class_name="py-3 px-4 text-right",
+                  class_name="py-3 px-4 text-right hidden lg:table-cell",
                 ),
                 rx.el.td(
                   State.currency_symbol,
@@ -1026,7 +1026,7 @@ def inventario_page() -> rx.Component:
                 rx.el.td(
                   State.currency_symbol,
                   product["stock_total_display"],
-                  class_name="py-3 px-4 text-right font-bold",
+                  class_name="py-3 px-4 text-right font-bold hidden lg:table-cell",
                 ),
                 rx.el.td(
                   rx.el.div(

@@ -491,11 +491,11 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
       ),
       class_name="py-3 px-4",
     ),
-    rx.el.td(log["user"], class_name="py-3 px-4"),
+    rx.el.td(log["user"], class_name="py-3 px-4 hidden md:table-cell"),
     rx.el.td(
       State.currency_symbol,
       log["opening_amount"].to_string(),
-      class_name="py-3 px-4 text-right font-medium",
+      class_name="py-3 px-4 text-right font-medium hidden md:table-cell",
     ),
     rx.el.td(
       State.currency_symbol,
@@ -558,9 +558,9 @@ def cashbox_logs_section() -> rx.Component:
           rx.el.tr(
             rx.el.th("Fecha y Hora", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("Evento", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
             rx.el.th(
-              "Monto Apertura", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+              "Monto Apertura", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden md:table-cell"
             ),
             rx.el.th(
               "Monto Cierre", class_name=f"{TABLE_STYLES['header_cell']} text-right"
@@ -1058,19 +1058,19 @@ def petty_cash_view() -> rx.Component:
                 class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap",
               ),
               rx.el.th(
-                "Usuario", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap"
+                "Usuario", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap hidden md:table-cell"
               ),
               rx.el.th(
                 "Motivo", class_name=f"{TABLE_STYLES['header_cell']} min-w-[180px]"
               ),
               rx.el.th(
-                "Cant.", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap"
+                "Cant.", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap hidden md:table-cell"
               ),
               rx.el.th(
-                "Unidad", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap"
+                "Unidad", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap hidden md:table-cell"
               ),
               rx.el.th(
-                "Costo", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap"
+                "Costo", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap hidden md:table-cell"
               ),
               rx.el.th(
                 "Total", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap"
@@ -1083,14 +1083,14 @@ def petty_cash_view() -> rx.Component:
               State.petty_cash_movements,
               lambda item: rx.el.tr(
                 rx.el.td(item["timestamp"], class_name="py-3 px-4 whitespace-nowrap"),
-                rx.el.td(item["user"], class_name="py-3 px-4 whitespace-nowrap"),
+                rx.el.td(item["user"], class_name="py-3 px-4 whitespace-nowrap hidden md:table-cell"),
                 rx.el.td(item["notes"], class_name="py-3 px-4"),
-                rx.el.td(item["formatted_quantity"], class_name="py-3 px-4 text-right whitespace-nowrap"),
-                rx.el.td(item["unit"], class_name="py-3 px-4 whitespace-nowrap"),
+                rx.el.td(item["formatted_quantity"], class_name="py-3 px-4 text-right whitespace-nowrap hidden md:table-cell"),
+                rx.el.td(item["unit"], class_name="py-3 px-4 whitespace-nowrap hidden md:table-cell"),
                 rx.el.td(
                   State.currency_symbol,
                   item["formatted_cost"],
-                  class_name="py-3 px-4 text-right whitespace-nowrap",
+                  class_name="py-3 px-4 text-right whitespace-nowrap hidden md:table-cell",
                 ),
                 rx.el.td(
                   State.currency_symbol,

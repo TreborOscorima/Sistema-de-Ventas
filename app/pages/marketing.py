@@ -322,7 +322,7 @@ def _hero_preview_card() -> rx.Component:
                 ),
                 class_name="absolute -bottom-3 left-4 right-4 grid gap-2 sm:grid-cols-2",
             ),
-            class_name="relative mt-4 pb-8",
+            class_name="relative mt-4 pb-10",
         ),
         class_name=(
             "glow-card reveal rounded-3xl border border-slate-200/80 bg-white/95 p-5 "

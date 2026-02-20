@@ -1,9 +1,9 @@
 import reflex as rx
 from app.state import State
 from app.components.ui import (
-    INPUT_STYLES, 
-    BUTTON_STYLES, 
-    RADIUS, 
+    INPUT_STYLES,
+    BUTTON_STYLES,
+    RADIUS,
     SHADOWS,
     TRANSITIONS,
 )
@@ -43,7 +43,7 @@ def login_page() -> rx.Component:
             rx.el.form(
                 rx.el.div(
                     rx.el.label(
-                        "Correo o usuario", 
+                        "Correo o usuario",
                         class_name="block text-sm font-medium text-slate-700 mb-1.5",
                     ),
                     rx.el.input(
@@ -140,7 +140,7 @@ def login_page() -> rx.Component:
                 ),
                 class_name="mt-8 pt-6 border-t border-slate-100 flex flex-col items-center gap-2 text-xs",
             ),
-            class_name=f"w-full max-w-md p-8 bg-white {RADIUS['xl']} {SHADOWS['xl']} border border-slate-100",
+            class_name=f"w-full max-w-md p-6 sm:p-8 bg-white {RADIUS['xl']} {SHADOWS['xl']} border border-slate-100",
         ),
         class_name="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4",
         style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},

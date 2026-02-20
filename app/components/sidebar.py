@@ -181,112 +181,158 @@ def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.C
     )
 
 
-def sidebar() -> rx.Component:
-    return rx.fragment(
-        # Sidebar principal
+def _sidebar_guest_content() -> rx.Component:
+    """Contenido del sidebar para visitantes no autenticados."""
+    return rx.el.div(
+        # Separador
+        rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4"),
+        # Mensaje de bienvenida
         rx.el.div(
             rx.el.div(
-                # Header con logo
-                rx.el.div(
-                    rx.el.div(
-                        rx.el.div(
-                            rx.icon("box", class_name="h-6 w-6 text-white"),
-                            class_name=f"p-2 bg-indigo-600 {RADIUS['lg']} {SHADOWS['sm']}",
-                        ),
-                        rx.cond(
-                            State.sidebar_open,
-                            rx.el.div(
-                                rx.el.div(
-                                    rx.el.span(
-                                        "TUWAYKIAPP",
-                                        class_name="text-lg font-bold text-slate-900 tracking-tight truncate",
-                                    ),
-                                    rx.cond(
-                                        State.subscription_snapshot["is_trial"],
-                                        rx.badge("TRIAL", color_scheme="orange"),
-                                        rx.fragment(),
-                                    ),
-                                    class_name="flex items-center gap-2 min-w-0",
-                                ),
-                                rx.el.span(
-                                    "Sistema de Ventas",
-                                    class_name="text-[10px] text-slate-400 uppercase tracking-wider truncate",
-                                ),
-                                class_name="flex flex-col leading-tight min-w-0",
-                            ),
-                            rx.fragment(),
-                        ),
-                        class_name="flex items-center gap-3 min-w-0 flex-1",
+                rx.icon("sparkles", class_name="h-8 w-8 text-indigo-500"),
+                class_name="flex justify-center mb-3",
+            ),
+            rx.el.h2(
+                "¡Bienvenido!",
+                class_name="text-lg font-bold text-slate-900 text-center",
+            ),
+            rx.el.p(
+                "Gestiona tu negocio de forma inteligente con TUWAYKIAPP.",
+                class_name="text-sm text-slate-500 text-center mt-1 leading-relaxed",
+            ),
+            class_name="px-4 py-6",
+        ),
+        # Características destacadas
+        rx.el.div(
+            rx.el.div(
+                rx.icon("chart-no-axes-combined", class_name="h-4 w-4 text-emerald-500 shrink-0"),
+                rx.el.span("Control de ventas en tiempo real", class_name="text-xs text-slate-600"),
+                class_name="flex items-center gap-2",
+            ),
+            rx.el.div(
+                rx.icon("package", class_name="h-4 w-4 text-blue-500 shrink-0"),
+                rx.el.span("Inventario y stock automatizado", class_name="text-xs text-slate-600"),
+                class_name="flex items-center gap-2",
+            ),
+            rx.el.div(
+                rx.icon("file-spreadsheet", class_name="h-4 w-4 text-amber-500 shrink-0"),
+                rx.el.span("Reportes y análisis financiero", class_name="text-xs text-slate-600"),
+                class_name="flex items-center gap-2",
+            ),
+            rx.el.div(
+                rx.icon("users", class_name="h-4 w-4 text-rose-500 shrink-0"),
+                rx.el.span("Gestión de clientes y créditos", class_name="text-xs text-slate-600"),
+                class_name="flex items-center gap-2",
+            ),
+            class_name="flex flex-col gap-3 px-5 py-4 mx-4 bg-slate-50 rounded-xl border border-slate-100",
+        ),
+        # Separador
+        rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4 my-4"),
+        # CTA de registro
+        rx.el.div(
+            rx.el.p(
+                "¿Aún no tienes cuenta?",
+                class_name="text-sm font-semibold text-slate-700 text-center",
+            ),
+            rx.el.p(
+                "Prueba gratis por 15 días, sin compromiso.",
+                class_name="text-xs text-slate-400 text-center mt-1",
+            ),
+            rx.link(
+                rx.el.button(
+                    rx.icon("rocket", class_name="h-4 w-4"),
+                    rx.el.span("Crear cuenta gratis"),
+                    class_name=f"flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-indigo-600 text-white text-sm font-semibold {RADIUS['lg']} hover:bg-indigo-700 {TRANSITIONS['fast']} {SHADOWS['sm']}",
+                ),
+                href="/registro",
+                underline="none",
+                class_name="block w-full mt-3",
+            ),
+            class_name="px-4 py-2",
+        ),
+        # Separador
+        rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4 my-3"),
+        # Indicación de login
+        rx.el.div(
+            rx.el.p(
+                "¿Ya eres parte de nosotros?",
+                class_name="text-sm font-semibold text-slate-700 text-center",
+            ),
+            rx.el.p(
+                "Ingresa tus credenciales para continuar.",
+                class_name="text-xs text-slate-400 text-center mt-1",
+            ),
+            class_name="px-4 py-2",
+        ),
+        class_name="flex-1 flex flex-col",
+    )
+
+
+def _sidebar_auth_content() -> rx.Component:
+    """Contenido del sidebar para usuarios autenticados."""
+    return rx.fragment(
+        rx.cond(
+            State.sidebar_open,
+            rx.el.div(
+                rx.el.label(
+                    rx.cond(
+                        State.available_branches.length() > 1,
+                        "Sucursal actual",
+                        "Sucursal",
                     ),
-                    rx.el.button(
-                        rx.icon("panel-left-close", class_name="h-5 w-5 text-slate-400"),
-                        on_click=State.toggle_sidebar,
-                        class_name=f"p-2 shrink-0 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
-                    ),
-                    class_name="flex h-16 items-center justify-between px-4",
+                    class_name="text-xs font-medium text-slate-500",
                 ),
                 rx.cond(
-                    State.sidebar_open,
-                    rx.el.div(
-                        rx.el.label(
-                            rx.cond(
-                                State.available_branches.length() > 1,
-                                "Sucursal actual",
-                                "Sucursal",
-                            ),
-                            class_name="text-xs font-medium text-slate-500",
-                        ),
-                        rx.cond(
-                            State.available_branches.length() > 1,
-                            rx.el.select(
-                                rx.foreach(
-                                    State.available_branches,
-                                    lambda branch: rx.el.option(
-                                        branch["name"], value=branch["id"]
-                                    ),
-                                ),
-                                value=State.selected_branch_id,
-                                on_change=State.set_active_branch,
-                                class_name="w-full h-9 px-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
-                            ),
-                            rx.el.div(
-                                rx.el.span(
-                                    rx.cond(
-                                        State.active_branch_name != "",
-                                        State.active_branch_name,
-                                        "Sin sucursal",
-                                    ),
-                                    class_name="text-sm font-semibold text-slate-800",
-                                ),
-                                class_name="w-full h-9 px-2 flex items-center bg-white border border-slate-200 rounded-md",
+                    State.available_branches.length() > 1,
+                    rx.el.select(
+                        rx.foreach(
+                            State.available_branches,
+                            lambda branch: rx.el.option(
+                                branch["name"], value=branch["id"]
                             ),
                         ),
-                        rx.fragment(),
-                        class_name="px-4 pb-3 flex flex-col gap-2",
+                        value=State.selected_branch_id,
+                        on_change=State.set_active_branch,
+                        class_name="w-full h-9 px-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     ),
-                    rx.fragment(),
-                ),
-                # Separador con gradiente sutil
-                rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4"),
-                # Navegación
-                rx.el.nav(
-                    rx.cond(
-                        State.navigation_items.length() == 0,
-                        rx.el.div(
-                            rx.el.p(
-                                "Sin modulos disponibles",
-                                class_name="text-sm text-slate-500 px-3",
+                    rx.el.div(
+                        rx.el.span(
+                            rx.cond(
+                                State.active_branch_name != "",
+                                State.active_branch_name,
+                                "Sin sucursal",
                             ),
-                            class_name="py-2",
+                            class_name="text-sm font-semibold text-slate-800",
                         ),
-                        rx.el.div(
-                            rx.foreach(
-                                State.navigation_items,
-                                lambda item: rx.el.div(
-                                    nav_item(item["label"], item["icon"], item["page"], item["route"]),
-                                    _submenu_section(item, "Configuracion", "/configuracion", CONFIG_SUBSECTIONS, "usuarios"),
-                                    _submenu_section(item, "Gestion de Caja", "/caja", CASH_SUBSECTIONS, "resumen"),
-                                    _submenu_section(item, "Servicios", "/servicios", SERVICES_SUBSECTIONS, "campo"),
+                        class_name="w-full h-9 px-2 flex items-center bg-white border border-slate-200 rounded-md",
+                    ),
+                ),
+                rx.fragment(),
+                class_name="px-4 pb-3 flex flex-col gap-2",
+            ),
+            rx.fragment(),
+        ),
+        # Separador con gradiente sutil
+        rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4"),
+        # Navegación
+        rx.el.nav(
+            rx.cond(
+                State.navigation_items.length() == 0,
+                rx.el.div(
+                    rx.el.p(
+                        "Sin modulos disponibles",
+                        class_name="text-sm text-slate-500 px-3",
+                    ),
+                    class_name="py-2",
+                ),
+                rx.el.div(
+                    rx.foreach(
+                        State.navigation_items,
+                        lambda item: rx.el.div(
+                            nav_item(item["label"], item["icon"], item["page"], item["route"]),
+                            _submenu_section(item, "Configuracion", "/configuracion", CONFIG_SUBSECTIONS, "usuarios"),
+                            _submenu_section(item, "Gestion de Caja", "/caja", CASH_SUBSECTIONS, "resumen"),
+                            _submenu_section(item, "Servicios", "/servicios", SERVICES_SUBSECTIONS, "campo"),
                             class_name="flex flex-col gap-0.5 pt-2",
                         ),
                     ),
@@ -294,11 +340,12 @@ def sidebar() -> rx.Component:
                 ),
             ),
         ),
-        id="sidebar-nav",
-        class_name="flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
-    ),
-    # Footer con usuario
-    rx.el.div(
+    )
+
+
+def _sidebar_auth_footer() -> rx.Component:
+    """Footer del sidebar para usuarios autenticados."""
+    return rx.el.div(
         # Separador
         rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4"),
         # Info del usuario
@@ -334,8 +381,69 @@ def sidebar() -> rx.Component:
             on_click=State.logout,
             class_name=f"flex items-center gap-3 w-full text-left px-4 py-3 text-red-500 hover:bg-red-50 {TRANSITIONS['fast']}",
         ),
-    ),
-    class_name=rx.cond(
+    )
+
+
+def sidebar() -> rx.Component:
+    return rx.fragment(
+        # Sidebar principal
+        rx.el.div(
+            rx.el.div(
+                # Header con logo (compartido entre autenticado e invitado)
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.div(
+                            rx.icon("box", class_name="h-6 w-6 text-white"),
+                            class_name=f"p-2 bg-indigo-600 {RADIUS['lg']} {SHADOWS['sm']}",
+                        ),
+                        rx.cond(
+                            State.sidebar_open,
+                            rx.el.div(
+                                rx.el.div(
+                                    rx.el.span(
+                                        "TUWAYKIAPP",
+                                        class_name="text-lg font-bold text-slate-900 tracking-tight truncate",
+                                    ),
+                                    rx.cond(
+                                        State.is_authenticated & State.subscription_snapshot["is_trial"],
+                                        rx.badge("TRIAL", color_scheme="orange"),
+                                        rx.fragment(),
+                                    ),
+                                    class_name="flex items-center gap-2 min-w-0",
+                                ),
+                                rx.el.span(
+                                    "Sistema de Ventas",
+                                    class_name="text-[10px] text-slate-400 uppercase tracking-wider truncate",
+                                ),
+                                class_name="flex flex-col leading-tight min-w-0",
+                            ),
+                            rx.fragment(),
+                        ),
+                        class_name="flex items-center gap-3 min-w-0 flex-1",
+                    ),
+                    rx.el.button(
+                        rx.icon("panel-left-close", class_name="h-5 w-5 text-slate-400"),
+                        on_click=State.toggle_sidebar,
+                        class_name=f"p-2 shrink-0 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
+                    ),
+                    class_name="flex h-16 items-center justify-between px-4",
+                ),
+                # Contenido condicional: autenticado vs invitado
+                rx.cond(
+                    State.is_authenticated,
+                    _sidebar_auth_content(),
+                    _sidebar_guest_content(),
+                ),
+                id="sidebar-nav",
+                class_name="flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
+            ),
+            # Footer condicional: solo para autenticados
+            rx.cond(
+                State.is_authenticated,
+                _sidebar_auth_footer(),
+                rx.fragment(),
+            ),
+            class_name=rx.cond(
         State.sidebar_open,
         f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
         f"fixed inset-y-0 left-0 z-50 w-0 overflow-hidden {TRANSITIONS['slow']}",

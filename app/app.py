@@ -198,38 +198,33 @@ def _content_skeleton() -> rx.Component:
 
 
 def authenticated_layout(page_content: rx.Component) -> rx.Component:
-    """Layout wrapper para páginas autenticadas.
+    """Layout optimizado para SPA: Sidebar fijo y persistente.
 
-    El sidebar se renderiza DENTRO del layout como hermano fijo del
-    contenido.  React reconcilia su DOM y lo mantiene estable entre
-    navegaciones SPA (misma posición en el árbol, mismo key='sidebar-root').
+    Los elementos estáticos (sidebar, barra gradiente, toasts) viven
+    FUERA de la condición is_hydrated para que React jamás los destruya
+    ni recree al navegar entre rutas, eliminando el parpadeo de 3-4 s.
     """
-    return rx.cond(
-        State.is_hydrated,
-        # --- Ya hidratado: decidir entre login o contenido ---
-        rx.cond(
-            State.is_authenticated,
-            rx.el.div(
-                # Barra gradiente superior (fixed, fuera de flujo)
-                rx.el.div(
-                    class_name=(
-                        "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
-                        "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
-                    ),
-                ),
-                # Sidebar persistente (fixed, fuera de flujo, key='sidebar-root')
-                sidebar(),
-                _toast_provider(),
-                NotificationHolder(),
-                # Área de contenido — SIN w-full para evitar desbordamiento
-                # Un div block sin width explícito auto-rellena (parent - margin)
-                rx.el.div(
+    return rx.el.main(
+        # 1. ELEMENTOS ESTÁTICOS: Fuera de la hidratación para evitar
+        #    que React los destruya/recree al cambiar de ruta.
+        rx.el.div(
+            class_name=(
+                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
+                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
+            ),
+        ),
+        sidebar(),
+        _toast_provider(),
+        NotificationHolder(),
+
+        # 2. ÁREA DE CONTENIDO DINÁMICO
+        rx.el.div(
+            rx.cond(
+                State.is_hydrated,
+                rx.cond(
+                    State.is_authenticated,
                     rx.el.div(
-                        rx.cond(
-                            State._runtime_ctx_loaded,
-                            cashbox_banner(),
-                            rx.fragment(),
-                        ),
+                        rx.cond(State.runtime_ctx_loaded, cashbox_banner(), rx.fragment()),
                         rx.cond(
                             State.navigation_items.length() == 0,
                             rx.el.div(
@@ -247,19 +242,20 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                         ),
                         class_name="w-full h-full flex flex-col gap-4 p-4 sm:p-6",
                     ),
-                    class_name=rx.cond(
-                        State.sidebar_open,
-                        "h-screen bg-slate-50 overflow-y-auto transition-[margin] duration-300 md:ml-64 xl:ml-72",
-                        "h-screen bg-slate-50 overflow-y-auto transition-[margin] duration-300",
-                    ),
+                    login_page(),
                 ),
-                class_name="text-slate-900 w-full h-screen",
-                style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
+                # Skeleton solo en el área de contenido
+                _content_skeleton(),
             ),
-            rx.fragment(NotificationHolder(), login_page()),
+            class_name=rx.cond(
+                State.sidebar_open,
+                "h-screen bg-slate-50 overflow-y-auto transition-[margin] duration-300 md:ml-64 xl:ml-72",
+                "h-screen bg-slate-50 overflow-y-auto transition-[margin] duration-300",
+            ),
         ),
-        # --- Aún no hidratado: skeleton de carga ---
-        _loading_skeleton(),
+        # SIN 'flex' para preservar el block-model y auto-fill del ancho
+        class_name="text-slate-900 w-full h-screen",
+        style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
     )
 
 

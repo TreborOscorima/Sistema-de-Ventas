@@ -182,7 +182,7 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       movement.get("user", "Desconocido"),
-      class_name="py-3 px-4 text-sm text-slate-700",
+      class_name="py-3 px-4 text-sm text-slate-700 hidden md:table-cell",
     ),
     rx.el.td(
       rx.el.button(
@@ -435,7 +435,7 @@ def historial_page() -> rx.Component:
       rx.el.div(
         credit_sales_card(),
         rx.foreach(State.dynamic_payment_cards, render_dynamic_card),
-        class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6",
+        class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6",
       ),
       rx.el.div(
         history_filters(),
@@ -448,7 +448,7 @@ def historial_page() -> rx.Component:
                 "Total", class_name=f"{TABLE_STYLES['header_cell']} text-right"
               ),
               rx.el.th("Metodo de Pago", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
               rx.el.th(
                 "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
               ),

@@ -154,9 +154,9 @@ def stats_dashboard_component(
   )
 
   grid_cols = (
-    "grid grid-cols-1 lg:grid-cols-4 gap-4 my-4"
+    "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-4"
     if overdue is not None
-    else "grid grid-cols-1 lg:grid-cols-3 gap-4 my-4"
+    else "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-4"
   )
   return rx.grid(
     *cards,
@@ -168,14 +168,14 @@ def stats_dashboard_component(
 def debtor_row(client: rx.Var[dict]) -> rx.Component:
   return rx.el.tr(
     rx.el.td(client["name"], class_name="py-3 px-4 font-medium text-slate-900"),
-    rx.el.td(client["dni"], class_name="py-3 px-4"),
+    rx.el.td(client["dni"], class_name="py-3 px-4 hidden md:table-cell"),
     rx.el.td(
       rx.cond(
         client["phone"] == None,
         rx.el.span("-", class_name="text-slate-400"),
         client["phone"],
       ),
-      class_name="py-3 px-4",
+      class_name="py-3 px-4 hidden md:table-cell",
     ),
     rx.el.td(
       State.currency_symbol,
@@ -206,7 +206,7 @@ def installment_overview_row(installment: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       installment["client_dni"],
-      class_name="py-3 px-4 text-slate-600",
+      class_name="py-3 px-4 text-slate-600 hidden md:table-cell",
     ),
     rx.el.td(
       rx.el.span(
@@ -651,10 +651,10 @@ def cuentas_page() -> rx.Component:
                     "Cliente", class_name=TABLE_STYLES["header_cell"]
                   ),
                   rx.el.th(
-                    "DNI", class_name=TABLE_STYLES["header_cell"]
+                    "DNI", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
                   ),
                   rx.el.th(
-                    "Telefono", class_name=TABLE_STYLES["header_cell"]
+                    "Telefono", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
                   ),
                   rx.el.th(
                     "Deuda",
@@ -695,7 +695,7 @@ def cuentas_page() -> rx.Component:
                     "Cliente", class_name=TABLE_STYLES["header_cell"]
                   ),
                   rx.el.th(
-                    "DNI", class_name=TABLE_STYLES["header_cell"]
+                    "DNI", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
                   ),
                   rx.el.th(
                     "Vencimiento", class_name=TABLE_STYLES["header_cell"]
@@ -706,7 +706,7 @@ def cuentas_page() -> rx.Component:
                   ),
                   rx.el.th(
                     "Pagado",
-                    class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                    class_name=f"{TABLE_STYLES['header_cell']} text-right hidden md:table-cell",
                   ),
                   rx.el.th(
                     "Pendiente",
