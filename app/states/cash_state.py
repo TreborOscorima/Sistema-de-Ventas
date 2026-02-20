@@ -1536,7 +1536,7 @@ class CashState(MixinState):
         # Abrir el modal inmediatamente para feedback visual rápido
         self.cashbox_close_modal_open = True
         self.cashbox_close_summary_sales = []
-        self.summary_by_method = {}
+        self.summary_by_method = []
         yield
         # Ahora calcular los datos pesados (5-6 DB queries)
         today = datetime.datetime.now().strftime("%Y-%m-%d")
