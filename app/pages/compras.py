@@ -120,15 +120,15 @@ def supplier_row(supplier: rx.Var[dict]) -> rx.Component:
     rx.el.td(supplier["tax_id"], class_name="py-3 px-4"),
     rx.el.td(
       rx.cond(supplier["phone"] != "", supplier["phone"], "-"),
-      class_name="py-3 px-4",
+      class_name="py-3 px-4 hidden md:table-cell",
     ),
     rx.el.td(
       rx.cond(supplier["email"] != "", supplier["email"], "-"),
-      class_name="py-3 px-4",
+      class_name="py-3 px-4 hidden md:table-cell",
     ),
     rx.el.td(
       rx.cond(supplier["address"] != "", supplier["address"], "-"),
-      class_name="py-3 px-4",
+      class_name="py-3 px-4 hidden md:table-cell",
     ),
     rx.el.td(
       rx.cond(
@@ -839,9 +839,9 @@ def compras_page() -> rx.Component:
           rx.el.tr(
             rx.el.th("Proveedor", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("N° de Registro de Empresa", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Telefono", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Email", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Direccion", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Telefono", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Email", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Direccion", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
             rx.el.th("Accion", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
           ),
           class_name=TABLE_STYLES["header"],

@@ -435,7 +435,7 @@ def historial_page() -> rx.Component:
       rx.el.div(
         credit_sales_card(),
         rx.foreach(State.dynamic_payment_cards, render_dynamic_card),
-        class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6",
+        class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6",
       ),
       rx.el.div(
         history_filters(),

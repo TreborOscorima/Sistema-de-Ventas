@@ -1089,7 +1089,7 @@ def currency_section() -> rx.Component:
         on_click=State.add_currency,
         class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
       ),
-      class_name="grid grid-cols-1 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
+      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
     ),
     rx.el.div(
       rx.el.span("Moneda activa:", class_name="text-xs text-slate-600"),
@@ -1201,7 +1201,7 @@ def unit_section() -> rx.Component:
         on_click=State.add_unit,
         class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
       ),
-      class_name="grid grid-cols-1 md:grid-cols-3 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
+      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
     ),
     rx.el.div(
       rx.foreach(
@@ -1323,7 +1323,7 @@ def payment_methods_section() -> rx.Component:
         on_click=State.add_payment_method,
         class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
       ),
-      class_name="grid grid-cols-1 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
+      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
     ),
     rx.el.div(
       rx.foreach(

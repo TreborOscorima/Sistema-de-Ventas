@@ -141,10 +141,10 @@ def _payment_alert_banner() -> rx.Component:
 
 
 def _stat_card(
-  title: str, 
-  value: rx.Var, 
-  subtitle: str = "", 
-  icon: str = "bar-chart-2", 
+  title: str,
+  value: rx.Var,
+  subtitle: str = "",
+  icon: str = "bar-chart-2",
   color: str = "blue",
   link: str = "",
 ) -> rx.Component:
@@ -157,7 +157,7 @@ def _stat_card(
     "red": "bg-red-50 text-red-600",
   }
   icon_bg = color_classes.get(color, color_classes["blue"])
-  
+
   card_content = rx.el.div(
     rx.el.div(
       rx.el.div(
@@ -178,7 +178,7 @@ def _stat_card(
     ),
     class_name=f"bg-white {RADIUS['xl']} border border-slate-200 p-4 {SHADOWS['sm']} {TRANSITIONS['fast']} hover:shadow-md {'cursor-pointer hover:border-indigo-300' if link else ''}",
   )
-  
+
   if link:
     return rx.link(card_content, href=link, class_name="block")
   return card_content
@@ -196,7 +196,7 @@ def _period_selector() -> rx.Component:
         f"px-3 py-1.5 text-sm font-medium {RADIUS['lg']} bg-slate-100 text-slate-600 hover:bg-slate-200 {TRANSITIONS['fast']}",
       ),
     )
-  
+
   return rx.el.div(
     period_btn("Hoy", "today"),
     period_btn("Semana", "week"),
@@ -213,10 +213,10 @@ def _alert_item(alert: dict) -> rx.Component:
     "warning": ("bg-amber-50 border-amber-200 text-amber-700", "triangle_alert", "text-amber-500"),
     "info": ("bg-blue-50 border-blue-200 text-blue-700", "info", "text-blue-500"),
   }
-  
+
   severity = alert.get("severity", "info")
   styles = severity_styles.get(severity, severity_styles["info"])
-  
+
   return rx.el.div(
     rx.el.div(
       rx.icon(styles[1], class_name=f"w-5 h-5 {styles[2]} flex-shrink-0"),
@@ -592,13 +592,13 @@ def dashboard_page() -> rx.Component:
       _plan_summary_card(),
       class_name="mt-4 flex-1 min-h-0",
     ),
-    
+
     # KPIs principales
     _kpis_grid(),
-    
+
     # KPIs secundarios
     rx.el.div(_secondary_kpis(), class_name="mt-4"),
-    
+
     # Gráficos y alertas
     rx.el.div(
       rx.el.div(
@@ -610,14 +610,14 @@ def dashboard_page() -> rx.Component:
       ),
       class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6",
     ),
-    
+
     # Segunda fila de gráficos
     rx.el.div(
       rx.el.div(_top_products_list(), class_name="h-full"),
       rx.el.div(_category_chart(), class_name="h-full"),
       class_name="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6 items-stretch",
     ),
-    
+
     on_mount=State.load_dashboard_background,
     class_name="p-4 sm:p-6",
   )

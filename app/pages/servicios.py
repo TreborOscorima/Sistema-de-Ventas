@@ -1343,7 +1343,7 @@ def admin_log_row(entry: rx.Var[dict]) -> rx.Component:
     rx.el.td(entry["timestamp"], class_name="py-3 px-4"),
     rx.el.td(log_type_badge(entry), class_name="py-3 px-4"),
     rx.el.td(entry["client_name"], class_name="py-3 px-4"),
-    rx.el.td(entry["field_name"], class_name="py-3 px-4"),
+    rx.el.td(entry["field_name"], class_name="py-3 px-4 hidden md:table-cell"),
     rx.el.td(
       rx.el.span(
         State.currency_symbol,
@@ -1356,7 +1356,7 @@ def admin_log_row(entry: rx.Var[dict]) -> rx.Component:
       rx.el.span(entry["status"].capitalize(), class_name="text-sm font-medium"),
       class_name="py-3 px-4",
     ),
-    rx.el.td(entry["notes"], class_name="py-3 px-4 text-sm text-slate-600"),
+    rx.el.td(entry["notes"], class_name="py-3 px-4 text-sm text-slate-600 hidden md:table-cell"),
     class_name="border-b",
   )
 
@@ -1417,12 +1417,12 @@ def admin_log_table() -> rx.Component:
           rx.el.th("Fecha y hora", class_name=TABLE_STYLES["header_cell"]),
           rx.el.th("Movimiento", class_name=TABLE_STYLES["header_cell"]),
           rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Campo", class_name=TABLE_STYLES["header_cell"]),
+          rx.el.th("Campo", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
           rx.el.th(
             "Monto", class_name=f"{TABLE_STYLES['header_cell']} text-right"
           ),
           rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Notas", class_name=TABLE_STYLES["header_cell"]),
+          rx.el.th("Notas", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
           class_name=TABLE_STYLES["header"],
         )
       ),

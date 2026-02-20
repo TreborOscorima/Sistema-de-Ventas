@@ -5,11 +5,11 @@ from app.components.ui import TABLE_STYLES, page_title, permission_guard
 
 def item_entry_row(item: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
-        rx.el.td(item["barcode"], class_name="py-3 px-4"),
+        rx.el.td(item["barcode"], class_name="py-3 px-4 hidden lg:table-cell"),
         rx.el.td(item["display_description"], class_name="py-3 px-4"),
-        rx.el.td(item.get("category", "General"), class_name="py-3 px-4"),
+        rx.el.td(item.get("category", "General"), class_name="py-3 px-4 hidden md:table-cell"),
         rx.el.td(item["quantity"].to_string(), class_name="py-3 px-4 text-center"),
-        rx.el.td(item["unit"], class_name="py-3 px-4 text-center"),
+        rx.el.td(item["unit"], class_name="py-3 px-4 text-center hidden md:table-cell"),
         rx.el.td(
             State.currency_symbol,
             item["price"].to_string(),
@@ -18,7 +18,7 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
         rx.el.td(
             State.currency_symbol,
             item["sale_price"].to_string(),
-            class_name="py-3 px-4 text-right text-green-600",
+            class_name="py-3 px-4 text-right text-green-600 hidden lg:table-cell",
         ),
         rx.el.td(
             State.currency_symbol,
@@ -533,13 +533,13 @@ def ingreso_page() -> rx.Component:
                     rx.el.thead(
                         rx.el.tr(
                             rx.el.th(
-                                "Codigo de Barra", class_name=TABLE_STYLES["header_cell"]
+                                "Codigo de Barra", class_name=f"{TABLE_STYLES['header_cell']} hidden lg:table-cell"
                             ),
                             rx.el.th(
                                 "Descripción", class_name=TABLE_STYLES["header_cell"]
                             ),
                             rx.el.th(
-                                "Categoría", class_name=TABLE_STYLES["header_cell"]
+                                "Categoría", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
                             ),
                             rx.el.th(
                                 "Cantidad",
@@ -547,7 +547,7 @@ def ingreso_page() -> rx.Component:
                             ),
                             rx.el.th(
                                 "Unidad",
-                                class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                                class_name=f"{TABLE_STYLES['header_cell']} text-center hidden md:table-cell",
                             ),
                             rx.el.th(
                                 "P. Compra",
@@ -555,7 +555,7 @@ def ingreso_page() -> rx.Component:
                             ),
                             rx.el.th(
                                 "P. Venta",
-                                class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell",
                             ),
                             rx.el.th(
                                 "Subtotal",
