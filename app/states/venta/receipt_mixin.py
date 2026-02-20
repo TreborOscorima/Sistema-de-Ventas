@@ -13,6 +13,12 @@ from app.utils.payment import payment_method_label
 
 
 class ReceiptMixin:
+    """Mixin para la generación e impresión de comprobantes de venta.
+
+    Genera comprobantes en formato texto plano y PDF, con datos de empresa,
+    detalle de productos, resumen de pago y pie de página personalizable.
+    """
+
     last_sale_id: str = ""
     last_sale_receipt: List[Dict[str, Any]] = []
     last_sale_total: float = 0

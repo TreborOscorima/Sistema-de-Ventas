@@ -63,6 +63,12 @@ REPORT_CASHBOX_ACTIONS = {
 }
 
 class HistorialState(MixinState):
+    """Estado del historial de ventas y reportes financieros.
+
+    Gestiona la vista de historial con filtros por fecha, método de pago,
+    categoría y vendedor. Genera reportes exportables a Excel.
+    """
+
     # history: List[Movement] = [] # Eliminado a favor de la BD
     history_filter_type: str = "Todos"
     history_filter_product: str = ""

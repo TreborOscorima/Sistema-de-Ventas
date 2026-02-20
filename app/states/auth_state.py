@@ -1198,7 +1198,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_ingresos(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.current_user["privileges"].get("view_ingresos"):
             yield rx.toast(
@@ -1210,7 +1210,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_compras(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         privileges = self.current_user["privileges"]
         if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
@@ -1223,7 +1223,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_ventas(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.current_user["privileges"].get("view_ventas"):
             yield rx.toast(
@@ -1235,7 +1235,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_cashbox(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.current_user["privileges"].get("view_cashbox"):
             yield rx.toast(
@@ -1247,7 +1247,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_inventario(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.current_user["privileges"].get("view_inventario"):
             yield rx.toast(
@@ -1259,7 +1259,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_historial(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.current_user["privileges"].get("view_historial"):
             yield rx.toast(
@@ -1271,7 +1271,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_export_data(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.current_user["privileges"].get("export_data"):
             yield rx.toast(
@@ -1283,7 +1283,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_servicios(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.can_view_servicios:
             yield rx.toast(
@@ -1295,7 +1295,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_clientes(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.can_view_clientes:
             yield rx.toast(
@@ -1307,7 +1307,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_cuentas(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if not self.can_view_cuentas:
             yield rx.toast(
@@ -1319,7 +1319,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_admin_access(self):
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         # Verifica roles exactos segun tu DB (Mayusculas importan)
         if self.current_user["role"] not in ["Superadmin", "Administrador"]:
@@ -1419,8 +1419,8 @@ class AuthState(MixinState):
     @rx.event
     def ensure_password_change(self):
         if not self.is_authenticated:
-            if self.router.url.path != "/":
-                return rx.redirect("/")
+            if self.router.url.path != "/ingreso":
+                return rx.redirect("/ingreso")
             return
         must_change = self.current_user.get("must_change_password", False)
         current_path = self.router.url.path
@@ -1656,7 +1656,7 @@ class AuthState(MixinState):
                     self.needs_initial_admin = False
                     if must_change_password:
                         return rx.redirect("/cambiar-clave")
-                    return rx.redirect("/")
+                    return rx.redirect("/ingreso")
 
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
@@ -1768,7 +1768,7 @@ class AuthState(MixinState):
     @rx.event
     def change_password(self, form_data: dict):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            return rx.redirect("/ingreso")
         new_password = (form_data.get("password") or "").strip()
         confirm_password = (form_data.get("confirm_password") or "").strip()
         username = (self.current_user.get("username") or "").strip()
@@ -1827,7 +1827,7 @@ class AuthState(MixinState):
         self.invalidate_user_cache()
         if hasattr(self, "cashbox_is_open_cached"):
             self.cashbox_is_open_cached = False
-        return rx.redirect("/")
+        return rx.redirect("/ingreso")
 
     @rx.event
     def show_create_user_form(self):

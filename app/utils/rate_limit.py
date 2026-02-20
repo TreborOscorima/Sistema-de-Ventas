@@ -1,5 +1,5 @@
 """
-Rate Limiting centralizado con soporte para Redis (producción) y memoria (desarrollo).
+Limitación de tasa centralizada con soporte para Redis (producción) y memoria (desarrollo).
 
 Este módulo proporciona protección contra ataques de fuerza bruta
 en el sistema de autenticación, compartiendo estado entre workers.
@@ -50,7 +50,7 @@ def _get_redis() -> "redis.Redis | None":
     """
     Obtiene cliente Redis configurado.
     
-    Returns:
+    Retorna:
         Cliente Redis o None si no está disponible/configurado
     """
     global _redis_client
@@ -129,12 +129,12 @@ def is_rate_limited(
     """
     Verifica si un usuario está bloqueado por demasiados intentos fallidos.
     
-    Args:
+    Parámetros:
         username: Nombre de usuario a verificar
         max_attempts: Número máximo de intentos permitidos
         window_minutes: Ventana de tiempo en minutos
         
-    Returns:
+    Retorna:
         True si está bloqueado, False si puede intentar
     """
     key = _build_key(username, ip_address)
@@ -167,7 +167,7 @@ def _is_rate_limited_memory(
     max_attempts: int,
     window_minutes: int,
 ) -> bool:
-    """Rate limiting en memoria (single worker)."""
+    """Limitación de tasa en memoria (un solo worker)."""
     now = datetime.now()
     cutoff = now - timedelta(minutes=window_minutes)
     
@@ -187,7 +187,7 @@ def record_failed_attempt(
     """
     Registra un intento de login fallido.
     
-    Args:
+    Parámetros:
         username: Nombre de usuario
         window_minutes: Tiempo de expiración del registro
     """
@@ -221,7 +221,7 @@ def clear_login_attempts(username: str, ip_address: str | None = None) -> None:
     """
     Limpia los intentos fallidos tras login exitoso.
     
-    Args:
+    Parámetros:
         username: Nombre de usuario
     """
     key = _build_key(username, ip_address)
@@ -250,11 +250,11 @@ def remaining_lockout_time(
     """
     Calcula los minutos restantes de bloqueo.
     
-    Args:
+    Parámetros:
         username: Nombre de usuario
         window_minutes: Ventana de tiempo original
         
-    Returns:
+    Retorna:
         Minutos restantes o 0 si no está bloqueado
     """
     key = _build_key(username, ip_address)
@@ -288,9 +288,9 @@ def remaining_lockout_time(
 
 def get_rate_limit_status() -> dict:
     """
-    Obtiene estado del sistema de rate limiting (para debugging).
+    Obtiene estado del sistema de limitación de tasa (para depuración).
     
-    Returns:
+    Retorna:
         Dict con información del estado actual
     """
     redis_client = _get_redis()

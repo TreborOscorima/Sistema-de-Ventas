@@ -138,12 +138,12 @@ def permission_guard(
     Si no tiene permisos, muestra un mensaje de acceso denegado con animación
     de fade mientras la redirección ocurre.
 
-    Args:
+    Parámetros:
         has_permission: Variable reactiva booleana de permiso
         content: Componente a mostrar si tiene permiso
         redirect_message: Mensaje a mostrar si no tiene permiso
 
-    Returns:
+    Retorna:
         Componente condicional basado en permisos
     """
     access_denied = rx.el.div(
@@ -182,13 +182,13 @@ def page_header(
     """
     Encabezado de página estandarizado con soporte para acciones y breadcrumbs.
 
-    Args:
+    Parámetros:
         title: Título principal de la página
         subtitle: Descripción opcional
         actions: Lista de componentes de acción (botones)
         breadcrumb: Texto de breadcrumb opcional
 
-    Returns:
+    Retorna:
         Componente de encabezado de página
     """
     # Seccion de titulo y subtitulo (consistente con page_title)

@@ -30,10 +30,10 @@ def get_logger(name: str) -> logging.Logger:
     - Nivel INFO (más detallado)
     - Incluye nombre del módulo para debugging
     
-    Args:
+    Parámetros:
         name: Nombre del módulo/componente
         
-    Returns:
+    Retorna:
         Logger configurado
     """
     logger = logging.getLogger(name)

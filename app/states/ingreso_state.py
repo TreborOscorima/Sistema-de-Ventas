@@ -22,6 +22,13 @@ from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.sanitization import sanitize_text
 
 class IngresoState(MixinState):
+    """Estado para el ingreso de productos al inventario.
+
+    Maneja el formulario de ingreso de mercadería con soporte para
+    variantes, lotes, autocompletado por código de barras y
+    vinculación a órdenes de compra.
+    """
+
     purchase_doc_type: str = "boleta"
     purchase_series: str = ""
     purchase_number: str = ""

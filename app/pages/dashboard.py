@@ -15,6 +15,7 @@ from app.components.ui import (
 
 
 def _plan_summary_card() -> rx.Component:
+  """Tarjeta resumen del plan de suscripción actual."""
   return rx.card(
     rx.el.div(
       rx.el.div(

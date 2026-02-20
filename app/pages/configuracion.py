@@ -229,6 +229,7 @@ def config_nav() -> rx.Component:
 
 
 def company_settings_section() -> rx.Component:
+  """Sección de configuración de datos de empresa."""
   return rx.el.div(
     rx.el.div(
       rx.el.h2(
@@ -451,6 +452,7 @@ def _upgrade_plan_modal() -> rx.Component:
 
 
 def subscription_section() -> rx.Component:
+  """Sección de información y estado de suscripción."""
   return rx.el.div(
     rx.el.div(
       rx.el.h2("MI SUSCRIPCION", class_name="text-xl font-semibold text-slate-700"),
@@ -1409,6 +1411,7 @@ def payment_methods_section() -> rx.Component:
 
 
 def configuracion_page() -> rx.Component:
+  """Página principal de configuración del sistema."""
   content = rx.fragment(
     rx.el.div(
       page_title(

@@ -28,6 +28,7 @@ from app.components.notification import NotificationHolder
 
 
 def cashbox_banner() -> rx.Component:
+    """Banner de advertencia que solicita apertura de caja cuando está cerrada."""
     return rx.cond(
         State.cashbox_is_open_cached,
         rx.fragment(),
@@ -73,6 +74,7 @@ def cashbox_banner() -> rx.Component:
 
 
 def _toast_provider() -> rx.Component:
+    """Proveedor global de notificaciones toast (posición, estilos y duración)."""
     return rx.toast.provider(
         position="bottom-center",
         close_button=True,
@@ -173,8 +175,8 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
 
 
 def index() -> rx.Component:
-    """Página principal - redirige a Ingreso."""
-    return authenticated_layout(ingreso_page())
+    """Página principal - landing de marketing."""
+    return marketing_page()
 
 
 def page_ingreso() -> rx.Component:
@@ -334,11 +336,11 @@ app = rx.App(
     ],
 )
 
-# Página principal (redirige a ingreso)
+# Landing page pública
 app.add_page(
     index,
     route="/",
-    on_load=State.page_init_default,
+    title="TUWAYKIAPP | Sistema de Ventas para tiendas, servicios y reservas",
 )
 
 # Cambio de contrasena (solo cuando aplica)
@@ -366,11 +368,7 @@ app.add_page(
     route="/registro",
     title="Registro - TUWAYKIAPP",
 )
-app.add_page(
-    page_marketing,
-    route="/sitio",
-    title="TUWAYKIAPP | Sistema de Ventas para tiendas, servicios y reservas",
-)
+
 
 # Páginas individuales con rutas separadas
 app.add_page(

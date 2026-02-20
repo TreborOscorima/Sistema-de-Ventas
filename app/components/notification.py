@@ -4,6 +4,7 @@ from app.state import State
 
 
 def NotificationHolder() -> rx.Component:
+    """Componente de notificación flotante con soporte para tipos: success, error, warning, info."""
     base_classes = "flex items-start gap-3 border border-slate-200 rounded-xl shadow-sm p-4"
     container_classes = rx.cond(
         State.notification_type == "success",

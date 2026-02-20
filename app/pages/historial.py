@@ -136,6 +136,7 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
   )
 
 def sale_detail_modal() -> rx.Component:
+  """Modal de detalle de una venta del historial."""
   return rx.radix.primitives.dialog.root(
     rx.radix.primitives.dialog.portal(
       rx.radix.primitives.dialog.overlay(
@@ -365,6 +366,7 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
 
 
 def historial_page() -> rx.Component:
+  """Página principal del historial de ventas y movimientos."""
   content = rx.fragment(
     rx.el.div(
       page_title(

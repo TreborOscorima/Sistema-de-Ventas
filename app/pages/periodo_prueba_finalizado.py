@@ -5,6 +5,7 @@ from app.constants import WHATSAPP_NUMBER
 
 
 def periodo_prueba_finalizado_page() -> rx.Component:
+    """Página mostrada cuando el periodo de prueba ha expirado."""
     return rx.el.div(
         rx.el.div(
             class_name=(

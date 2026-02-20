@@ -14,6 +14,12 @@ from .mixin_state import MixinState
 
 
 class PurchasesState(MixinState):
+    """Estado para la gestión de órdenes de compra.
+
+    Permite visualizar, editar y eliminar compras registradas,
+    con reversión de stock al eliminar.
+    """
+
     purchases_active_tab: str = "registro"
     purchase_search_term: str = ""
     purchase_start_date: str = ""

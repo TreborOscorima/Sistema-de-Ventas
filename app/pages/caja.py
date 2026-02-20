@@ -87,6 +87,7 @@ def cashbox_log_filters() -> rx.Component:
 
 
 def cashbox_payments_header() -> rx.Component:
+  """Encabezado con resumen de pagos de caja."""
   date_range = rx.cond(
     (State.cashbox_filter_start_date != "") | (State.cashbox_filter_end_date != ""),
     rx.el.span(
@@ -146,6 +147,7 @@ def cashbox_payments_header() -> rx.Component:
 
 
 def cashbox_opening_card() -> rx.Component:
+  """Tarjeta de apertura de caja."""
   return card_container(
     rx.el.div(
       rx.el.div(
@@ -555,6 +557,7 @@ def cashbox_logs_section() -> rx.Component:
 
 
 def delete_sale_modal() -> rx.Component:
+  """Modal de confirmación para eliminar una venta."""
   return modal_container(
     is_open=State.sale_delete_modal_open,
     on_close=State.close_sale_delete_modal,
@@ -586,6 +589,7 @@ def delete_sale_modal() -> rx.Component:
 
 
 def close_cashbox_modal() -> rx.Component:
+  """Modal de cierre de caja con resumen."""
   return modal_container(
     is_open=State.cashbox_close_modal_open,
     on_close=State.close_cashbox_close_modal,

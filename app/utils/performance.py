@@ -1,7 +1,7 @@
-"""Utilidades de monitoreo de performance para queries de base de datos.
+"""Utilidades de monitoreo de rendimiento para consultas de base de datos.
 
-Este módulo proporciona herramientas para detectar y registrar queries lentas,
-útil para optimización y debugging en producción.
+Este módulo proporciona herramientas para detectar y registrar consultas lentas,
+útil para optimización y depuración en producción.
 
 Uso básico::
 
@@ -31,7 +31,7 @@ logger = get_logger("Performance")
 # Umbral en segundos para considerar una query "lenta"
 SLOW_QUERY_THRESHOLD = float(os.getenv("SLOW_QUERY_THRESHOLD", "1.0"))
 
-# Umbral para queries muy lentas (alertar inmediatamente)
+# Umbral para consultas muy lentas (alertar inmediatamente)
 CRITICAL_QUERY_THRESHOLD = float(os.getenv("CRITICAL_QUERY_THRESHOLD", "5.0"))
 
 
@@ -44,7 +44,7 @@ def log_slow_query(
     """
     Registra una query si excede el umbral de tiempo.
     
-    Args:
+    Parámetros:
         operation: Nombre descriptivo de la operación
         elapsed: Tiempo transcurrido en segundos
         threshold: Umbral personalizado (default: SLOW_QUERY_THRESHOLD)
@@ -84,14 +84,14 @@ def query_timer(
     extra_context: dict | None = None,
 ) -> Generator[dict, None, None]:
     """
-    Context manager para medir tiempo de ejecución de queries.
+    Context manager para medir tiempo de ejecución de consultas.
     
-    Args:
+    Parámetros:
         operation: Nombre descriptivo de la operación
         threshold: Umbral en segundos para alertar
         extra_context: Información adicional para el log
     
-    Yields:
+    Genera:
         Dict con información de timing (elapsed se llena al salir)
         
     Ejemplo::
@@ -114,7 +114,7 @@ def timed_operation(operation_name: str | None = None, threshold: float = SLOW_Q
     """
     Decorador para medir tiempo de funciones/métodos.
     
-    Args:
+    Parámetros:
         operation_name: Nombre para el log (default: nombre de función)
         threshold: Umbral en segundos
         
@@ -156,9 +156,9 @@ def timed_operation(operation_name: str | None = None, threshold: float = SLOW_Q
 
 class QueryStats:
     """
-    Recolector de estadísticas de queries para análisis.
+    Recolector de estadísticas de consultas para análisis.
     
-    Uso para debugging local o tests::
+    Uso para depuración local o tests::
     
         stats = QueryStats()
         
@@ -210,5 +210,5 @@ class QueryStats:
     
     @property
     def queries(self) -> list[dict]:
-        """Lista de queries trackeadas."""
+        """Lista de consultas trackeadas."""
         return self._queries.copy()

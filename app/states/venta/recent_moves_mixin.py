@@ -9,6 +9,12 @@ from app.states.types import RecentTransaction
 
 
 class RecentMovesMixin:
+    """Mixin para mostrar los movimientos recientes en el punto de venta.
+
+    Muestra las últimas transacciones con formato resumido y permite
+    reimprimir comprobantes.
+    """
+
     show_recent_modal: bool = False
     recent_transactions: list[RecentTransaction] = []
     recent_loading: bool = False

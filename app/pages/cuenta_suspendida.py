@@ -6,6 +6,7 @@ from app.constants import WHATSAPP_SALES_URL
 
 
 def cuenta_suspendida_page() -> rx.Component:
+    """Página mostrada cuando la cuenta está suspendida."""
     return rx.el.div(
         rx.el.div(
             class_name=(

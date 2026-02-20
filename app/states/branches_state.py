@@ -11,6 +11,12 @@ from .mixin_state import MixinState
 
 
 class BranchesState(MixinState):
+    """Estado para la gestión de sucursales.
+
+    Permite crear, editar, eliminar sucursales y administrar el acceso
+    de usuarios por sucursal.
+    """
+
     branches_list: List[Dict[str, Any]] = []
     new_branch_name: str = ""
     new_branch_address: str = ""

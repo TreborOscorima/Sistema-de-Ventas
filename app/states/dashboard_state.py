@@ -34,7 +34,7 @@ class DashboardState(MixinState):
     """Estado para el dashboard de métricas."""
 
     # Filtro de período
-    selected_period: str = "month"  # today, week, month, custom
+    selected_period: str = "month"  # Valores: today, week, month, custom
     custom_start_date: str = ""
     custom_end_date: str = ""
 
@@ -52,7 +52,7 @@ class DashboardState(MixinState):
     month_sales: float = 0.0
     month_sales_count: int = 0
 
-    # KPIs
+    # Indicadores clave de rendimiento (KPIs)
     avg_ticket: float = 0.0
     total_clients: int = 0
     active_credits: int = 0

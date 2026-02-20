@@ -32,6 +32,12 @@ for _tz in [*_COUNTRY_TIMEZONES, *_REGIONAL_TIMEZONES]:
         _BASE_TIMEZONE_OPTIONS.append(_tz)
 
 class ConfigState(MixinState):
+    """Estado de configuración general del sistema.
+
+    Administra los datos de la empresa, moneda, categorías, unidades de medida,
+    métodos de pago y configuración de comprobantes.
+    """
+
     # Configuracion de empresa
     company_name: str = ""
     ruc: str = ""

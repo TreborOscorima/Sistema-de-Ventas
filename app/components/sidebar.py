@@ -44,7 +44,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     )
     is_active = rx.cond(
         route == "/ingreso",
-        (current_path == "/ingreso") | (current_path == "/"),
+        current_path == "/ingreso",
         current_path == route,
     )
 
@@ -385,6 +385,7 @@ def _sidebar_auth_footer() -> rx.Component:
 
 
 def sidebar() -> rx.Component:
+    """Componente principal del sidebar con navegación y contenido condicional."""
     return rx.fragment(
         # Sidebar principal
         rx.el.div(

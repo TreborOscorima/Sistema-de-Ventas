@@ -14,6 +14,7 @@ COUNTRY_DIAL_OPTIONS = [
 
 
 def registro_page() -> rx.Component:
+    """Página de registro de empresa y usuario administrador."""
     return rx.el.div(
         rx.el.div(
             class_name=(
@@ -232,7 +233,7 @@ def registro_page() -> rx.Component:
                 rx.el.span("¿Ya tienes cuenta?", class_name="text-slate-400"),
                 rx.el.a(
                     "Inicia sesion",
-                    href="/",
+                    href="/ingreso",
                     class_name=f"text-indigo-600 hover:text-indigo-700 {TRANSITIONS['fast']} font-medium",
                 ),
                 class_name="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-xs text-center",

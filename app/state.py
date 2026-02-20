@@ -128,19 +128,19 @@ class State(RootState):
 
     @rx.event
     async def refresh_runtime_context(self, force: bool = False):
-        """Evento público de refresh (backward compat)."""
+        """Evento público de refresco (compatibilidad hacia atrás)."""
         await self._do_runtime_refresh(force)
 
     # ------------------------------------------------------------------
-    # Consolidated page-init handlers
-    # Merge sync_page + ensure_view + page-specific loads + common_guards
-    # into ONE event per page → 1 delta instead of 3-5 separate events.
+    # Manejadores consolidados de inicialización de página
+    # Fusiona sync_page + ensure_view + cargas específicas de página + common_guards
+    # en UN solo evento por página → 1 delta en vez de 3-5 eventos separados.
     # ------------------------------------------------------------------
 
     def _check_auth_and_privilege(self, privilege_key: str, deny_msg: str):
-        """Helper: returns redirect events if denied, else None."""
+        """Retorna eventos de redirección si el acceso es denegado, sino None."""
         if not self.is_authenticated:
-            return [rx.redirect("/")]
+            return [rx.redirect("/ingreso")]
         if not self.current_user["privileges"].get(privilege_key):
             return [
                 rx.toast(deny_msg, duration=3000),
@@ -150,7 +150,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_default(self):
-        """on_load for / and /dashboard (no privilege gate)."""
+        """on_load para / y /dashboard (sin restricción de privilegio)."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         redirect = self.run_common_guards()
@@ -161,15 +161,17 @@ class State(RootState):
 
     @rx.event
     async def page_init_ingreso(self):
+        """on_load para /ingreso. Verifica autenticación y privilegio view_ingresos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        denied = self._check_auth_and_privilege(
-            "view_ingresos",
-            "Acceso denegado: No tienes permiso para ver Ingresos.",
-        )
-        if denied:
-            for ev in denied:
-                yield ev
+        if not self.is_authenticated:
+            return  # authenticated_layout muestra login_page()
+        if not self.current_user["privileges"].get("view_ingresos"):
+            yield rx.toast(
+                "Acceso denegado: No tienes permiso para ver Ingresos.",
+                duration=3000,
+            )
+            yield rx.redirect("/dashboard")
             return
         redirect = self.run_common_guards()
         if redirect:
@@ -179,10 +181,11 @@ class State(RootState):
 
     @rx.event
     async def page_init_compras(self):
+        """on_load para /compras. Verifica privilegio view_compras y carga proveedores."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         privileges = self.current_user["privileges"]
         if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
@@ -205,6 +208,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_venta(self):
+        """on_load para /venta. Verifica privilegio view_ventas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
@@ -223,6 +227,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_caja(self):
+        """on_load para /caja. Verifica privilegio view_cashbox y carga datos de caja."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
@@ -246,10 +251,11 @@ class State(RootState):
 
     @rx.event
     async def page_init_clientes(self):
+        """on_load para /clientes. Verifica plan y privilegio view_clientes."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         # can_view_clientes inline: plan != standard + privilege
         plan = (self.plan_actual or "").strip().lower()
@@ -268,10 +274,11 @@ class State(RootState):
 
     @rx.event
     async def page_init_cuentas(self):
+        """on_load para /cuentas. Verifica plan y privilegio view_cuentas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         plan = (self.plan_actual or "").strip().lower()
         if plan == "standard" or not self.current_user["privileges"].get("view_cuentas"):
@@ -289,6 +296,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_inventario(self):
+        """on_load para /inventario. Verifica privilegio view_inventario."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
@@ -307,6 +315,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_historial(self):
+        """on_load para /historial. Verifica privilegio view_historial."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
@@ -325,6 +334,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_reportes(self):
+        """on_load para /reportes. Verifica privilegio export_data."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
@@ -343,10 +353,11 @@ class State(RootState):
 
     @rx.event
     async def page_init_servicios(self):
+        """on_load para /servicios. Verifica plan, privilegio view_servicios y reservas habilitadas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         # can_view_servicios inline
         plan = (self.plan_actual or "").strip().lower()
@@ -372,10 +383,11 @@ class State(RootState):
 
     @rx.event
     async def page_init_configuracion(self):
+        """on_load para /configuracion. Requiere rol Administrador o Superadmin."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/")
+            yield rx.redirect("/ingreso")
             return
         if self.current_user["role"] not in ["Superadmin", "Administrador"]:
             yield rx.toast(
@@ -397,7 +409,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_cambiar_clave(self):
-        """on_load for /cambiar-clave."""
+        """on_load para /cambiar-clave."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         redirect = self.ensure_trial_active()

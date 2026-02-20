@@ -11,6 +11,12 @@ from ..types import TransactionItem
 
 
 class CartMixin:
+    """Mixin para la gestión del carrito de ventas.
+
+    Maneja búsqueda de productos, autocompletado, agregar/quitar ítems,
+    validación de stock y aplicación de precios por nivel.
+    """
+
     new_sale_item: Dict[str, Any] = {
         "temp_id": "",
         "barcode": "",

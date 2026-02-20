@@ -26,14 +26,14 @@ def validate_password_strength(
     """
     Valida la fortaleza de una contraseña.
 
-    Args:
+    Parámetros:
         password: Contraseña a validar
         min_length: Longitud mínima requerida
         require_uppercase: Si requiere al menos una mayúscula
         require_digit: Si requiere al menos un dígito
         require_special: Si requiere al menos un carácter especial
 
-    Returns:
+    Retorna:
         Tupla (es_valida, mensaje_error)
     """
     if not password:
@@ -69,10 +69,10 @@ def validate_password(password: str) -> tuple[bool, str]:
         PASSWORD_REQUIRE_DIGIT=true
         PASSWORD_REQUIRE_SPECIAL=true
 
-    Args:
+    Parámetros:
         password: Contraseña a validar
 
-    Returns:
+    Retorna:
         Tupla (es_valida, mensaje_error)
 
     Ejemplo:

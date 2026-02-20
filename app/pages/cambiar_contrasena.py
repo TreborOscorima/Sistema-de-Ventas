@@ -4,6 +4,7 @@ from app.constants import WHATSAPP_NUMBER
 
 
 def cambiar_contrasena_page() -> rx.Component:
+    """Página de cambio obligatorio de contraseña inicial."""
     return rx.el.div(
         rx.el.div(
             class_name=(

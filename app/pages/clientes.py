@@ -13,6 +13,7 @@ from app.components.ui import (
 
 
 def client_row(client: rx.Var[dict]) -> rx.Component:
+  """Fila de cliente para la tabla de listado."""
   return rx.el.tr(
     rx.el.td(client["name"], class_name="py-3 px-4 font-medium text-slate-900"),
     rx.el.td(client["dni"], class_name="py-3 px-4"),
@@ -62,6 +63,7 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
 
 
 def client_form_modal() -> rx.Component:
+  """Modal de creación/edición de cliente."""
   return modal_container(
     is_open=State.show_modal,
     on_close=State.close_modal,
@@ -152,6 +154,7 @@ def client_form_modal() -> rx.Component:
 
 
 def clientes_page() -> rx.Component:
+  """Página principal de gestión de clientes."""
   content = rx.fragment(
     rx.el.div(
       page_header(

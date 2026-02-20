@@ -68,6 +68,13 @@ DAY_NAMES_ES = [
 ]
 
 class ServicesState(MixinState):
+    """Estado para el módulo de servicios (reservas de canchas).
+
+    Gestiona reservas de canchas deportivas con calendario interactivo,
+    planificador semanal/mensual, precios por cancha, pagos parciales
+    y generación de constancias.
+    """
+
     service_active_tab: str = "campo"
 
     @rx.event

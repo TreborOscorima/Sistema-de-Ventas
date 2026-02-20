@@ -6,6 +6,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class BaseSchema(BaseModel):
+    """Esquema base con configuración común para DTOs del sistema."""
+
     model_config = ConfigDict(extra="ignore")
 
     def to_dict(self) -> dict:
@@ -13,6 +15,8 @@ class BaseSchema(BaseModel):
 
 
 class SaleItemDTO(BaseSchema):
+    """DTO de un ítem de venta con datos del producto."""
+
     description: str
     quantity: Decimal
     unit: str = ""
@@ -26,26 +30,36 @@ class SaleItemDTO(BaseSchema):
 
 
 class PaymentBreakdownItemDTO(BaseSchema):
+    """DTO de un ítem del desglose de pago."""
+
     label: str = ""
     amount: Decimal = Decimal("0.00")
 
 
 class PaymentCashDTO(BaseSchema):
+    """DTO de datos de pago en efectivo."""
+
     amount: Decimal = Decimal("0.00")
     message: str = ""
     status: str = ""
 
 
 class PaymentCardDTO(BaseSchema):
+    """DTO de datos de pago con tarjeta."""
+
     type: str = ""
 
 
 class PaymentWalletDTO(BaseSchema):
+    """DTO de datos de pago con billetera digital."""
+
     provider: str = ""
     choice: str = ""
 
 
 class PaymentMixedDTO(BaseSchema):
+    """DTO de datos de pago mixto (efectivo + electrónico)."""
+
     cash: Decimal = Decimal("0.00")
     card: Decimal = Decimal("0.00")
     wallet: Decimal = Decimal("0.00")
@@ -56,6 +70,8 @@ class PaymentMixedDTO(BaseSchema):
 
 
 class PaymentInfoDTO(BaseSchema):
+    """DTO con toda la información de pago de una venta."""
+
     summary: str = ""
     method: str = ""
     method_kind: str = ""

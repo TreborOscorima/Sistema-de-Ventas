@@ -10,6 +10,7 @@ from app.components.ui import (
 
 
 def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
+  """Fila de compra para la tabla de listado."""
   action_buttons = rx.el.div(
     rx.el.button(
       rx.icon("eye", class_name="h-4 w-4"),
@@ -143,6 +144,7 @@ def supplier_row(supplier: rx.Var[dict]) -> rx.Component:
 
 
 def purchase_detail_modal() -> rx.Component:
+  """Modal de detalle de una compra."""
   summary_grid = rx.el.div(
     rx.el.div(
       rx.el.p("Proveedor", class_name="text-xs text-slate-500"),
@@ -646,6 +648,7 @@ def supplier_modal() -> rx.Component:
 
 
 def compras_page() -> rx.Component:
+  """Página principal de gestión de compras y proveedores."""
   tab_button = "px-4 py-2 rounded-md text-sm font-semibold transition"
   registro_button = rx.el.button(
     "REGISTRO DE COMPRAS",

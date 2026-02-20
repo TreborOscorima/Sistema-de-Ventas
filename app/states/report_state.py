@@ -33,7 +33,7 @@ class ReportState(MixinState):
 
     # Configuración del reporte
     report_type: str = "ventas"  # ventas, inventario, cuentas, caja
-    report_period: str = "month"  # today, week, month, quarter, year, custom
+    report_period: str = "month"  # Valores: today, week, month, quarter, year, custom
     custom_start_date: str = ""
     custom_end_date: str = ""
 

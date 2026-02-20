@@ -13,10 +13,10 @@ def normalize_payment_method_kind(kind: str) -> PaymentMethodType:
     """
     Normaliza un string de método de pago al enum correspondiente.
 
-    Args:
+    Parámetros:
         kind: String que representa el tipo de método de pago
 
-    Returns:
+    Retorna:
         PaymentMethodType correspondiente
     """
     normalized = (kind or "").strip().lower()
@@ -47,10 +47,10 @@ def card_method_type(card_type: str) -> PaymentMethodType:
     """
     Determina el tipo de método de pago para tarjetas.
 
-    Args:
+    Parámetros:
         card_type: Tipo de tarjeta ("debito", "credito", etc.)
 
-    Returns:
+    Retorna:
         PaymentMethodType.debit o PaymentMethodType.credit
     """
     value = (card_type or "").strip().lower()
@@ -65,10 +65,10 @@ def wallet_method_type(provider: str) -> PaymentMethodType:
     """
     Determina el tipo de método de pago para billeteras digitales.
 
-    Args:
+    Parámetros:
         provider: Nombre del proveedor ("Yape", "Plin", etc.)
 
-    Returns:
+    Retorna:
         PaymentMethodType correspondiente
     """
     value = (provider or "").strip().lower()
@@ -83,10 +83,10 @@ def payment_method_code(method_type: PaymentMethodType) -> str | None:
     """
     Obtiene el código normalizado para un tipo de método de pago.
 
-    Args:
+    Parámetros:
         method_type: Enum del tipo de método
 
-    Returns:
+    Retorna:
         Código string o None si no hay mapeo
     """
     mapping = {
@@ -105,10 +105,10 @@ def payment_method_label(kind: str) -> str:
     """
     Obtiene la etiqueta legible para un tipo de método de pago.
 
-    Args:
+    Parámetros:
         kind: Código del tipo de método
 
-    Returns:
+    Retorna:
         Etiqueta en español
     """
     normalized = (kind or "").strip().lower()
@@ -133,10 +133,10 @@ def normalize_wallet_label(label: str) -> str:
     """
     Normaliza etiquetas de billetera/método de pago para mostrar.
 
-    Args:
+    Parámetros:
         label: Etiqueta original
 
-    Returns:
+    Retorna:
         Etiqueta normalizada en español
     """
     value = (label or "").strip()
@@ -192,11 +192,11 @@ def payment_category(method: str, kind: str = "") -> str:
     """
     Categoriza un método de pago para reportes.
 
-    Args:
+    Parámetros:
         method: Nombre del método
         kind: Tipo de método
 
-    Returns:
+    Retorna:
         Categoría del pago
     """
     normalized_kind = (kind or "").lower()

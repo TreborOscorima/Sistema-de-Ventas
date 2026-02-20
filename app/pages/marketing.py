@@ -569,6 +569,7 @@ def _footer_link(
 
 
 def marketing_page() -> rx.Component:
+    """Página de marketing y landing page pública."""
     demo_link = _wa_link("Hola, quiero una demo en vivo de TUWAYKIAPP.")
     standard_link = _wa_link("Hola, quiero el Plan Standard (USD 45/mes) de TUWAYKIAPP.")
     professional_link = _wa_link("Hola, quiero el Plan Professional (USD 75/mes) de TUWAYKIAPP.")
@@ -721,27 +722,38 @@ def marketing_page() -> rx.Component:
         rx.el.header(
             rx.el.div(
                 rx.el.a(
-                    rx.icon("box", class_name="h-5 w-5 text-slate-900"),
-                    rx.el.span("TUWAYKIAPP", class_name="font-bold text-slate-900"),
-                    href="/sitio",
-                    class_name="flex items-center gap-2",
+                    rx.icon("box", class_name="h-7 w-7 text-indigo-600"),
+                    rx.el.span("TUWAYKIAPP", class_name="text-xl font-extrabold tracking-tight text-slate-900"),
+                    href="/",
+                    class_name="flex items-center gap-2.5",
                 ),
                 rx.el.nav(
                     _nav_link("Modulos", "#modulos", "click_nav_modulos", "header_nav"),
                     _nav_link("Como funciona", "#como-funciona", "click_nav_como_funciona", "header_nav"),
                     _nav_link("Planes", "#planes", "click_nav_planes", "header_nav"),
                     _nav_link("FAQ", "#faq", "click_nav_faq", "header_nav"),
-                    _nav_link("Ingresar", "/", "click_nav_login", "header_nav"),
                     class_name="hidden items-center gap-6 md:flex",
                 ),
-                rx.el.a(
-                    "Iniciar prueba gratis",
-                    href="/registro",
-                    on_click=rx.call_script(_track_event_script("click_trial_cta", "header_primary_cta")),
-                    class_name=(
-                        "hidden items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm "
-                        "font-semibold text-white transition-colors duration-150 hover:bg-emerald-700 md:inline-flex"
+                rx.el.div(
+                    rx.el.a(
+                        "Ingresar",
+                        href="/ingreso",
+                        on_click=rx.call_script(_track_event_script("click_nav_login", "header_nav")),
+                        class_name=(
+                            "hidden items-center justify-center rounded-xl border-2 border-indigo-600 bg-white px-4 py-2 text-sm "
+                            "font-semibold text-indigo-600 transition-colors duration-150 hover:bg-indigo-50 md:inline-flex"
+                        ),
                     ),
+                    rx.el.a(
+                        "Iniciar prueba gratis",
+                        href="/registro",
+                        on_click=rx.call_script(_track_event_script("click_trial_cta", "header_primary_cta")),
+                        class_name=(
+                            "hidden items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm "
+                            "font-semibold text-white transition-colors duration-150 hover:bg-emerald-700 md:inline-flex"
+                        ),
+                    ),
+                    class_name="hidden items-center gap-3 md:flex",
                 ),
                 rx.el.details(
                     rx.el.summary(
@@ -756,7 +768,17 @@ def marketing_page() -> rx.Component:
                         _nav_link("Como funciona", "#como-funciona", "click_nav_como_funciona_mobile", "mobile_menu"),
                         _nav_link("Planes", "#planes", "click_nav_planes_mobile", "mobile_menu"),
                         _nav_link("FAQ", "#faq", "click_nav_faq_mobile", "mobile_menu"),
-                        _nav_link("Ingresar", "/", "click_nav_login_mobile", "mobile_menu"),
+                        rx.el.a(
+                            "Ingresar",
+                            href="/ingreso",
+                            on_click=rx.call_script(
+                                _track_event_script("click_nav_login_mobile", "mobile_menu")
+                            ),
+                            class_name=(
+                                "inline-flex w-full items-center justify-center rounded-xl border-2 border-indigo-600 "
+                                "px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50"
+                            ),
+                        ),
                         rx.el.a(
                             "Iniciar prueba gratis",
                             href="/registro",
@@ -1191,10 +1213,10 @@ def marketing_page() -> rx.Component:
                 rx.el.div(
                     rx.el.div(
                         rx.el.a(
-                            rx.icon("box", class_name="h-5 w-5 text-slate-900"),
-                            rx.el.span("TUWAYKIAPP", class_name="font-bold text-slate-900"),
-                            href="/sitio",
-                            class_name="inline-flex items-center gap-2",
+                            rx.icon("box", class_name="h-7 w-7 text-indigo-600"),
+                            rx.el.span("TUWAYKIAPP", class_name="text-lg font-extrabold tracking-tight text-slate-900"),
+                            href="/",
+                            class_name="inline-flex items-center gap-2.5",
                         ),
                         rx.el.p(
                             "Sistema de ventas SaaS para negocios multi-sucursal con enfoque en control real.",
@@ -1245,7 +1267,7 @@ def marketing_page() -> rx.Component:
                     ),
                     rx.el.div(
                         rx.el.h4("Accesos", class_name="text-sm font-bold text-slate-900"),
-                        _footer_link("Iniciar sesion", "/", "click_footer_login", "footer_accesos"),
+                        _footer_link("Iniciar sesion", "/ingreso", "click_footer_login", "footer_accesos"),
                         _footer_link("Crear cuenta", "/registro", "click_footer_signup", "footer_accesos"),
                         _footer_link(
                             "WhatsApp directo",
@@ -1259,15 +1281,37 @@ def marketing_page() -> rx.Component:
                     class_name="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4",
                 ),
                 rx.el.div(
-                    rx.el.p(
-                        "TUWAYKIAPP (c) 2026. Todos los derechos reservados.",
-                        class_name="text-sm text-slate-500",
+                    rx.el.div(
+                        rx.el.p(
+                            "TUWAYKIAPP \u00a9 2026. Todos los derechos reservados.",
+                            class_name="text-sm text-slate-500",
+                        ),
+                        rx.el.p(
+                            "Hecho con foco en escalabilidad, operacion y crecimiento comercial.",
+                            class_name="text-sm text-slate-500",
+                        ),
                     ),
-                    rx.el.p(
-                        "Hecho con foco en escalabilidad, operacion y crecimiento comercial.",
-                        class_name="text-sm text-slate-500",
+                    rx.el.div(
+                        rx.el.p("Creado por", class_name="text-xs text-slate-400 uppercase tracking-wider"),
+                        rx.el.a(
+                            "Trebor Oscorima ",
+                            rx.el.span("\ud83e\uddc9\u26bd\ufe0f", class_name="ml-1"),
+                            href="https://www.facebook.com/trebor.oscorima/?locale=es_LA",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                            class_name="text-sm font-semibold text-slate-700 hover:text-indigo-600 transition-colors",
+                        ),
+                        rx.el.a(
+                            rx.icon("message-circle", class_name="h-3.5 w-3.5"),
+                            "+5491168376517",
+                            href="https://wa.me/5491168376517",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                            class_name="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 transition-colors",
+                        ),
+                        class_name="flex flex-col gap-0.5 items-end",
                     ),
-                    class_name="mt-8 flex flex-col items-start justify-between gap-2 border-t border-slate-200 pt-4 sm:flex-row sm:items-center",
+                    class_name="mt-8 flex flex-col items-start justify-between gap-4 border-t border-slate-200 pt-4 sm:flex-row sm:items-center",
                 ),
                 class_name="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8",
             ),

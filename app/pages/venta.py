@@ -93,6 +93,7 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
 
 
 def recent_moves_modal() -> rx.Component:
+    """Modal de movimientos recientes del inventario."""
     table_header = rx.table.header(
         rx.table.row(
             rx.table.column_header_cell("Hora"),
@@ -220,6 +221,7 @@ def recent_moves_modal() -> rx.Component:
 
 
 def sale_receipt_modal() -> rx.Component:
+    """Modal del recibo/boleta de venta."""
     footer = rx.hstack(
         rx.el.button(
             rx.icon("download", class_name="h-4 w-4"),
@@ -614,6 +616,7 @@ def products_table(embedded: bool = False) -> rx.Component:
 
 
 def sale_products_card() -> rx.Component:
+    """Tarjeta principal con los productos de la venta."""
     return rx.el.div(
         quick_add_bar(),
         products_table(embedded=True),
@@ -1647,6 +1650,7 @@ def _venta_keyboard_shortcuts() -> rx.Component:
 
 
 def venta_page() -> rx.Component:
+    """Página principal del punto de venta (POS)."""
     content = rx.el.div(
         _venta_keyboard_shortcuts(),
         # Contenido principal

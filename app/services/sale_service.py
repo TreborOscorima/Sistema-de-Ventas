@@ -1189,13 +1189,13 @@ class SaleService:
             query = _apply_tenant_filters(query, Product, company_id, branch_id)
             products = (await session.exec(query.with_for_update())).all()
 
-            # Map products by all possible keys
+            # Mapear productos por todas las claves posibles
             for product in products:
-                # Map by ID
+                # Mapear por ID
                 if product.id:
                     products_by_id[product.id] = product
 
-                # Map by Description
+                # Mapear por descripción
                 description = (product.description or "").strip()
                 if description:
                     if description in products_by_description:
@@ -1203,11 +1203,11 @@ class SaleService:
                     else:
                         products_by_description[description] = product
 
-                # Map by Barcode
+                # Mapear por código de barras
                 if product.barcode:
                     products_by_barcode[product.barcode] = product
 
-            # Clean up ambiguous maps
+            # Limpiar mapeos ambiguos
             for description in ambiguous_descriptions:
                 products_by_description.pop(description, None)
 
@@ -1335,7 +1335,7 @@ class SaleService:
                     )
                 product = products_by_description.get(description)
 
-            # 5. Final validation
+            # 5. Validación final
             if not product:
                 identifier = ""
                 if item.get("barcode"):

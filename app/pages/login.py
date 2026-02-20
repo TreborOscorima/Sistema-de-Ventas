@@ -11,17 +11,18 @@ from app.constants import WHATSAPP_NUMBER
 
 
 def login_page() -> rx.Component:
+    """Página de inicio de sesión del sistema."""
     return rx.el.div(
-        # Gradient bar top
+        # Barra de gradiente superior
         rx.el.div(
             class_name=(
                 "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
                 "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
             ),
         ),
-        # Login card
+        # Tarjeta de inicio de sesión
         rx.el.div(
-            # Logo section
+            # Sección de logo
             rx.el.div(
                 rx.el.div(
                     rx.icon("box", class_name="h-8 w-8 text-white"),
@@ -40,7 +41,7 @@ def login_page() -> rx.Component:
                 ),
                 class_name="flex flex-col items-center gap-4 mb-8",
             ),
-            # Login form
+            # Formulario de inicio de sesión
             rx.el.form(
                 rx.el.div(
                     rx.el.label(
@@ -100,7 +101,7 @@ def login_page() -> rx.Component:
                     ),
                     class_name="space-y-1",
                 ),
-                # Submit button
+                # Botón de envío
                 rx.el.button(
                     "Iniciar Sesión",
                     type="submit",
@@ -118,7 +119,7 @@ def login_page() -> rx.Component:
                     class_name=f"flex items-center gap-3 mt-5 bg-red-50 p-4 {RADIUS['lg']} border border-red-200",
                 ),
             ),
-            # Footer
+            # Pie de página
             rx.el.div(
                 rx.el.div(
                     rx.el.span("Creado por", class_name="text-slate-400"),

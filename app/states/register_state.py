@@ -27,6 +27,12 @@ logger = get_logger("RegisterState")
 
 
 class RegisterState(MixinState):
+    """Estado para el registro de nuevas empresas y usuarios.
+
+    Gestiona el formulario de registro con validación de campos,
+    creación de empresa, sucursal inicial y asignación de plan trial.
+    """
+
     register_error: str = ""
     is_registering: bool = False
     show_register_password: bool = False

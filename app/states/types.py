@@ -1,3 +1,8 @@
+"""Tipos de datos compartidos para los estados de la aplicación.
+
+Define TypedDicts utilizados como contratos de datos entre los estados
+y los componentes de la interfaz de usuario.
+"""
 from typing import TypedDict, List, Dict, Union
 
 class Product(TypedDict):

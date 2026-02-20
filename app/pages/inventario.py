@@ -10,6 +10,7 @@ from app.components.ui import (
 
 
 def edit_product_modal() -> rx.Component:
+  """Modal de edición de producto."""
   return rx.cond(
     State.is_editing_product,
     rx.el.div(
@@ -371,6 +372,7 @@ def edit_product_modal() -> rx.Component:
 
 
 def stock_details_modal() -> rx.Component:
+  """Modal de detalles de stock (variantes, lotes, precios)."""
   return rx.cond(
     State.stock_details_open,
     rx.el.div(
@@ -476,6 +478,7 @@ def stock_details_modal() -> rx.Component:
 
 
 def inventory_adjustment_modal() -> rx.Component:
+  """Modal de ajuste manual de inventario."""
   return rx.cond(
     State.inventory_check_modal_open,
     rx.el.div(
@@ -811,6 +814,7 @@ def inventory_stat_card(title: str, value: rx.Var, value_class: str) -> rx.Compo
 
 
 def inventario_page() -> rx.Component:
+  """Página principal de gestión de inventario."""
   content = rx.el.div(
     page_title(
       "INVENTARIO ACTUAL",
