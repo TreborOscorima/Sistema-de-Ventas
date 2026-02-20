@@ -608,7 +608,7 @@ def dashboard_page() -> rx.Component:
       rx.el.div(
         _alerts_panel(),
       ),
-      class_name="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6",
+      class_name="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6",
     ),
     
     # Segunda fila de gráficos
@@ -619,5 +619,5 @@ def dashboard_page() -> rx.Component:
     ),
     
     on_mount=State.load_dashboard_background,
-    class_name="p-6 ",
+    class_name="p-4 sm:p-6",
   )

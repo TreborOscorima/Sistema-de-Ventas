@@ -182,7 +182,7 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       movement.get("user", "Desconocido"),
-      class_name="py-3 px-4 text-sm text-slate-700",
+      class_name="py-3 px-4 text-sm text-slate-700 hidden md:table-cell",
     ),
     rx.el.td(
       rx.el.button(
@@ -448,7 +448,7 @@ def historial_page() -> rx.Component:
                 "Total", class_name=f"{TABLE_STYLES['header_cell']} text-right"
               ),
               rx.el.th("Metodo de Pago", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
               rx.el.th(
                 "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
               ),

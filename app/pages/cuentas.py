@@ -154,9 +154,9 @@ def stats_dashboard_component(
   )
 
   grid_cols = (
-    "grid grid-cols-1 lg:grid-cols-4 gap-4 my-4"
+    "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-4"
     if overdue is not None
-    else "grid grid-cols-1 lg:grid-cols-3 gap-4 my-4"
+    else "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-4"
   )
   return rx.grid(
     *cards,

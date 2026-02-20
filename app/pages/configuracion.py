@@ -983,7 +983,7 @@ def branch_section() -> rx.Component:
         ),
         class_name="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end",
       ),
-      class_name="grid grid-cols-1 lg:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm",
+      class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm",
     ),
     rx.el.div(
       rx.el.table(

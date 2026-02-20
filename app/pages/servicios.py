@@ -703,7 +703,7 @@ def reservation_modal() -> rx.Component:
           ),
           class_name="flex justify-end gap-3 pt-4",
         ),
-        class_name="relative z-10 w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto",
+        class_name="relative z-10 w-full max-w-3xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto",
       ),
       class_name="fixed inset-0 z-50 flex items-center justify-center px-4",
     ),
@@ -965,7 +965,7 @@ def reservation_status_badge(reservation: rx.Var[dict]) -> rx.Component:
 def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
   return rx.el.tr(
     rx.el.td(reservation["client_name"], class_name="py-3 px-4"),
-    rx.el.td(reservation["field_name"], class_name="py-3 px-4"),
+    rx.el.td(reservation["field_name"], class_name="py-3 px-4 hidden md:table-cell"),
     rx.el.td(
       rx.el.div(
         rx.el.span(reservation["start_datetime"], class_name="text-sm font-medium"),
@@ -1065,7 +1065,7 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
         (reservation["total_amount"] - reservation["advance_amount"]).to_string(),
         class_name="font-semibold",
       ),
-      class_name="py-3 px-4 text-right",
+      class_name="py-3 px-4 text-right hidden md:table-cell",
     ),
     class_name="border-b",
   )
@@ -1144,13 +1144,13 @@ def reservations_table() -> rx.Component:
         rx.el.thead(
           rx.el.tr(
             rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Campo", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Campo", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
             rx.el.th("Horario", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("Monto", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th("Acciones", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th(
-              "Saldo", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+              "Saldo", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden md:table-cell"
             ),
             class_name=TABLE_STYLES["header"],
           )
