@@ -1073,7 +1073,7 @@ def marketing_page() -> rx.Component:
                         rx.el.div(
                             rx.el.div(
                                 rx.el.div(
-                                    rx.icon("check-circle", class_name="h-5 w-5 text-emerald-600"),
+                                    rx.icon("circle-check", class_name="h-5 w-5 text-emerald-600"),
                                     rx.el.span("Ventajas", class_name="text-sm font-bold text-slate-900"),
                                     class_name="flex items-center gap-2 mb-3",
                                 ),
@@ -1099,7 +1099,7 @@ def marketing_page() -> rx.Component:
                             ),
                             rx.el.div(
                                 rx.el.div(
-                                    rx.icon("alert-circle", class_name="h-5 w-5 text-amber-600"),
+                                    rx.icon("circle-alert", class_name="h-5 w-5 text-amber-600"),
                                     rx.el.span("Consideraciones", class_name="text-sm font-bold text-slate-900"),
                                     class_name="flex items-center gap-2 mb-3",
                                 ),
@@ -1186,7 +1186,7 @@ def marketing_page() -> rx.Component:
                         rx.el.div(
                             rx.el.div(
                                 rx.el.div(
-                                    rx.icon("check-circle", class_name="h-5 w-5 text-emerald-600"),
+                                    rx.icon("circle-check", class_name="h-5 w-5 text-emerald-600"),
                                     rx.el.span("Ventajas", class_name="text-sm font-bold text-slate-900"),
                                     class_name="flex items-center gap-2 mb-3",
                                 ),
@@ -1212,7 +1212,7 @@ def marketing_page() -> rx.Component:
                             ),
                             rx.el.div(
                                 rx.el.div(
-                                    rx.icon("alert-circle", class_name="h-5 w-5 text-amber-600"),
+                                    rx.icon("circle-alert", class_name="h-5 w-5 text-amber-600"),
                                     rx.el.span("Consideraciones", class_name="text-sm font-bold text-slate-900"),
                                     class_name="flex items-center gap-2 mb-3",
                                 ),
