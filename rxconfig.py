@@ -9,6 +9,7 @@ load_dotenv()
 # Configuracion de Entorno
 env = (os.getenv("ENV") or "dev").strip().lower()
 is_prod = env in {"prod", "production"}
+# Base URL del backend: con nginx/NPM debe terminar en /api (ej. https://tudominio.com/api)
 api_url = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
 redis_url = (os.getenv("REDIS_URL") or "").strip()
 if is_prod and not redis_url:

@@ -1,8 +1,8 @@
 # Sistema de Ventas - Stack de producción
 # Uso: docker compose up -d
-# Un solo puerto: http://<IP-PUBLICA>:8101  (frontend + API bajo /api)
-# Más adelante: poner Nginx Proxy Manager delante con dominio.
-# MySQL y Redis no se exponen al host (solo red interna Docker).
+# Con dominio: solo NPM (app en npm_network). Sin contenedor nginx.
+# Por IP (opcional): descomentar el servicio nginx y exponer 8101.
+# MySQL y Redis solo en red interna; no se exponen al host.
 # Despliegue sin borrar MySQL: docker compose build app && docker compose up -d (nunca usar -v en down si quieres conservar datos).
 # Solo si MySQL queda "Restarting" y necesitas empezar de cero: docker compose down -v (eso SÍ borra volúmenes).
 
@@ -14,19 +14,19 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
       MYSQL_DATABASE: ${DB_NAME:-sistema_ventas}
-      # La imagen MySQL no permite MYSQL_USER=root; usar siempre un usuario de aplicación
       MYSQL_USER: app
       MYSQL_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
     volumes:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     healthcheck:
-      # MYSQL_PWD evita poner la contraseña en la línea de comandos (caracteres especiales)
       test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h localhost -u root -e 'SELECT 1' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 8
       start_period: 60s
+    networks:
+      - internal_net
 
   redis:
     image: redis:7-alpine
@@ -39,6 +39,8 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
+    networks:
+      - internal_net
 
   app:
     build:
@@ -46,14 +48,12 @@ services:
       dockerfile: Dockerfile
     container_name: sistema_ventas_app
     restart: unless-stopped
-    # service_started: el entrypoint de la app ya espera a MySQL/Redis con reintentos
     depends_on:
       mysql:
         condition: service_started
       redis:
         condition: service_started
     environment:
-      # ENV lo toma tu app (rxconfig) y .env; el CMD del Dockerfile ya usa reflex run --env prod
       ENV: ${ENV:-prod}
       DB_HOST: mysql
       DB_PORT: 3306
@@ -61,28 +61,42 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
       DB_NAME: ${DB_NAME:-sistema_ventas}
       REDIS_URL: redis://redis:6379/0
-      # Mismo origen que el frontend: http://<IP>:8101/api (NPM luego: https://dominio.com/api)
+      # Definir en .env: PUBLIC_API_URL=https://tudominio.com/api
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8101/api}
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-min-32-chars-for-production}
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
     env_file:
       - .env
     volumes:
-      # Cache del build de producción del frontend (evita recompilar en cada reinicio)
       - reflex_web:/app/.web
+    networks:
+      - internal_net
+      - npm_network
 
-  nginx:
-    image: nginx:alpine
-    container_name: sistema_ventas_nginx
-    restart: unless-stopped
-    depends_on:
-      - app
-    ports:
-      - "8101:80"
-    volumes:
-      - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+  # Opcional: solo para acceso por IP (http://<IP>:8101). Con dominio no hace falta.
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: sistema_ventas_nginx
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - app
+  #   ports:
+  #     - "8101:80"
+  #   volumes:
+  #     - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+  #   networks:
+  #     - internal_net
+  #     - npm_network
 
 volumes:
   mysql_data:
   redis_data:
   reflex_web:
+
+networks:
+  internal_net:
+    driver: bridge
+
+  npm_network:
+    external: true
+    name: nginx-proxy-manager_default
