@@ -1,6 +1,11 @@
+"""Enumeraciones del sistema de ventas.
+
+Define los valores válidos para estados, métodos de pago y tipos de deporte.
+"""
 from enum import Enum
 
 class ReservationStatus(str, Enum):
+    """Estados posibles de una reservación."""
     pending = "pending"
     paid = "paid"
     cancelled = "cancelled"
@@ -12,6 +17,7 @@ class ReservationStatus(str, Enum):
     REFUNDED = refunded
 
 class SaleStatus(str, Enum):
+    """Estados posibles de una venta."""
     pending = "pending"
     completed = "completed"
     cancelled = "cancelled"
@@ -21,6 +27,7 @@ class SaleStatus(str, Enum):
     CANCELLED = cancelled
 
 class PaymentMethodType(str, Enum):
+    """Tipos de método de pago soportados por el sistema."""
     cash = "cash"
     debit = "debit"
     credit = "credit"
@@ -44,6 +51,7 @@ class PaymentMethodType(str, Enum):
     WALLET = wallet
 
 class SportType(str, Enum):
+    """Tipos de deporte disponibles para canchas/servicios."""
     futbol = "futbol"
     voley = "voley"
 

@@ -9,8 +9,7 @@ from app.utils.timezone import is_valid_timezone
 from app.enums import PaymentMethodType
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
-
-WHATSAPP_SALES_URL = "https://wa.me/message/ULLEZ4HUFB5HA1"
+from app.constants import WHATSAPP_SALES_URL
 
 _REGIONAL_TIMEZONES = [
     "America/Lima",
@@ -33,6 +32,12 @@ for _tz in [*_COUNTRY_TIMEZONES, *_REGIONAL_TIMEZONES]:
         _BASE_TIMEZONE_OPTIONS.append(_tz)
 
 class ConfigState(MixinState):
+    """Estado de configuración general del sistema.
+
+    Administra los datos de la empresa, moneda, categorías, unidades de medida,
+    métodos de pago y configuración de comprobantes.
+    """
+
     # Configuracion de empresa
     company_name: str = ""
     ruc: str = ""

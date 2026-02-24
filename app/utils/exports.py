@@ -15,7 +15,7 @@ from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from typing import Any
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 
 # Estilos por defecto para exportaciones Excel
@@ -60,12 +60,12 @@ def _sanitize_excel_value(value: Any) -> Any:
 
 
 def _safe_decimal(value: Any) -> Decimal:
-    """Convierte un valor a Decimal de forma segura."""
+    """Convierte un valor a Decimal de forma segura, evitando corrupción de datos."""
     if value is None:
         return Decimal("0")
     try:
         return Decimal(str(value))
-    except:
+    except (ValueError, TypeError, InvalidOperation):
         return Decimal("0")
 
 
@@ -80,15 +80,15 @@ def _safe_float(value: Any) -> float:
 
 
 def add_company_header(
-    ws: Worksheet, 
-    company_name: str, 
-    report_title: str, 
+    ws: Worksheet,
+    company_name: str,
+    report_title: str,
     period_str: str = "",
     columns: int = 6
 ) -> int:
     """
     Agrega un encabezado profesional con nombre de empresa, título y período.
-    
+
     Retorna la fila donde deben comenzar los datos (después del encabezado).
     """
     # Fila 1: Nombre de empresa
@@ -96,30 +96,30 @@ def add_company_header(
     title_cell = ws.cell(row=1, column=1, value=company_name.upper() if company_name else "EMPRESA")
     title_cell.font = TITLE_FONT
     title_cell.alignment = Alignment(horizontal="center")
-    
+
     # Fila 2: Título del reporte
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=columns)
     subtitle_cell = ws.cell(row=2, column=1, value=report_title)
     subtitle_cell.font = SUBTITLE_FONT
     subtitle_cell.alignment = Alignment(horizontal="center")
-    
+
     # Fila 3: Período
     if period_str:
         ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=columns)
         period_cell = ws.cell(row=3, column=1, value=f"📅 {period_str}")
         period_cell.font = Font(size=10, color="6B7280")
         period_cell.alignment = Alignment(horizontal="center")
-    
+
     # Fila 4: Fecha de generación
     now = datetime.datetime.now()
     ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=columns)
     date_cell = ws.cell(row=4, column=1, value=f"⏱ Generado: {now.strftime('%d/%m/%Y a las %H:%M:%S')}")
     date_cell.font = Font(size=9, italic=True, color="9CA3AF")
     date_cell.alignment = Alignment(horizontal="center")
-    
+
     # Fila 5: Espacio
     ws.row_dimensions[5].height = 10
-    
+
     # Retornar fila 6 para encabezados de datos
     return 6
 
@@ -132,7 +132,7 @@ def add_totals_row_with_formulas(
 ) -> None:
     """
     Agrega una fila de totales con fórmulas Excel.
-    
+
     columns_config: Lista de diccionarios con:
         - type: "label", "sum", "count", "average", "formula", "text"
         - value: Valor para label/text/formula
@@ -142,7 +142,7 @@ def add_totals_row_with_formulas(
     for col_idx, config in enumerate(columns_config, start=1):
         cell = ws.cell(row=row, column=col_idx)
         col_type = config.get("type", "text")
-        
+
         if col_type == "label":
             cell.value = config.get("value", "TOTAL")
         elif col_type == "sum":
@@ -158,51 +158,51 @@ def add_totals_row_with_formulas(
             cell.value = config.get("value", "")
         elif col_type == "text":
             cell.value = config.get("value", "")
-        
+
         cell.font = Font(bold=True)
         cell.fill = TOTAL_FILL
         cell.border = THICK_BORDER_BOTTOM
-        
+
         if "number_format" in config:
             cell.number_format = config["number_format"]
 
 
 def add_notes_section(
-    ws: Worksheet, 
-    after_row: int, 
-    notes: list[str], 
+    ws: Worksheet,
+    after_row: int,
+    notes: list[str],
     columns: int = 6
 ) -> int:
     """
     Agrega una sección de notas explicativas al final de la hoja.
-    
+
     Retorna la última fila utilizada.
     """
     row = after_row + 2
-    
+
     # Título de notas
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=columns)
     notes_title = ws.cell(row=row, column=1, value="📋 NOTAS Y DEFINICIONES:")
     notes_title.font = Font(bold=True, size=10, color="374151")
     row += 1
-    
+
     # Cada nota
     for note in notes:
         ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=columns)
         note_cell = ws.cell(row=row, column=1, value=f"• {note}")
         note_cell.font = NOTE_FONT
         row += 1
-    
+
     return row
 
 
 def create_excel_workbook(title: str) -> tuple[Workbook, Worksheet]:
     """
     Crea un workbook de Excel con una hoja nombrada.
-    
+
     Parametros:
         title: Titulo de la hoja activa
-        
+
     Retorna:
         Tupla (workbook, hoja_activa)
     """
@@ -215,7 +215,7 @@ def create_excel_workbook(title: str) -> tuple[Workbook, Worksheet]:
 def style_header_row(ws: Worksheet, row: int, columns: list[str]) -> None:
     """
     Agrega encabezados con estilo a una fila de la hoja.
-    
+
     Parametros:
         ws: Hoja a modificar
         row: Numero de fila (1-indexed)
@@ -237,13 +237,13 @@ def add_data_rows(
 ) -> int:
     """
     Agrega multiples filas de datos a una hoja.
-    
+
     Parametros:
         ws: Hoja a modificar
         data: Lista de filas (cada fila es una lista de valores)
         start_row: Fila inicial (1-indexed)
         apply_border: Si se aplican bordes a las celdas
-        
+
     Retorna:
         Numero de fila despues de la ultima fila agregada
     """
@@ -258,42 +258,31 @@ def add_data_rows(
     return current_row
 
 
-def add_simple_headers(ws: Worksheet, headers: list[str]) -> None:
-    """
-    Agrega encabezados simples a la primera fila (sin estilo).
-    
-    Parametros:
-        ws: Hoja a modificar
-        headers: Lista de encabezados
-    """
-    ws.append(headers)
-
-
 def auto_adjust_column_widths(ws: Worksheet, min_width: int = 10, max_width: int = 50) -> None:
     """
     Ajusta automaticamente el ancho de columnas segun el contenido.
-    
+
     Parametros:
         ws: Hoja a modificar
         min_width: Ancho minimo de columna
         max_width: Ancho maximo de columna
     """
     from openpyxl.cell.cell import MergedCell
-    
+
     for column in ws.columns:
         max_length = 0
         column_letter = None
-        
+
         # Buscar la primera celda que no sea MergedCell para obtener la letra de columna
         for cell in column:
             if not isinstance(cell, MergedCell):
                 column_letter = cell.column_letter
                 break
-        
+
         # Si no encontramos una celda válida, saltar esta columna
         if column_letter is None:
             continue
-            
+
         for cell in column:
             # Ignorar celdas combinadas para el cálculo de ancho
             if isinstance(cell, MergedCell):
@@ -304,7 +293,7 @@ def auto_adjust_column_widths(ws: Worksheet, min_width: int = 10, max_width: int
                     max_length = len(cell_value)
             except:
                 pass
-        
+
         adjusted_width = (max_length + 2)
         if adjusted_width < min_width:
             adjusted_width = min_width

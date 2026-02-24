@@ -286,11 +286,11 @@ SUPPORTED_COUNTRIES = {
 
 def get_country_config(country_code: str) -> dict:
     """Obtiene la configuración completa de un país.
-    
-    Args:
+
+    Parámetros:
         country_code: Código ISO del país (ej: 'PE', 'AR', 'EC')
-        
-    Returns:
+
+    Retorna:
         Diccionario con toda la configuración del país
     """
     country_code = (country_code or "PE").upper()
@@ -299,11 +299,11 @@ def get_country_config(country_code: str) -> dict:
 
 def get_payment_methods_for_country(country_code: str) -> list[dict]:
     """Obtiene los métodos de pago para un país específico.
-    
-    Args:
+
+    Parámetros:
         country_code: Código ISO del país (ej: 'PE', 'AR', 'EC')
-        
-    Returns:
+
+    Retorna:
         Lista de métodos de pago (universales + específicos del país)
     """
     country_code = (country_code or "PE").upper()
@@ -391,18 +391,6 @@ def seed_new_branch_data(
                 for data in DEFAULT_PAYMENT_METHODS
             ]
         )
-
-
-def seed_new_company_data(
-    session: Session,
-    company_id: int,
-    branch_id: int | None = None,
-) -> None:
-    """Compatibilidad: carga datos base para una empresa/sucursal."""
-    if not company_id:
-        return
-    if branch_id:
-        seed_new_branch_data(session, company_id, branch_id)
 
 
 async def init_payment_methods(

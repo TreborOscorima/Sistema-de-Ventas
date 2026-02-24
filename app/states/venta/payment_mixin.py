@@ -7,6 +7,12 @@ from ..types import PaymentBreakdownItem, PaymentMethodConfig
 
 
 class PaymentMixin:
+    """Mixin para la selección y validación de métodos de pago.
+
+    Gestiona pagos en efectivo, tarjeta, billetera digital, transferencia
+    y pagos mixtos. Calcula vuelto y genera resúmenes de pago.
+    """
+
     # payment_methods se declara y carga en ConfigState.load_config_data().
     # NO redeclarar aquí para evitar conflictos MRO.
 

@@ -15,28 +15,28 @@ def sanitize_text(value: Any, max_length: int = 500) -> str:
     """
     Sanitiza texto de entrada para prevenir XSS y limitar longitud.
 
-    Args:
+    Parámetros:
         value: Valor a sanitizar (se convierte a string)
         max_length: Longitud máxima permitida
 
-    Returns:
+    Retorna:
         String sanitizado y truncado
     """
     if value is None:
         return ""
-    
+
     # Convertir a string y limpiar espacios
     cleaned = str(value).strip()
-    
+
     # Eliminado html.escape para evitar doble codificación en BD y reportes.
     # En su lugar, removemos tags HTML para sanitización real (limpieza).
     if "<" in cleaned and ">" in cleaned:
         cleaned = re.sub(r"<[^>]*>", "", cleaned)
-    
+
     # Limitar longitud
     if len(cleaned) > max_length:
         cleaned = cleaned[:max_length]
-    
+
     return cleaned
 
 
@@ -44,7 +44,7 @@ def sanitize_text_preserve_spaces(value: Any, max_length: int = 500) -> str:
     """
     Sanitiza texto sin recortar espacios al final (para inputs en vivo).
 
-    Args:
+    Parámetros:
         value: Valor a sanitizar
         max_length: Longitud máxima permitida
     """
@@ -64,10 +64,10 @@ def sanitize_notes(value: Any) -> str:
 
     Límite de 250 caracteres para notas.
 
-    Args:
+    Parámetros:
         value: Texto de notas a sanitizar
 
-    Returns:
+    Retorna:
         String sanitizado
     """
     return sanitize_text(value, max_length=250)
@@ -78,31 +78,16 @@ def sanitize_notes_preserve_spaces(value: Any) -> str:
     return sanitize_text_preserve_spaces(value, max_length=250)
 
 
-def sanitize_description(value: Any) -> str:
-    """
-    Sanitiza descripciones de productos o servicios.
-
-    Límite de 200 caracteres.
-
-    Args:
-        value: Descripción a sanitizar
-
-    Returns:
-        String sanitizado
-    """
-    return sanitize_text(value, max_length=200)
-
-
 def sanitize_name(value: Any) -> str:
     """
     Sanitiza nombres (clientes, usuarios, etc).
 
     Límite de 100 caracteres.
 
-    Args:
+    Parámetros:
         value: Nombre a sanitizar
 
-    Returns:
+    Retorna:
         String sanitizado
     """
     return sanitize_text(value, max_length=100)
@@ -114,19 +99,19 @@ def sanitize_phone(value: Any) -> str:
 
     Solo permite dígitos, espacios, guiones y el símbolo +.
 
-    Args:
+    Parámetros:
         value: Teléfono a sanitizar
 
-    Returns:
+    Retorna:
         String sanitizado con solo caracteres válidos
     """
     if value is None:
         return ""
-    
+
     cleaned = str(value).strip()
     # Solo permitir dígitos, espacios, guiones y +
     cleaned = re.sub(r"[^\d\s\-+]", "", cleaned)
-    
+
     return cleaned[:20]  # Límite razonable para teléfonos
 
 
@@ -136,35 +121,20 @@ def sanitize_dni(value: Any) -> str:
 
     Solo permite caracteres alfanuméricos y guiones.
 
-    Args:
+    Parámetros:
         value: Documento a sanitizar
 
-    Returns:
+    Retorna:
         String sanitizado
     """
     if value is None:
         return ""
-    
+
     cleaned = str(value).strip().upper()
     # Solo permitir alfanuméricos y guiones
     cleaned = re.sub(r"[^A-Z0-9\-]", "", cleaned)
-    
+
     return cleaned[:20]
-
-
-def sanitize_address(value: Any) -> str:
-    """
-    Sanitiza direcciones.
-
-    Límite de 300 caracteres.
-
-    Args:
-        value: Dirección a sanitizar
-
-    Returns:
-        String sanitizado
-    """
-    return sanitize_text(value, max_length=300)
 
 
 def sanitize_barcode(value: Any) -> str:
@@ -173,19 +143,19 @@ def sanitize_barcode(value: Any) -> str:
 
     Solo permite caracteres alfanuméricos.
 
-    Args:
+    Parámetros:
         value: Código de barra a sanitizar
 
-    Returns:
+    Retorna:
         String sanitizado
     """
     if value is None:
         return ""
-    
+
     cleaned = str(value).strip()
     # Solo alfanuméricos para códigos de barra
     cleaned = re.sub(r"[^A-Za-z0-9]", "", cleaned)
-    
+
     return cleaned[:50]
 
 
@@ -195,10 +165,10 @@ def sanitize_reason(value: Any) -> str:
 
     Límite de 200 caracteres.
 
-    Args:
+    Parámetros:
         value: Razón a sanitizar
 
-    Returns:
+    Retorna:
         String sanitizado
     """
     return sanitize_text(value, max_length=200)
@@ -209,58 +179,23 @@ def sanitize_reason_preserve_spaces(value: Any) -> str:
     return sanitize_text_preserve_spaces(value, max_length=200)
 
 
-def validate_positive_decimal(value: Any) -> bool:
-    """
-    Valida que un valor sea un decimal positivo.
-
-    Args:
-        value: Valor a validar
-
-    Returns:
-        True si es un decimal positivo válido
-    """
-    try:
-        from decimal import Decimal, InvalidOperation
-        parsed = Decimal(str(value or 0))
-        return parsed >= 0
-    except (InvalidOperation, ValueError, TypeError):
-        return False
-
-
-def validate_positive_integer(value: Any) -> bool:
-    """
-    Valida que un valor sea un entero positivo.
-
-    Args:
-        value: Valor a validar
-
-    Returns:
-        True si es un entero positivo válido
-    """
-    try:
-        parsed = int(value)
-        return parsed >= 0
-    except (ValueError, TypeError):
-        return False
-
-
 def is_valid_phone(phone: str, country_code: str = "PE") -> bool:
     """
     Valida formato de teléfono según el país.
 
-    Args:
+    Parámetros:
         phone: Número de teléfono a validar
         country_code: Código ISO del país (default: PE)
 
-    Returns:
+    Retorna:
         True si es un formato válido para el país
     """
     from app.utils.db_seeds import get_country_config
-    
+
     digits = re.sub(r"\D", "", phone or "")
     if not digits:
         return False
-    
+
     config = get_country_config(country_code)
     valid_lengths = config.get("phone_digits", [9, 11])
     return len(digits) in valid_lengths
@@ -269,7 +204,7 @@ def is_valid_phone(phone: str, country_code: str = "PE") -> bool:
 def is_valid_personal_id(id_value: str, country_code: str = "PE") -> bool:
     """
     Valida formato de documento de identidad personal según el país.
-    
+
     - Perú: DNI (8 dígitos)
     - Argentina: DNI (7-8 dígitos)
     - Ecuador: Cédula (10 dígitos)
@@ -277,50 +212,21 @@ def is_valid_personal_id(id_value: str, country_code: str = "PE") -> bool:
     - Chile: RUN (8-9 caracteres)
     - México: CURP (18 caracteres)
 
-    Args:
+    Parámetros:
         id_value: Documento a validar
         country_code: Código ISO del país (default: PE)
 
-    Returns:
+    Retorna:
         True si es un formato válido para el país
     """
     from app.utils.db_seeds import get_country_config
-    
+
     cleaned = re.sub(r"[^A-Za-z0-9]", "", id_value or "")
     if not cleaned:
         return False
-    
+
     config = get_country_config(country_code)
     min_len, max_len = config.get("personal_id_length", (6, 12))
-    return min_len <= len(cleaned) <= max_len
-
-
-def is_valid_tax_id(tax_id: str, country_code: str = "PE") -> bool:
-    """
-    Valida formato de identificación tributaria según el país.
-    
-    - Perú: RUC (11 dígitos)
-    - Argentina: CUIT (11 dígitos)
-    - Ecuador: RUC (13 dígitos)
-    - Colombia: NIT (9-10 dígitos)
-    - Chile: RUT (8-9 caracteres)
-    - México: RFC (12-13 caracteres)
-
-    Args:
-        tax_id: Identificación tributaria a validar
-        country_code: Código ISO del país (default: PE)
-
-    Returns:
-        True si es un formato válido para el país
-    """
-    from app.utils.db_seeds import get_country_config
-    
-    cleaned = re.sub(r"[^A-Za-z0-9]", "", tax_id or "")
-    if not cleaned:
-        return True  # Campo opcional, vacío es válido
-    
-    config = get_country_config(country_code)
-    min_len, max_len = config.get("tax_id_length", (8, 13))
     return min_len <= len(cleaned) <= max_len
 
 
@@ -328,12 +234,12 @@ def is_valid_tax_id(tax_id: str, country_code: str = "PE") -> bool:
 def is_valid_dni(dni: str, country_code: str = "PE") -> bool:
     """
     Alias de is_valid_personal_id para compatibilidad.
-    
-    Args:
+
+    Parámetros:
         dni: Documento a validar
         country_code: Código ISO del país (default: PE)
 
-    Returns:
+    Retorna:
         True si es un formato válido
     """
     return is_valid_personal_id(dni, country_code)

@@ -101,7 +101,9 @@ def _refresh_tenant_models() -> None:
         if "company_id" in table.c:
             company_models.append(model)
         if "branch_id" in table.c:
-            branch_models.append(model)
+            branch_col = table.c.get("branch_id")
+            if branch_col is not None and not getattr(branch_col, "nullable", True):
+                branch_models.append(model)
     _TENANT_COMPANY_MODELS = company_models
     _TENANT_BRANCH_MODELS = branch_models
     _TENANT_MODELS_READY = True

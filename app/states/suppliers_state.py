@@ -10,6 +10,12 @@ from .mixin_state import MixinState
 
 
 class SuppliersState(MixinState):
+    """Estado para la gestión de proveedores.
+
+    CRUD de proveedores con validación de RUC/DNI duplicado
+    y filtrado por empresa/sucursal.
+    """
+
     suppliers: list[dict[str, Any]] = []
     supplier_search_query: str = ""
     supplier_modal_open: bool = False

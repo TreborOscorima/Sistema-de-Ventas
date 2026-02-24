@@ -18,7 +18,7 @@ Clases principales:
 Ejemplo de uso::
 
     from app.services.sale_service import SaleService, StockError
-    
+
     async with get_async_session() as session:
         try:
             result = await SaleService.process_sale(
@@ -66,6 +66,12 @@ from app.utils.calculations import calculate_subtotal, calculate_total
 from app.utils.db import get_async_session as get_session
 from app.utils.logger import get_logger
 from app.utils.tenant import set_tenant_context
+from app.utils.payment import (
+    normalize_payment_method_kind as _method_type_from_kind,
+    card_method_type as _card_method_type,
+    wallet_method_type as _wallet_method_type,
+    payment_method_code as _payment_method_code,
+)
 
 # Nota: get_session es un alias de get_async_session para uso interno.
 
@@ -422,21 +428,33 @@ async def calculate_item_price(
     company_id: int | None,
     branch_id: int | None,
     session: AsyncSession | None = None,
+    variant_id: int | None = None,
 ) -> Decimal:
     set_tenant_context(company_id, branch_id)
     if not product_id:
         return Decimal("0.00")
 
     async def _run(current_session: AsyncSession) -> Decimal:
-        tier_query = select(PriceTier).where(
-            PriceTier.product_id == product_id,
-            PriceTier.min_quantity <= qty,
+        # Buscar primero por variante si se proporcionó
+        if variant_id:
+            tier = await _get_price_tier(
+                current_session,
+                variant_id=variant_id,
+                qty=qty,
+                company_id=company_id,
+                branch_id=branch_id,
+            )
+            if tier and tier.unit_price is not None:
+                return _round_money(tier.unit_price)
+
+        # Luego buscar por producto
+        tier = await _get_price_tier(
+            current_session,
+            product_id=product_id,
+            qty=qty,
+            company_id=company_id,
+            branch_id=branch_id,
         )
-        tier_query = _apply_tenant_filters(
-            tier_query, PriceTier, company_id, branch_id
-        )
-        tier_query = tier_query.order_by(PriceTier.min_quantity.desc())
-        tier = (await current_session.exec(tier_query)).first()
         if tier and tier.unit_price is not None:
             return _round_money(tier.unit_price)
 
@@ -641,12 +659,12 @@ def _deduct_from_batches(
 
 class StockError(ValueError):
     """Excepción para errores relacionados con inventario.
-    
+
     Se lanza cuando:
     - El producto no existe en inventario
     - El stock es insuficiente para la cantidad solicitada
     - Hay ambigüedad en la descripción del producto
-    
+
     Attributes:
         args: Mensaje descriptivo del error
     """
@@ -656,10 +674,10 @@ class StockError(ValueError):
 @dataclass
 class SaleProcessResult:
     """Resultado de una venta procesada exitosamente.
-    
+
     Contiene toda la información necesaria para generar el recibo
     y actualizar la UI después de procesar una venta.
-    
+
     Attributes:
         sale: Objeto Sale persistido en base de datos
         receipt_items: Lista de items formateados para el recibo
@@ -686,10 +704,10 @@ class SaleProcessResult:
 
 def _to_decimal(value: Any) -> Decimal:
     """Convierte cualquier valor numérico a Decimal.
-    
+
     Args:
         value: Valor a convertir (int, float, str, None)
-        
+
     Returns:
         Decimal del valor, o Decimal(0) si es None/vacío
     """
@@ -698,12 +716,12 @@ def _to_decimal(value: Any) -> Decimal:
 
 def _round_money(value: Any) -> Decimal:
     """Redondea un valor monetario a 2 decimales.
-    
+
     Usa ROUND_HALF_UP para consistencia contable.
-    
+
     Args:
         value: Monto a redondear
-        
+
     Returns:
         Decimal redondeado a centavos (0.01)
     """
@@ -742,43 +760,6 @@ def _reservation_status_value(status: Any) -> str:
     if isinstance(status, ReservationStatus):
         return status.value
     return str(status or "").strip().lower()
-
-
-def _method_type_from_kind(kind: str) -> PaymentMethodType:
-    normalized = (kind or "").strip().lower()
-    if normalized == "cash":
-        return PaymentMethodType.cash
-    if normalized == "debit":
-        return PaymentMethodType.debit
-    if normalized == "credit":
-        return PaymentMethodType.credit
-    if normalized == "yape":
-        return PaymentMethodType.yape
-    if normalized == "plin":
-        return PaymentMethodType.plin
-    if normalized == "transfer":
-        return PaymentMethodType.transfer
-    if normalized == "mixed":
-        return PaymentMethodType.mixed
-    if normalized == "card":
-        return PaymentMethodType.credit
-    if normalized == "wallet":
-        return PaymentMethodType.yape
-    return PaymentMethodType.other
-
-
-def _card_method_type(card_type: str) -> PaymentMethodType:
-    value = (card_type or "").strip().lower()
-    if "deb" in value:
-        return PaymentMethodType.debit
-    return PaymentMethodType.credit
-
-
-def _wallet_method_type(provider: str) -> PaymentMethodType:
-    value = (provider or "").strip().lower()
-    if "plin" in value:
-        return PaymentMethodType.plin
-    return PaymentMethodType.yape
 
 
 def _allocate_mixed_payments(
@@ -853,35 +834,19 @@ def _build_sale_payments(
     return [(method_type, _round_money(amount))]
 
 
-def _payment_method_code(method_type: PaymentMethodType) -> str | None:
-    if method_type == PaymentMethodType.cash:
-        return "cash"
-    if method_type == PaymentMethodType.yape:
-        return "yape"
-    if method_type == PaymentMethodType.plin:
-        return "plin"
-    if method_type == PaymentMethodType.transfer:
-        return "transfer"
-    if method_type == PaymentMethodType.debit:
-        return "debit_card"
-    if method_type == PaymentMethodType.credit:
-        return "credit_card"
-    return None
-
-
 def _split_installments(total: Decimal, count: int) -> list[Decimal]:
     """Divide un monto total en cuotas iguales.
-    
+
     Distribuye cualquier diferencia por redondeo en las primeras cuotas
     para garantizar que la suma exacta sea igual al total.
-    
+
     Args:
         total: Monto total a dividir
         count: Número de cuotas
-        
+
     Returns:
         Lista de montos por cuota (Decimal)
-        
+
     Example:
         >>> _split_installments(Decimal("100.00"), 3)
         [Decimal("33.34"), Decimal("33.33"), Decimal("33.33")]
@@ -906,11 +871,11 @@ def _split_installments(total: Decimal, count: int) -> list[Decimal]:
 
 class SaleService:
     """Servicio para procesamiento de ventas.
-    
+
     Proporciona métodos estáticos para procesar ventas completas,
     incluyendo validación, descuento de stock, registro de pagos
     y generación de datos para recibos.
-    
+
     Todos los métodos son asíncronos y requieren una sesión de BD.
     """
 
@@ -952,6 +917,7 @@ class SaleService:
         company_id: int | None,
         branch_id: int | None,
         session: AsyncSession | None = None,
+        variant_id: int | None = None,
     ) -> Decimal:
         return await calculate_item_price(
             product_id,
@@ -959,6 +925,7 @@ class SaleService:
             company_id,
             branch_id,
             session=session,
+            variant_id=variant_id,
         )
 
     @staticmethod
@@ -990,7 +957,7 @@ class SaleService:
             limit=limit,
             company_id=company_id,
         )
-    
+
     @staticmethod
     async def process_sale(
         session: AsyncSession | None,
@@ -1003,10 +970,10 @@ class SaleService:
         currency_symbol: str | None = None,
     ) -> SaleProcessResult:
         """Procesa una venta completa de forma atómica.
-        
+
         Este es el método principal del servicio. Realiza todas las
         validaciones y operaciones necesarias para completar una venta:
-        
+
         1. Valida método de pago seleccionado
         2. Verifica reserva asociada (si aplica)
         3. Valida existencia y stock de productos
@@ -1018,7 +985,7 @@ class SaleService:
         9. Descuenta stock y registra movimientos
         10. Crea registro en caja (CashboxLog)
         11. Para créditos: crea plan de cuotas (SaleInstallment)
-        
+
         Args:
             session: Sesión async de SQLAlchemy (debe manejarse externamente)
             user_id: ID del usuario que realiza la venta (puede ser None)
@@ -1026,20 +993,20 @@ class SaleService:
             items: Lista de productos a vender (SaleItemDTO)
             payment_data: Información de pago (PaymentInfoDTO)
             reservation_id: ID de reserva asociada (opcional)
-            
+
         Returns:
             SaleProcessResult con todos los datos de la venta procesada
-            
+
         Raises:
             ValueError: Para errores de validación (pago, cliente, montos)
             StockError: Para errores de inventario (stock insuficiente, producto no encontrado)
-            
+
         Note:
             El commit/rollback debe manejarse externamente.
             En caso de error, se recomienda hacer rollback de la sesión.
-            
+
         Example::
-        
+
             result = await SaleService.process_sale(
                 session=session,
                 user_id=current_user.id,
@@ -1200,20 +1167,20 @@ class SaleService:
         unique_variant_ids = list(dict.fromkeys(variant_ids))
         unique_descriptions = list(dict.fromkeys(descriptions))
         unique_barcodes = list(dict.fromkeys(barcodes))
-        
+
         products_by_id: dict[int, Product] = {}
         products_by_description: dict[str, Product] = {}
         products_by_barcode: dict[str, Product] = {}
         ambiguous_descriptions: set[str] = set()
         filters = []
-        
+
         if unique_product_ids:
             filters.append(Product.id.in_(unique_product_ids))
         if unique_barcodes:
             filters.append(Product.barcode.in_(unique_barcodes))
         if unique_descriptions:
             filters.append(Product.description.in_(unique_descriptions))
-        
+
         if filters:
             if len(filters) == 1:
                 query = select(Product).where(filters[0])
@@ -1221,26 +1188,26 @@ class SaleService:
                 query = select(Product).where(or_(*filters))
             query = _apply_tenant_filters(query, Product, company_id, branch_id)
             products = (await session.exec(query.with_for_update())).all()
-            
-            # Map products by all possible keys
+
+            # Mapear productos por todas las claves posibles
             for product in products:
-                # Map by ID
+                # Mapear por ID
                 if product.id:
                     products_by_id[product.id] = product
-                
-                # Map by Description
+
+                # Mapear por descripción
                 description = (product.description or "").strip()
                 if description:
                     if description in products_by_description:
                         ambiguous_descriptions.add(description)
                     else:
                         products_by_description[description] = product
-                
-                # Map by Barcode
+
+                # Mapear por código de barras
                 if product.barcode:
                     products_by_barcode[product.barcode] = product
 
-            # Clean up ambiguous maps
+            # Limpiar mapeos ambiguos
             for description in ambiguous_descriptions:
                 products_by_description.pop(description, None)
 
@@ -1368,7 +1335,7 @@ class SaleService:
                     )
                 product = products_by_description.get(description)
 
-            # 5. Final validation
+            # 5. Validación final
             if not product:
                 identifier = ""
                 if item.get("barcode"):
@@ -1572,7 +1539,7 @@ class SaleService:
         try:
             timestamp = datetime.datetime.now()
             sale_total_display = _money_to_float(sale_total)
-    
+
             new_sale = Sale(
                 timestamp=timestamp,
                 total_amount=sale_total,
@@ -1589,11 +1556,11 @@ class SaleService:
             session.add(new_sale)
             await session.flush()
             await session.refresh(new_sale)
-    
+
             paid_now_total = sale_total
             if is_credit:
                 paid_now_total = total_paid_now
-    
+
             payment_allocations = _build_sale_payments(payment_data, paid_now_total)
             valid_allocations = [
                 (method_type, amount)
@@ -1615,11 +1582,11 @@ class SaleService:
                         created_at=timestamp,
                     )
                 )
-    
+
             cashbox_amount = paid_now_total
             if is_credit and initial_payment_input > Decimal("0.00"):
                 cashbox_amount = initial_payment_input
-    
+
             if cashbox_amount > 0:
                 cashbox_method_id = None
                 main_payment_code = None
@@ -1688,7 +1655,7 @@ class SaleService:
                         sale_id=new_sale.id,
                     )
                 )
-    
+
             if is_credit:
                 financed_amount = _round_money(sale_total - total_paid_now)
                 if financed_amount < Decimal("0.00"):
@@ -1725,7 +1692,7 @@ class SaleService:
                         client.current_debt + financed_amount
                     )
                     session.add(client)
-    
+
             products_to_recalculate: set[int] = set()
             for entry in resolved_items:
                 item = entry["item"]
@@ -1826,7 +1793,7 @@ class SaleService:
                             total_stock, allows_decimal
                         )
                         session.add(product)
-    
+
             reservation_context = None
             reservation_balance_display = _money_to_float(reservation_balance)
             if reservation and reservation_balance > Decimal("0.00"):
@@ -1838,7 +1805,7 @@ class SaleService:
                 if reservation.paid_amount >= reservation.total_amount:
                     reservation.status = ReservationStatus.paid
                 session.add(reservation)
-    
+
                 res_item = SaleItem(
                     sale_id=new_sale.id,
                     product_id=None,
@@ -1855,7 +1822,7 @@ class SaleService:
                     product_category_snapshot="Servicios",
                 )
                 session.add(res_item)
-    
+
                 balance_after = reservation.total_amount - reservation.paid_amount
                 if balance_after < 0:
                     balance_after = Decimal("0.00")
@@ -1872,7 +1839,7 @@ class SaleService:
                     "products_total": _money_to_float(items_total),
                     "charged_total": sale_total_display,
                 }
-    
+
             receipt_items = list(product_snapshot)
             if reservation and reservation_balance > Decimal("0.00"):
                 receipt_items.insert(
@@ -1885,7 +1852,7 @@ class SaleService:
                         "subtotal": reservation_balance_display,
                     },
                 )
-    
+
             payment_summary = payment_data.summary or payment_method
             if is_credit:
                 credit_lines = [
@@ -1905,7 +1872,7 @@ class SaleService:
                     payment_summary = f"{payment_summary}\n{credit_block}"
                 else:
                     payment_summary = credit_block
-    
+
             await session.commit()
             return SaleProcessResult(
                 sale=new_sale,

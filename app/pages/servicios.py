@@ -4,7 +4,6 @@ from app.components.ui import (
   date_range_filter,
   select_filter,
   section_header,
-  card_container,
   BUTTON_STYLES,
   TABLE_STYLES,
   pagination_controls,
@@ -83,6 +82,7 @@ def payment_method_selector_compact() -> rx.Component:
 
 
 def sport_selector() -> rx.Component:
+  """Selector de deporte para reservas de canchas."""
   return rx.el.div(
     rx.el.div(
       rx.el.p("ALQUILER DE CAMPOS DE FUTBOL Y VOLEY", class_name="text-lg font-semibold text-slate-800"),
@@ -1610,6 +1610,7 @@ def servicio_card(title: str, description: str) -> rx.Component:
 
 
 def servicios_page() -> rx.Component:
+  """Página principal del módulo de servicios y reservas."""
   content = rx.el.div(
     page_title(
       "SERVICIOS",

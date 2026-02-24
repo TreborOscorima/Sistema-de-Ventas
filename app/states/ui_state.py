@@ -47,6 +47,12 @@ _SERVICES_DEFAULT = "campo"
 
 
 class UIState(MixinState):
+    """Estado de la interfaz de usuario.
+
+    Controla el sidebar, notificaciones, modales, breadcrumbs,
+    tema visual y estado de responsividad de la aplicación.
+    """
+
     sidebar_open: bool = True
     current_page: str = ""  # Vacío inicialmente, se setea según privilegios
     current_active_item: str = rx.SessionStorage("")

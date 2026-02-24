@@ -574,6 +574,7 @@ def cuentas_detail_modal() -> rx.Component:
 
 
 def cuentas_page() -> rx.Component:
+  """Página principal de cuentas corrientes y créditos."""
   content = rx.fragment(
     rx.el.div(
       page_title(

@@ -11,6 +11,7 @@ from app.components.ui import (
   card_container,
   info_badge,
   form_textarea,
+  payment_method_badge,
   TABLE_STYLES,
   INPUT_STYLES,
   toggle_switch,
@@ -86,6 +87,7 @@ def cashbox_log_filters() -> rx.Component:
 
 
 def cashbox_payments_header() -> rx.Component:
+  """Encabezado con resumen de pagos de caja."""
   date_range = rx.cond(
     (State.cashbox_filter_start_date != "") | (State.cashbox_filter_end_date != ""),
     rx.el.span(
@@ -145,6 +147,7 @@ def cashbox_payments_header() -> rx.Component:
 
 
 def cashbox_opening_card() -> rx.Component:
+  """Tarjeta de apertura de caja."""
   return card_container(
     rx.el.div(
       rx.el.div(
@@ -345,50 +348,6 @@ def render_payment_details(details: rx.Var[str]) -> rx.Component:
       side_offset=6,
     ),
     rx.el.p(details, class_name="text-[11px] text-slate-500"),
-  )
-
-
-def method_chip(label: rx.Var | str, color_classes: str) -> rx.Component:
-  return rx.el.span(
-    label,
-    class_name=(
-      "inline-flex items-center rounded-full px-2 py-0.5 "
-      f"text-[11px] font-semibold tracking-wide {color_classes}"
-    ),
-  )
-
-
-def payment_method_badge(method: rx.Var[str]) -> rx.Component:
-  is_credit_sale = (method == None) | (method == "") | (method == "-")
-  return rx.cond(
-    is_credit_sale,
-    method_chip("Crédito / Fiado", "bg-amber-100 text-amber-700"),
-    rx.match(
-      method,
-      ("Efectivo", method_chip("Efectivo", "bg-emerald-100 text-emerald-700")),
-      ("Yape", method_chip("Yape", "bg-violet-100 text-violet-700")),
-      ("Plin", method_chip("Plin", "bg-violet-100 text-violet-700")),
-      (
-        "Billetera Digital (Yape)",
-        method_chip("Yape", "bg-violet-100 text-violet-700"),
-      ),
-      (
-        "Billetera Digital (Plin)",
-        method_chip("Plin", "bg-violet-100 text-violet-700"),
-      ),
-      ("Transferencia", method_chip("Transferencia", "bg-sky-100 text-sky-700")),
-      ("Transferencia Bancaria", method_chip("Transferencia", "bg-sky-100 text-sky-700")),
-      ("Tarjeta", method_chip(method, "bg-blue-100 text-blue-700")),
-      ("T. Debito", method_chip(method, "bg-blue-100 text-blue-700")),
-      ("T. Credito", method_chip(method, "bg-blue-100 text-blue-700")),
-      ("Tarjeta de Débito", method_chip("Tarjeta Débito", "bg-blue-100 text-blue-700")),
-      ("Tarjeta de Crédito", method_chip("Tarjeta Crédito", "bg-blue-100 text-blue-700")),
-      ("Pago Mixto", method_chip("Mixto", "bg-amber-100 text-amber-700")),
-      rx.el.span(
-        method,
-        class_name="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600",
-      ),
-    ),
   )
 
 
@@ -598,6 +557,7 @@ def cashbox_logs_section() -> rx.Component:
 
 
 def delete_sale_modal() -> rx.Component:
+  """Modal de confirmación para eliminar una venta."""
   return modal_container(
     is_open=State.sale_delete_modal_open,
     on_close=State.close_sale_delete_modal,
@@ -629,6 +589,7 @@ def delete_sale_modal() -> rx.Component:
 
 
 def close_cashbox_modal() -> rx.Component:
+  """Modal de cierre de caja con resumen."""
   return modal_container(
     is_open=State.cashbox_close_modal_open,
     on_close=State.close_cashbox_close_modal,

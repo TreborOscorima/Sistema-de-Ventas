@@ -10,6 +10,7 @@ from app.components.ui import (
 
 
 def edit_product_modal() -> rx.Component:
+  """Modal de edición de producto."""
   return rx.cond(
     State.is_editing_product,
     rx.el.div(
@@ -162,6 +163,42 @@ def edit_product_modal() -> rx.Component:
             class_name="flex flex-col gap-2",
           ),
           class_name="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4",
+        ),
+        # Modal de confirmación para desactivar mayoreo
+        rx.cond(
+          State.confirm_disable_wholesale,
+          rx.el.div(
+            rx.el.div(
+              rx.el.div(
+                rx.icon("triangle-alert", class_name="h-5 w-5 text-amber-500"),
+                rx.el.h4(
+                  "¿Desactivar precios mayoristas?",
+                  class_name="text-sm font-semibold text-slate-800",
+                ),
+                class_name="flex items-center gap-2",
+              ),
+              rx.el.p(
+                "Se eliminarán todas las escalas de precio configuradas para este producto. Esta acción no se puede deshacer.",
+                class_name="text-xs text-slate-500 mt-2",
+              ),
+              rx.el.div(
+                rx.el.button(
+                  "Cancelar",
+                  on_click=State.confirm_disable_wholesale_no,
+                  class_name="px-3 py-1.5 text-xs rounded-md border text-slate-700 hover:bg-slate-50",
+                ),
+                rx.el.button(
+                  "Sí, desactivar",
+                  on_click=State.confirm_disable_wholesale_yes,
+                  class_name="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700",
+                ),
+                class_name="flex justify-end gap-2 mt-3",
+              ),
+              class_name="p-4 bg-amber-50 border border-amber-200 rounded-lg",
+            ),
+            class_name="mt-3",
+          ),
+          rx.fragment(),
         ),
         rx.cond(
           State.show_variants,
@@ -335,6 +372,7 @@ def edit_product_modal() -> rx.Component:
 
 
 def stock_details_modal() -> rx.Component:
+  """Modal de detalles de stock (variantes, lotes, precios)."""
   return rx.cond(
     State.stock_details_open,
     rx.el.div(
@@ -440,6 +478,7 @@ def stock_details_modal() -> rx.Component:
 
 
 def inventory_adjustment_modal() -> rx.Component:
+  """Modal de ajuste manual de inventario."""
   return rx.cond(
     State.inventory_check_modal_open,
     rx.el.div(
@@ -775,6 +814,7 @@ def inventory_stat_card(title: str, value: rx.Var, value_class: str) -> rx.Compo
 
 
 def inventario_page() -> rx.Component:
+  """Página principal de gestión de inventario."""
   content = rx.el.div(
     page_title(
       "INVENTARIO ACTUAL",

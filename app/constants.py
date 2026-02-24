@@ -7,6 +7,17 @@ para facilitar su mantenimiento y configuración.
 from __future__ import annotations
 
 # =============================================================================
+# CONTACTO / WHATSAPP
+# =============================================================================
+
+# Número de WhatsApp de soporte/ventas (sin "+", solo dígitos con código de país)
+WHATSAPP_NUMBER: str = "5491168376517"
+
+# URL directa de WhatsApp para ventas (formato wa.me/message/...)
+WHATSAPP_SALES_URL: str = "https://wa.me/message/ULLEZ4HUFB5HA1"
+
+
+# =============================================================================
 # LÍMITES DE BÚSQUEDA Y PAGINACIÓN
 # =============================================================================
 

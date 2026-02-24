@@ -1,9 +1,11 @@
 import reflex as rx
 from app.state import State
 from app.components.ui import BUTTON_STYLES, RADIUS, SHADOWS, TRANSITIONS
+from app.constants import WHATSAPP_NUMBER
 
 
 def periodo_prueba_finalizado_page() -> rx.Component:
+    """Página mostrada cuando el periodo de prueba ha expirado."""
     return rx.el.div(
         rx.el.div(
             class_name=(
@@ -32,7 +34,7 @@ def periodo_prueba_finalizado_page() -> rx.Component:
                 rx.el.a(
                     rx.icon("message-circle", class_name="h-4 w-4"),
                     "Contactar soporte",
-                    href="https://wa.me/5491168376517",
+                    href=f"https://wa.me/{WHATSAPP_NUMBER}",
                     target="_blank",
                     rel="noopener noreferrer",
                     class_name=BUTTON_STYLES["warning"] + " w-full justify-center",
@@ -48,8 +50,8 @@ def periodo_prueba_finalizado_page() -> rx.Component:
             rx.el.div(
                 rx.el.span("¿Necesitas ayuda inmediata?", class_name="text-slate-400"),
                 rx.el.a(
-                    "WhatsApp +5491168376517",
-                    href="https://wa.me/5491168376517",
+                    f"WhatsApp +{WHATSAPP_NUMBER}",
+                    href=f"https://wa.me/{WHATSAPP_NUMBER}",
                     target="_blank",
                     rel="noopener noreferrer",
                     class_name=f"text-slate-400 hover:text-emerald-600 {TRANSITIONS['fast']}",

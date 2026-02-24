@@ -63,15 +63,3 @@ def country_today_start(
 ) -> datetime.datetime:
     now = country_now(country_code, timezone=timezone)
     return now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
-
-
-def argentina_now() -> datetime.datetime:
-    return country_now("AR")
-
-
-def argentina_today_date() -> datetime.date:
-    return country_today_date("AR")
-
-
-def argentina_today_start() -> datetime.datetime:
-    return country_today_start("AR")

@@ -11,13 +11,11 @@ from app.components.ui import (
   SHADOWS,
   TRANSITIONS,
   page_header,
-  stat_card,
-  empty_state,
-  action_button,
 )
 
 
 def _plan_summary_card() -> rx.Component:
+  """Tarjeta resumen del plan de suscripción actual."""
   return rx.card(
     rx.el.div(
       rx.el.div(

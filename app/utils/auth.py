@@ -12,13 +12,15 @@ load_dotenv()
 
 
 def _require_env(var_name: str) -> str:
+    """Obtiene una variable de entorno obligatoria o lanza error."""
     value = os.getenv(var_name)
     if not value:
-        raise RuntimeError(f"Missing required environment variable: {var_name}")
+        raise RuntimeError(f"Variable de entorno requerida no encontrada: {var_name}")
     return value
 
 
 def _is_prod_environment() -> bool:
+    """Determina si el entorno actual es producción."""
     value = (os.getenv("ENV") or "dev").strip().lower()
     return value in {"prod", "production"}
 
@@ -38,6 +40,7 @@ def create_access_token(
     token_version: int | None = None,
     company_id: int | None = None,
 ) -> str:
+    """Crea un token JWT de acceso con expiración de 24 horas."""
     expire = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(hours=24)
     payload = {
         "sub": str(subject),
@@ -50,6 +53,7 @@ def create_access_token(
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_token(token: str) -> dict | None:
+    """Decodifica y valida un token JWT. Retorna el payload o None si es inválido."""
     if not token:
         return None
     try:
@@ -64,6 +68,7 @@ def decode_token(token: str) -> dict | None:
 
 
 def verify_token(token: str) -> str | None:
+    """Verifica un token JWT y retorna el subject (usuario) o None."""
     payload = decode_token(token)
     if not payload:
         return None

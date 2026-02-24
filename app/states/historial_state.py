@@ -8,6 +8,7 @@ from sqlmodel import select
 import sqlalchemy as sa
 from sqlalchemy.orm import selectinload
 from app.enums import PaymentMethodType, SaleStatus
+from app.utils.payment import payment_method_label
 from app.models import (
     Sale,
     SaleItem,
@@ -62,6 +63,12 @@ REPORT_CASHBOX_ACTIONS = {
 }
 
 class HistorialState(MixinState):
+    """Estado del historial de ventas y reportes financieros.
+
+    Gestiona la vista de historial con filtros por fecha, método de pago,
+    categoría y vendedor. Genera reportes exportables a Excel.
+    """
+
     # history: List[Movement] = [] # Eliminado a favor de la BD
     history_filter_type: str = "Todos"
     history_filter_product: str = ""
@@ -603,17 +610,7 @@ class HistorialState(MixinState):
         return key
 
     def _payment_method_label(self, method_key: str) -> str:
-        mapping = {
-            "cash": "Efectivo",
-            "debit": "Tarjeta de Débito",
-            "credit": "Tarjeta de Crédito",
-            "yape": "Billetera Digital (Yape)",
-            "plin": "Billetera Digital (Plin)",
-            "transfer": "Transferencia Bancaria",
-            "mixed": "Pago Mixto",
-            "other": "Otros",
-        }
-        return mapping.get(method_key, "Otros")
+        return payment_method_label(method_key)
 
     def _payment_method_abbrev(self, method_key: str) -> str:
         mapping = {

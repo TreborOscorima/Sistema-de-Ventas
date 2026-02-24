@@ -16,9 +16,10 @@ logger = get_logger("DatabaseTurbo")
 
 
 def _require_env(var_name: str) -> str:
+    """Obtiene una variable de entorno obligatoria o lanza error."""
     value = os.getenv(var_name)
     if not value:
-        raise RuntimeError(f"Missing required environment variable: {var_name}")
+        raise RuntimeError(f"Variable de entorno requerida no encontrada: {var_name}")
     return value
 
 DB_USER = _require_env("DB_USER")
@@ -54,6 +55,7 @@ register_tenant_listeners()
 
 @asynccontextmanager
 async def get_async_session() -> AsyncIterator[AsyncSession]:
+    """Context manager asíncrono para obtener una sesión de base de datos."""
     logger.info("🚀 Iniciando Transacción ASÍNCRONA...")
     try:
         async with AsyncSessionLocal() as session:
