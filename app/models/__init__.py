@@ -1,5 +1,6 @@
 from .auth import Permission, Role, RolePermission, User, UserBranch
 from .company import Branch, Company
+from .owner import OwnerAuditLog
 from .inventory import (
     Category,
     FieldPrice,
@@ -58,4 +59,5 @@ __all__ = [
     "PaymentMethod",
     "Currency",
     "CompanySettings",
+    "OwnerAuditLog",
 ]

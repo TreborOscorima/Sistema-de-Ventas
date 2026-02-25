@@ -223,4 +223,5 @@ class User(TypedDict):
     role: str
     privileges: Privileges
     must_change_password: bool
+    is_platform_owner: bool
 

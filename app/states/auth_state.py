@@ -189,6 +189,9 @@ class AuthState(MixinState):
     active_branch_name: str = ""
     plan_actual: str = "unknown"
     company_has_reservations: bool = False
+    company_has_services: bool = False
+    company_has_clients: bool = False
+    company_has_credits: bool = False
     subscription_snapshot: Dict[str, Any] = {
         "plan_type": "",
         "plan_display": "PLAN",
@@ -344,6 +347,9 @@ class AuthState(MixinState):
                         "must_change_password": bool(
                             getattr(user, "must_change_password", False)
                         ),
+                        "is_platform_owner": bool(
+                            getattr(user, "is_platform_owner", False)
+                        ),
                     }
             else:
                 self._cached_user = self._guest_user()
@@ -489,6 +495,9 @@ class AuthState(MixinState):
         if not company_id:
             self.plan_actual = "unknown"
             self.company_has_reservations = False
+            self.company_has_services = False
+            self.company_has_clients = False
+            self.company_has_credits = False
             self.subscription_snapshot = self._default_subscription_snapshot()
             return
 
@@ -499,6 +508,9 @@ class AuthState(MixinState):
             if not company:
                 self.plan_actual = "unknown"
                 self.company_has_reservations = False
+                self.company_has_services = False
+                self.company_has_clients = False
+                self.company_has_credits = False
                 self.subscription_snapshot = self._default_subscription_snapshot()
                 return
 
@@ -519,6 +531,15 @@ class AuthState(MixinState):
         self.plan_actual = self.subscription_snapshot.get("plan_type", "") or "unknown"
         self.company_has_reservations = bool(
             getattr(company, "has_reservations_module", False)
+        )
+        self.company_has_services = bool(
+            getattr(company, "has_services_module", False)
+        )
+        self.company_has_clients = bool(
+            getattr(company, "has_clients_module", False)
+        )
+        self.company_has_credits = bool(
+            getattr(company, "has_credits_module", False)
         )
 
     @rx.event
@@ -641,6 +662,9 @@ class AuthState(MixinState):
         if not company_id:
             self.plan_actual = "unknown"
             self.company_has_reservations = False
+            self.company_has_services = False
+            self.company_has_clients = False
+            self.company_has_credits = False
             self.subscription_snapshot = self._default_subscription_snapshot()
             self.payment_alert_info = default_alert
             return
@@ -652,6 +676,9 @@ class AuthState(MixinState):
             if not company:
                 self.plan_actual = "unknown"
                 self.company_has_reservations = False
+                self.company_has_services = False
+                self.company_has_clients = False
+                self.company_has_credits = False
                 self.subscription_snapshot = self._default_subscription_snapshot()
                 self.payment_alert_info = default_alert
                 return
@@ -674,6 +701,15 @@ class AuthState(MixinState):
         self.plan_actual = self.subscription_snapshot.get("plan_type", "") or "unknown"
         self.company_has_reservations = bool(
             getattr(company, "has_reservations_module", False)
+        )
+        self.company_has_services = bool(
+            getattr(company, "has_services_module", False)
+        )
+        self.company_has_clients = bool(
+            getattr(company, "has_clients_module", False)
+        )
+        self.company_has_credits = bool(
+            getattr(company, "has_credits_module", False)
         )
 
         # --- Payment alert (reutiliza el mismo company object) ---
@@ -724,6 +760,9 @@ class AuthState(MixinState):
         self.active_branch_name = ""
         self.plan_actual = "unknown"
         self.company_has_reservations = False
+        self.company_has_services = False
+        self.company_has_clients = False
+        self.company_has_credits = False
         self.subscription_snapshot = self._default_subscription_snapshot()
         self.payment_alert_info = self._default_payment_alert_info()
 
@@ -770,9 +809,6 @@ class AuthState(MixinState):
 
     @rx.var(cache=True)
     def can_view_servicios(self) -> bool:
-        plan = self.plan_actual_str
-        if plan == "standard":
-            return False
         return bool(
             self.current_user["privileges"].get("view_servicios")
             and self.company_has_reservations
@@ -780,9 +816,10 @@ class AuthState(MixinState):
 
     @rx.var(cache=True)
     def can_view_clientes(self) -> bool:
-        if self.plan_actual_str == "standard":
-            return False
-        return bool(self.current_user["privileges"].get("view_clientes"))
+        return bool(
+            self.current_user["privileges"].get("view_clientes")
+            and self.company_has_clients
+        )
 
     @rx.var(cache=True)
     def can_manage_proveedores(self) -> bool:
@@ -793,9 +830,10 @@ class AuthState(MixinState):
 
     @rx.var(cache=True)
     def can_view_cuentas(self) -> bool:
-        if self.plan_actual_str == "standard":
-            return False
-        return bool(self.current_user["privileges"].get("view_cuentas"))
+        return bool(
+            self.current_user["privileges"].get("view_cuentas")
+            and self.company_has_credits
+        )
 
     @rx.var(cache=True)
     def can_manage_config(self) -> bool:
@@ -854,6 +892,7 @@ class AuthState(MixinState):
             "role": "Invitado",
             "privileges": EMPTY_PRIVILEGES.copy(),
             "must_change_password": False,
+            "is_platform_owner": False,
         }
 
     def _normalize_privileges(self, privileges: Dict[str, bool]) -> Privileges:
@@ -1419,8 +1458,8 @@ class AuthState(MixinState):
     @rx.event
     def ensure_password_change(self):
         if not self.is_authenticated:
-            if self.router.url.path != "/ingreso":
-                return rx.redirect("/ingreso")
+            if self.router.url.path == "/cambiar-clave":
+                return rx.redirect("/")
             return
         must_change = self.current_user.get("must_change_password", False)
         current_path = self.router.url.path
@@ -1656,7 +1695,7 @@ class AuthState(MixinState):
                     self.needs_initial_admin = False
                     if must_change_password:
                         return rx.redirect("/cambiar-clave")
-                    return rx.redirect("/ingreso")
+                    return rx.redirect("/")
 
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
@@ -1756,10 +1795,15 @@ class AuthState(MixinState):
                     session,
                     company_id=getattr(user, "company_id", None),
                 )
-                privileges = self._get_privileges_dict(user) or {}
+                snapshot = self.subscription_snapshot or {}
+                status_label = str(snapshot.get("status_label", "") or "").strip().lower()
+                if bool(snapshot.get("is_trial")) and status_label == "vencido":
+                    return rx.redirect("/periodo-prueba-finalizado")
+                if (not bool(snapshot.get("is_trial"))) and status_label == "suspendido":
+                    return rx.redirect("/cuenta-suspendida")
                 if getattr(user, "must_change_password", False):
                     return rx.redirect("/cambiar-clave")
-                return rx.redirect(self._default_route_for_privileges(privileges))
+                return rx.redirect("/")
 
         # Login fallido: registrar intento
         _record_failed_attempt(identifier, ip_address=client_ip)
@@ -1827,7 +1871,12 @@ class AuthState(MixinState):
         self.invalidate_user_cache()
         if hasattr(self, "cashbox_is_open_cached"):
             self.cashbox_is_open_cached = False
-        return rx.redirect("/ingreso")
+        # Limpiar sesión del Owner Backoffice si estaba activa
+        if hasattr(self, "owner_session_active"):
+            self.owner_session_active = False
+            self.owner_session_email = ""
+            self.owner_session_user_id = 0
+        return rx.redirect("/")
 
     @rx.event
     def show_create_user_form(self):

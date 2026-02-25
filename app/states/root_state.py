@@ -32,9 +32,11 @@ from .clientes_state import ClientesState
 from .dashboard_state import DashboardState
 from .report_state import ReportState
 from .register_state import RegisterState
+from .owner_state import OwnerState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin
 
 _mixins = [
+    OwnerState,
     ReportState,
     DashboardState,
     ServicesState,

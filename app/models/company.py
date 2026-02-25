@@ -46,6 +46,9 @@ class Company(rx.Model, table=True):
     max_branches: int = Field(default=2)
     max_users: int = Field(default=3)
     has_reservations_module: bool = Field(default=True)
+    has_services_module: bool = Field(default=True)
+    has_clients_module: bool = Field(default=True)
+    has_credits_module: bool = Field(default=True)
     has_electronic_billing: bool = Field(default=False)
     subscription_status: str = Field(
         default=SubscriptionStatus.ACTIVE,

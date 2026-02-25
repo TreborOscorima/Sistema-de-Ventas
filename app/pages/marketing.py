@@ -747,7 +747,7 @@ def marketing_page() -> rx.Component:
                 rx.el.div(
                     rx.el.a(
                         "Ingresar",
-                        href="/ingreso",
+                        href="/",
                         on_click=rx.call_script(_track_event_script("click_nav_login", "header_nav")),
                         class_name=(
                             "hidden items-center justify-center rounded-xl border-2 border-indigo-600 bg-white px-4 py-2 text-sm "
@@ -780,7 +780,7 @@ def marketing_page() -> rx.Component:
                         _nav_link("FAQ", "#faq", "click_nav_faq_mobile", "mobile_menu"),
                         rx.el.a(
                             "Ingresar",
-                            href="/ingreso",
+                            href="/",
                             on_click=rx.call_script(
                                 _track_event_script("click_nav_login_mobile", "mobile_menu")
                             ),
@@ -1485,7 +1485,7 @@ def marketing_page() -> rx.Component:
                     ),
                     rx.el.div(
                         rx.el.h4("Accesos", class_name="text-sm font-bold text-slate-900"),
-                        _footer_link("Iniciar sesion", "/ingreso", "click_footer_login", "footer_accesos"),
+                        _footer_link("Iniciar sesion", "/", "click_footer_login", "footer_accesos"),
                         _footer_link("Crear cuenta", "/registro", "click_footer_signup", "footer_accesos"),
                         _footer_link(
                             "WhatsApp directo",
