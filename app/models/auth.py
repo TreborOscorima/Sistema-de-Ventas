@@ -88,6 +88,7 @@ class User(rx.Model, table=True):
     is_active: bool = Field(default=True)
     must_change_password: bool = Field(default=False)
     token_version: int = Field(default=0)
+    is_platform_owner: bool = Field(default=False, description="Owner de la plataforma SaaS")
 
     company_id: int = Field(
         foreign_key="company.id",

@@ -24,6 +24,7 @@ from app.pages.cuentas import cuentas_page
 from app.pages.clientes import clientes_page
 from app.pages.dashboard import dashboard_page
 from app.pages.reportes import reportes_page
+from app.pages.owner import owner_page, owner_login_page
 from app.components.notification import NotificationHolder
 
 
@@ -242,6 +243,10 @@ def page_marketing() -> rx.Component:
     return marketing_page()
 
 
+def page_owner_backoffice() -> rx.Component:
+    return owner_page()
+
+
 app = rx.App(
     theme=rx.theme(appearance="light"),
     head_components=[
@@ -338,8 +343,8 @@ app = rx.App(
 
 # Landing page pública
 app.add_page(
-    index,
-    route="/",
+    page_marketing,
+    route="/home",
     title="TUWAYKIAPP | Sistema de Ventas para tiendas, servicios y reservas",
 )
 
@@ -374,7 +379,7 @@ app.add_page(
 app.add_page(
     page_ingreso,
     route="/ingreso",
-    title="Ingreso - TUWAYKIAPP",
+    title="Compras e Ingresos - TUWAYKIAPP",
     on_load=State.page_init_ingreso,
 )
 app.add_page(
@@ -407,6 +412,13 @@ app.add_page(
     title="Cuentas Corrientes | Sistema de Ventas",
     on_load=State.page_init_cuentas,
 )
+app.add_page(
+    page_dashboard,
+    route="/",
+    title="Dashboard - TUWAYKIAPP",
+    on_load=State.page_init_default,
+)
+# Alias de compatibilidad mientras se migra navegación interna a "/"
 app.add_page(
     page_dashboard,
     route="/dashboard",
@@ -442,4 +454,20 @@ app.add_page(
     route="/configuracion",
     title="Configuración - TUWAYKIAPP",
     on_load=State.page_init_configuracion,
+)
+app.add_page(
+    page_owner_backoffice,
+    route="/owner",
+    title="Panel Owner - TUWAYKIAPP",
+    on_load=State.page_init_owner,
+)
+
+def page_owner_login() -> rx.Component:
+    return owner_login_page()
+
+app.add_page(
+    page_owner_login,
+    route="/owner/login",
+    title="Login - Platform Admin",
+    on_load=State.page_init_owner_login,
 )

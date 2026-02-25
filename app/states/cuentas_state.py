@@ -927,6 +927,17 @@ class CuentasState(MixinState):
                     for client in debtors_result.all()
                 ]
                 await self._refresh_installment_totals(session)
+                country_code, timezone = self._company_time_context()
+                self.overdue_installments_count = await get_overdue_count(
+                    session,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    country_code=country_code,
+                    timezone=timezone,
+                )
+                # Mantener sincronizado el badge global del sidebar sin esperar TTL.
+                if hasattr(self, "overdue_alerts_count"):
+                    self.overdue_alerts_count = int(self.overdue_installments_count or 0)
                 await self._load_installments(session)
         finally:
             self.is_loading = False
