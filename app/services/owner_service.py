@@ -173,8 +173,15 @@ class OwnerService:
         """Lista empresas con búsqueda, paginación y conteos de uso."""
         def _row_values(row: Any) -> List[Any]:
             """Normaliza filas SQLAlchemy/SQLModel a lista de valores."""
+            if row is None:
+                return []
+            if isinstance(row, (str, bytes)):
+                # En tests/mocks puede venir un escalar textual (no iterable de columnas).
+                return [row]
             if isinstance(row, (tuple, list)):
                 return list(row)
+            if isinstance(row, dict):
+                return list(row.values())
             mapping = getattr(row, "_mapping", None)
             if mapping is not None:
                 return list(mapping.values())
