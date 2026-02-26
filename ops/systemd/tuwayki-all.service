@@ -1,0 +1,19 @@
+[Unit]
+Description=TUWAYKI Reflex Stable Monolith (APP_SURFACE=all)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/tuwayki
+EnvironmentFile=/etc/tuwayki/all.env
+ExecStart=/bin/bash -lc '/opt/tuwayki/.venv/bin/reflex run --env prod --single-port --frontend-port ${REFLEX_PORT}'
+Restart=always
+RestartSec=3
+TimeoutStartSec=120
+TimeoutStopSec=30
+KillSignal=SIGINT
+
+[Install]
+WantedBy=multi-user.target

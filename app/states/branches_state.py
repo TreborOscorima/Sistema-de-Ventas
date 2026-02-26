@@ -2,12 +2,16 @@ import reflex as rx
 from typing import List, Dict, Any
 from sqlmodel import select
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from app.models import Branch, Company, User as UserModel, UserBranch, Sale, Purchase, CashboxSession, Product
 from app.utils.db_seeds import seed_new_branch_data
+from app.utils.logger import get_logger
 from app.utils.tenant import set_tenant_context
 from .mixin_state import MixinState
+
+logger = get_logger("BranchesState")
 
 
 class BranchesState(MixinState):
@@ -108,47 +112,85 @@ class BranchesState(MixinState):
         address = (self.new_branch_address or "").strip()
         if not name:
             return rx.toast("Ingrese el nombre de la sucursal.", duration=2500)
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-            if not company:
-                return rx.toast("Empresa no definida.", duration=3000)
-            max_branches_raw = getattr(company, "max_branches", None)
-            try:
-                max_branches = int(max_branches_raw)
-            except (TypeError, ValueError):
-                max_branches = None
-            if max_branches is not None and max_branches >= 0:
-                current_count = session.exec(
-                    select(func.count(Branch.id)).where(Branch.company_id == company_id)
-                ).one()
-                if int(current_count or 0) >= max_branches:
-                    plan_type = getattr(company, "plan_type", "")
-                    if hasattr(plan_type, "value"):
-                        plan_type = plan_type.value
-                    plan_label = str(plan_type or "").strip() or "desconocido"
-                    self.limit_modal_message = (
-                        f"Has alcanzado el límite de sucursales para tu plan {plan_label}. "
-                        f"Tu plan actual permite hasta {max_branches} sucursales."
-                    )
-                    self.show_limit_modal = True
-                    return
-            existing = session.exec(
-                select(Branch)
-                .where(Branch.company_id == company_id)
-                .where(Branch.name == name)
-            ).first()
-            if existing:
-                return rx.toast("Ya existe una sucursal con ese nombre.", duration=2500)
-            branch = Branch(company_id=company_id, name=name, address=address)
-            session.add(branch)
-            session.flush()
-            user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
-            if user_id:
-                session.add(UserBranch(user_id=int(user_id), branch_id=branch.id))
-            seed_new_branch_data(session, company_id, branch.id)
-            session.commit()
+        try:
+            with rx.session() as session:
+                company = session.exec(
+                    select(Company).where(Company.id == company_id)
+                ).first()
+                if not company:
+                    return rx.toast("Empresa no definida.", duration=3000)
+                max_branches_raw = getattr(company, "max_branches", None)
+                try:
+                    max_branches = int(max_branches_raw)
+                except (TypeError, ValueError):
+                    max_branches = None
+                if max_branches is not None and max_branches >= 0:
+                    current_count = session.exec(
+                        select(func.count(Branch.id)).where(Branch.company_id == company_id)
+                    ).one()
+                    if int(current_count or 0) >= max_branches:
+                        plan_type = getattr(company, "plan_type", "")
+                        if hasattr(plan_type, "value"):
+                            plan_type = plan_type.value
+                        plan_label = str(plan_type or "").strip() or "desconocido"
+                        self.limit_modal_message = (
+                            f"Has alcanzado el límite de sucursales para tu plan {plan_label}. "
+                            f"Tu plan actual permite hasta {max_branches} sucursales."
+                        )
+                        self.show_limit_modal = True
+                        return
+                existing = session.exec(
+                    select(Branch)
+                    .where(Branch.company_id == company_id)
+                    .where(Branch.name == name)
+                ).first()
+                if existing:
+                    return rx.toast("Ya existe una sucursal con ese nombre.", duration=2500)
+                branch = Branch(company_id=company_id, name=name, address=address)
+                session.add(branch)
+                session.flush()
+                user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
+                if user_id:
+                    session.add(UserBranch(user_id=int(user_id), branch_id=branch.id))
+                seed_new_branch_data(session, company_id, branch.id)
+                session.commit()
+        except IntegrityError as e:
+            logger.error(
+                "Conflicto de integridad al crear sucursal company_id=%s name=%s: %s",
+                company_id,
+                name,
+                e,
+                exc_info=True,
+            )
+            return rx.toast(
+                "No se pudo crear la sucursal por conflicto de datos. "
+                "Verifica migraciones/constraints de la base de datos.",
+                duration=5000,
+            )
+        except SQLAlchemyError as e:
+            logger.error(
+                "Error SQL al crear sucursal company_id=%s name=%s: %s",
+                company_id,
+                name,
+                e,
+                exc_info=True,
+            )
+            return rx.toast(
+                "Error de base de datos al crear la sucursal.",
+                duration=5000,
+            )
+        except Exception as e:
+            logger.error(
+                "Error inesperado al crear sucursal company_id=%s name=%s: %s",
+                company_id,
+                name,
+                e,
+                exc_info=True,
+            )
+            return rx.toast(
+                "Error inesperado al crear la sucursal. Revisa logs del servidor.",
+                duration=5000,
+            )
         self.new_branch_name = ""
         self.new_branch_address = ""
         self.load_branches()

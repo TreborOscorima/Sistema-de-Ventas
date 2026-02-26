@@ -182,10 +182,37 @@ Minimo recomendado:
 
 Si hay incidente:
 
-1. Restaurar config Nginx previa:
-   - `sudo cp /etc/nginx/conf.d/tuwayki-domain-split.conf.bak /etc/nginx/conf.d/tuwayki-domain-split.conf`
+1. Pasar a servicio estable unico (APP_SURFACE=all):
+   - Crear `/etc/tuwayki/all.env` con:
+     ```env
+     APP_SURFACE=all
+     REFLEX_PORT=3200
+     PUBLIC_SITE_URL=https://tuwayki.app
+     PUBLIC_APP_URL=https://sys.tuwayki.app
+     PUBLIC_OWNER_URL=https://admin.tuwayki.app
+     DB_USER=...
+     DB_PASSWORD=...
+     DB_HOST=...
+     DB_PORT=3306
+     DB_NAME=...
+     AUTH_SECRET_KEY=...
+     ```
+   - Instalar y activar `ops/systemd/tuwayki-all.service`:
+     ```bash
+     sudo cp ops/systemd/tuwayki-all.service /etc/systemd/system/tuwayki-all.service
+     sudo systemctl daemon-reload
+     sudo systemctl enable --now tuwayki-all
+     ```
+2. Apagar superficies separadas para evitar colisión:
+   - `sudo systemctl stop tuwayki-surface@landing tuwayki-surface@sys tuwayki-surface@admin`
+3. Activar Nginx de fallback:
+   - `sudo cp ops/nginx/tuwayki-single-surface.conf /etc/nginx/conf.d/tuwayki-domain-split.conf`
    - `sudo nginx -t && sudo systemctl reload nginx`
-2. Volver a servicio unico anterior.
-3. Mantener DNS sin cambios destructivos.
-4. Revisar logs y reintentar en nueva ventana.
-
+4. Smoke test inmediato:
+   - `curl -I https://tuwayki.app/`
+   - `curl -I https://tuwayki.app/home`
+   - `curl -I https://tuwayki.app/owner/login`
+   - `curl -I https://sys.tuwayki.app/`
+   - `curl -I https://admin.tuwayki.app/login`
+5. Mantener DNS sin cambios destructivos y revisar logs:
+   - `sudo journalctl -u tuwayki-all -n 200 --no-pager`

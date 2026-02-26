@@ -549,6 +549,25 @@ class OwnerState:
         actor = self._owner_actor_info()
         action = self.owner_modal_action
         company_id = self.owner_modal_company_id
+        valid_actions = {"change_plan", "change_status", "extend_trial", "adjust_limits"}
+
+        if action not in valid_actions:
+            logger.warning(
+                "Accion owner invalida. action=%s company_id=%s actor=%s",
+                action,
+                company_id,
+                actor_email,
+            )
+            self.owner_loading = False
+            yield rx.toast("Accion invalida. Cierra y vuelve a abrir el modal.", duration=3500)
+            return
+
+        logger.info(
+            "Owner action requested action=%s company_id=%s actor=%s",
+            action,
+            company_id,
+            actor_email,
+        )
 
         try:
             async with AsyncSessionLocal() as session:
@@ -623,6 +642,13 @@ class OwnerState:
                     return
 
         except OwnerServiceError as e:
+            logger.warning(
+                "OwnerServiceError action=%s company_id=%s actor=%s: %s",
+                action,
+                company_id,
+                actor_email,
+                e,
+            )
             yield rx.toast(f"Error: {e}", duration=5000)
             self.owner_loading = False
             return
