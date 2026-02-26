@@ -160,9 +160,9 @@ class State(RootState):
 
         current_path = ""
         router = getattr(self, "router", None)
-        page = getattr(router, "page", None) if router else None
-        if page:
-            current_path = getattr(page, "path", "") or ""
+        url = getattr(router, "url", None) if router else None
+        if url:
+            current_path = getattr(url, "path", "") or ""
 
         if current_path == "/configuracion":
             if hasattr(self, "load_users"):
