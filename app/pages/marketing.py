@@ -1541,12 +1541,13 @@ def marketing_page() -> rx.Component:
                     rx.el.div(
                         rx.el.p(
                             "TUWAYKIAPP \u00a9 2026. Todos los derechos reservados.",
-                            class_name="text-sm text-slate-500",
+                            class_name="text-sm leading-relaxed text-slate-500",
                         ),
                         rx.el.p(
                             "Hecho con foco en escalabilidad, operacion y crecimiento comercial.",
-                            class_name="text-sm text-slate-500",
+                            class_name="text-sm leading-relaxed text-slate-500",
                         ),
+                        class_name="space-y-1",
                     ),
                     rx.el.div(
                         rx.el.p("Creado por", class_name="text-xs text-slate-400 uppercase tracking-wider"),
@@ -1566,7 +1567,7 @@ def marketing_page() -> rx.Component:
                             rel="noopener noreferrer",
                             class_name="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 transition-colors",
                         ),
-                        class_name="flex flex-col gap-0.5 items-end",
+                        class_name="mt-1 flex flex-col gap-0.5 items-start text-left sm:mt-0 sm:items-end sm:text-right",
                     ),
                     class_name="mt-8 flex flex-col items-start justify-between gap-4 border-t border-slate-200 pt-4 sm:flex-row sm:items-center",
                 ),
