@@ -27,6 +27,8 @@ def edit_product_modal() -> rx.Component:
           rx.el.button(
             rx.icon("x", class_name="h-4 w-4"),
             on_click=State.cancel_edit_product,
+            title="Cerrar",
+            aria_label="Cerrar",
             class_name="p-2 rounded-full hover:bg-slate-100",
           ),
           class_name="flex items-start justify-between gap-4 mb-4",
@@ -272,6 +274,8 @@ def edit_product_modal() -> rx.Component:
                     on_click=lambda _, index=row["index"]: State.remove_variant_row(
                       index
                     ),
+                    title="Eliminar variante",
+                    aria_label="Eliminar variante",
                     class_name="p-2 text-red-600 hover:bg-red-50 rounded-md",
                   ),
                   class_name="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center",
@@ -336,6 +340,8 @@ def edit_product_modal() -> rx.Component:
                     on_click=lambda _, index=row["index"]: State.remove_tier_row(
                       index
                     ),
+                    title="Eliminar regla",
+                    aria_label="Eliminar regla",
                     class_name="p-2 text-red-600 hover:bg-red-50 rounded-md",
                   ),
                   class_name="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center",
@@ -389,6 +395,8 @@ def stock_details_modal() -> rx.Component:
           rx.el.button(
             rx.icon("x", class_name="h-4 w-4"),
             on_click=State.close_stock_details,
+            title="Cerrar",
+            aria_label="Cerrar",
             class_name="p-2 rounded-full hover:bg-slate-100",
           ),
           class_name="flex items-start justify-between gap-4 mb-4",
@@ -495,6 +503,8 @@ def inventory_adjustment_modal() -> rx.Component:
           rx.el.button(
             rx.icon("x", class_name="h-4 w-4"),
             on_click=State.close_inventory_check_modal,
+            title="Cerrar",
+            aria_label="Cerrar",
             class_name="p-2 rounded-full hover:bg-slate-100",
           ),
           class_name="flex items-start justify-between gap-4",
@@ -907,6 +917,8 @@ def inventario_page() -> rx.Component:
                 on_click=lambda category=category: State.remove_category(
                   category
                 ),
+                title="Eliminar categoria",
+                aria_label="Eliminar categoria",
                 class_name="text-red-500 hover:text-red-700",
               ),
             ),
@@ -1075,12 +1087,14 @@ def inventario_page() -> rx.Component:
                       on_click=lambda: State.open_edit_product(product),
                       class_name="p-2 text-blue-600 hover:bg-blue-50 rounded-full",
                       title="Editar",
+                      aria_label="Editar",
                     ),
                     rx.el.button(
                       rx.icon("eye", class_name="h-4 w-4"),
                       on_click=lambda: State.open_stock_details(product),
                       class_name="p-2 text-slate-600 hover:bg-slate-100 rounded-full",
                       title="Ver Desglose",
+                      aria_label="Ver desglose",
                     ),
                     rx.cond(
                       product["is_variant"],
@@ -1092,6 +1106,7 @@ def inventario_page() -> rx.Component:
                         loading=State.is_loading,
                         class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
                         title="Eliminar",
+                        aria_label="Eliminar",
                       ),
                     ),
                     class_name="flex items-center justify-center gap-2",
@@ -1137,4 +1152,3 @@ def inventario_page() -> rx.Component:
     content=content,
     redirect_message="Acceso denegado a Inventario",
   )
-

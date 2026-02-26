@@ -7,6 +7,7 @@ Este directorio concentra la documentación operativa y técnica del proyecto.
 - `docs/SYSTEM_FULL_DOCUMENTATION.md`: guía integral del sistema (arquitectura, módulos, datos, seguridad, operación, scripts y QA).
 - `docs/DEPLOYMENT_SECURITY.md`: hardening y checklist de seguridad para producción.
 - `docs/CANARY_ROLLOUT_RUNBOOK.md`: despliegue gradual 10% -> 50% -> 100% con criterios de avance y rollback.
+- `docs/DOMAIN_SPLIT_RUNBOOK.md`: separación por dominio/subdominio (`tuwayki`, `sys`, `admin`) usando 1 repo y 3 superficies.
 - `docs/MARKETING_WEBSITE_PLAN.md`: estrategia web comercial (landing, embudo, tracking, KPIs y plan de lanzamiento).
 
 ## Documentos de soporte en raíz

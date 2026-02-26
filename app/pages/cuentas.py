@@ -491,6 +491,8 @@ def cuentas_detail_modal() -> rx.Component:
           rx.el.button(
             rx.icon("x", class_name="h-4 w-4"),
             on_click=State.close_detail,
+            title="Cerrar detalle",
+            aria_label="Cerrar detalle",
             class_name="p-2 rounded-full hover:bg-slate-100",
           ),
           class_name="flex items-start justify-between gap-4",

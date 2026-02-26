@@ -25,6 +25,13 @@ from app.utils.tenant import tenant_bypass
 
 logger = get_logger("OwnerState")
 
+APP_SURFACE: str = (os.getenv("APP_SURFACE") or "all").strip().lower()
+if APP_SURFACE not in {"all", "landing", "app", "owner"}:
+    APP_SURFACE = "all"
+
+OWNER_ROOT_PATH: str = "/" if APP_SURFACE == "owner" else "/owner"
+OWNER_LOGIN_PATH: str = "/login" if APP_SURFACE == "owner" else "/owner/login"
+
 # ─── Credenciales del Owner Backoffice (independientes del Sistema de Ventas) ───
 # Configurables vía variables de entorno para producción.
 OWNER_ADMIN_EMAIL: str = os.environ.get(
@@ -121,11 +128,11 @@ class OwnerState:
 
     El Owner Backoffice tiene su propio flujo de autenticación independiente.
     Un usuario del Sistema de Ventas NO puede acceder al backoffice aunque
-    esté logueado; debe autenticarse explícitamente en /owner/login.
+    esté logueado; debe autenticarse explícitamente en el login owner.
     """
 
     # ─── Sesión independiente del Owner Backoffice ─────
-    owner_session_active: bool = False  # Solo True si se autentica via /owner/login
+    owner_session_active: bool = False  # Solo True si se autentica via login owner
     owner_session_email: str = ""  # Email del owner autenticado
     owner_session_user_id: int = 0  # ID del usuario owner en BD (para auditoría)
 
@@ -192,7 +199,7 @@ class OwnerState:
 
     @rx.var(cache=True)
     def is_owner_authenticated(self) -> bool:
-        """True solo si el owner se autenticó explícitamente vía /owner/login.
+        """True solo si el owner se autenticó explícitamente vía login owner.
 
         Completamente independiente del login del Sistema de Ventas.
         """
@@ -267,7 +274,7 @@ class OwnerState:
         self.owner_login_error = ""
         self.owner_login_loading = False
         logger.info("Owner login exitoso: %s", email[:20])
-        return rx.redirect("/owner")
+        return rx.redirect(OWNER_ROOT_PATH)
 
     @rx.event
     def owner_logout(self):
@@ -281,7 +288,7 @@ class OwnerState:
         self.owner_login_password = ""
         self.owner_login_error = ""
         logger.info("Owner logout")
-        return rx.redirect("/owner/login")
+        return rx.redirect(OWNER_LOGIN_PATH)
 
     # ─── Eventos de carga ──────────────────────────────
 
