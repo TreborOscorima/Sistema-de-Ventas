@@ -43,9 +43,6 @@ def upgrade() -> None:
     if not _has_table("paymentmethod"):
         return
 
-    # Limpieza histórica para evitar colisiones por índice/valores heredados.
-    op.execute("DELETE FROM paymentmethod")
-
     if not _has_column("cashboxlog", "payment_method_id"):
         op.add_column("cashboxlog", sa.Column("payment_method_id", sa.Integer(), nullable=True))
         inspector = sa_inspect(bind)
@@ -78,6 +75,46 @@ def upgrade() -> None:
             sa.Column("allows_change", sa.Boolean(), nullable=False, server_default=sa.false()),
         )
         inspector = sa_inspect(bind)
+
+    # Preservar datos legacy: asegurar códigos válidos y únicos antes del índice.
+    if _has_column("paymentmethod", "code"):
+        if _has_column("paymentmethod", "method_id"):
+            op.execute(
+                """
+                UPDATE paymentmethod
+                SET code = COALESCE(
+                    NULLIF(TRIM(code), ''),
+                    NULLIF(TRIM(method_id), ''),
+                    CONCAT('legacy-', id)
+                )
+                WHERE code IS NULL OR TRIM(code) = ''
+                """
+            )
+        else:
+            op.execute(
+                """
+                UPDATE paymentmethod
+                SET code = COALESCE(
+                    NULLIF(TRIM(code), ''),
+                    CONCAT('legacy-', id)
+                )
+                WHERE code IS NULL OR TRIM(code) = ''
+                """
+            )
+
+        op.execute(
+            """
+            UPDATE paymentmethod pm
+            JOIN (
+                SELECT code, MIN(id) AS keep_id
+                FROM paymentmethod
+                WHERE code IS NOT NULL AND TRIM(code) <> ''
+                GROUP BY code
+                HAVING COUNT(*) > 1
+            ) dup ON pm.code = dup.code AND pm.id <> dup.keep_id
+            SET pm.code = CONCAT(pm.code, '-', pm.id)
+            """
+        )
 
     if _has_column("paymentmethod", "code") and not _has_index("paymentmethod", op.f("ix_paymentmethod_code")):
         op.create_index(op.f("ix_paymentmethod_code"), "paymentmethod", ["code"], unique=True)
