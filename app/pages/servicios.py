@@ -291,11 +291,15 @@ def mini_calendar_sidebar() -> rx.Component:
         rx.el.button(
           rx.icon("chevron-left", class_name="h-4 w-4"),
           on_click=State.prev_month,
+          title="Mes anterior",
+          aria_label="Mes anterior",
           class_name="p-1 rounded-full text-slate-600 hover:bg-slate-100",
         ),
         rx.el.button(
           rx.icon("chevron-right", class_name="h-4 w-4"),
           on_click=State.next_month,
+          title="Mes siguiente",
+          aria_label="Mes siguiente",
           class_name="p-1 rounded-full text-slate-600 hover:bg-slate-100",
         ),
         class_name="flex items-center gap-1",
@@ -1009,6 +1013,7 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
           rx.icon("trash-2", class_name="h-4 w-4"),
           on_click=lambda _, rid=reservation["id"]: State.start_reservation_delete(rid),
           disabled=reservation["status"] != "pendiente",
+          title="Eliminar reserva",
           aria_label="Eliminar reserva",
           class_name=rx.cond(
             reservation["status"] != "pendiente",
@@ -1573,11 +1578,15 @@ def field_prices_tab() -> rx.Component:
                     rx.el.button(
                       rx.icon("pencil", class_name="h-4 w-4"),
                       on_click=lambda _, pid=price["id"]: State.edit_field_price(pid),
+                      title="Editar",
+                      aria_label="Editar",
                       class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
                     ),
                     rx.el.button(
                       rx.icon("trash-2", class_name="h-4 w-4"),
                       on_click=lambda _, pid=price["id"]: State.remove_field_price(pid),
+                      title="Eliminar",
+                      aria_label="Eliminar",
                       class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
                     ),
                     class_name="flex items-center justify-center gap-2",
@@ -1630,5 +1639,3 @@ def servicios_page() -> rx.Component:
     content=content,
     redirect_message="Acceso denegado a Servicios",
   )
-
-

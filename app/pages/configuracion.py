@@ -827,6 +827,8 @@ def user_section() -> rx.Component:
                     username=user["username"]: State.show_edit_user_form_by_username(
                       username
                     ),
+                    title="Editar usuario",
+                    aria_label="Editar usuario",
                     class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
                   ),
                   rx.el.button(
@@ -835,6 +837,8 @@ def user_section() -> rx.Component:
                     username=user["username"]: State.delete_user(
                       username
                     ),
+                    title="Eliminar usuario",
+                    aria_label="Eliminar usuario",
                     class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
                   ),
                   class_name="flex justify-center gap-2",
@@ -868,6 +872,8 @@ def branch_users_modal() -> rx.Component:
           rx.el.button(
             rx.icon("x", class_name="h-4 w-4"),
             on_click=State.close_branch_users,
+            title="Cerrar",
+            aria_label="Cerrar",
             class_name="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100",
           ),
           class_name="flex items-start justify-between",
@@ -1010,16 +1016,22 @@ def branch_section() -> rx.Component:
                   rx.el.button(
                     rx.icon("users", class_name="h-4 w-4"),
                     on_click=lambda _, bid=branch["id"]: State.open_branch_users(bid),
+                    title="Gestionar usuarios por sucursal",
+                    aria_label="Gestionar usuarios por sucursal",
                     class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
                   ),
                   rx.el.button(
                     rx.icon("pencil", class_name="h-4 w-4"),
                     on_click=lambda _, bid=branch["id"]: State.start_edit_branch(bid),
+                    title="Editar sucursal",
+                    aria_label="Editar sucursal",
                     class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
                   ),
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
                     on_click=lambda _, bid=branch["id"]: State.delete_branch(bid),
+                    title="Eliminar sucursal",
+                    aria_label="Eliminar sucursal",
                     class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
                   ),
                   class_name="flex justify-center gap-2",
@@ -1148,6 +1160,8 @@ def currency_section() -> rx.Component:
               rx.icon("trash-2", class_name="h-4 w-4"),
               on_click=lambda _,
               code=currency["code"]: State.remove_currency(code),
+              title="Eliminar moneda",
+              aria_label="Eliminar moneda",
               class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
             ),
             class_name="flex items-center justify-end gap-2",
@@ -1247,6 +1261,8 @@ def unit_section() -> rx.Component:
                 is_disabled=rx.cond(
                   unit["name"] == "Unidad", True, False
                 ),
+                title="Eliminar unidad",
+                aria_label="Eliminar unidad",
                 class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
               ),
               class_name="flex items-center gap-2",
@@ -1395,6 +1411,8 @@ def payment_methods_section() -> rx.Component:
                 rx.icon("trash-2", class_name="h-4 w-4"),
                 on_click=lambda _,
                 mid=method["id"]: State.remove_payment_method(mid),
+                title="Eliminar método de pago",
+                aria_label="Eliminar método de pago",
                 class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
               ),
               class_name="flex items-center gap-2",

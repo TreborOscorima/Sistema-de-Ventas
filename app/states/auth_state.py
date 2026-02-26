@@ -1179,7 +1179,7 @@ class AuthState(MixinState):
         # Dashboard siempre es accesible para todos
         # Pero priorizamos la página que el usuario use más frecuentemente
         if privileges.get("view_ingresos"):
-            return "/ingreso"
+            return "/"
         if privileges.get("view_compras"):
             return "/compras"
         if privileges.get("view_ventas"):
@@ -1199,7 +1199,7 @@ class AuthState(MixinState):
         if privileges.get("manage_config"):
             return "/configuracion"
         # Fallback: Dashboard es accesible para todos
-        return "/dashboard"
+        return "/"
 
     @rx.event
     def ensure_roles_and_permissions(self):
@@ -1237,7 +1237,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_ingresos(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.current_user["privileges"].get("view_ingresos"):
             yield rx.toast(
@@ -1249,7 +1249,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_compras(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         privileges = self.current_user["privileges"]
         if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
@@ -1262,7 +1262,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_ventas(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.current_user["privileges"].get("view_ventas"):
             yield rx.toast(
@@ -1274,7 +1274,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_cashbox(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.current_user["privileges"].get("view_cashbox"):
             yield rx.toast(
@@ -1286,7 +1286,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_inventario(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.current_user["privileges"].get("view_inventario"):
             yield rx.toast(
@@ -1298,7 +1298,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_historial(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.current_user["privileges"].get("view_historial"):
             yield rx.toast(
@@ -1310,7 +1310,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_export_data(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.current_user["privileges"].get("export_data"):
             yield rx.toast(
@@ -1322,7 +1322,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_servicios(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.can_view_servicios:
             yield rx.toast(
@@ -1334,7 +1334,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_clientes(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.can_view_clientes:
             yield rx.toast(
@@ -1346,7 +1346,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_view_cuentas(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if not self.can_view_cuentas:
             yield rx.toast(
@@ -1358,7 +1358,7 @@ class AuthState(MixinState):
     @rx.event
     def ensure_admin_access(self):
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         # Verifica roles exactos segun tu DB (Mayusculas importan)
         if self.current_user["role"] not in ["Superadmin", "Administrador"]:
@@ -1812,7 +1812,7 @@ class AuthState(MixinState):
     @rx.event
     def change_password(self, form_data: dict):
         if not self.is_authenticated:
-            return rx.redirect("/ingreso")
+            return rx.redirect("/")
         new_password = (form_data.get("password") or "").strip()
         confirm_password = (form_data.get("confirm_password") or "").strip()
         username = (self.current_user.get("username") or "").strip()
@@ -2033,7 +2033,10 @@ class AuthState(MixinState):
         self.new_role_name = ""
         self.new_user_data["role"] = name
         self.new_user_data["privileges"] = privileges.copy()
-        return rx.toast(f"Rol {name} creado con los privilegios actuales.", duration=3000)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast(f"Rol {name} creado con los privilegios actuales.", duration=3000),
+        ]
 
     @rx.event
     def save_role_template(self):
@@ -2061,7 +2064,10 @@ class AuthState(MixinState):
             session.commit()
             self._load_roles_cache(session, company_id=company_id)
 
-        return rx.toast(f"Plantilla de rol {role} actualizada.", duration=3000)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast(f"Plantilla de rol {role} actualizada.", duration=3000),
+        ]
 
     @rx.event
     def save_user(self):
@@ -2196,7 +2202,10 @@ class AuthState(MixinState):
 
                 self.hide_user_form()
                 self.load_users()
-                return rx.toast(f"Usuario {username} actualizado.", duration=3000)
+                return [
+                    self._emit_runtime_sync_event(),
+                    rx.toast(f"Usuario {username} actualizado.", duration=3000),
+                ]
             else:
                 # Crear nuevo usuario
                 existing_user = session.exec(
@@ -2250,7 +2259,10 @@ class AuthState(MixinState):
 
                 self.hide_user_form()
                 self.load_users()
-                return rx.toast(f"Usuario {username} creado.", duration=3000)
+                return [
+                    self._emit_runtime_sync_event(),
+                    rx.toast(f"Usuario {username} creado.", duration=3000),
+                ]
 
     @rx.event
     def delete_user(self, username: str):
@@ -2284,6 +2296,9 @@ class AuthState(MixinState):
             session.delete(user)
             session.commit()
             self.load_users()
-            return rx.toast(f"Usuario {username} eliminado.", duration=3000)
+            return [
+                self._emit_runtime_sync_event(),
+                rx.toast(f"Usuario {username} eliminado.", duration=3000),
+            ]
 
         return rx.toast(f"Usuario {username} no encontrado.", duration=3000)

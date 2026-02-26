@@ -15,6 +15,8 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
     rx.el.button(
       rx.icon("eye", class_name="h-4 w-4"),
       on_click=lambda _: State.open_purchase_detail(purchase["id"]),
+      title="Ver detalle",
+      aria_label="Ver detalle",
       class_name="px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700",
     ),
     rx.cond(
@@ -103,11 +105,15 @@ def supplier_row(supplier: rx.Var[dict]) -> rx.Component:
     rx.el.button(
       rx.icon("pencil", class_name="h-4 w-4"),
       on_click=lambda _: State.open_supplier_modal(supplier),
+      title="Editar proveedor",
+      aria_label="Editar proveedor",
       class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
     ),
     rx.el.button(
       rx.icon("trash-2", class_name="h-4 w-4"),
       on_click=lambda _: State.delete_supplier(supplier["id"]),
+      title="Eliminar proveedor",
+      aria_label="Eliminar proveedor",
       class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
     ),
     class_name="flex items-center justify-center gap-2",
@@ -372,6 +378,8 @@ def purchase_edit_modal() -> rx.Component:
       rx.el.button(
         rx.icon("x", class_name="h-4 w-4"),
         on_click=State.clear_purchase_edit_supplier,
+        title="Quitar proveedor seleccionado",
+        aria_label="Quitar proveedor seleccionado",
         class_name="p-1 text-slate-500 hover:text-slate-800",
       ),
       class_name="flex items-center justify-between rounded-md border border-slate-200 bg-white p-2",
@@ -876,4 +884,3 @@ def compras_page() -> rx.Component:
     content=content,
     redirect_message="Acceso denegado a Compras",
   )
-

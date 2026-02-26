@@ -233,7 +233,7 @@ def registro_page() -> rx.Component:
                 rx.el.span("¿Ya tienes cuenta?", class_name="text-slate-400"),
                 rx.el.a(
                     "Inicia sesion",
-                    href="/ingreso",
+                    href="/",
                     class_name=f"text-indigo-600 hover:text-indigo-700 {TRANSITIONS['fast']} font-medium",
                 ),
                 class_name="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-xs text-center",

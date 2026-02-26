@@ -181,6 +181,12 @@ class MixinState:
 
         return rx.toast(str(message or ""), duration=duration)
 
+    def _emit_runtime_sync_event(self):
+        """Notifica a otras pestañas que deben refrescar contexto en tiempo real."""
+        return rx.call_script(
+            "try{localStorage.setItem('twk_runtime_sync', String(Date.now()));}catch(_err){}"
+        )
+
     def _tenant_ids(self) -> tuple[int | None, int | None]:
         company_value = None
         if hasattr(self, "current_user"):

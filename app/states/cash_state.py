@@ -71,6 +71,7 @@ from app.utils.exports import (
     WARNING_FILL,
 )
 from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
+from app.utils.tenant import set_tenant_context
 
 
 class CashState(MixinState):
@@ -550,6 +551,7 @@ class CashState(MixinState):
         user_id = log.user_id
         company_id = log.company_id
         branch_id = log.branch_id
+        set_tenant_context(company_id, branch_id)
         if user_id:
             window_start = timestamp - datetime.timedelta(hours=4)
             window_end = timestamp + datetime.timedelta(hours=4)
@@ -562,6 +564,10 @@ class CashState(MixinState):
                     .where(CashboxSessionModel.closing_time.is_not(None))
                     .where(CashboxSessionModel.closing_time >= window_start)
                     .where(CashboxSessionModel.closing_time <= window_end)
+                    .execution_options(
+                        tenant_company_id=company_id,
+                        tenant_branch_id=branch_id,
+                    )
                 ).all()
             if sessions:
                 closest = min(
@@ -1870,6 +1876,11 @@ class CashState(MixinState):
             and self.current_user["privileges"]["export_data"]
         ):
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa o sucursal no definida.", duration=3000)
+        set_tenant_context(company_id, branch_id)
         try:
             log_id_int = int(log_id)
         except (TypeError, ValueError):
@@ -1878,18 +1889,31 @@ class CashState(MixinState):
             log = session.exec(
                 select(CashboxLogModel)
                 .where(CashboxLogModel.id == log_id_int)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
+                .execution_options(
+                    tenant_company_id=company_id,
+                    tenant_branch_id=branch_id,
+                )
             ).first()
         if not log or (log.action or "").lower() != "cierre":
             return rx.toast("El registro seleccionado no es un cierre.", duration=3000)
 
         start_dt, end_dt, user_id, report_date, closing_timestamp = self._cashbox_range_for_log(log)
-        company_id = log.company_id
-        branch_id = log.branch_id
+        company_id = int(log.company_id or company_id)
+        branch_id = int(log.branch_id or branch_id)
+        set_tenant_context(company_id, branch_id)
         responsable = ""
         if user_id:
             with rx.session() as session:
                 user = session.exec(
-                    select(UserModel).where(UserModel.id == user_id)
+                    select(UserModel)
+                    .where(UserModel.id == user_id)
+                    .where(UserModel.company_id == company_id)
+                    .execution_options(
+                        tenant_company_id=company_id,
+                        tenant_branch_id=branch_id,
+                    )
                 ).first()
                 if user:
                     responsable = user.username or ""
@@ -1996,6 +2020,11 @@ class CashState(MixinState):
     def print_cashbox_close_summary_for_log(self, log_id: str):
         if not self.current_user["privileges"]["view_cashbox"]:
             return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa o sucursal no definida.", duration=3000)
+        set_tenant_context(company_id, branch_id)
         try:
             log_id_int = int(log_id)
         except (TypeError, ValueError):
@@ -2004,18 +2033,31 @@ class CashState(MixinState):
             log = session.exec(
                 select(CashboxLogModel)
                 .where(CashboxLogModel.id == log_id_int)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
+                .execution_options(
+                    tenant_company_id=company_id,
+                    tenant_branch_id=branch_id,
+                )
             ).first()
         if not log or (log.action or "").lower() != "cierre":
             return rx.toast("El registro seleccionado no es un cierre.", duration=3000)
 
         start_dt, end_dt, user_id, report_date, closing_timestamp = self._cashbox_range_for_log(log)
-        company_id = log.company_id
-        branch_id = log.branch_id
+        company_id = int(log.company_id or company_id)
+        branch_id = int(log.branch_id or branch_id)
+        set_tenant_context(company_id, branch_id)
         responsable = ""
         if user_id:
             with rx.session() as session:
                 user = session.exec(
-                    select(UserModel).where(UserModel.id == user_id)
+                    select(UserModel)
+                    .where(UserModel.id == user_id)
+                    .where(UserModel.company_id == company_id)
+                    .execution_options(
+                        tenant_company_id=company_id,
+                        tenant_branch_id=branch_id,
+                    )
                 ).first()
                 if user:
                     responsable = user.username or ""

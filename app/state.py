@@ -1,3 +1,5 @@
+import os
+
 import reflex as rx
 import time
 from app.states.root_state import RootState
@@ -30,6 +32,13 @@ from app.states.auth_state import (
 )
 from app.utils.db import AsyncSessionLocal
 from app.utils.db_seeds import init_payment_methods
+
+APP_SURFACE: str = (os.getenv("APP_SURFACE") or "all").strip().lower()
+if APP_SURFACE not in {"all", "landing", "app", "owner"}:
+    APP_SURFACE = "all"
+
+OWNER_ROOT_PATH: str = "/" if APP_SURFACE == "owner" else "/owner"
+OWNER_LOGIN_PATH: str = "/login" if APP_SURFACE == "owner" else "/owner/login"
 
 # Reexportar State
 class State(RootState):
@@ -131,6 +140,36 @@ class State(RootState):
         """Evento público de refresco (compatibilidad hacia atrás)."""
         await self._do_runtime_refresh(force)
 
+    @rx.event
+    async def handle_cross_tab_runtime_sync(self):
+        """Refresca estado en caliente cuando otra pestaña cambia configuración."""
+        if not self.is_authenticated:
+            return
+
+        await self._do_runtime_refresh(force=True)
+        self.sync_page_from_route()
+
+        if hasattr(self, "load_settings"):
+            self.load_settings()
+        if hasattr(self, "load_config_data"):
+            self.load_config_data()
+        if hasattr(self, "_ensure_payment_method_selected"):
+            self._ensure_payment_method_selected()
+        if hasattr(self, "_refresh_payment_feedback"):
+            self._refresh_payment_feedback()
+
+        current_path = ""
+        router = getattr(self, "router", None)
+        page = getattr(router, "page", None) if router else None
+        if page:
+            current_path = getattr(page, "path", "") or ""
+
+        if current_path == "/configuracion":
+            if hasattr(self, "load_users"):
+                self.load_users()
+            if hasattr(self, "load_branches"):
+                self.load_branches()
+
     # ------------------------------------------------------------------
     # Manejadores consolidados de inicialización de página
     # Fusiona sync_page + ensure_view + cargas específicas de página + common_guards
@@ -140,7 +179,7 @@ class State(RootState):
     def _check_auth_and_privilege(self, privilege_key: str, deny_msg: str):
         """Retorna eventos de redirección si el acceso es denegado, sino None."""
         if not self.is_authenticated:
-            return [rx.redirect("/ingreso")]
+            return [rx.redirect("/")]
         if not self.current_user["privileges"].get(privilege_key):
             return [
                 rx.toast(deny_msg, duration=3000),
@@ -185,7 +224,7 @@ class State(RootState):
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         privileges = self.current_user["privileges"]
         if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
@@ -222,6 +261,13 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Garantiza que Venta siempre use la configuración más reciente de métodos de pago.
+        if hasattr(self, "load_config_data"):
+            self.load_config_data()
+        if hasattr(self, "_ensure_payment_method_selected"):
+            self._ensure_payment_method_selected()
+        if hasattr(self, "_refresh_payment_feedback"):
+            self._refresh_payment_feedback()
         # Delta parcial: renderiza la UI de inmediato
         yield
 
@@ -255,7 +301,7 @@ class State(RootState):
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         # can_view_clientes inline: plan != standard + privilege
         plan = (self.plan_actual or "").strip().lower()
@@ -278,7 +324,7 @@ class State(RootState):
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         plan = (self.plan_actual or "").strip().lower()
         if plan == "standard" or not self.current_user["privileges"].get("view_cuentas"):
@@ -357,7 +403,7 @@ class State(RootState):
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         # can_view_servicios inline
         plan = (self.plan_actual or "").strip().lower()
@@ -387,7 +433,7 @@ class State(RootState):
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
-            yield rx.redirect("/ingreso")
+            yield rx.redirect("/")
             return
         if self.current_user["role"] not in ["Superadmin", "Administrador"]:
             yield rx.toast(
@@ -428,7 +474,7 @@ class State(RootState):
         # No necesita _do_runtime_refresh del sistema de ventas
         # Solo verifica la sesión propia del owner
         if not self.owner_session_active:
-            yield rx.redirect("/owner/login")
+            yield rx.redirect(OWNER_LOGIN_PATH)
             return
         # Delta parcial: renderiza la UI de inmediato
         yield
@@ -438,8 +484,8 @@ class State(RootState):
 
     @rx.event
     async def page_init_owner_login(self):
-        """on_load para /owner/login."""
+        """on_load para login del Owner Backoffice."""
         # Si ya tiene sesión activa de owner, redirigir al backoffice
         if self.owner_session_active:
-            yield rx.redirect("/owner")
+            yield rx.redirect(OWNER_ROOT_PATH)
             return

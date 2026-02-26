@@ -4,9 +4,11 @@ Backoffice de Owners — Mini-sistema independiente de gestión de la plataforma
 Completamente separado del Sistema de Ventas:
 - Layout propio (sin sidebar del sistema de ventas)
 - Header administrativo independiente
-- Accesible solo para propietarios de plataforma vía /owner
+- Accesible solo para propietarios de plataforma
 - Invisible para usuarios regulares del sistema
 """
+import os
+
 import reflex as rx
 
 from app.state import State
@@ -18,6 +20,20 @@ from app.components.ui import (
     SHADOWS,
     TRANSITIONS,
 )
+
+APP_SURFACE: str = (os.getenv("APP_SURFACE") or "all").strip().lower()
+if APP_SURFACE not in {"all", "landing", "app", "owner"}:
+    APP_SURFACE = "all"
+
+PUBLIC_APP_URL = (os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
+OWNER_LOGIN_PATH = "/login" if APP_SURFACE == "owner" else "/owner/login"
+
+
+def _app_href(path: str = "/") -> str:
+    normalized = path if path.startswith("/") else f"/{path}"
+    if PUBLIC_APP_URL:
+        return f"{PUBLIC_APP_URL}{normalized}"
+    return normalized
 
 
 # ─── Helpers de estilo ──────────────────────────────────
@@ -1213,7 +1229,7 @@ def _access_denied() -> rx.Component:
                     "Ir al Sistema de Ventas",
                     class_name=BUTTON_STYLES["primary"],
                 ),
-                href="/dashboard",
+                href=_app_href("/"),
                 class_name="mt-6",
             ),
             class_name="flex flex-col items-center justify-center py-20",
@@ -1259,7 +1275,7 @@ def _owner_header() -> rx.Component:
                         "Sistema de Ventas",
                         class_name=f"flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 px-3 py-2 {RADIUS['md']} hover:bg-slate-100 {TRANSITIONS['fast']}",
                     ),
-                    href="/dashboard",
+                    href=_app_href("/"),
                 ),
                 # Separador
                 rx.el.div(class_name="hidden sm:block w-px h-8 bg-slate-200"),
@@ -1342,8 +1358,8 @@ def owner_page() -> rx.Component:
     - Sin sidebar del sistema de ventas
     - Header propio con marca "Admin Plataforma"
     - Fondo y estilo visual diferenciado
-    - Login propio e independiente en /owner/login
-    - Accesible SOLO para propietarios de plataforma autenticados vía /owner/login
+    - Login propio e independiente del sistema principal
+    - Accesible SOLO para propietarios de plataforma autenticados
     """
     return rx.el.main(
         # Barra superior distintiva (gris oscuro para diferenciarse del sistema)
@@ -1360,7 +1376,7 @@ def owner_page() -> rx.Component:
                     _owner_content(),
                     class_name="min-h-screen bg-slate-50",
                 ),
-                # ───── No autenticado en owner → redirigir a /owner/login ─────
+                # ───── No autenticado en owner → redirigir a login owner ─────
                 rx.el.div(
                     rx.el.div(
                         rx.icon("shield-alert", class_name="h-12 w-12 text-slate-400"),
@@ -1378,7 +1394,7 @@ def owner_page() -> rx.Component:
                                 "Iniciar Sesión",
                                 class_name=BUTTON_STYLES["primary"],
                             ),
-                            href="/owner/login",
+                            href=OWNER_LOGIN_PATH,
                             class_name="mt-6",
                         ),
                         class_name="flex flex-col items-center justify-center py-20",

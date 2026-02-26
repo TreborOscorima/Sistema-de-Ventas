@@ -45,6 +45,7 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
           on_click=lambda _, c=client: State.open_modal(c),
           class_name="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full",
           title="Editar",
+          aria_label="Editar",
         ),
         rx.el.button(
           rx.icon("trash-2", class_name="h-4 w-4"),
@@ -53,6 +54,7 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
           loading=State.is_loading,
           class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
           title="Eliminar",
+          aria_label="Eliminar",
         ),
         class_name="flex items-center justify-center gap-2",
       ),

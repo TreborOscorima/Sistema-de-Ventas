@@ -7,6 +7,22 @@ from app.constants import WHATSAPP_NUMBER
 
 GA4_MEASUREMENT_ID = (os.getenv("GA4_MEASUREMENT_ID") or "").strip()
 META_PIXEL_ID = (os.getenv("META_PIXEL_ID") or "").strip()
+PUBLIC_SITE_URL = (os.getenv("PUBLIC_SITE_URL") or "").strip().rstrip("/")
+PUBLIC_APP_URL = (os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
+
+
+def _site_href(path: str = "/") -> str:
+    normalized = path if path.startswith("/") else f"/{path}"
+    if PUBLIC_SITE_URL:
+        return f"{PUBLIC_SITE_URL}{normalized}"
+    return normalized
+
+
+def _app_href(path: str = "/") -> str:
+    normalized = path if path.startswith("/") else f"/{path}"
+    if PUBLIC_APP_URL:
+        return f"{PUBLIC_APP_URL}{normalized}"
+    return normalized
 
 
 def _wa_link(message: str) -> str:
@@ -757,7 +773,7 @@ def marketing_page() -> rx.Component:
                 rx.el.a(
                     rx.icon("box", class_name="h-7 w-7 text-indigo-600"),
                     rx.el.span("TUWAYKIAPP", class_name="text-xl font-extrabold tracking-tight text-slate-900"),
-                    href="/",
+                    href=_site_href("/"),
                     class_name="flex items-center gap-2.5",
                 ),
                 rx.el.nav(
@@ -770,7 +786,7 @@ def marketing_page() -> rx.Component:
                 rx.el.div(
                     rx.el.a(
                         "Ingresar",
-                        href="/",
+                        href=_app_href("/"),
                         on_click=rx.call_script(_track_event_script("click_nav_login", "header_nav")),
                         class_name=(
                             "hidden items-center justify-center rounded-xl border-2 border-indigo-600 bg-white px-4 py-2 text-sm "
@@ -779,7 +795,7 @@ def marketing_page() -> rx.Component:
                     ),
                     rx.el.a(
                         "Iniciar prueba gratis",
-                        href="/registro",
+                        href=_app_href("/registro"),
                         on_click=rx.call_script(_track_event_script("click_trial_cta", "header_primary_cta")),
                         class_name=(
                             "hidden items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm "
@@ -803,7 +819,7 @@ def marketing_page() -> rx.Component:
                         _nav_link("FAQ", "#faq", "click_nav_faq_mobile", "mobile_menu"),
                         rx.el.a(
                             "Ingresar",
-                            href="/",
+                            href=_app_href("/"),
                             on_click=rx.call_script(
                                 _track_event_script("click_nav_login_mobile", "mobile_menu")
                             ),
@@ -814,7 +830,7 @@ def marketing_page() -> rx.Component:
                         ),
                         rx.el.a(
                             "Iniciar prueba gratis",
-                            href="/registro",
+                            href=_app_href("/registro"),
                             on_click=rx.call_script(
                                 _track_event_script("click_trial_cta", "mobile_menu_primary_cta")
                             ),
@@ -866,7 +882,7 @@ def marketing_page() -> rx.Component:
                             rx.el.div(
                                 rx.el.a(
                                     "Comenzar trial de 15 dias",
-                                    href="/registro",
+                                    href=_app_href("/registro"),
                                     on_click=rx.call_script(
                                         _track_event_script("click_trial_cta", "hero_primary_cta")
                                     ),
@@ -1369,7 +1385,7 @@ def marketing_page() -> rx.Component:
                             ),
                             rx.el.a(
                                 "Iniciar prueba",
-                                href="/registro",
+                                href=_app_href("/registro"),
                                 on_click=rx.call_script(
                                     _track_event_script("click_trial_cta", "faq_trial_cta")
                                 ),
@@ -1416,7 +1432,7 @@ def marketing_page() -> rx.Component:
                         rx.el.div(
                             rx.el.a(
                                 "Crear cuenta ahora",
-                                href="/registro",
+                                href=_app_href("/registro"),
                                 on_click=rx.call_script(
                                     _track_event_script("click_trial_cta", "bottom_banner_primary_cta")
                                 ),
@@ -1456,7 +1472,7 @@ def marketing_page() -> rx.Component:
                         rx.el.a(
                             rx.icon("box", class_name="h-7 w-7 text-indigo-600"),
                             rx.el.span("TUWAYKIAPP", class_name="text-lg font-extrabold tracking-tight text-slate-900"),
-                            href="/",
+                            href=_site_href("/"),
                             class_name="inline-flex items-center gap-2.5",
                         ),
                         rx.el.p(
@@ -1508,8 +1524,8 @@ def marketing_page() -> rx.Component:
                     ),
                     rx.el.div(
                         rx.el.h4("Accesos", class_name="text-sm font-bold text-slate-900"),
-                        _footer_link("Iniciar sesion", "/", "click_footer_login", "footer_accesos"),
-                        _footer_link("Crear cuenta", "/registro", "click_footer_signup", "footer_accesos"),
+                        _footer_link("Iniciar sesion", _app_href("/"), "click_footer_login", "footer_accesos"),
+                        _footer_link("Crear cuenta", _app_href("/registro"), "click_footer_signup", "footer_accesos"),
                         _footer_link(
                             "WhatsApp directo",
                             f"https://wa.me/{WHATSAPP_NUMBER}",

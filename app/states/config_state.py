@@ -369,11 +369,14 @@ class ConfigState(MixinState):
         self.selected_currency_code = new_currency
         self.load_config_data()  # Recargar métodos de pago
 
-        return rx.toast(
-            f"País cambiado a {country_info['name']}. Moneda: {new_currency}. "
-            f"Métodos de pago actualizados.",
-            duration=4000
-        )
+        return [
+            self._emit_payment_methods_sync_event(),
+            rx.toast(
+                f"País cambiado a {country_info['name']}. Moneda: {new_currency}. "
+                f"Métodos de pago actualizados.",
+                duration=4000,
+            ),
+        ]
 
     @rx.event
     def set_company_name(self, value: str):
@@ -514,7 +517,10 @@ class ConfigState(MixinState):
         )
         self.timezone = timezone_value
         self.company_form_key += 1
-        return rx.toast("Configuracion de empresa guardada.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast("Configuracion de empresa guardada.", duration=2500),
+        ]
 
     @rx.event
     def go_to_config_tab(self, tab: str):
@@ -552,7 +558,10 @@ class ConfigState(MixinState):
                 self.new_unit_name = ""
                 self.new_unit_allows_decimal = False
                 self.load_config_data()
-                return rx.toast(f"Unidad '{name}' agregada.", duration=2000)
+                return [
+                    self._emit_runtime_sync_event(),
+                    rx.toast(f"Unidad '{name}' agregada.", duration=2000),
+                ]
             else:
                 return rx.toast("La unidad ya existe.", duration=2000)
 
@@ -576,6 +585,7 @@ class ConfigState(MixinState):
                 session.add(unit)
                 session.commit()
         self.load_config_data()
+        return self._emit_runtime_sync_event()
 
     def remove_unit(self, unit_name: str):
         toast = self._require_manage_config()
@@ -596,7 +606,10 @@ class ConfigState(MixinState):
                 session.delete(unit)
                 session.commit()
                 self.load_config_data()
-                return rx.toast(f"Unidad '{unit_name}' eliminada.", duration=2000)
+                return [
+                    self._emit_runtime_sync_event(),
+                    rx.toast(f"Unidad '{unit_name}' eliminada.", duration=2000),
+                ]
 
     def ensure_default_data(self):
         """Inicializa datos por defecto basados en el país configurado."""
@@ -784,7 +797,10 @@ class ConfigState(MixinState):
         self.selected_currency_code = code
         if hasattr(self, "_refresh_payment_feedback"):
             self._refresh_payment_feedback()
-        return rx.toast(f"Moneda cambiada a {match['name']}.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast(f"Moneda cambiada a {match['name']}.", duration=2500),
+        ]
 
     @rx.event
     def set_new_currency_code(self, value: str):
@@ -823,7 +839,10 @@ class ConfigState(MixinState):
         self.new_currency_symbol = ""
         if hasattr(self, "_refresh_payment_feedback"):
             self._refresh_payment_feedback()
-        return rx.toast(f"Moneda {name} agregado.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast(f"Moneda {name} agregado.", duration=2500),
+        ]
 
     @rx.event
     def remove_currency(self, code: str):
@@ -847,7 +866,10 @@ class ConfigState(MixinState):
             self.selected_currency_code = self.available_currencies[0]["code"]
         if hasattr(self, "_refresh_payment_feedback"):
             self._refresh_payment_feedback()
-        return rx.toast("Moneda eliminada.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast("Moneda eliminada.", duration=2500),
+        ]
 
     def _unit_allows_decimal(self, unit: str) -> bool:
         return unit and unit.lower() in self.decimal_units
@@ -905,7 +927,10 @@ class ConfigState(MixinState):
         self.load_config_data()
         self.new_unit_name = ""
         self.new_unit_allows_decimal = False
-        return rx.toast(f"Unidad {name} configurada.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast(f"Unidad {name} configurada.", duration=2500),
+        ]
 
     @rx.event
     def remove_decimal_unit(self, unit: str):
@@ -929,7 +954,10 @@ class ConfigState(MixinState):
                 session.add(unit_db)
                 session.commit()
                 self.load_config_data()
-                return rx.toast(f"Unidad {unit} ya no permite decimales.", duration=2500)
+                return [
+                    self._emit_runtime_sync_event(),
+                    rx.toast(f"Unidad {unit} ya no permite decimales.", duration=2500),
+                ]
 
     # Metodos de pago
     def _payment_method_by_identifier(self, identifier: str) -> PaymentMethodConfig | None:
@@ -967,6 +995,22 @@ class ConfigState(MixinState):
         if not any(m["name"] == current_name for m in available):
             if hasattr(self, "_set_payment_method"):
                 self._set_payment_method(available[0])
+
+    def _emit_payment_methods_sync_event(self):
+        """Notifica a otras pestañas que la configuración de pagos cambió."""
+        return rx.call_script(
+            "try{var v=String(Date.now());localStorage.setItem('twk_payment_methods_version',v);"
+            "localStorage.setItem('twk_runtime_sync',v);}catch(_err){}"
+        )
+
+    @rx.event
+    def refresh_payment_methods_runtime(self):
+        """Recarga métodos de pago en caliente para tabs activas de Venta."""
+        self.load_config_data()
+        self._ensure_payment_method_selected()
+        if hasattr(self, "_refresh_payment_feedback"):
+            self._refresh_payment_feedback()
+        return self._emit_runtime_sync_event()
 
     @rx.event
     def set_new_payment_method_name(self, value: str):
@@ -1039,7 +1083,10 @@ class ConfigState(MixinState):
         }
         if hasattr(self, "_set_payment_method"):
             self._set_payment_method(method)
-        return rx.toast(f"Metodo {name} agregado.", duration=2500)
+        return [
+            self._emit_payment_methods_sync_event(),
+            rx.toast(f"Metodo {name} agregado.", duration=2500),
+        ]
 
     @rx.event
     def toggle_payment_method_enabled(self, method_id: str, enabled: bool | str):
@@ -1075,6 +1122,7 @@ class ConfigState(MixinState):
 
         self.load_config_data()
         self._ensure_payment_method_selected()
+        return self._emit_payment_methods_sync_event()
 
     @rx.event
     def remove_payment_method(self, method_id: str):
@@ -1103,4 +1151,7 @@ class ConfigState(MixinState):
 
         self.load_config_data()
         self._ensure_payment_method_selected()
-        return rx.toast(f"Metodo {method['name']} eliminado.", duration=2500)
+        return [
+            self._emit_payment_methods_sync_event(),
+            rx.toast(f"Metodo {method['name']} eliminado.", duration=2500),
+        ]

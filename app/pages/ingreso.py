@@ -42,11 +42,15 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
                 rx.el.button(
                     rx.icon("pencil", class_name="h-4 w-4"),
                     on_click=lambda: State.edit_item_from_entry(item["temp_id"]),
+                    title="Editar",
+                    aria_label="Editar",
                     class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
                 ),
                 rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
                     on_click=lambda: State.remove_item_from_entry(item["temp_id"]),
+                    title="Eliminar",
+                    aria_label="Eliminar",
                     class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
                 ),
                 class_name="flex justify-center items-center gap-2",
@@ -608,4 +612,3 @@ def ingreso_page() -> rx.Component:
         content=content,
         redirect_message="Acceso denegado a Ingresos",
     )
-

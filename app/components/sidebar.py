@@ -425,6 +425,8 @@ def sidebar() -> rx.Component:
                     rx.el.button(
                         rx.icon("panel-left-close", class_name="h-5 w-5 text-slate-400"),
                         on_click=State.toggle_sidebar,
+                        title="Ocultar menu lateral",
+                        aria_label="Ocultar menu lateral",
                         class_name=f"p-2 shrink-0 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
                     ),
                     class_name="flex h-16 items-center justify-between px-4",
@@ -449,6 +451,7 @@ def sidebar() -> rx.Component:
         f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
         f"fixed inset-y-0 left-0 z-50 w-0 overflow-hidden {TRANSITIONS['slow']}",
     ),
+    style={"height": "100dvh"},
     key="sidebar-root",
 ),
 # Overlay móvil con blur
@@ -472,6 +475,8 @@ rx.cond(
         rx.el.button(
             rx.icon("menu", class_name="h-4 w-4 text-indigo-500"),
             on_click=State.toggle_sidebar,
+            title="Mostrar menu lateral",
+            aria_label="Mostrar menu lateral",
             class_name=(
                 f"sidebar-toggle-btn fixed top-4 left-4 md:top-5 md:left-5 z-[55] "
                 f"p-2 bg-white/80 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['sm']} "

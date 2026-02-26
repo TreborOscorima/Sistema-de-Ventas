@@ -46,6 +46,8 @@ def NotificationHolder() -> rx.Component:
         rx.el.button(
             rx.icon("x", class_name="h-4 w-4"),
             on_click=State.close_notification,
+            title="Cerrar notificacion",
+            aria_label="Cerrar notificacion",
             class_name="p-1 rounded-md hover:bg-slate-900/5",
         ),
         class_name=container_classes,

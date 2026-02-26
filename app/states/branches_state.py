@@ -154,7 +154,10 @@ class BranchesState(MixinState):
         self.load_branches()
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
-        return rx.toast("Sucursal creada.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast("Sucursal creada.", duration=2500),
+        ]
 
     @rx.event
     def start_edit_branch(self, branch_id: str):
@@ -229,7 +232,10 @@ class BranchesState(MixinState):
         self.load_branches()
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
-        return rx.toast("Sucursal actualizada.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast("Sucursal actualizada.", duration=2500),
+        ]
 
     @rx.event
     def delete_branch(self, branch_id: str):
@@ -287,7 +293,10 @@ class BranchesState(MixinState):
         self.load_branches()
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
-        return rx.toast("Sucursal eliminada.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast("Sucursal eliminada.", duration=2500),
+        ]
 
     @rx.event
     def open_branch_users(self, branch_id: str):
@@ -448,4 +457,7 @@ class BranchesState(MixinState):
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
         self.close_branch_users()
-        return rx.toast("Accesos actualizados.", duration=2500)
+        return [
+            self._emit_runtime_sync_event(),
+            rx.toast("Accesos actualizados.", duration=2500),
+        ]

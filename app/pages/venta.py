@@ -43,6 +43,8 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
             rx.el.button(
                 rx.icon("x", class_name="h-4 w-4"),
                 on_click=lambda: State.remove_item_from_sale(item["temp_id"]),
+                title="Quitar producto",
+                aria_label="Quitar producto",
                 class_name="p-1 text-red-500 hover:bg-red-50 rounded transition-colors",
             ),
             class_name="py-2 px-2 text-center",
@@ -63,6 +65,8 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
             rx.el.button(
                 rx.icon("x", class_name="h-4 w-4"),
                 on_click=lambda: State.remove_item_from_sale(item["temp_id"]),
+                title="Quitar producto",
+                aria_label="Quitar producto",
                 class_name="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-colors",
             ),
             class_name="flex items-start justify-between gap-2",
@@ -164,6 +168,7 @@ def recent_moves_modal() -> rx.Component:
                             on_click=State.reprint_recent_sale(entry["sale_id"]),
                             class_name="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full",
                             title="Reimprimir comprobante",
+                            aria_label="Reimprimir comprobante",
                         ),
                         rx.el.span("-", class_name="text-xs text-slate-400"),
                     ),
@@ -306,6 +311,8 @@ def client_selector() -> rx.Component:
                     color_scheme="red",
                     variant="soft",
                     size="2",
+                    title="Quitar cliente",
+                    aria_label="Quitar cliente",
                 ),
                 align="center",
                 justify="between",
@@ -327,6 +334,7 @@ def client_selector() -> rx.Component:
                         on_click=State.open_modal_from_pos,
                         class_name="h-10 w-10 flex items-center justify-center rounded-lg border text-indigo-600 hover:bg-indigo-50",
                         title="Nuevo cliente",
+                        aria_label="Nuevo cliente",
                     ),
                     class_name="flex items-center gap-1 w-full",
                 ),
@@ -648,6 +656,7 @@ def reservation_info_card() -> rx.Component:
                     rx.icon("x", class_name="h-5 w-5"),
                     on_click=State.clear_pending_reservation,
                     title="Cerrar cobro de servicio",
+                    aria_label="Cerrar cobro de servicio",
                     class_name="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors",
                 ),
                 class_name="flex items-center justify-between",
@@ -877,6 +886,7 @@ def payment_sidebar() -> rx.Component:
                             rx.el.span(State.currency_symbol, class_name="text-slate-400"),
                             rx.el.input(
                                 type="number",
+                                key=State.sale_form_key.to_string() + "_cash_amount_desktop",
                                 default_value=rx.cond(
                                     State.payment_cash_amount > 0,
                                     State.payment_cash_amount.to_string(),
@@ -977,6 +987,7 @@ def payment_sidebar() -> rx.Component:
                             rx.el.label("Efectivo", class_name="text-xs font-medium text-slate-600"),
                             rx.el.input(
                                 type="number",
+                                key=State.sale_form_key.to_string() + "_mixed_cash_desktop",
                                 default_value=rx.cond(
                                     State.payment_mixed_cash > 0,
                                     State.payment_mixed_cash.to_string(),
@@ -1294,6 +1305,7 @@ def payment_mobile_section() -> rx.Component:
                     rx.el.span(State.currency_symbol, class_name="text-slate-400 text-lg"),
                     rx.el.input(
                         type="number",
+                        key=State.sale_form_key.to_string() + "_cash_amount_mobile",
                         default_value=rx.cond(
                             State.payment_cash_amount > 0,
                             State.payment_cash_amount.to_string(),
@@ -1390,6 +1402,7 @@ def payment_mobile_section() -> rx.Component:
                     rx.el.label("Efectivo", class_name="text-xs font-medium text-slate-600"),
                     rx.el.input(
                         type="number",
+                        key=State.sale_form_key.to_string() + "_mixed_cash_mobile",
                         default_value=rx.cond(
                             State.payment_mixed_cash > 0,
                             State.payment_mixed_cash.to_string(),
