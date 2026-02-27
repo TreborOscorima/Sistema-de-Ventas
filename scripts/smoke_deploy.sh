@@ -101,12 +101,12 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 
 if $DOMAIN_SPLIT; then
-    # ─── Test 3 superficies separadas ────────────────────────────────────
+    # ─── Prueba de las 3 superficies separadas ───────────────────────────
     info "=== LANDING (tuwayki.app) ==="
     check_url "https://tuwayki.app/" 200 "Landing home"
     check_health "https://tuwayki.app" "Landing health"
 
-    info "=== WWW redirect ==="
+    info "=== Redirects WWW ==="
     check_redirect "https://www.tuwayki.app/" "tuwayki.app" "www -> apex"
 
     info "=== APP (sys.tuwayki.app) ==="
@@ -117,13 +117,13 @@ if $DOMAIN_SPLIT; then
     check_url "https://admin.tuwayki.app/login" 200 "Owner login"
     check_health "https://admin.tuwayki.app" "Owner health"
 
-    info "=== Compatibilidad (redirects legacy) ==="
+    info "=== Compatibilidad (redirects heredados) ==="
     check_redirect "https://tuwayki.app/home" "tuwayki.app" "/home -> landing"
     check_redirect "https://tuwayki.app/owner/login" "admin.tuwayki.app" "/owner/login -> admin"
     check_redirect "https://tuwayki.app/dashboard" "sys.tuwayki.app" "/dashboard -> sys"
     check_redirect "https://tuwayki.app/venta" "sys.tuwayki.app" "/venta -> sys"
 
-    info "=== Security headers ==="
+    info "=== Cabeceras de seguridad ==="
     HEADERS="$(curl -sI --max-time 10 "https://sys.tuwayki.app/" 2>/dev/null || echo '')"
     if echo "$HEADERS" | grep -qi "x-robots-tag.*noindex"; then
         pass "sys.tuwayki.app tiene X-Robots-Tag: noindex"
@@ -139,22 +139,22 @@ if $DOMAIN_SPLIT; then
     fi
 
 else
-    # ─── Test single surface / test server ───────────────────────────────
+    # ─── Prueba de superficie única / servidor de prueba ─────────────────
     info "=== Base: $BASE_URL ==="
     check_health "$BASE_URL" "Health check"
     check_url "$BASE_URL/api/ping" 200 "Ping"
 
     # Backend devuelve algo en /
     info "=== Páginas principales ==="
-    check_url "$BASE_URL/" 200 "Root /"
+    check_url "$BASE_URL/" 200 "Raíz /"
 
-    # Si es http (test server), probar rutas de la app
+    # Si es http (servidor de prueba), verificar rutas de la app
     if [[ "$BASE_URL" == http://* ]]; then
         check_url "$BASE_URL/api/health" 200 "Health endpoint"
     fi
 fi
 
-# ─── Resumen ─────────────────────────────────────────────────────────────────
+# ─── Resumen de resultados ───────────────────────────────────────────────────
 echo ""
 echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 TOTAL=$((PASS + FAIL + WARN))
@@ -163,9 +163,9 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 
 if [[ $FAIL -gt 0 ]]; then
-    echo -e "${RED}  HAY FALLOS — revisar antes de confirmar deploy${NC}"
+    echo -e "${RED}  HAY FALLOS \u2014 revisar antes de confirmar el deploy${NC}"
     exit 1
 else
-    echo -e "${GREEN}  TODOS LOS TESTS PASARON${NC}"
+    echo -e "${GREEN}  TODAS LAS PRUEBAS PASARON${NC}"
     exit 0
 fi

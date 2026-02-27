@@ -47,7 +47,7 @@ cd "$APP_DIR"
 info "Deploy iniciado en: $APP_DIR"
 info "Branch: $BRANCH | Puerto: $BACKEND_PORT | Prod: $IS_PROD"
 
-# ─── 0. Verificar prerequisitos ──────────────────────────────────────────────
+# ─── 0. Verificar prerrequisitos ──────────────────────────────────────────────
 command -v python3 >/dev/null 2>&1 || fail "python3 no encontrado"
 command -v git      >/dev/null 2>&1 || fail "git no encontrado"
 
@@ -174,16 +174,16 @@ info "Ejecutando health check..."
 HEALTH_RESPONSE="$(curl -sf "http://127.0.0.1:${BACKEND_PORT}/api/health" || echo '{}')"
 echo "  $HEALTH_RESPONSE"
 
-# ─── 11. Smoke test básico ──────────────────────────────────────────────────
-info "Smoke test..."
+# ─── 11. Prueba rápida de funcionamiento ────────────────────────────────────
+info "Prueba rápida de funcionamiento..."
 HTTP_CODE="$(curl -sf -o /dev/null -w '%{http_code}' "http://127.0.0.1:${BACKEND_PORT}/api/ping" || echo '000')"
 if [[ "$HTTP_CODE" == "200" ]]; then
     ok "Ping OK (200)"
 else
-    warn "Ping devolvió: $HTTP_CODE"
+    warn "Ping devolvió código: $HTTP_CODE"
 fi
 
-# ─── 12. Resumen ────────────────────────────────────────────────────────────
+# ─── 12. Resumen final ──────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}  DEPLOY COMPLETADO EXITOSAMENTE${NC}"

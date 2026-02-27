@@ -6,7 +6,6 @@ Reflex 0.8.x utiliza Starlette como framework ASGI subyacente.
 """
 from __future__ import annotations
 
-import json
 import os
 import time
 from datetime import datetime, timezone
