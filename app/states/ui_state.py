@@ -84,9 +84,18 @@ class UIState(MixinState):
     def _safe_query_tab(self) -> str:
         """Lee el param 'tab' de la URL actual de forma segura."""
         try:
-            qp = self.router.url.query_parameters
-            v = qp.get("tab", "") if isinstance(qp, dict) else ""
-            return str(v or "").strip().lower()
+            qp = getattr(self.router.url, "query_parameters", None)
+            if isinstance(qp, dict):
+                v = qp.get("tab", "")
+                normalized = str(v or "").strip().lower()
+                if normalized:
+                    return normalized
+        except Exception:
+            pass
+
+        # Fallback robusto para entornos donde query_parameters no se hidrata.
+        try:
+            return self._query_tab()
         except Exception:
             return ""
 
