@@ -20,11 +20,13 @@ PASS=0
 FAIL=0
 WARN=0
 DOMAIN_SPLIT=false
+BACKEND_ONLY=false
 
 for arg in "$@"; do
     case "$arg" in
-        --domain-split) DOMAIN_SPLIT=true ;;
-        http*) BASE_URL="$arg" ;;
+        --domain-split)  DOMAIN_SPLIT=true ;;
+        --backend-only)  BACKEND_ONLY=true ;;
+        http*)           BASE_URL="$arg" ;;
     esac
 done
 
@@ -41,7 +43,8 @@ check_url() {
     local description="${3:-$url}"
 
     local code
-    code="$(curl -sf -o /dev/null -w '%{http_code}' --max-time 10 "$url" 2>/dev/null || echo '000')"
+    # No usar -f: curl -f falla con 4xx/5xx y corrompe la captura de %{http_code}
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" 2>/dev/null)"
 
     if [[ "$code" == "$expected_code" ]]; then
         pass "$description -> $code"
@@ -144,14 +147,16 @@ else
     check_health "$BASE_URL" "Health check"
     check_url "$BASE_URL/api/ping" 200 "Ping"
 
-    # Backend devuelve algo en /
     info "=== Páginas principales ==="
-    check_url "$BASE_URL/" 200 "Raíz /"
-
-    # Si es http (servidor de prueba), verificar rutas de la app
-    if [[ "$BASE_URL" == http://* ]]; then
-        check_url "$BASE_URL/api/health" 200 "Health endpoint"
+    if $BACKEND_ONLY; then
+        # En modo --backend-only el frontend no se sirve; / devuelve 404 es normal
+        warn_t "Modo --backend-only: saltando prueba de / (frontend no servido)"
+    else
+        check_url "$BASE_URL/" 200 "Raíz /"
     fi
+
+    # Verificar rutas API adicionales
+    check_url "$BASE_URL/api/health" 200 "Health endpoint"
 fi
 
 # ─── Resumen de resultados ───────────────────────────────────────────────────

@@ -8,10 +8,11 @@
 #   bash scripts/deploy.sh --rollback   # Rollback al commit anterior
 #
 # Variables de entorno opcionales:
-#   APP_DIR      Directorio de la app (default: directorio del script/../)
-#   BRANCH       Branch de git a desplegar (default: main)
-#   BACKEND_PORT Puerto del backend (default: 8000)
-#   SKIP_MIGRATE Saltar migraciones (default: false)
+#   APP_DIR       Directorio de la app (default: directorio del script/../)
+#   BRANCH        Branch de git a desplegar (default: main)
+#   BACKEND_PORT  Puerto del backend (default: 8000)
+#   BACKEND_ONLY  Solo backend sin frontend (default: false, usar true con nginx)
+#   SKIP_MIGRATE  Saltar migraciones (default: false)
 # =============================================================================
 set -euo pipefail
 
@@ -32,20 +33,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${APP_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BRANCH="${BRANCH:-main}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
+BACKEND_ONLY="${BACKEND_ONLY:-false}"
 SKIP_MIGRATE="${SKIP_MIGRATE:-false}"
 IS_PROD=false
 IS_ROLLBACK=false
 
 for arg in "$@"; do
     case "$arg" in
-        --prod)     IS_PROD=true ;;
-        --rollback) IS_ROLLBACK=true ;;
+        --prod)          IS_PROD=true ;;
+        --rollback)      IS_ROLLBACK=true ;;
+        --backend-only)  BACKEND_ONLY=true ;;
     esac
 done
 
 cd "$APP_DIR"
 info "Deploy iniciado en: $APP_DIR"
-info "Branch: $BRANCH | Puerto: $BACKEND_PORT | Prod: $IS_PROD"
+info "Branch: $BRANCH | Puerto: $BACKEND_PORT | Prod: $IS_PROD | Solo backend: $BACKEND_ONLY"
 
 # ─── 0. Verificar prerrequisitos ──────────────────────────────────────────────
 command -v python3 >/dev/null 2>&1 || fail "python3 no encontrado"
@@ -136,22 +139,33 @@ fi
 ok "Procesos anteriores detenidos"
 
 # ─── 8. Levantar backend ────────────────────────────────────────────────────
-info "Iniciando backend en puerto $BACKEND_PORT..."
 mkdir -p logs
 
-nohup $PYTHON -m reflex run \
-    --env prod \
-    --backend-only \
-    --backend-host 0.0.0.0 \
-    --backend-port "$BACKEND_PORT" \
-    > logs/backend.out 2>&1 &
+if [[ "$BACKEND_ONLY" == "true" ]]; then
+    info "Iniciando solo backend (--backend-only) en puerto $BACKEND_PORT..."
+    nohup $PYTHON -m reflex run \
+        --env prod \
+        --backend-only \
+        --backend-host 0.0.0.0 \
+        --backend-port "$BACKEND_PORT" \
+        > logs/backend.out 2>&1 &
+    MAX_WAIT=60
+else
+    info "Iniciando backend + frontend en puerto $BACKEND_PORT..."
+    nohup $PYTHON -m reflex run \
+        --env prod \
+        --backend-host 0.0.0.0 \
+        --backend-port "$BACKEND_PORT" \
+        > logs/backend.out 2>&1 &
+    # El frontend tarda más en compilar
+    MAX_WAIT=300
+fi
 
 BACKEND_PID=$!
 info "Backend PID: $BACKEND_PID"
 
 # ─── 9. Esperar a que levante ────────────────────────────────────────────────
-info "Esperando a que el backend responda..."
-MAX_WAIT=60
+info "Esperando a que el backend responda (máx ${MAX_WAIT}s)..."
 WAITED=0
 while [[ $WAITED -lt $MAX_WAIT ]]; do
     if curl -sf "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
