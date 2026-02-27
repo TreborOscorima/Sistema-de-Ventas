@@ -13,3 +13,5 @@ logs/
 *.log
 backups/
 .deploy_prev_commit
+mysql_data/
+redis_data/

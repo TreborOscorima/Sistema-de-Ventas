@@ -1,0 +1,204 @@
+# =============================================================================
+# docker-compose.prod.yml — TUWAYKI Stack de Producción (3 superficies)
+#
+# Arquitectura:
+#   tuwayki.app       → app-landing  (APP_SURFACE=landing)
+#   sys.tuwayki.app   → app-sys      (APP_SURFACE=app)
+#   admin.tuwayki.app → app-admin    (APP_SURFACE=owner)
+#
+# Cada superficie comparte la misma imagen Docker, misma DB y Redis.
+# Nginx Proxy Manager (NPM) enruta por Host a cada contenedor.
+#
+# Uso:
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Re-deploy sin perder datos:
+#   docker compose -f docker-compose.prod.yml build app-landing app-sys app-admin
+#   docker compose -f docker-compose.prod.yml up -d --no-deps app-landing app-sys app-admin
+#
+# NUNCA usar "down -v" en producción (borra volúmenes = borra datos MySQL).
+# =============================================================================
+
+services:
+  # ─── Base de datos ─────────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: tuwayki_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-sistema_ventas}
+      MYSQL_USER: ${DB_USER:-app}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max-connections=200
+      --innodb-buffer-pool-size=256M
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h localhost -u root -e 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - internal
+
+  # ─── Cache / Rate limiting ─────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: tuwayki_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+
+  # ─── Superficie 1: Landing pública (tuwayki.app) ──────────────────────────
+  app-landing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuwayki_landing
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENV: prod
+      APP_SURFACE: landing
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-app}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-sistema_ventas}
+      REDIS_URL: redis://redis:6379/0
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      PUBLIC_SITE_URL: https://tuwayki.app
+      PUBLIC_APP_URL: https://sys.tuwayki.app
+      PUBLIC_OWNER_URL: https://admin.tuwayki.app
+      PUBLIC_API_URL: https://tuwayki.app
+      GA4_MEASUREMENT_ID: ${GA4_MEASUREMENT_ID:-}
+      META_PIXEL_ID: ${META_PIXEL_ID:-}
+      # Solo landing ejecuta migraciones (evita race condition entre los 3)
+      SKIP_MIGRATE: "false"
+    env_file:
+      - .env
+    volumes:
+      - landing_web:/app/.web
+    networks:
+      - internal
+      - npm_network
+
+  # ─── Superficie 2: Sistema de Ventas (sys.tuwayki.app) ────────────────────
+  app-sys:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuwayki_sys
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      app-landing:
+        condition: service_started
+    environment:
+      ENV: prod
+      APP_SURFACE: app
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-app}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-sistema_ventas}
+      REDIS_URL: redis://redis:6379/0
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      PUBLIC_SITE_URL: https://tuwayki.app
+      PUBLIC_APP_URL: https://sys.tuwayki.app
+      PUBLIC_OWNER_URL: https://admin.tuwayki.app
+      PUBLIC_API_URL: https://sys.tuwayki.app
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+      # Migraciones las ejecuta app-landing
+      SKIP_MIGRATE: "true"
+    env_file:
+      - .env
+    volumes:
+      - sys_web:/app/.web
+    networks:
+      - internal
+      - npm_network
+
+  # ─── Superficie 3: Gestión de Plataforma (admin.tuwayki.app) ──────────────
+  app-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuwayki_admin
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      app-landing:
+        condition: service_started
+    environment:
+      ENV: prod
+      APP_SURFACE: owner
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-app}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-sistema_ventas}
+      REDIS_URL: redis://redis:6379/0
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      PUBLIC_SITE_URL: https://tuwayki.app
+      PUBLIC_APP_URL: https://sys.tuwayki.app
+      PUBLIC_OWNER_URL: https://admin.tuwayki.app
+      PUBLIC_API_URL: https://admin.tuwayki.app
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+      # Migraciones las ejecuta app-landing
+      SKIP_MIGRATE: "true"
+    env_file:
+      - .env
+    volumes:
+      - admin_web:/app/.web
+    networks:
+      - internal
+      - npm_network
+
+# ─── Volúmenes persistentes ─────────────────────────────────────────────────
+volumes:
+  mysql_data:
+    name: tuwayki_mysql_data
+  redis_data:
+    name: tuwayki_redis_data
+  landing_web:
+    name: tuwayki_landing_web
+  sys_web:
+    name: tuwayki_sys_web
+  admin_web:
+    name: tuwayki_admin_web
+
+# ─── Redes ───────────────────────────────────────────────────────────────────
+networks:
+  # Red interna: MySQL y Redis solo accesibles internamente
+  internal:
+    driver: bridge
+
+  # Red de NPM: permite que Nginx Proxy Manager enrute tráfico a los contenedores
+  npm_network:
+    external: true
+    name: nginx-proxy-manager_default

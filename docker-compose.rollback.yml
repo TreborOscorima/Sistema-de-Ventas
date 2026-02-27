@@ -1,0 +1,97 @@
+# =============================================================================
+# docker-compose.rollback.yml — TUWAYKI Rollback: superficie única (APP_SURFACE=all)
+#
+# Usar en caso de emergencia para volver al modo monolito.
+# NPM debe apuntar todos los dominios a este único contenedor.
+#
+# Uso:
+#   docker compose -f docker-compose.rollback.yml up -d
+# =============================================================================
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tuwayki_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-sistema_ventas}
+      MYSQL_USER: ${DB_USER:-app}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h localhost -u root -e 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: tuwayki_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - internal
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuwayki_app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENV: prod
+      APP_SURFACE: all
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-app}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME:-sistema_ventas}
+      REDIS_URL: redis://redis:6379/0
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      PUBLIC_SITE_URL: https://tuwayki.app
+      PUBLIC_APP_URL: https://sys.tuwayki.app
+      PUBLIC_OWNER_URL: https://admin.tuwayki.app
+      PUBLIC_API_URL: https://tuwayki.app
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+    env_file:
+      - .env
+    volumes:
+      - reflex_web:/app/.web
+    networks:
+      - internal
+      - npm_network
+
+volumes:
+  mysql_data:
+    name: tuwayki_mysql_data
+  redis_data:
+    name: tuwayki_redis_data
+  reflex_web:
+    name: tuwayki_rollback_web
+
+networks:
+  internal:
+    driver: bridge
+  npm_network:
+    external: true
+    name: nginx-proxy-manager_default
