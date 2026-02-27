@@ -3,10 +3,16 @@
 # scripts/smoke_deploy.sh — Smoke test post-deploy para TUWAYKI
 #
 # Uso:
-#   bash scripts/smoke_deploy.sh                           # Test server local
-#   bash scripts/smoke_deploy.sh http://3.19.234.12        # Test server remoto
-#   bash scripts/smoke_deploy.sh https://tuwayki.app       # Producción
-#   bash scripts/smoke_deploy.sh --domain-split            # Test 3 superficies
+#   bash scripts/smoke_deploy.sh                                    # Local
+#   bash scripts/smoke_deploy.sh http://3.19.234.12:8000            # Test server
+#   bash scripts/smoke_deploy.sh https://tuwayki.app                # Producción
+#   bash scripts/smoke_deploy.sh --domain-split                     # 3 superficies
+#   bash scripts/smoke_deploy.sh http://3.19.234.12:8000 --backend-only  # Solo API
+#
+# Notas:
+#   - Reflex sin nginx: backend en :8000, frontend en :3000
+#   - Con nginx: todo pasa por :80/:443 (proxy a ambos puertos)
+#   - El script auto-detecta la URL del frontend a partir de la del backend
 # =============================================================================
 set -euo pipefail
 
@@ -31,6 +37,14 @@ for arg in "$@"; do
 done
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8000}"
+
+# Auto-detectar URL del frontend (Reflex: backend=8000, frontend=3000)
+# Con nginx (puertos 80/443) el frontend y backend comparten URL
+if [[ "$BASE_URL" =~ :8000$ ]]; then
+    FRONTEND_URL="${BASE_URL/:8000/:3000}"
+else
+    FRONTEND_URL="$BASE_URL"
+fi
 
 info()  { echo -e "${CYAN}[TEST]${NC}  $*"; }
 pass()  { echo -e "${GREEN}[PASS]${NC}  $*"; PASS=$((PASS + 1)); }
@@ -143,20 +157,26 @@ if $DOMAIN_SPLIT; then
 
 else
     # ─── Prueba de superficie única / servidor de prueba ─────────────────
-    info "=== Base: $BASE_URL ==="
-    check_health "$BASE_URL" "Health check"
-    check_url "$BASE_URL/api/ping" 200 "Ping"
+    info "=== Backend: $BASE_URL ==="
+    check_health "$BASE_URL" "Health check (backend)"
+    check_url "$BASE_URL/api/ping" 200 "Ping (backend)"
+    check_url "$BASE_URL/api/health" 200 "Health endpoint (backend)"
 
-    info "=== Páginas principales ==="
+    info "=== Frontend: $FRONTEND_URL ==="
     if $BACKEND_ONLY; then
-        # En modo --backend-only el frontend no se sirve; / devuelve 404 es normal
-        warn_t "Modo --backend-only: saltando prueba de / (frontend no servido)"
+        # En modo --backend-only el frontend no se sirve
+        warn_t "Modo --backend-only: saltando pruebas de frontend"
     else
-        check_url "$BASE_URL/" 200 "Raíz /"
+        check_url "$FRONTEND_URL/" 200 "Raíz / (frontend)"
+        # Verificar que el frontend devuelve HTML
+        local content_type
+        content_type="$(curl -s -o /dev/null -w '%{content_type}' --max-time 10 "$FRONTEND_URL/" 2>/dev/null)"
+        if [[ "$content_type" == *"text/html"* ]]; then
+            pass "Content-Type de / es text/html"
+        else
+            warn_t "Content-Type de / es '$content_type' (esperado: text/html)"
+        fi
     fi
-
-    # Verificar rutas API adicionales
-    check_url "$BASE_URL/api/health" 200 "Health endpoint"
 fi
 
 # ─── Resumen de resultados ───────────────────────────────────────────────────
