@@ -169,7 +169,6 @@ else
     else
         check_url "$FRONTEND_URL/" 200 "Raíz / (frontend)"
         # Verificar que el frontend devuelve HTML
-        local content_type
         content_type="$(curl -s -o /dev/null -w '%{content_type}' --max-time 10 "$FRONTEND_URL/" 2>/dev/null)"
         if [[ "$content_type" == *"text/html"* ]]; then
             pass "Content-Type de / es text/html"
