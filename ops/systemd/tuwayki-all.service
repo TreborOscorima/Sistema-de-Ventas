@@ -4,16 +4,23 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-Group=ubuntu
-WorkingDirectory=/opt/tuwayki
+User=${TUWAYKI_USER:-ubuntu}
+Group=${TUWAYKI_GROUP:-ubuntu}
+WorkingDirectory=${TUWAYKI_APP_DIR:-/opt/tuwayki}
 EnvironmentFile=/etc/tuwayki/all.env
-ExecStart=/bin/bash -lc '/opt/tuwayki/.venv/bin/reflex run --env prod --single-port --frontend-port ${REFLEX_PORT}'
+ExecStart=/bin/bash -lc '${TUWAYKI_APP_DIR:-/opt/tuwayki}/.venv/bin/python -m reflex run --env prod --backend-only --backend-host 0.0.0.0 --backend-port ${REFLEX_PORT}'
 Restart=always
 RestartSec=3
 TimeoutStartSec=120
 TimeoutStopSec=30
 KillSignal=SIGINT
+
+# Seguridad: limitar acceso al sistema de archivos
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=${TUWAYKI_APP_DIR:-/opt/tuwayki}/logs ${TUWAYKI_APP_DIR:-/opt/tuwayki}/.web
+PrivateTmp=true
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target

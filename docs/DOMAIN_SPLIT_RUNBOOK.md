@@ -131,7 +131,21 @@ sudo systemctl reload nginx
 
 ## 5. Validacion inmediata (sin downtime)
 
-Ejecutar:
+Health check por superficie:
+
+```bash
+curl -sf https://tuwayki.app/api/health | python3 -m json.tool
+curl -sf https://sys.tuwayki.app/api/health | python3 -m json.tool
+curl -sf https://admin.tuwayki.app/api/health | python3 -m json.tool
+```
+
+Smoke test automatizado:
+
+```bash
+bash scripts/smoke_deploy.sh --domain-split
+```
+
+O validacion manual:
 
 ```bash
 curl -I https://tuwayki.app/
@@ -182,37 +196,41 @@ Minimo recomendado:
 
 Si hay incidente:
 
-1. Pasar a servicio estable unico (APP_SURFACE=all):
-   - Crear `/etc/tuwayki/all.env` con:
-     ```env
-     APP_SURFACE=all
-     REFLEX_PORT=3200
-     PUBLIC_SITE_URL=https://tuwayki.app
-     PUBLIC_APP_URL=https://sys.tuwayki.app
-     PUBLIC_OWNER_URL=https://admin.tuwayki.app
-     DB_USER=...
-     DB_PASSWORD=...
-     DB_HOST=...
-     DB_PORT=3306
-     DB_NAME=...
-     AUTH_SECRET_KEY=...
-     ```
-   - Instalar y activar `ops/systemd/tuwayki-all.service`:
-     ```bash
-     sudo cp ops/systemd/tuwayki-all.service /etc/systemd/system/tuwayki-all.service
-     sudo systemctl daemon-reload
-     sudo systemctl enable --now tuwayki-all
-     ```
-2. Apagar superficies separadas para evitar colisión:
-   - `sudo systemctl stop tuwayki-surface@landing tuwayki-surface@sys tuwayki-surface@admin`
+1. Pasar a servicio estable unico (APP_SURFACE=all).
+   Crear `/etc/tuwayki/all.env` con variables: `APP_SURFACE=all`, `REFLEX_PORT=3200`,
+   y las mismas variables de DB, auth y URLs publicas del entorno.
+   Instalar y activar:
+
+```bash
+sudo cp ops/systemd/tuwayki-all.service /etc/systemd/system/tuwayki-all.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now tuwayki-all
+```
+
+2. Apagar superficies separadas para evitar colision:
+
+```bash
+sudo systemctl stop tuwayki-surface@landing tuwayki-surface@sys tuwayki-surface@admin
+```
+
 3. Activar Nginx de fallback:
-   - `sudo cp ops/nginx/tuwayki-single-surface.conf /etc/nginx/conf.d/tuwayki-domain-split.conf`
-   - `sudo nginx -t && sudo systemctl reload nginx`
+
+```bash
+sudo cp ops/nginx/tuwayki-single-surface.conf /etc/nginx/conf.d/tuwayki-domain-split.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
 4. Smoke test inmediato:
-   - `curl -I https://tuwayki.app/`
-   - `curl -I https://tuwayki.app/home`
-   - `curl -I https://tuwayki.app/owner/login`
-   - `curl -I https://sys.tuwayki.app/`
-   - `curl -I https://admin.tuwayki.app/login`
+
+```bash
+bash scripts/smoke_deploy.sh --domain-split
+# O manualmente:
+curl -sf https://tuwayki.app/api/health | python3 -m json.tool
+curl -sf https://sys.tuwayki.app/api/health | python3 -m json.tool
+```
+
 5. Mantener DNS sin cambios destructivos y revisar logs:
-   - `sudo journalctl -u tuwayki-all -n 200 --no-pager`
+
+```bash
+sudo journalctl -u tuwayki-all -n 200 --no-pager
+```

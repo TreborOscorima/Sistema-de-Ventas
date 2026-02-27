@@ -28,6 +28,7 @@ from app.pages.dashboard import dashboard_page
 from app.pages.reportes import reportes_page
 from app.pages.owner import owner_page, owner_login_page
 from app.components.notification import NotificationHolder
+from app.api import health_app
 
 APP_SURFACE = (os.getenv("APP_SURFACE") or "all").strip().lower()
 if APP_SURFACE not in {"all", "landing", "app", "owner"}:
@@ -669,6 +670,7 @@ def page_owner_backoffice() -> rx.Component:
 
 app = rx.App(
     theme=rx.theme(appearance="light"),
+    api_transformer=health_app,
     head_components=[
         rx.el.link(rel="preconnect", href="https://fonts.googleapis.com"),
         rx.el.link(rel="preconnect", href="https://fonts.gstatic.com", cross_origin=""),
