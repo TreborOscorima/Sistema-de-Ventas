@@ -171,15 +171,36 @@ class OwnerService:
         per_page: int = 20,
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Lista empresas con búsqueda, paginación y conteos de uso."""
+        def _row_values(row: Any) -> List[Any]:
+            """Normaliza filas SQLAlchemy/SQLModel a lista de valores."""
+            if row is None:
+                return []
+            if isinstance(row, (str, bytes)):
+                # En tests/mocks puede venir un escalar textual (no iterable de columnas).
+                return [row]
+            if isinstance(row, (tuple, list)):
+                return list(row)
+            if isinstance(row, dict):
+                return list(row.values())
+            mapping = getattr(row, "_mapping", None)
+            if mapping is not None:
+                return list(mapping.values())
+            try:
+                return list(row)
+            except TypeError:
+                return [row]
+
         def _single_company_scalar_fallback(rows: list, caster):
             """Compatibilidad con mocks legacy que devuelven escalares."""
             if len(company_ids) != 1 or not rows:
                 return {}
-            first = rows[0]
-            if isinstance(first, (tuple, list)):
+            first_values = _row_values(rows[0])
+            if not first_values:
+                return {}
+            if len(first_values) >= 2:
                 return {}
             try:
-                return {company_ids[0]: caster(first)}
+                return {company_ids[0]: caster(first_values[0])}
             except (TypeError, ValueError):
                 return {}
 
@@ -224,8 +245,9 @@ class OwnerService:
         user_count_rows = user_counts_result.all()
         user_counts = {}
         for row in user_count_rows:
-            if isinstance(row, (tuple, list)) and len(row) >= 2:
-                company_id, count = row[0], row[1]
+            values = _row_values(row)
+            if len(values) >= 2:
+                company_id, count = values[0], values[1]
                 user_counts[int(company_id)] = int(count or 0)
         if not user_counts:
             user_counts = _single_company_scalar_fallback(user_count_rows, lambda v: int(v or 0))
@@ -239,8 +261,9 @@ class OwnerService:
         branch_count_rows = branch_counts_result.all()
         branch_counts = {}
         for row in branch_count_rows:
-            if isinstance(row, (tuple, list)) and len(row) >= 2:
-                company_id, count = row[0], row[1]
+            values = _row_values(row)
+            if len(values) >= 2:
+                company_id, count = values[0], values[1]
                 branch_counts[int(company_id)] = int(count or 0)
         if not branch_counts:
             branch_counts = _single_company_scalar_fallback(branch_count_rows, lambda v: int(v or 0))
@@ -262,8 +285,9 @@ class OwnerService:
         first_user_rows = first_user_result.all()
         admin_emails = {}
         for row in first_user_rows:
-            if isinstance(row, (tuple, list)) and len(row) >= 2:
-                company_id, email = row[0], row[1]
+            values = _row_values(row)
+            if len(values) >= 2:
+                company_id, email = values[0], values[1]
                 admin_emails[int(company_id)] = email or ""
         if not admin_emails:
             admin_emails = _single_company_scalar_fallback(
@@ -288,8 +312,9 @@ class OwnerService:
         first_settings_rows = first_settings_result.all()
         company_phones = {}
         for row in first_settings_rows:
-            if isinstance(row, (tuple, list)) and len(row) >= 2:
-                company_id, phone = row[0], row[1]
+            values = _row_values(row)
+            if len(values) >= 2:
+                company_id, phone = values[0], values[1]
                 company_phones[int(company_id)] = phone or ""
         if not company_phones:
             company_phones = _single_company_scalar_fallback(

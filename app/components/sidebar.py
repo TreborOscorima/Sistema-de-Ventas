@@ -31,7 +31,6 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         & (State.overdue_alerts_count > 0)
     )
     show_badge = has_overdue & State.sidebar_open
-    current_path = State.router.page.path
 
     # Estilos para item activo vs inactivo
     active_class = f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
@@ -42,11 +41,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         "/cuentas?filter=overdue",
         route,
     )
-    is_active = rx.cond(
-        route == "/ingreso",
-        current_path == "/ingreso",
-        current_path == route,
-    )
+    is_active = State.active_page == page
 
     link = rx.link(
         rx.el.div(
@@ -119,11 +114,11 @@ def _submenu_section(
     page_label: str,
     route: str,
     subsections: list,
-    default_key: str,
+    active_tab: rx.Var[str],
 ) -> rx.Component:
     """Renderiza un bloque de submenú si la página y ruta coinciden."""
     return rx.cond(
-        (item["page"] == page_label) & (State.router.page.path == route),
+        (item["page"] == page_label) & (State.active_page == page_label),
         rx.el.div(
             rx.foreach(
                 subsections,
@@ -139,17 +134,7 @@ def _submenu_section(
                     href=route + "?tab=" + section["key"],
                     underline="none",
                     class_name=rx.cond(
-                        (State.router.page.path == route)
-                        & (
-                            (State.router.page.params["tab"] == section["key"])
-                            | (
-                                (section["key"] == default_key)
-                                & (
-                                    (State.router.page.params["tab"] == "")
-                                    | (State.router.page.params["tab"] == None)
-                                )
-                            )
-                        ),
+                        active_tab == section["key"],
                         _SUBMENU_ACTIVE,
                         _SUBMENU_INACTIVE,
                     ),
@@ -330,9 +315,27 @@ def _sidebar_auth_content() -> rx.Component:
                         State.navigation_items,
                         lambda item: rx.el.div(
                             nav_item(item["label"], item["icon"], item["page"], item["route"]),
-                            _submenu_section(item, "Configuracion", "/configuracion", CONFIG_SUBSECTIONS, "usuarios"),
-                            _submenu_section(item, "Gestion de Caja", "/caja", CASH_SUBSECTIONS, "resumen"),
-                            _submenu_section(item, "Servicios", "/servicios", SERVICES_SUBSECTIONS, "campo"),
+                            _submenu_section(
+                                item,
+                                "Configuracion",
+                                "/configuracion",
+                                CONFIG_SUBSECTIONS,
+                                State.config_tab,
+                            ),
+                            _submenu_section(
+                                item,
+                                "Gestion de Caja",
+                                "/caja",
+                                CASH_SUBSECTIONS,
+                                State.cash_tab,
+                            ),
+                            _submenu_section(
+                                item,
+                                "Servicios",
+                                "/servicios",
+                                SERVICES_SUBSECTIONS,
+                                State.service_tab,
+                            ),
                             class_name="flex flex-col gap-0.5 pt-2",
                         ),
                     ),

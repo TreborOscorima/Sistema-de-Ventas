@@ -208,14 +208,7 @@ def config_nav() -> rx.Component:
           href=f"/configuracion?tab={section['key']}",
           underline="none",
           class_name=rx.cond(
-            (State.router.page.params["tab"] == section["key"])
-            | (
-                (section["key"] == "usuarios")
-                & (
-                    (State.router.page.params["tab"] == "")
-                    | (State.router.page.params["tab"] == None)
-                )
-            ),
+            State.config_tab == section["key"],
             "w-full text-left bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-md shadow-sm",
             "w-full text-left bg-white text-slate-700 border px-3 py-2 rounded-md hover:bg-slate-50",
           ),
@@ -1438,7 +1431,7 @@ def configuracion_page() -> rx.Component:
       ),
       rx.el.div(
           rx.match(
-            State.router.page.params["tab"],
+            State.config_tab,
             ("empresa", company_settings_section()),
             ("sucursales", branch_section()),
             ("usuarios", user_section()),

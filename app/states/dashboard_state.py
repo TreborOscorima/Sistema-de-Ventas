@@ -26,7 +26,6 @@ from app.models import (
 from .inventory_state import LOW_STOCK_THRESHOLD
 from app.enums import SaleStatus, ReservationStatus
 from app.services.alert_service import get_alert_summary
-from app.utils.timezone import country_now
 from .mixin_state import MixinState
 
 
@@ -91,21 +90,14 @@ class DashboardState(MixinState):
         self.last_refresh = self._tz_now().strftime("%H:%M:%S")
 
     def _tz_now(self) -> datetime:
-        """Devuelve datetime.now() en la zona horaria de la empresa.
+        """Devuelve el `now` base para filtros del dashboard.
 
-        Usa la configuración de país/timezone del tenant.
-        Si no hay config disponible, cae a datetime.now() (hora local del server).
+        IMPORTANTE:
+        Las ventas y logs se persisten como datetimes naive con `datetime.now()`
+        (reloj del servidor). Para evitar desfasajes de día entre módulos
+        (Dashboard vs Caja), el dashboard debe usar el mismo origen temporal.
         """
-        settings = {}
-        if hasattr(self, "_company_settings_snapshot"):
-            settings = self._company_settings_snapshot()
-        country_code = settings.get("country_code") or getattr(
-            self, "selected_country_code", None
-        )
-        timezone = settings.get("timezone")
-        now = country_now(country_code, timezone=timezone)
-        # Stripea tzinfo para comparar naive con naive (DB almacena naive)
-        return now.replace(tzinfo=None)
+        return datetime.now()
 
     def _get_period_dates(self) -> tuple[datetime, datetime, datetime, datetime]:
         """Obtiene fechas de inicio y fin del período seleccionado y período anterior."""

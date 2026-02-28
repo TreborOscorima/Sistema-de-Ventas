@@ -1,144 +1,95 @@
 #!/usr/bin/env bash
-# Entry point de produccion para el contenedor app.
-# Objetivo:
-# 1) Esperar infraestructura dependiente (MySQL y Redis)
-# 2) Ejecutar migraciones de esquema
-# 3) Arrancar proceso principal (Reflex)
+# =============================================================================
+# docker-entrypoint.sh — Pre-arranque del contenedor TUWAYKI
+#
+# 1. Espera a que MySQL y Redis estén disponibles.
+# 2. Ejecuta migraciones Alembic (upgrade head).
+# 3. Arranca Reflex con los argumentos pasados por CMD.
+# =============================================================================
 set -euo pipefail
 
-# Logger simple con prefijo para leer facil en docker logs
-log() {
-  printf '[entrypoint] %s\n' "$*"
-}
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
 
-# Espera activa de MySQL con reintentos controlados.
-# Variables:
-# - DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
-# - DB_WAIT_MAX_ATTEMPTS, DB_WAIT_SLEEP_SECONDS
-wait_for_mysql() {
-  local host="${DB_HOST:-localhost}"
-  local port="${DB_PORT:-3306}"
-  local user="${DB_USER:-root}"
-  local max_attempts="${DB_WAIT_MAX_ATTEMPTS:-60}"
-  local sleep_seconds="${DB_WAIT_SLEEP_SECONDS:-2}"
+info()  { echo -e "${CYAN}[ENTRYPOINT]${NC} $*"; }
+ok()    { echo -e "${GREEN}[ENTRYPOINT]${NC} $*"; }
+warn()  { echo -e "${YELLOW}[ENTRYPOINT]${NC} $*"; }
+fail()  { echo -e "${RED}[ENTRYPOINT]${NC} $*"; exit 1; }
 
-  log "Esperando MySQL en ${host}:${port}..."
-  # Se usa Python para validar conexion real + SELECT 1.
-  python - "$host" "$port" "$user" "$max_attempts" "$sleep_seconds" <<'PY'
-import sys
-import time
-import pymysql
+# ─── 1. Esperar MySQL ───────────────────────────────────────────────────────
+DB_HOST="${DB_HOST:-mysql}"
+DB_PORT="${DB_PORT:-3306}"
+DB_USER="${DB_USER:-app}"
+MAX_WAIT=120
 
-host = sys.argv[1]
-port = int(sys.argv[2])
-user = sys.argv[3]
-max_attempts = int(sys.argv[4])
-sleep_seconds = float(sys.argv[5])
-
-password = __import__("os").environ.get("DB_PASSWORD", "")
-db_name = __import__("os").environ.get("DB_NAME", "")
-
-for attempt in range(1, max_attempts + 1):
-    try:
-        conn = pymysql.connect(
-            host=host,
-            port=port,
-            user=user,
-            password=password,
-            database=db_name or None,
-            connect_timeout=3,
-            read_timeout=3,
-            write_timeout=3,
-            autocommit=True,
-        )
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-        conn.close()
-        print(f"MySQL listo (attempt={attempt}).")
-        raise SystemExit(0)
-    except Exception as exc:
-        if attempt == max_attempts:
-            print(f"MySQL no disponible tras {max_attempts} intentos: {exc}")
-            raise SystemExit(1)
-        time.sleep(sleep_seconds)
-PY
-}
-
-# Espera opcional de Redis.
-# Si REDIS_URL no existe, se omite sin fallar.
-# Variables:
-# - REDIS_URL
-# - REDIS_WAIT_MAX_ATTEMPTS, REDIS_WAIT_SLEEP_SECONDS
-wait_for_redis() {
-  local redis_url="${REDIS_URL:-}"
-  if [[ -z "${redis_url}" ]]; then
-    log "REDIS_URL no definido. Se omite espera de Redis."
-    return 0
-  fi
-
-  local max_attempts="${REDIS_WAIT_MAX_ATTEMPTS:-40}"
-  local sleep_seconds="${REDIS_WAIT_SLEEP_SECONDS:-2}"
-  log "Esperando Redis (${redis_url})..."
-  # Verificacion TCP para asegurar que el servicio acepta conexiones.
-  python - "$redis_url" "$max_attempts" "$sleep_seconds" <<'PY'
-import sys
-import time
-from urllib.parse import urlparse
+info "Esperando MySQL en ${DB_HOST}:${DB_PORT}..."
+WAITED=0
+while [[ $WAITED -lt $MAX_WAIT ]]; do
+    if python3 -c "
 import socket
+s = socket.socket()
+s.settimeout(2)
+try:
+    s.connect(('${DB_HOST}', ${DB_PORT}))
+    s.close()
+    exit(0)
+except:
+    exit(1)
+" 2>/dev/null; then
+        break
+    fi
+    sleep 2
+    WAITED=$((WAITED + 2))
+done
 
-redis_url = sys.argv[1]
-max_attempts = int(sys.argv[2])
-sleep_seconds = float(sys.argv[3])
+if [[ $WAITED -ge $MAX_WAIT ]]; then
+    fail "MySQL no disponible después de ${MAX_WAIT}s"
+fi
+ok "MySQL disponible"
 
-parsed = urlparse(redis_url)
-host = parsed.hostname or "localhost"
-port = int(parsed.port or 6379)
+# ─── 2. Esperar Redis (si REDIS_URL está configurada) ───────────────────────
+REDIS_URL="${REDIS_URL:-}"
+if [[ -n "$REDIS_URL" ]]; then
+    info "Verificando Redis..."
+    WAITED=0
+    while [[ $WAITED -lt 30 ]]; do
+        if python3 -c "
+import redis, os
+r = redis.from_url(os.environ['REDIS_URL'])
+r.ping()
+" 2>/dev/null; then
+            break
+        fi
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
+    if [[ $WAITED -ge 30 ]]; then
+        warn "Redis no respondió en 30s — continuando de todas formas"
+    else
+        ok "Redis disponible"
+    fi
+fi
 
-for attempt in range(1, max_attempts + 1):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(3.0)
-    try:
-        sock.connect((host, port))
-        sock.close()
-        print(f"Redis listo (attempt={attempt}).")
-        raise SystemExit(0)
-    except Exception as exc:
-        sock.close()
-        if attempt == max_attempts:
-            print(f"Redis no disponible tras {max_attempts} intentos: {exc}")
-            raise SystemExit(1)
-        time.sleep(sleep_seconds)
-PY
-}
+# ─── 3. Migraciones Alembic ─────────────────────────────────────────────────
+SKIP_MIGRATE="${SKIP_MIGRATE:-false}"
+if [[ "$SKIP_MIGRATE" != "true" ]]; then
+    info "Ejecutando migraciones Alembic..."
+    if alembic upgrade head; then
+        ok "Migraciones aplicadas correctamente"
+    else
+        warn "Migraciones fallaron — verificar manualmente"
+    fi
+else
+    warn "Migraciones saltadas (SKIP_MIGRATE=true)"
+fi
 
-# Ejecuta migraciones Alembic antes de iniciar la app.
-# Puede deshabilitarse con SKIP_MIGRATIONS=1.
-run_migrations() {
-  if [[ "${SKIP_MIGRATIONS:-0}" == "1" ]]; then
-    log "SKIP_MIGRATIONS=1, se omiten migraciones."
-    return 0
-  fi
+# ─── 4. Información de arranque ─────────────────────────────────────────────
+SURFACE="${APP_SURFACE:-all}"
+info "Superficie: ${SURFACE}"
+info "Iniciando Reflex: $*"
 
-  if [[ -f "alembic.ini" ]]; then
-    log "Ejecutando migraciones: alembic upgrade head"
-    alembic upgrade head
-    return 0
-  fi
-
-  log "alembic.ini no encontrado, se omiten migraciones."
-}
-
-# Flujo principal de arranque del contenedor.
-main() {
-  # 1) Esperar dependencias
-  wait_for_mysql
-  wait_for_redis
-  # 2) Alinear esquema
-  run_migrations
-
-  # 3) Delegar al comando final del contenedor (CMD)
-  log "Iniciando aplicación: $*"
-  exec "$@"
-}
-
-main "$@"
+# ─── 5. Ejecutar CMD (reflex run ...) ───────────────────────────────────────
+exec "$@"
