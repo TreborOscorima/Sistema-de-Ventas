@@ -153,6 +153,39 @@ class BranchesState(MixinState):
                 if user_id:
                     session.add(UserBranch(user_id=int(user_id), branch_id=branch.id))
                 seed_new_branch_data(session, company_id, branch.id)
+                # Clonar CompanySettings de la sucursal canónica para la nueva
+                from app.models import CompanySettings
+                canonical = session.exec(
+                    select(CompanySettings)
+                    .where(CompanySettings.company_id == company_id)
+                    .order_by(CompanySettings.id)
+                ).first()
+                existing_cs = session.exec(
+                    select(CompanySettings)
+                    .where(CompanySettings.company_id == company_id)
+                    .where(CompanySettings.branch_id == branch.id)
+                ).first()
+                if not existing_cs:
+                    if canonical:
+                        session.add(CompanySettings(
+                            company_id=company_id,
+                            branch_id=branch.id,
+                            company_name=canonical.company_name,
+                            ruc=canonical.ruc,
+                            address=canonical.address,
+                            phone=canonical.phone,
+                            footer_message=canonical.footer_message,
+                            receipt_paper=canonical.receipt_paper,
+                            receipt_width=canonical.receipt_width,
+                            default_currency_code=canonical.default_currency_code,
+                            country_code=canonical.country_code,
+                            timezone=canonical.timezone,
+                        ))
+                    else:
+                        session.add(CompanySettings(
+                            company_id=company_id,
+                            branch_id=branch.id,
+                        ))
                 session.commit()
         except IntegrityError as e:
             logger.error(

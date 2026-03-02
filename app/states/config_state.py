@@ -775,20 +775,20 @@ class ConfigState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        # Persistir la moneda en la base de datos
+        # Persistir la moneda globalmente en todas las filas de la empresa
         with rx.session() as session:
-            settings = session.exec(
+            settings_list = session.exec(
                 select(CompanySettings)
                 .where(CompanySettings.company_id == company_id)
-                .where(CompanySettings.branch_id == branch_id)
-            ).first()
-            if settings:
-                settings.default_currency_code = code
-                session.add(settings)
+            ).all()
+            if settings_list:
+                for settings in settings_list:
+                    settings.default_currency_code = code
+                    session.add(settings)
             else:
                 settings = CompanySettings(
                     company_id=company_id,
-                    branch_id=branch_id,
+                    branch_id=int(branch_id),
                     default_currency_code=code,
                 )
                 session.add(settings)
