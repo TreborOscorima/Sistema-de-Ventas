@@ -209,6 +209,28 @@ fi
 
 ok "Backend respondiendo en puerto $BACKEND_PORT"
 
+# ─── 9b. Esperar al frontend (solo en modo completo) ────────────────────────
+if [[ "$BACKEND_ONLY" != "true" ]]; then
+    FRONTEND_PORT=3000
+    info "Esperando a que el frontend responda en puerto $FRONTEND_PORT (máx 300s)..."
+    FE_WAITED=0
+    FE_MAX=300
+    while [[ $FE_WAITED -lt $FE_MAX ]]; do
+        if curl -sf -o /dev/null "http://127.0.0.1:${FRONTEND_PORT}/"; then
+            break
+        fi
+        sleep 3
+        FE_WAITED=$((FE_WAITED + 3))
+    done
+
+    if [[ $FE_WAITED -ge $FE_MAX ]]; then
+        warn "Frontend no respondió en ${FE_MAX}s — revisando logs..."
+        tail -20 logs/backend.out
+        fail "Frontend no levantó correctamente. Revisar logs/backend.out"
+    fi
+    ok "Frontend respondiendo en puerto $FRONTEND_PORT (tardó ~${FE_WAITED}s)"
+fi
+
 # ─── 10. Health check ───────────────────────────────────────────────────────
 info "Ejecutando health check..."
 HEALTH_RESPONSE="$(curl -sf "http://127.0.0.1:${BACKEND_PORT}/api/health" || echo '{}')"
@@ -231,7 +253,10 @@ echo -e "${GREEN}═════════════════════
 echo ""
 echo "  Commit:    $(git rev-parse --short HEAD)"
 echo "  Branch:    $BRANCH"
-echo "  Puerto:    $BACKEND_PORT"
+echo "  Backend:   http://127.0.0.1:${BACKEND_PORT}"
+if [[ "$BACKEND_ONLY" != "true" ]]; then
+echo "  Frontend:  http://127.0.0.1:3000"
+fi
 echo "  Health:    http://127.0.0.1:${BACKEND_PORT}/api/health"
 echo "  Logs:      $APP_DIR/logs/backend.out"
 echo "  Rollback:  bash scripts/deploy.sh --rollback"
