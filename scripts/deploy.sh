@@ -125,6 +125,17 @@ if ! $IS_ROLLBACK; then
             echo ""
         fi
     fi
+
+    # Auto-limpiar .web/ si hay cambios que afectan al frontend compilado
+    # Esto fuerza a Reflex a recompilar en lugar de servir el build cacheado
+    if [[ "$BACKEND_ONLY" != "true" && "$PREV_COMMIT" != "$NEW_COMMIT" ]]; then
+        NEED_REBUILD="$(git diff --name-only "$PREV_COMMIT" "$NEW_COMMIT" -- 'app/pages/' 'app/components/' 'app/states/' 'app/state.py' 'app/app.py' 'app/enums.py' 'app/constants.py' 'assets/' 'rxconfig.py' '.env' | head -1)"
+        if [[ -n "$NEED_REBUILD" ]]; then
+            info "Cambios de frontend detectados — limpiando build cacheado (.web/)..."
+            rm -rf .web
+            ok "Build anterior limpiado. Reflex recompilará el frontend."
+        fi
+    fi
 fi
 
 # ─── 5. Instalar/actualizar dependencias ────────────────────────────────────
