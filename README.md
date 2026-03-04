@@ -286,10 +286,6 @@ Incluye:
 - Rate limiting con Redis
 - Checklist de producción
 
-Para producción con **dominios tuwayki.app** (landing, sys, admin) y **Nginx Proxy Manager**, ver:
-
-📄 **[docs/NGINX_PROXY_MANAGER.md](docs/NGINX_PROXY_MANAGER.md)** — Proxy Hosts para tuwayki.app, sys.tuwayki.app, admin.tuwayki.app y redirect www.
-
 ### Validación de Contraseñas
 
 Para activar validación robusta de contraseñas en producción, añade a `.env`:
@@ -370,6 +366,5 @@ Para documentación actualizada por capas:
 - Índice documental: `docs/README.md`
 - Guía completa del sistema: `docs/SYSTEM_FULL_DOCUMENTATION.md`
 - Seguridad de despliegue: `docs/DEPLOYMENT_SECURITY.md`
-- Nginx Proxy Manager (tuwayki.app): `docs/NGINX_PROXY_MANAGER.md`
 - Runbook de canary/rollback: `docs/CANARY_ROLLOUT_RUNBOOK.md`
 - Roadmap histórico: `plan.md`
