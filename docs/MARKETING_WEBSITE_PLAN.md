@@ -15,9 +15,10 @@ Convertir visitas de internet en pruebas gratuitas de 15 dias y luego en cliente
 5. Conversion a Standard/Professional.
 
 ## Ruta publica ya implementada
-- Landing comercial en: `/sitio`
-- CTA principal a trial: `/registro`
-- Acceso al sistema: `/`
+- Landing comercial en: `/` (modo `APP_SURFACE=landing`, dominio `tuwayki.app`)
+- Landing en modo desarrollo: `/home` (modo `APP_SURFACE=all`)
+- CTA principal a trial: `/registro` (en `sys.tuwayki.app`)
+- Acceso al sistema: `sys.tuwayki.app`
 
 ## Mensaje comercial recomendado
 - Propuesta de valor:
@@ -37,9 +38,9 @@ Convertir visitas de internet en pruebas gratuitas de 15 dias y luego en cliente
    - operacion con sucursales
 4. FAQ comercial y tecnico.
 5. Politicas:
-   - terminos y condiciones
-   - privacidad
-   - cookies
+   - terminos y condiciones (`/terminos`)
+   - privacidad (`/privacidad`)
+   - cookies (`/cookies`)
 
 ## Tracking minimo (obligatorio)
 Instrumentar eventos:
@@ -54,13 +55,14 @@ Instrumentar eventos:
 
 ### Configuracion productiva de tracking (GA4 + Meta Pixel)
 
-Variables de entorno para habilitar tags en la landing (`/sitio`):
+Variables de entorno para habilitar tags en la landing:
 - `GA4_MEASUREMENT_ID=G-XXXXXXXXXX`
 - `META_PIXEL_ID=123456789012345`
 
 Comportamiento implementado:
 - Si `GA4_MEASUREMENT_ID` existe: carga `gtag.js` y envía eventos custom.
 - Si `META_PIXEL_ID` existe: carga `fbq` y envía `trackCustom`.
+- **Ambos requieren consentimiento explícito del usuario** (banner de cookies).
 - Siempre conserva fallback local (`dataLayer` + `localStorage`) para depuración.
 
 Eventos ya conectados en la landing:
@@ -68,10 +70,11 @@ Eventos ya conectados en la landing:
 - `click_trial_cta` (header, hero, FAQ, banner final y footer)
 
 Validacion rapida:
-1. Abrir `/sitio`.
-2. En DevTools verificar `window.dataLayer` con `view_landing`.
-3. Hacer click en CTA trial y confirmar `click_trial_cta`.
-4. En producción validar en GA4 DebugView y Meta Test Events.
+1. Abrir `/` (con `APP_SURFACE=landing`) o `/home` (con `APP_SURFACE=all`).
+2. Aceptar cookies en el banner de consentimiento.
+3. En DevTools verificar `window.dataLayer` con `view_landing`.
+4. Hacer click en CTA trial y confirmar `click_trial_cta`.
+5. En producción validar en GA4 DebugView y Meta Test Events.
 
 ## KPIs de lanzamiento
 - Conversion Landing -> Trial (%)
