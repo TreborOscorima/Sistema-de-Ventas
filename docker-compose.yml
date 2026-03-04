@@ -16,7 +16,7 @@
 services:
   mysql:
     image: mysql:8.0
-    container_name: sistema_ventas_mysql
+    container_name: tuwayki_mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
@@ -42,7 +42,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: sistema_ventas_redis
+    container_name: tuwayki_redis
     restart: unless-stopped
     volumes:
       - redis_data:/data

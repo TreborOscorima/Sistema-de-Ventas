@@ -35,6 +35,16 @@ docker compose ps
 ```
 Los cinco contenedores (mysql, redis, tuwayki_landing, tuwayki_sys, tuwayki_admin) deben estar `Up` y (salvo los app) `healthy`. Si alguno reinicia, revisar logs: `docker compose logs -f tuwayki_landing` (o el servicio que falle).
 
+**Si los app muestran "MySQL no disponible después de 120s":** Los contenedores de la app deben estar en la misma red que MySQL. Verificar:
+```bash
+# Nombre de la red interna (sustituir sist-ventas-trebor por tu nombre de proyecto si aplica)
+docker network ls | grep internal
+
+# Que mysql y tuwayki_landing estén en esa red
+docker network inspect sist-ventas-trebor_internal_net
+```
+En `Containers` deben aparecer `sistema_ventas_mysql`, `tuwayki_landing`, `tuwayki_sys` y `tuwayki_admin`. Si no, revisar que en `docker-compose.yml` los servicios app tengan `networks: - internal_net` (y `- npm_network`). Tras cambiar el entrypoint (sleep inicial), reconstruir: `docker compose build tuwayki_landing tuwayki_sys tuwayki_admin && docker compose up -d`.
+
 ---
 
 ## Red y requisitos
