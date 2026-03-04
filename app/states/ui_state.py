@@ -5,7 +5,7 @@ from .mixin_state import MixinState
 
 # Mapeo de rutas a páginas
 ROUTE_TO_PAGE = {
-    "/": "Ingreso",
+    "/": "Dashboard",
     "/dashboard": "Dashboard",
     "/ingreso": "Ingreso",
     "/compras": "Compras",
@@ -147,7 +147,7 @@ class UIState(MixinState):
         # Si no, usar el primero permitido.
         if self.allowed_pages:
             return self.allowed_pages[0]
-        return "Ingreso"
+        return "Dashboard"
 
     @rx.event
     def toggle_sidebar(self):

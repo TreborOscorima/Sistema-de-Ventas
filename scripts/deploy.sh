@@ -3,9 +3,14 @@
 # scripts/deploy.sh — Deploy unificado para TUWAYKI Sistema de Ventas
 #
 # Uso:
-#   bash scripts/deploy.sh              # Deploy estándar (test server)
+#   bash scripts/deploy.sh              # Deploy COMPLETO (backend + frontend)
 #   bash scripts/deploy.sh --prod       # Deploy producción (extra validaciones)
 #   bash scripts/deploy.sh --rollback   # Rollback al commit anterior
+#   bash scripts/deploy.sh --backend-only  # SOLO backend (API/WS). Usar
+#                                          # únicamente cuando los cambios NO
+#                                          # tocan páginas, componentes ni assets.
+#                                          # Si hay cambios de UI, usar deploy
+#                                          # completo (sin --backend-only).
 #
 # Variables de entorno opcionales:
 #   APP_DIR       Directorio de la app (default: directorio del script/../)
@@ -104,6 +109,33 @@ if ! $IS_ROLLBACK; then
     if [[ "$PREV_COMMIT" == "$NEW_COMMIT" ]]; then
         warn "Sin cambios nuevos (mismo commit)"
     fi
+
+    # Detectar si hay cambios en frontend (páginas/componentes) y avisar si --backend-only
+    if [[ "$BACKEND_ONLY" == "true" && "$PREV_COMMIT" != "$NEW_COMMIT" ]]; then
+        FRONTEND_CHANGES="$(git diff --name-only "$PREV_COMMIT" "$NEW_COMMIT" -- 'app/pages/' 'app/components/' 'assets/' 'rxconfig.py' | head -5)"
+        if [[ -n "$FRONTEND_CHANGES" ]]; then
+            echo ""
+            warn "╔══════════════════════════════════════════════════════════╗"
+            warn "║  HAY CAMBIOS EN FRONTEND pero estás usando --backend-only  ║"
+            warn "║  Los cambios en páginas/componentes NO se verán hasta     ║"
+            warn "║  que re-deploys SIN --backend-only (compila frontend).    ║"
+            warn "╚══════════════════════════════════════════════════════════╝"
+            echo "  Archivos cambiados:"
+            echo "$FRONTEND_CHANGES" | sed 's/^/    /'
+            echo ""
+        fi
+    fi
+
+    # Auto-limpiar .web/ si hay cambios que afectan al frontend compilado
+    # Esto fuerza a Reflex a recompilar en lugar de servir el build cacheado
+    if [[ "$BACKEND_ONLY" != "true" && "$PREV_COMMIT" != "$NEW_COMMIT" ]]; then
+        NEED_REBUILD="$(git diff --name-only "$PREV_COMMIT" "$NEW_COMMIT" -- 'app/pages/' 'app/components/' 'app/states/' 'app/state.py' 'app/app.py' 'app/enums.py' 'app/constants.py' 'assets/' 'rxconfig.py' '.env' | head -1)"
+        if [[ -n "$NEED_REBUILD" ]]; then
+            info "Cambios de frontend detectados — limpiando build cacheado (.web/)..."
+            rm -rf .web
+            ok "Build anterior limpiado. Reflex recompilará el frontend."
+        fi
+    fi
 fi
 
 # ─── 5. Instalar/actualizar dependencias ────────────────────────────────────
@@ -131,6 +163,11 @@ info "Deteniendo procesos anteriores..."
 fuser -k "$BACKEND_PORT/tcp" 2>/dev/null || true
 pkill -f "reflex run" 2>/dev/null || true
 pkill -f "granian" 2>/dev/null || true
+# Siempre matar procesos bun/next zombie (evita frontend stale)
+pkill -f "bun run prod" 2>/dev/null || true
+pkill -f "bun run dev" 2>/dev/null || true
+pkill -f "next-server" 2>/dev/null || true
+fuser -k "3000/tcp" 2>/dev/null || true
 sleep 2
 # Verificar que el puerto está libre
 if ss -ltnp 2>/dev/null | grep -q ":${BACKEND_PORT} "; then
@@ -183,6 +220,28 @@ fi
 
 ok "Backend respondiendo en puerto $BACKEND_PORT"
 
+# ─── 9b. Esperar al frontend (solo en modo completo) ────────────────────────
+if [[ "$BACKEND_ONLY" != "true" ]]; then
+    FRONTEND_PORT=3000
+    info "Esperando a que el frontend responda en puerto $FRONTEND_PORT (máx 300s)..."
+    FE_WAITED=0
+    FE_MAX=300
+    while [[ $FE_WAITED -lt $FE_MAX ]]; do
+        if curl -sf -o /dev/null "http://127.0.0.1:${FRONTEND_PORT}/"; then
+            break
+        fi
+        sleep 3
+        FE_WAITED=$((FE_WAITED + 3))
+    done
+
+    if [[ $FE_WAITED -ge $FE_MAX ]]; then
+        warn "Frontend no respondió en ${FE_MAX}s — revisando logs..."
+        tail -20 logs/backend.out
+        fail "Frontend no levantó correctamente. Revisar logs/backend.out"
+    fi
+    ok "Frontend respondiendo en puerto $FRONTEND_PORT (tardó ~${FE_WAITED}s)"
+fi
+
 # ─── 10. Health check ───────────────────────────────────────────────────────
 info "Ejecutando health check..."
 HEALTH_RESPONSE="$(curl -sf "http://127.0.0.1:${BACKEND_PORT}/api/health" || echo '{}')"
@@ -205,7 +264,10 @@ echo -e "${GREEN}═════════════════════
 echo ""
 echo "  Commit:    $(git rev-parse --short HEAD)"
 echo "  Branch:    $BRANCH"
-echo "  Puerto:    $BACKEND_PORT"
+echo "  Backend:   http://127.0.0.1:${BACKEND_PORT}"
+if [[ "$BACKEND_ONLY" != "true" ]]; then
+echo "  Frontend:  http://127.0.0.1:3000"
+fi
 echo "  Health:    http://127.0.0.1:${BACKEND_PORT}/api/health"
 echo "  Logs:      $APP_DIR/logs/backend.out"
 echo "  Rollback:  bash scripts/deploy.sh --rollback"

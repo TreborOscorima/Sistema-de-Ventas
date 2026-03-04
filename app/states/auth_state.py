@@ -1695,7 +1695,7 @@ class AuthState(MixinState):
                     self.needs_initial_admin = False
                     if must_change_password:
                         return rx.redirect("/cambiar-clave")
-                    return rx.redirect("/")
+                    return rx.redirect("/dashboard")
 
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
@@ -1803,7 +1803,7 @@ class AuthState(MixinState):
                     return rx.redirect("/cuenta-suspendida")
                 if getattr(user, "must_change_password", False):
                     return rx.redirect("/cambiar-clave")
-                return rx.redirect("/")
+                return rx.redirect("/dashboard")
 
         # Login fallido: registrar intento
         _record_failed_attempt(identifier, ip_address=client_ip)
