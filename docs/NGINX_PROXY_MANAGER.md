@@ -61,6 +61,39 @@ Para ver el nombre de la red de NPM: `docker network ls` y localizar la red del 
 
 ---
 
+## Si el landing (o sys/admin) no se muestra
+
+1. **Logs del contenedor sin “colgar”** (las últimas líneas):
+   ```bash
+   docker logs --tail 80 tuwayki_landing
+   ```
+   Debe terminar con Reflex en marcha (ej. “Compiling … 100%” o “Listening”). Si ves errores o reinicios, ese es el problema.
+
+2. **Que el contenedor esté en la red de NPM:**
+   ```bash
+   docker network inspect nginx-proxy-manager_default
+   ```
+   En `Containers` debe aparecer **tuwayki_landing** (y tuwayki_sys, tuwayki_admin). Si no está, el compose debe tener `networks: - npm_network` para ese servicio y la red debe existir.
+
+3. **Comprobar que NPM llega al contenedor** (desde el host):
+   ```bash
+   docker run --rm --network nginx-proxy-manager_default curlimages/curl:latest curl -s -o /dev/null -w "%{http_code}" http://tuwayki_landing:3000/
+   ```
+   Debe devolver **200** (o 302 si redirige). Si falla o timeout, el problema es red/contenedor, no NPM.
+
+4. **Revisar el Proxy Host en NPM:**
+   - **Domain Names:** exactamente `tuwayki.app` (sin www para el host del landing).
+   - **Forward Hostname:** exactamente `tuwayki_landing` (mismo nombre que el contenedor; distinto a tuwayki_sys / tuwayki_admin).
+   - **Forward Port:** `3000`.
+   - **Scheme:** `http` (NPM termina SSL y habla HTTP con el contenedor).
+   - **Websockets Support:** ON.
+
+5. **DNS:** En tu PC o móvil, `tuwayki.app` debe resolver a la IP del servidor donde corre NPM (la misma que tiene los contenedores). Comprueba con `ping tuwayki.app` o `nslookup tuwayki.app`.
+
+6. **Certificado SSL:** Si usas “Request a new certificate”, el primer acceso puede tardar hasta que Let’s Encrypt emita el cert. Revisa en NPM que el proxy esté en verde (certificado válido) y sin errores en el log del proxy.
+
+---
+
 ## 1. Proxy Host — Landing (tuwayki.app)
 
 | Campo | Valor |
