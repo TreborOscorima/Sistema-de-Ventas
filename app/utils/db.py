@@ -56,7 +56,8 @@ register_tenant_listeners()
 @asynccontextmanager
 async def get_async_session() -> AsyncIterator[AsyncSession]:
     """Context manager asíncrono para obtener una sesión de base de datos."""
-    logger.info("🚀 Iniciando Transacción ASÍNCRONA...")
+    # Evita I/O de logs por cada sesión en producción/carga alta.
+    logger.debug("Iniciando transacción asíncrona.")
     try:
         async with AsyncSessionLocal() as session:
             try:

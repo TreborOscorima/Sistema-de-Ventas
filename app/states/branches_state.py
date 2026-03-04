@@ -5,7 +5,11 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
-from app.models import Branch, Company, User as UserModel, UserBranch, Sale, Purchase, CashboxSession, Product
+from app.models import (
+    Branch, Company, User as UserModel, UserBranch,
+    Sale, Purchase, CashboxSession, Product,
+    Category, CashboxLog, Client,
+)
 from app.utils.db_seeds import seed_new_branch_data
 from app.utils.logger import get_logger
 from app.utils.tenant import set_tenant_context
@@ -335,22 +339,32 @@ class BranchesState(MixinState):
                 return rx.toast("No puedes eliminar la única sucursal.", duration=3000)
             if current_branch and int(current_branch) == branch_id_int:
                 return rx.toast("No puedes eliminar la sucursal activa.", duration=3000)
+
+            # Verificar todas las tablas dependientes
             if session.exec(
                 select(Sale.id).where(Sale.branch_id == branch_id_int)
             ).first():
-                return rx.toast("No puedes eliminar una sucursal con ventas.", duration=3000)
+                return rx.toast("No puedes eliminar una sucursal con ventas registradas.", duration=3000)
             if session.exec(
                 select(Purchase.id).where(Purchase.branch_id == branch_id_int)
             ).first():
-                return rx.toast("No puedes eliminar una sucursal con compras.", duration=3000)
+                return rx.toast("No puedes eliminar una sucursal con compras registradas.", duration=3000)
             if session.exec(
                 select(CashboxSession.id).where(CashboxSession.branch_id == branch_id_int)
             ).first():
-                return rx.toast("No puedes eliminar una sucursal con caja registrada.", duration=3000)
+                return rx.toast("No puedes eliminar una sucursal con sesiones de caja.", duration=3000)
+            if session.exec(
+                select(CashboxLog.id).where(CashboxLog.branch_id == branch_id_int)
+            ).first():
+                return rx.toast("No puedes eliminar una sucursal con movimientos de caja.", duration=3000)
             if session.exec(
                 select(Product.id).where(Product.branch_id == branch_id_int)
             ).first():
                 return rx.toast("No puedes eliminar una sucursal con inventario.", duration=3000)
+            if session.exec(
+                select(Client.id).where(Client.branch_id == branch_id_int)
+            ).first():
+                return rx.toast("No puedes eliminar una sucursal con clientes registrados.", duration=3000)
 
             branch = session.exec(
                 select(Branch)
@@ -359,12 +373,31 @@ class BranchesState(MixinState):
             ).first()
             if not branch:
                 return rx.toast("Sucursal no encontrada.", duration=2500)
+
+            # Limpiar relaciones auxiliares y eliminar
             for member in session.exec(
                 select(UserBranch).where(UserBranch.branch_id == branch_id_int)
             ).all():
                 session.delete(member)
-            session.delete(branch)
-            session.commit()
+            # Eliminar categorías huérfanas (sin productos asociados)
+            for cat in session.exec(
+                select(Category).where(Category.branch_id == branch_id_int)
+            ).all():
+                session.delete(cat)
+            try:
+                session.delete(branch)
+                session.commit()
+            except IntegrityError:
+                session.rollback()
+                logger.warning(
+                    "IntegrityError al eliminar sucursal %s — tiene datos asociados",
+                    branch_id_int,
+                )
+                return rx.toast(
+                    "No se puede eliminar esta sucursal porque tiene datos asociados. "
+                    "Verifique que no tenga registros pendientes.",
+                    duration=4000,
+                )
         self.load_branches()
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
@@ -395,6 +428,7 @@ class BranchesState(MixinState):
             users = session.exec(
                 select(UserModel)
                 .where(UserModel.company_id == company_id)
+                .where(UserModel.is_active == True)  # noqa: E712
                 .options(selectinload(UserModel.role))
                 .order_by(UserModel.username)
             ).all()
@@ -463,6 +497,7 @@ class BranchesState(MixinState):
             company_users = session.exec(
                 select(UserModel.id, UserModel.username)
                 .where(UserModel.company_id == company_id)
+                .where(UserModel.is_active == True)  # noqa: E712
             ).all()
             company_user_ids = {int(row[0]) for row in company_users if row and row[0]}
             username_by_id = {

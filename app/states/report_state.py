@@ -41,8 +41,8 @@ class ReportState(MixinState):
     report_loading: bool = False
     report_error: str = ""
     report_ready: bool = False
-    _report_download_data: bytes = b""
-    _report_download_filename: str = ""
+    _report_download_data: bytes = rx.field(default=b"", is_var=False)
+    _report_download_filename: str = rx.field(default="", is_var=False)
 
     # Opciones de reporte
     include_cancelled: bool = False

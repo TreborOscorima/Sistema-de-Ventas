@@ -71,8 +71,8 @@ class DashboardState(MixinState):
     # Estado de carga
     dashboard_loading: bool = False
     last_refresh: str = ""
-    _last_dashboard_load_ts: float = 0.0
-    _DASHBOARD_TTL: float = 30.0
+    _last_dashboard_load_ts: float = rx.field(default=0.0, is_var=False)
+    _DASHBOARD_TTL: float = rx.field(default=30.0, is_var=False)
 
     def set_loading(self, loading: bool):
         """Establece el estado de carga."""

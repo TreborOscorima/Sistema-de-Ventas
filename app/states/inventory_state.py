@@ -25,7 +25,7 @@ import logging
 import io
 from decimal import Decimal, InvalidOperation
 from sqlmodel import select
-from sqlalchemy import and_, or_, func, exists
+from sqlalchemy import and_, or_, func, exists, literal, union_all
 from sqlalchemy.orm import selectinload
 from app.models import (
     Product,
@@ -224,16 +224,77 @@ class InventoryState(MixinState):
             "stock_total_display": f"{stock_total:.2f}",
         }
 
+    def _inventory_search_count(
+        self,
+        session,
+        search: str,
+        company_id: int,
+        branch_id: int,
+    ) -> int:
+        """Count total matching rows for search using SQL COUNT (no row loading)."""
+        term = f"%{search}%"
+        variant_count = int(
+            session.exec(
+                select(func.count(ProductVariant.id))
+                .join(Product, ProductVariant.product_id == Product.id)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(
+                    or_(
+                        ProductVariant.sku.ilike(term),
+                        ProductVariant.size.ilike(term),
+                        ProductVariant.color.ilike(term),
+                        Product.description.ilike(term),
+                        Product.barcode.ilike(term),
+                        Product.category.ilike(term),
+                    )
+                )
+            ).one()
+            or 0
+        )
+        no_variant = ~exists().where(ProductVariant.product_id == Product.id).where(
+            ProductVariant.company_id == company_id
+        ).where(ProductVariant.branch_id == branch_id)
+        product_count = int(
+            session.exec(
+                select(func.count(Product.id))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(no_variant)
+                .where(
+                    or_(
+                        Product.description.ilike(term),
+                        Product.barcode.ilike(term),
+                        Product.category.ilike(term),
+                    )
+                )
+            ).one()
+            or 0
+        )
+        return variant_count + product_count
+
     def _inventory_search_rows(
         self,
         session,
         search: str,
         company_id: int,
         branch_id: int,
+        offset: int = 0,
+        per_page: int = 20,
     ) -> List[Dict[str, Any]]:
+        """Fetch one page of search results via SQL UNION ALL + OFFSET/LIMIT."""
         term = f"%{search}%"
-        variant_query = (
-            select(ProductVariant, Product)
+
+        # Variant IDs matching search
+        variant_ids_q = (
+            select(
+                Product.id.label("pid"),
+                ProductVariant.id.label("vid"),
+                Product.description.label("sort_desc"),
+                func.coalesce(ProductVariant.sku, Product.barcode).label("sort_code"),
+            )
             .join(Product, ProductVariant.product_id == Product.id)
             .where(ProductVariant.company_id == company_id)
             .where(ProductVariant.branch_id == branch_id)
@@ -249,19 +310,19 @@ class InventoryState(MixinState):
                     Product.category.ilike(term),
                 )
             )
-            .order_by(Product.description, ProductVariant.sku)
         )
 
-        variant_rows = [
-            self._inventory_row_from_variant(parent, variant)
-            for variant, parent in session.exec(variant_query).all()
-        ]
-
+        # Standalone product IDs matching search (no variants)
         no_variant = ~exists().where(ProductVariant.product_id == Product.id).where(
             ProductVariant.company_id == company_id
         ).where(ProductVariant.branch_id == branch_id)
-        product_query = (
-            select(Product)
+        product_ids_q = (
+            select(
+                Product.id.label("pid"),
+                literal(None).label("vid"),
+                Product.description.label("sort_desc"),
+                Product.barcode.label("sort_code"),
+            )
             .where(Product.company_id == company_id)
             .where(Product.branch_id == branch_id)
             .where(no_variant)
@@ -272,20 +333,54 @@ class InventoryState(MixinState):
                     Product.category.ilike(term),
                 )
             )
-            .order_by(Product.description, Product.id)
         )
-        product_rows = [
-            self._inventory_row_from_product(product)
-            for product in session.exec(product_query).all()
-        ]
 
-        rows = [*variant_rows, *product_rows]
-        rows.sort(
-            key=lambda row: (
-                str(row.get("description") or "").lower(),
-                str(row.get("barcode") or "").lower(),
-            )
+        # SQL UNION ALL with ORDER BY + OFFSET + LIMIT
+        unioned = union_all(variant_ids_q, product_ids_q).subquery()
+        page_q = (
+            select(unioned.c.pid, unioned.c.vid)
+            .order_by(unioned.c.sort_desc, unioned.c.sort_code)
+            .offset(offset)
+            .limit(per_page)
         )
+        page_id_rows = session.exec(page_q).all()
+
+        if not page_id_rows:
+            return []
+
+        # Batch fetch ORM objects for this page only
+        product_ids_needed = list({r[0] for r in page_id_rows})
+        variant_ids_needed = [r[1] for r in page_id_rows if r[1] is not None]
+
+        products_map = {
+            p.id: p
+            for p in session.exec(
+                select(Product).where(Product.id.in_(product_ids_needed))
+            ).all()
+        }
+        variants_map = {}
+        if variant_ids_needed:
+            variants_map = {
+                v.id: v
+                for v in session.exec(
+                    select(ProductVariant).where(
+                        ProductVariant.id.in_(variant_ids_needed)
+                    )
+                ).all()
+            }
+
+        # Build rows preserving SQL sort order
+        rows: List[Dict[str, Any]] = []
+        for pid, vid in page_id_rows:
+            product = products_map.get(pid)
+            if not product:
+                continue
+            if vid is not None:
+                variant = variants_map.get(vid)
+                if variant:
+                    rows.append(self._inventory_row_from_variant(product, variant))
+            else:
+                rows.append(self._inventory_row_from_product(product))
         return rows
 
     def _refresh_inventory_cache(self):
@@ -316,10 +411,9 @@ class InventoryState(MixinState):
 
         with rx.session() as session:
             if search:
-                rows = self._inventory_search_rows(
+                total_items = self._inventory_search_count(
                     session, search, company_id, branch_id
                 )
-                total_items = len(rows)
                 total_pages = (
                     1 if total_items == 0 else (total_items + per_page - 1) // per_page
                 )
@@ -327,7 +421,10 @@ class InventoryState(MixinState):
                     page = total_pages
                     self.inventory_current_page = page
                 offset = (page - 1) * per_page
-                page_rows = rows[offset : offset + per_page]
+                page_rows = self._inventory_search_rows(
+                    session, search, company_id, branch_id,
+                    offset=offset, per_page=per_page,
+                )
             else:
                 total_items = int(
                     session.exec(
