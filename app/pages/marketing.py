@@ -56,14 +56,11 @@ def _analytics_bootstrap_script() -> str:
     pixel_id = META_PIXEL_ID.replace("'", "\\'")
     return (
         "(function(){"
-        "if(window.__tuwayAnalyticsReady){return;}"
-        "window.__tuwayAnalyticsReady=true;"
         f"var ga4Id='{ga4_id}';"
         f"var metaPixelId='{pixel_id}';"
-        # --- Cookie consent gate: only load third-party scripts if user accepted ---
-        "var consent=localStorage.getItem('tw_cookie_consent');"
-        "var allowAnalytics=(consent==='all');"
-        "if(allowAnalytics && ga4Id){"
+        # --- Expose a reusable loader so the consent button can call it ---
+        "window.__twLoadAnalytics=window.__twLoadAnalytics||function(){"
+        "if(ga4Id){"
         "window.dataLayer=window.dataLayer||[];"
         "window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};"
         "if(!window.__twGa4Loaded){"
@@ -73,7 +70,7 @@ def _analytics_bootstrap_script() -> str:
         "window.__twGa4Loaded=true;"
         "}"
         "}"
-        "if(allowAnalytics && metaPixelId && !window.__twMetaLoaded){"
+        "if(metaPixelId && !window.__twMetaLoaded){"
         "!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?"
         "n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;"
         "n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;"
@@ -82,6 +79,8 @@ def _analytics_bootstrap_script() -> str:
         "window.fbq('init',metaPixelId);"
         "window.__twMetaLoaded=true;"
         "}"
+        "};"
+        # --- tuwayTrack always available (local fallback even without consent) ---
         "window.tuwayTrack=window.tuwayTrack||function(name,payload){"
         "payload=payload||{};"
         "var data=Object.assign({event:name,page:window.location.pathname,ts:new Date().toISOString()},payload);"
@@ -91,6 +90,10 @@ def _analytics_bootstrap_script() -> str:
         "if(typeof window.fbq==='function'){window.fbq('trackCustom',name,data);}"
         "try{var q=JSON.parse(localStorage.getItem('tuway_events')||'[]');q.push(data);localStorage.setItem('tuway_events',JSON.stringify(q.slice(-200)));}catch(e){}"
         "};"
+        # --- Auto-load analytics if user already consented previously ---
+        "var consent=localStorage.getItem('tw_cookie_consent');"
+        "if(consent==='all'){window.__twLoadAnalytics();}"
+        # --- Track landing view (always, uses local fallback if no consent) ---
         "try{if(!sessionStorage.getItem('tw_view_landing_sent')){window.tuwayTrack('view_landing',{source:'landing'});sessionStorage.setItem('tw_view_landing_sent','1');}}"
         "catch(e){window.tuwayTrack('view_landing',{source:'landing'});}"
         "})();"
@@ -115,9 +118,7 @@ def _cookie_accept_all_script() -> str:
     return (
         "localStorage.setItem('tw_cookie_consent','all');"
         "document.getElementById('tw-cookie-banner').style.display='none';"
-        "window.__tuwayAnalyticsReady=false;"
-        + _analytics_bootstrap_script().replace("(function(){", "").rstrip(")();").rstrip("}") + "}"
-        + "})();"
+        "if(typeof window.__twLoadAnalytics==='function'){window.__twLoadAnalytics();}"
     )
 
 
