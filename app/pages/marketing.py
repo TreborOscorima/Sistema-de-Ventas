@@ -1109,7 +1109,8 @@ def _cta_section() -> rx.Component:
                     style={"fontFamily": "'Space Grotesk', sans-serif"},
                 ),
                 rx.el.p(
-                    "Activa tu prueba de 15 dias sin tarjeta. Centraliza ventas, inventario, caja y reservas desde hoy.",
+                    "Activa tu prueba de 15 dias sin tarjeta. Centraliza ventas, inventario, caja y reservas ",
+                    rx.el.span("desde hoy.", class_name="whitespace-nowrap"),
                     class_name="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base",
                 ),
                 rx.el.div(
@@ -1123,7 +1124,7 @@ def _cta_section() -> rx.Component:
                         on_click=rx.call_script(_track_event_script("click_demo_cta", "bottom_banner_secondary_cta")),
                         class_name="inline-flex items-center justify-center rounded-xl border border-slate-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800",
                     ),
-                    class_name="mt-8 flex flex-col gap-3 sm:flex-row",
+                    class_name="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center",
                 ),
                 class_name="reveal mx-auto w-full max-w-7xl overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 px-8 py-14 sm:px-12 sm:py-16 shadow-2xl",
             ),
