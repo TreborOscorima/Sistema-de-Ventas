@@ -1,54 +1,17 @@
 """Página de Política de Cookies — TUWAYKIAPP."""
 
-import os
-
 import reflex as rx
 
-PUBLIC_SITE_URL = (os.getenv("PUBLIC_SITE_URL") or "https://tuwayki.app").strip().rstrip("/")
+from app.components.legal_layout import legal_page_shell
 
 LAST_UPDATED = "4 de marzo de 2026"
 
 
-def _legal_header() -> rx.Component:
-    return rx.el.header(
-        rx.el.div(
-            rx.el.a(
-                rx.icon("box", class_name="h-7 w-7 text-indigo-600"),
-                rx.el.span("TUWAYKIAPP", class_name="text-lg font-extrabold tracking-tight text-slate-900"),
-                href="/",
-                class_name="inline-flex items-center gap-2.5",
-            ),
-            class_name="mx-auto flex w-full max-w-4xl items-center px-4 py-4 sm:px-6 lg:px-8",
-        ),
-        class_name="border-b border-slate-200 bg-white",
-    )
-
-
-def _back_link() -> rx.Component:
-    return rx.el.a(
-        rx.icon("arrow-left", class_name="h-4 w-4"),
-        "Volver al inicio",
-        href="/",
-        class_name="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors",
-    )
-
-
 def cookies_page() -> rx.Component:
     """Página pública de Política de Cookies."""
-    return rx.el.div(
-        _legal_header(),
-        rx.el.main(
-            rx.el.div(
-                _back_link(),
-                rx.el.h1(
-                    "Política de Cookies",
-                    class_name="mt-6 text-3xl font-extrabold tracking-tight text-slate-900",
-                ),
-                rx.el.p(
-                    f"Última actualización: {LAST_UPDATED}",
-                    class_name="mt-2 text-sm text-slate-500",
-                ),
-                rx.el.div(
+    return legal_page_shell(
+        "Política de Cookies",
+        LAST_UPDATED,
                     # 1. ¿Qué son las cookies?
                     rx.el.h2("1. ¿Qué son las Cookies?", class_name="text-xl font-bold text-slate-900 mt-8"),
                     rx.el.p(
@@ -201,21 +164,4 @@ def cookies_page() -> rx.Component:
                         class_name="mt-2 list-disc pl-6 space-y-1 text-slate-700",
                     ),
 
-                    class_name="prose max-w-none",
-                ),
-                class_name="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 lg:px-8",
-            ),
-            class_name="min-h-screen bg-slate-50",
-        ),
-        rx.el.footer(
-            rx.el.div(
-                rx.el.p(
-                    "TUWAYKIAPP © 2026. Todos los derechos reservados.",
-                    class_name="text-sm text-slate-500 text-center",
-                ),
-                class_name="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8",
-            ),
-            class_name="border-t border-slate-200 bg-white",
-        ),
-        class_name="min-h-screen bg-slate-50",
     )

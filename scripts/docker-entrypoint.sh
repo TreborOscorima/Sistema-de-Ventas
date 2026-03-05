@@ -19,11 +19,6 @@ ok()    { echo -e "${GREEN}[ENTRYPOINT]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[ENTRYPOINT]${NC} $*"; }
 fail()  { echo -e "${RED}[ENTRYPOINT]${NC} $*"; exit 1; }
 
-# Dar tiempo a Docker a adjuntar el contenedor a la red (evita que "mysql" no resuelva al arrancar).
-# Sin esto, los app pueden quedarse en "Esperando MySQL" si arrancan justo después del healthcheck.
-info "Esperando 10s para que la red esté lista..."
-sleep 10
-
 # ─── 1. Esperar MySQL ───────────────────────────────────────────────────────
 DB_HOST="${DB_HOST:-mysql}"
 DB_PORT="${DB_PORT:-3306}"
