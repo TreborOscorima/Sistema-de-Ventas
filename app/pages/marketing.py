@@ -195,7 +195,7 @@ def _reveal_script() -> str:
         "entries.forEach(function(e){"
         "if(e.isIntersecting){e.target.classList.add('in-view');io.unobserve(e.target);}"
         "});"
-        "},{threshold:0.08,rootMargin:'0px 0px -5% 0px'});"
+        "},{threshold:0.01,rootMargin:'0px 0px 80px 0px'});"
         "els.forEach(function(el){io.observe(el);});"
         "},300);"
     )
@@ -234,21 +234,21 @@ def _global_styles() -> str:
 }
 @media (prefers-reduced-motion: no-preference) {
   .reveal {
-    opacity: 0; transform: translateY(16px);
-    transition: opacity 500ms ease, transform 500ms ease;
+    opacity: 0; transform: translateY(12px);
+    transition: opacity 350ms ease, transform 350ms ease;
   }
   .reveal.in-view { opacity: 1; transform: none; }
   .reveal-stagger > * {
-    opacity: 0; transform: translateY(12px);
-    transition: opacity 400ms ease, transform 400ms ease;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity 300ms ease, transform 300ms ease;
   }
   .reveal-stagger.in-view > * { opacity: 1; transform: none; }
-  .reveal-stagger.in-view > *:nth-child(1) { transition-delay: 50ms; }
-  .reveal-stagger.in-view > *:nth-child(2) { transition-delay: 100ms; }
-  .reveal-stagger.in-view > *:nth-child(3) { transition-delay: 150ms; }
-  .reveal-stagger.in-view > *:nth-child(4) { transition-delay: 200ms; }
-  .reveal-stagger.in-view > *:nth-child(5) { transition-delay: 250ms; }
-  .reveal-stagger.in-view > *:nth-child(6) { transition-delay: 300ms; }
+  .reveal-stagger.in-view > *:nth-child(1) { transition-delay: 30ms; }
+  .reveal-stagger.in-view > *:nth-child(2) { transition-delay: 60ms; }
+  .reveal-stagger.in-view > *:nth-child(3) { transition-delay: 90ms; }
+  .reveal-stagger.in-view > *:nth-child(4) { transition-delay: 120ms; }
+  .reveal-stagger.in-view > *:nth-child(5) { transition-delay: 150ms; }
+  .reveal-stagger.in-view > *:nth-child(6) { transition-delay: 180ms; }
 }
 /* Fallback: make visible after 2.5s if JS fails */
 @keyframes revealFallback { to { opacity: 1; transform: none; } }
@@ -912,7 +912,7 @@ def _cloud_panel() -> rx.Component:
                 _plan_card("Enterprise", "Para companias con demanda de escala, personalizacion y SLA dedicado.", "$175",
                     ["Plan personalizable por operacion", "Onboarding y arquitectura dedicada", "Integraciones y flujos a medida", "Acompanamiento prioritario", "Gobernanza enterprise"],
                     "Solicitar Enterprise", _enterprise_link, "click_plan_enterprise", tone="enterprise", badge_text="Escala total"),
-                class_name="reveal-stagger grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3",
+                class_name="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3",
             ),
             class_name="mt-8",
         ),
