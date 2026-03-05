@@ -743,9 +743,9 @@ class ServicesState(MixinState):
             self.field_prices = [
                 {
                     "id": str(p.id),
-                    "sport": p.sport,
-                    "name": p.name,
-                    "price": p.price
+                    "sport": p.sport.value if hasattr(p.sport, "value") else str(p.sport).strip().lower(),
+                    "name": str(p.name),
+                    "price": float(p.price) if p.price else 0.0,
                 }
                 for p in prices
             ]
@@ -777,7 +777,7 @@ class ServicesState(MixinState):
                     return rx.toast("Empresa no definida.", duration=3000)
                 with rx.session() as session:
                     new_price = FieldPriceModel(
-                        sport=self.new_field_price_sport,
+                        sport=self.new_field_price_sport.strip().lower(),
                         name=self.new_field_price_name,
                         price=price,
                         company_id=company_id,
@@ -815,7 +815,7 @@ class ServicesState(MixinState):
                 if price:
                     price.name = self.new_field_price_name
                     price.price = price_val
-                    price.sport = self.new_field_price_sport
+                    price.sport = self.new_field_price_sport.strip().lower()
                     session.add(price)
                     session.commit()
 
@@ -871,7 +871,10 @@ class ServicesState(MixinState):
                 self.editing_field_price_id = str(price.id)
                 self.new_field_price_name = price.name
                 self.new_field_price_amount = str(price.price)
-                self.new_field_price_sport = price.sport
+                self.new_field_price_sport = (
+                    price.sport.value if hasattr(price.sport, "value")
+                    else str(price.sport).strip().lower()
+                )
 
     def remove_field_price(self, price_id: str):
         toast = self._require_manage_config()

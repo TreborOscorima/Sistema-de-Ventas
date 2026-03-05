@@ -123,6 +123,13 @@ if $DOMAIN_SPLIT; then
     check_url "https://tuwayki.app/" 200 "Landing home"
     check_health "https://tuwayki.app" "Landing health"
 
+    info "=== Páginas legales y SEO ==="
+    check_url "https://tuwayki.app/terminos" 200 "Legal: Términos"
+    check_url "https://tuwayki.app/privacidad" 200 "Legal: Privacidad"
+    check_url "https://tuwayki.app/cookies" 200 "Legal: Cookies"
+    check_url "https://tuwayki.app/robots.txt" 200 "SEO: robots.txt"
+    check_url "https://tuwayki.app/sitemap.xml" 200 "SEO: sitemap.xml"
+
     info "=== Redirects WWW ==="
     check_redirect "https://www.tuwayki.app/" "tuwayki.app" "www -> apex"
 

@@ -21,6 +21,9 @@ from app.pages.periodo_prueba_finalizado import periodo_prueba_finalizado_page
 from app.pages.cuenta_suspendida import cuenta_suspendida_page
 from app.pages.registro import registro_page
 from app.pages.marketing import marketing_page
+from app.pages.terminos import terminos_page
+from app.pages.privacidad import privacidad_page
+from app.pages.cookies import cookies_page
 from app.pages.servicios import servicios_page
 from app.pages.cuentas import cuentas_page
 from app.pages.clientes import clientes_page
@@ -663,6 +666,15 @@ def page_registro() -> rx.Component:
 def page_marketing() -> rx.Component:
     return marketing_page()
 
+def page_terminos() -> rx.Component:
+    return terminos_page()
+
+def page_privacidad() -> rx.Component:
+    return privacidad_page()
+
+def page_cookies() -> rx.Component:
+    return cookies_page()
+
 
 def page_owner_backoffice() -> rx.Component:
     return owner_page()
@@ -806,16 +818,39 @@ def _register_landing_routes():
             image=LANDING_IMAGE,
             meta=_landing_meta(f"{PUBLIC_SITE_URL}/", indexable=False),
         )
-        return
+    else:
+        # Modo all: mantener landing en /home hasta completar migración de dominios.
+        app.add_page(
+            page_marketing,
+            route="/home",
+            title=LANDING_TITLE,
+            description=LANDING_DESCRIPTION,
+            image=LANDING_IMAGE,
+            meta=_landing_meta(f"{PUBLIC_SITE_URL}/", indexable=False),
+        )
 
-    # Modo all: mantener landing en /home hasta completar migración de dominios.
+    # Páginas legales públicas (indexables en todas las superficies).
+    _legal_indexable = APP_SURFACE == "landing"
     app.add_page(
-        page_marketing,
-        route="/home",
-        title=LANDING_TITLE,
-        description=LANDING_DESCRIPTION,
-        image=LANDING_IMAGE,
-        meta=_landing_meta(f"{PUBLIC_SITE_URL}/", indexable=False),
+        page_terminos,
+        route="/terminos",
+        title="Términos y Condiciones - TUWAYKIAPP",
+        description="Términos y condiciones de uso de TUWAYKIAPP.",
+        meta=_landing_meta(f"{PUBLIC_SITE_URL}/terminos", indexable=_legal_indexable),
+    )
+    app.add_page(
+        page_privacidad,
+        route="/privacidad",
+        title="Política de Privacidad - TUWAYKIAPP",
+        description="Política de privacidad de TUWAYKIAPP.",
+        meta=_landing_meta(f"{PUBLIC_SITE_URL}/privacidad", indexable=_legal_indexable),
+    )
+    app.add_page(
+        page_cookies,
+        route="/cookies",
+        title="Política de Cookies - TUWAYKIAPP",
+        description="Política de cookies de TUWAYKIAPP.",
+        meta=_landing_meta(f"{PUBLIC_SITE_URL}/cookies", indexable=_legal_indexable),
     )
 
 

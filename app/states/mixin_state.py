@@ -153,9 +153,9 @@ def require_cashbox_open(
 class MixinState:
     is_loading: bool = False
     # Cache privado para _company_settings_snapshot (TTL 60s)
-    _settings_snapshot_cache: dict = {}
-    _settings_snapshot_ts: float = 0.0
-    _settings_snapshot_bid: int = 0
+    _settings_snapshot_cache: dict = rx.field(default_factory=dict, is_var=False)
+    _settings_snapshot_ts: float = rx.field(default=0.0, is_var=False)
+    _settings_snapshot_bid: int = rx.field(default=0, is_var=False)
 
     def set_loading(self, value: bool) -> None:
         """Activa o desactiva el estado global de carga."""
@@ -248,7 +248,7 @@ class MixinState:
                     rx.redirect("/periodo-prueba-finalizado"),
                 ]
 
-        if status_label == "suspendido":
+        if status_label in ("suspendido", "pago vencido"):
             return [
                 rx.toast("Cuenta suspendida.", duration=3000),
                 rx.redirect("/cuenta-suspendida"),

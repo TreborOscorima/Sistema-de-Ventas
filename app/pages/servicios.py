@@ -114,6 +114,8 @@ def sport_selector() -> rx.Component:
             rx.el.img(
               src="/balon-futbol.png",
               alt="Balon futbol",
+              loading="lazy",
+              decoding="async",
               class_name="h-6 w-6",
             ),
             rx.el.span(
@@ -123,7 +125,7 @@ def sport_selector() -> rx.Component:
             class_name="relative z-10 flex flex-col items-start gap-2",
           ),
           style={
-            "backgroundImage": "url('/campo-futbol.png')",
+            "backgroundImage": "image-set(url('/campo-futbol.webp') type('image/webp'), url('/campo-futbol.png') type('image/png'))",
             "backgroundSize": "cover",
             "backgroundPosition": "center",
           },
@@ -161,6 +163,8 @@ def sport_selector() -> rx.Component:
             rx.el.img(
               src="/balon-voley.png",
               alt="Balon voley",
+              loading="lazy",
+              decoding="async",
               class_name="h-6 w-6",
             ),
             rx.el.span(
@@ -170,7 +174,7 @@ def sport_selector() -> rx.Component:
             class_name="relative z-10 flex flex-col items-start gap-2",
           ),
           style={
-            "backgroundImage": "url('/campo-voley.png')",
+            "backgroundImage": "image-set(url('/campo-voley.webp') type('image/webp'), url('/campo-voley.png') type('image/png'))",
             "backgroundSize": "cover",
             "backgroundPosition": "center",
           },
@@ -200,6 +204,8 @@ def time_slot_button(slot: rx.Var[dict]) -> rx.Component:
       rx.el.img(
         src="/balon-futbol.png",
         alt="Reserva futbol",
+        loading="lazy",
+        decoding="async",
         class_name="absolute right-2 top-2 h-7 w-7 rounded-full bg-white/80 p-1 shadow pointer-events-none",
       ),
       rx.fragment(),
@@ -209,6 +215,8 @@ def time_slot_button(slot: rx.Var[dict]) -> rx.Component:
       rx.el.img(
         src="/balon-voley.png",
         alt="Reserva voley",
+        loading="lazy",
+        decoding="async",
         class_name="absolute right-2 top-2 h-7 w-7 rounded-full bg-white/80 p-1 shadow pointer-events-none",
       ),
       rx.fragment(),

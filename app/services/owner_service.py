@@ -141,19 +141,28 @@ class OwnerServiceError(Exception):
 
 
 def _effective_status(company: Company) -> str:
-    """Calcula el estado efectivo considerando expiración de trial.
+    """Calcula el estado efectivo considerando expiración de trial y suscripción.
 
-    Si la empresa tiene plan trial, subscription_status == 'active' pero
-    su trial_ends_at ya pasó, retorna 'trial_expired' para reflejar
-    que el periodo de prueba venció aunque la BD no se haya actualizado.
+    - Trial sin trial_ends_at → 'trial_expired' (nunca se configuró fecha).
+    - Trial con trial_ends_at pasado → 'trial_expired'.
+    - Plan de pago con subscription_ends_at pasado → 'suspended'.
+    - En cualquier otro caso, retorna el subscription_status de la BD.
     """
-    if (
-        company.plan_type == PlanType.TRIAL
-        and company.subscription_status == SubscriptionStatus.ACTIVE
-        and company.trial_ends_at
-        and company.trial_ends_at < datetime.now()
-    ):
-        return "trial_expired"
+    now = datetime.now()
+    if company.plan_type == PlanType.TRIAL:
+        # Cualquier trial sin fecha o con fecha pasada → trial_expired,
+        # sin importar el subscription_status actual (incluye SUSPENDED).
+        if not company.trial_ends_at or company.trial_ends_at < now:
+            return "trial_expired"
+    else:
+        # Plan de pago: verificar fecha de vencimiento
+        if (
+            company.subscription_ends_at
+            and company.subscription_ends_at < now
+            and company.subscription_status
+            in (SubscriptionStatus.ACTIVE, SubscriptionStatus.WARNING, SubscriptionStatus.PAST_DUE)
+        ):
+            return SubscriptionStatus.SUSPENDED
     return company.subscription_status
 
 
@@ -342,9 +351,9 @@ class OwnerService:
                     "plan_type": c.plan_type,
                     "subscription_status": c.subscription_status,
                     "effective_status": _effective_status(c),
-                    "trial_ends_at": effective_trial_ends.isoformat() if effective_trial_ends else None,
+                    "trial_ends_at": effective_trial_ends.strftime("%d/%m/%Y") if effective_trial_ends else None,
                     "subscription_ends_at": (
-                        c.subscription_ends_at.isoformat() if c.subscription_ends_at else None
+                        c.subscription_ends_at.strftime("%d/%m/%Y") if c.subscription_ends_at else None
                     ),
                     "max_users": c.max_users,
                     "max_branches": c.max_branches,
@@ -415,10 +424,10 @@ class OwnerService:
             "subscription_status": company.subscription_status,
             "effective_status": _effective_status(company),
             "trial_ends_at": (
-                company.trial_ends_at.isoformat() if company.trial_ends_at else None
+                company.trial_ends_at.strftime("%d/%m/%Y") if company.trial_ends_at else None
             ),
             "subscription_ends_at": (
-                company.subscription_ends_at.isoformat()
+                company.subscription_ends_at.strftime("%d/%m/%Y")
                 if company.subscription_ends_at
                 else None
             ),

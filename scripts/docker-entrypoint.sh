@@ -19,10 +19,6 @@ ok()    { echo -e "${GREEN}[ENTRYPOINT]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[ENTRYPOINT]${NC} $*"; }
 fail()  { echo -e "${RED}[ENTRYPOINT]${NC} $*"; exit 1; }
 
-# Dar tiempo a Docker a adjuntar el contenedor a la red (evita "mysql" no resuelve al arrancar)
-info "Esperando 5s para que la red esté lista..."
-sleep 5
-
 # ─── 1. Esperar MySQL ───────────────────────────────────────────────────────
 DB_HOST="${DB_HOST:-mysql}"
 DB_PORT="${DB_PORT:-3306}"
@@ -40,8 +36,7 @@ try:
     s.connect(('${DB_HOST}', ${DB_PORT}))
     s.close()
     exit(0)
-except Exception as e:
-    print(f'Conectar a ${DB_HOST}:${DB_PORT} -> {e}', file=__import__('sys').stderr)
+except:
     exit(1)
 " 2>/dev/null; then
         break
@@ -51,20 +46,7 @@ except Exception as e:
 done
 
 if [[ $WAITED -ge $MAX_WAIT ]]; then
-    warn "Intentando conexión final para mostrar error:"
-    python3 -c "
-import socket
-s = socket.socket()
-s.settimeout(5)
-try:
-    s.connect(('${DB_HOST}', ${DB_PORT}))
-    s.close()
-    print('OK')
-except Exception as e:
-    print(f'Error: {e}')
-    exit(1)
-" || true
-    fail "MySQL no disponible después de ${MAX_WAIT}s (host=${DB_HOST}, port=${DB_PORT}). Comprueba que el contenedor app está en la misma red que mysql: docker network inspect \$(docker inspect -f '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$v.NetworkID}}{{end}}' sistema_ventas_mysql)"
+    fail "MySQL no disponible después de ${MAX_WAIT}s"
 fi
 ok "MySQL disponible"
 

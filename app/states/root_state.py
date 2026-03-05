@@ -133,7 +133,7 @@ for _mixin in _mixins:
 _class_dict["__annotations__"]["overdue_alerts_count"] = int
 _class_dict["overdue_alerts_count"] = 0
 _class_dict["__annotations__"]["_last_overdue_check_ts"] = float
-_class_dict["_last_overdue_check_ts"] = 0.0
+_class_dict["_last_overdue_check_ts"] = rx.field(default=0.0, is_var=False)
 _class_dict["__annotations__"]["is_loading"] = bool
 _class_dict["is_loading"] = False
 _class_dict["check_overdue_alerts"] = check_overdue_alerts
