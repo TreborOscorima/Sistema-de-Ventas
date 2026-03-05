@@ -386,8 +386,9 @@ def _logo_chip(mark: str, name: str, segment: str) -> rx.Component:
     )
 
 
-def _hero_preview_card() -> rx.Component:
-    return rx.el.aside(
+def _browser_frame(src: str, alt: str) -> rx.Component:
+    """Tarjeta con barra de navegador simulada que envuelve una captura."""
+    return rx.el.div(
         rx.el.div(
             rx.el.div(
                 rx.el.span(class_name="h-2.5 w-2.5 rounded-full bg-slate-300"),
@@ -399,13 +400,21 @@ def _hero_preview_card() -> rx.Component:
         ),
         rx.el.div(
             rx.el.img(
-                src="/dashboard-hero-real.png",
-                alt="Dashboard de TUWAYKIAPP",
+                src=src,
+                alt=alt,
                 class_name="h-auto w-full object-cover",
             ),
-            class_name="bg-white p-2",
+            class_name="bg-white p-1",
         ),
-        class_name="reveal overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 ring-1 ring-slate-900/5",
+        class_name="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/40 ring-1 ring-slate-900/5",
+    )
+
+
+def _hero_preview_card() -> rx.Component:
+    return rx.el.aside(
+        _browser_frame("/dashboard-hero-real.png?v=3", "Dashboard de TUWAYKIAPP"),
+        _browser_frame("/Punto-de-Venta.png?v=1", "Punto de Venta de TUWAYKIAPP"),
+        class_name="reveal flex flex-col gap-6",
     )
 
 
@@ -691,7 +700,7 @@ def _hero_section() -> rx.Component:
                 class_name="reveal max-w-2xl",
             ),
             _hero_preview_card(),
-            class_name="grid grid-cols-1 items-start gap-10 lg:grid-cols-[1.02fr_0.98fr]",
+            class_name="grid grid-cols-1 items-start gap-10 lg:grid-cols-[0.95fr_1.05fr]",
         ),
         class_name="mx-auto w-full max-w-6xl px-4 pt-24 pb-16 sm:px-6 lg:px-8 lg:pt-28",
     )
