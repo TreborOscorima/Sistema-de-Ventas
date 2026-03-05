@@ -20,28 +20,23 @@ warn()  { echo -e "${YELLOW}[ENTRYPOINT]${NC} $*"; }
 fail()  { echo -e "${RED}[ENTRYPOINT]${NC} $*"; exit 1; }
 
 # ─── 1. Esperar MySQL ───────────────────────────────────────────────────────
-# En el stack de 3 superficies el servicio MySQL tiene alias tuwayki_mysql; compose inyecta DB_HOST.
 DB_HOST="${DB_HOST:-mysql}"
 DB_PORT="${DB_PORT:-3306}"
 DB_USER="${DB_USER:-app}"
 MAX_WAIT=120
-SOCKET_TIMEOUT=5
-
-# Breve pausa para que la red del contenedor esté lista (evita fallos DNS en arranque)
-sleep 3
 
 info "Esperando MySQL en ${DB_HOST}:${DB_PORT}..."
 WAITED=0
 while [[ $WAITED -lt $MAX_WAIT ]]; do
     if python3 -c "
 import socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.settimeout(${SOCKET_TIMEOUT})
+s = socket.socket()
+s.settimeout(2)
 try:
     s.connect(('${DB_HOST}', ${DB_PORT}))
     s.close()
     exit(0)
-except Exception as e:
+except:
     exit(1)
 " 2>/dev/null; then
         break
