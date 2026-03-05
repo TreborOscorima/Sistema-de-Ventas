@@ -221,7 +221,7 @@ def _company_due_value(company: rx.Var) -> rx.Component:
                 company["trial_ends_at"],
                 class_name="text-xs text-amber-600",
             ),
-            rx.el.span("—", class_name="text-xs text-slate-400"),
+            rx.el.span("Sin fecha", class_name="text-xs text-slate-400 italic"),
         ),
         rx.cond(
             company["subscription_ends_at"],
@@ -229,7 +229,7 @@ def _company_due_value(company: rx.Var) -> rx.Component:
                 company["subscription_ends_at"],
                 class_name="text-xs text-slate-600",
             ),
-            rx.el.span("—", class_name="text-xs text-slate-400"),
+            rx.el.span("Sin fecha", class_name="text-xs text-slate-400 italic"),
         ),
     )
 

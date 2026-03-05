@@ -56,10 +56,10 @@ def _analytics_bootstrap_script() -> str:
     pixel_id = META_PIXEL_ID.replace("'", "\\'")
     return (
         "(function(){"
-        "if(window.__tuwayAnalyticsReady){return;}"
-        "window.__tuwayAnalyticsReady=true;"
         f"var ga4Id='{ga4_id}';"
         f"var metaPixelId='{pixel_id}';"
+        # --- Expose a reusable loader so the consent button can call it ---
+        "window.__twLoadAnalytics=window.__twLoadAnalytics||function(){"
         "if(ga4Id){"
         "window.dataLayer=window.dataLayer||[];"
         "window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};"
@@ -79,6 +79,8 @@ def _analytics_bootstrap_script() -> str:
         "window.fbq('init',metaPixelId);"
         "window.__twMetaLoaded=true;"
         "}"
+        "};"
+        # --- tuwayTrack always available (local fallback even without consent) ---
         "window.tuwayTrack=window.tuwayTrack||function(name,payload){"
         "payload=payload||{};"
         "var data=Object.assign({event:name,page:window.location.pathname,ts:new Date().toISOString()},payload);"
@@ -88,9 +90,84 @@ def _analytics_bootstrap_script() -> str:
         "if(typeof window.fbq==='function'){window.fbq('trackCustom',name,data);}"
         "try{var q=JSON.parse(localStorage.getItem('tuway_events')||'[]');q.push(data);localStorage.setItem('tuway_events',JSON.stringify(q.slice(-200)));}catch(e){}"
         "};"
+        # --- Auto-load analytics if user already consented previously ---
+        "var consent=localStorage.getItem('tw_cookie_consent');"
+        "if(consent==='all'){window.__twLoadAnalytics();}"
+        # --- Track landing view (always, uses local fallback if no consent) ---
         "try{if(!sessionStorage.getItem('tw_view_landing_sent')){window.tuwayTrack('view_landing',{source:'landing'});sessionStorage.setItem('tw_view_landing_sent','1');}}"
         "catch(e){window.tuwayTrack('view_landing',{source:'landing'});}"
         "})();"
+    )
+
+
+def _cookie_consent_script() -> str:
+    """JS that manages the cookie consent banner visibility and user choice."""
+    return (
+        "(function(){"
+        "var consent=localStorage.getItem('tw_cookie_consent');"
+        "if(consent){document.getElementById('tw-cookie-banner')&&(document.getElementById('tw-cookie-banner').style.display='none');return;}"
+        "setTimeout(function(){"
+        "var b=document.getElementById('tw-cookie-banner');"
+        "if(b){b.style.display='flex';}"
+        "},800);"
+        "})();"
+    )
+
+
+def _cookie_accept_all_script() -> str:
+    return (
+        "localStorage.setItem('tw_cookie_consent','all');"
+        "document.getElementById('tw-cookie-banner').style.display='none';"
+        "if(typeof window.__twLoadAnalytics==='function'){window.__twLoadAnalytics();}"
+    )
+
+
+def _cookie_reject_script() -> str:
+    return (
+        "localStorage.setItem('tw_cookie_consent','essential');"
+        "document.getElementById('tw-cookie-banner').style.display='none';"
+    )
+
+
+def _cookie_consent_banner() -> rx.Component:
+    """Banner de consentimiento de cookies — GDPR/ePrivacy compliant."""
+    return rx.el.div(
+        rx.el.div(
+            rx.el.div(
+                rx.icon("cookie", class_name="h-5 w-5 text-amber-600 shrink-0 mt-0.5"),
+                rx.el.div(
+                    rx.el.p(
+                        "Utilizamos cookies esenciales para el funcionamiento del sitio. "
+                        "Las cookies de analítica y marketing solo se activan con tu consentimiento. ",
+                        rx.el.a(
+                            "Más información",
+                            href="/cookies",
+                            class_name="underline text-indigo-600 hover:text-indigo-700",
+                        ),
+                        class_name="text-sm text-slate-700 leading-relaxed",
+                    ),
+                    class_name="flex-1",
+                ),
+                class_name="flex items-start gap-3",
+            ),
+            rx.el.div(
+                rx.el.button(
+                    "Solo esenciales",
+                    on_click=rx.call_script(_cookie_reject_script()),
+                    class_name="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 cursor-pointer",
+                ),
+                rx.el.button(
+                    "Aceptar todas",
+                    on_click=rx.call_script(_cookie_accept_all_script()),
+                    class_name="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 cursor-pointer",
+                ),
+                class_name="flex items-center gap-3 mt-3 sm:mt-0",
+            ),
+            class_name="mx-auto flex w-full max-w-6xl flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-4 sm:px-6",
+        ),
+        id="tw-cookie-banner",
+        style={"display": "none"},
+        class_name="fixed bottom-0 left-0 right-0 z-[100] border-t border-slate-200 bg-white/95 backdrop-blur-sm shadow-2xl",
     )
 
 
@@ -1085,7 +1162,14 @@ def _footer_section() -> rx.Component:
                     _footer_link("WhatsApp directo", f"https://wa.me/{WHATSAPP_NUMBER}", "click_footer_whatsapp", "footer_accesos", external=True),
                     class_name="flex flex-col gap-2",
                 ),
-                class_name="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4",
+                rx.el.div(
+                    rx.el.h4("Legal", class_name="text-sm font-bold text-slate-900"),
+                    _footer_link("Términos y condiciones", _site_href("/terminos"), "click_footer_terms", "footer_legal"),
+                    _footer_link("Política de privacidad", _site_href("/privacidad"), "click_footer_privacy", "footer_legal"),
+                    _footer_link("Política de cookies", _site_href("/cookies"), "click_footer_cookies", "footer_legal"),
+                    class_name="flex flex-col gap-2",
+                ),
+                class_name="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-5",
             ),
             rx.el.div(
                 rx.el.div(
@@ -1133,6 +1217,7 @@ def marketing_page() -> rx.Component:
     return rx.el.div(
         rx.el.style(_global_styles()),
         rx.script(_analytics_bootstrap_script()),
+        rx.script(_cookie_consent_script()),
         rx.script(_reveal_script()),
         _announcement_banner(),
         _header_section(),
@@ -1151,6 +1236,7 @@ def marketing_page() -> rx.Component:
         ),
         _footer_section(),
         _floating_whatsapp(),
+        _cookie_consent_banner(),
         class_name="relative min-h-screen bg-slate-50",
         style={"fontFamily": "'Manrope', sans-serif"},
     )

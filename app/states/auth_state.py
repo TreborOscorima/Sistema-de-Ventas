@@ -32,6 +32,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from sqlmodel import select
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from app.models import Branch, Company, Permission, Role, User as UserModel, UserBranch
 from app.models.company import SubscriptionStatus
@@ -238,7 +239,7 @@ class AuthState(MixinState):
     _cached_user_time: float = rx.field(default=0.0, is_var=False)
     _roles_bootstrap_ts: float = rx.field(default=0.0, is_var=False)
     _subscription_check_ts: float = rx.field(default=0.0, is_var=False)
-    _USER_CACHE_TTL: float = 30.0  # Segundos de validez del cache
+    _USER_CACHE_TTL: float = rx.field(default=30.0, is_var=False)  # Segundos de validez del cache
 
     @rx.event
     def toggle_login_password_visibility(self):
@@ -416,16 +417,25 @@ class AuthState(MixinState):
         is_trial = plan_type == "trial"
 
         trial_ends_at = getattr(company, "trial_ends_at", None)
+        subscription_ends_at = getattr(company, "subscription_ends_at", None)
         now = datetime.now()
-        is_expired = bool(is_trial and trial_ends_at and trial_ends_at < now)
+
+        # Trial: vencido si trial_ends_at ya pasó O si nunca se configuró fecha
+        is_expired = bool(is_trial and (not trial_ends_at or trial_ends_at < now))
         status_label = "Vencido" if is_expired else "Activo"
         status_tone = "danger" if is_expired else ("warning" if is_trial else "success")
         if not is_trial:
+            # Plan de pago: verificar subscription_ends_at
             sub_status = getattr(company, "subscription_status", "")
             if hasattr(sub_status, "value"):
                 sub_status = sub_status.value
             sub_status = str(sub_status or "").strip().lower()
-            if sub_status == SubscriptionStatus.WARNING.value:
+
+            # Fecha de suscripción vencida → forzar suspendido
+            if subscription_ends_at and subscription_ends_at < now:
+                status_label = "Suspendido"
+                status_tone = "danger"
+            elif sub_status == SubscriptionStatus.WARNING.value:
                 status_label = "Por vencer"
                 status_tone = "warning"
             elif sub_status == SubscriptionStatus.PAST_DUE.value:
@@ -863,6 +873,7 @@ class AuthState(MixinState):
             users = session.exec(
                 select(UserModel)
                 .where(UserModel.company_id == company_id)
+                .where(UserModel.is_active == True)
                 .options(selectinload(UserModel.role).selectinload(Role.permissions))
                 .execution_options(tenant_company_id=company_id)
             ).all()
@@ -1392,38 +1403,64 @@ class AuthState(MixinState):
 
         # --- Trial expirado: necesita ir a DB para actualizar status ---
         if is_trial:
+            # Trial sin fecha = vencido; Trial con fecha pasada = vencido
             trial_end = snapshot.get("trial_ends_on", "")
-            if trial_end:
+            is_trial_expired = False
+            if not trial_end:
+                # trial_ends_at nunca se configuró → tratamos como vencido
+                is_trial_expired = True
+            else:
                 try:
                     from datetime import datetime as dt_cls
                     trial_ends_at = dt_cls.strptime(trial_end, "%d/%m/%Y")
                     if trial_ends_at < datetime.now():
-                        # Trial expirado — actualizar en DB
-                        company_id = self.current_user.get("company_id")
-                        if company_id:
-                            with rx.session() as session:
-                                company = session.exec(
-                                    select(Company).where(Company.id == company_id)
-                                ).first()
-                                if company:
-                                    current_status = getattr(company, "subscription_status", "")
-                                    if hasattr(current_status, "value"):
-                                        current_status = current_status.value
-                                    if str(current_status or "") != SubscriptionStatus.SUSPENDED.value:
-                                        company.subscription_status = SubscriptionStatus.SUSPENDED.value
-                                        session.add(company)
-                                        session.commit()
-                                    self.refresh_subscription_snapshot()
-                        if current_path != "/periodo-prueba-finalizado":
-                            return rx.redirect("/periodo-prueba-finalizado")
-                        return
+                        is_trial_expired = True
                 except (ValueError, TypeError):
                     pass
+
+            if is_trial_expired:
+                # Actualizar estado en DB si no está marcado como suspendido
+                company_id = self.current_user.get("company_id")
+                if company_id:
+                    with rx.session() as session:
+                        company = session.exec(
+                            select(Company).where(Company.id == company_id)
+                        ).first()
+                        if company:
+                            current_status = getattr(company, "subscription_status", "")
+                            if hasattr(current_status, "value"):
+                                current_status = current_status.value
+                            if str(current_status or "") != SubscriptionStatus.SUSPENDED.value:
+                                company.subscription_status = SubscriptionStatus.SUSPENDED.value
+                                session.add(company)
+                                session.commit()
+                            self.refresh_subscription_snapshot()
+                if current_path != "/periodo-prueba-finalizado":
+                    return rx.redirect("/periodo-prueba-finalizado")
+                return
             return  # Trial activo, nada que hacer
 
         # --- Plan pago: verificar vencimiento desde snapshot ---
-        if status_label == "suspendido" and current_path != "/cuenta-suspendida":
-            return rx.redirect("/cuenta-suspendida")
+        if status_label in ("suspendido", "pago vencido"):
+            # Auto-suspender en DB si aún no está marcado
+            company_id = self.current_user.get("company_id")
+            if company_id:
+                with rx.session() as session:
+                    company = session.exec(
+                        select(Company).where(Company.id == company_id)
+                    ).first()
+                    if company:
+                        current_status = getattr(company, "subscription_status", "")
+                        if hasattr(current_status, "value"):
+                            current_status = current_status.value
+                        if str(current_status or "") != SubscriptionStatus.SUSPENDED.value:
+                            company.subscription_status = SubscriptionStatus.SUSPENDED.value
+                            company.is_active = False
+                            session.add(company)
+                            session.commit()
+                        self.refresh_subscription_snapshot()
+            if current_path != "/cuenta-suspendida":
+                return rx.redirect("/cuenta-suspendida")
 
     @rx.event
     def ensure_subscription_active(self):
@@ -1436,14 +1473,12 @@ class AuthState(MixinState):
         if bool(snapshot.get("is_trial")):
             return
         status_label = str(snapshot.get("status_label", "") or "").strip().lower()
-        if status_label == "suspendido":
+        if status_label in ("suspendido", "pago vencido"):
             return rx.redirect("/cuenta-suspendida")
 
     @rx.event
     def ensure_trial_active(self):
         if not self.is_authenticated:
-            return
-        if not self._trial_enforced():
             return
         current_path = self.router.url.path
         if current_path == "/periodo-prueba-finalizado":
@@ -1506,6 +1541,8 @@ class AuthState(MixinState):
             self._last_users_load_ts = 0.0
         if hasattr(self, "_last_cashbox_data_ts"):
             self._last_cashbox_data_ts = 0.0
+        if hasattr(self, "_last_config_data_load_ts"):
+            self._last_config_data_load_ts = 0.0
         if hasattr(self, "_last_dashboard_load_ts"):
             self._last_dashboard_load_ts = 0.0
         if hasattr(self, "_last_overdue_check_ts"):
@@ -1740,6 +1777,49 @@ class AuthState(MixinState):
                 if not user.is_active:
                     self.error_message = "Usuario inactivo. Contacte al administrador."
                     return
+
+                # Verificar que la empresa esté activa y la suscripción vigente
+                user_company = session.exec(
+                    select(Company).where(Company.id == user.company_id)
+                    .execution_options(tenant_bypass=True)
+                ).first()
+                if user_company:
+                    now = datetime.now()
+                    plan_type = getattr(user_company, "plan_type", "") or ""
+                    if hasattr(plan_type, "value"):
+                        plan_type = plan_type.value
+                    plan_type = str(plan_type).strip().lower()
+                    is_trial = plan_type == "trial"
+
+                    if is_trial:
+                        trial_end = getattr(user_company, "trial_ends_at", None)
+                        if not trial_end or trial_end < now:
+                            # Auto-suspender en DB (sin bloquear login;
+                            # la redirección se maneja post-login vía snapshot)
+                            sub_st = getattr(user_company, "subscription_status", "")
+                            if hasattr(sub_st, "value"):
+                                sub_st = sub_st.value
+                            if str(sub_st) != SubscriptionStatus.SUSPENDED.value:
+                                user_company.subscription_status = SubscriptionStatus.SUSPENDED.value
+                                user_company.is_active = False
+                                session.add(user_company)
+                                session.commit()
+                    else:
+                        sub_end = getattr(user_company, "subscription_ends_at", None)
+                        sub_st = getattr(user_company, "subscription_status", "")
+                        if hasattr(sub_st, "value"):
+                            sub_st = sub_st.value
+                        sub_st = str(sub_st).strip().lower()
+                        if sub_st == SubscriptionStatus.SUSPENDED.value or (
+                            sub_end and sub_end < now
+                        ):
+                            # Auto-suspender en DB si aún no lo está
+                            if sub_st != SubscriptionStatus.SUSPENDED.value:
+                                user_company.subscription_status = SubscriptionStatus.SUSPENDED.value
+                                user_company.is_active = False
+                                session.add(user_company)
+                                session.commit()
+
                 if not user.role_id:
                     fallback_role = (
                         "Superadmin" if user.username == "admin" else "Usuario"
@@ -1799,7 +1879,7 @@ class AuthState(MixinState):
                 status_label = str(snapshot.get("status_label", "") or "").strip().lower()
                 if bool(snapshot.get("is_trial")) and status_label == "vencido":
                     return rx.redirect("/periodo-prueba-finalizado")
-                if (not bool(snapshot.get("is_trial"))) and status_label == "suspendido":
+                if (not bool(snapshot.get("is_trial"))) and status_label in ("suspendido", "pago vencido"):
                     return rx.redirect("/cuenta-suspendida")
                 if getattr(user, "must_change_password", False):
                     return rx.redirect("/cambiar-clave")
@@ -2165,9 +2245,12 @@ class AuthState(MixinState):
                 if not user_to_update:
                     return rx.toast("Usuario a editar no encontrado.", duration=3000)
                 if email:
-                    existing_email = session.exec(
-                        select(UserModel).where(UserModel.email == email)
-                    ).first()
+                    with tenant_bypass():
+                        existing_email = session.exec(
+                            select(UserModel)
+                            .where(UserModel.email == email)
+                            .where(UserModel.is_active == True)
+                        ).first()
                     if existing_email and existing_email.id != user_to_update.id:
                         return rx.toast("El correo ya esta registrado.", duration=3000)
                     user_to_update.email = email
@@ -2212,13 +2295,17 @@ class AuthState(MixinState):
                     select(UserModel)
                     .where(UserModel.username == username)
                     .where(UserModel.company_id == company_id)
+                    .where(UserModel.is_active == True)
                 ).first()
 
                 if existing_user:
                     return rx.toast("El nombre de usuario ya existe.", duration=3000)
-                existing_email = session.exec(
-                    select(UserModel).where(UserModel.email == email)
-                ).first()
+                with tenant_bypass():
+                    existing_email = session.exec(
+                        select(UserModel)
+                        .where(UserModel.email == email)
+                        .where(UserModel.is_active == True)
+                    ).first()
                 if existing_email:
                     return rx.toast("El correo ya esta registrado.", duration=3000)
                 password = self.new_user_data["password"]
@@ -2250,7 +2337,14 @@ class AuthState(MixinState):
                     branch_id=branch_id,
                 )
                 session.add(new_user)
-                session.flush()
+                try:
+                    session.flush()
+                except IntegrityError:
+                    session.rollback()
+                    return rx.toast(
+                        "El correo o nombre de usuario ya está registrado.",
+                        duration=3000,
+                    )
                 session.add(
                     UserBranch(user_id=new_user.id, branch_id=branch_id)
                 )
@@ -2293,8 +2387,25 @@ class AuthState(MixinState):
             role_name = (user.role.name if user.role else "").strip().lower()
             if role_name == "superadmin":
                 return rx.toast("No se puede eliminar al superadmin.", duration=3000)
-            session.delete(user)
-            session.commit()
+
+            # Soft-delete: desactivar usuario y liberar email/username para reuso.
+            user.is_active = False
+            user.email = None
+            user.token_version = (getattr(user, "token_version", 0) or 0) + 1
+
+            # Liberar username único: sufijo @deleted_<id> para evitar conflicto
+            # al re-crear un usuario con el mismo nombre.
+            user.username = f"{user.username}@deleted_{user.id}"
+
+            # Revocar accesos a sucursales.
+            with tenant_bypass():
+                branch_links = session.exec(
+                    select(UserBranch).where(UserBranch.user_id == user.id)
+                ).all()
+                for link in branch_links:
+                    session.delete(link)
+                session.commit()
+
             self.load_users()
             return [
                 self._emit_runtime_sync_event(),

@@ -1037,13 +1037,13 @@ class TestEffectiveStatusAndSync:
         assert _effective_status(c) == "trial_expired"
 
     def test_effective_status_suspended_trial(self):
-        """Trial ya suspendido (no activo) → 'suspended' (no se sobreescribe)."""
+        """Trial ya suspendido en BD → 'trial_expired' (siempre muestra estado trial)."""
         c = _make_company(
             plan_type=PlanType.TRIAL,
             subscription_status=SubscriptionStatus.SUSPENDED,
             trial_ends_at=datetime.now() - timedelta(days=3),
         )
-        assert _effective_status(c) == SubscriptionStatus.SUSPENDED
+        assert _effective_status(c) == "trial_expired"
 
     def test_effective_status_standard_plan(self):
         """Plan standard activo → 'active' (no aplica lógica trial)."""
@@ -1055,22 +1055,22 @@ class TestEffectiveStatusAndSync:
         assert _effective_status(c) == "active"
 
     def test_effective_status_no_trial_date(self):
-        """Trial sin fecha → 'active' (no puede determinar expiración)."""
+        """Trial sin fecha → 'trial_expired' (no se configuró periodo)."""
         c = _make_company(
             plan_type=PlanType.TRIAL,
             subscription_status=SubscriptionStatus.ACTIVE,
             trial_ends_at=None,
         )
-        assert _effective_status(c) == "active"
+        assert _effective_status(c) == "trial_expired"
 
     def test_effective_status_warning_not_overridden(self):
-        """Estado 'warning' no se sobreescribe aunque sea trial expirado."""
+        """Estado 'warning' con trial expirado → 'trial_expired' (expiración tiene prioridad)."""
         c = _make_company(
             plan_type=PlanType.TRIAL,
             subscription_status=SubscriptionStatus.WARNING,
             trial_ends_at=datetime.now() - timedelta(days=3),
         )
-        assert _effective_status(c) == SubscriptionStatus.WARNING
+        assert _effective_status(c) == "trial_expired"
 
     # ── list_companies incluye effective_status ────────
 

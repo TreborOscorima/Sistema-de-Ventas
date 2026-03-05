@@ -163,7 +163,9 @@ Sistema-de-Ventas/
 
 > **Nota:** Al primer inicio, el sistema poblará automáticamente las tablas de configuración (monedas, unidades, métodos de pago) gracias al método `ensure_default_data`.
 
-### Tracking de Marketing (Landing `/sitio`)
+### Tracking de Marketing (Landing)
+
+La landing pública se sirve en `/` cuando `APP_SURFACE=landing` (dominio `tuwayki.app`) o en `/home` cuando `APP_SURFACE=all` (modo desarrollo).
 
 Para habilitar analítica productiva en la landing:
 
@@ -177,6 +179,8 @@ Eventos instrumentados actualmente:
 - `click_trial_cta` (clics en CTAs clave de prueba)
 
 Si no configuras esos IDs, la landing sigue funcionando y guarda eventos localmente para depuración.
+
+> **Nota de consentimiento:** GA4 y Meta Pixel solo se cargan cuando el visitante acepta cookies de analítica a través del banner de consentimiento.
 
 ---
 
