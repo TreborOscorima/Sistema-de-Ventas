@@ -163,7 +163,7 @@ def _cookie_consent_banner() -> rx.Component:
                 ),
                 class_name="flex items-center gap-3 mt-3 sm:mt-0",
             ),
-            class_name="mx-auto flex w-full max-w-6xl flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-4 sm:px-6",
+            class_name="mx-auto flex w-full max-w-7xl flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-4 sm:px-6",
         ),
         id="tw-cookie-banner",
         style={"display": "none"},
@@ -589,7 +589,7 @@ def _announcement_banner() -> rx.Component:
                     class_name="ml-4 text-slate-400 hover:text-white transition-colors cursor-pointer",
                     aria_label="Cerrar aviso",
                 ),
-                class_name="mx-auto flex max-w-6xl items-center justify-center px-4 py-2",
+                class_name="mx-auto flex max-w-7xl items-center justify-center px-4 py-2",
             ),
             class_name="bg-slate-900",
         ),
@@ -652,7 +652,7 @@ def _header_section() -> rx.Component:
                 ),
                 class_name="relative md:hidden",
             ),
-            class_name="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8",
+            class_name="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8",
         ),
         class_name="glass-nav fixed top-0 left-0 right-0 z-50 border-b border-slate-200/80",
     )
@@ -702,7 +702,7 @@ def _hero_section() -> rx.Component:
             _hero_preview_card(),
             class_name="grid grid-cols-1 items-start gap-10 lg:grid-cols-[0.95fr_1.05fr]",
         ),
-        class_name="mx-auto w-full max-w-6xl px-4 pt-24 pb-16 sm:px-6 lg:px-8 lg:pt-28",
+        class_name="mx-auto w-full max-w-7xl px-4 pt-24 pb-16 sm:px-6 lg:px-8 lg:pt-28",
     )
 
 
@@ -715,7 +715,7 @@ def _metrics_section() -> rx.Component:
             _metric_card("24/7", "acceso cloud", "Desktop, tablet y mobile"),
             class_name="reveal-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4",
         ),
-        class_name="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8",
+        class_name="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8",
     )
 
 
@@ -731,9 +731,9 @@ def _logos_section() -> rx.Component:
                 rx.el.div(*ticker_nodes, class_name="ticker-track"),
                 class_name="ticker-wrap mt-6",
             ),
-            class_name="mx-auto w-full max-w-6xl rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-sm",
+            class_name="mx-auto w-full max-w-7xl rounded-3xl border border-slate-200 bg-white px-6 py-6 shadow-sm",
         ),
-        class_name="mx-auto w-full max-w-6xl px-4 pt-10 sm:px-6 lg:px-8",
+        class_name="mx-auto w-full max-w-7xl px-4 pt-10 sm:px-6 lg:px-8",
     )
 
 
@@ -774,7 +774,7 @@ def _comparison_section() -> rx.Component:
                 ),
                 class_name="reveal-stagger mt-10 grid grid-cols-1 gap-4 lg:grid-cols-2",
             ),
-            class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
         ),
     )
 
@@ -795,7 +795,7 @@ def _modules_section() -> rx.Component:
                 *[_module_card(m["icon"], m["title"], m["description"], m["bullets"]) for m in MODULES],
                 class_name="reveal-stagger mt-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3",
             ),
-            class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
             id="modulos",
         ),
     )
@@ -817,7 +817,7 @@ def _timeline_section() -> rx.Component:
                 *[_timeline_step(s, t, d) for s, t, d in STEPS],
                 class_name="reveal-stagger mt-10 grid grid-cols-1 gap-3 md:grid-cols-2",
             ),
-            class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
             id="como-funciona",
         ),
         class_name="bg-slate-50",
@@ -840,7 +840,7 @@ def _strength_section() -> rx.Component:
                 *[_strength_card(m["icon"], m["title"], m["detail"]) for m in STRENGTH_METRICS],
                 class_name="reveal-stagger mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4",
             ),
-            class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
         ),
     )
 
@@ -1053,7 +1053,7 @@ def _pricing_section() -> rx.Component:
                 _cloud_panel(),
                 _local_panel(),
             ),
-            class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
             id="planes",
         ),
     )
@@ -1092,7 +1092,7 @@ def _faq_section() -> rx.Component:
                 ),
                 class_name="reveal mt-8 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between",
             ),
-            class_name="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:px-8",
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
             id="faq",
         ),
         class_name="bg-slate-50",
@@ -1125,10 +1125,10 @@ def _cta_section() -> rx.Component:
                     ),
                     class_name="mt-8 flex flex-col gap-3 sm:flex-row",
                 ),
-                class_name="reveal mx-auto w-full max-w-6xl overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 px-8 py-14 sm:px-12 sm:py-16 shadow-2xl",
+                class_name="reveal mx-auto w-full max-w-7xl overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 px-8 py-14 sm:px-12 sm:py-16 shadow-2xl",
             ),
         ),
-        class_name="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6 lg:px-8",
+        class_name="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6 lg:px-8",
     )
 
 
@@ -1203,7 +1203,7 @@ def _footer_section() -> rx.Component:
                 ),
                 class_name="mt-8 flex flex-col items-start justify-between gap-4 border-t border-slate-200 pt-4 sm:flex-row sm:items-center",
             ),
-            class_name="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8",
+            class_name="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8",
         ),
         class_name="border-t border-slate-200 bg-white",
     )
