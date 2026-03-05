@@ -8,9 +8,12 @@ transiciones de estado y auditoría atómica.
 """
 
 import json
+import secrets
+import string
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
+import bcrypt
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -857,3 +860,111 @@ class OwnerService:
             )
 
         return count
+
+    # ─── Listado de usuarios de una empresa ────────────
+
+    @staticmethod
+    async def list_company_users(
+        session: AsyncSession,
+        *,
+        company_id: int,
+    ) -> List[Dict[str, Any]]:
+        """Retorna los usuarios de una empresa (id, username, email, is_active, role)."""
+        from app.models.auth import Role
+
+        company = await session.get(Company, company_id)
+        if not company:
+            raise OwnerServiceError(f"Empresa {company_id} no encontrada.")
+
+        stmt = (
+            select(User, Role.name)
+            .outerjoin(Role, User.role_id == Role.id)
+            .where(User.company_id == company_id)
+            .order_by(User.id)
+        )
+        result = await session.exec(stmt)  # type: ignore[arg-type]
+        rows = result.all()
+
+        return [
+            {
+                "id": str(user.id),
+                "username": user.username,
+                "email": user.email or "",
+                "is_active": "true" if user.is_active else "false",
+                "role_name": role_name or "Sin rol",
+            }
+            for user, role_name in rows
+        ]
+
+    # ─── Reset de contraseña de usuario ────────────────
+
+    @staticmethod
+    async def reset_user_password(
+        session: AsyncSession,
+        *,
+        company_id: int,
+        user_id: int,
+        actor_user_id: int,
+        actor_email: str,
+        reason: str = "Reset de contraseña por admin",
+        ip_address: Optional[str] = None,
+    ) -> str:
+        """Resetea la contraseña de un usuario y retorna la contraseña temporal.
+
+        Genera una contraseña aleatoria segura, la hashea con bcrypt,
+        activa must_change_password e invalida sesiones activas.
+        """
+        company = await session.get(Company, company_id)
+        if not company:
+            raise OwnerServiceError(f"Empresa {company_id} no encontrada.")
+
+        user = await session.get(User, user_id)
+        if not user or user.company_id != company_id:
+            raise OwnerServiceError("Usuario no encontrado en esta empresa.")
+
+        # Generar contraseña temporal: 10 chars, al menos 1 mayúscula, 1 dígito, 1 especial
+        alphabet = string.ascii_letters + string.digits
+        while True:
+            temp_password = "".join(secrets.choice(alphabet) for _ in range(8))
+            temp_password += secrets.choice(string.digits)
+            temp_password += secrets.choice("!@#$%")
+            # Mezclar para que los últimos chars no siempre sean dígito + especial
+            temp_list = list(temp_password)
+            secrets.SystemRandom().shuffle(temp_list)
+            temp_password = "".join(temp_list)
+            # Verificar complejidad mínima
+            has_upper = any(c.isupper() for c in temp_password)
+            has_lower = any(c.islower() for c in temp_password)
+            has_digit = any(c.isdigit() for c in temp_password)
+            if has_upper and has_lower and has_digit:
+                break
+
+        password_hash = bcrypt.hashpw(
+            temp_password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
+
+        before = {"must_change_password": user.must_change_password}
+        user.password_hash = password_hash
+        user.must_change_password = True
+        user.token_version = (getattr(user, "token_version", 0) or 0) + 1
+        after = {"must_change_password": True}
+
+        session.add(user)
+        await _write_audit(
+            session,
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
+            target_company=company,
+            action="reset_user_password",
+            before=before,
+            after={**after, "target_user_id": user.id, "target_username": user.username},
+            reason=reason.strip(),
+            ip_address=ip_address,
+        )
+        await session.commit()
+
+        logger.info(
+            "Owner %s reseteó contraseña del usuario %s (id=%s) en empresa %s",
+            actor_email, user.username, user.id, company.name,
+        )
+        return temp_password

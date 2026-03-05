@@ -180,6 +180,8 @@ class AuthState(MixinState):
     error_message: str = ""
     password_change_error: str = ""
     show_login_password: bool = False
+    show_change_password: bool = False
+    show_change_confirm_password: bool = False
     show_user_form_password: bool = False
     show_user_form_confirm_password: bool = False
     needs_initial_admin: bool = False
@@ -254,6 +256,14 @@ class AuthState(MixinState):
         self.show_user_form_confirm_password = (
             not self.show_user_form_confirm_password
         )
+
+    @rx.event
+    def toggle_change_password_visibility(self):
+        self.show_change_password = not self.show_change_password
+
+    @rx.event
+    def toggle_change_confirm_password_visibility(self):
+        self.show_change_confirm_password = not self.show_change_confirm_password
 
     @rx.var(cache=True)
     def is_authenticated(self) -> bool:

@@ -185,6 +185,15 @@ class OwnerState:
     owner_audit_total: int = 0
     owner_audit_page: int = 1
 
+    # ─── Reset de contraseña ────────────────────────────
+    owner_reset_modal_open: bool = False
+    owner_reset_company_id: int = 0
+    owner_reset_company_name: str = ""
+    owner_reset_users: list[dict[str, str]] = []
+    owner_reset_temp_password: str = ""
+    owner_reset_target_username: str = ""
+    owner_reset_loading: bool = False
+
     # ─── Loading ───────────────────────────────────────
     owner_loading: bool = False
     _owner_companies_load_seq: int = rx.field(default=0, is_var=False)
@@ -703,3 +712,78 @@ class OwnerState:
 
         self.owner_loading = False
         yield type(self).owner_load_companies
+
+    # ─── Reset de contraseña de usuario ────────────────
+
+    @rx.event
+    async def owner_open_reset_modal(self, company_id: int, company_name: str):
+        """Abre modal de reset de contraseña y carga usuarios de la empresa."""
+        if not self.is_owner_authenticated:
+            return
+        self.owner_reset_modal_open = True
+        self.owner_reset_company_id = company_id
+        self.owner_reset_company_name = company_name
+        self.owner_reset_temp_password = ""
+        self.owner_reset_target_username = ""
+        self.owner_reset_users = []
+        self.owner_reset_loading = True
+        yield
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    users = await OwnerService.list_company_users(
+                        session, company_id=company_id,
+                    )
+                self.owner_reset_users = users
+        except Exception as e:
+            logger.error(f"Error cargando usuarios para reset: {e}")
+            yield rx.toast(f"Error: {e}", duration=4000)
+        finally:
+            self.owner_reset_loading = False
+
+    @rx.event
+    def owner_close_reset_modal(self):
+        """Cierra modal de reset."""
+        self.owner_reset_modal_open = False
+        self.owner_reset_temp_password = ""
+        self.owner_reset_target_username = ""
+
+    @rx.event
+    async def owner_reset_password(self, user_id: str, username: str):
+        """Resetea la contraseña del usuario seleccionado."""
+        if not self.is_owner_authenticated:
+            return
+
+        actor_email = self.owner_session_email or "unknown"
+        if _is_owner_rate_limited(actor_email):
+            yield rx.toast(
+                f"Demasiadas acciones. Espera {OWNER_ACTION_WINDOW_SECONDS}s.",
+                duration=5000,
+            )
+            return
+
+        self.owner_reset_loading = True
+        yield
+
+        actor = self._owner_actor_info()
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    temp_password = await OwnerService.reset_user_password(
+                        session,
+                        company_id=self.owner_reset_company_id,
+                        user_id=int(user_id),
+                        reason="Reset de contraseña por admin de plataforma",
+                        **actor,
+                    )
+            _record_owner_action(actor_email)
+            self.owner_reset_temp_password = temp_password
+            self.owner_reset_target_username = username
+            yield rx.toast(f"Contraseña reseteada para {username}.", duration=4000)
+        except OwnerServiceError as e:
+            yield rx.toast(f"Error: {e}", duration=5000)
+        except Exception as e:
+            logger.error(f"Error reseteando contraseña: {e}", exc_info=True)
+            yield rx.toast(f"Error inesperado: {e}", duration=5000)
+        finally:
+            self.owner_reset_loading = False

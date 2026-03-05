@@ -17,7 +17,7 @@ def cambiar_contrasena_page() -> rx.Component:
                 rx.icon("lock", class_name="h-10 w-10 text-indigo-600"),
                 rx.el.div(
                     rx.el.h1(
-                        "Actualizar Contrasena",
+                        "Actualizar Contraseña",
                         class_name="text-2xl font-bold text-slate-800 text-center",
                     ),
                     rx.el.p(
@@ -31,27 +31,53 @@ def cambiar_contrasena_page() -> rx.Component:
             rx.el.form(
                 rx.el.div(
                     rx.el.label(
-                        "Nueva Contrasena",
+                        "Nueva Contraseña",
                         class_name="block text-sm font-medium text-slate-700",
                     ),
-                    rx.el.input(
-                        placeholder="Minimo 6 caracteres",
-                        name="password",
-                        type="password",
-                        class_name="mt-1 block w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    rx.el.div(
+                        rx.el.input(
+                            placeholder="Mínimo 6 caracteres",
+                            name="password",
+                            type=rx.cond(State.show_change_password, "text", "password"),
+                            class_name="block w-full h-10 px-3 pr-10 text-sm bg-white border border-slate-200 rounded-md placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        ),
+                        rx.el.button(
+                            rx.cond(
+                                State.show_change_password,
+                                rx.icon("eye-off", class_name="h-4 w-4 text-slate-400"),
+                                rx.icon("eye", class_name="h-4 w-4 text-slate-400"),
+                            ),
+                            type="button",
+                            on_click=State.toggle_change_password_visibility,
+                            class_name="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded transition-colors",
+                        ),
+                        class_name="relative mt-1",
                     ),
                     class_name="mb-4",
                 ),
                 rx.el.div(
                     rx.el.label(
-                        "Confirmar Contrasena",
+                        "Confirmar Contraseña",
                         class_name="block text-sm font-medium text-slate-700",
                     ),
-                    rx.el.input(
-                        placeholder="Repite la contrasena",
-                        name="confirm_password",
-                        type="password",
-                        class_name="mt-1 block w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    rx.el.div(
+                        rx.el.input(
+                            placeholder="Repite la contraseña",
+                            name="confirm_password",
+                            type=rx.cond(State.show_change_confirm_password, "text", "password"),
+                            class_name="block w-full h-10 px-3 pr-10 text-sm bg-white border border-slate-200 rounded-md placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        ),
+                        rx.el.button(
+                            rx.cond(
+                                State.show_change_confirm_password,
+                                rx.icon("eye-off", class_name="h-4 w-4 text-slate-400"),
+                                rx.icon("eye", class_name="h-4 w-4 text-slate-400"),
+                            ),
+                            type="button",
+                            on_click=State.toggle_change_confirm_password_visibility,
+                            class_name="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded transition-colors",
+                        ),
+                        class_name="relative mt-1",
                     ),
                     class_name="mb-6",
                 ),

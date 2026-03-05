@@ -310,6 +310,14 @@ def _company_actions(company: rx.Var) -> rx.Component:
             ),
             tone="slate",
         ),
+        _owner_action_icon_button(
+            "key-round",
+            "Resetear Contraseña",
+            on_click=State.owner_open_reset_modal(
+                company["id"], company["name"]
+            ),
+            tone="slate",
+        ),
         class_name="flex items-center gap-2 flex-wrap",
     )
 
@@ -997,6 +1005,207 @@ def _form_adjust_limits() -> rx.Component:
     )
 
 
+# ─── Modal de reset de contraseña ─────────────────────────
+
+def _reset_user_row(user: rx.Var[dict[str, str]]) -> rx.Component:
+    """Fila de usuario en el modal de reset de contraseña."""
+    return rx.el.div(
+        rx.el.div(
+            rx.el.div(
+                rx.icon("user", class_name="h-4 w-4 text-indigo-600"),
+                class_name=(
+                    "h-8 w-8 rounded-full bg-indigo-100 flex items-center "
+                    "justify-center flex-shrink-0"
+                ),
+            ),
+            rx.el.div(
+                rx.el.p(
+                    user["username"],
+                    class_name="text-sm font-medium text-slate-800",
+                ),
+                rx.el.p(
+                    rx.cond(
+                        user["email"] != "",
+                        user["email"],
+                        "Sin correo",
+                    ),
+                    class_name="text-xs text-slate-500",
+                ),
+                class_name="flex flex-col min-w-0",
+            ),
+            class_name="flex items-center gap-2.5 min-w-0 flex-1",
+        ),
+        rx.el.div(
+            rx.el.span(
+                user["role_name"],
+                class_name="text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full",
+            ),
+            rx.cond(
+                user["is_active"] == "true",
+                rx.el.span(
+                    "Activo",
+                    class_name="text-[11px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full",
+                ),
+                rx.el.span(
+                    "Inactivo",
+                    class_name="text-[11px] text-red-600 bg-red-50 px-2 py-0.5 rounded-full",
+                ),
+            ),
+            rx.el.button(
+                rx.icon("rotate-ccw", class_name="h-3.5 w-3.5"),
+                "Resetear",
+                on_click=State.owner_reset_password(user["id"], user["username"]),
+                disabled=State.owner_reset_loading,
+                class_name=(
+                    "ml-1 flex items-center gap-1 px-2.5 py-1 text-xs font-medium "
+                    "text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-md "
+                    f"{TRANSITIONS['fast']} disabled:opacity-50 disabled:cursor-not-allowed"
+                ),
+            ),
+            class_name="flex items-center gap-2 flex-shrink-0",
+        ),
+        class_name="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg",
+    )
+
+
+def _reset_password_modal() -> rx.Component:
+    """Modal de reseteo de contraseña con listado de usuarios."""
+    return rx.cond(
+        State.owner_reset_modal_open,
+        rx.el.div(
+            # Overlay
+            rx.el.div(
+                on_click=State.owner_close_reset_modal,
+                class_name="fixed inset-0 bg-black/40 z-[70] modal-overlay",
+            ),
+            # Panel
+            rx.el.div(
+                # Header
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.div(
+                            rx.icon("key-round", class_name="h-5 w-5 text-amber-600"),
+                            class_name=f"p-2 bg-amber-50 {RADIUS['lg']}",
+                        ),
+                        rx.el.div(
+                            rx.el.h2(
+                                "Resetear Contraseña",
+                                class_name="text-lg font-semibold text-slate-800",
+                            ),
+                            rx.el.p(
+                                State.owner_reset_company_name,
+                                class_name="text-sm text-slate-500",
+                            ),
+                            class_name="flex flex-col",
+                        ),
+                        class_name="flex items-center gap-3",
+                    ),
+                    rx.el.button(
+                        rx.icon("x", class_name="h-5 w-5"),
+                        on_click=State.owner_close_reset_modal,
+                        class_name=BUTTON_STYLES["icon_ghost"],
+                    ),
+                    class_name="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-slate-100",
+                ),
+                # Contraseña temporal generada (solo visible después de resetear)
+                rx.cond(
+                    State.owner_reset_temp_password != "",
+                    rx.el.div(
+                        rx.el.div(
+                            rx.icon("shield-check", class_name="h-5 w-5 text-emerald-600"),
+                            rx.el.div(
+                                rx.el.p(
+                                    "Contraseña temporal para ",
+                                    rx.el.span(
+                                        State.owner_reset_target_username,
+                                        class_name="font-semibold",
+                                    ),
+                                    class_name="text-sm text-emerald-800",
+                                ),
+                                rx.el.p(
+                                    "El usuario deberá cambiarla al iniciar sesión.",
+                                    class_name="text-xs text-emerald-600 mt-0.5",
+                                ),
+                                class_name="flex flex-col",
+                            ),
+                            class_name="flex items-start gap-2",
+                        ),
+                        rx.el.div(
+                            rx.el.code(
+                                State.owner_reset_temp_password,
+                                class_name=(
+                                    "text-lg font-mono font-bold text-emerald-900 "
+                                    "bg-emerald-100 px-4 py-2 rounded-lg tracking-wider "
+                                    "select-all"
+                                ),
+                            ),
+                            class_name="flex justify-center mt-2",
+                        ),
+                        rx.el.p(
+                            rx.icon("triangle-alert", class_name="h-3.5 w-3.5 inline mr-1"),
+                            "Copia esta contraseña ahora. No se mostrará de nuevo.",
+                            class_name="text-xs text-amber-700 mt-2 text-center",
+                        ),
+                        class_name=(
+                            "bg-emerald-50 border border-emerald-200 rounded-xl "
+                            "p-4 mb-4"
+                        ),
+                    ),
+                    rx.fragment(),
+                ),
+                # Loading
+                rx.cond(
+                    State.owner_reset_loading,
+                    rx.el.div(
+                        rx.icon("loader-circle", class_name="h-5 w-5 text-slate-400 animate-spin"),
+                        rx.el.span("Cargando...", class_name="text-sm text-slate-500"),
+                        class_name="flex items-center gap-2 justify-center py-6",
+                    ),
+                    rx.fragment(),
+                ),
+                # Lista de usuarios
+                rx.cond(
+                    State.owner_reset_users.length() > 0,  # type: ignore
+                    rx.el.div(
+                        rx.el.p(
+                            "Selecciona el usuario a resetear:",
+                            class_name="text-sm text-slate-600 mb-2 font-medium",
+                        ),
+                        rx.el.div(
+                            rx.foreach(State.owner_reset_users, _reset_user_row),
+                            class_name="flex flex-col gap-0.5 max-h-[320px] overflow-y-auto",
+                        ),
+                        class_name="flex flex-col",
+                    ),
+                    rx.cond(
+                        ~State.owner_reset_loading,
+                        rx.el.p(
+                            "No se encontraron usuarios en esta empresa.",
+                            class_name="text-sm text-slate-500 text-center py-6",
+                        ),
+                        rx.fragment(),
+                    ),
+                ),
+                # Footer
+                rx.el.div(
+                    rx.el.button(
+                        "Cerrar",
+                        on_click=State.owner_close_reset_modal,
+                        class_name=BUTTON_STYLES["secondary"] + " w-full sm:w-auto",
+                    ),
+                    class_name="flex justify-end mt-5 pt-4 border-t border-slate-100",
+                ),
+                class_name=(
+                    f"fixed z-[80] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 "
+                    f"w-[calc(100%-1.5rem)] sm:w-full max-w-lg bg-white {RADIUS['xl']} "
+                    f"{SHADOWS['xl']} p-4 sm:p-6 max-h-[92vh] overflow-y-auto"
+                ),
+            ),
+        ),
+        rx.fragment(),
+    )
+
+
 # ─── Modal de acción ──────────────────────────────────────
 
 def _action_modal() -> rx.Component:
@@ -1345,6 +1554,7 @@ def _owner_content() -> rx.Component:
         _pagination(),
         _audit_section(),
         _action_modal(),
+        _reset_password_modal(),
         class_name="w-full max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 fade-in-up",
     )
 
