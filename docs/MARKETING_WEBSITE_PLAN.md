@@ -30,7 +30,7 @@ Convertir visitas de internet en pruebas gratuitas de 15 dias y luego en cliente
   - Multiempresa con roles por tenant.
 
 ## Piezas de contenido para marketing
-1. Pagina principal (`/sitio`) con CTA repetido.
+1. Pagina principal (`/`) con CTA repetido.
 2. Pagina de precios (si se decide separar de la landing).
 3. Casos por rubro:
    - tienda de barrio

@@ -89,8 +89,8 @@ services:
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
       PUBLIC_API_URL: https://tuwayki.app
-      GA4_MEASUREMENT_ID: ${GA4_MEASUREMENT_ID:-}
-      META_PIXEL_ID: ${META_PIXEL_ID:-}
+      GA4_MEASUREMENT_ID: ${GA4_MEASUREMENT_ID:-G-3BTEW9TJ9S}
+      META_PIXEL_ID: ${META_PIXEL_ID:-25996276110052747}
       # Solo landing ejecuta migraciones (evita race condition entre los 3)
       SKIP_MIGRATE: "false"
     env_file:
