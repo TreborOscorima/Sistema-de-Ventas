@@ -61,6 +61,10 @@ class Purchase(rx.Model, table=True):
             "number",
             name="uq_purchase_company_branch_supplier_doc",
         ),
+        sqlalchemy.Index(
+            "ix_purchase_issue_date",
+            "issue_date",
+        ),
     )
 
     doc_type: str = Field(nullable=False, index=True)

@@ -172,6 +172,11 @@ class SaleInstallment(rx.Model, table=True):
             "sale_id",
             "status",
         ),
+        sqlalchemy.Index(
+            "ix_saleinstallment_duedate_status",
+            "due_date",
+            "status",
+        ),
     )
 
     sale_id: int = Field(foreign_key="sale.id")
@@ -253,6 +258,11 @@ class CashboxLog(rx.Model, table=True):
             "company_id",
             "branch_id",
             "timestamp",
+        ),
+        sqlalchemy.Index(
+            "ix_cashboxlog_timestamp_action",
+            "timestamp",
+            "action",
         ),
     )
 

@@ -24,6 +24,11 @@ class Product(rx.Model, table=True):
             "barcode",
             name="uq_product_company_branch_barcode",
         ),
+        sqlalchemy.Index(
+            "ix_product_search",
+            "category",
+            "description",
+        ),
     )
 
     barcode: str = Field(index=True, nullable=False)
