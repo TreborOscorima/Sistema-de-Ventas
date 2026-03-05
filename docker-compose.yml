@@ -10,7 +10,9 @@
 # Con dominio: NPM en npm_network. Hostnames: tuwayki_landing, tuwayki_sys, tuwayki_admin (puerto 3000).
 # MySQL y Redis solo en red interna; no se exponen al host.
 # Solo landing ejecuta migraciones; sys y admin usan SKIP_MIGRATE=true.
-# Las apps esperan service_healthy de MySQL/Redis antes de arrancar.
+# Las apps conectan a MySQL/Redis por hostname (tuwayki_mysql / tuwayki_redis) vía alias en internal_net.
+# Si ves "MySQL no disponible después de 120s": verifica que todos los contenedores estén en la misma red
+#   (docker network inspect <internal_net_id>) y que DB_HOST=tuwayki_mysql llegue al entrypoint.
 # Re-deploy sin borrar datos: docker compose build && docker compose up -d (no usar down -v).
 
 services:
@@ -48,7 +50,10 @@ services:
       retries: 10
       start_period: 60s
     networks:
-      - internal_net
+      internal_net:
+        aliases:
+          - mysql
+          - tuwayki_mysql
 
   redis:
     image: redis:7-alpine
@@ -62,7 +67,10 @@ services:
       timeout: 3s
       retries: 5
     networks:
-      - internal_net
+      internal_net:
+        aliases:
+          - redis
+          - tuwayki_redis
 
   # https://tuwayki.app/ — Landing pública (único que ejecuta migraciones)
   tuwayki_landing:
@@ -77,12 +85,12 @@ services:
     environment:
       APP_SURFACE: landing
       ENV: ${ENV:-prod}
-      DB_HOST: mysql
+      DB_HOST: ${DB_HOST:-tuwayki_mysql}
       DB_PORT: 3306
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
       DB_NAME: ${DB_NAME:-sistema_ventas}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://tuwayki_redis:6379/0
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
@@ -115,12 +123,12 @@ services:
       APP_SURFACE: app
       SKIP_MIGRATE: "true"
       ENV: ${ENV:-prod}
-      DB_HOST: mysql
+      DB_HOST: ${DB_HOST:-tuwayki_mysql}
       DB_PORT: 3306
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
       DB_NAME: ${DB_NAME:-sistema_ventas}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://tuwayki_redis:6379/0
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
@@ -150,12 +158,12 @@ services:
       APP_SURFACE: owner
       SKIP_MIGRATE: "true"
       ENV: ${ENV:-prod}
-      DB_HOST: mysql
+      DB_HOST: ${DB_HOST:-tuwayki_mysql}
       DB_PORT: 3306
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
       DB_NAME: ${DB_NAME:-sistema_ventas}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://tuwayki_redis:6379/0
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app

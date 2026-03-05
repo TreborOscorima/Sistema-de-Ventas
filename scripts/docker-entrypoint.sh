@@ -20,6 +20,7 @@ warn()  { echo -e "${YELLOW}[ENTRYPOINT]${NC} $*"; }
 fail()  { echo -e "${RED}[ENTRYPOINT]${NC} $*"; exit 1; }
 
 # ─── 1. Esperar MySQL ───────────────────────────────────────────────────────
+# En el stack de 3 superficies el servicio MySQL tiene alias tuwayki_mysql; compose inyecta DB_HOST.
 DB_HOST="${DB_HOST:-mysql}"
 DB_PORT="${DB_PORT:-3306}"
 DB_USER="${DB_USER:-app}"
