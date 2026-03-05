@@ -666,7 +666,7 @@ def page_registro() -> rx.Component:
 
 def page_login() -> rx.Component:
     """Página de login del sistema (superficie app/sys)."""
-    return login_page()
+    return authenticated_layout(rx.fragment())
 
 
 def page_marketing() -> rx.Component:
@@ -865,6 +865,7 @@ def _register_app_routes():
         page_login,
         route="/login",
         title="Iniciar sesión - TUWAYKIAPP",
+        on_load=State.page_init_login,
     )
     _add_private_page(
         page_cambiar_contrasena,

@@ -679,6 +679,12 @@ class State(RootState):
         yield
 
     @rx.event
+    async def page_init_login(self):
+        """on_load para /login. Redirige al dashboard si ya está autenticado."""
+        if self.is_authenticated:
+            yield rx.redirect("/dashboard")
+
+    @rx.event
     async def page_init_owner(self):
         """on_load para /owner. Verifica sesión activa del Owner Backoffice."""
         # No necesita _do_runtime_refresh del sistema de ventas
@@ -688,9 +694,12 @@ class State(RootState):
             return
         # Delta parcial: renderiza la UI de inmediato
         yield
-        # Cargar datos del backoffice
+        # Cargar datos inline (evita problemas de timing con dispatch de eventos)
         yield State.owner_load_companies  # type: ignore[attr-defined]
         yield State.owner_load_audit_logs(0)  # type: ignore[attr-defined]
+        # Fallback: si las empresas no cargaron, reintenta directamente
+        if not self.owner_companies:
+            yield State.owner_load_companies  # type: ignore[attr-defined]
 
     @rx.event
     async def page_init_owner_login(self):

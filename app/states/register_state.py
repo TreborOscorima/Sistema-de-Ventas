@@ -164,6 +164,9 @@ class RegisterState(MixinState):
                     max_branches=2,
                     max_users=3,
                     has_reservations_module=True,
+                    has_services_module=True,
+                    has_clients_module=True,
+                    has_credits_module=True,
                     has_electronic_billing=False,
                 )
                 session.add(company)
@@ -287,5 +290,8 @@ class RegisterState(MixinState):
         _clear_login_attempts(identifier, ip_address=client_ip)
         if hasattr(self, "selected_branch_id"):
             self.selected_branch_id = str(branch_id)
+        # Cargar runtime (suscripción, módulos, sucursales) igual que login
+        if hasattr(self, "refresh_auth_runtime_cache"):
+            self.refresh_auth_runtime_cache()
         self.is_registering = False
         return rx.redirect("/dashboard")
