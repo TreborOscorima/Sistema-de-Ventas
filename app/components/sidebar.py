@@ -474,7 +474,7 @@ rx.cond(
         rx.el.div(
             class_name="sidebar-hover-zone fixed top-0 left-0 z-[54] w-6 h-32",
         ),
-        # Botón de menú: aparece al hover y se auto-oculta tras 2s
+        # Botón de menú: siempre visible en móvil, auto-hide solo en desktop
         rx.el.button(
             rx.icon("menu", class_name="h-4 w-4 text-indigo-500"),
             on_click=State.toggle_sidebar,
@@ -485,14 +485,16 @@ rx.cond(
                 f"p-2 bg-white/80 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['sm']} "
                 f"hover:bg-white border border-slate-200/40 {TRANSITIONS['fast']} "
                 f"hover:scale-105 hover:shadow-md hover:border-slate-300/60 "
-                f"opacity-0 pointer-events-none"
+                f"md:opacity-0 md:pointer-events-none"
             ),
         ),
-        # CSS + JS para auto-hide y hover-reveal
+        # CSS + JS para auto-hide y hover-reveal (solo desktop con mouse)
         rx.script("""
             (function(){
                 if(window.__sidebarToggleAttached) return;
                 window.__sidebarToggleAttached = true;
+                var isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+                if(isTouch) return;
                 var hideTimer = null;
                 function showBtn(){
                     var btn = document.querySelector('.sidebar-toggle-btn');
@@ -512,12 +514,10 @@ rx.cond(
                     clearTimeout(hideTimer);
                     hideTimer = setTimeout(hideBtn, 2000);
                 }
-                // Mostrar al inicio brevemente
                 setTimeout(function(){
                     showBtn();
                     scheduleHide();
                 }, 300);
-                // Hover en la zona izquierda → mostrar
                 document.addEventListener('mousemove', function(e){
                     var zone = document.querySelector('.sidebar-hover-zone');
                     if(!zone) return;
@@ -527,7 +527,6 @@ rx.cond(
                         clearTimeout(hideTimer);
                     }
                 });
-                // Al salir del botón → auto-ocultar
                 document.addEventListener('mouseover', function(e){
                     var btn = document.querySelector('.sidebar-toggle-btn');
                     if(btn && btn.contains(e.target)){

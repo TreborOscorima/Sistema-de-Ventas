@@ -103,7 +103,9 @@ class State(RootState):
             return
 
         now = time.time()
-        if not force and (now - self._last_runtime_refresh_ts) < self._runtime_refresh_ttl:
+        # Forzar refresh si subscription_snapshot está vacío (plan no cargado)
+        snapshot_empty = not (self.subscription_snapshot or {}).get("plan_type")
+        if not force and not snapshot_empty and (now - self._last_runtime_refresh_ts) < self._runtime_refresh_ttl:
             return
         self._last_runtime_refresh_ts = now
 
@@ -413,6 +415,11 @@ class State(RootState):
     @rx.event
     async def page_init_default(self):
         """on_load para / y /dashboard (sin restricción de privilegio)."""
+        if not self.is_authenticated:
+            # Forzar sidebar abierto para mostrar contenido guest
+            self.sidebar_open = True
+            yield
+            return
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         redirect = self.run_common_guards()
@@ -683,6 +690,9 @@ class State(RootState):
         """on_load para /login. Redirige al dashboard si ya está autenticado."""
         if self.is_authenticated:
             yield rx.redirect("/dashboard")
+            return
+        # Forzar sidebar abierto para mostrar contenido guest en producción
+        self.sidebar_open = True
 
     @rx.event
     async def page_init_owner(self):
@@ -694,12 +704,29 @@ class State(RootState):
             return
         # Delta parcial: renderiza la UI de inmediato
         yield
-        # Cargar datos inline (evita problemas de timing con dispatch de eventos)
-        yield State.owner_load_companies  # type: ignore[attr-defined]
+        # Cargar empresas INLINE para evitar race conditions en producción
+        self.owner_loading = True
+        yield
+        try:
+            async with AsyncSessionLocal() as session:
+                from app.utils.tenant import tenant_bypass
+                from app.services.owner_service import OwnerService
+                with tenant_bypass():
+                    items, total = await OwnerService.list_companies(
+                        session,
+                        search=self.owner_search,
+                        page=self.owner_page,
+                        per_page=self.owner_per_page,
+                    )
+                self.owner_companies = items
+                self.owner_companies_total = total
+        except Exception as e:
+            import logging
+            logging.getLogger("State").error(f"Error cargando empresas en page_init_owner: {e}")
+        finally:
+            self.owner_loading = False
+        yield
         yield State.owner_load_audit_logs(0)  # type: ignore[attr-defined]
-        # Fallback: si las empresas no cargaron, reintenta directamente
-        if not self.owner_companies:
-            yield State.owner_load_companies  # type: ignore[attr-defined]
 
     @rx.event
     async def page_init_owner_login(self):
