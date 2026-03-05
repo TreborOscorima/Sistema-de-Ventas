@@ -96,6 +96,8 @@ Para ver el nombre de la red de NPM: `docker network ls` y localizar la red del 
 
 ## 1. Proxy Host — Landing (tuwayki.app)
 
+Si el landing usa Reflex con backend (WebSocket), las rutas `/_event`, `/_upload`, `/ping` deben ir al puerto **8000** de `tuwayki_landing`. Si solo sirve estático, no hace falta el bloque `location`.
+
 | Campo | Valor |
 |-------|--------|
 | **Domain Names** | `tuwayki.app` |
@@ -112,10 +114,42 @@ Para ver el nombre de la red de NPM: `docker network ls` y localizar la red del 
 - **HTTP/2 Support**: Activado.
 - **HSTS Enabled**: Activado (opcional pero recomendado).
 
-**Advanced — Custom Nginx Configuration** (opcional, para cabeceras SEO/seguridad):
+**Advanced — Custom Nginx Configuration** (si el landing usa backend/WebSocket, incluir los `location`; si no, solo las cabeceras):
 
 ```nginx
-# Cabeceras recomendadas para landing pública
+location /_event {
+    proxy_pass http://tuwayki_landing:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
+    proxy_buffering off;
+    proxy_cache off;
+}
+location /_upload {
+    proxy_pass http://tuwayki_landing:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
+    proxy_buffering off;
+}
+location /ping {
+    proxy_pass http://tuwayki_landing:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
 ```
@@ -125,6 +159,8 @@ Guardar y aplicar.
 ---
 
 ## 2. Proxy Host — Sistema de Ventas (sys.tuwayki.app)
+
+El frontend (HTML/JS) se sirve desde el puerto **3000**; el backend de Reflex (WebSocket `/_event`, `/_upload`, `/ping`) corre en el puerto **8000**. NPM debe enviar esas rutas al 8000 con soporte WebSocket; si no, verás "Cannot connect to server: timeout" en `wss://sys.tuwayki.app/_event`.
 
 | Campo | Valor |
 |-------|--------|
@@ -142,10 +178,45 @@ Guardar y aplicar.
 - **HTTP/2 Support**: Activado.
 - **HSTS Enabled**: Activado.
 
-**Advanced — Custom Nginx Configuration** (recomendado):
+**Advanced — Custom Nginx Configuration** (obligatorio para que el WebSocket y el backend funcionen):
 
 ```nginx
-# No indexar en buscadores (área de aplicación)
+# Backend Reflex (puerto 8000): WebSocket /_event y rutas de API
+location /_event {
+    proxy_pass http://tuwayki_sys:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
+    proxy_buffering off;
+    proxy_cache off;
+}
+location /_upload {
+    proxy_pass http://tuwayki_sys:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
+    proxy_buffering off;
+}
+location /ping {
+    proxy_pass http://tuwayki_sys:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+# Cabeceras recomendadas
 add_header X-Robots-Tag "noindex, nofollow" always;
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
@@ -156,6 +227,8 @@ Guardar y aplicar.
 ---
 
 ## 3. Proxy Host — Admin / Gestión de plataforma (admin.tuwayki.app)
+
+Igual que sys: el backend (/_event, /_upload, /ping) debe ir al puerto **8000** de `tuwayki_admin`.
 
 | Campo | Valor |
 |-------|--------|
@@ -173,10 +246,42 @@ Guardar y aplicar.
 - **HTTP/2 Support**: Activado.
 - **HSTS Enabled**: Activado.
 
-**Advanced — Custom Nginx Configuration** (recomendado):
+**Advanced — Custom Nginx Configuration** (obligatorio para WebSocket/backend):
 
 ```nginx
-# No indexar (área interna)
+location /_event {
+    proxy_pass http://tuwayki_admin:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
+    proxy_buffering off;
+    proxy_cache off;
+}
+location /_upload {
+    proxy_pass http://tuwayki_admin:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 86400;
+    proxy_send_timeout 86400;
+    proxy_buffering off;
+}
+location /ping {
+    proxy_pass http://tuwayki_admin:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 add_header X-Robots-Tag "noindex, nofollow" always;
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
