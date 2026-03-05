@@ -1,27 +1,22 @@
-# =============================================================================
-# Dockerfile — TUWAYKI Sistema de Ventas (Reflex + MySQL)
-#
-# Imagen multi-propósito: se usa para las 3 superficies (landing, app, owner)
-# diferenciadas por la variable de entorno APP_SURFACE.
-#
-# Build: docker compose -f docker-compose.prod.yml build
-# =============================================================================
-FROM python:3.13-slim
+# Sistema de Ventas (Reflex + MySQL) - Imagen para produccion
+# Esta imagen esta orientada a despliegue cloud con runtime de Reflex en modo prod.
+FROM python:3.11-slim
 
-# Optimizaciones de Python para contenedores:
-# - no generar .pyc (imagen más liviana)
-# - logs sin buffer (stdout inmediato)
-# - pip sin cache
+# Variables recomendadas para contenedores Python:
+# - no generar .pyc
+# - logs en stdout sin buffer
+# - pip sin cache para imagen mas liviana
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
+# Directorio de trabajo dentro del contenedor
 WORKDIR /app
 
-# Dependencias del sistema:
-# - gcc/pkg-config: compilación de paquetes Python nativos
-# - default-libmysqlclient-dev: conector MySQL
-# - curl/unzip: build del frontend Reflex (descarga de bun/node)
+# Dependencias del sistema necesarias para:
+# - conectores MySQL/PyMySQL
+# - compilacion de paquetes Python (gcc/pkg-config)
+# - build frontend de Reflex (curl/unzip)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     default-libmysqlclient-dev \
@@ -30,25 +25,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalar dependencias Python (cache de Docker: solo reinstala si cambia requirements.txt)
+# Copiamos primero requirements para aprovechar cache de Docker
+# (solo reinstala dependencias si requirements cambia)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código de la aplicación
+# Copiar codigo de la aplicacion
 COPY . .
 
-# Entrypoint: espera MySQL/Redis → migraciones → arranca Reflex
+# Script de entrada:
+# - espera MySQL/Redis
+# - aplica migraciones Alembic
+# - luego arranca Reflex
 COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Reflex expone:
-# - 3000: frontend (Next.js compilado)
-# - 8000: backend (Starlette/Granian API + WebSocket)
+# Puertos de Reflex (frontend 3000 + backend 8000)
 EXPOSE 3000 8000
 
+# ENTRYPOINT mantiene el pre-arranque obligatorio del sistema
 ENTRYPOINT ["/docker-entrypoint.sh"]
-
-# CMD por defecto: Reflex en modo producción
-# --env prod: desactiva HMR/dev mode
-# --backend-host 0.0.0.0: acepta conexiones externas
+# CMD final en produccion:
+# - --env prod desactiva modo desarrollo/HMR
+# - --backend-host 0.0.0.0 permite recibir trafico externo via nginx
 CMD ["reflex", "run", "--env", "prod", "--loglevel", "warning", "--backend-host", "0.0.0.0"]

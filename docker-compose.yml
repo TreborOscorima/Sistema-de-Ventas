@@ -1,0 +1,194 @@
+# Sistema de Ventas - Stack de producción (3 superficies para tuwayki.app)
+#
+# PRIMERA VEZ (checklist antes de "docker compose up -d"):
+#   1. cp .env.example .env  y editar .env (DB_PASSWORD, AUTH_SECRET_KEY obligatorios en prod).
+#   2. Crear red de NPM si no existe: docker network create nginx-proxy-manager_default
+#      (o usar el nombre de la red de tu NPM; ver con: docker network ls)
+#   3. docker compose build && docker compose up -d
+#
+# Uso normal: docker compose up -d
+# Con dominio: NPM en npm_network. Hostnames: tuwayki_landing, tuwayki_sys, tuwayki_admin (puerto 3000).
+# MySQL y Redis solo en red interna; no se exponen al host.
+# Solo landing ejecuta migraciones; sys y admin usan SKIP_MIGRATE=true.
+# Las apps conectan a MySQL/Redis por hostname (tuwayki_mysql / tuwayki_redis) vía alias en internal_net.
+# Si ves "MySQL no disponible después de 120s": verifica que todos los contenedores estén en la misma red
+#   (docker network inspect <internal_net_id>) y que DB_HOST=tuwayki_mysql llegue al entrypoint.
+# Re-deploy sin borrar datos: docker compose build && docker compose up -d (no usar down -v).
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tuwayki_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      MYSQL_DATABASE: ${DB_NAME:-sistema_ventas}
+      MYSQL_USER: app
+      MYSQL_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command:
+      - --default-authentication-plugin=caching_sha2_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-name-resolve
+      - --slow_query_log=1
+      - --long_query_time=2
+      - --log-error-verbosity=3
+      - --max_connections=200
+      - --innodb_buffer_pool_size=256M
+      - --innodb_log_file_size=128M
+      - --innodb_flush_log_at_trx_commit=1
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h localhost -u root -e 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      internal_net:
+        aliases:
+          - mysql
+          - tuwayki_mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: tuwayki_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      internal_net:
+        aliases:
+          - redis
+          - tuwayki_redis
+
+  # https://tuwayki.app/ — Landing pública (único que ejecuta migraciones)
+  tuwayki_landing:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuwayki_landing
+    restart: unless-stopped
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      APP_SURFACE: landing
+      ENV: ${ENV:-prod}
+      DB_HOST: ${DB_HOST:-tuwayki_mysql}
+      DB_PORT: 3306
+      DB_USER: app
+      DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      DB_NAME: ${DB_NAME:-sistema_ventas}
+      REDIS_URL: redis://tuwayki_redis:6379/0
+      PUBLIC_SITE_URL: https://tuwayki.app
+      PUBLIC_APP_URL: https://sys.tuwayki.app
+      PUBLIC_OWNER_URL: https://admin.tuwayki.app
+      # api_url en Reflex = URL base del backend (sin /api). Mismo host que el frontend si NPM hace proxy.
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-https://tuwayki.app}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-min-32-chars-for-production}
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+      GA4_MEASUREMENT_ID: ${GA4_MEASUREMENT_ID:-}
+      META_PIXEL_ID: ${META_PIXEL_ID:-}
+    env_file:
+      - .env
+    volumes:
+      - reflex_web_landing:/app/.web
+    networks:
+      - internal_net
+      - npm_network
+
+  # https://sys.tuwayki.app/ — Sistema de Ventas
+  tuwayki_sys:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuwayki_sys
+    restart: unless-stopped
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      tuwayki_landing: { condition: service_started }
+    environment:
+      APP_SURFACE: app
+      SKIP_MIGRATE: "true"
+      ENV: ${ENV:-prod}
+      DB_HOST: ${DB_HOST:-tuwayki_mysql}
+      DB_PORT: 3306
+      DB_USER: app
+      DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      DB_NAME: ${DB_NAME:-sistema_ventas}
+      REDIS_URL: redis://tuwayki_redis:6379/0
+      PUBLIC_SITE_URL: https://tuwayki.app
+      PUBLIC_APP_URL: https://sys.tuwayki.app
+      PUBLIC_OWNER_URL: https://admin.tuwayki.app
+      PUBLIC_API_URL: https://sys.tuwayki.app
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-min-32-chars-for-production}
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+    env_file:
+      - .env
+    volumes:
+      - reflex_web_sys:/app/.web
+    networks:
+      - internal_net
+      - npm_network
+
+  # https://admin.tuwayki.app/login — Gestión de plataforma (interna)
+  tuwayki_admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tuwayki_admin
+    restart: unless-stopped
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      tuwayki_landing: { condition: service_started }
+    environment:
+      APP_SURFACE: owner
+      SKIP_MIGRATE: "true"
+      ENV: ${ENV:-prod}
+      DB_HOST: ${DB_HOST:-tuwayki_mysql}
+      DB_PORT: 3306
+      DB_USER: app
+      DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      DB_NAME: ${DB_NAME:-sistema_ventas}
+      REDIS_URL: redis://tuwayki_redis:6379/0
+      PUBLIC_SITE_URL: https://tuwayki.app
+      PUBLIC_APP_URL: https://sys.tuwayki.app
+      PUBLIC_OWNER_URL: https://admin.tuwayki.app
+      PUBLIC_API_URL: https://admin.tuwayki.app
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-min-32-chars-for-production}
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+    env_file:
+      - .env
+    volumes:
+      - reflex_web_admin:/app/.web
+    networks:
+      - internal_net
+      - npm_network
+
+volumes:
+  mysql_data:
+  redis_data:
+  reflex_web_landing:
+  reflex_web_sys:
+  reflex_web_admin:
+
+networks:
+  internal_net:
+    driver: bridge
+
+  npm_network:
+    external: true
+    name: nginx-proxy-manager_default

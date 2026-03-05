@@ -663,6 +663,12 @@ def page_cuenta_suspendida() -> rx.Component:
 def page_registro() -> rx.Component:
     return registro_page()
 
+
+def page_login() -> rx.Component:
+    """Página de login del sistema (superficie app/sys)."""
+    return login_page()
+
+
 def page_marketing() -> rx.Component:
     return marketing_page()
 
@@ -855,6 +861,11 @@ def _register_landing_routes():
 
 
 def _register_app_routes():
+    _add_private_page(
+        page_login,
+        route="/login",
+        title="Iniciar sesión - TUWAYKIAPP",
+    )
     _add_private_page(
         page_cambiar_contrasena,
         route="/cambiar-clave",
