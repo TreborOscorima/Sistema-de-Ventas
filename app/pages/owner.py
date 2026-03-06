@@ -400,7 +400,7 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
                 rx.el.span(company["company_phone"], class_name="text-xs text-slate-500"),
                 class_name="flex items-center gap-1",
             ),
-            class_name="flex flex-col gap-1 mt-2",
+            class_name="flex flex-col gap-1 mt-2 min-w-0",
         ),
         rx.el.div(
             rx.el.div(
@@ -441,7 +441,7 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
                 class_name="text-[11px] text-slate-400 uppercase tracking-wide mt-0.5",
             ),
             _company_modules(company),
-            class_name="flex items-start justify-between gap-3 mt-3",
+            class_name="flex flex-col gap-2 mt-3",
         ),
         rx.el.div(
             rx.el.span(
@@ -449,7 +449,7 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
                 class_name="text-[11px] text-slate-400 uppercase tracking-wide mt-0.5",
             ),
             _company_actions(company),
-            class_name="flex items-start justify-between gap-3 mt-3",
+            class_name="flex flex-col gap-2 mt-3",
         ),
         class_name=f"bg-white border border-slate-200 {RADIUS['lg']} p-4",
     )
@@ -459,7 +459,7 @@ def _companies_table() -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.foreach(State.owner_companies, _company_mobile_card),
-            class_name="md:hidden flex flex-col gap-3",
+            class_name="grid grid-cols-1 gap-3 md:grid-cols-2 xl:hidden",
         ),
         rx.el.div(
             rx.el.table(
@@ -481,7 +481,7 @@ def _companies_table() -> rx.Component:
                 ),
                 class_name="w-full table-auto min-w-[980px]",
             ),
-            class_name="hidden md:block overflow-x-auto",
+            class_name="hidden xl:block overflow-x-auto",
         ),
         class_name=f"{CARD_STYLES['default']} p-3 sm:p-4",
     )
@@ -1029,7 +1029,7 @@ def _reset_user_row(user: rx.Var[dict[str, str]]) -> rx.Component:
                         user["email"],
                         "Sin correo",
                     ),
-                    class_name="text-xs text-slate-500",
+                    class_name="text-xs text-slate-500 break-all",
                 ),
                 class_name="flex flex-col min-w-0",
             ),
@@ -1062,9 +1062,12 @@ def _reset_user_row(user: rx.Var[dict[str, str]]) -> rx.Component:
                     f"{TRANSITIONS['fast']} disabled:opacity-50 disabled:cursor-not-allowed"
                 ),
             ),
-            class_name="flex items-center gap-2 flex-shrink-0",
+            class_name="flex flex-wrap items-center gap-2 sm:justify-end flex-shrink-0",
         ),
-        class_name="flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg",
+        class_name=(
+            "flex flex-col gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-lg "
+            "sm:flex-row sm:items-center sm:justify-between"
+        ),
     )
 
 
@@ -1134,9 +1137,9 @@ def _reset_password_modal() -> rx.Component:
                             rx.el.code(
                                 State.owner_reset_temp_password,
                                 class_name=(
-                                    "text-lg font-mono font-bold text-emerald-900 "
-                                    "bg-emerald-100 px-4 py-2 rounded-lg tracking-wider "
-                                    "select-all"
+                                    "block w-full min-w-0 overflow-x-auto text-center sm:text-left "
+                                    "text-lg font-mono font-bold text-emerald-900 bg-emerald-100 "
+                                    "px-4 py-2 rounded-lg tracking-wider select-all"
                                 ),
                             ),
                             rx.el.button(
@@ -1149,7 +1152,10 @@ def _reset_password_modal() -> rx.Component:
                                     f"{RADIUS['lg']} {TRANSITIONS['fast']}"
                                 ),
                             ),
-                            class_name="flex items-center justify-center gap-3 mt-2",
+                            class_name=(
+                                "mt-3 flex flex-col gap-2 sm:flex-row sm:items-center "
+                                "sm:justify-between"
+                            ),
                         ),
                         rx.el.p(
                             rx.icon("triangle-alert", class_name="h-3.5 w-3.5 inline mr-1"),
@@ -1207,7 +1213,7 @@ def _reset_password_modal() -> rx.Component:
                 ),
                 class_name=(
                     f"fixed z-[80] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 "
-                    f"w-[calc(100%-1.5rem)] sm:w-full max-w-lg bg-white {RADIUS['xl']} "
+                    f"w-[calc(100%-1.5rem)] sm:w-full max-w-2xl bg-white {RADIUS['xl']} "
                     f"{SHADOWS['xl']} p-4 sm:p-6 max-h-[92vh] overflow-y-auto"
                 ),
             ),
@@ -1315,6 +1321,42 @@ def _action_modal() -> rx.Component:
 
 # ─── Tabla de auditoría ──────────────────────────────────
 
+def _audit_log_card(log: rx.Var) -> rx.Component:
+    return rx.el.article(
+        rx.el.div(
+            rx.el.div(
+                rx.el.span("Fecha", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+                rx.el.p(log["created_at"], class_name="text-xs text-slate-500"),
+                class_name="flex flex-col gap-1",
+            ),
+            rx.el.div(
+                rx.el.span("Acción", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+                rx.el.p(log["action"], class_name="text-sm font-medium text-slate-700 break-words"),
+                class_name="flex flex-col gap-1",
+            ),
+            class_name="grid grid-cols-1 gap-3 sm:grid-cols-2",
+        ),
+        rx.el.div(
+            rx.el.div(
+                rx.el.span("Actor", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+                rx.el.p(log["actor_email"], class_name="text-sm text-slate-700 break-all"),
+                class_name="flex flex-col gap-1",
+            ),
+            rx.el.div(
+                rx.el.span("Empresa", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+                rx.el.p(log["target_company_name"], class_name="text-sm text-slate-700 break-words"),
+                class_name="flex flex-col gap-1",
+            ),
+            class_name="grid grid-cols-1 gap-3 sm:grid-cols-2",
+        ),
+        rx.el.div(
+            rx.el.span("Motivo", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+            rx.el.p(log["reason"], class_name="text-sm text-slate-500 break-words"),
+            class_name="flex flex-col gap-1",
+        ),
+        class_name=f"flex flex-col gap-4 border border-slate-200 bg-white p-4 {RADIUS['lg']}",
+    )
+
 def _audit_section() -> rx.Component:
     return rx.el.div(
         rx.el.div(
@@ -1334,48 +1376,55 @@ def _audit_section() -> rx.Component:
         rx.cond(
             State.owner_audit_logs.length() > 0,
             rx.el.div(
-                rx.el.table(
-                    rx.el.thead(
-                        rx.el.tr(
-                            rx.el.th("Fecha", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                            rx.el.th("Actor", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                            rx.el.th("Empresa", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                            rx.el.th("Acción", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                            rx.el.th("Motivo", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                            class_name="bg-slate-50 border-b border-slate-200",
-                        ),
-                    ),
-                    rx.el.tbody(
-                        rx.foreach(
-                            State.owner_audit_logs,
-                            lambda log: rx.el.tr(
-                                rx.el.td(
-                                    log["created_at"],
-                                    class_name="px-3 py-2 text-xs text-slate-500 whitespace-nowrap",
-                                ),
-                                rx.el.td(
-                                    log["actor_email"],
-                                    class_name="px-3 py-2 text-sm text-slate-700",
-                                ),
-                                rx.el.td(
-                                    log["target_company_name"],
-                                    class_name="px-3 py-2 text-sm text-slate-700",
-                                ),
-                                rx.el.td(
-                                    log["action"],
-                                    class_name="px-3 py-2 text-sm text-slate-700 font-medium",
-                                ),
-                                rx.el.td(
-                                    log["reason"],
-                                    class_name="px-3 py-2 text-sm text-slate-500 max-w-xs truncate",
-                                ),
-                                class_name=f"border-b border-slate-100 hover:bg-slate-50 {TRANSITIONS['fast']}",
+                rx.el.div(
+                    rx.foreach(State.owner_audit_logs, _audit_log_card),
+                    class_name="flex flex-col gap-3 xl:hidden",
+                ),
+                rx.el.div(
+                    rx.el.table(
+                        rx.el.thead(
+                            rx.el.tr(
+                                rx.el.th("Fecha", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Actor", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Empresa", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Acción", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Motivo", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                class_name="bg-slate-50 border-b border-slate-200",
                             ),
                         ),
+                        rx.el.tbody(
+                            rx.foreach(
+                                State.owner_audit_logs,
+                                lambda log: rx.el.tr(
+                                    rx.el.td(
+                                        log["created_at"],
+                                        class_name="px-3 py-2 text-xs text-slate-500 whitespace-nowrap",
+                                    ),
+                                    rx.el.td(
+                                        log["actor_email"],
+                                        class_name="px-3 py-2 text-sm text-slate-700",
+                                    ),
+                                    rx.el.td(
+                                        log["target_company_name"],
+                                        class_name="px-3 py-2 text-sm text-slate-700",
+                                    ),
+                                    rx.el.td(
+                                        log["action"],
+                                        class_name="px-3 py-2 text-sm text-slate-700 font-medium",
+                                    ),
+                                    rx.el.td(
+                                        log["reason"],
+                                        class_name="px-3 py-2 text-sm text-slate-500 max-w-xs truncate",
+                                    ),
+                                    class_name=f"border-b border-slate-100 hover:bg-slate-50 {TRANSITIONS['fast']}",
+                                ),
+                            ),
+                        ),
+                        class_name="w-full table-auto min-w-[920px]",
                     ),
-                    class_name="w-full table-auto",
+                    class_name="hidden xl:block overflow-x-auto",
                 ),
-                class_name="overflow-x-auto",
+                class_name="flex flex-col gap-3",
             ),
             rx.el.div(
                 rx.icon("inbox", class_name="h-8 w-8 text-slate-300"),
