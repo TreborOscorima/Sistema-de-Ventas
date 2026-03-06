@@ -272,6 +272,12 @@ class OwnerState:
                 .where(UserModel.is_platform_owner == True)  # noqa: E712
                 .execution_options(tenant_bypass=True)
             ).first()
+            if not owner_user:
+                owner_user = session.exec(
+                    select(UserModel)
+                    .where(UserModel.email == email)
+                    .execution_options(tenant_bypass=True)
+                ).first()
             if owner_user:
                 owner_user_id = owner_user.id
 
@@ -521,8 +527,15 @@ class OwnerState:
 
     def _owner_actor_info(self) -> dict:
         """Extrae info del actor owner actual (desde sesión owner, no sistema de ventas)."""
+        actor_user_id = self.owner_session_user_id
+        if not actor_user_id:
+            actor_user_id = (self.current_user or {}).get("id", 0)
+        try:
+            actor_user_id = int(actor_user_id or 0)
+        except (TypeError, ValueError):
+            actor_user_id = 0
         return {
-            "actor_user_id": self.owner_session_user_id or self.current_user.get("id", 0),
+            "actor_user_id": actor_user_id,
             "actor_email": self.owner_session_email or "owner@platform",
         }
 
@@ -557,6 +570,13 @@ class OwnerState:
         yield
 
         actor = self._owner_actor_info()
+        if actor["actor_user_id"] <= 0:
+            self.owner_loading = False
+            yield rx.toast(
+                "Falta un usuario owner para auditoría. Ejecuta scripts/make_owner.py y vuelve a iniciar sesión.",
+                duration=7000,
+            )
+            return
         action = self.owner_modal_action
         company_id = self.owner_modal_company_id
         valid_actions = {"change_plan", "change_status", "extend_trial", "adjust_limits"}
@@ -685,6 +705,13 @@ class OwnerState:
             return
 
         actor = self._owner_actor_info()
+        if actor["actor_user_id"] <= 0:
+            self.owner_loading = False
+            yield rx.toast(
+                "Falta un usuario owner para auditoría. Ejecuta scripts/make_owner.py y vuelve a iniciar sesión.",
+                duration=7000,
+            )
+            return
         self.owner_loading = True
         yield
 
@@ -773,6 +800,13 @@ class OwnerState:
         yield
 
         actor = self._owner_actor_info()
+        if actor["actor_user_id"] <= 0:
+            self.owner_reset_loading = False
+            yield rx.toast(
+                "Falta un usuario owner para auditoría. Ejecuta scripts/make_owner.py y vuelve a iniciar sesión.",
+                duration=7000,
+            )
+            return
         try:
             async with AsyncSessionLocal() as session:
                 with tenant_bypass():
