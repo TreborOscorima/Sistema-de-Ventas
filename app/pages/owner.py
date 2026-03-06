@@ -36,6 +36,38 @@ def _app_href(path: str = "/") -> str:
     return normalized
 
 
+def _copy_text_script(target_id: str) -> str:
+    """Copia texto desde un nodo del DOM con fallback para HTTP/IP."""
+    return (
+        "(function(){"
+        f"const el=document.getElementById('{target_id}');"
+        "const text=(el?.textContent||'').trim();"
+        "if(!text){return;}"
+        "const fallback=()=>{"
+        "const ta=document.createElement('textarea');"
+        "ta.value=text;"
+        "ta.setAttribute('readonly','');"
+        "ta.style.position='fixed';"
+        "ta.style.opacity='0';"
+        "ta.style.left='-9999px';"
+        "document.body.appendChild(ta);"
+        "ta.focus();"
+        "ta.select();"
+        "ta.setSelectionRange(0, ta.value.length);"
+        "let copied=false;"
+        "try{copied=document.execCommand('copy');}catch(_err){copied=false;}"
+        "document.body.removeChild(ta);"
+        "if(!copied){window.prompt('Copia manualmente la contraseña temporal:', text);}"
+        "};"
+        "if(window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText){"
+        "navigator.clipboard.writeText(text).catch(()=>fallback());"
+        "}else{"
+        "fallback();"
+        "}"
+        "})();"
+    )
+
+
 # ─── Helpers de estilo ──────────────────────────────────
 
 _BADGE_PLAN = {
@@ -1138,6 +1170,7 @@ def _reset_password_modal() -> rx.Component:
                         rx.el.div(
                             rx.el.code(
                                 State.owner_reset_temp_password,
+                                id="owner-temp-password-value",
                                 class_name=(
                                     "block w-full min-w-0 overflow-x-auto text-center sm:text-left "
                                     "text-lg font-mono font-bold text-emerald-900 bg-emerald-100 "
@@ -1147,7 +1180,9 @@ def _reset_password_modal() -> rx.Component:
                             rx.el.button(
                                 rx.icon("copy", class_name="h-4 w-4"),
                                 "Copiar",
-                                on_click=rx.set_clipboard(State.owner_reset_temp_password),
+                                on_click=rx.call_script(
+                                    _copy_text_script("owner-temp-password-value")
+                                ),
                                 type="button",
                                 class_name=(
                                     f"flex items-center gap-1.5 px-3 py-2 text-sm font-medium "
