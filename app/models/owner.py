@@ -20,10 +20,11 @@ class OwnerAuditLog(rx.Model, table=True):
         sqlalchemy.Index("ix_owner_audit_log_action", "action"),
     )
 
-    actor_user_id: int = Field(
+    actor_user_id: Optional[int] = Field(
         foreign_key="user.id",
-        nullable=False,
-        description="Usuario owner que ejecutó la acción",
+        default=None,
+        nullable=True,
+        description="Usuario owner que ejecutó la acción si existe en la tabla user",
     )
     actor_email: str = Field(
         nullable=False,
