@@ -1056,6 +1056,7 @@ def _reset_user_row(user: rx.Var[dict[str, str]]) -> rx.Component:
                 "Resetear",
                 on_click=State.owner_reset_password(user["id"], user["username"]),
                 disabled=State.owner_reset_loading,
+                type="button",
                 class_name=(
                     "ml-1 flex items-center gap-1 px-2.5 py-1 text-xs font-medium "
                     "text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-md "
@@ -1106,13 +1107,14 @@ def _reset_password_modal() -> rx.Component:
                     rx.el.button(
                         rx.icon("x", class_name="h-5 w-5"),
                         on_click=State.owner_close_reset_modal,
+                        type="button",
                         class_name=BUTTON_STYLES["icon_ghost"],
                     ),
                     class_name="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-slate-100",
                 ),
                 # Contraseña temporal generada (solo visible después de resetear)
                 rx.cond(
-                    State.owner_reset_temp_password != "",
+                    State.owner_reset_result_visible,
                     rx.el.div(
                         rx.el.div(
                             rx.icon("shield-check", class_name="h-5 w-5 text-emerald-600"),
@@ -1146,6 +1148,7 @@ def _reset_password_modal() -> rx.Component:
                                 rx.icon("copy", class_name="h-4 w-4"),
                                 "Copiar",
                                 on_click=rx.set_clipboard(State.owner_reset_temp_password),
+                                type="button",
                                 class_name=(
                                     f"flex items-center gap-1.5 px-3 py-2 text-sm font-medium "
                                     f"text-emerald-700 bg-emerald-100 hover:bg-emerald-200 "
@@ -1207,6 +1210,7 @@ def _reset_password_modal() -> rx.Component:
                     rx.el.button(
                         "Cerrar",
                         on_click=State.owner_close_reset_modal,
+                        type="button",
                         class_name=BUTTON_STYLES["secondary"] + " w-full sm:w-auto",
                     ),
                     class_name="flex justify-end mt-5 pt-4 border-t border-slate-100",

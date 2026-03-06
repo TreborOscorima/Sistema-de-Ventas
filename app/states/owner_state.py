@@ -192,6 +192,7 @@ class OwnerState:
     owner_reset_users: list[dict[str, str]] = []
     owner_reset_temp_password: str = ""
     owner_reset_target_username: str = ""
+    owner_reset_result_visible: bool = False
     owner_reset_loading: bool = False
 
     # ─── Loading ───────────────────────────────────────
@@ -725,6 +726,7 @@ class OwnerState:
         self.owner_reset_company_name = company_name
         self.owner_reset_temp_password = ""
         self.owner_reset_target_username = ""
+        self.owner_reset_result_visible = False
         self.owner_reset_users = []
         self.owner_reset_loading = True
         yield
@@ -748,6 +750,7 @@ class OwnerState:
         self.owner_reset_modal_open = False
         self.owner_reset_temp_password = ""
         self.owner_reset_target_username = ""
+        self.owner_reset_result_visible = False
 
     @rx.event
     async def owner_reset_password(self, user_id: str, username: str):
@@ -764,6 +767,9 @@ class OwnerState:
             return
 
         self.owner_reset_loading = True
+        self.owner_reset_temp_password = ""
+        self.owner_reset_target_username = ""
+        self.owner_reset_result_visible = False
         yield
 
         actor = self._owner_actor_info()
@@ -778,8 +784,11 @@ class OwnerState:
                         **actor,
                     )
             _record_owner_action(actor_email)
-            self.owner_reset_temp_password = temp_password
+            self.owner_reset_temp_password = temp_password.strip()
             self.owner_reset_target_username = username
+            self.owner_reset_result_visible = True
+            # Fuerza rerender del listado para evitar UI stale dentro del modal.
+            self.owner_reset_users = [dict(item) for item in self.owner_reset_users]
             self.owner_reset_loading = False
             yield
             yield rx.toast(f"Contraseña reseteada para {username}.", duration=4000)

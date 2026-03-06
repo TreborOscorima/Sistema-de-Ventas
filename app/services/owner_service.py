@@ -922,13 +922,13 @@ class OwnerService:
         if not user or user.company_id != company_id:
             raise OwnerServiceError("Usuario no encontrado en esta empresa.")
 
-        # Generar contraseña temporal: 10 chars, al menos 1 mayúscula, 1 dígito, 1 especial
-        alphabet = string.ascii_letters + string.digits
+        # Generar contraseña temporal legible: 10 chars, al menos 1 mayúscula,
+        # 1 minúscula y 1 dígito. Evitamos símbolos para simplificar copiado
+        # y descartar problemas de render/serialización en UI.
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
         while True:
-            temp_password = "".join(secrets.choice(alphabet) for _ in range(8))
-            temp_password += secrets.choice(string.digits)
-            temp_password += secrets.choice("!@#$%")
-            # Mezclar para que los últimos chars no siempre sean dígito + especial
+            temp_password = "".join(secrets.choice(alphabet) for _ in range(10))
+            # Mezclar para que la composición no siga un patrón fijo.
             temp_list = list(temp_password)
             secrets.SystemRandom().shuffle(temp_list)
             temp_password = "".join(temp_list)
