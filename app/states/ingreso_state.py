@@ -36,6 +36,7 @@ class IngresoState(MixinState):
     purchase_notes: str = ""
     purchase_supplier_query: str = ""
     purchase_supplier_suggestions: List[Dict[str, Any]] = []
+    purchase_supplier_active_index: int = -1
     purchase_supplier_input_key: int = 0
     selected_supplier: Optional[Dict[str, Any]] = None
     is_existing_product: bool = False
@@ -73,6 +74,7 @@ class IngresoState(MixinState):
     }
     new_entry_items: List[TransactionItem] = []
     entry_autocomplete_suggestions: List[str] = []
+    entry_autocomplete_active_index: int = -1
 
     @rx.var(cache=True)
     def entry_subtotal(self) -> float:
@@ -83,6 +85,22 @@ class IngresoState(MixinState):
         return self._round_currency(
             sum((item["subtotal"] for item in self.new_entry_items))
         )
+
+    @rx.var(cache=True)
+    def purchase_supplier_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for index, supplier in enumerate(self.purchase_supplier_suggestions):
+            row = dict(supplier)
+            row["index"] = index
+            rows.append(row)
+        return rows
+
+    @rx.var(cache=True)
+    def entry_autocomplete_rows(self) -> List[Dict[str, Any]]:
+        return [
+            {"value": suggestion, "index": index}
+            for index, suggestion in enumerate(self.entry_autocomplete_suggestions)
+        ]
 
     @rx.event
     def handle_entry_change(self, field: str, value: str):
@@ -116,6 +134,7 @@ class IngresoState(MixinState):
                     branch_id = self._branch_id()
                     if not company_id or not branch_id:
                         self.entry_autocomplete_suggestions = []
+                        self.entry_autocomplete_active_index = -1
                         return
                     with rx.session() as session:
                         products = session.exec(
@@ -126,8 +145,12 @@ class IngresoState(MixinState):
                             .limit(5)
                         ).all()
                         self.entry_autocomplete_suggestions = [p.description for p in products]
+                        self.entry_autocomplete_active_index = (
+                            0 if self.entry_autocomplete_suggestions else -1
+                        )
                 else:
                     self.entry_autocomplete_suggestions = []
+                    self.entry_autocomplete_active_index = -1
             elif field == "barcode":
                 return self._process_entry_barcode(value)
         except ValueError as e:
@@ -162,12 +185,14 @@ class IngresoState(MixinState):
         term = (query or "").strip()
         if len(term) < 2:
             self.purchase_supplier_suggestions = []
+            self.purchase_supplier_active_index = -1
             return
         search = f"%{term}%"
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             self.purchase_supplier_suggestions = []
+            self.purchase_supplier_active_index = -1
             return
         with rx.session() as session:
             suppliers = session.exec(
@@ -191,11 +216,47 @@ class IngresoState(MixinState):
             }
             for supplier in suppliers
         ]
+        self.purchase_supplier_active_index = (
+            0 if self.purchase_supplier_suggestions else -1
+        )
 
     @rx.event
-    def handle_supplier_search_enter(self, key: str, input_id: str):
-        if key == "Enter":
-            return rx.call_script(f"document.getElementById('{input_id}').blur()")
+    def handle_supplier_search_keydown(self, key: str):
+        if not self.purchase_supplier_suggestions:
+            return
+        total = len(self.purchase_supplier_suggestions)
+        if key == "ArrowDown":
+            if self.purchase_supplier_active_index < 0:
+                self.purchase_supplier_active_index = 0
+            else:
+                self.purchase_supplier_active_index = min(
+                    self.purchase_supplier_active_index + 1,
+                    total - 1,
+                )
+            return
+        if key == "ArrowUp":
+            if self.purchase_supplier_active_index < 0:
+                self.purchase_supplier_active_index = 0
+            else:
+                self.purchase_supplier_active_index = max(
+                    self.purchase_supplier_active_index - 1,
+                    0,
+                )
+            return
+        if key in ("Enter", "NumpadEnter"):
+            idx = self.purchase_supplier_active_index
+            if idx < 0:
+                idx = 0
+            if 0 <= idx < total:
+                return self.select_supplier(self.purchase_supplier_suggestions[idx])
+            return
+        if key == "Escape":
+            self.purchase_supplier_suggestions = []
+            self.purchase_supplier_active_index = -1
+
+    @rx.event
+    def set_purchase_supplier_active_index(self, index: int):
+        self.purchase_supplier_active_index = index
 
     @rx.event
     def select_supplier(self, supplier_data: dict | Supplier):
@@ -211,6 +272,7 @@ class IngresoState(MixinState):
         self.selected_supplier = selected
         self.purchase_supplier_query = ""
         self.purchase_supplier_suggestions = []
+        self.purchase_supplier_active_index = -1
         self.purchase_supplier_input_key += 1
 
     @rx.event
@@ -222,6 +284,7 @@ class IngresoState(MixinState):
         self.selected_supplier = None
         self.purchase_supplier_query = ""
         self.purchase_supplier_suggestions = []
+        self.purchase_supplier_active_index = -1
         self.purchase_supplier_input_key += 1
 
     def _reset_purchase_form(self):
@@ -232,6 +295,7 @@ class IngresoState(MixinState):
         self.purchase_notes = ""
         self.purchase_supplier_query = ""
         self.purchase_supplier_suggestions = []
+        self.purchase_supplier_active_index = -1
         self.purchase_supplier_input_key += 1
         self.selected_supplier = None
 
@@ -337,6 +401,7 @@ class IngresoState(MixinState):
             self.new_entry_item["sale_price"] = 0
             self.new_entry_item["subtotal"] = 0
             self.entry_autocomplete_suggestions = []
+            self.entry_autocomplete_active_index = -1
             self._set_new_product_mode()
             return
 
@@ -346,6 +411,7 @@ class IngresoState(MixinState):
             if product:
                 self._apply_existing_product_context(product)
                 self.entry_autocomplete_suggestions = []
+                self.entry_autocomplete_active_index = -1
                 return rx.toast(
                     f"Producto '{product['description']}' cargado",
                     duration=2000,
@@ -491,6 +557,46 @@ class IngresoState(MixinState):
             )
 
     @rx.event
+    def handle_entry_description_keydown(self, key: str):
+        if not self.entry_autocomplete_suggestions:
+            return
+        total = len(self.entry_autocomplete_suggestions)
+        if key == "ArrowDown":
+            if self.entry_autocomplete_active_index < 0:
+                self.entry_autocomplete_active_index = 0
+            else:
+                self.entry_autocomplete_active_index = min(
+                    self.entry_autocomplete_active_index + 1,
+                    total - 1,
+                )
+            return
+        if key == "ArrowUp":
+            if self.entry_autocomplete_active_index < 0:
+                self.entry_autocomplete_active_index = 0
+            else:
+                self.entry_autocomplete_active_index = max(
+                    self.entry_autocomplete_active_index - 1,
+                    0,
+                )
+            return
+        if key in ("Enter", "NumpadEnter"):
+            idx = self.entry_autocomplete_active_index
+            if idx < 0:
+                idx = 0
+            if 0 <= idx < total:
+                return self.select_product_for_entry(
+                    self.entry_autocomplete_suggestions[idx]
+                )
+            return
+        if key == "Escape":
+            self.entry_autocomplete_suggestions = []
+            self.entry_autocomplete_active_index = -1
+
+    @rx.event
+    def set_entry_autocomplete_active_index(self, index: int):
+        self.entry_autocomplete_active_index = index
+
+    @rx.event
     def remove_item_from_entry(self, temp_id: str):
         self.new_entry_items = [
             item for item in self.new_entry_items if item["temp_id"] != temp_id
@@ -547,6 +653,7 @@ class IngresoState(MixinState):
                     entry for entry in self.new_entry_items if entry["temp_id"] != temp_id
                 ]
                 self.entry_autocomplete_suggestions = []
+                self.entry_autocomplete_active_index = -1
                 return
 
     @rx.event
@@ -1059,6 +1166,7 @@ class IngresoState(MixinState):
             "requires_batches": False,
         }
         self.entry_autocomplete_suggestions = []
+        self.entry_autocomplete_active_index = -1
         self._set_new_product_mode()
 
     def _find_product_by_barcode(self, barcode: str) -> Optional[Dict[str, Any]]:
@@ -1144,6 +1252,8 @@ class IngresoState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
+            self.entry_autocomplete_suggestions = []
+            self.entry_autocomplete_active_index = -1
             return
         with rx.session() as session:
             product = session.exec(
@@ -1169,3 +1279,4 @@ class IngresoState(MixinState):
                     }
                 )
         self.entry_autocomplete_suggestions = []
+        self.entry_autocomplete_active_index = -1

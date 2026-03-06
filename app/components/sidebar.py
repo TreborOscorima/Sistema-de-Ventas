@@ -466,15 +466,19 @@ rx.cond(
     ),
     rx.fragment(),
 ),
-# Zona de hover invisible (izquierda) + botón flotante con auto-hide
+# Zona de reactivación izquierda + botón flotante con auto-hide
 rx.cond(
     ~State.sidebar_open,
     rx.el.div(
-        # Zona sensible invisible en el borde izquierdo
-        rx.el.div(
-            class_name="sidebar-hover-zone fixed top-0 left-0 z-[54] w-6 h-32",
+        # Zona sensible del borde izquierdo para desktop (hover) y móvil (tap)
+        rx.el.button(
+            on_click=State.toggle_sidebar,
+            title="Abrir menu lateral",
+            aria_label="Abrir menu lateral",
+            type="button",
+            class_name="sidebar-hover-zone fixed top-3 left-0 z-[54] h-14 w-5 border-0 bg-transparent p-0 m-0 appearance-none md:top-0 md:h-32 md:w-6",
         ),
-        # Botón de menú: siempre visible en móvil, auto-hide solo en desktop
+        # Botón de menú: visible al colapsar y se auto-oculta en desktop y móvil
         rx.el.button(
             rx.icon("menu", class_name="h-4 w-4 text-indigo-500"),
             on_click=State.toggle_sidebar,
@@ -485,60 +489,90 @@ rx.cond(
                 f"p-2 bg-white/80 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['sm']} "
                 f"hover:bg-white border border-slate-200/40 {TRANSITIONS['fast']} "
                 f"hover:scale-105 hover:shadow-md hover:border-slate-300/60 "
-                f"md:opacity-0 md:pointer-events-none"
+                f"opacity-0 pointer-events-none"
             ),
         ),
-        # CSS + JS para auto-hide y hover-reveal (solo desktop con mouse)
+        # CSS + JS para auto-hide y reveal por hover/tap en el borde izquierdo
         rx.script("""
             (function(){
-                if(window.__sidebarToggleAttached) return;
-                window.__sidebarToggleAttached = true;
-                var isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-                if(isTouch) return;
-                var hideTimer = null;
-                function showBtn(){
-                    var btn = document.querySelector('.sidebar-toggle-btn');
-                    if(!btn) return;
-                    btn.style.opacity = '1';
-                    btn.style.pointerEvents = 'auto';
-                    btn.style.transition = 'opacity 0.2s ease';
+                function getBtn(){
+                    return document.querySelector('.sidebar-toggle-btn');
                 }
-                function hideBtn(){
-                    var btn = document.querySelector('.sidebar-toggle-btn');
-                    if(!btn) return;
-                    btn.style.opacity = '0';
-                    btn.style.pointerEvents = 'none';
-                    btn.style.transition = 'opacity 0.5s ease';
+                function getZone(){
+                    return document.querySelector('.sidebar-hover-zone');
                 }
-                function scheduleHide(){
-                    clearTimeout(hideTimer);
-                    hideTimer = setTimeout(hideBtn, 2000);
+                if(!window.__sidebarToggleRuntime){
+                    var hideTimer = null;
+                    function clearHide(){
+                        clearTimeout(hideTimer);
+                    }
+                    function showBtn(){
+                        var btn = getBtn();
+                        if(!btn) return;
+                        btn.style.opacity = '1';
+                        btn.style.pointerEvents = 'auto';
+                        btn.style.transition = 'opacity 0.2s ease';
+                    }
+                    function hideBtn(){
+                        var btn = getBtn();
+                        if(!btn) return;
+                        btn.style.opacity = '0';
+                        btn.style.pointerEvents = 'none';
+                        btn.style.transition = 'opacity 0.45s ease';
+                    }
+                    function scheduleHide(delay){
+                        clearHide();
+                        hideTimer = setTimeout(hideBtn, delay || 2000);
+                    }
+                    window.__sidebarToggleRuntime = {
+                        showBtn: showBtn,
+                        hideBtn: hideBtn,
+                        scheduleHide: scheduleHide,
+                        clearHide: clearHide
+                    };
+                    document.addEventListener('mousemove', function(e){
+                        var zone = getZone();
+                        if(!zone) return;
+                        var rect = zone.getBoundingClientRect();
+                        if(
+                            e.clientX <= rect.right &&
+                            e.clientY >= rect.top &&
+                            e.clientY <= rect.bottom
+                        ){
+                            showBtn();
+                            clearHide();
+                        }
+                    });
+                    document.addEventListener('mouseover', function(e){
+                        var btn = getBtn();
+                        if(btn && btn.contains(e.target)){
+                            clearHide();
+                        }
+                    });
+                    document.addEventListener('mouseout', function(e){
+                        var btn = getBtn();
+                        if(btn && btn.contains(e.target)){
+                            scheduleHide(1800);
+                        }
+                    });
+                    document.addEventListener('touchstart', function(e){
+                        var zone = getZone();
+                        if(zone && zone.contains(e.target)){
+                            showBtn();
+                            scheduleHide(2200);
+                            return;
+                        }
+                        var btn = getBtn();
+                        if(btn && btn.contains(e.target)){
+                            clearHide();
+                        }
+                    }, {passive: true});
                 }
                 setTimeout(function(){
-                    showBtn();
-                    scheduleHide();
-                }, 300);
-                document.addEventListener('mousemove', function(e){
-                    var zone = document.querySelector('.sidebar-hover-zone');
-                    if(!zone) return;
-                    var rect = zone.getBoundingClientRect();
-                    if(e.clientX <= rect.right && e.clientY <= rect.bottom){
-                        showBtn();
-                        clearTimeout(hideTimer);
-                    }
-                });
-                document.addEventListener('mouseover', function(e){
-                    var btn = document.querySelector('.sidebar-toggle-btn');
-                    if(btn && btn.contains(e.target)){
-                        clearTimeout(hideTimer);
-                    }
-                });
-                document.addEventListener('mouseout', function(e){
-                    var btn = document.querySelector('.sidebar-toggle-btn');
-                    if(btn && btn.contains(e.target)){
-                        scheduleHide();
-                    }
-                });
+                    if(!window.__sidebarToggleRuntime) return;
+                    window.__sidebarToggleRuntime.showBtn();
+                    window.__sidebarToggleRuntime.scheduleHide(2200);
+                }, 80);
             })();
         """),
     ),

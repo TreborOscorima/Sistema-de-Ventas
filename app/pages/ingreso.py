@@ -3,6 +3,37 @@ from app.state import State
 from app.components.ui import TABLE_STYLES, page_title, permission_guard
 
 
+def _ingreso_autocomplete_shortcuts() -> rx.Component:
+    return rx.script(
+        """
+        (function(){
+            if(window.__ingresoAutocompleteKbAttached) return;
+            window.__ingresoAutocompleteKbAttached = true;
+            document.addEventListener('keydown', function(e){
+                if(e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                var el = document.activeElement;
+                if(!el) return;
+                var wrapper = el.closest('[data-ingreso-autocomplete]');
+                if(!wrapper) return;
+                var dropdown = wrapper.querySelector('[data-ingreso-autocomplete-dropdown]');
+                if(!dropdown || dropdown.children.length === 0) return;
+                e.preventDefault();
+                setTimeout(function(){
+                    var items = dropdown.querySelectorAll('button');
+                    for(var i = 0; i < items.length; i++){
+                        var cls = ' ' + items[i].className + ' ';
+                        if(cls.indexOf(' bg-indigo-50 ') > -1){
+                            items[i].scrollIntoView({block: 'nearest'});
+                            break;
+                        }
+                    }
+                }, 80);
+            });
+        })();
+        """
+    )
+
+
 def item_entry_row(item: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
         rx.el.td(item["barcode"], class_name="py-3 px-4 hidden lg:table-cell"),
@@ -88,6 +119,7 @@ def ingreso_page() -> rx.Component:
                             placeholder="Buscar por Nombre de Empresa o N° de Registro",
                             value=State.purchase_supplier_query,
                             on_change=State.search_supplier_change,
+                            on_key_down=State.handle_supplier_search_keydown,
                             class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                             auto_complete=False,
                         ),
@@ -97,7 +129,7 @@ def ingreso_page() -> rx.Component:
                         State.purchase_supplier_suggestions.length() > 0,
                         rx.el.div(
                             rx.foreach(
-                                State.purchase_supplier_suggestions,
+                                State.purchase_supplier_rows,
                                 lambda supplier: rx.el.button(
                                     rx.el.div(
                                         rx.el.span(
@@ -114,13 +146,23 @@ def ingreso_page() -> rx.Component:
                                     supplier=supplier: State.select_supplier(
                                         supplier
                                     ),
-                                    class_name="w-full text-left p-2 hover:bg-slate-100",
+                                    on_mouse_enter=lambda supplier=supplier: State.set_purchase_supplier_active_index(
+                                        supplier["index"]
+                                    ),
+                                    class_name=rx.cond(
+                                        supplier["index"]
+                                        == State.purchase_supplier_active_index,
+                                        "w-full text-left p-2 bg-indigo-50 border-b border-slate-100 last:border-0",
+                                        "w-full text-left p-2 hover:bg-indigo-50 border-b border-slate-100 last:border-0",
+                                    ),
                                 ),
                             ),
+                            custom_attrs={"data-ingreso-autocomplete-dropdown": "1"},
                             class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
                         ),
                         rx.fragment(),
                     ),
+                    custom_attrs={"data-ingreso-autocomplete": "1"},
                     class_name="relative flex-1",
                 ),
                 rx.el.button(
@@ -401,6 +443,7 @@ def ingreso_page() -> rx.Component:
                         on_change=lambda val: State.handle_entry_change(
                             "description", val
                         ),
+                        on_key_down=State.handle_entry_description_keydown,
                         placeholder="Descripción del producto",
                         class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                         is_read_only=State.is_existing_product,
@@ -411,20 +454,30 @@ def ingreso_page() -> rx.Component:
                     State.entry_autocomplete_suggestions.length() > 0,
                     rx.el.div(
                         rx.foreach(
-                            State.entry_autocomplete_suggestions,
+                            State.entry_autocomplete_rows,
                             lambda suggestion: rx.el.button(
-                                suggestion,
+                                suggestion["value"],
                                 on_click=lambda _,
                                 suggestion=suggestion: State.select_product_for_entry(
-                                    suggestion
+                                    suggestion["value"]
                                 ),
-                                class_name="w-full text-left p-2 hover:bg-slate-100",
+                                on_mouse_enter=lambda suggestion=suggestion: State.set_entry_autocomplete_active_index(
+                                    suggestion["index"]
+                                ),
+                                class_name=rx.cond(
+                                    suggestion["index"]
+                                    == State.entry_autocomplete_active_index,
+                                    "w-full text-left p-2 bg-indigo-50 border-b border-slate-100 last:border-0",
+                                    "w-full text-left p-2 hover:bg-indigo-50 border-b border-slate-100 last:border-0",
+                                ),
                             ),
                         ),
+                        custom_attrs={"data-ingreso-autocomplete-dropdown": "1"},
                         class_name="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto",
                     ),
                     rx.fragment(),
                 ),
+                custom_attrs={"data-ingreso-autocomplete": "1"},
                 class_name="col-span-12 sm:col-span-8 lg:col-span-3 relative",
             ),
             rx.el.div(
@@ -522,6 +575,7 @@ def ingreso_page() -> rx.Component:
     )
 
     content = rx.el.div(
+        _ingreso_autocomplete_shortcuts(),
         page_title(
             "INGRESO DE PRODUCTOS",
             "Registra la entrada de nuevos productos al almacen para aumentar el stock disponible.",
