@@ -779,11 +779,12 @@ class OwnerState:
             _record_owner_action(actor_email)
             self.owner_reset_temp_password = temp_password
             self.owner_reset_target_username = username
+            self.owner_reset_loading = False
             yield rx.toast(f"Contraseña reseteada para {username}.", duration=4000)
         except OwnerServiceError as e:
+            self.owner_reset_loading = False
             yield rx.toast(f"Error: {e}", duration=5000)
         except Exception as e:
             logger.error(f"Error reseteando contraseña: {e}", exc_info=True)
-            yield rx.toast(f"Error inesperado: {e}", duration=5000)
-        finally:
             self.owner_reset_loading = False
+            yield rx.toast(f"Error inesperado: {e}", duration=5000)
