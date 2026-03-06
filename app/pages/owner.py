@@ -1139,7 +1139,17 @@ def _reset_password_modal() -> rx.Component:
                                     "select-all"
                                 ),
                             ),
-                            class_name="flex justify-center mt-2",
+                            rx.el.button(
+                                rx.icon("copy", class_name="h-4 w-4"),
+                                "Copiar",
+                                on_click=rx.set_clipboard(State.owner_reset_temp_password),
+                                class_name=(
+                                    f"flex items-center gap-1.5 px-3 py-2 text-sm font-medium "
+                                    f"text-emerald-700 bg-emerald-100 hover:bg-emerald-200 "
+                                    f"{RADIUS['lg']} {TRANSITIONS['fast']}"
+                                ),
+                            ),
+                            class_name="flex items-center justify-center gap-3 mt-2",
                         ),
                         rx.el.p(
                             rx.icon("triangle-alert", class_name="h-3.5 w-3.5 inline mr-1"),

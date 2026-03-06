@@ -735,11 +735,12 @@ class OwnerState:
                         session, company_id=company_id,
                     )
                 self.owner_reset_users = users
+                self.owner_reset_loading = False
+                yield
         except Exception as e:
             logger.error(f"Error cargando usuarios para reset: {e}")
-            yield rx.toast(f"Error: {e}", duration=4000)
-        finally:
             self.owner_reset_loading = False
+            yield rx.toast(f"Error: {e}", duration=4000)
 
     @rx.event
     def owner_close_reset_modal(self):
@@ -780,6 +781,7 @@ class OwnerState:
             self.owner_reset_temp_password = temp_password
             self.owner_reset_target_username = username
             self.owner_reset_loading = False
+            yield
             yield rx.toast(f"Contraseña reseteada para {username}.", duration=4000)
         except OwnerServiceError as e:
             self.owner_reset_loading = False
