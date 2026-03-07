@@ -294,4 +294,6 @@ class RegisterState(MixinState):
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
         self.is_registering = False
+        if hasattr(self, "_hard_redirect"):
+            return self._hard_redirect("/dashboard")
         return rx.redirect("/dashboard")

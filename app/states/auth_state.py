@@ -1804,8 +1804,8 @@ class AuthState(MixinState):
                     self.password_change_error = ""
                     self.needs_initial_admin = False
                     if must_change_password:
-                        return rx.redirect("/cambiar-clave")
-                    return rx.redirect("/dashboard")
+                        return self._hard_redirect("/cambiar-clave")
+                    return self._hard_redirect("/dashboard")
 
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
@@ -1951,12 +1951,12 @@ class AuthState(MixinState):
                 snapshot = self.subscription_snapshot or {}
                 status_label = str(snapshot.get("status_label", "") or "").strip().lower()
                 if bool(snapshot.get("is_trial")) and status_label == "vencido":
-                    return rx.redirect("/periodo-prueba-finalizado")
+                    return self._hard_redirect("/periodo-prueba-finalizado")
                 if (not bool(snapshot.get("is_trial"))) and status_label in ("suspendido", "pago vencido"):
-                    return rx.redirect("/cuenta-suspendida")
+                    return self._hard_redirect("/cuenta-suspendida")
                 if getattr(user, "must_change_password", False):
-                    return rx.redirect("/cambiar-clave")
-                return rx.redirect("/dashboard")
+                    return self._hard_redirect("/cambiar-clave")
+                return self._hard_redirect("/dashboard")
 
         # Login fallido: registrar intento
         _record_failed_attempt(identifier, ip_address=client_ip)

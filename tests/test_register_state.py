@@ -24,3 +24,12 @@ def test_trial_days_clamps_invalid_values(monkeypatch):
 
     monkeypatch.setenv("TRIAL_DAYS", "abc")
     assert state._trial_days() == 15
+
+
+def test_register_state_inherits_hard_redirect_helper():
+    state = RegisterState()
+
+    script = state._hard_redirect_script("/dashboard")
+
+    assert "window.location.replace" in script
+    assert '"/dashboard"' in script
