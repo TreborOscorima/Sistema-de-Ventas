@@ -297,12 +297,3 @@ def test_can_view_servicios_uses_services_module_flag() -> None:
     state.company_has_reservations = False
 
     assert state.can_view_servicios is True
-
-
-def test_hard_redirect_script_uses_full_reload_navigation() -> None:
-    state = AuthState()
-
-    script = state._hard_redirect_script("/dashboard")
-
-    assert "window.location.replace" in script
-    assert '"/dashboard"' in script

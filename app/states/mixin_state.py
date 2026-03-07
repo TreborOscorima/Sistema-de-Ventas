@@ -35,7 +35,6 @@ Ejemplo de uso::
 """
 import os
 import time
-import json
 import functools
 import datetime
 from contextlib import contextmanager
@@ -161,17 +160,6 @@ class MixinState:
     def set_loading(self, value: bool) -> None:
         """Activa o desactiva el estado global de carga."""
         self.is_loading = bool(value)
-
-    def _hard_redirect_script(self, route: str) -> str:
-        target = (route or "").strip() or "/"
-        return (
-            "window.setTimeout(function(){"
-            f"window.location.replace({json.dumps(target)});"
-            "}, 0);"
-        )
-
-    def _hard_redirect(self, route: str):
-        return rx.call_script(self._hard_redirect_script(route))
 
     def add_notification(self, message: str, type: str = "info", duration: int = 3000):
         """Publica una notificación global de estado.
