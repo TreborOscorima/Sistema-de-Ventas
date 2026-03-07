@@ -559,24 +559,28 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                 State.is_hydrated,
                 rx.cond(
                     State.is_authenticated,
-                    rx.el.div(
-                        rx.cond(State.runtime_ctx_loaded, cashbox_banner(), rx.fragment()),
-                        rx.cond(
-                            State.navigation_items.length() == 0,
-                            rx.el.div(
-                                rx.el.h1(
-                                    "Acceso restringido",
-                                    class_name="text-2xl font-bold text-red-600",
+                    rx.cond(
+                        State.runtime_ctx_loaded,
+                        rx.el.div(
+                            rx.cond(State.runtime_ctx_loaded, cashbox_banner(), rx.fragment()),
+                            rx.cond(
+                                State.navigation_items.length() == 0,
+                                rx.el.div(
+                                    rx.el.h1(
+                                        "Acceso restringido",
+                                        class_name="text-2xl font-bold text-red-600",
+                                    ),
+                                    rx.el.p(
+                                        "Tu usuario no tiene modulos habilitados. Solicita permisos al administrador.",
+                                        class_name="text-slate-600 mt-2 text-center",
+                                    ),
+                                    class_name="flex flex-col items-center justify-center h-full p-6",
                                 ),
-                                rx.el.p(
-                                    "Tu usuario no tiene modulos habilitados. Solicita permisos al administrador.",
-                                    class_name="text-slate-600 mt-2 text-center",
-                                ),
-                                class_name="flex flex-col items-center justify-center h-full p-6",
+                                page_content,
                             ),
-                            page_content,
+                            class_name="w-full h-full flex flex-col gap-4 p-4 sm:p-6",
                         ),
-                        class_name="w-full h-full flex flex-col gap-4 p-4 sm:p-6",
+                        _content_skeleton(),
                     ),
                     login_page(),
                 ),

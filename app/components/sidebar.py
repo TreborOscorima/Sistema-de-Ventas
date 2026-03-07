@@ -268,28 +268,38 @@ def _sidebar_auth_content() -> rx.Component:
                     class_name="text-xs font-medium text-slate-500",
                 ),
                 rx.cond(
-                    State.available_branches.length() > 1,
-                    rx.el.select(
-                        rx.foreach(
-                            State.available_branches,
-                            lambda branch: rx.el.option(
-                                branch["name"], value=branch["id"]
+                    State.runtime_ctx_loaded,
+                    rx.cond(
+                        State.available_branches.length() > 1,
+                        rx.el.select(
+                            rx.foreach(
+                                State.available_branches,
+                                lambda branch: rx.el.option(
+                                    branch["name"], value=branch["id"]
+                                ),
                             ),
+                            value=State.selected_branch_id,
+                            on_change=State.set_active_branch,
+                            class_name="w-full h-9 px-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                         ),
-                        value=State.selected_branch_id,
-                        on_change=State.set_active_branch,
-                        class_name="w-full h-9 px-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        rx.el.div(
+                            rx.el.span(
+                                rx.cond(
+                                    State.active_branch_name != "",
+                                    State.active_branch_name,
+                                    "Sin sucursal",
+                                ),
+                                class_name="text-sm font-semibold text-slate-800",
+                            ),
+                            class_name="w-full h-9 px-2 flex items-center bg-white border border-slate-200 rounded-md",
+                        ),
                     ),
                     rx.el.div(
                         rx.el.span(
-                            rx.cond(
-                                State.active_branch_name != "",
-                                State.active_branch_name,
-                                "Sin sucursal",
-                            ),
-                            class_name="text-sm font-semibold text-slate-800",
+                            "Cargando sucursal...",
+                            class_name="text-sm font-medium text-slate-500",
                         ),
-                        class_name="w-full h-9 px-2 flex items-center bg-white border border-slate-200 rounded-md",
+                        class_name="w-full h-9 px-2 flex items-center bg-white border border-slate-200 rounded-md animate-pulse",
                     ),
                 ),
                 rx.fragment(),

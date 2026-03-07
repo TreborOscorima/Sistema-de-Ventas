@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlalchemy.orm import selectinload
 
@@ -195,3 +197,103 @@ def test_ensure_user_branch_access_uses_single_company_branch_as_fallback() -> N
         assert user.branch_id == branch.id
         assert len(links) == 1
         assert links[0].branch_id == branch.id
+
+
+def test_ensure_user_branch_access_backfills_all_company_branches_for_admin_legacy_user() -> None:
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+
+    state = AuthState()
+    with Session(engine) as session:
+        company = _create_company(session, "Empresa Legacy", "RUC-LEGACY-1")
+        branch_a = _create_branch(session, company.id, "Casa Matriz")
+        branch_b = _create_branch(session, company.id, "Sucursal Norte")
+        role = _create_role(session, company.id, "Administrador")
+        user = _create_user(
+            session,
+            company_id=company.id,
+            role_id=role.id,
+            username="legacy_admin",
+            email="legacy_admin@test.local",
+        )
+        session.commit()
+        session.refresh(user)
+
+        set_tenant_context(company.id, None)
+        branch_ids, changed = state._ensure_user_branch_access(session, user)
+        session.commit()
+        session.refresh(user)
+
+        links = session.exec(
+            select(UserBranch).where(UserBranch.user_id == user.id)
+        ).all()
+
+        assert changed is True
+        assert branch_ids == [branch_a.id, branch_b.id]
+        assert user.branch_id == branch_a.id
+        assert sorted(link.branch_id for link in links) == [branch_a.id, branch_b.id]
+
+
+def test_module_visibility_waits_for_runtime_context() -> None:
+    def build_state(runtime_ctx_loaded: bool) -> AuthState:
+        state = AuthState()
+        state._USER_CACHE_TTL = 30.0
+        state._cached_user = {
+            "id": 1,
+            "company_id": 1,
+            "branch_id": 1,
+            "username": "admin",
+            "email": "admin@test.local",
+            "role": "Administrador",
+            "privileges": {
+                "view_servicios": True,
+                "view_clientes": True,
+                "view_cuentas": True,
+            },
+            "must_change_password": False,
+            "is_platform_owner": False,
+        }
+        state._cached_user_token = state.token
+        state._cached_user_time = time.time()
+        state.runtime_ctx_loaded = runtime_ctx_loaded
+        state.company_has_reservations = False
+        state.company_has_clients = False
+        state.company_has_credits = False
+        return state
+
+    pending_state = build_state(False)
+
+    assert pending_state.can_view_servicios is True
+    assert pending_state.can_view_clientes is True
+    assert pending_state.can_view_cuentas is True
+
+    ready_state = build_state(True)
+
+    assert ready_state.can_view_servicios is False
+    assert ready_state.can_view_clientes is False
+    assert ready_state.can_view_cuentas is False
+
+
+def test_can_view_servicios_uses_services_module_flag() -> None:
+    state = AuthState()
+    state._USER_CACHE_TTL = 30.0
+    state._cached_user = {
+        "id": 1,
+        "company_id": 1,
+        "branch_id": 1,
+        "username": "admin",
+        "email": "admin@test.local",
+        "role": "Administrador",
+        "privileges": {
+            "view_servicios": True,
+        },
+        "must_change_password": False,
+        "is_platform_owner": False,
+    }
+    state._cached_user_token = state.token
+    state._cached_user_time = time.time()
+    state.runtime_ctx_loaded = True
+    state.company_has_services = True
+    state.company_has_reservations = False
+
+    assert state.can_view_servicios is True
