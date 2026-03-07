@@ -4,7 +4,12 @@ from typing import List, Dict, Any, Set
 from decimal import Decimal, ROUND_HALF_UP
 from sqlmodel import select
 from app.models import Unit, PaymentMethod, Currency, CompanySettings
-from app.utils.db_seeds import SUPPORTED_COUNTRIES, get_payment_methods_for_country, get_country_config
+from app.utils.db_seeds import (
+    SUPPORTED_COUNTRIES,
+    get_payment_methods_for_country,
+    get_country_config,
+    is_reserved_payment_method,
+)
 from app.utils.timezone import is_valid_timezone
 from app.enums import PaymentMethodType
 from .types import CurrencyOption, PaymentMethodConfig
@@ -181,6 +186,11 @@ class ConfigState(MixinState):
                     "enabled": m.enabled
                 }
                 for m in methods
+                if not is_reserved_payment_method(
+                    method_id=m.method_id,
+                    code=m.code,
+                    name=m.name,
+                )
             ]
 
     @rx.event
@@ -1033,6 +1043,11 @@ class ConfigState(MixinState):
         kind = (self.new_payment_method_kind or "other").strip().lower()
         if not name:
             return rx.toast("Asigne un nombre al metodo de pago.", duration=3000)
+        if is_reserved_payment_method(name=name):
+            return rx.toast(
+                "La venta a crédito / fiado se configura desde el switch de Punto de Venta, no como método de pago.",
+                duration=4000,
+            )
         if kind not in [
             "cash",
             "debit",

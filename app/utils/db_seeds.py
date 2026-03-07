@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import re
+import unicodedata
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import Session, select
 
@@ -46,15 +49,14 @@ UNIVERSAL_PAYMENT_METHODS = [
         "kind": PaymentMethodType.debit,
         "allows_change": False,
     },
-    {
-        "name": "Crédito / Fiado",
-        "code": "credit_sale",
-        "method_id": "credit_sale",
-        "description": "Venta al crédito",
-        "kind": PaymentMethodType.credit,
-        "allows_change": False,
-    },
 ]
+
+LEGACY_PAYMENT_METHOD_IDS = {"credit_sale"}
+RESERVED_PAYMENT_METHOD_NAME_KEYS = {
+    "credito fiado",
+    "venta a credito",
+    "venta al credito",
+}
 
 # Métodos específicos por país
 COUNTRY_PAYMENT_METHODS = {
@@ -297,6 +299,32 @@ def get_country_config(country_code: str) -> dict:
     return SUPPORTED_COUNTRIES.get(country_code, SUPPORTED_COUNTRIES["PE"])
 
 
+def _payment_method_name_key(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    without_accents = "".join(
+        char for char in normalized if not unicodedata.combining(char)
+    )
+    collapsed = re.sub(r"[^a-z0-9]+", " ", without_accents.lower()).strip()
+    return collapsed
+
+
+def is_reserved_payment_method(
+    *,
+    method_id: str | None = None,
+    code: str | None = None,
+    name: str | None = None,
+) -> bool:
+    """Determina si un método corresponde al flujo reservado de venta a crédito."""
+    normalized_method_id = (method_id or "").strip().lower()
+    normalized_code = (code or "").strip().lower()
+    if (
+        normalized_method_id in LEGACY_PAYMENT_METHOD_IDS
+        or normalized_code in LEGACY_PAYMENT_METHOD_IDS
+    ):
+        return True
+    return _payment_method_name_key(name or "") in RESERVED_PAYMENT_METHOD_NAME_KEYS
+
+
 def get_payment_methods_for_country(country_code: str) -> list[dict]:
     """Obtiene los métodos de pago para un país específico.
 
@@ -310,7 +338,15 @@ def get_payment_methods_for_country(country_code: str) -> list[dict]:
     methods = list(UNIVERSAL_PAYMENT_METHODS)
     if country_code in COUNTRY_PAYMENT_METHODS:
         methods.extend(COUNTRY_PAYMENT_METHODS[country_code])
-    return methods
+    return [
+        dict(method)
+        for method in methods
+        if not is_reserved_payment_method(
+            method_id=method.get("method_id"),
+            code=method.get("code"),
+            name=method.get("name"),
+        )
+    ]
 
 
 # Por defecto: Perú (para compatibilidad con instalaciones existentes)
