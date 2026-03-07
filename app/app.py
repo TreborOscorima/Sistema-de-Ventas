@@ -523,27 +523,21 @@ def _runtime_bootstrap_script() -> str:
     return """
     (function(){
         const KEY = "twk:runtime-bootstrap-at";
-        const MIN_INTERVAL = 1800;
+        const now = Date.now();
 
-        function needsBootstrap(btn){
-            if (!btn) return false;
-            return String(btn.getAttribute("data-runtime-loaded") || "false") !== "true";
-        }
+        try {
+            const last = Number(sessionStorage.getItem(KEY) || "0");
+            if ((now - last) < 1200) return;
+            sessionStorage.setItem(KEY, String(now));
+        } catch(_err) {}
 
         function trigger(){
             const btn = document.querySelector('[data-twk-runtime-bootstrap="1"]');
-            if (!needsBootstrap(btn)) return;
-            const now = Date.now();
-            try {
-                const last = Number(sessionStorage.getItem(KEY) || "0");
-                if ((now - last) < MIN_INTERVAL) return;
-                sessionStorage.setItem(KEY, String(now));
-            } catch(_err) {}
             if (btn) btn.click();
         }
 
-        window.setTimeout(trigger, 900);
-        window.setTimeout(trigger, 2400);
+        window.setTimeout(trigger, 0);
+        window.setTimeout(trigger, 1200);
     })();
     """
 
@@ -576,11 +570,6 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
             on_click=lambda: State.refresh_runtime_context(True),
             custom_attrs={
                 "data-twk-runtime-bootstrap": "1",
-                "data-runtime-loaded": rx.cond(
-                    State.runtime_ctx_loaded,
-                    "true",
-                    "false",
-                ),
                 "aria-hidden": "true",
                 "tabindex": "-1",
             },

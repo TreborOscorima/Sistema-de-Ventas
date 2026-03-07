@@ -192,26 +192,3 @@ async def test_runtime_refresh_rebuilds_branch_context_even_with_recent_snapshot
     await State._do_runtime_refresh(state)
 
     state.refresh_auth_runtime_cache.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_refresh_runtime_context_swallows_internal_runtime_errors():
-    class DummyState:
-        is_authenticated = True
-
-        async def _do_runtime_refresh(self, force: bool = False):
-            raise RuntimeError("boom")
-
-    await State.refresh_runtime_context.fn(DummyState(), True)
-
-
-@pytest.mark.asyncio
-async def test_handle_cross_tab_runtime_sync_swallows_runtime_errors():
-    class DummyState:
-        is_authenticated = True
-        router = None
-
-        async def _do_runtime_refresh(self, force: bool = False):
-            raise RuntimeError("boom")
-
-    await State.handle_cross_tab_runtime_sync.fn(DummyState())

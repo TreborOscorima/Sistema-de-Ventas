@@ -33,13 +33,3 @@ def test_register_state_inherits_hard_redirect_helper():
 
     assert "window.location.replace" in script
     assert '"/dashboard"' in script
-
-
-def test_runtime_bootstrap_script_waits_before_clicking():
-    from app.app import _runtime_bootstrap_script
-
-    script = _runtime_bootstrap_script()
-
-    assert 'data-runtime-loaded' in script
-    assert "setTimeout(trigger, 0)" not in script
-    assert "setTimeout(trigger, 900)" in script
