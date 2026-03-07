@@ -1,5 +1,6 @@
 import uuid
 import os
+import time
 from datetime import datetime, timedelta
 
 import bcrypt
@@ -293,7 +294,9 @@ class RegisterState(MixinState):
         # Cargar runtime (suscripción, módulos, sucursales) igual que login
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
+        if hasattr(self, "runtime_ctx_loaded"):
+            self.runtime_ctx_loaded = True
+        if hasattr(self, "_last_runtime_refresh_ts"):
+            self._last_runtime_refresh_ts = time.time()
         self.is_registering = False
-        if hasattr(self, "_hard_redirect"):
-            return self._hard_redirect("/dashboard")
         return rx.redirect("/dashboard")

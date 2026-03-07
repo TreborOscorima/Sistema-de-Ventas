@@ -1800,12 +1800,16 @@ class AuthState(MixinState):
                     self.refresh_auth_runtime_cache()
                     if hasattr(self, "refresh_cashbox_status"):
                         self.refresh_cashbox_status()
+                    if hasattr(self, "runtime_ctx_loaded"):
+                        self.runtime_ctx_loaded = True
+                    if hasattr(self, "_last_runtime_refresh_ts"):
+                        self._last_runtime_refresh_ts = time.time()
                     self.error_message = ""
                     self.password_change_error = ""
                     self.needs_initial_admin = False
                     if must_change_password:
-                        return self._hard_redirect("/cambiar-clave")
-                    return self._hard_redirect("/dashboard")
+                        return rx.redirect("/cambiar-clave")
+                    return rx.redirect("/dashboard")
 
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
@@ -1942,6 +1946,10 @@ class AuthState(MixinState):
                     self.load_settings()
                 if hasattr(self, "load_config_data"):
                     self.load_config_data()
+                if hasattr(self, "runtime_ctx_loaded"):
+                    self.runtime_ctx_loaded = True
+                if hasattr(self, "_last_runtime_refresh_ts"):
+                    self._last_runtime_refresh_ts = time.time()
                 self.error_message = ""
                 self.password_change_error = ""
                 self._load_roles_cache(
@@ -1951,12 +1959,12 @@ class AuthState(MixinState):
                 snapshot = self.subscription_snapshot or {}
                 status_label = str(snapshot.get("status_label", "") or "").strip().lower()
                 if bool(snapshot.get("is_trial")) and status_label == "vencido":
-                    return self._hard_redirect("/periodo-prueba-finalizado")
+                    return rx.redirect("/periodo-prueba-finalizado")
                 if (not bool(snapshot.get("is_trial"))) and status_label in ("suspendido", "pago vencido"):
-                    return self._hard_redirect("/cuenta-suspendida")
+                    return rx.redirect("/cuenta-suspendida")
                 if getattr(user, "must_change_password", False):
-                    return self._hard_redirect("/cambiar-clave")
-                return self._hard_redirect("/dashboard")
+                    return rx.redirect("/cambiar-clave")
+                return rx.redirect("/dashboard")
 
         # Login fallido: registrar intento
         _record_failed_attempt(identifier, ip_address=client_ip)
