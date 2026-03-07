@@ -197,6 +197,10 @@ class MixinState:
             branch_value = getattr(self, "selected_branch_id")
         if not branch_value and hasattr(self, "current_branch_id"):
             branch_value = getattr(self, "current_branch_id")
+        if not branch_value and hasattr(self, "available_branches"):
+            branches = getattr(self, "available_branches") or []
+            if branches and isinstance(branches[0], dict):
+                branch_value = branches[0].get("id")
         if not branch_value and hasattr(self, "current_user"):
             branch_value = self.current_user.get("branch_id")
 

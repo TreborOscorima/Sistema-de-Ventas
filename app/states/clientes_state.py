@@ -236,8 +236,10 @@ class ClientesState(MixinState):
             client_id = int(client_id) if client_id.isdigit() else None
         company_id = self._company_id()
         branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        if not company_id:
             return self.add_notification("Empresa no definida.", "error")
+        if not branch_id:
+            return self.add_notification("Sucursal no definida.", "error")
 
         self.is_loading = True
         yield
@@ -326,8 +328,10 @@ class ClientesState(MixinState):
             )
         company_id = self._company_id()
         branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        if not company_id:
             return self.add_notification("Empresa no definida.", "error")
+        if not branch_id:
+            return self.add_notification("Sucursal no definida.", "error")
 
         self.is_loading = True
         yield

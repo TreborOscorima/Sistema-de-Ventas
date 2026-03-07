@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlmodel import Session, SQLModel, create_engine, select
 from sqlalchemy.orm import selectinload
 
-from app.models import Company, Permission, Role
+from app.models import Branch, Company, Permission, Role, User as UserModel, UserBranch
 from app.states.auth_state import AuthState
 from app.utils.tenant import set_tenant_context
 
@@ -13,6 +13,42 @@ def _create_company(session: Session, name: str, ruc: str) -> Company:
     session.add(company)
     session.flush()
     return company
+
+
+def _create_branch(session: Session, company_id: int, name: str) -> Branch:
+    branch = Branch(company_id=company_id, name=name, address="")
+    session.add(branch)
+    session.flush()
+    return branch
+
+
+def _create_role(session: Session, company_id: int, name: str) -> Role:
+    role = Role(company_id=company_id, name=name, description="")
+    session.add(role)
+    session.flush()
+    return role
+
+
+def _create_user(
+    session: Session,
+    *,
+    company_id: int,
+    role_id: int,
+    username: str,
+    email: str,
+    branch_id: int | None = None,
+) -> UserModel:
+    user = UserModel(
+        username=username,
+        email=email,
+        password_hash="hash",
+        company_id=company_id,
+        branch_id=branch_id,
+        role_id=role_id,
+    )
+    session.add(user)
+    session.flush()
+    return user
 
 
 def test_role_lookup_is_scoped_by_company() -> None:
@@ -92,3 +128,70 @@ def test_updating_role_permissions_does_not_leak_between_companies() -> None:
         assert updated_b is not None
         assert {perm.codename for perm in updated_a.permissions} == {"perm_a"}
         assert {perm.codename for perm in updated_b.permissions} == {"perm_b"}
+
+
+def test_ensure_user_branch_access_backfills_from_user_branch_id() -> None:
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+
+    state = AuthState()
+    with Session(engine) as session:
+        company = _create_company(session, "Empresa Branch", "RUC-BR-1")
+        branch = _create_branch(session, company.id, "Casa Matriz")
+        role = _create_role(session, company.id, "Administrador")
+        user = _create_user(
+            session,
+            company_id=company.id,
+            role_id=role.id,
+            username="admin_branch",
+            email="admin_branch@test.local",
+            branch_id=branch.id,
+        )
+        session.commit()
+
+        set_tenant_context(company.id, None)
+        branch_ids, changed = state._ensure_user_branch_access(session, user)
+        session.commit()
+
+        links = session.exec(
+            select(UserBranch).where(UserBranch.user_id == user.id)
+        ).all()
+
+        assert changed is True
+        assert branch_ids == [branch.id]
+        assert len(links) == 1
+        assert links[0].branch_id == branch.id
+
+
+def test_ensure_user_branch_access_uses_single_company_branch_as_fallback() -> None:
+    engine = create_engine("sqlite://")
+    SQLModel.metadata.create_all(engine)
+
+    state = AuthState()
+    with Session(engine) as session:
+        company = _create_company(session, "Empresa Single", "RUC-SINGLE-1")
+        branch = _create_branch(session, company.id, "Principal")
+        role = _create_role(session, company.id, "Administrador")
+        user = _create_user(
+            session,
+            company_id=company.id,
+            role_id=role.id,
+            username="single_branch_user",
+            email="single_branch_user@test.local",
+        )
+        session.commit()
+
+        set_tenant_context(company.id, None)
+        branch_ids, changed = state._ensure_user_branch_access(session, user)
+        session.commit()
+        session.refresh(user)
+
+        links = session.exec(
+            select(UserBranch).where(UserBranch.user_id == user.id)
+        ).all()
+
+        assert changed is True
+        assert branch_ids == [branch.id]
+        assert user.branch_id == branch.id
+        assert len(links) == 1
+        assert links[0].branch_id == branch.id

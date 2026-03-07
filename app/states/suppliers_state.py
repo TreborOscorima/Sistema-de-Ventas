@@ -133,8 +133,10 @@ class SuppliersState(MixinState):
             return rx.toast("No tiene permisos para gestionar proveedores.", duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
+        if not branch_id:
+            return rx.toast("Sucursal no definida.", duration=3000)
 
         name = sanitize_name(self.current_supplier.get("name") or "")
         tax_id = sanitize_dni(self.current_supplier.get("tax_id") or "")
@@ -202,8 +204,10 @@ class SuppliersState(MixinState):
             return rx.toast("No tiene permisos para gestionar proveedores.", duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
+        if not branch_id:
+            return rx.toast("Sucursal no definida.", duration=3000)
         with rx.session() as session:
             supplier = session.exec(
                 select(Supplier)
