@@ -351,7 +351,6 @@ class AuthState(MixinState):
                     self._cached_user = {
                         "id": user.id,
                         "company_id": getattr(user, "company_id", None),
-                        "branch_id": getattr(user, "branch_id", None),
                         "username": user.username,
                         "email": getattr(user, "email", "") or "",
                         "role": role_name,
@@ -638,11 +637,7 @@ class AuthState(MixinState):
                 self.active_branch_name = ""
                 return
 
-            branch_ids, branch_access_changed = self._ensure_user_branch_access(
-                session, user
-            )
-            if branch_access_changed:
-                session.commit()
+            branch_ids = self._user_branch_ids(session, user_id)
             if not branch_ids:
                 self.available_branches = []
                 self.active_branch_name = ""
@@ -673,9 +668,6 @@ class AuthState(MixinState):
             ),
             None,
         ) if active_id else None
-        if not selected and self.available_branches:
-            self.selected_branch_id = self.available_branches[0]["id"]
-            selected = self.available_branches[0]
         self.active_branch_name = selected["name"] if selected else ""
 
     @rx.event
@@ -916,7 +908,6 @@ class AuthState(MixinState):
         return {
             "id": None,
             "company_id": None,
-            "branch_id": None,
             "username": "Invitado",
             "email": "",
             "role": "Invitado",
@@ -984,47 +975,7 @@ class AuthState(MixinState):
     def _ensure_user_branch_access(self, session, user: UserModel) -> tuple[list[int], bool]:
         if not user:
             return [], False
-        changed = False
-        branch_ids = self._user_branch_ids(session, user.id)
-        branch_id_set = {int(branch_id) for branch_id in branch_ids if branch_id}
-        company_id = getattr(user, "company_id", None)
-        default_branch_id = getattr(user, "branch_id", None)
-
-        if default_branch_id and company_id:
-            default_branch = session.exec(
-                select(Branch)
-                .where(Branch.id == int(default_branch_id))
-                .where(Branch.company_id == int(company_id))
-            ).first()
-            if default_branch and int(default_branch.id) not in branch_id_set:
-                session.add(
-                    UserBranch(user_id=user.id, branch_id=int(default_branch.id))
-                )
-                branch_id_set.add(int(default_branch.id))
-                changed = True
-
-        if not branch_id_set and company_id:
-            company_branch_ids = [
-                int(branch_id)
-                for branch_id in session.exec(
-                    select(Branch.id)
-                    .where(Branch.company_id == int(company_id))
-                    .order_by(Branch.id)
-                ).all()
-                if branch_id
-            ]
-            if len(company_branch_ids) == 1:
-                fallback_branch_id = company_branch_ids[0]
-                session.add(
-                    UserBranch(user_id=user.id, branch_id=fallback_branch_id)
-                )
-                branch_id_set.add(fallback_branch_id)
-                if not default_branch_id:
-                    user.branch_id = fallback_branch_id
-                    session.add(user)
-                changed = True
-
-        return sorted(branch_id_set), changed
+        return self._user_branch_ids(session, user.id), False
 
     def _select_default_branch(
         self,

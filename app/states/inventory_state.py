@@ -125,8 +125,6 @@ class InventoryState(MixinState):
     inventory_adjustment_suggestions: List[Dict[str, Any]] = []
     categories: List[str] = ["General"]
     categories_panel_expanded: bool = False
-    _categories_loaded_company_id: int = rx.field(default=0, is_var=False)
-    _categories_loaded_branch_id: int = rx.field(default=0, is_var=False)
     _inventory_update_trigger: int = 0
     inventory_list: list[dict] = []
     inventory_total_pages: int = 1
@@ -140,35 +138,11 @@ class InventoryState(MixinState):
         set_tenant_context(company_id, branch_id)
         return company_id
 
-    def ensure_categories_loaded(self, force: bool = False):
-        """Carga categorías desde BD si aún no se cargaron para el tenant activo."""
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            self.categories = ["General"]
-            self._categories_loaded_company_id = 0
-            self._categories_loaded_branch_id = 0
-            return
-
-        company_id = int(company_id)
-        branch_id = int(branch_id)
-        if (
-            not force
-            and self.categories
-            and self._categories_loaded_company_id == company_id
-            and self._categories_loaded_branch_id == branch_id
-        ):
-            return
-
-        self.load_categories()
-
     def load_categories(self):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             self.categories = ["General"]
-            self._categories_loaded_company_id = 0
-            self._categories_loaded_branch_id = 0
             return
         with rx.session() as session:
             cats = session.exec(
@@ -181,8 +155,6 @@ class InventoryState(MixinState):
             if "General" not in names:
                 names.insert(0, "General")
             self.categories = names
-        self._categories_loaded_company_id = int(company_id)
-        self._categories_loaded_branch_id = int(branch_id)
 
     def _inventory_search_clause(self, search: str, company_id: int, branch_id: int):
         term = f"%{search}%"
@@ -578,13 +550,9 @@ class InventoryState(MixinState):
                     self.new_category_name = ""
                     self.new_category_input_key += 1
                     self.load_categories()
-                    notification = self.add_notification(
+                    return self.add_notification(
                         f"Categoría '{name}' agregada.", "success"
                     )
-                    sync_event = self._emit_runtime_sync_event()
-                    if notification is None:
-                        return sync_event
-                    return [sync_event, notification]
                 return self.add_notification("La categoría ya existe.", "warning")
         finally:
             self.is_loading = False
@@ -621,13 +589,9 @@ class InventoryState(MixinState):
                     session.delete(cat)
                     session.commit()
                     self.load_categories()
-                    notification = self.add_notification(
+                    return self.add_notification(
                         f"Categoría '{category}' eliminada.", "success"
                     )
-                    sync_event = self._emit_runtime_sync_event()
-                    if notification is None:
-                        return sync_event
-                    return [sync_event, notification]
                 return self.add_notification("Categoría no encontrada.", "warning")
         finally:
             self.is_loading = False
