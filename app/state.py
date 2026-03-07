@@ -37,6 +37,9 @@ from app.states.auth_state import (
 )
 from app.utils.db import AsyncSessionLocal, get_async_session
 from app.utils.db_seeds import init_payment_methods
+from app.utils.logger import get_logger
+
+logger = get_logger("State")
 
 APP_SURFACE: str = (os.getenv("APP_SURFACE") or "all").strip().lower()
 if APP_SURFACE not in {"all", "landing", "app", "owner"}:
@@ -160,7 +163,14 @@ class State(RootState):
     @rx.event
     async def refresh_runtime_context(self, force: bool = False):
         """Evento público de refresco (compatibilidad hacia atrás)."""
-        await self._do_runtime_refresh(force)
+        try:
+            await self._do_runtime_refresh(force)
+        except Exception:
+            logger.warning(
+                "refresh_runtime_context failed (force=%s)",
+                force,
+                exc_info=True,
+            )
 
     def _refresh_payment_config_with_ttl(self, force: bool = False):
         """Recarga configuración de pagos solo cuando vence TTL o forzado."""
@@ -387,16 +397,20 @@ class State(RootState):
         if not self.is_authenticated:
             return
 
-        await self._do_runtime_refresh(force=True)
-        self.sync_page_from_route()
+        try:
+            await self._do_runtime_refresh(force=True)
+            self.sync_page_from_route()
 
-        if hasattr(self, "load_settings"):
-            self.load_settings()
-        self._refresh_payment_config_with_ttl(force=True)
-        if hasattr(self, "_ensure_payment_method_selected"):
-            self._ensure_payment_method_selected()
-        if hasattr(self, "_refresh_payment_feedback"):
-            self._refresh_payment_feedback()
+            if hasattr(self, "load_settings"):
+                self.load_settings()
+            self._refresh_payment_config_with_ttl(force=True)
+            if hasattr(self, "_ensure_payment_method_selected"):
+                self._ensure_payment_method_selected()
+            if hasattr(self, "_refresh_payment_feedback"):
+                self._refresh_payment_feedback()
+        except Exception:
+            logger.warning("handle_cross_tab_runtime_sync failed", exc_info=True)
+            return
 
         current_path = ""
         router = getattr(self, "router", None)
@@ -435,13 +449,17 @@ class State(RootState):
             self.sidebar_open = True
             yield
             return
-        await self._do_runtime_refresh()
-        self.sync_page_from_route()
-        redirect = self.run_common_guards()
-        if redirect:
-            yield redirect
-        # Delta parcial: renderiza la UI de inmediato
-        yield
+        try:
+            await self._do_runtime_refresh()
+            self.sync_page_from_route()
+            redirect = self.run_common_guards()
+            if redirect:
+                yield redirect
+            # Delta parcial: renderiza la UI de inmediato
+            yield
+        except Exception:
+            logger.warning("page_init_default failed", exc_info=True)
+            yield
 
     @rx.event
     async def page_init_ingreso(self):
