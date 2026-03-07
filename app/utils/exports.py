@@ -48,6 +48,7 @@ WARNING_FILL = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="
 CURRENCY_FORMAT = '"S/"#,##0.00'
 PERCENT_FORMAT = '0.00%'
 NUMBER_FORMAT = '#,##0'
+PDF_CONTROL_KEYS = {"logo_path", "logo", "page_size", "column_widths", "wrap_columns"}
 
 
 def _sanitize_excel_value(value: Any) -> Any:
@@ -393,7 +394,7 @@ def create_pdf_report(
 
     info_rows: list[list[Any]] = []
     for key, value in info_dict.items():
-        if key in {"logo_path", "logo", "page_size"}:
+        if key in PDF_CONTROL_KEYS:
             continue
         label = str(key).replace("_", " ").title()
         info_rows.append(

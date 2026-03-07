@@ -127,7 +127,12 @@ class State(RootState):
             self.ensure_default_data()
             seeded_defaults = True
 
-        if hasattr(self, "categories") and not self.categories and hasattr(self, "load_categories"):
+        categories_loaded = getattr(self, "_categories_loaded_once", False)
+        if (
+            hasattr(self, "categories")
+            and hasattr(self, "load_categories")
+            and (force or not categories_loaded or not self.categories)
+        ):
             self.load_categories()
 
         if hasattr(self, "field_prices") and not self.field_prices and hasattr(self, "load_field_prices"):

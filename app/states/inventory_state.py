@@ -124,6 +124,7 @@ class InventoryState(MixinState):
     inventory_adjustment_items: List[InventoryAdjustment] = []
     inventory_adjustment_suggestions: List[Dict[str, Any]] = []
     categories: List[str] = ["General"]
+    _categories_loaded_once: bool = rx.field(default=False, is_var=False)
     categories_panel_expanded: bool = False
     _inventory_update_trigger: int = 0
     inventory_list: list[dict] = []
@@ -143,6 +144,7 @@ class InventoryState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             self.categories = ["General"]
+            self._categories_loaded_once = True
             return
         with rx.session() as session:
             cats = session.exec(
@@ -155,6 +157,7 @@ class InventoryState(MixinState):
             if "General" not in names:
                 names.insert(0, "General")
             self.categories = names
+            self._categories_loaded_once = True
 
     def _inventory_search_clause(self, search: str, company_id: int, branch_id: int):
         term = f"%{search}%"
@@ -550,9 +553,13 @@ class InventoryState(MixinState):
                     self.new_category_name = ""
                     self.new_category_input_key += 1
                     self.load_categories()
-                    return self.add_notification(
+                    events = [self._emit_runtime_sync_event()]
+                    notification = self.add_notification(
                         f"Categoría '{name}' agregada.", "success"
                     )
+                    if notification is not None:
+                        events.append(notification)
+                    return events
                 return self.add_notification("La categoría ya existe.", "warning")
         finally:
             self.is_loading = False
@@ -589,9 +596,13 @@ class InventoryState(MixinState):
                     session.delete(cat)
                     session.commit()
                     self.load_categories()
-                    return self.add_notification(
+                    events = [self._emit_runtime_sync_event()]
+                    notification = self.add_notification(
                         f"Categoría '{category}' eliminada.", "success"
                     )
+                    if notification is not None:
+                        events.append(notification)
+                    return events
                 return self.add_notification("Categoría no encontrada.", "warning")
         finally:
             self.is_loading = False

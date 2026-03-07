@@ -71,12 +71,13 @@ def test_add_category_creates_when_missing(monkeypatch):
     fake_session = FakeSession(existing_category=None)
     monkeypatch.setattr(rx, "session", lambda: fake_session)
     monkeypatch.setattr(rx, "toast", lambda *args, **kwargs: "toast")
+    monkeypatch.setattr(state, "_emit_runtime_sync_event", lambda: "sync")
     load_called = {"value": False}
     state.load_categories = lambda: load_called.update(value=True)
 
     result = state.add_category()
 
-    assert result == "toast"
+    assert result == ["sync", "toast"]
     assert state.new_category_name == ""
     assert load_called["value"] is True
     assert any(
@@ -94,12 +95,13 @@ def test_remove_category_deletes_when_exists(monkeypatch):
     fake_session = FakeSession(existing_category=fake_category)
     monkeypatch.setattr(rx, "session", lambda: fake_session)
     monkeypatch.setattr(rx, "toast", lambda *args, **kwargs: "toast")
+    monkeypatch.setattr(state, "_emit_runtime_sync_event", lambda: "sync")
     load_called = {"value": False}
     state.load_categories = lambda: load_called.update(value=True)
 
     result = state.remove_category("Bebidas")
 
-    assert result == "toast"
+    assert result == ["sync", "toast"]
     assert fake_category in fake_session.deleted
     fake_session.commit.assert_called_once()
     assert load_called["value"] is True
