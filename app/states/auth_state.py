@@ -784,10 +784,6 @@ class AuthState(MixinState):
         self._cached_user = None
         self._cached_user_token = ""
         self._cached_user_time = 0.0
-        if hasattr(self, "runtime_ctx_loaded"):
-            self.runtime_ctx_loaded = False
-        if hasattr(self, "_last_runtime_refresh_ts"):
-            self._last_runtime_refresh_ts = 0.0
         self.available_branches = []
         self.active_branch_name = ""
         self.plan_actual = "unknown"
@@ -841,19 +837,17 @@ class AuthState(MixinState):
 
     @rx.var(cache=True)
     def can_view_servicios(self) -> bool:
-        if not self.current_user["privileges"].get("view_servicios"):
-            return False
-        if not bool(getattr(self, "runtime_ctx_loaded", True)):
-            return True
-        return bool(self.company_has_services)
+        return bool(
+            self.current_user["privileges"].get("view_servicios")
+            and self.company_has_reservations
+        )
 
     @rx.var(cache=True)
     def can_view_clientes(self) -> bool:
-        if not self.current_user["privileges"].get("view_clientes"):
-            return False
-        if not bool(getattr(self, "runtime_ctx_loaded", True)):
-            return True
-        return bool(self.company_has_clients)
+        return bool(
+            self.current_user["privileges"].get("view_clientes")
+            and self.company_has_clients
+        )
 
     @rx.var(cache=True)
     def can_manage_proveedores(self) -> bool:
@@ -864,11 +858,10 @@ class AuthState(MixinState):
 
     @rx.var(cache=True)
     def can_view_cuentas(self) -> bool:
-        if not self.current_user["privileges"].get("view_cuentas"):
-            return False
-        if not bool(getattr(self, "runtime_ctx_loaded", True)):
-            return True
-        return bool(self.company_has_credits)
+        return bool(
+            self.current_user["privileges"].get("view_cuentas")
+            and self.company_has_credits
+        )
 
     @rx.var(cache=True)
     def can_manage_config(self) -> bool:
@@ -996,7 +989,6 @@ class AuthState(MixinState):
         branch_id_set = {int(branch_id) for branch_id in branch_ids if branch_id}
         company_id = getattr(user, "company_id", None)
         default_branch_id = getattr(user, "branch_id", None)
-        role_name = str(getattr(getattr(user, "role", None), "name", "") or "").strip().lower()
 
         if default_branch_id and company_id:
             default_branch = session.exec(
@@ -1021,21 +1013,15 @@ class AuthState(MixinState):
                 ).all()
                 if branch_id
             ]
-            fallback_branch_ids = []
             if len(company_branch_ids) == 1:
-                fallback_branch_ids = [company_branch_ids[0]]
-            elif role_name in {"administrador", "superadmin"}:
-                fallback_branch_ids = company_branch_ids
-
-            for fallback_branch_id in fallback_branch_ids:
+                fallback_branch_id = company_branch_ids[0]
                 session.add(
                     UserBranch(user_id=user.id, branch_id=fallback_branch_id)
                 )
                 branch_id_set.add(fallback_branch_id)
-                changed = True
-            if fallback_branch_ids and not default_branch_id:
-                user.branch_id = fallback_branch_ids[0]
-                session.add(user)
+                if not default_branch_id:
+                    user.branch_id = fallback_branch_id
+                    session.add(user)
                 changed = True
 
         return sorted(branch_id_set), changed

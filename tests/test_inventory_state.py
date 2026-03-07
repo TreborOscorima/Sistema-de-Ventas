@@ -1,4 +1,3 @@
-import time
 from unittest.mock import Mock
 
 import reflex as rx
@@ -162,33 +161,3 @@ async def test_runtime_refresh_loads_categories_even_with_general_placeholder():
     await State._do_runtime_refresh(state)
 
     state.ensure_categories_loaded.assert_called_once_with(force=False)
-
-
-@pytest.mark.asyncio
-async def test_runtime_refresh_rebuilds_branch_context_even_with_recent_snapshot():
-    class DummyState:
-        is_authenticated = True
-
-        def __init__(self):
-            self.subscription_snapshot = {"plan_type": "trial"}
-            self.categories = ["General"]
-            self.units = ["unidad"]
-            self.available_currencies = [{"code": "USD", "symbol": "$", "name": "Dólar"}]
-            self.payment_methods = [{"name": "Efectivo"}]
-            self.available_branches = []
-            self.active_branch_name = ""
-            self.runtime_ctx_loaded = True
-            self._last_runtime_refresh_ts = time.time()
-            self._runtime_refresh_ttl = 30.0
-            self.ensure_categories_loaded = Mock()
-            self.refresh_branch_access_cache = Mock()
-            self.refresh_auth_runtime_cache = Mock()
-            self.refresh_cashbox_status = Mock()
-            self.check_overdue_alerts = Mock()
-            self._refresh_payment_config_with_ttl = Mock()
-
-    state = DummyState()
-
-    await State._do_runtime_refresh(state)
-
-    state.refresh_auth_runtime_cache.assert_called_once()

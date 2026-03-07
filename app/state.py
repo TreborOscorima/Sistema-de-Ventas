@@ -105,20 +105,7 @@ class State(RootState):
         now = time.time()
         # Forzar refresh si subscription_snapshot está vacío (plan no cargado)
         snapshot_empty = not (self.subscription_snapshot or {}).get("plan_type")
-        branch_ctx_incomplete = (
-            hasattr(self, "refresh_branch_access_cache")
-            and (
-                not getattr(self, "available_branches", [])
-                or not getattr(self, "active_branch_name", "")
-            )
-        )
-        runtime_incomplete = not self.runtime_ctx_loaded or branch_ctx_incomplete
-        if (
-            not force
-            and not snapshot_empty
-            and not runtime_incomplete
-            and (now - self._last_runtime_refresh_ts) < self._runtime_refresh_ttl
-        ):
+        if not force and not snapshot_empty and (now - self._last_runtime_refresh_ts) < self._runtime_refresh_ttl:
             return
         self._last_runtime_refresh_ts = now
 
@@ -535,13 +522,15 @@ class State(RootState):
 
     @rx.event
     async def page_init_clientes(self):
-        """on_load para /clientes. Verifica acceso efectivo al módulo."""
+        """on_load para /clientes. Verifica plan y privilegio view_clientes."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
             yield rx.redirect("/")
             return
-        if not self.can_view_clientes:
+        # can_view_clientes inline: plan != standard + privilege
+        plan = (self.plan_actual or "").strip().lower()
+        if plan == "standard" or not self.current_user["privileges"].get("view_clientes"):
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Clientes.",
                 duration=3000,
@@ -556,13 +545,14 @@ class State(RootState):
 
     @rx.event
     async def page_init_cuentas(self):
-        """on_load para /cuentas. Verifica acceso efectivo al módulo."""
+        """on_load para /cuentas. Verifica plan y privilegio view_cuentas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
             yield rx.redirect("/")
             return
-        if not self.can_view_cuentas:
+        plan = (self.plan_actual or "").strip().lower()
+        if plan == "standard" or not self.current_user["privileges"].get("view_cuentas"):
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Cuentas.",
                 duration=3000,
@@ -634,13 +624,17 @@ class State(RootState):
 
     @rx.event
     async def page_init_servicios(self):
-        """on_load para /servicios. Verifica acceso efectivo al módulo."""
+        """on_load para /servicios. Verifica plan, privilegio view_servicios y reservas habilitadas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         if not self.is_authenticated:
             yield rx.redirect("/")
             return
-        if not self.can_view_servicios:
+        # can_view_servicios inline
+        plan = (self.plan_actual or "").strip().lower()
+        has_privilege = self.current_user["privileges"].get("view_servicios")
+        has_reservations = self.company_has_reservations
+        if plan == "standard" or not (has_privilege and has_reservations):
             yield rx.toast(
                 "Acceso denegado: No tienes permiso para ver Servicios.",
                 duration=3000,
