@@ -665,7 +665,6 @@ class IngresoState(MixinState):
             return block
         if not self.new_entry_items:
             return rx.toast("No hay productos para ingresar.", duration=3000)
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         doc_type = (self.purchase_doc_type or "").strip().lower()
         series = sanitize_text(self.purchase_series, max_length=20)
@@ -684,7 +683,7 @@ class IngresoState(MixinState):
 
         issue_date_raw = (self.purchase_issue_date or "").strip()
         if not issue_date_raw:
-            issue_date_raw = datetime.datetime.now().strftime("%Y-%m-%d")
+            issue_date_raw = self._display_now().strftime("%Y-%m-%d")
         try:
             issue_date = datetime.datetime.strptime(issue_date_raw, "%Y-%m-%d")
         except ValueError:

@@ -102,6 +102,11 @@ def test_build_report_entries_filters_by_method_and_user(monkeypatch):
     state.report_filter_method = "cash"
     state.report_filter_source = "Todos"
     state.report_filter_user = "Alice"
+    monkeypatch.setattr(
+        state,
+        "_company_settings_snapshot",
+        lambda: {"country_code": "PE", "timezone": "America/Lima"},
+    )
 
     user_a = User(username="Alice", password_hash="x", role_id=1)
     user_b = User(username="Bob", password_hash="x", role_id=1)
@@ -162,6 +167,11 @@ def test_build_report_entries_sales_only_skips_cancelled(monkeypatch):
     state.report_filter_method = "Todos"
     state.report_filter_source = "Ventas"
     state.report_filter_user = "Todos"
+    monkeypatch.setattr(
+        state,
+        "_company_settings_snapshot",
+        lambda: {"country_code": "PE", "timezone": "America/Lima"},
+    )
 
     user = User(username="User", password_hash="x", role_id=1)
     sale_ok = Sale(id=1, status=SaleStatus.completed)

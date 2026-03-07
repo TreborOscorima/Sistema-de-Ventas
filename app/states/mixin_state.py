@@ -44,6 +44,15 @@ from typing import List, Dict, Any, Callable, TypeVar
 
 from app.utils.tenant import set_tenant_context
 from app.utils.payment import normalize_wallet_label, payment_category
+from app.utils.timezone import (
+    country_now,
+    country_today_date,
+    format_local_datetime,
+    local_datetime_to_utc_naive,
+    local_day_bounds_utc_naive,
+    to_local_datetime,
+    utc_now_naive,
+)
 from .types import CashboxSale, PaymentBreakdownItem
 
 # Type variable para preservar tipo de retorno del método decorado
@@ -485,6 +494,82 @@ class MixinState:
         self._settings_snapshot_ts = now
         self._settings_snapshot_bid = effective_bid
         return result
+
+    def _company_time_context(self) -> tuple[str, str | None]:
+        settings = self._company_settings_snapshot()
+        code = (
+            settings.get("country_code")
+            or getattr(self, "selected_country_code", None)
+            or "PE"
+        )
+        timezone = settings.get("timezone")
+        timezone_value = str(timezone).strip() if timezone else None
+        return str(code), timezone_value
+
+    def _display_now(self) -> datetime.datetime:
+        country_code, timezone = self._company_time_context()
+        return country_now(country_code, timezone=timezone)
+
+    def _utc_now(self) -> datetime.datetime:
+        return utc_now_naive()
+
+    def _company_today(self) -> datetime.date:
+        country_code, timezone = self._company_time_context()
+        return country_today_date(country_code, timezone=timezone)
+
+    def _to_company_datetime(
+        self,
+        value: datetime.datetime | None,
+        *,
+        assume_utc_naive: bool = True,
+    ) -> datetime.datetime | None:
+        country_code, timezone = self._company_time_context()
+        return to_local_datetime(
+            value,
+            country_code,
+            timezone=timezone,
+            assume_utc_naive=assume_utc_naive,
+        )
+
+    def _format_company_datetime(
+        self,
+        value: datetime.datetime | None,
+        fmt: str = "%Y-%m-%d %H:%M:%S",
+        *,
+        assume_utc_naive: bool = True,
+        empty: str = "",
+    ) -> str:
+        country_code, timezone = self._company_time_context()
+        return format_local_datetime(
+            value,
+            fmt,
+            country_code,
+            timezone=timezone,
+            assume_utc_naive=assume_utc_naive,
+            empty=empty,
+        )
+
+    def _company_day_bounds_utc_naive(
+        self,
+        day_value: str | datetime.date | datetime.datetime | None,
+    ) -> tuple[datetime.datetime, datetime.datetime]:
+        country_code, timezone = self._company_time_context()
+        return local_day_bounds_utc_naive(
+            day_value,
+            country_code,
+            timezone=timezone,
+        )
+
+    def _company_local_datetime_to_utc_naive(
+        self,
+        value: datetime.datetime,
+    ) -> datetime.datetime:
+        country_code, timezone = self._company_time_context()
+        return local_datetime_to_utc_naive(
+            value,
+            country_code,
+            timezone=timezone,
+        )
 
     @rx.var(cache=True)
     def currency_symbol(self) -> str:

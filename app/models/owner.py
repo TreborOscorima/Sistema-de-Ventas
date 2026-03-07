@@ -8,6 +8,7 @@ from typing import Optional
 import reflex as rx
 import sqlalchemy
 from sqlmodel import Field
+from app.utils.timezone import utc_now_naive
 
 
 class OwnerAuditLog(rx.Model, table=True):
@@ -65,7 +66,7 @@ class OwnerAuditLog(rx.Model, table=True):
         description="Dirección IP del actor si está disponible",
     )
     created_at: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(
             sqlalchemy.DateTime(timezone=False),
             nullable=False,

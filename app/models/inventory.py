@@ -8,6 +8,7 @@ import sqlalchemy
 from sqlalchemy import Numeric
 
 from app.enums import SportType
+from app.utils.timezone import utc_now_naive
 
 if TYPE_CHECKING:
     from .auth import User
@@ -266,7 +267,7 @@ class StockMovement(rx.Model, table=True):
     """Movimientos de stock (ingresos, ajustes)."""
 
     timestamp: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
     type: str = Field(nullable=False)

@@ -219,6 +219,43 @@ class CashState(MixinState):
     def set_petty_cash_reason(self, value: str):
         self.petty_cash_reason = sanitize_notes_preserve_spaces(value)
 
+    def _event_timestamp(self) -> datetime.datetime:
+        return self._utc_now()
+
+    def _format_event_timestamp(
+        self,
+        value: datetime.datetime | None,
+        fmt: str = "%Y-%m-%d %H:%M:%S",
+    ) -> str:
+        return self._format_company_datetime(value, fmt)
+
+    def _current_local_date_str(self) -> str:
+        return self._display_now().strftime("%Y-%m-%d")
+
+    def _current_local_display_date(self) -> str:
+        return self._display_now().strftime("%d/%m/%Y")
+
+    def _apply_local_day_filters(
+        self,
+        statement,
+        column,
+        start_value: str,
+        end_value: str,
+    ):
+        if start_value:
+            try:
+                start_dt, _ = self._company_day_bounds_utc_naive(start_value)
+                statement = statement.where(column >= start_dt)
+            except ValueError:
+                pass
+        if end_value:
+            try:
+                _, end_dt = self._company_day_bounds_utc_naive(end_value)
+                statement = statement.where(column <= end_dt)
+            except ValueError:
+                pass
+        return statement
+
     @rx.event
     def add_petty_cash_movement(self):
         if not self.current_user["privileges"]["manage_cashbox"]:
@@ -263,7 +300,7 @@ class CashState(MixinState):
                 unit=self.petty_cash_unit,
                 cost=cost,
                 notes=self.petty_cash_reason,
-                timestamp=datetime.datetime.now()
+                timestamp=self._event_timestamp()
             )
             session.add(log)
             session.commit()
@@ -333,7 +370,7 @@ class CashState(MixinState):
                 entry: CashboxLogEntry = {
                     "id": str(log.id),
                     "action": log.action,
-                    "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    "timestamp": self._format_event_timestamp(log.timestamp),
                     "user": username,
                     "opening_amount": 0.0,
                     "closing_total": 0.0,
@@ -383,8 +420,8 @@ class CashState(MixinState):
             return session_data
 
         session_data["opening_amount"] = float(cashbox_session.opening_amount or 0)
-        session_data["opening_time"] = cashbox_session.opening_time.strftime(
-            "%Y-%m-%d %H:%M:%S"
+        session_data["opening_time"] = self._format_event_timestamp(
+            cashbox_session.opening_time
         )
         session_data["closing_time"] = ""
         session_data["is_open"] = True
@@ -395,21 +432,25 @@ class CashState(MixinState):
             return 0.0
 
         opening_amount = float(session_data.get("opening_amount", 0) or 0)
-        opening_time_str = session_data.get("opening_time")
-        if not opening_time_str:
-            return opening_amount
-
-        try:
-            opening_time = datetime.datetime.strptime(
-                opening_time_str, "%Y-%m-%d %H:%M:%S"
-            )
-        except ValueError:
-            return opening_amount
-
         user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not user_id or not company_id or not branch_id:
+            return opening_amount
+
+        opening_time = None
+        with rx.session() as session:
+            cashbox_session = session.exec(
+                select(CashboxSessionModel)
+                .where(CashboxSessionModel.user_id == user_id)
+                .where(CashboxSessionModel.company_id == company_id)
+                .where(CashboxSessionModel.branch_id == branch_id)
+                .where(CashboxSessionModel.is_open == True)
+            ).first()
+            if cashbox_session:
+                opening_time = cashbox_session.opening_time
+
+        if not opening_time:
             return opening_amount
 
         with rx.session() as session:
@@ -528,15 +569,13 @@ class CashState(MixinState):
     ) -> tuple[datetime.datetime, datetime.datetime, dict[str, Any] | None]:
         session_info = self._active_cashbox_session_info()
         if session_info:
-            start_dt = session_info.get("opening_time") or datetime.datetime.now()
-            end_dt = session_info.get("closing_time") or datetime.datetime.now()
+            start_dt = session_info.get("opening_time") or self._event_timestamp()
+            end_dt = session_info.get("closing_time") or self._event_timestamp()
             return start_dt, end_dt, session_info
         try:
-            target_date = datetime.datetime.strptime(date, "%Y-%m-%d")
+            start_dt, end_dt = self._company_day_bounds_utc_naive(date)
         except ValueError:
-            target_date = datetime.datetime.now()
-        start_dt = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_dt = target_date.replace(hour=23, minute=59, second=59, microsecond=0)
+            start_dt, end_dt = self._company_day_bounds_utc_naive(None)
         return start_dt, end_dt, None
 
     def _cashbox_range_for_log(
@@ -544,10 +583,9 @@ class CashState(MixinState):
         log: CashboxLogModel,
     ) -> tuple[datetime.datetime, datetime.datetime, int | None, str, datetime.datetime]:
         """Obtiene rango de tiempo para un cierre histórico basado en el log."""
-        timestamp = log.timestamp or datetime.datetime.now()
-        report_date = timestamp.strftime("%Y-%m-%d")
-        start_dt = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_dt = timestamp.replace(hour=23, minute=59, second=59, microsecond=0)
+        timestamp = log.timestamp or self._event_timestamp()
+        report_date = self._format_company_datetime(timestamp, "%Y-%m-%d")
+        start_dt, end_dt = self._company_day_bounds_utc_naive(report_date)
         user_id = log.user_id
         company_id = log.company_id
         branch_id = log.branch_id
@@ -715,11 +753,11 @@ class CashState(MixinState):
                 timestamp = log.timestamp
                 time_label = ""
                 if timestamp:
-                    time_label = timestamp.strftime("%H:%M")
+                    time_label = self._format_event_timestamp(timestamp, "%H:%M")
                 result.append(
                     {
                         "sale_id": str(log.id),
-                        "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "timestamp": self._format_event_timestamp(log.timestamp),
                         "time": time_label,
                         "user": username or "Desconocido",
                         "payment_method": method_label,
@@ -914,7 +952,7 @@ class CashState(MixinState):
                 branch_id=branch_id,
                 user_id=user_id,
                 opening_amount=amount,
-                opening_time=datetime.datetime.now(),
+                opening_time=self._event_timestamp(),
                 is_open=True
             )
             session.add(new_session)
@@ -928,7 +966,7 @@ class CashState(MixinState):
                 action="apertura",
                 amount=amount,
                 notes="Apertura de caja",
-                timestamp=datetime.datetime.now()
+                timestamp=self._event_timestamp()
             )
             session.add(log)
             session.commit()
@@ -959,7 +997,7 @@ class CashState(MixinState):
 
             if cashbox_session:
                 cashbox_session.is_open = False
-                cashbox_session.closing_time = datetime.datetime.now()
+                cashbox_session.closing_time = self._event_timestamp()
                 session.add(cashbox_session)
                 session.commit()
         self._cashbox_update_trigger += 1
@@ -982,27 +1020,12 @@ class CashState(MixinState):
             .where(CashboxLogModel.branch_id == branch_id)
             .order_by(desc(CashboxLogModel.timestamp))
         )
-
-        if self.cashbox_log_filter_start_date:
-            try:
-                start_date = datetime.datetime.strptime(
-                    self.cashbox_log_filter_start_date, "%Y-%m-%d"
-                )
-                statement = statement.where(CashboxLogModel.timestamp >= start_date)
-            except ValueError:
-                pass
-
-        if self.cashbox_log_filter_end_date:
-            try:
-                end_date = datetime.datetime.strptime(
-                    self.cashbox_log_filter_end_date, "%Y-%m-%d"
-                )
-                end_date = end_date.replace(hour=23, minute=59, second=59)
-                statement = statement.where(CashboxLogModel.timestamp <= end_date)
-            except ValueError:
-                pass
-
-        return statement
+        return self._apply_local_day_filters(
+            statement,
+            CashboxLogModel.timestamp,
+            self.cashbox_log_filter_start_date,
+            self.cashbox_log_filter_end_date,
+        )
 
     def _cashbox_logs_count(self) -> int:
         company_id = self._company_id()
@@ -1016,25 +1039,12 @@ class CashState(MixinState):
             .where(CashboxLogModel.company_id == company_id)
             .where(CashboxLogModel.branch_id == branch_id)
         )
-
-        if self.cashbox_log_filter_start_date:
-            try:
-                start_date = datetime.datetime.strptime(
-                    self.cashbox_log_filter_start_date, "%Y-%m-%d"
-                )
-                statement = statement.where(CashboxLogModel.timestamp >= start_date)
-            except ValueError:
-                pass
-
-        if self.cashbox_log_filter_end_date:
-            try:
-                end_date = datetime.datetime.strptime(
-                    self.cashbox_log_filter_end_date, "%Y-%m-%d"
-                )
-                end_date = end_date.replace(hour=23, minute=59, second=59)
-                statement = statement.where(CashboxLogModel.timestamp <= end_date)
-            except ValueError:
-                pass
+        statement = self._apply_local_day_filters(
+            statement,
+            CashboxLogModel.timestamp,
+            self.cashbox_log_filter_start_date,
+            self.cashbox_log_filter_end_date,
+        )
 
         with rx.session() as session:
             return session.exec(statement).one()
@@ -1055,7 +1065,7 @@ class CashState(MixinState):
                 entry: CashboxLogEntry = {
                     "id": str(log.id),
                     "action": log.action,
-                    "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    "timestamp": self._format_event_timestamp(log.timestamp),
                     "user": username,
                     "opening_amount": log.amount if log.action == "apertura" else 0.0,
                     "closing_total": log.amount if log.action == "cierre" else 0.0,
@@ -1221,25 +1231,12 @@ class CashState(MixinState):
             .where(Sale.branch_id == branch_id)
             .order_by(desc(Sale.timestamp))
         )
-
-        if self.cashbox_filter_start_date:
-            try:
-                start_date = datetime.datetime.strptime(
-                    self.cashbox_filter_start_date, "%Y-%m-%d"
-                )
-                query = query.where(Sale.timestamp >= start_date)
-            except ValueError:
-                pass
-
-        if self.cashbox_filter_end_date:
-            try:
-                end_date = datetime.datetime.strptime(
-                    self.cashbox_filter_end_date, "%Y-%m-%d"
-                )
-                end_date = end_date.replace(hour=23, minute=59, second=59)
-                query = query.where(Sale.timestamp <= end_date)
-            except ValueError:
-                pass
+        query = self._apply_local_day_filters(
+            query,
+            Sale.timestamp,
+            self.cashbox_filter_start_date,
+            self.cashbox_filter_end_date,
+        )
 
         if not self.show_cashbox_advances:
             advance_exists = (
@@ -1266,25 +1263,12 @@ class CashState(MixinState):
             .where(Sale.company_id == company_id)
             .where(Sale.branch_id == branch_id)
         )
-
-        if self.cashbox_filter_start_date:
-            try:
-                start_date = datetime.datetime.strptime(
-                    self.cashbox_filter_start_date, "%Y-%m-%d"
-                )
-                query = query.where(Sale.timestamp >= start_date)
-            except ValueError:
-                pass
-
-        if self.cashbox_filter_end_date:
-            try:
-                end_date = datetime.datetime.strptime(
-                    self.cashbox_filter_end_date, "%Y-%m-%d"
-                )
-                end_date = end_date.replace(hour=23, minute=59, second=59)
-                query = query.where(Sale.timestamp <= end_date)
-            except ValueError:
-                pass
+        query = self._apply_local_day_filters(
+            query,
+            Sale.timestamp,
+            self.cashbox_filter_start_date,
+            self.cashbox_filter_end_date,
+        )
 
         if not self.show_cashbox_advances:
             advance_exists = (
@@ -1446,7 +1430,7 @@ class CashState(MixinState):
         hidden_count = max(len(items) - preview_limit, 0)
         sale_dict: CashboxSale = {
             "sale_id": str(sale.id),
-            "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": self._format_event_timestamp(sale.timestamp),
             "user": user.username if user else "Desconocido",
             "payment_method": method_label,
             "payment_label": method_label,
@@ -1536,7 +1520,7 @@ class CashState(MixinState):
         self.summary_by_method = []
         yield
         # Ahora calcular los datos pesados (5-6 DB queries)
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        today = self._current_local_date_str()
         breakdown = self._build_cashbox_close_breakdown(today)
         day_sales = self._get_day_sales(today)
         summary = breakdown["summary"]
@@ -1575,7 +1559,7 @@ class CashState(MixinState):
         currency_format = self._currency_excel_format()
         # Obtener nombre de empresa
         company_name = getattr(self, "company_name", "") or "EMPRESA"
-        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        today = self._current_local_display_date()
         period_start = self.cashbox_filter_start_date or "Inicio"
         period_end = self.cashbox_filter_end_date or "Actual"
         period_label = f"Período: {period_start} a {period_end}"
@@ -1614,6 +1598,7 @@ class CashState(MixinState):
             "RESUMEN DE GESTIÓN DE CAJA",
             period_label,
             columns=8,
+            generated_at=self._display_now(),
         )
 
         row += 1
@@ -1776,9 +1761,7 @@ class CashState(MixinState):
         ):
             return rx.toast("No tiene permisos para exportar datos.", duration=3000)
 
-        report_date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
-            "%Y-%m-%d"
-        )
+        report_date = self.cashbox_close_summary_date or self._current_local_date_str()
         breakdown = self._build_cashbox_close_breakdown(report_date)
         summary = breakdown["summary"]
         day_sales = self.cashbox_close_summary_sales or self._get_day_sales(report_date)
@@ -2137,7 +2120,7 @@ class CashState(MixinState):
                 "",
                 f"Responsable: {responsable}",
                 "",
-                f"Cierre: {closing_timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Cierre: {self._format_event_timestamp(closing_timestamp)}",
                 "",
                 line(),
                 "",
@@ -2256,7 +2239,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
-        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        today = self._current_local_display_date()
         period_start = self.cashbox_log_filter_start_date or "Inicio"
         period_end = self.cashbox_log_filter_end_date or "Actual"
         period_label = f"Período: {period_start} a {period_end}"
@@ -2285,6 +2268,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "REGISTRO DE APERTURAS Y CIERRES DE CAJA",
             period_label,
             columns=7,
+            generated_at=self._display_now(),
         )
 
         row += 1
@@ -2402,7 +2386,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
-        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        today = self._current_local_display_date()
 
         def _parse_numeric(value: Any) -> float:
             if value is None:
@@ -2442,6 +2426,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "MOVIMIENTOS DE CAJA CHICA",
             f"Corte: {today}",
             columns=7,
+            generated_at=self._display_now(),
         )
 
         row += 1
@@ -2543,7 +2528,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             self.cashbox_log_selected = {
                 "id": str(log.id),
                 "action": log.action,
-                "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": self._format_event_timestamp(log.timestamp),
                 "user": username,
                 "opening_amount": log.amount if log.action == "apertura" else 0.0,
                 "closing_total": log.amount if log.action == "cierre" else 0.0,
@@ -2725,7 +2710,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     type="Devolucion Venta",
                     quantity=quantity,
                     description=f"Venta anulada #{sale_db.id}: {reason}",
-                    timestamp=datetime.datetime.now(),
+                    timestamp=self._event_timestamp(),
                     company_id=company_id,
                     branch_id=branch_id,
                 )
@@ -2852,7 +2837,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         })
 
                     sale_data = {
-                        "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "timestamp": self._format_event_timestamp(sale.timestamp),
                         "total": sale.total_amount,
                         "payment_details": self._payment_summary_from_payments(
                             sale.payments or []
@@ -3014,9 +2999,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        date = self.cashbox_close_summary_date or datetime.datetime.now().strftime(
-            "%Y-%m-%d"
-        )
+        date = self.cashbox_close_summary_date or self._current_local_date_str()
         breakdown = self._build_cashbox_close_breakdown(date)
         summary = breakdown["summary"]
         day_sales = self.cashbox_close_summary_sales or self._get_day_sales(date)
@@ -3026,7 +3009,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             and breakdown["opening_amount"] == 0
         ):
             return rx.toast("No hay movimientos de caja hoy.", duration=3000)
-        closing_timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        closing_timestamp = self._display_now().strftime("%Y-%m-%d %H:%M:%S")
         totals_list = [
             {
                 "method": item.get("method", "No especificado"),
@@ -3054,7 +3037,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
                 if cashbox_session:
                     cashbox_session.is_open = False
-                    cashbox_session.closing_time = datetime.datetime.now()
+                    cashbox_session.closing_time = self._event_timestamp()
                     cashbox_session.closing_amount = closing_total
                     session.add(cashbox_session)
 
@@ -3066,7 +3049,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     action="cierre",
                     amount=closing_total,
                     notes=f"Cierre de caja {date}",
-                    timestamp=datetime.datetime.now()
+                    timestamp=self._event_timestamp()
                 )
                 session.add(log)
                 session.commit()
@@ -3271,11 +3254,11 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 timestamp = log.timestamp
                 time_label = ""
                 if timestamp:
-                    time_label = timestamp.strftime("%H:%M")
+                    time_label = self._format_event_timestamp(timestamp, "%H:%M")
                 result.append(
                     {
                         "sale_id": str(log.id),
-                        "timestamp": log.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                        "timestamp": self._format_event_timestamp(log.timestamp),
                         "time": time_label,
                         "user": username or "Desconocido",
                         "payment_method": method_label,
@@ -3400,7 +3383,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             payment_label = self._payment_method_label(method_kind)
 
         with rx.session() as session:
-            timestamp = datetime.datetime.now()
+            timestamp = self._event_timestamp()
             # Crear venta por adelanto
             new_sale = Sale(
                 timestamp=timestamp,

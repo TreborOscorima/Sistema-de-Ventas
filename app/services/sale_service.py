@@ -72,6 +72,7 @@ from app.utils.payment import (
     wallet_method_type as _wallet_method_type,
     payment_method_code as _payment_method_code,
 )
+from app.utils.timezone import format_local_datetime, utc_now_naive
 
 # Nota: get_session es un alias de get_async_session para uso interno.
 
@@ -167,6 +168,8 @@ async def get_recent_activity(
     branch_id: int,
     limit: int = 15,
     company_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
 ) -> list[dict[str, Any]]:
     """Obtiene los movimientos recientes de caja para una sucursal."""
     set_tenant_context(company_id, branch_id)
@@ -233,8 +236,18 @@ async def get_recent_activity(
         time_display = ""
         timestamp_display = ""
         if timestamp:
-            time_display = timestamp.strftime("%H:%M")
-            timestamp_display = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            time_display = format_local_datetime(
+                timestamp,
+                "%H:%M",
+                country_code,
+                timezone=timezone,
+            )
+            timestamp_display = format_local_datetime(
+                timestamp,
+                "%Y-%m-%d %H:%M:%S",
+                country_code,
+                timezone=timezone,
+            )
 
         results.append(
             {
@@ -950,12 +963,16 @@ class SaleService:
         branch_id: int,
         limit: int = 15,
         company_id: int | None = None,
+        country_code: str | None = None,
+        timezone: str | None = None,
     ) -> list[dict[str, Any]]:
         return await get_recent_activity(
             session=session,
             branch_id=branch_id,
             limit=limit,
             company_id=company_id,
+            country_code=country_code,
+            timezone=timezone,
         )
 
     @staticmethod
@@ -1537,7 +1554,7 @@ class SaleService:
                 raise ValueError("Limite de credito excedido.")
 
         try:
-            timestamp = datetime.datetime.now()
+            timestamp = utc_now_naive()
             sale_total_display = _money_to_float(sale_total)
 
             new_sale = Sale(

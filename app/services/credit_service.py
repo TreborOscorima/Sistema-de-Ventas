@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import CashboxLog, Client, Sale, SaleInstallment
 from app.utils.calculations import calculate_total
 from app.utils.tenant import set_tenant_context
+from app.utils.timezone import utc_now_naive
 
 
 def _round_money(value: Any) -> Decimal:
@@ -227,7 +228,7 @@ class CreditService:
         installment.paid_amount = new_paid_amount
         if installment.paid_amount >= amount_due:
             installment.status = "paid"
-            installment.payment_date = datetime.datetime.now()
+            installment.payment_date = utc_now_naive()
         else:
             installment.status = "partial"
 
@@ -251,6 +252,7 @@ class CreditService:
                 amount=payment_amount,
                 payment_method=method_label,
                 notes=notes,
+                timestamp=utc_now_naive(),
                 user_id=user_id,
                 sale_id=sale.id,
                 company_id=sale.company_id,

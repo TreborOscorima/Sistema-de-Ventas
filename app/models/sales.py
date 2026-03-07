@@ -8,6 +8,7 @@ import sqlalchemy
 from sqlalchemy import Numeric
 
 from app.enums import PaymentMethodType, ReservationStatus, SaleStatus, SportType
+from app.utils.timezone import utc_now_naive
 
 if TYPE_CHECKING:
     from .auth import User
@@ -28,7 +29,7 @@ class Sale(rx.Model, table=True):
     )
 
     timestamp: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(
             sqlalchemy.DateTime(timezone=False),
             server_default=sqlalchemy.func.now(),
@@ -90,7 +91,7 @@ class SalePayment(rx.Model, table=True):
         default=None, foreign_key="paymentmethod.id"
     )
     created_at: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
 
@@ -217,7 +218,7 @@ class CashboxSession(rx.Model, table=True):
     """Sesion de caja (apertura/cierre)."""
 
     opening_time: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
     closing_time: Optional[datetime] = Field(
@@ -267,7 +268,7 @@ class CashboxLog(rx.Model, table=True):
     )
 
     timestamp: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(
             sqlalchemy.DateTime(timezone=False), index=True
         ),
@@ -365,7 +366,7 @@ class FieldReservation(rx.Model, table=True):
     cancellation_reason: Optional[str] = Field(default=None)
     delete_reason: Optional[str] = Field(default=None)
     created_at: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
 

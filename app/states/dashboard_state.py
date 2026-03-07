@@ -87,21 +87,11 @@ class DashboardState(MixinState):
         self._load_top_products()
         self._load_sales_by_category()
         self._load_payment_breakdown()
-        self.last_refresh = self._tz_now().strftime("%H:%M:%S")
+        self.last_refresh = self._display_now().strftime("%H:%M:%S")
 
-    def _tz_now(self) -> datetime:
-        """Devuelve el `now` base para filtros del dashboard.
-
-        IMPORTANTE:
-        Las ventas y logs se persisten como datetimes naive con `datetime.now()`
-        (reloj del servidor). Para evitar desfasajes de día entre módulos
-        (Dashboard vs Caja), el dashboard debe usar el mismo origen temporal.
-        """
-        return datetime.now()
-
-    def _get_period_dates(self) -> tuple[datetime, datetime, datetime, datetime]:
-        """Obtiene fechas de inicio y fin del período seleccionado y período anterior."""
-        now = self._tz_now()
+    def _local_period_dates(self) -> tuple[datetime, datetime, datetime, datetime]:
+        """Devuelve rangos locales según la zona horaria configurada."""
+        now = self._display_now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         if self.selected_period == "today":
@@ -114,20 +104,37 @@ class DashboardState(MixinState):
             end = now
             prev_start = start - timedelta(days=7)
             prev_end = start
-        elif self.selected_period == "custom" and self.custom_start_date and self.custom_end_date:
+        elif (
+            self.selected_period == "custom"
+            and self.custom_start_date
+            and self.custom_end_date
+        ):
             start = datetime.strptime(self.custom_start_date, "%Y-%m-%d")
-            end = datetime.strptime(self.custom_end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            end = datetime.strptime(self.custom_end_date, "%Y-%m-%d").replace(
+                hour=23,
+                minute=59,
+                second=59,
+            )
             delta = end - start
             prev_start = start - delta - timedelta(days=1)
             prev_end = start - timedelta(days=1)
-        else:  # mes (por defecto)
+        else:
             start = today_start.replace(day=1)
             end = now
             prev_month = start - timedelta(days=1)
             prev_start = prev_month.replace(day=1)
             prev_end = start
-
         return start, end, prev_start, prev_end
+
+    def _get_period_dates(self) -> tuple[datetime, datetime, datetime, datetime]:
+        """Convierte rangos locales a UTC-naive para consultar eventos persistidos."""
+        start, end, prev_start, prev_end = self._local_period_dates()
+        return (
+            self._company_local_datetime_to_utc_naive(start),
+            self._company_local_datetime_to_utc_naive(end),
+            self._company_local_datetime_to_utc_naive(prev_start),
+            self._company_local_datetime_to_utc_naive(prev_end),
+        )
 
     def _get_reservation_period_end(self, today_start: datetime) -> datetime:
         """Devuelve fin de día actual (23:59:59) para contar reservas.
@@ -187,10 +194,13 @@ class DashboardState(MixinState):
 
     def _load_sales_summary(self):
         """Carga resumen de ventas por período."""
-        now = self._tz_now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        week_start = today_start - timedelta(days=today_start.weekday())
-        month_start = today_start.replace(day=1)
+        local_now = self._display_now()
+        today_start_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start_local = today_start_local - timedelta(days=today_start_local.weekday())
+        month_start_local = today_start_local.replace(day=1)
+        today_start = self._company_local_datetime_to_utc_naive(today_start_local)
+        week_start = self._company_local_datetime_to_utc_naive(week_start_local)
+        month_start = self._company_local_datetime_to_utc_naive(month_start_local)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -264,6 +274,7 @@ class DashboardState(MixinState):
 
             # Ventas del período seleccionado y período anterior
             period_start, period_end, prev_start, prev_end = self._get_period_dates()
+            reservation_start, _, _, _ = self._local_period_dates()
 
             period_result = session.exec(
                 select(
@@ -288,13 +299,13 @@ class DashboardState(MixinState):
             # ya que start_datetime es la hora agendada (no la hora de creación).
             # Excluye estados cancelled y refunded.
             reservation_end = self._get_reservation_period_end(
-                now.replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start_local
             )
             reservation_result = session.exec(
                 select(func.count(FieldReservation.id))
                 .where(
                     and_(
-                        FieldReservation.start_datetime >= period_start,
+                        FieldReservation.start_datetime >= reservation_start,
                         FieldReservation.start_datetime <= reservation_end,
                         FieldReservation.status.notin_(
                             [ReservationStatus.CANCELLED, ReservationStatus.REFUNDED]
@@ -417,7 +428,7 @@ class DashboardState(MixinState):
 
     def _load_sales_by_day(self):
         """Carga ventas de los últimos 7 días para gráfico."""
-        today = self._tz_now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_local = self._display_now().replace(hour=0, minute=0, second=0, microsecond=0)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -426,14 +437,16 @@ class DashboardState(MixinState):
 
         days_data = []
         day_names = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-        start_date = today - timedelta(days=6)
-        end_date = today + timedelta(days=1)
+        start_local = today_local - timedelta(days=6)
+        end_local = today_local + timedelta(days=1)
+        start_date = self._company_local_datetime_to_utc_naive(start_local)
+        end_date = self._company_local_datetime_to_utc_naive(end_local)
 
         with rx.session() as session:
             results = session.exec(
                 select(
-                    func.date(Sale.timestamp).label("day"),
-                    func.coalesce(func.sum(Sale.total_amount), 0).label("total"),
+                    Sale.timestamp,
+                    Sale.total_amount,
                 )
                 .where(
                     and_(
@@ -444,23 +457,23 @@ class DashboardState(MixinState):
                         Sale.branch_id == branch_id,
                     )
                 )
-                .group_by(func.date(Sale.timestamp))
             ).all()
 
-            totals_by_day = {}
+            totals_by_day: dict[datetime.date, float] = {}
             for row in results:
-                day_value = row[0]
-                if isinstance(day_value, str):
-                    try:
-                        day_value = datetime.strptime(day_value, "%Y-%m-%d").date()
-                    except ValueError:
-                        continue
-                if hasattr(day_value, "date"):
-                    day_value = day_value.date()
-                totals_by_day[day_value] = float(row[1] or 0)
+                timestamp = row[0]
+                if not timestamp:
+                    continue
+                local_value = self._to_company_datetime(timestamp)
+                if not local_value:
+                    continue
+                day_value = local_value.date()
+                totals_by_day[day_value] = totals_by_day.get(day_value, 0.0) + float(
+                    row[1] or 0
+                )
 
             for i in range(6, -1, -1):
-                day_start = today - timedelta(days=i)
+                day_start = today_local - timedelta(days=i)
                 day_key = day_start.date()
                 days_data.append({
                     "day": day_names[day_start.weekday()],
@@ -713,7 +726,7 @@ class DashboardState(MixinState):
         ws['A1'].alignment = Alignment(horizontal='center')
 
         ws.merge_cells('A2:D2')
-        ws['A2'] = f"Generado: {self._tz_now().strftime('%d/%m/%Y %H:%M:%S')}"
+        ws['A2'] = f"Generado: {self._display_now().strftime('%d/%m/%Y %H:%M:%S')}"
         ws['A2'].alignment = Alignment(horizontal='center')
         ws['A2'].font = Font(italic=True, color="666666")
 
@@ -798,7 +811,7 @@ class DashboardState(MixinState):
 
         # Crear data URL para descarga directa
         b64_data = base64.b64encode(excel_bytes).decode('utf-8')
-        filename = f"ventas_categoria_{self._tz_now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        filename = f"ventas_categoria_{self._display_now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
         # Usar JavaScript para descargar el archivo
         js_code = f"""

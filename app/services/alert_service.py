@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
-from app.utils.timezone import country_today_start
+from app.utils.timezone import local_day_bounds_utc_naive, utc_now_naive
 
 import reflex as rx
 from sqlmodel import select, func
@@ -55,7 +55,7 @@ class Alert:
 
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.now()
+            self.created_at = utc_now_naive()
 
     def to_dict(self) -> dict:
         return {
@@ -212,7 +212,11 @@ def get_installment_alerts(
     _require_tenant(company_id, branch_id)
     set_tenant_context(company_id, branch_id)
     alerts = []
-    today = country_today_start(country_code, timezone=timezone)
+    today, _ = local_day_bounds_utc_naive(
+        None,
+        country_code,
+        timezone=timezone,
+    )
     due_threshold = today + timedelta(days=INSTALLMENT_DUE_DAYS)
     
     with rx.session() as session:
@@ -348,7 +352,7 @@ def get_cashbox_alerts(
     _require_tenant(company_id, branch_id)
     set_tenant_context(company_id, branch_id)
     alerts = []
-    threshold_time = datetime.now() - timedelta(hours=CASHBOX_OPEN_HOURS)
+    threshold_time = utc_now_naive() - timedelta(hours=CASHBOX_OPEN_HOURS)
     
     with rx.session() as session:
         # Sesiones de caja abiertas por mucho tiempo
@@ -380,7 +384,7 @@ def get_cashbox_alerts(
                         {
                             "id": s.id,
                             "opened_at": s.opening_time.isoformat(),
-                            "hours_open": (datetime.now() - s.opening_time).total_seconds() / 3600
+                            "hours_open": (utc_now_naive() - s.opening_time).total_seconds() / 3600
                         }
                         for s in long_open_sessions
                     ]
@@ -400,7 +404,11 @@ async def get_overdue_count(
     """Cuenta cuotas vencidas (pendientes con fecha pasada) usando sesión async."""
     _require_tenant(company_id, branch_id)
     set_tenant_context(company_id, branch_id)
-    today = country_today_start(country_code, timezone=timezone)
+    today, _ = local_day_bounds_utc_naive(
+        None,
+        country_code,
+        timezone=timezone,
+    )
     overdue_query = (
         select(func.count())
         .select_from(SaleInstallment)

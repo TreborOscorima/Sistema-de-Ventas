@@ -133,17 +133,16 @@ class HistorialState(MixinState):
         end_date = None
         if self.history_filter_start_date:
             try:
-                start_date = datetime.datetime.fromisoformat(
+                start_date, _ = self._company_day_bounds_utc_naive(
                     self.history_filter_start_date
                 )
             except ValueError:
                 start_date = None
         if self.history_filter_end_date:
             try:
-                end_date = datetime.datetime.fromisoformat(
+                _, end_date = self._company_day_bounds_utc_naive(
                     self.history_filter_end_date
                 )
-                end_date = end_date.replace(hour=23, minute=59, second=59)
             except ValueError:
                 end_date = None
         return start_date, end_date
@@ -200,17 +199,16 @@ class HistorialState(MixinState):
         end_date = None
         if self.report_filter_start_date:
             try:
-                start_date = datetime.datetime.fromisoformat(
+                start_date, _ = self._company_day_bounds_utc_naive(
                     self.report_filter_start_date
                 )
             except ValueError:
                 start_date = None
         if self.report_filter_end_date:
             try:
-                end_date = datetime.datetime.fromisoformat(
+                _, end_date = self._company_day_bounds_utc_naive(
                     self.report_filter_end_date
                 )
-                end_date = end_date.replace(hour=23, minute=59, second=59)
             except ValueError:
                 end_date = None
         return start_date, end_date
@@ -410,8 +408,8 @@ class HistorialState(MixinState):
                     rows.append(
                         {
                             "timestamp": timestamp,
-                            "timestamp_display": timestamp.strftime(
-                                "%Y-%m-%d %H:%M:%S"
+                            "timestamp_display": self._format_company_datetime(
+                                timestamp
                             )
                             if timestamp
                             else "",
@@ -455,8 +453,8 @@ class HistorialState(MixinState):
                     rows.append(
                         {
                             "timestamp": timestamp,
-                            "timestamp_display": timestamp.strftime(
-                                "%Y-%m-%d %H:%M:%S"
+                            "timestamp_display": self._format_company_datetime(
+                                timestamp
                             )
                             if timestamp
                             else "",
@@ -516,8 +514,8 @@ class HistorialState(MixinState):
                 rows.append(
                     {
                         "timestamp": timestamp,
-                        "timestamp_display": timestamp.strftime(
-                            "%Y-%m-%d %H:%M:%S"
+                        "timestamp_display": self._format_company_datetime(
+                            timestamp
                         )
                         if timestamp
                         else "",
@@ -807,7 +805,7 @@ class HistorialState(MixinState):
                 rows.append(
                     {
                         "sale_id": str(sale.id),
-                        "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                        "timestamp": self._format_company_datetime(sale.timestamp)
                         if sale.timestamp
                         else "",
                         "client_name": client_name,
@@ -1449,7 +1447,7 @@ class HistorialState(MixinState):
             self.selected_sale_id = str(sale.id)
             self.selected_sale_summary = {
                 "sale_id": str(sale.id),
-                "timestamp": sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                "timestamp": self._format_company_datetime(sale.timestamp)
                 if sale.timestamp
                 else "",
                 "client_name": sale.client.name if sale.client else "Sin cliente",
@@ -1493,8 +1491,16 @@ class HistorialState(MixinState):
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         start_dt, end_dt = self._history_date_range()
-        period_start = start_dt.strftime("%d/%m/%Y") if start_dt else "Inicio"
-        period_end = end_dt.strftime("%d/%m/%Y") if end_dt else "Actual"
+        period_start = (
+            self._format_company_datetime(start_dt, "%d/%m/%Y")
+            if start_dt
+            else "Inicio"
+        )
+        period_end = (
+            self._format_company_datetime(end_dt, "%d/%m/%Y")
+            if end_dt
+            else "Actual"
+        )
         period_label = f"Período: {period_start} a {period_end}"
 
         wb, ws = create_excel_workbook("Historial de Ventas")
@@ -1506,6 +1512,7 @@ class HistorialState(MixinState):
             "HISTORIAL DE MOVIMIENTOS Y VENTAS",
             period_label,
             columns=11,
+            generated_at=self._display_now(),
         )
 
         headers = [
@@ -1644,7 +1651,14 @@ class HistorialState(MixinState):
                         unit_price = Decimal(str(item.unit_price or 0))
                         subtotal = Decimal(str(item.subtotal or 0))
 
-                    ws.cell(row=row, column=1, value=sale.timestamp.strftime("%d/%m/%Y %H:%M") if sale.timestamp else "")
+                    ws.cell(
+                        row=row,
+                        column=1,
+                        value=self._format_company_datetime(
+                            sale.timestamp,
+                            "%d/%m/%Y %H:%M",
+                        ) if sale.timestamp else "",
+                    )
                     ws.cell(row=row, column=2, value=str(sale.id))
                     ws.cell(row=row, column=3, value=client_name)
                     ws.cell(row=row, column=4, value=user_name)
@@ -1703,8 +1717,16 @@ class HistorialState(MixinState):
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         start_dt, end_dt = self._report_date_range()
-        period_start = start_dt.strftime("%d/%m/%Y") if start_dt else "Inicio"
-        period_end = end_dt.strftime("%d/%m/%Y") if end_dt else "Actual"
+        period_start = (
+            self._format_company_datetime(start_dt, "%d/%m/%Y")
+            if start_dt
+            else "Inicio"
+        )
+        period_end = (
+            self._format_company_datetime(end_dt, "%d/%m/%Y")
+            if end_dt
+            else "Actual"
+        )
         period_label = f"Período: {period_start} a {period_end}"
 
         active_tab = self.report_active_tab or "metodos"
@@ -1722,6 +1744,7 @@ class HistorialState(MixinState):
                 "HISTORIAL DE CIERRES DE CAJA",
                 period_label,
                 columns=5,
+                generated_at=self._display_now(),
             )
 
             headers = [
@@ -1785,6 +1808,7 @@ class HistorialState(MixinState):
                 "DETALLE DE COBROS E INGRESOS",
                 period_label,
                 columns=6,
+                generated_at=self._display_now(),
             )
 
             detail_headers = [
@@ -1858,6 +1882,7 @@ class HistorialState(MixinState):
             "INGRESOS POR MÉTODO DE PAGO",
             period_label,
             columns=4,
+            generated_at=self._display_now(),
         )
 
         summary_headers = [
@@ -1924,6 +1949,7 @@ class HistorialState(MixinState):
             "DETALLE DE COBROS E INGRESOS",
             period_label,
             columns=6,
+            generated_at=self._display_now(),
         )
 
         detail_headers = [
@@ -2053,4 +2079,3 @@ class HistorialState(MixinState):
     @rx.var(cache=True)
     def total_ventas_mixtas(self) -> float:
         return self.payment_stats["mixto"]
-

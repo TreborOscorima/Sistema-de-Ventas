@@ -1906,7 +1906,7 @@ class InventoryState(MixinState):
                             type="Re Ajuste Inventario",
                             quantity=-qty,
                             description=details,
-                            timestamp=datetime.datetime.now(),
+                            timestamp=self._utc_now(),
                             company_id=company_id,
                             branch_id=branch_id,
                         )
@@ -2031,12 +2031,19 @@ class InventoryState(MixinState):
         currency_format = self._currency_excel_format()
 
         company_name = getattr(self, "company_name", "") or "EMPRESA"
-        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        today = self._display_now().strftime("%d/%m/%Y")
 
         wb, ws = create_excel_workbook("Inventario Valorizado")
 
         # Encabezado profesional
-        row = add_company_header(ws, company_name, "INVENTARIO VALORIZADO ACTUAL", f"Al {today}", columns=12)
+        row = add_company_header(
+            ws,
+            company_name,
+            "INVENTARIO VALORIZADO ACTUAL",
+            f"Al {today}",
+            columns=12,
+            generated_at=self._display_now(),
+        )
 
         headers = [
             "Código/SKU",

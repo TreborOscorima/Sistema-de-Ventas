@@ -155,9 +155,10 @@ class ServicesState(MixinState):
             "total_amount": reservation.total_amount,
             "paid_amount": reservation.paid_amount,
             "status": status_ui,
-            "created_at": reservation.created_at.strftime("%Y-%m-%d %H:%M")
-            if reservation.created_at
-            else "",
+            "created_at": self._format_company_datetime(
+                reservation.created_at,
+                "%Y-%m-%d %H:%M",
+            ),
             "cancellation_reason": reservation.cancellation_reason or "",
             "delete_reason": reservation.delete_reason or "",
         }
@@ -350,7 +351,7 @@ class ServicesState(MixinState):
 
             # Crear venta para asociar el pago
             new_sale = Sale(
-                timestamp=datetime.datetime.now(),
+                timestamp=self._utc_now(),
                 total_amount=self._round_currency(advance_amount),
                 company_id=company_id,
                 branch_id=branch_id,
@@ -400,7 +401,7 @@ class ServicesState(MixinState):
                     amount=self._round_currency(advance_amount),
                     payment_method=payment_label,
                     notes=f"Adelanto reserva {reservation.get('id', '')} - {reservation.get('field_name', '')}".strip(" -"),
-                    timestamp=datetime.datetime.now(),
+                    timestamp=self._utc_now(),
                     user_id=user_id,
                     sale_id=new_sale.id,
                 )
@@ -588,6 +589,7 @@ class ServicesState(MixinState):
             "RESERVAS DE CAMPOS DEPORTIVOS",
             period_label,
             columns=12,
+            generated_at=self._display_now(),
         )
 
         row += 1
@@ -1598,7 +1600,7 @@ class ServicesState(MixinState):
                     "total_amount": new_reservation.total_amount,
                     "paid_amount": new_reservation.paid_amount,
                     "status": status_ui,
-                    "created_at": datetime.datetime.now().strftime(
+                    "created_at": self._display_now().strftime(
                         "%Y-%m-%d %H:%M"
                     ),
                     "cancellation_reason": "",
@@ -1741,7 +1743,7 @@ class ServicesState(MixinState):
                 center("CONSTANCIA DE RESERVA"),
                 line(),
                 "",
-                f"Fecha Emision: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                f"Fecha Emision: {self._display_now().strftime('%Y-%m-%d %H:%M:%S')}",
                 "",
                 f"NRO. CONSTANCIA: {reservation['id']}",
                 "",
@@ -1933,7 +1935,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
             # Nueva Cabecera de Venta limpia
             new_sale = Sale(
-                timestamp=datetime.datetime.now(),
+                timestamp=self._utc_now(),
                 total_amount=applied_amount,
                 company_id=company_id,
                 branch_id=branch_id,
@@ -1986,7 +1988,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     amount=applied_amount,
                     payment_method=payment_label,
                     notes=log_notes,
-                    timestamp=datetime.datetime.now(),
+                    timestamp=self._utc_now(),
                     user_id=user_id,
                     sale_id=new_sale.id,
                 )
@@ -2086,7 +2088,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             user_id = self.current_user.get("id")
 
             new_sale = Sale(
-                timestamp=datetime.datetime.now(),
+                timestamp=self._utc_now(),
                 total_amount=applied_amount,
                 company_id=company_id,
                 branch_id=branch_id,
@@ -2139,7 +2141,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     amount=applied_amount,
                     payment_method=payment_label,
                     notes=log_notes,
-                    timestamp=datetime.datetime.now(),
+                    timestamp=self._utc_now(),
                     user_id=user_id,
                     sale_id=new_sale.id,
                 )
@@ -2354,7 +2356,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     def _log_service_action(self, reservation: FieldReservation, action: str, amount: float, notes: str = "", status: str = ""):
         self.service_admin_log.append({
             "id": str(uuid.uuid4()),
-            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": self._display_now().strftime("%Y-%m-%d %H:%M:%S"),
             "user": self.current_user["username"],
             "action": action,
             "reservation_id": reservation["id"],

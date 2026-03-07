@@ -6,7 +6,7 @@ principal de la aplicación a partir de estados especializados.
 """
 import datetime
 
-from app.utils.timezone import country_today_start
+from app.utils.timezone import local_day_bounds_utc_naive
 from app.utils.tenant import set_tenant_context
 from typing import Any
 
@@ -82,7 +82,11 @@ def check_overdue_alerts(self):
             self, "selected_country_code", None
         )
         timezone = settings.get("timezone")
-        now = country_today_start(country_code, timezone=timezone)
+        now, _ = local_day_bounds_utc_naive(
+            None,
+            country_code,
+            timezone=timezone,
+        )
         statement = (
             select(func.count())
             .select_from(SaleInstallment)

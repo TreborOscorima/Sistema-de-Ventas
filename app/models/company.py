@@ -6,6 +6,7 @@ import reflex as rx
 from sqlmodel import Field, Relationship
 import sqlalchemy
 from .auth import UserBranch
+from app.utils.timezone import utc_now_naive
 
 if TYPE_CHECKING:
     from .auth import User
@@ -36,7 +37,7 @@ class Company(rx.Model, table=True):
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
     created_at: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
     plan_type: str = Field(

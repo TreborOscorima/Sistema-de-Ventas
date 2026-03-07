@@ -1,6 +1,6 @@
 import uuid
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import bcrypt
 import reflex as rx
@@ -14,6 +14,7 @@ from app.utils.db_seeds import seed_new_branch_data
 from app.utils.logger import get_logger
 from app.utils.validators import validate_email, validate_password
 from app.utils.sanitization import sanitize_name, sanitize_phone
+from app.utils.timezone import utc_now_naive
 from app.utils.rate_limit import (
     is_rate_limited as _is_rate_limited,
     record_failed_attempt as _record_failed_attempt,
@@ -152,7 +153,7 @@ class RegisterState(MixinState):
                     _record_failed_attempt(identifier, ip_address=client_ip)
                     return
 
-                now = datetime.now()
+                now = utc_now_naive()
                 ruc_placeholder = f"TEMP{uuid.uuid4().hex[:11]}"
                 company = Company(
                     name=company_name,

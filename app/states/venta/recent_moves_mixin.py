@@ -48,12 +48,18 @@ class RecentMovesMixin:
             return
 
         company_id = self._company_id() if hasattr(self, "_company_id") else None
+        country_code = None
+        timezone = None
+        if hasattr(self, "_company_time_context"):
+            country_code, timezone = self._company_time_context()
         async with get_async_session() as session:
             rows = await SaleService.get_recent_activity(
                 session=session,
                 branch_id=branch_id,
                 limit=15,
                 company_id=company_id,
+                country_code=country_code,
+                timezone=timezone,
             )
 
         symbol = getattr(self, "currency_symbol", "S/ ")

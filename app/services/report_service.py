@@ -23,6 +23,7 @@ from app.models import Sale, SaleItem, Product, Client, SaleInstallment, Cashbox
 from app.enums import SaleStatus, PaymentMethodType
 from app.utils.tenant import set_tenant_context, tenant_bypass
 from app.utils.exports import _safe_decimal, _sanitize_excel_value
+from app.utils.timezone import format_local_datetime, to_local_datetime, utc_now_naive
 
 
 # =============================================================================
@@ -85,7 +86,46 @@ def _currency_format(currency_symbol: str | None) -> str:
     return f'"{symbol}"#,##0.00'
 
 
-def _add_company_header(ws: Worksheet, company_name: str, report_title: str, period: str, columns: int = 8) -> int:
+def _report_now(
+    generated_at: datetime | None,
+    country_code: str | None,
+    timezone: str | None,
+) -> datetime:
+    base = generated_at or utc_now_naive()
+    if not country_code and not timezone:
+        return base
+    localized = to_local_datetime(
+        base,
+        country_code,
+        timezone=timezone,
+    )
+    return localized or base
+
+
+def _format_report_datetime(
+    value: datetime | None,
+    fmt: str,
+    country_code: str | None,
+    timezone: str | None,
+) -> str:
+    return format_local_datetime(
+        value,
+        fmt,
+        country_code,
+        timezone=timezone,
+    )
+
+
+def _add_company_header(
+    ws: Worksheet,
+    company_name: str,
+    report_title: str,
+    period: str,
+    columns: int = 8,
+    generated_at: datetime | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
+) -> int:
     """
     Agrega encabezado de empresa profesional al reporte.
 
@@ -123,7 +163,10 @@ def _add_company_header(ws: Worksheet, company_name: str, report_title: str, per
 
     # Fila 4: Fecha de generación
     ws.merge_cells(f"A4:{end_col}4")
-    ws["A4"] = f"🕐 Generado: {datetime.now().strftime('%d/%m/%Y a las %H:%M:%S')}"
+    generated_label = _report_now(generated_at, country_code, timezone).strftime(
+        "%d/%m/%Y a las %H:%M:%S"
+    )
+    ws["A4"] = f"🕐 Generado: {generated_label}"
     ws["A4"].font = Font(italic=True, size=9, color="6B7280")
     ws["A4"].alignment = Alignment(horizontal="center")
 
@@ -467,6 +510,9 @@ def generate_sales_report(
     currency_symbol: str | None = None,
     company_id: int | None = None,
     branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
+    generated_at: datetime | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de ventas consolidado con detalles contables.
@@ -483,6 +529,21 @@ def generate_sales_report(
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
 
     # Consultar ventas del período
     query = (
@@ -512,8 +573,16 @@ def generate_sales_report(
 
     sales = session.exec(query).all()
     sale_user_lookup = _build_sale_user_lookup(session, sales, company_id)
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
 
-    period_str = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+    period_str = (
+        f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
+        f"{_format_report_datetime(end_date, '%d/%m/%Y', country_code, timezone)}"
+    )
 
     # =================
     # HOJA 1: RESUMEN EJECUTIVO
@@ -521,7 +590,15 @@ def generate_sales_report(
     ws_summary = wb.active
     ws_summary.title = "Resumen Ejecutivo"
 
-    row = _add_company_header(ws_summary, company_name, "REPORTE DE VENTAS CONSOLIDADO", period_str)
+    row = _add_company_header(
+        ws_summary,
+        company_name,
+        "REPORTE DE VENTAS CONSOLIDADO",
+        period_str,
+        generated_at=generated_at,
+        country_code=country_code,
+        timezone=timezone,
+    )
 
     # Calcular métricas
     total_ventas = Decimal("0")
@@ -560,7 +637,16 @@ def generate_sales_report(
             monto_contado += sale_total
 
         # Por día
-        day_key = sale.timestamp.strftime("%Y-%m-%d") if sale.timestamp else "Sin fecha"
+        day_key = (
+            _format_report_datetime(
+                sale.timestamp,
+                "%Y-%m-%d",
+                country_code,
+                timezone,
+            )
+            if sale.timestamp
+            else "Sin fecha"
+        )
         if day_key not in by_day:
             by_day[day_key] = {"count": 0, "total": Decimal("0"), "cost": Decimal("0")}
         by_day[day_key]["count"] += 1
@@ -637,7 +723,14 @@ def generate_sales_report(
     # HOJA 2: VENTAS POR DÍA (con fórmulas de Excel)
     # =================
     ws_daily = wb.create_sheet("Ventas por Día")
-    row = _add_company_header(ws_daily, company_name, "VENTAS DIARIAS DETALLADAS", period_str, columns=6)
+    row = _add_company_header(
+        ws_daily,
+        company_name,
+        "VENTAS DIARIAS DETALLADAS",
+        period_str,
+        columns=6,
+        **header_kwargs,
+    )
 
     headers = [
         "Fecha",
@@ -692,7 +785,14 @@ def generate_sales_report(
     # HOJA 3: VENTAS POR CATEGORÍA (con fórmulas de Excel)
     # =================
     ws_category = wb.create_sheet("Por Categoría")
-    row = _add_company_header(ws_category, company_name, "ANÁLISIS DE VENTAS POR CATEGORÍA", period_str, columns=7)
+    row = _add_company_header(
+        ws_category,
+        company_name,
+        "ANÁLISIS DE VENTAS POR CATEGORÍA",
+        period_str,
+        columns=7,
+        **header_kwargs,
+    )
 
     headers = [
         "Categoría",
@@ -753,7 +853,14 @@ def generate_sales_report(
     # HOJA 4: POR MÉTODO DE PAGO (con fórmulas)
     # =================
     ws_payment = wb.create_sheet("Por Método de Pago")
-    row = _add_company_header(ws_payment, company_name, "ANÁLISIS POR MÉTODO DE PAGO", period_str, columns=5)
+    row = _add_company_header(
+        ws_payment,
+        company_name,
+        "ANÁLISIS POR MÉTODO DE PAGO",
+        period_str,
+        columns=5,
+        **header_kwargs,
+    )
 
     # ---- SECCIÓN 1: PAGOS RECIBIDOS ----
     row += 1
@@ -886,7 +993,14 @@ def generate_sales_report(
     # HOJA 5: POR VENDEDOR (con fórmulas)
     # =================
     ws_user = wb.create_sheet("Por Vendedor")
-    row = _add_company_header(ws_user, company_name, "RENDIMIENTO POR VENDEDOR", period_str, columns=5)
+    row = _add_company_header(
+        ws_user,
+        company_name,
+        "RENDIMIENTO POR VENDEDOR",
+        period_str,
+        columns=5,
+        **header_kwargs,
+    )
 
     headers = [
         "Vendedor",
@@ -945,6 +1059,7 @@ def generate_sales_report(
         "LISTADO DETALLADO DE TRANSACCIONES",
         period_str,
         columns=11,
+        **header_kwargs,
     )
 
     headers = [
@@ -1006,7 +1121,16 @@ def generate_sales_report(
             ws_detail.cell(
                 row=row,
                 column=1,
-                value=sale.timestamp.strftime("%d/%m/%Y %H:%M") if sale.timestamp else "Sin fecha",
+                value=(
+                    _format_report_datetime(
+                        sale.timestamp,
+                        "%d/%m/%Y %H:%M",
+                        country_code,
+                        timezone,
+                    )
+                    if sale.timestamp
+                    else "Sin fecha"
+                ),
             )
             ws_detail.cell(row=row, column=2, value=sale.id)
             ws_detail.cell(
@@ -1066,7 +1190,14 @@ def generate_sales_report(
     # HOJA 7: PRODUCTOS MÁS VENDIDOS (TOP 20, con fórmulas)
     # =================
     ws_top_products = wb.create_sheet("Top Productos")
-    row = _add_company_header(ws_top_products, company_name, "RANKING DE PRODUCTOS MÁS VENDIDOS", period_str, columns=8)
+    row = _add_company_header(
+        ws_top_products,
+        company_name,
+        "RANKING DE PRODUCTOS MÁS VENDIDOS",
+        period_str,
+        columns=8,
+        **header_kwargs,
+    )
 
     # Calcular productos más vendidos
     by_product: dict[str, dict] = {}
@@ -1149,14 +1280,26 @@ def generate_sales_report(
     # HOJA 8: ANÁLISIS HORARIO (con fórmulas)
     # =================
     ws_hourly = wb.create_sheet("Análisis Horario")
-    row = _add_company_header(ws_hourly, company_name, "DISTRIBUCIÓN DE VENTAS POR HORA", period_str, columns=5)
+    row = _add_company_header(
+        ws_hourly,
+        company_name,
+        "DISTRIBUCIÓN DE VENTAS POR HORA",
+        period_str,
+        columns=5,
+        **header_kwargs,
+    )
 
     by_hour: dict[int, dict] = {}
     for sale in sales:
         if sale.status == SaleStatus.cancelled:
             continue
         if sale.timestamp:
-            hour = sale.timestamp.hour
+            local_timestamp = to_local_datetime(
+                sale.timestamp,
+                country_code,
+                timezone=timezone,
+            ) or sale.timestamp
+            hour = local_timestamp.hour
             if hour not in by_hour:
                 by_hour[hour] = {"count": 0, "total": Decimal("0")}
             by_hour[hour]["count"] += 1
@@ -1228,6 +1371,9 @@ def generate_inventory_report(
     currency_symbol: str | None = None,
     company_id: int | None = None,
     branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
+    generated_at: datetime | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de inventario valorizado profesional.
@@ -1306,7 +1452,8 @@ def generate_inventory_report(
                 }
             )
 
-    today = datetime.now().strftime("%d/%m/%Y")
+    report_now = _report_now(generated_at, country_code, timezone)
+    today = report_now.strftime("%d/%m/%Y")
 
     # =================
     # HOJA 1: RESUMEN
@@ -1314,7 +1461,13 @@ def generate_inventory_report(
     ws_summary = wb.active
     ws_summary.title = "Resumen Valorización"
 
-    row = _add_company_header(ws_summary, company_name, "INVENTARIO VALORIZADO", f"Al {today}")
+    row = _add_company_header(
+        ws_summary,
+        company_name,
+        "INVENTARIO VALORIZADO",
+        f"Al {today}",
+        **header_kwargs,
+    )
 
     # Calcular métricas
     total_items = len(inventory_rows)
@@ -1385,7 +1538,14 @@ def generate_inventory_report(
     # HOJA 2: POR CATEGORÍA (con fórmulas)
     # =================
     ws_category = wb.create_sheet("Por Categoría")
-    row = _add_company_header(ws_category, company_name, "VALORIZACIÓN POR CATEGORÍA DE PRODUCTO", f"Al {today}", columns=7)
+    row = _add_company_header(
+        ws_category,
+        company_name,
+        "VALORIZACIÓN POR CATEGORÍA DE PRODUCTO",
+        f"Al {today}",
+        columns=7,
+        **header_kwargs,
+    )
 
     headers = [
         "Categoría",
@@ -1445,7 +1605,14 @@ def generate_inventory_report(
     # HOJA 3: DETALLE COMPLETO (con fórmulas)
     # =================
     ws_detail = wb.create_sheet("Detalle Inventario")
-    row = _add_company_header(ws_detail, company_name, "LISTADO DETALLADO DE PRODUCTOS EN INVENTARIO", f"Al {today}", columns=12)
+    row = _add_company_header(
+        ws_detail,
+        company_name,
+        "LISTADO DETALLADO DE PRODUCTOS EN INVENTARIO",
+        f"Al {today}",
+        columns=12,
+        **header_kwargs,
+    )
 
     headers = [
         "Código/SKU", "Descripción del Producto", "Categoría", "Stock Actual", "Unidad de Medida",
@@ -1535,7 +1702,14 @@ def generate_inventory_report(
     # HOJA 4: STOCK CRÍTICO (productos a reponer)
     # =================
     ws_critical = wb.create_sheet("Productos a Reponer")
-    row = _add_company_header(ws_critical, company_name, "PRODUCTOS CON STOCK CRÍTICO - REQUIEREN REPOSICIÓN", f"Al {today}", columns=6)
+    row = _add_company_header(
+        ws_critical,
+        company_name,
+        "PRODUCTOS CON STOCK CRÍTICO - REQUIEREN REPOSICIÓN",
+        f"Al {today}",
+        columns=6,
+        **header_kwargs,
+    )
 
     headers = [
         "Código/SKU",
@@ -1615,6 +1789,9 @@ def generate_receivables_report(
     currency_symbol: str | None = None,
     company_id: int | None = None,
     branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
+    generated_at: datetime | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de cuentas por cobrar con análisis de antigüedad.
@@ -1664,7 +1841,7 @@ def generate_receivables_report(
             if sale.client:
                 clients_map[sale.id] = sale.client
 
-    today = datetime.now()
+    today = _report_now(generated_at, country_code, timezone)
     today_str = today.strftime("%d/%m/%Y")
 
     # Clasificar por antigüedad
@@ -1703,7 +1880,14 @@ def generate_receivables_report(
 
         # Calcular antigüedad - normalizar a date
         if due_date:
-            if hasattr(due_date, 'date'):
+            localized_due_date = to_local_datetime(
+                due_date,
+                country_code,
+                timezone=timezone,
+            )
+            if localized_due_date and hasattr(localized_due_date, "date"):
+                due_date_normalized = localized_due_date.date()
+            elif hasattr(due_date, "date"):
                 due_date_normalized = due_date.date()
             else:
                 due_date_normalized = due_date
@@ -1742,7 +1926,12 @@ def generate_receivables_report(
             "client": client_name,
             "sale_id": sale.id if sale else 0,
             "installment_num": installment.number,
-            "due_date": due_date.strftime("%d/%m/%Y") if due_date else "",
+            "due_date": _format_report_datetime(
+                due_date,
+                "%d/%m/%Y",
+                country_code,
+                timezone,
+            ) if due_date else "",
             "days_overdue": max(0, days_overdue),
             "amount": amount,
             "paid": paid,
@@ -1762,7 +1951,14 @@ def generate_receivables_report(
     ws_summary = wb.active
     ws_summary.title = "Resumen Cartera"
 
-    row = _add_company_header(ws_summary, company_name, "ANÁLISIS DE CUENTAS POR COBRAR", f"Al {today_str}", columns=6)
+    row = _add_company_header(
+        ws_summary,
+        company_name,
+        "ANÁLISIS DE CUENTAS POR COBRAR",
+        f"Al {today_str}",
+        columns=6,
+        **header_kwargs,
+    )
 
     row += 1
     ws_summary.cell(row=row, column=1, value="RESUMEN DE CARTERA DE CRÉDITOS").font = SUBTITLE_FONT
@@ -1842,7 +2038,14 @@ def generate_receivables_report(
     # HOJA 2: POR CLIENTE (con fórmulas)
     # =================
     ws_client = wb.create_sheet("Por Cliente")
-    row = _add_company_header(ws_client, company_name, "DEUDA DETALLADA POR CLIENTE", f"Al {today_str}", columns=7)
+    row = _add_company_header(
+        ws_client,
+        company_name,
+        "DEUDA DETALLADA POR CLIENTE",
+        f"Al {today_str}",
+        columns=7,
+        **header_kwargs,
+    )
 
     headers = [
         "Cliente",
@@ -1896,7 +2099,14 @@ def generate_receivables_report(
     # HOJA 3: DETALLE (mejorado)
     # =================
     ws_detail = wb.create_sheet("Detalle Cuotas")
-    row = _add_company_header(ws_detail, company_name, "LISTADO DETALLADO DE CUOTAS PENDIENTES", f"Al {today_str}", columns=9)
+    row = _add_company_header(
+        ws_detail,
+        company_name,
+        "LISTADO DETALLADO DE CUOTAS PENDIENTES",
+        f"Al {today_str}",
+        columns=9,
+        **header_kwargs,
+    )
 
     headers = [
         "Cliente",
@@ -2038,6 +2248,9 @@ def generate_cashbox_report(
     currency_symbol: str | None = None,
     company_id: int | None = None,
     branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
+    generated_at: datetime | None = None,
 ) -> io.BytesIO:
     """
     Genera reporte de caja consolidado con flujo de caja REAL.
@@ -2054,7 +2267,10 @@ def generate_cashbox_report(
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
 
-    period_str = f"{start_date.strftime('%d/%m/%Y')} - {end_date.strftime('%d/%m/%Y')}"
+    period_str = (
+        f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
+        f"{_format_report_datetime(end_date, '%d/%m/%Y', country_code, timezone)}"
+    )
 
     # Consultar logs de caja
     query = (
@@ -2153,7 +2369,14 @@ def generate_cashbox_report(
     ws_summary = wb.active
     ws_summary.title = "Resumen Caja"
 
-    row = _add_company_header(ws_summary, company_name, "REPORTE CONSOLIDADO DE CAJA", period_str, columns=4)
+    row = _add_company_header(
+        ws_summary,
+        company_name,
+        "REPORTE CONSOLIDADO DE CAJA",
+        period_str,
+        columns=4,
+        **header_kwargs,
+    )
 
     row += 1
     ws_summary.cell(row=row, column=1, value="MOVIMIENTOS DE CAJA EN EL PERÍODO").font = SUBTITLE_FONT
@@ -2250,6 +2473,7 @@ def generate_cashbox_report(
         "BITÁCORA DE MOVIMIENTOS DE CAJA",
         period_str,
         columns=7,
+        **header_kwargs,
     )
 
     headers = [
@@ -2279,7 +2503,16 @@ def generate_cashbox_report(
         ws_logs.cell(
             row=row,
             column=1,
-            value=log.timestamp.strftime("%d/%m/%Y %H:%M:%S") if log.timestamp else "",
+            value=(
+                _format_report_datetime(
+                    log.timestamp,
+                    "%d/%m/%Y %H:%M:%S",
+                    country_code,
+                    timezone,
+                )
+                if log.timestamp
+                else ""
+            ),
         )
         ws_logs.cell(row=row, column=2, value=_safe_string(action_label))
         ws_logs.cell(row=row, column=3, value=user_name)
@@ -2318,7 +2551,14 @@ def generate_cashbox_report(
     # HOJA 3: DESGLOSE POR ORIGEN (Ventas vs Cobranzas)
     # =================
     ws_origin = wb.create_sheet("Ingresos por Origen")
-    row = _add_company_header(ws_origin, company_name, "DESGLOSE DE INGRESOS POR ORIGEN", period_str, columns=5)
+    row = _add_company_header(
+        ws_origin,
+        company_name,
+        "DESGLOSE DE INGRESOS POR ORIGEN",
+        period_str,
+        columns=5,
+        **header_kwargs,
+    )
 
     row += 1
     ws_origin.cell(row=row, column=1, value="INGRESOS POR VENTAS DIRECTAS").font = SUBTITLE_FONT
@@ -2442,13 +2682,25 @@ def generate_cashbox_report(
     # HOJA 4: VENTAS POR DÍA (con fórmulas)
     # =================
     ws_daily = wb.create_sheet("Ventas Diarias")
-    row = _add_company_header(ws_daily, company_name, "RESUMEN DE VENTAS DIARIAS", period_str, columns=5)
+    row = _add_company_header(
+        ws_daily,
+        company_name,
+        "RESUMEN DE VENTAS DIARIAS",
+        period_str,
+        columns=5,
+        **header_kwargs,
+    )
 
     # Agrupar ventas por día
     by_day: dict[str, dict] = {}
     for sale in sales:
         if sale.timestamp:
-            day_key = sale.timestamp.strftime("%Y-%m-%d")
+            day_key = _format_report_datetime(
+                sale.timestamp,
+                "%Y-%m-%d",
+                country_code,
+                timezone,
+            )
             if day_key not in by_day:
                 by_day[day_key] = {"count": 0, "total": Decimal("0"), "cash": Decimal("0"), "other": Decimal("0")}
             by_day[day_key]["count"] += 1
@@ -2508,7 +2760,14 @@ def generate_cashbox_report(
     # HOJA 5: CONCILIACIÓN DE CAJA (con fórmulas)
     # =================
     ws_conciliation = wb.create_sheet("Conciliación")
-    row = _add_company_header(ws_conciliation, company_name, "CUADRE Y CONCILIACIÓN DE CAJA", period_str, columns=4)
+    row = _add_company_header(
+        ws_conciliation,
+        company_name,
+        "CUADRE Y CONCILIACIÓN DE CAJA",
+        period_str,
+        columns=4,
+        **header_kwargs,
+    )
 
     row += 1
     ws_conciliation.cell(row=row, column=1, value="ANÁLISIS DE FLUJO DE EFECTIVO").font = SUBTITLE_FONT

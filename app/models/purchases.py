@@ -6,6 +6,7 @@ import reflex as rx
 from sqlmodel import Field, Relationship
 import sqlalchemy
 from sqlalchemy import Numeric
+from app.utils.timezone import utc_now_naive
 
 if TYPE_CHECKING:
     from .auth import User
@@ -41,7 +42,7 @@ class Supplier(rx.Model, table=True):
     address: Optional[str] = Field(default=None)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
 
@@ -96,7 +97,7 @@ class Purchase(rx.Model, table=True):
     supplier_id: int = Field(foreign_key="supplier.id", index=True)
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(
-        default_factory=datetime.now,
+        default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
 

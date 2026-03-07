@@ -85,7 +85,8 @@ def add_company_header(
     company_name: str,
     report_title: str,
     period_str: str = "",
-    columns: int = 6
+    columns: int = 6,
+    generated_at: datetime.datetime | None = None,
 ) -> int:
     """
     Agrega un encabezado profesional con nombre de empresa, título y período.
@@ -112,7 +113,7 @@ def add_company_header(
         period_cell.alignment = Alignment(horizontal="center")
 
     # Fila 4: Fecha de generación
-    now = datetime.datetime.now()
+    now = generated_at or datetime.datetime.now()
     ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=columns)
     date_cell = ws.cell(row=4, column=1, value=f"⏱ Generado: {now.strftime('%d/%m/%Y a las %H:%M:%S')}")
     date_cell.font = Font(size=9, italic=True, color="9CA3AF")

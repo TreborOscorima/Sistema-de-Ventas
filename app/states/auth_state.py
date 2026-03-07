@@ -34,11 +34,20 @@ from sqlmodel import select
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
-from app.models import Branch, Company, Permission, Role, User as UserModel, UserBranch
+from app.models import (
+    Branch,
+    Company,
+    CompanySettings,
+    Permission,
+    Role,
+    User as UserModel,
+    UserBranch,
+)
 from app.models.company import SubscriptionStatus
 from app.utils.auth import create_access_token, decode_token
 from app.utils.logger import get_logger
 from app.utils.tenant import set_tenant_context, tenant_bypass
+from app.utils.timezone import country_today_date, utc_now_naive
 from app.utils.rate_limit import (
     is_rate_limited as _is_rate_limited,
     record_failed_attempt as _record_failed_attempt,
@@ -411,6 +420,24 @@ class AuthState(MixinState):
         except (TypeError, ValueError):
             return fallback
 
+    def _company_today_for_id(self, session, company_id: int | None) -> datetime.date:
+        current_company_id = self.current_user.get("company_id")
+        if company_id and current_company_id == company_id:
+            return self._company_today()
+        if company_id:
+            settings = session.exec(
+                select(CompanySettings)
+                .where(CompanySettings.company_id == company_id)
+                .order_by(CompanySettings.branch_id.asc())
+                .execution_options(tenant_bypass=True)
+            ).first()
+            if settings:
+                return country_today_date(
+                    getattr(settings, "country_code", None) or "PE",
+                    timezone=getattr(settings, "timezone", None) or None,
+                )
+        return country_today_date("PE")
+
     def _build_subscription_snapshot(
         self,
         company: Company | None,
@@ -428,10 +455,12 @@ class AuthState(MixinState):
 
         trial_ends_at = getattr(company, "trial_ends_at", None)
         subscription_ends_at = getattr(company, "subscription_ends_at", None)
-        now = datetime.now()
+        today = self._company_today()
 
         # Trial: vencido si trial_ends_at ya pasó O si nunca se configuró fecha
-        is_expired = bool(is_trial and (not trial_ends_at or trial_ends_at < now))
+        is_expired = bool(
+            is_trial and (not trial_ends_at or trial_ends_at.date() < today)
+        )
         status_label = "Vencido" if is_expired else "Activo"
         status_tone = "danger" if is_expired else ("warning" if is_trial else "success")
         if not is_trial:
@@ -442,7 +471,7 @@ class AuthState(MixinState):
             sub_status = str(sub_status or "").strip().lower()
 
             # Fecha de suscripción vencida → forzar suspendido
-            if subscription_ends_at and subscription_ends_at < now:
+            if subscription_ends_at and subscription_ends_at.date() < today:
                 status_label = "Suspendido"
                 status_tone = "danger"
             elif sub_status == SubscriptionStatus.WARNING.value:
@@ -458,7 +487,7 @@ class AuthState(MixinState):
         trial_days_left = 0
         trial_ends_on = ""
         if is_trial and trial_ends_at:
-            trial_days_left = max((trial_ends_at.date() - now.date()).days, 0)
+            trial_days_left = max((trial_ends_at.date() - today).days, 0)
             trial_ends_on = trial_ends_at.strftime("%d/%m/%Y")
 
         max_branches = self._safe_int(getattr(company, "max_branches", 0), 0)
@@ -590,8 +619,8 @@ class AuthState(MixinState):
             self.payment_alert_info = default
             return
 
-        now = datetime.now()
-        days_remaining = (subscription_ends_at.date() - now.date()).days
+        today = self._company_today()
+        days_remaining = (subscription_ends_at.date() - today).days
         if days_remaining > 5:
             self.payment_alert_info = default
             return
@@ -746,8 +775,8 @@ class AuthState(MixinState):
             self.payment_alert_info = default_alert
             return
 
-        now = datetime.now()
-        days_remaining = (subscription_ends_at.date() - now.date()).days
+        today = self._company_today()
+        days_remaining = (subscription_ends_at.date() - today).days
         if days_remaining > 5:
             self.payment_alert_info = default_alert
             return
@@ -1159,7 +1188,7 @@ class AuthState(MixinState):
             select(Company).order_by(Company.id.asc())
         ).first()
         if not company:
-            now = datetime.now()
+            now = utc_now_naive()
             company = Company(
                 name="Empresa Inicial",
                 ruc=f"BOOT{time.time_ns()}",
@@ -1423,7 +1452,7 @@ class AuthState(MixinState):
                 try:
                     from datetime import datetime as dt_cls
                     trial_ends_at = dt_cls.strptime(trial_end, "%d/%m/%Y")
-                    if trial_ends_at < datetime.now():
+                    if trial_ends_at.date() < self._company_today():
                         is_trial_expired = True
                 except (ValueError, TypeError):
                     pass
@@ -1794,7 +1823,7 @@ class AuthState(MixinState):
                     .execution_options(tenant_bypass=True)
                 ).first()
                 if user_company:
-                    now = datetime.now()
+                    today = self._company_today_for_id(session, user_company.id)
                     plan_type = getattr(user_company, "plan_type", "") or ""
                     if hasattr(plan_type, "value"):
                         plan_type = plan_type.value
@@ -1803,7 +1832,7 @@ class AuthState(MixinState):
 
                     if is_trial:
                         trial_end = getattr(user_company, "trial_ends_at", None)
-                        if not trial_end or trial_end < now:
+                        if not trial_end or trial_end.date() < today:
                             # Auto-suspender en DB (sin bloquear login;
                             # la redirección se maneja post-login vía snapshot)
                             sub_st = getattr(user_company, "subscription_status", "")
@@ -1821,7 +1850,7 @@ class AuthState(MixinState):
                             sub_st = sub_st.value
                         sub_st = str(sub_st).strip().lower()
                         if sub_st == SubscriptionStatus.SUSPENDED.value or (
-                            sub_end and sub_end < now
+                            sub_end and sub_end.date() < today
                         ):
                             # Auto-suspender en DB si aún no lo está
                             if sub_st != SubscriptionStatus.SUSPENDED.value:

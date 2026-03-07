@@ -149,41 +149,65 @@ class ReportState(MixinState):
 
     def _calculate_period_dates(self):
         """Calcula fechas de inicio y fin del período seleccionado."""
-        now = datetime.now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        now_local = self._display_now()
+        today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now_local.replace(hour=23, minute=59, second=59, microsecond=999999)
 
         period = self.report_period
 
         if period == "today":
-            return (today_start, today_end)
+            return (
+                self._company_local_datetime_to_utc_naive(today_start),
+                self._company_local_datetime_to_utc_naive(today_end),
+            )
         elif period == "week":
             start = today_start - timedelta(days=today_start.weekday())
-            return (start, today_end)
+            return (
+                self._company_local_datetime_to_utc_naive(start),
+                self._company_local_datetime_to_utc_naive(today_end),
+            )
         elif period == "month":
             start = today_start.replace(day=1)
-            return (start, today_end)
+            return (
+                self._company_local_datetime_to_utc_naive(start),
+                self._company_local_datetime_to_utc_naive(today_end),
+            )
         elif period == "quarter":
-            quarter = (now.month - 1) // 3
+            quarter = (now_local.month - 1) // 3
             start_month = quarter * 3 + 1
             start = today_start.replace(month=start_month, day=1)
-            return (start, today_end)
+            return (
+                self._company_local_datetime_to_utc_naive(start),
+                self._company_local_datetime_to_utc_naive(today_end),
+            )
         elif period == "year":
             start = today_start.replace(month=1, day=1)
-            return (start, today_end)
+            return (
+                self._company_local_datetime_to_utc_naive(start),
+                self._company_local_datetime_to_utc_naive(today_end),
+            )
         elif period == "custom":
             try:
                 start = datetime.strptime(self.custom_start_date, "%Y-%m-%d")
                 end = datetime.strptime(self.custom_end_date, "%Y-%m-%d")
                 end = end.replace(hour=23, minute=59, second=59)
-                return (start, end)
+                return (
+                    self._company_local_datetime_to_utc_naive(start),
+                    self._company_local_datetime_to_utc_naive(end),
+                )
             except (ValueError, TypeError):
                 start = today_start.replace(day=1)
-                return (start, today_end)
+                return (
+                    self._company_local_datetime_to_utc_naive(start),
+                    self._company_local_datetime_to_utc_naive(today_end),
+                )
         else:
             # Por defecto: este mes
             start = today_start.replace(day=1)
-            return (start, today_end)
+            return (
+                self._company_local_datetime_to_utc_naive(start),
+                self._company_local_datetime_to_utc_naive(today_end),
+            )
 
     @rx.event(background=True)
     async def generate_report(self):
@@ -213,6 +237,7 @@ class ReportState(MixinState):
                 end_date = dates[1]
 
                 with rx.session() as session:
+                    country_code, timezone = self._company_time_context()
                     if MAX_REPORT_ROWS > 0:
                         if self.report_type == "ventas":
                             count_query = (
@@ -304,8 +329,15 @@ class ReportState(MixinState):
                             currency_symbol=self.currency_symbol,
                             company_id=company_id,
                             branch_id=branch_id,
+                            country_code=country_code,
+                            timezone=timezone,
+                            generated_at=self._display_now(),
                         )
-                        filename = f"Reporte_Ventas_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
+                        filename = (
+                            "Reporte_Ventas_"
+                            f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
+                            f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
+                        )
 
                     elif self.report_type == "inventario":
                         output = generate_inventory_report(
@@ -315,8 +347,14 @@ class ReportState(MixinState):
                             currency_symbol=self.currency_symbol,
                             company_id=company_id,
                             branch_id=branch_id,
+                            country_code=country_code,
+                            timezone=timezone,
+                            generated_at=self._display_now(),
                         )
-                        filename = f"Inventario_Valorizado_{datetime.now().strftime('%Y%m%d')}.xlsx"
+                        filename = (
+                            f"Inventario_Valorizado_"
+                            f"{self._display_now().strftime('%Y%m%d')}.xlsx"
+                        )
 
                     elif self.report_type == "cuentas":
                         output = generate_receivables_report(
@@ -325,8 +363,14 @@ class ReportState(MixinState):
                             currency_symbol=self.currency_symbol,
                             company_id=company_id,
                             branch_id=branch_id,
+                            country_code=country_code,
+                            timezone=timezone,
+                            generated_at=self._display_now(),
                         )
-                        filename = f"Cuentas_por_Cobrar_{datetime.now().strftime('%Y%m%d')}.xlsx"
+                        filename = (
+                            f"Cuentas_por_Cobrar_"
+                            f"{self._display_now().strftime('%Y%m%d')}.xlsx"
+                        )
 
                     elif self.report_type == "caja":
                         output = generate_cashbox_report(
@@ -337,8 +381,15 @@ class ReportState(MixinState):
                             currency_symbol=self.currency_symbol,
                             company_id=company_id,
                             branch_id=branch_id,
+                            country_code=country_code,
+                            timezone=timezone,
+                            generated_at=self._display_now(),
                         )
-                        filename = f"Reporte_Caja_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.xlsx"
+                        filename = (
+                            "Reporte_Caja_"
+                            f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
+                            f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
+                        )
 
                     else:
                         self.report_loading = False

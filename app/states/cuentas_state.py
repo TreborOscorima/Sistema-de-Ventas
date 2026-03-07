@@ -34,7 +34,6 @@ from app.models import Client, Sale, SaleInstallment
 from app.services.credit_service import CreditService
 from app.services.alert_service import get_overdue_count
 from app.utils.db import get_async_session
-from app.utils.timezone import country_today_date, country_today_start
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -103,12 +102,11 @@ class CuentasState(MixinState):
         return code
 
     def _country_today(self) -> datetime.date:
-        code, timezone = self._company_time_context()
-        return country_today_date(code, timezone=timezone)
+        return self._company_today()
 
     def _country_today_start(self) -> datetime.datetime:
-        code, timezone = self._company_time_context()
-        return country_today_start(code, timezone=timezone)
+        start_dt, _ = self._company_day_bounds_utc_naive(self._company_today())
+        return start_dt
 
     def _query_filter_mode(self) -> str | None:
         query = ""
@@ -259,12 +257,19 @@ class CuentasState(MixinState):
                 pending_amount = Decimal("0")
             due_date = installment.get("due_date")
             due_date_display = (
-                due_date.strftime("%Y-%m-%d") if due_date else ""
+                self._format_company_datetime(due_date, "%Y-%m-%d")
+                if due_date
+                else ""
             )
             is_overdue = False
             if due_date:
                 try:
-                    is_overdue = due_date.date() < today and not is_paid
+                    local_due_date = self._to_company_datetime(due_date)
+                    is_overdue = (
+                        bool(local_due_date)
+                        and local_due_date.date() < today
+                        and not is_paid
+                    )
                 except Exception:
                     is_overdue = False
             rows.append(
@@ -390,12 +395,19 @@ class CuentasState(MixinState):
                 pending_amount = Decimal("0")
             due_date = installment.due_date
             due_date_display = (
-                due_date.strftime("%Y-%m-%d") if due_date else ""
+                self._format_company_datetime(due_date, "%Y-%m-%d")
+                if due_date
+                else ""
             )
             is_overdue = False
             if due_date:
                 try:
-                    is_overdue = due_date.date() < today_date and not is_paid
+                    local_due_date = self._to_company_datetime(due_date)
+                    is_overdue = (
+                        bool(local_due_date)
+                        and local_due_date.date() < today_date
+                        and not is_paid
+                    )
                 except Exception:
                     is_overdue = False
             client_payload = None
@@ -587,7 +599,7 @@ class CuentasState(MixinState):
             rows = result.all()
 
         company_name = getattr(self, "company_name", "") or "EMPRESA"
-        today = datetime.datetime.now().strftime("%d/%m/%Y")
+        today = self._display_now().strftime("%d/%m/%Y")
         period_label = f"Corte: {today}"
 
         total_installments = len(rows)
@@ -618,7 +630,14 @@ class CuentasState(MixinState):
         title = f"ESTADO DE CUENTA - {report_client_name.upper()}" if report_client_name else "CUENTAS POR COBRAR - REPORTE GLOBAL"
         
         # Encabezado profesional
-        row = add_company_header(sheet, company_name, title, period_label, columns=7)
+        row = add_company_header(
+            sheet,
+            company_name,
+            title,
+            period_label,
+            columns=7,
+            generated_at=self._display_now(),
+        )
 
         row += 1
         sheet.cell(row=row, column=1, value="RESUMEN DE CARTERA")
@@ -660,7 +679,10 @@ class CuentasState(MixinState):
 
         for installment, client in rows:
             due_date = (
-                installment.due_date.strftime("%d/%m/%Y")
+                self._format_company_datetime(
+                    installment.due_date,
+                    "%d/%m/%Y",
+                )
                 if installment.due_date
                 else "Sin fecha"
             )

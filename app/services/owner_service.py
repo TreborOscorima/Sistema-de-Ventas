@@ -10,7 +10,7 @@ transiciones de estado y auditoría atómica.
 import json
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import bcrypt
@@ -23,6 +23,7 @@ from app.models.company import Branch, Company, PlanType, SubscriptionStatus
 from app.models.owner import OwnerAuditLog
 from app.models.sales import CompanySettings
 from app.utils.logger import get_logger
+from app.utils.timezone import utc_now_naive
 
 logger = get_logger("OwnerService")
 
@@ -151,7 +152,7 @@ def _effective_status(company: Company) -> str:
     - Plan de pago con subscription_ends_at pasado → 'suspended'.
     - En cualquier otro caso, retorna el subscription_status de la BD.
     """
-    now = datetime.now()
+    now = utc_now_naive()
     if company.plan_type == PlanType.TRIAL:
         # Cualquier trial sin fecha o con fecha pasada → trial_expired,
         # sin importar el subscription_status actual (incluye SUSPENDED).
@@ -557,7 +558,7 @@ class OwnerService:
             company.is_active = True
             # Establecer fecha de vencimiento de suscripción
             if subscription_months and subscription_months > 0:
-                company.subscription_ends_at = datetime.now() + timedelta(
+                company.subscription_ends_at = utc_now_naive() + timedelta(
                     days=subscription_months * 30
                 )
             else:
@@ -701,7 +702,7 @@ class OwnerService:
 
         before = _company_snapshot(company)
 
-        base = company.trial_ends_at or datetime.now()
+        base = company.trial_ends_at or utc_now_naive()
         company.trial_ends_at = base + timedelta(days=extra_days)
         company.is_active = True
         company.subscription_status = SubscriptionStatus.ACTIVE
@@ -822,7 +823,7 @@ class OwnerService:
         Returns:
             Número de empresas actualizadas.
         """
-        now = datetime.now()
+        now = utc_now_naive()
         stmt = select(Company).where(
             Company.plan_type == PlanType.TRIAL,
             Company.subscription_status == SubscriptionStatus.ACTIVE,
