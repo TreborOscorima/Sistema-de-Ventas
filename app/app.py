@@ -519,29 +519,6 @@ def _content_skeleton() -> rx.Component:
     )
 
 
-def _runtime_bootstrap_script() -> str:
-    return """
-    (function(){
-        const KEY = "twk:runtime-bootstrap-at";
-        const now = Date.now();
-
-        try {
-            const last = Number(sessionStorage.getItem(KEY) || "0");
-            if ((now - last) < 1200) return;
-            sessionStorage.setItem(KEY, String(now));
-        } catch(_err) {}
-
-        function trigger(){
-            const btn = document.querySelector('[data-twk-runtime-bootstrap="1"]');
-            if (btn) btn.click();
-        }
-
-        window.setTimeout(trigger, 0);
-        window.setTimeout(trigger, 1200);
-    })();
-    """
-
-
 def authenticated_layout(page_content: rx.Component) -> rx.Component:
     """Layout optimizado para SPA: Sidebar fijo y persistente.
 
@@ -565,31 +542,7 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
             type="button",
             class_name="hidden",
         ),
-        rx.el.button(
-            "bootstrap",
-            on_click=lambda: State.refresh_runtime_context(True),
-            custom_attrs={
-                "data-twk-runtime-bootstrap": "1",
-                "aria-hidden": "true",
-                "tabindex": "-1",
-            },
-            type="button",
-            class_name="hidden",
-        ),
         rx.script(_runtime_sync_script()),
-        rx.cond(
-            State.is_hydrated,
-            rx.cond(
-                State.is_authenticated,
-                rx.cond(
-                    State.runtime_ctx_loaded,
-                    rx.fragment(),
-                    rx.script(_runtime_bootstrap_script()),
-                ),
-                rx.fragment(),
-            ),
-            rx.fragment(),
-        ),
         rx.el.div(
             class_name=(
                 "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
