@@ -30,11 +30,17 @@ from typing import Any
 from sqlmodel import select
 from sqlalchemy import or_
 
+from app.constants import (
+    CLIENT_SUGGESTIONS_LIMIT,
+    DEFAULT_CREDIT_INTERVAL_DAYS,
+    DEFAULT_INSTALLMENTS_COUNT,
+)
 from app.models import Client
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.services.sale_service import SaleService, StockError
 from app.utils.db import get_async_session
 from app.utils.logger import get_logger
+from app.utils.sanitization import escape_like
 from .mixin_state import MixinState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin
 
@@ -67,8 +73,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     client_suggestions: list[dict] = []
     selected_client: dict | None = None
     is_credit_mode: bool = False
-    credit_installments: int = 1
-    credit_interval_days: int = 30
+    credit_installments: int = DEFAULT_INSTALLMENTS_COUNT
+    credit_interval_days: int = DEFAULT_CREDIT_INTERVAL_DAYS
     credit_initial_payment: str = "0"
     is_processing_sale: bool = False
 
@@ -100,7 +106,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         financed = total - initial_payment
         if financed < 0:
             financed = Decimal("0")
-        return self._round_currency(float(financed))
+        return self._round_currency(financed)
 
     @rx.var(cache=True)
     def credit_installment_amount(self) -> float:
@@ -116,7 +122,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         if len(term) <= 2:
             self.client_suggestions = []
             return
-        like_search = f"%{term}%"
+        like_search = f"%{escape_like(term)}%"
         company_id = self.current_user.get("company_id")
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -133,7 +139,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 )
                 .where(Client.company_id == company_id)
                 .where(Client.branch_id == branch_id)
-                .limit(6)
+                .limit(CLIENT_SUGGESTIONS_LIMIT)
             ).all()
         self.client_suggestions = [
             {
@@ -158,7 +164,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             balance = client_data.credit_limit - client_data.current_debt
             if balance is None:
                 balance = 0
-            selected["balance"] = self._round_currency(float(max(balance, 0)))
+            selected["balance"] = self._round_currency(max(balance, 0))
         elif isinstance(client_data, dict) and client_data:
             selected = dict(client_data)
         self.selected_client = dict(selected) if isinstance(selected, dict) else None
@@ -212,8 +218,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         self.client_suggestions = []
         self.is_credit_mode = False
         self.credit_initial_payment = ""
-        self.credit_installments = 1
-        self.credit_interval_days = 30
+        self.credit_installments = DEFAULT_INSTALLMENTS_COUNT
+        self.credit_interval_days = DEFAULT_CREDIT_INTERVAL_DAYS
         self.payment_cash_amount = 0
         if hasattr(self, "clear_pending_reservation"):
             self.clear_pending_reservation()
@@ -290,7 +296,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 "breakdown": payment_breakdown,
                 "total": sale_total_guess,
                 "cash": {
-                    "amount": self._round_currency(self.payment_cash_amount),
+                    "amount": self._round_currency(max(self.payment_cash_amount, 0)),
                     "message": self.payment_cash_message,
                     "status": self.payment_cash_status,
                 },
@@ -300,10 +306,11 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     or self.payment_wallet_choice,
                     "choice": self.payment_wallet_choice,
                 },
+                # FIX 41: clamp negative mixed amounts at commit point
                 "mixed": {
-                    "cash": self._round_currency(self.payment_mixed_cash),
-                    "card": self._round_currency(self.payment_mixed_card),
-                    "wallet": self._round_currency(self.payment_mixed_wallet),
+                    "cash": self._round_currency(max(self.payment_mixed_cash, 0)),
+                    "card": self._round_currency(max(self.payment_mixed_card, 0)),
+                    "wallet": self._round_currency(max(self.payment_mixed_wallet, 0)),
                     "non_cash_kind": self.payment_mixed_non_cash_kind,
                     "notes": self.payment_mixed_notes,
                     "message": self.payment_mixed_message,
@@ -316,6 +323,9 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             try:
                 initial_payment = Decimal(str(self.credit_initial_payment or "0"))
             except Exception:
+                initial_payment = Decimal("0")
+            # FIX 42: clamp negative initial payment to prevent credit bypass
+            if initial_payment < 0:
                 initial_payment = Decimal("0")
             payment_data.update(
                 {

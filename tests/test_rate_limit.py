@@ -59,11 +59,13 @@ class TestMemoryRateLimiting:
         # Todos deberían contar para el mismo usuario
         assert len(_memory_store.get("testuser", [])) == 3
 
-    def test_empty_username_not_blocked(self):
-        """Username vacío no causa bloqueo."""
-        assert is_rate_limited("", max_attempts=1) is False
-        record_failed_attempt("")
-        assert is_rate_limited("", max_attempts=1) is False
+    def test_empty_username_blocked_fail_closed(self):
+        """Username vacío se bloquea por seguridad (fail-closed).
+
+        Un username vacío indica un bug en el caller; por seguridad
+        se bloquea en lugar de permitir acceso sin identificación.
+        """
+        assert is_rate_limited("", max_attempts=1) is True
 
     def test_remaining_lockout_time_not_blocked(self):
         """Sin tiempo restante si no está bloqueado."""

@@ -8,6 +8,8 @@ import jwt
 from dotenv import load_dotenv
 from jwt import ExpiredSignatureError, PyJWTError
 
+from app.constants import TOKEN_EXPIRY_HOURS
+
 load_dotenv()
 
 
@@ -40,8 +42,8 @@ def create_access_token(
     token_version: int | None = None,
     company_id: int | None = None,
 ) -> str:
-    """Crea un token JWT de acceso con expiración de 24 horas."""
-    expire = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(hours=24)
+    """Crea un token JWT de acceso con expiración configurable."""
+    expire = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(hours=TOKEN_EXPIRY_HOURS)
     payload = {
         "sub": str(subject),
         "exp": expire,

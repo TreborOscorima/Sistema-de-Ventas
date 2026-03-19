@@ -65,6 +65,7 @@ from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.utils.calculations import calculate_subtotal, calculate_total
 from app.utils.db import get_async_session as get_session
 from app.utils.logger import get_logger
+from app.utils.sanitization import escape_like
 from app.utils.tenant import set_tenant_context
 from app.utils.payment import (
     normalize_payment_method_kind as _method_type_from_kind,
@@ -85,7 +86,10 @@ logger = get_logger("SaleService")
 
 def _apply_company_filter(query, model, company_id: int | None):
     if not company_id:
-        return query
+        raise ValueError(
+            "company_id es obligatorio para filtrar por tenant. "
+            "No se permiten consultas cross-tenant sin filtro explícito."
+        )
     company_attr = getattr(model, "company_id", None)
     if company_attr is None:
         return query
@@ -94,7 +98,10 @@ def _apply_company_filter(query, model, company_id: int | None):
 
 def _apply_branch_filter(query, model, branch_id: int | None):
     if not branch_id:
-        return query
+        raise ValueError(
+            "branch_id es obligatorio para filtrar por tenant. "
+            "No se permiten consultas cross-tenant sin filtro explícito."
+        )
     branch_attr = getattr(model, "branch_id", None)
     if branch_attr is None:
         return query
@@ -375,7 +382,7 @@ async def search_products(
     term = (query or "").strip()
     if not term:
         return []
-    like_search = f"%{term}%"
+    like_search = f"%{escape_like(term)}%"
 
     async def _run(current_session: AsyncSession) -> list[dict[str, Any]]:
         product_query = select(Product).where(
@@ -1098,7 +1105,7 @@ class SaleService:
                         FieldReservation,
                         company_id,
                         branch_id,
-                    )
+                    ).with_for_update()
                 )
             ).first()
             if reservation:
@@ -1540,7 +1547,7 @@ class SaleService:
                 await session.exec(
                     _apply_tenant_filters(
                         client_query, Client, company_id, branch_id
-                    )
+                    ).with_for_update()
                 )
             ).first()
             if not client:
@@ -1736,9 +1743,15 @@ class SaleService:
                         current_stock = _round_quantity(
                             variant.stock, allows_decimal
                         )
-                        variant.stock = _round_quantity(
+                        new_stock = _round_quantity(
                             current_stock - item["quantity"], allows_decimal
                         )
+                        if new_stock < Decimal("0"):
+                            raise StockError(
+                                f"Stock insuficiente para {item['description']} "
+                                f"(concurrencia detectada)."
+                            )
+                        variant.stock = new_stock
                         session.add(variant)
                     products_to_recalculate.add(product.id)
                 else:
@@ -1758,9 +1771,15 @@ class SaleService:
                         current_stock = _round_quantity(
                             product.stock, allows_decimal
                         )
-                        product.stock = _round_quantity(
+                        new_stock = _round_quantity(
                             current_stock - item["quantity"], allows_decimal
                         )
+                        if new_stock < Decimal("0"):
+                            raise StockError(
+                                f"Stock insuficiente para {item['description']} "
+                                f"(concurrencia detectada)."
+                            )
+                        product.stock = new_stock
                         session.add(product)
 
                 barcode_snapshot = (
@@ -1890,7 +1909,10 @@ class SaleService:
                 else:
                     payment_summary = credit_block
 
-            await session.commit()
+            # Flush final para asegurar integridad antes de devolver al caller.
+            # El commit/rollback es responsabilidad EXCLUSIVA del caller,
+            # como documenta el docstring y el ejemplo de uso del módulo.
+            await session.flush()
             return SaleProcessResult(
                 sale=new_sale,
                 receipt_items=receipt_items,
@@ -1902,7 +1924,6 @@ class SaleService:
                 reservation_balance=reservation_balance,
                 reservation_balance_display=reservation_balance_display,
             )
-        except Exception as e:
-            await session.rollback()
-            logger.error("Transacción fallida. Rollback ejecutado.", exc_info=True)
-            raise e
+        except Exception:
+            logger.error("Error en process_sale. El caller debe hacer rollback.", exc_info=True)
+            raise

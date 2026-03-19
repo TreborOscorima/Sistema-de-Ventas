@@ -5,7 +5,6 @@ Proporciona funcionalidades para generar reportes profesionales
 para evaluaciones administrativas, contables y financieras.
 """
 import logging
-import traceback
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -400,9 +399,10 @@ class ReportState(MixinState):
                 self._report_download_filename = filename
                 self.report_ready = True
             except Exception as e:
-                self.report_error = str(e)
-                logger.error(f"Error al generar reporte: {e}")
-                logger.error(traceback.format_exc())
+                # FIX 40b: log full traceback + show short detail for diagnosis
+                detail = str(e) or type(e).__name__
+                self.report_error = f"Error al generar el reporte: {detail}"
+                logger.exception("Error al generar reporte: %s", detail)
             finally:
                 self.report_loading = False
 

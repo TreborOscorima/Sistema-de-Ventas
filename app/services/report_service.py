@@ -286,16 +286,20 @@ def _safe_string(value: Any, default: str = "") -> str:
         return default
 
 
-def _build_sale_user_lookup(
+def _build_user_lookup(
     session,
-    sales: list[Sale],
+    records: list,
     company_id: int | None,
 ) -> dict[int, str]:
-    """Obtiene usernames por user_id para ventas, evitando filtros por sucursal."""
+    """Obtiene usernames por user_id para cualquier lista de registros con .user_id.
+
+    Funciona con Sales, CashboxLog, o cualquier modelo que tenga user_id.
+    Evita filtros por sucursal usando tenant_bypass para cross-branch reporting.
+    """
     user_ids = {
-        int(sale.user_id)
-        for sale in sales
-        if sale is not None and getattr(sale, "user_id", None) is not None
+        int(record.user_id)
+        for record in records
+        if record is not None and getattr(record, "user_id", None) is not None
     }
     if not user_ids:
         return {}
@@ -319,6 +323,11 @@ def _build_sale_user_lookup(
         if safe_id and safe_name:
             lookup[safe_id] = safe_name
     return lookup
+
+
+# Aliases retrocompatibles (evitan romper callers existentes)
+_build_sale_user_lookup = _build_user_lookup
+_build_cashbox_log_user_lookup = _build_user_lookup
 
 
 def _resolve_sale_username(
@@ -333,41 +342,6 @@ def _resolve_sale_username(
     if user_id and user_id in user_lookup:
         return _safe_string(user_lookup.get(user_id), default)
     return default
-
-
-def _build_cashbox_log_user_lookup(
-    session,
-    logs: list[CashboxLog],
-    company_id: int | None,
-) -> dict[int, str]:
-    """Resuelve usernames para logs de caja aunque el usuario no pertenezca a la sucursal actual."""
-    user_ids = {
-        int(log.user_id)
-        for log in logs
-        if log is not None and getattr(log, "user_id", None) is not None
-    }
-    if not user_ids:
-        return {}
-
-    query = select(User.id, User.username).where(User.id.in_(user_ids))
-    if company_id:
-        query = query.where(User.company_id == company_id)
-
-    with tenant_bypass():
-        rows = session.exec(query.execution_options(tenant_bypass=True)).all()
-
-    lookup: dict[int, str] = {}
-    for row in rows:
-        try:
-            user_id, username = row[0], row[1]
-        except Exception:
-            user_id = getattr(row, "id", None)
-            username = getattr(row, "username", None)
-        safe_id = _safe_int(user_id)
-        safe_name = _safe_string(username)
-        if safe_id and safe_name:
-            lookup[safe_id] = safe_name
-    return lookup
 
 
 def _translate_cashbox_action(action: str | None) -> str:
@@ -534,16 +508,6 @@ def generate_sales_report(
         "country_code": country_code,
         "timezone": timezone,
     }
-    header_kwargs = {
-        "generated_at": generated_at,
-        "country_code": country_code,
-        "timezone": timezone,
-    }
-    header_kwargs = {
-        "generated_at": generated_at,
-        "country_code": country_code,
-        "timezone": timezone,
-    }
 
     # Consultar ventas del período
     query = (
@@ -573,11 +537,6 @@ def generate_sales_report(
 
     sales = session.exec(query).all()
     sale_user_lookup = _build_sale_user_lookup(session, sales, company_id)
-    header_kwargs = {
-        "generated_at": generated_at,
-        "country_code": country_code,
-        "timezone": timezone,
-    }
 
     period_str = (
         f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
@@ -749,8 +708,8 @@ def generate_sales_report(
 
         ws_daily.cell(row=row, column=1, value=_safe_string(day_key))
         ws_daily.cell(row=row, column=2, value=day_data["count"])
-        ws_daily.cell(row=row, column=3, value=float(day_data["total"])).number_format = currency_format
-        ws_daily.cell(row=row, column=4, value=float(day_data["cost"])).number_format = currency_format
+        ws_daily.cell(row=row, column=3, value=day_data["total"]).number_format = currency_format
+        ws_daily.cell(row=row, column=4, value=day_data["cost"]).number_format = currency_format
         # Utilidad = Fórmula Excel: Venta - Costo
         ws_daily.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = currency_format
         # Margen % = Fórmula Excel: (Utilidad / Venta) * 100
@@ -812,14 +771,14 @@ def generate_sales_report(
     for cat_name, cat_data in sorted_categories:
         ws_category.cell(row=row, column=1, value=_safe_string(cat_name))
         ws_category.cell(row=row, column=2, value=cat_data["qty"])
-        ws_category.cell(row=row, column=3, value=float(cat_data["total"])).number_format = currency_format
-        ws_category.cell(row=row, column=4, value=float(cat_data["cost"])).number_format = currency_format
+        ws_category.cell(row=row, column=3, value=cat_data["total"]).number_format = currency_format
+        ws_category.cell(row=row, column=4, value=cat_data["cost"]).number_format = currency_format
         # Utilidad = Fórmula: Venta - Costo
         ws_category.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = currency_format
         # Margen % = Fórmula: Utilidad / Venta
         ws_category.cell(row=row, column=6, value=f"=IF(C{row}>0,E{row}/C{row},0)").number_format = PERCENT_FORMAT
         # % del Total = se calculará con referencia al total
-        ws_category.cell(row=row, column=7, value=float(cat_data["total"])).number_format = currency_format  # Temporal
+        ws_category.cell(row=row, column=7, value=cat_data["total"]).number_format = currency_format  # Temporal
 
         for col in range(1, 8):
             ws_category.cell(row=row, column=col).border = THIN_BORDER
@@ -887,8 +846,8 @@ def generate_sales_report(
         method_es = _translate_payment_method(method)
         ws_payment.cell(row=row, column=1, value=_safe_string(method_es))
         ws_payment.cell(row=row, column=2, value=method_data["count"])
-        ws_payment.cell(row=row, column=3, value=float(method_data["total"])).number_format = currency_format
-        ws_payment.cell(row=row, column=4, value=float(method_data["total"])).number_format = currency_format  # Temporal
+        ws_payment.cell(row=row, column=3, value=method_data["total"]).number_format = currency_format
+        ws_payment.cell(row=row, column=4, value=method_data["total"]).number_format = currency_format  # Temporal
 
         # Observación según tipo
         method_lower = method.lower()
@@ -946,9 +905,9 @@ def generate_sales_report(
 
     ws_payment.cell(row=row, column=1, value="Ventas a Crédito/Fiado")
     ws_payment.cell(row=row, column=2, value=ventas_credito)
-    ws_payment.cell(row=row, column=3, value=float(monto_credito)).number_format = currency_format
+    ws_payment.cell(row=row, column=3, value=monto_credito).number_format = currency_format
     if total_ventas > 0:
-        ws_payment.cell(row=row, column=4, value=float(monto_credito / total_ventas)).number_format = PERCENT_FORMAT
+        ws_payment.cell(row=row, column=4, value=monto_credito / total_ventas).number_format = PERCENT_FORMAT
     else:
         ws_payment.cell(row=row, column=4, value=0).number_format = PERCENT_FORMAT
     ws_payment.cell(row=row, column=5, value="Cuentas por cobrar")
@@ -965,7 +924,7 @@ def generate_sales_report(
     row += 2
 
     ws_payment.cell(row=row, column=1, value="Total Ventas del Período:").font = Font(bold=True)
-    ws_payment.cell(row=row, column=2, value=float(total_ventas)).number_format = currency_format
+    ws_payment.cell(row=row, column=2, value=total_ventas).number_format = currency_format
     row += 1
 
     ws_payment.cell(row=row, column=1, value="(-) Pagos Recibidos:").font = Font(bold=True)
@@ -973,7 +932,7 @@ def generate_sales_report(
     row += 1
 
     ws_payment.cell(row=row, column=1, value="(=) Pendiente de Cobro:").font = Font(bold=True, color="B45309")
-    ws_payment.cell(row=row, column=2, value=f"={float(total_ventas)}-C{pay_totals_row}").number_format = currency_format
+    ws_payment.cell(row=row, column=2, value=f"={total_ventas}-C{pay_totals_row}").number_format = currency_format
     ws_payment.cell(row=row, column=2).fill = WARNING_FILL
 
     _add_notes_section(ws_payment, row, [
@@ -1018,11 +977,11 @@ def generate_sales_report(
     for user_name, user_data in sorted_users:
         ws_user.cell(row=row, column=1, value=_safe_string(user_name))
         ws_user.cell(row=row, column=2, value=user_data["count"])
-        ws_user.cell(row=row, column=3, value=float(user_data["total"])).number_format = currency_format
+        ws_user.cell(row=row, column=3, value=user_data["total"]).number_format = currency_format
         # Ticket Promedio = Fórmula: Venta Total / Nº Transacciones
         ws_user.cell(row=row, column=4, value=f"=IF(B{row}>0,C{row}/B{row},0)").number_format = currency_format
         # Participación - se calculará con referencia al total
-        ws_user.cell(row=row, column=5, value=float(user_data["total"])).number_format = currency_format  # Temporal
+        ws_user.cell(row=row, column=5, value=user_data["total"]).number_format = currency_format  # Temporal
 
         for col in range(1, 6):
             ws_user.cell(row=row, column=col).border = THIN_BORDER
@@ -1153,9 +1112,9 @@ def generate_sales_report(
             ws_detail.cell(row=row, column=6, value=_safe_string(product_name))
             ws_detail.cell(row=row, column=7, value=_safe_string(variant_label, "-"))
             ws_detail.cell(row=row, column=8, value=_safe_string(category, "General"))
-            ws_detail.cell(row=row, column=9, value=float(quantity)).number_format = NUMBER_FORMAT
-            ws_detail.cell(row=row, column=10, value=float(unit_price)).number_format = currency_format
-            ws_detail.cell(row=row, column=11, value=float(subtotal)).number_format = currency_format
+            ws_detail.cell(row=row, column=9, value=quantity).number_format = NUMBER_FORMAT
+            ws_detail.cell(row=row, column=10, value=unit_price).number_format = currency_format
+            ws_detail.cell(row=row, column=11, value=subtotal).number_format = currency_format
 
             for col in range(1, 12):
                 ws_detail.cell(row=row, column=col).border = THIN_BORDER
@@ -1243,8 +1202,8 @@ def generate_sales_report(
         ws_top_products.cell(row=row, column=2, value=_safe_string(prod["category"]))
         ws_top_products.cell(row=row, column=3, value=prod["qty"])
         ws_top_products.cell(row=row, column=4, value=prod["transactions"])
-        ws_top_products.cell(row=row, column=5, value=float(prod["total"])).number_format = currency_format
-        ws_top_products.cell(row=row, column=6, value=float(prod["cost"])).number_format = currency_format
+        ws_top_products.cell(row=row, column=5, value=prod["total"]).number_format = currency_format
+        ws_top_products.cell(row=row, column=6, value=prod["cost"]).number_format = currency_format
         # Utilidad = Fórmula: Ingresos - Costo
         ws_top_products.cell(row=row, column=7, value=f"=E{row}-F{row}").number_format = currency_format
         # Margen = Fórmula: Utilidad / Ingresos
@@ -1321,9 +1280,9 @@ def generate_sales_report(
 
         ws_hourly.cell(row=row, column=1, value=f"{hour:02d}:00 - {hour:02d}:59")
         ws_hourly.cell(row=row, column=2, value=hour_data["count"])
-        ws_hourly.cell(row=row, column=3, value=float(hour_data["total"])).number_format = currency_format
+        ws_hourly.cell(row=row, column=3, value=hour_data["total"]).number_format = currency_format
         # Participación - se calculará con referencia al total
-        ws_hourly.cell(row=row, column=4, value=float(hour_data["total"])).number_format = currency_format  # Temporal
+        ws_hourly.cell(row=row, column=4, value=hour_data["total"]).number_format = currency_format  # Temporal
         # Ticket Promedio = Fórmula: Venta / Transacciones
         ws_hourly.cell(row=row, column=5, value=f"=IF(B{row}>0,C{row}/B{row},0)").number_format = currency_format
 
@@ -1389,6 +1348,11 @@ def generate_inventory_report(
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
 
     # Consultar productos
     query = (
@@ -1565,13 +1529,13 @@ def generate_inventory_report(
     for cat_name, cat_data in sorted_cats:
         ws_category.cell(row=row, column=1, value=_safe_string(cat_name))
         ws_category.cell(row=row, column=2, value=cat_data["items"])
-        ws_category.cell(row=row, column=3, value=float(cat_data["units"]))
-        ws_category.cell(row=row, column=4, value=float(cat_data["cost"])).number_format = currency_format
-        ws_category.cell(row=row, column=5, value=float(cat_data["sale"])).number_format = currency_format
+        ws_category.cell(row=row, column=3, value=cat_data["units"])
+        ws_category.cell(row=row, column=4, value=cat_data["cost"]).number_format = currency_format
+        ws_category.cell(row=row, column=5, value=cat_data["sale"]).number_format = currency_format
         # Utilidad Potencial = Fórmula: Valor Venta - Valor Costo
         ws_category.cell(row=row, column=6, value=f"=E{row}-D{row}").number_format = currency_format
         # Participación - temporal, se actualizará con fórmula
-        ws_category.cell(row=row, column=7, value=float(cat_data["cost"])).number_format = currency_format
+        ws_category.cell(row=row, column=7, value=cat_data["cost"]).number_format = currency_format
 
         for col in range(1, 8):
             ws_category.cell(row=row, column=col).border = THIN_BORDER
@@ -1641,10 +1605,10 @@ def generate_inventory_report(
         ws_detail.cell(row=row, column=1, value=_safe_string(row_data["sku"], "S/C"))
         ws_detail.cell(row=row, column=2, value=_safe_string(row_data["description"], "Sin descripción"))
         ws_detail.cell(row=row, column=3, value=_safe_string(row_data["category"], "Sin categoría"))
-        ws_detail.cell(row=row, column=4, value=float(stock))
+        ws_detail.cell(row=row, column=4, value=stock)
         ws_detail.cell(row=row, column=5, value=_safe_string(row_data["unit"], "Unid."))
-        ws_detail.cell(row=row, column=6, value=float(cost)).number_format = currency_format
-        ws_detail.cell(row=row, column=7, value=float(price)).number_format = currency_format
+        ws_detail.cell(row=row, column=6, value=cost).number_format = currency_format
+        ws_detail.cell(row=row, column=7, value=price).number_format = currency_format
         # Margen Unitario = Fórmula: Precio - Costo
         ws_detail.cell(row=row, column=8, value=f"=G{row}-F{row}").number_format = currency_format
         # Margen % = Fórmula: Margen / Costo (si costo > 0)
@@ -1734,8 +1698,8 @@ def generate_inventory_report(
         ws_critical.cell(row=row, column=1, value=_safe_string(row_data["sku"], "S/C"))
         ws_critical.cell(row=row, column=2, value=_safe_string(row_data["description"], "Sin descripción"))
         ws_critical.cell(row=row, column=3, value=_safe_string(row_data["category"], "Sin categoría"))
-        ws_critical.cell(row=row, column=4, value=float(stock))
-        ws_critical.cell(row=row, column=5, value=float(_safe_decimal(row_data["sale_price"]))).number_format = currency_format
+        ws_critical.cell(row=row, column=4, value=stock)
+        ws_critical.cell(row=row, column=5, value=_safe_decimal(row_data["sale_price"])).number_format = currency_format
         # Valor Disponible = Fórmula: Stock × Precio
         ws_critical.cell(row=row, column=6, value=f"=D{row}*E{row}").number_format = currency_format
 
@@ -1806,6 +1770,11 @@ def generate_receivables_report(
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
 
     # Consultar cuotas pendientes
     query = (
@@ -2000,10 +1969,10 @@ def generate_receivables_report(
 
         ws_summary.cell(row=row, column=1, value=bucket["label"])
         ws_summary.cell(row=row, column=2, value=bucket["count"])
-        ws_summary.cell(row=row, column=3, value=float(bucket["amount"])).number_format = currency_format
+        ws_summary.cell(row=row, column=3, value=bucket["amount"]).number_format = currency_format
         # Participación - temporal
-        ws_summary.cell(row=row, column=4, value=float(bucket["amount"])).number_format = currency_format
-        ws_summary.cell(row=row, column=5, value=float(prov_rate)).number_format = PERCENT_FORMAT
+        ws_summary.cell(row=row, column=4, value=bucket["amount"]).number_format = currency_format
+        ws_summary.cell(row=row, column=5, value=prov_rate).number_format = PERCENT_FORMAT
         # Provisión = Fórmula: Monto × Tasa
         ws_summary.cell(row=row, column=6, value=f"=C{row}*E{row}").number_format = currency_format
 
@@ -2064,11 +2033,11 @@ def generate_receivables_report(
 
     for client_name, client_data in sorted_clients:
         ws_client.cell(row=row, column=1, value=_safe_string(client_name))
-        ws_client.cell(row=row, column=2, value=float(client_data["current"])).number_format = currency_format
-        ws_client.cell(row=row, column=3, value=float(client_data["0-30"])).number_format = currency_format
-        ws_client.cell(row=row, column=4, value=float(client_data["31-60"])).number_format = currency_format
-        ws_client.cell(row=row, column=5, value=float(client_data["61-90"])).number_format = currency_format
-        ws_client.cell(row=row, column=6, value=float(client_data["90+"])).number_format = currency_format
+        ws_client.cell(row=row, column=2, value=client_data["current"]).number_format = currency_format
+        ws_client.cell(row=row, column=3, value=client_data["0-30"]).number_format = currency_format
+        ws_client.cell(row=row, column=4, value=client_data["31-60"]).number_format = currency_format
+        ws_client.cell(row=row, column=5, value=client_data["61-90"]).number_format = currency_format
+        ws_client.cell(row=row, column=6, value=client_data["90+"]).number_format = currency_format
         # Total = Fórmula: Suma de columnas B a F
         ws_client.cell(row=row, column=7, value=f"=SUM(B{row}:F{row})").number_format = currency_format
 
@@ -2132,8 +2101,8 @@ def generate_receivables_report(
         ws_detail.cell(row=row, column=3, value=inst["installment_num"])
         ws_detail.cell(row=row, column=4, value=inst["due_date"])
         ws_detail.cell(row=row, column=5, value=inst["days_overdue"])
-        ws_detail.cell(row=row, column=6, value=float(inst["amount"])).number_format = currency_format
-        ws_detail.cell(row=row, column=7, value=float(inst["paid"])).number_format = currency_format
+        ws_detail.cell(row=row, column=6, value=inst["amount"]).number_format = currency_format
+        ws_detail.cell(row=row, column=7, value=inst["paid"]).number_format = currency_format
         # Pendiente = Fórmula: Monto - Abonado
         ws_detail.cell(row=row, column=8, value=f"=F{row}-G{row}").number_format = currency_format
         ws_detail.cell(row=row, column=9, value=aging_buckets[inst["bucket"]]["label"])
@@ -2266,6 +2235,11 @@ def generate_cashbox_report(
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
 
     period_str = (
         f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
@@ -2434,9 +2408,9 @@ def generate_cashbox_report(
 
         ws_summary.cell(row=row, column=1, value=_safe_string(method_es))
         ws_summary.cell(row=row, column=2, value=count)
-        ws_summary.cell(row=row, column=3, value=float(amount)).number_format = currency_format
+        ws_summary.cell(row=row, column=3, value=amount).number_format = currency_format
         # Participación - temporal, se reemplazará con fórmula
-        ws_summary.cell(row=row, column=4, value=float(amount)).number_format = currency_format
+        ws_summary.cell(row=row, column=4, value=amount).number_format = currency_format
 
         for col in range(1, 5):
             ws_summary.cell(row=row, column=col).border = THIN_BORDER
@@ -2517,7 +2491,7 @@ def generate_cashbox_report(
         ws_logs.cell(row=row, column=2, value=_safe_string(action_label))
         ws_logs.cell(row=row, column=3, value=user_name)
         ws_logs.cell(row=row, column=4, value=nature)
-        ws_logs.cell(row=row, column=5, value=float(_safe_decimal(log.amount))).number_format = currency_format
+        ws_logs.cell(row=row, column=5, value=_safe_decimal(log.amount)).number_format = currency_format
         ws_logs.cell(row=row, column=6, value=_safe_string(method_label))
         notes_str = _safe_string(log.notes, "Sin observaciones")
         if "#" in notes_str and ", " in notes_str:
@@ -2582,8 +2556,8 @@ def generate_cashbox_report(
 
         ws_origin.cell(row=row, column=1, value=_safe_string(method_es))
         ws_origin.cell(row=row, column=2, value=count)
-        ws_origin.cell(row=row, column=3, value=float(amount)).number_format = currency_format
-        ws_origin.cell(row=row, column=4, value=float(amount)).number_format = currency_format  # Temporal
+        ws_origin.cell(row=row, column=3, value=amount).number_format = currency_format
+        ws_origin.cell(row=row, column=4, value=amount).number_format = currency_format  # Temporal
         ws_origin.cell(row=row, column=5, value="Pago de venta directa")
 
         for col in range(1, 6):
@@ -2625,8 +2599,8 @@ def generate_cashbox_report(
 
             ws_origin.cell(row=row, column=1, value=_safe_string(method_es))
             ws_origin.cell(row=row, column=2, value=count)
-            ws_origin.cell(row=row, column=3, value=float(amount)).number_format = currency_format
-            ws_origin.cell(row=row, column=4, value=float(amount)).number_format = currency_format  # Temporal
+            ws_origin.cell(row=row, column=3, value=amount).number_format = currency_format
+            ws_origin.cell(row=row, column=4, value=amount).number_format = currency_format  # Temporal
             ws_origin.cell(row=row, column=5, value="Pago de cuota de crédito")
 
             for col in range(1, 6):
@@ -2730,8 +2704,8 @@ def generate_cashbox_report(
 
         ws_daily.cell(row=row, column=1, value=_safe_string(day_key))
         ws_daily.cell(row=row, column=2, value=day_data["count"])
-        ws_daily.cell(row=row, column=3, value=float(day_data["cash"])).number_format = currency_format
-        ws_daily.cell(row=row, column=4, value=float(day_data["other"])).number_format = currency_format
+        ws_daily.cell(row=row, column=3, value=day_data["cash"]).number_format = currency_format
+        ws_daily.cell(row=row, column=4, value=day_data["other"]).number_format = currency_format
         # Total = Fórmula: Efectivo + Otros
         ws_daily.cell(row=row, column=5, value=f"=C{row}+D{row}").number_format = currency_format
 
@@ -2787,18 +2761,18 @@ def generate_cashbox_report(
     # Escribir datos con referencias para fórmulas
     data_start_row = row
     ws_conciliation.cell(row=row, column=1, value="(+) Monto Inicial (Aperturas):").font = Font(bold=True)
-    ws_conciliation.cell(row=row, column=2, value=float(total_opening_amount)).number_format = currency_format
+    ws_conciliation.cell(row=row, column=2, value=total_opening_amount).number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Suma de todas las aperturas de caja")
     row += 1
 
     ws_conciliation.cell(row=row, column=1, value="(+) Efectivo por Ventas:").font = Font(bold=True)
-    ws_conciliation.cell(row=row, column=2, value=float(cash_from_sales)).number_format = currency_format
+    ws_conciliation.cell(row=row, column=2, value=cash_from_sales).number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Ventas cobradas en efectivo")
     sales_cash_row = row
     row += 1
 
     ws_conciliation.cell(row=row, column=1, value="(+) Efectivo por Cobros de Cuotas:").font = Font(bold=True)
-    ws_conciliation.cell(row=row, column=2, value=float(cash_from_collections)).number_format = currency_format
+    ws_conciliation.cell(row=row, column=2, value=cash_from_collections).number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Cuotas de créditos cobradas en efectivo")
     collections_cash_row = row
     row += 1
@@ -2810,7 +2784,7 @@ def generate_cashbox_report(
     row += 2
 
     ws_conciliation.cell(row=row, column=1, value="(-) Monto Real (Cierres):").font = Font(bold=True)
-    ws_conciliation.cell(row=row, column=2, value=float(total_closing_amount)).number_format = currency_format
+    ws_conciliation.cell(row=row, column=2, value=total_closing_amount).number_format = currency_format
     ws_conciliation.cell(row=row, column=3, value="Suma de todos los cierres de caja")
     actual_row = row
     row += 2

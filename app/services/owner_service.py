@@ -23,6 +23,7 @@ from app.models.company import Branch, Company, PlanType, SubscriptionStatus
 from app.models.owner import OwnerAuditLog
 from app.models.sales import CompanySettings
 from app.utils.logger import get_logger
+from app.utils.sanitization import escape_like
 from app.utils.timezone import utc_now_naive
 
 logger = get_logger("OwnerService")
@@ -223,7 +224,7 @@ class OwnerService:
         # Conteo total
         count_stmt = select(func.count()).select_from(Company)
         if search:
-            like = f"%{search}%"
+            like = f"%{escape_like(search)}%"
             count_stmt = count_stmt.where(
                 (Company.name.ilike(like)) | (Company.ruc.ilike(like))  # type: ignore[union-attr]
             )
@@ -233,7 +234,7 @@ class OwnerService:
         # Datos paginados
         stmt = select(Company).order_by(Company.id.desc())  # type: ignore[union-attr]
         if search:
-            like = f"%{search}%"
+            like = f"%{escape_like(search)}%"
             stmt = stmt.where(
                 (Company.name.ilike(like)) | (Company.ruc.ilike(like))  # type: ignore[union-attr]
             )

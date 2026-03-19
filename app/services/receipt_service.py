@@ -50,20 +50,21 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
+from app.constants import DEFAULT_RECEIPT_WIDTH, MIN_RECEIPT_WIDTH, MAX_RECEIPT_WIDTH
 from app.utils.formatting import format_currency as format_currency_screen
 
 
 class ReceiptService:
     """Servicio para generación de recibos de venta.
-    
+
     Genera HTML formateado para impresión en impresoras térmicas POS.
     Soporta anchos de 24 a 64 caracteres (58mm a 80mm de papel).
-    
+
     Attributes:
-        DEFAULT_WIDTH: Ancho por defecto en caracteres (42 para 80mm)
+        DEFAULT_WIDTH: Ancho por defecto en caracteres (configurado en constants.py)
     """
-    
-    DEFAULT_WIDTH = 42
+
+    DEFAULT_WIDTH = DEFAULT_RECEIPT_WIDTH
 
     @staticmethod
     def _round_currency(value: Any) -> Decimal:
@@ -239,7 +240,7 @@ class ReceiptService:
             width = int(data.get("width", ReceiptService.DEFAULT_WIDTH))
         except (TypeError, ValueError):
             width = ReceiptService.DEFAULT_WIDTH
-        width = max(24, min(width, 64))
+        width = max(MIN_RECEIPT_WIDTH, min(width, MAX_RECEIPT_WIDTH))
         currency_symbol = data.get("currency_symbol") or "S/ "
 
         receipt_items = data.get("items") or []

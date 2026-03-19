@@ -7,6 +7,7 @@ from sqlmodel import select
 from sqlalchemy import func, or_
 from app.models import Supplier, FieldReservation as FieldReservationModel
 from app.enums import ReservationStatus
+from app.utils.sanitization import escape_like
 from app.states.root_state import RootState
 from app.states.types import (
     Product,
@@ -197,7 +198,7 @@ class State(RootState):
                 .where(Supplier.branch_id == branch_id)
             )
             if term:
-                like = f"%{term}%"
+                like = f"%{escape_like(term)}%"
                 query = query.where(
                     or_(
                         Supplier.name.ilike(like),
@@ -289,7 +290,7 @@ class State(RootState):
                     if db_status is not None:
                         q = q.where(FieldReservationModel.status == db_status)
                 if search_term:
-                    like = f"%{search_term.strip()}%"
+                    like = f"%{escape_like(search_term.strip())}%"
                     q = q.where(
                         or_(
                             FieldReservationModel.client_name.ilike(like),

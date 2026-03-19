@@ -21,6 +21,7 @@ from app.models.company import PlanType, SubscriptionStatus
 from app.services.owner_service import OwnerService, OwnerServiceError
 from app.utils.db import AsyncSessionLocal
 from app.utils.logger import get_logger
+from app.utils.rate_limit import is_rate_limited, record_failed_attempt, clear_login_attempts
 from app.utils.tenant import tenant_bypass
 
 logger = get_logger("OwnerState")
@@ -37,10 +38,55 @@ OWNER_LOGIN_PATH: str = "/login" if APP_SURFACE == "owner" else "/owner/login"
 OWNER_ADMIN_EMAIL: str = os.environ.get(
     "OWNER_ADMIN_EMAIL", "admin@tuwaykiapp.com"
 )
-_OWNER_ADMIN_PASSWORD_HASH: str = os.environ.get(
-    "OWNER_ADMIN_PASSWORD_HASH",
-    "$2b$12$hJw0pC61BFXV0pGwNrtbDOBq6qPRFdJbziGx58sJmTt5FAteCBtXa",
+
+# Timeout de sesión del owner (30 minutos por defecto)
+OWNER_SESSION_TIMEOUT_SECONDS: int = int(
+    os.environ.get("OWNER_SESSION_TIMEOUT_SECONDS", "1800")
 )
+
+
+def _load_owner_password_hash() -> str:
+    """Carga el hash de contraseña del owner de forma segura.
+
+    Prioridad:
+      1. Variable de entorno OWNER_ADMIN_PASSWORD_HASH (recomendado)
+      2. Fallback temporal con advertencia en logs (para no romper deploys existentes)
+
+    En un futuro deploy, configurá la env var y el fallback desaparece.
+    """
+    h = os.environ.get("OWNER_ADMIN_PASSWORD_HASH", "").strip()
+    if h:
+        return h
+
+    # ── Fallback retrocompatible ──
+    # Usa un hash de respaldo para no inutilizar el backoffice en deploys
+    # que aún no tengan la variable configurada.
+    # ACCIÓN REQUERIDA: configurar OWNER_ADMIN_PASSWORD_HASH en el .env
+    # del servidor y eliminar este fallback en una versión futura.
+    _fallback_hash = (
+        "$2b$12$hJw0pC61BFXV0pGwNrtbDOBq6qPRFdJbziGx58sJmTt5FAteCBtXa"
+    )
+
+    _env = (os.getenv("ENV") or "dev").strip().lower()
+    if _env in ("prod", "production"):
+        logger.warning(
+            "⚠️  OWNER_ADMIN_PASSWORD_HASH no configurado. "
+            "Usando hash de respaldo temporal. "
+            "ACCIÓN REQUERIDA: generar un hash con "
+            "'python -c \"import bcrypt; print(bcrypt.hashpw(b\\\"TU_CLAVE\\\", bcrypt.gensalt(12)).decode())\"' "
+            "y agregarlo al .env del servidor como OWNER_ADMIN_PASSWORD_HASH=..."
+        )
+        return _fallback_hash
+
+    # En desarrollo: también usar el fallback (más práctico que generar temporal)
+    logger.info(
+        "Owner password hash: usando fallback. "
+        "Configura OWNER_ADMIN_PASSWORD_HASH en .env para personalizarlo."
+    )
+    return _fallback_hash
+
+
+_OWNER_ADMIN_PASSWORD_HASH: str = _load_owner_password_hash()
 
 
 def _verify_owner_credentials(email: str, password: str) -> bool:
@@ -135,6 +181,7 @@ class OwnerState:
     owner_session_active: bool = False  # Solo True si se autentica via login owner
     owner_session_email: str = ""  # Email del owner autenticado
     owner_session_user_id: int = 0  # ID del usuario owner en BD (para auditoría)
+    _owner_session_started_at: float = rx.field(default=0.0, is_var=False)
 
     # ─── Campos de login del owner ─────────────────────
     owner_login_email: str = ""
@@ -212,8 +259,16 @@ class OwnerState:
         """True solo si el owner se autenticó explícitamente vía login owner.
 
         Completamente independiente del login del Sistema de Ventas.
+        Incluye validación de timeout de sesión.
         """
-        return self.owner_session_active
+        if not self.owner_session_active:
+            return False
+        # Validar timeout de sesión
+        if self._owner_session_started_at > 0:
+            elapsed = time.time() - self._owner_session_started_at
+            if elapsed > OWNER_SESSION_TIMEOUT_SECONDS:
+                return False
+        return True
 
     @rx.var(cache=True)
     def owner_total_pages(self) -> int:
@@ -244,6 +299,7 @@ class OwnerState:
         Credenciales completamente independientes del Sistema de Ventas.
         Valida contra OWNER_ADMIN_EMAIL / OWNER_ADMIN_PASSWORD_HASH,
         NO contra la tabla de usuarios del sistema.
+        Incluye rate limiting para prevenir ataques de fuerza bruta.
         """
         email = (
             form_data.get("owner_email", "") or self.owner_login_email
@@ -257,12 +313,24 @@ class OwnerState:
         self.owner_login_loading = True
         self.owner_login_error = ""
 
+        # Rate limiting — prevenir fuerza bruta en login del owner
+        rate_key = f"owner_login:{email}"
+        if is_rate_limited(rate_key):
+            self.owner_login_error = "Demasiados intentos. Espere 15 minutos."
+            self.owner_login_loading = False
+            logger.warning("Owner login rate-limited: %s", email[:20])
+            return
+
         # Validar contra credenciales propias del Owner Backoffice
         if not _verify_owner_credentials(email, raw_password):
+            record_failed_attempt(rate_key)
             self.owner_login_error = "Credenciales inválidas."
             self.owner_login_loading = False
             logger.warning("Owner login fallido: credenciales incorrectas (%s)", email[:20])
             return
+
+        # Limpiar intentos fallidos tras login exitoso
+        clear_login_attempts(rate_key)
 
         # Buscar al platform owner en la BD para auditoría
         owner_user_id = 0
@@ -281,10 +349,11 @@ class OwnerState:
             if owner_user:
                 owner_user_id = owner_user.id
 
-        # ¡Login exitoso! Activar sesión owner
+        # ¡Login exitoso! Activar sesión owner con timestamp
         self.owner_session_active = True
         self.owner_session_email = email
         self.owner_session_user_id = owner_user_id
+        self._owner_session_started_at = time.time()
         self.owner_login_email = ""
         self.owner_login_password = ""
         self.owner_login_error = ""
@@ -298,6 +367,7 @@ class OwnerState:
         self.owner_session_active = False
         self.owner_session_email = ""
         self.owner_session_user_id = 0
+        self._owner_session_started_at = 0.0
         self.owner_companies = []
         self.owner_audit_logs = []
         self.owner_login_email = ""
@@ -332,9 +402,9 @@ class OwnerState:
                 self.owner_companies = items
                 self.owner_companies_total = total
         except Exception as e:
-            logger.error(f"Error cargando empresas: {e}")
+            logger.exception("Error cargando empresas")
             if seq == self._owner_companies_load_seq:
-                yield rx.toast(f"Error: {e}", duration=4000)
+                yield rx.toast("Error al cargar empresas. Revise los logs.", duration=4000)
         finally:
             if seq == self._owner_companies_load_seq:
                 self.owner_loading = False
@@ -392,7 +462,7 @@ class OwnerState:
                 self.owner_audit_logs = items
                 self.owner_audit_total = total
         except Exception as e:
-            logger.error(f"Error cargando auditoría: {e}")
+            logger.exception("Error cargando auditoría")
 
     @rx.event
     async def owner_audit_next_page(self):
@@ -676,8 +746,8 @@ class OwnerState:
             self.owner_loading = False
             return
         except Exception as e:
-            logger.error(f"Error ejecutando acción owner: {e}", exc_info=True)
-            yield rx.toast(f"Error inesperado: {e}", duration=5000)
+            logger.exception("Error ejecutando acción owner")
+            yield rx.toast("Error inesperado. Revise los logs del servidor.", duration=5000)
             self.owner_loading = False
             return
 
@@ -719,8 +789,8 @@ class OwnerState:
                     duration=3000,
                 )
         except Exception as e:
-            logger.error(f"Error sincronizando trials expirados: {e}", exc_info=True)
-            yield rx.toast(f"Error: {e}", duration=5000)
+            logger.exception("Error sincronizando trials expirados")
+            yield rx.toast("Error al sincronizar trials. Revise los logs.", duration=5000)
             self.owner_loading = False
             return
 
@@ -753,9 +823,9 @@ class OwnerState:
                 self.owner_reset_loading = False
                 yield
         except Exception as e:
-            logger.error(f"Error cargando usuarios para reset: {e}")
+            logger.exception("Error cargando usuarios para reset")
             self.owner_reset_loading = False
-            yield rx.toast(f"Error: {e}", duration=4000)
+            yield rx.toast("Error al cargar usuarios. Revise los logs.", duration=4000)
 
     @rx.event
     def owner_close_reset_modal(self):
@@ -809,6 +879,6 @@ class OwnerState:
             self.owner_reset_loading = False
             yield rx.toast(f"Error: {e}", duration=5000)
         except Exception as e:
-            logger.error(f"Error reseteando contraseña: {e}", exc_info=True)
+            logger.exception("Error reseteando contraseña")
             self.owner_reset_loading = False
-            yield rx.toast(f"Error inesperado: {e}", duration=5000)
+            yield rx.toast("Error inesperado al resetear. Revise los logs.", duration=5000)

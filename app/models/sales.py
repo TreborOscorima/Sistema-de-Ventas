@@ -41,7 +41,7 @@ class Sale(rx.Model, table=True):
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
 
-    status: SaleStatus = Field(default=SaleStatus.completed)
+    status: SaleStatus = Field(default=SaleStatus.completed, index=True)
     delete_reason: Optional[str] = Field(default=None)
     payment_condition: str = Field(default="contado")
 
@@ -58,7 +58,7 @@ class Sale(rx.Model, table=True):
     client_id: Optional[int] = Field(
         default=None, foreign_key="client.id", index=True
     )
-    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
 
     client: Optional["Client"] = Relationship(back_populates="sales")
     user: Optional["User"] = Relationship(back_populates="sales")
@@ -70,7 +70,16 @@ class Sale(rx.Model, table=True):
 class SalePayment(rx.Model, table=True):
     """Transaccion de pago asociada a una venta."""
 
-    sale_id: int = Field(foreign_key="sale.id")
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_salepayment_tenant_sale",
+            "company_id",
+            "branch_id",
+            "sale_id",
+        ),
+    )
+
+    sale_id: int = Field(foreign_key="sale.id", index=True)
     company_id: int = Field(
         foreign_key="company.id",
         index=True,
@@ -178,6 +187,12 @@ class SaleInstallment(rx.Model, table=True):
             "due_date",
             "status",
         ),
+        sqlalchemy.Index(
+            "ix_saleinstallment_tenant_status",
+            "company_id",
+            "branch_id",
+            "status",
+        ),
     )
 
     sale_id: int = Field(foreign_key="sale.id")
@@ -216,6 +231,16 @@ class SaleInstallment(rx.Model, table=True):
 
 class CashboxSession(rx.Model, table=True):
     """Sesion de caja (apertura/cierre)."""
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_cashboxsession_tenant_user_open",
+            "company_id",
+            "branch_id",
+            "user_id",
+            "is_open",
+        ),
+    )
 
     opening_time: datetime = Field(
         default_factory=utc_now_naive,
@@ -323,6 +348,12 @@ class FieldReservation(rx.Model, table=True):
             "sport",
             "start_datetime",
         ),
+        sqlalchemy.Index(
+            "ix_fieldreservation_tenant_status",
+            "company_id",
+            "branch_id",
+            "status",
+        ),
     )
 
     client_name: str = Field(nullable=False)
@@ -338,7 +369,9 @@ class FieldReservation(rx.Model, table=True):
         ),
     )
     end_datetime: datetime = Field(
-        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.DateTime(timezone=False), index=True
+        ),
     )
 
     total_amount: Decimal = Field(
@@ -349,7 +382,7 @@ class FieldReservation(rx.Model, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
-    status: ReservationStatus = Field(default=ReservationStatus.pending)
+    status: ReservationStatus = Field(default=ReservationStatus.pending, index=True)
 
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     company_id: int = Field(

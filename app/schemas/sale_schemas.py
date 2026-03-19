@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.constants import DEFAULT_CREDIT_INTERVAL_DAYS, DEFAULT_INSTALLMENTS_COUNT
+
 
 class BaseSchema(BaseModel):
     """Esquema base con configuración común para DTOs del sistema."""
@@ -78,8 +80,8 @@ class PaymentInfoDTO(BaseSchema):
     label: str = ""
     client_id: int | None = None
     is_credit: bool = False
-    installments: int = 1
-    interval_days: int = 30
+    installments: int = DEFAULT_INSTALLMENTS_COUNT
+    interval_days: int = DEFAULT_CREDIT_INTERVAL_DAYS
     initial_payment: Decimal = Decimal("0.00")
     breakdown: list[PaymentBreakdownItemDTO] = Field(default_factory=list)
     total: Decimal = Decimal("0.00")

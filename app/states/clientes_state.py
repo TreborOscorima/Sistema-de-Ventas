@@ -20,6 +20,7 @@ Permisos requeridos:
 Clases:
     ClientesState: Estado principal del módulo de clientes
 """
+import logging
 from decimal import Decimal
 
 import reflex as rx
@@ -29,12 +30,15 @@ from sqlalchemy import or_
 from app.models import Client, Sale
 from app.utils.tenant import set_tenant_context
 from app.utils.sanitization import (
+    escape_like,
     sanitize_name,
     sanitize_dni,
     sanitize_phone,
     sanitize_text,
 )
 from .mixin_state import MixinState
+
+logger = logging.getLogger(__name__)
 
 
 class ClientesState(MixinState):
@@ -143,7 +147,7 @@ class ClientesState(MixinState):
                 .where(Client.branch_id == branch_id)
             )
             if term:
-                like = f"%{term}%"
+                like = f"%{escape_like(term)}%"
                 query = query.where(
                     or_(
                         Client.name.ilike(like),
@@ -257,11 +261,13 @@ class ClientesState(MixinState):
                     )
 
                 if client_id:
+                    # FIX 39a: with_for_update to prevent TOCTOU on credit fields
                     client = session.exec(
                         select(Client)
                         .where(Client.id == client_id)
                         .where(Client.company_id == company_id)
                         .where(Client.branch_id == branch_id)
+                        .with_for_update()
                     ).first()
                     if not client:
                         return self.add_notification("Cliente no encontrado.", "error")
@@ -291,6 +297,10 @@ class ClientesState(MixinState):
                     session.refresh(payload)
                     saved = payload
         except Exception:
+            logger.exception(
+                "save_client failed | company=%s",
+                self._company_id(),
+            )
             return self.add_notification(
                 "No se pudo guardar el cliente.", "error"
             )
@@ -310,7 +320,7 @@ class ClientesState(MixinState):
                 "id": saved.id,
                 "name": saved.name,
                 "dni": saved.dni,
-                "balance": self._round_currency(float(balance)),
+                "balance": self._round_currency(balance),
             }
             if hasattr(self, "select_client"):
                 self.select_client(client_payload)
@@ -358,6 +368,10 @@ class ClientesState(MixinState):
                 session.delete(client)
                 session.commit()
         except Exception:
+            logger.exception(
+                "delete_client failed | company=%s",
+                self._company_id(),
+            )
             return self.add_notification(
                 "No se pudo eliminar el cliente.", "error"
             )

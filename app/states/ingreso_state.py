@@ -19,7 +19,10 @@ from app.models import (
 from .types import TransactionItem
 from .mixin_state import MixinState
 from app.utils.barcode import clean_barcode, validate_barcode
-from app.utils.sanitization import sanitize_text
+from app.utils.sanitization import escape_like, sanitize_text
+from app.utils.stock import recalculate_stock_totals
+
+logger = logging.getLogger(__name__)
 
 class IngresoState(MixinState):
     """Estado para el ingreso de productos al inventario.
@@ -187,7 +190,7 @@ class IngresoState(MixinState):
             self.purchase_supplier_suggestions = []
             self.purchase_supplier_active_index = -1
             return
-        search = f"%{term}%"
+        search = f"%{escape_like(term)}%"
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -767,6 +770,74 @@ class IngresoState(MixinState):
                 products_recalc_batches: set[int] = set()
                 variants_recalc_batches: set[int] = set()
 
+                # --- FIX 34: Batch pre-load products/variants (5N → 2 queries) ---
+                _variant_ids: set[int] = set()
+                _product_ids: set[int] = set()
+                _barcodes: set[str] = set()
+                _descriptions: set[str] = set()
+
+                for _item in self.new_entry_items:
+                    _vid = _item.get("variant_id") or ""
+                    if _vid:
+                        try:
+                            _variant_ids.add(int(_vid))
+                        except (TypeError, ValueError):
+                            pass
+                    _pid = _item.get("product_id")
+                    if _pid:
+                        try:
+                            _product_ids.add(int(_pid))
+                        except (TypeError, ValueError):
+                            pass
+                    _bc = (_item.get("barcode") or "").strip()
+                    if _bc:
+                        _barcodes.add(_bc)
+                    _desc = (_item.get("description") or "").strip()
+                    if _desc:
+                        _descriptions.add(_desc)
+
+                _variants_map: dict[int, ProductVariant] = {}
+                if _variant_ids:
+                    _vlist = session.exec(
+                        select(ProductVariant)
+                        .where(ProductVariant.id.in_(_variant_ids))
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                        .with_for_update()
+                    ).all()
+                    _variants_map = {v.id: v for v in _vlist}
+                    for _v in _vlist:
+                        if _v.product_id:
+                            _product_ids.add(_v.product_id)
+
+                _products_by_id: dict[int, Product] = {}
+                _products_by_barcode: dict[str, Product] = {}
+                _products_by_desc: dict[str, Product] = {}
+
+                _prod_conditions = []
+                if _product_ids:
+                    _prod_conditions.append(Product.id.in_(_product_ids))
+                if _barcodes:
+                    _prod_conditions.append(Product.barcode.in_(_barcodes))
+                if _descriptions:
+                    _prod_conditions.append(Product.description.in_(_descriptions))
+
+                if _prod_conditions:
+                    _prods = session.exec(
+                        select(Product)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                        .where(or_(*_prod_conditions))
+                        .with_for_update()
+                    ).all()
+                    for _p in _prods:
+                        _products_by_id[_p.id] = _p
+                        if _p.barcode:
+                            _products_by_barcode[_p.barcode] = _p
+                        if _p.description:
+                            _products_by_desc[_p.description] = _p
+                # --- END FIX 34 pre-load ---
+
                 for item in self.new_entry_items:
                     barcode = (item.get("barcode") or "").strip()
                     description = (item.get("description") or "").strip()
@@ -786,56 +857,39 @@ class IngresoState(MixinState):
                                 "Fecha de vencimiento invalida.", duration=3000
                             )
 
+                    # FIX 34: Use pre-loaded maps instead of per-item queries
                     product = None
                     variant = None
+                    variant_id = None
                     if variant_id_raw:
                         try:
                             variant_id = int(variant_id_raw)
                         except (TypeError, ValueError):
                             variant_id = None
                         if variant_id:
-                            variant = session.exec(
-                                select(ProductVariant)
-                                .where(ProductVariant.id == variant_id)
-                                .where(ProductVariant.company_id == company_id)
-                                .where(ProductVariant.branch_id == branch_id)
-                            ).first()
+                            variant = _variants_map.get(variant_id)
                             if variant:
-                                product = session.exec(
-                                    select(Product)
-                                    .where(Product.id == variant.product_id)
-                                    .where(Product.company_id == company_id)
-                                    .where(Product.branch_id == branch_id)
-                                ).first()
+                                product = _products_by_id.get(variant.product_id)
 
                     if not product:
                         product_id = item.get("product_id")
                         if product_id:
-                            product = session.exec(
-                                select(Product)
-                                .where(Product.id == product_id)
-                                .where(Product.company_id == company_id)
-                                .where(Product.branch_id == branch_id)
-                            ).first()
+                            try:
+                                product = _products_by_id.get(int(product_id))
+                            except (TypeError, ValueError):
+                                pass
 
                     if not product and barcode:
-                        product = session.exec(
-                            select(Product)
-                            .where(Product.barcode == barcode)
-                            .where(Product.company_id == company_id)
-                            .where(Product.branch_id == branch_id)
-                        ).first()
+                        product = _products_by_barcode.get(barcode)
 
                     if not product and description:
-                        product = session.exec(
-                            select(Product)
-                            .where(Product.description == description)
-                            .where(Product.company_id == company_id)
-                            .where(Product.branch_id == branch_id)
-                        ).first()
+                        product = _products_by_desc.get(description)
 
                     quantity = Decimal(str(item["quantity"]))
                     unit_cost = Decimal(str(item["price"]))
+                    # FIX 45: reject negative quantities/prices at commit point
+                    if quantity <= 0 or unit_cost < 0:
+                        continue
                     subtotal = quantity * unit_cost
                     is_batch = bool(batch_number)
 
@@ -861,6 +915,12 @@ class IngresoState(MixinState):
 
                         product = new_product
                         product_id = new_product.id
+                        # Update pre-loaded maps for later items in same batch
+                        _products_by_id[product_id] = new_product
+                        if new_product.barcode:
+                            _products_by_barcode[new_product.barcode] = new_product
+                        if new_product.description:
+                            _products_by_desc[new_product.description] = new_product
 
                         if has_variants:
                             sku = barcode or str(uuid.uuid4())
@@ -877,6 +937,7 @@ class IngresoState(MixinState):
                             )
                             session.add(variant)
                             session.flush()
+                            _variants_map[variant.id] = variant
                             if is_batch:
                                 batch = ProductBatch(
                                     batch_number=batch_number,
@@ -900,6 +961,7 @@ class IngresoState(MixinState):
                                     .where(ProductBatch.batch_number == batch_number)
                                     .where(ProductBatch.company_id == company_id)
                                     .where(ProductBatch.branch_id == branch_id)
+                                    .with_for_update()
                                 ).first()
                                 if batch:
                                     batch.stock = (
@@ -946,6 +1008,7 @@ class IngresoState(MixinState):
                                     .where(ProductBatch.batch_number == batch_number)
                                     .where(ProductBatch.company_id == company_id)
                                     .where(ProductBatch.branch_id == branch_id)
+                                    .with_for_update()
                                 ).first()
                                 if batch:
                                     batch.stock = (
@@ -980,6 +1043,7 @@ class IngresoState(MixinState):
                                     .where(ProductBatch.batch_number == batch_number)
                                     .where(ProductBatch.company_id == company_id)
                                     .where(ProductBatch.branch_id == branch_id)
+                                    .with_for_update()
                                 ).first()
                                 if batch:
                                     batch.stock = (
@@ -1044,87 +1108,25 @@ class IngresoState(MixinState):
                     )
                     session.add(purchase_item)
 
-                if variants_recalc_batches:
-                    for variant_id in variants_recalc_batches:
-                        total_query = (
-                            select(func.coalesce(func.sum(ProductBatch.stock), 0))
-                            .where(ProductBatch.product_variant_id == variant_id)
-                            .where(ProductBatch.company_id == company_id)
-                            .where(ProductBatch.branch_id == branch_id)
-                        )
-                        total_row = session.exec(total_query).first()
-                        if total_row is None:
-                            total_stock = Decimal("0.0000")
-                        elif isinstance(total_row, tuple):
-                            total_stock = total_row[0]
-                        else:
-                            total_stock = total_row
-                        variant = session.exec(
-                            select(ProductVariant)
-                            .where(ProductVariant.id == variant_id)
-                            .where(ProductVariant.company_id == company_id)
-                            .where(ProductVariant.branch_id == branch_id)
-                        ).first()
-                        if variant:
-                            variant.stock = total_stock
-                            session.add(variant)
-
-                if products_recalc_variants:
-                    for product_id in products_recalc_variants:
-                        total_query = (
-                            select(func.coalesce(func.sum(ProductVariant.stock), 0))
-                            .where(ProductVariant.product_id == product_id)
-                            .where(ProductVariant.company_id == company_id)
-                            .where(ProductVariant.branch_id == branch_id)
-                        )
-                        total_row = session.exec(total_query).first()
-                        if total_row is None:
-                            total_stock = Decimal("0.0000")
-                        elif isinstance(total_row, tuple):
-                            total_stock = total_row[0]
-                        else:
-                            total_stock = total_row
-                        product = session.exec(
-                            select(Product)
-                            .where(Product.id == product_id)
-                            .where(Product.company_id == company_id)
-                            .where(Product.branch_id == branch_id)
-                        ).first()
-                        if product:
-                            product.stock = total_stock
-                            session.add(product)
-
-                if products_recalc_batches:
-                    for product_id in (
-                        products_recalc_batches - products_recalc_variants
-                    ):
-                        total_query = (
-                            select(func.coalesce(func.sum(ProductBatch.stock), 0))
-                            .where(ProductBatch.product_id == product_id)
-                            .where(ProductBatch.product_variant_id.is_(None))
-                            .where(ProductBatch.company_id == company_id)
-                            .where(ProductBatch.branch_id == branch_id)
-                        )
-                        total_row = session.exec(total_query).first()
-                        if total_row is None:
-                            total_stock = Decimal("0.0000")
-                        elif isinstance(total_row, tuple):
-                            total_stock = total_row[0]
-                        else:
-                            total_stock = total_row
-                        product = session.exec(
-                            select(Product)
-                            .where(Product.id == product_id)
-                            .where(Product.company_id == company_id)
-                            .where(Product.branch_id == branch_id)
-                        ).first()
-                        if product:
-                            product.stock = total_stock
-                            session.add(product)
+                # Recalcular totales de stock (3 fases) usando helper compartido
+                recalculate_stock_totals(
+                    session=session,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    variants_from_batches=variants_recalc_batches,
+                    products_from_variants=products_recalc_variants,
+                    products_from_batches=products_recalc_batches,
+                )
 
                 session.commit()
             except Exception:
                 session.rollback()
+                logger.exception(
+                    "confirm_entry failed | company=%s branch=%s items=%d",
+                    company_id,
+                    branch_id,
+                    len(self.new_entry_items),
+                )
                 return rx.toast(
                     "Error al registrar el ingreso. Verifique los datos.",
                     duration=4000,

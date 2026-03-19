@@ -1,3 +1,4 @@
+import logging
 import reflex as rx
 from typing import Dict, Any
 import datetime
@@ -9,6 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.orm import selectinload
 from app.enums import PaymentMethodType, SaleStatus
 from app.utils.payment import payment_method_label
+from app.utils.sanitization import escape_like
 from app.models import (
     Sale,
     SaleItem,
@@ -61,6 +63,9 @@ REPORT_CASHBOX_ACTIONS = {
     "Amortizacion",
     "Pago Credito",
 }
+
+logger = logging.getLogger(__name__)
+
 
 class HistorialState(MixinState):
     """Estado del historial de ventas y reportes financieros.
@@ -416,7 +421,7 @@ class HistorialState(MixinState):
                             "source": "Venta",
                             "method_key": method_key,
                             "method_label": self._normalize_wallet_label(method_key),
-                            "amount": self._round_currency(float(amount)),
+                            "amount": self._round_currency(amount),
                             "user": user_name,
                             "reference": reference,
                         }
@@ -463,7 +468,7 @@ class HistorialState(MixinState):
                             "method_label": self._normalize_wallet_label(
                                 getattr(log, "payment_method", "") or method_key
                             ),
-                            "amount": self._round_currency(float(amount)),
+                            "amount": self._round_currency(amount),
                             "user": user_name,
                             "reference": (log.notes or "").strip()
                             or "Cobranza registrada",
@@ -520,7 +525,7 @@ class HistorialState(MixinState):
                         if timestamp
                         else "",
                         "action": action_label,
-                        "amount": self._round_currency(float(amount)),
+                        "amount": self._round_currency(amount),
                         "user": user_name,
                         "notes": (log.notes or "").strip(),
                     }
@@ -550,7 +555,7 @@ class HistorialState(MixinState):
 
         search = (self.history_filter_product or "").strip()
         if search:
-            like_search = f"%{search}%"
+            like_search = f"%{escape_like(search)}%"
             sale_ids = (
                 select(SaleItem.sale_id)
                 .join(Sale, SaleItem.sale_id == Sale.id)
@@ -729,7 +734,8 @@ class HistorialState(MixinState):
         if not sale_ids:
             return {}
         company_id = self._company_id()
-        if not company_id:
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
             return {}
         conditions = [CashboxLog.sale_id.in_(sale_ids)]
         conditions.extend(
@@ -738,9 +744,11 @@ class HistorialState(MixinState):
         )
         if not conditions:
             return {}
+        # FIX 38d: add branch_id filter for branch-level isolation
         logs = session.exec(
             select(CashboxLog)
             .where(CashboxLog.company_id == company_id)
+            .where(CashboxLog.branch_id == branch_id)
             .where(CashboxLog.action.in_(["Venta", "Inicial Credito"]))
             .where(CashboxLog.is_voided == False)
             .where(sa.or_(*conditions))
@@ -801,7 +809,7 @@ class HistorialState(MixinState):
                 user_name = self._sale_username(
                     sale, sale_user_lookup, "Desconocido"
                 )
-                total_amount = self._round_currency(float(sale.total_amount or 0))
+                total_amount = self._round_currency(sale.total_amount or 0)
                 rows.append(
                     {
                         "sale_id": str(sale.id),
@@ -878,7 +886,7 @@ class HistorialState(MixinState):
                     {
                         "method_label": item["method_label"],
                         "count": item["count"],
-                        "total": self._round_currency(float(item["total"])),
+                        "total": self._round_currency(item["total"]),
                     }
                 )
         for key, value in totals.items():
@@ -887,7 +895,7 @@ class HistorialState(MixinState):
                     {
                         "method_label": value["method_label"],
                         "count": value["count"],
-                        "total": self._round_currency(float(value["total"])),
+                        "total": self._round_currency(value["total"]),
                     }
                 )
 
@@ -1193,7 +1201,7 @@ class HistorialState(MixinState):
                 "date": day.strftime("%Y-%m-%d")
                 if hasattr(day, "strftime")
                 else str(day or ""),
-                "total": self._round_currency(float(total or 0)),
+                "total": self._round_currency(total or 0),
             }
             for day, total in sales_day_rows
         ]
@@ -1401,13 +1409,16 @@ class HistorialState(MixinState):
         except ValueError:
             return rx.toast("Venta no encontrada.", duration=3000)
         company_id = self._company_id()
-        if not company_id:
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            # FIX 38c: add branch_id filter for branch-level isolation
             sale = session.exec(
                 select(Sale)
                 .where(Sale.id == sale_db_id)
                 .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
                 .options(
                     selectinload(Sale.items),
                     selectinload(Sale.payments),
@@ -1439,8 +1450,8 @@ class HistorialState(MixinState):
                 {
                     "description": item.product_name_snapshot,
                     "quantity": float(item.quantity or 0),
-                    "unit_price": self._round_currency(float(item.unit_price or 0)),
-                    "subtotal": self._round_currency(float(item.subtotal or 0)),
+                    "unit_price": self._round_currency(item.unit_price or 0),
+                    "subtotal": self._round_currency(item.subtotal or 0),
                 }
                 for item in (sale.items or [])
             ]
@@ -1456,7 +1467,7 @@ class HistorialState(MixinState):
                 ),
                 "payment_method": payment_method,
                 "payment_details": self._payment_details_text(payment_details),
-                "total": self._round_currency(float(sale.total_amount or 0)),
+                "total": self._round_currency(sale.total_amount or 0),
             }
         self.sale_detail_modal_open = True
 
@@ -1666,9 +1677,9 @@ class HistorialState(MixinState):
                     ws.cell(row=row, column=6, value=product_name)
                     ws.cell(row=row, column=7, value=variant_label)
                     ws.cell(row=row, column=8, value=category)
-                    ws.cell(row=row, column=9, value=float(quantity)).number_format = NUMBER_FORMAT
-                    ws.cell(row=row, column=10, value=float(unit_price)).number_format = currency_format
-                    ws.cell(row=row, column=11, value=float(subtotal)).number_format = currency_format
+                    ws.cell(row=row, column=9, value=quantity).number_format = NUMBER_FORMAT
+                    ws.cell(row=row, column=10, value=unit_price).number_format = currency_format
+                    ws.cell(row=row, column=11, value=subtotal).number_format = currency_format
 
                     for col in range(1, 12):
                         ws.cell(row=row, column=col).border = THIN_BORDER
@@ -1765,7 +1776,7 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=1, value=item.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=action_display)
                 ws.cell(row=row, column=3, value=item.get("user", "Desconocido"))
-                ws.cell(row=row, column=4, value=float(item.get("amount", 0) or 0)).number_format = currency_format
+                ws.cell(row=row, column=4, value=item.get("amount", 0) or 0).number_format = currency_format
                 ws.cell(row=row, column=5, value=item.get("notes", "") or "Sin observaciones")
 
                 for col in range(1, 6):
@@ -1827,7 +1838,7 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
                 ws.cell(row=row, column=3, value=entry.get("method_label", "No especificado"))
-                ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = currency_format
+                ws.cell(row=row, column=4, value=entry.get("amount", 0) or 0).number_format = currency_format
                 ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
                 ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
 
@@ -1900,9 +1911,9 @@ class HistorialState(MixinState):
                 summary = summary_totals[key]
                 ws.cell(row=row, column=1, value=summary["method_label"])
                 ws.cell(row=row, column=2, value=summary["count"])
-                ws.cell(row=row, column=3, value=float(summary["total"])).number_format = currency_format
+                ws.cell(row=row, column=3, value=summary["total"]).number_format = currency_format
                 # Participación se calculará después
-                ws.cell(row=row, column=4, value=float(summary["total"])).number_format = currency_format
+                ws.cell(row=row, column=4, value=summary["total"]).number_format = currency_format
 
                 for col in range(1, 5):
                     ws.cell(row=row, column=col).border = THIN_BORDER
@@ -1912,8 +1923,8 @@ class HistorialState(MixinState):
             if key not in REPORT_METHOD_KEYS:
                 ws.cell(row=row, column=1, value=summary["method_label"])
                 ws.cell(row=row, column=2, value=summary["count"])
-                ws.cell(row=row, column=3, value=float(summary["total"])).number_format = currency_format
-                ws.cell(row=row, column=4, value=float(summary["total"])).number_format = currency_format
+                ws.cell(row=row, column=3, value=summary["total"]).number_format = currency_format
+                ws.cell(row=row, column=4, value=summary["total"]).number_format = currency_format
 
                 for col in range(1, 5):
                     ws.cell(row=row, column=col).border = THIN_BORDER
@@ -1968,7 +1979,7 @@ class HistorialState(MixinState):
             detail_ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
             detail_ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
             detail_ws.cell(row=row, column=3, value=entry.get("method_label", "No especificado"))
-            detail_ws.cell(row=row, column=4, value=float(entry.get("amount", 0) or 0)).number_format = currency_format
+            detail_ws.cell(row=row, column=4, value=entry.get("amount", 0) or 0).number_format = currency_format
             detail_ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
             detail_ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
 
@@ -2026,7 +2037,11 @@ class HistorialState(MixinState):
                     except IndexError:
                         continue
         except Exception:
-            pass
+            logger.warning(
+                "_parse_payment_amount: could not parse | text=%r keyword=%r",
+                text[:80],
+                keyword,
+            )
         return Decimal("0.00")
 
     def _add_to_stats(self, stats: dict, key: str, amount: Decimal):

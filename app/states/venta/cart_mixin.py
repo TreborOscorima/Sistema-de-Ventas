@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from typing import Any, Dict, List, Union
@@ -5,6 +6,7 @@ from typing import Any, Dict, List, Union
 import reflex as rx
 from decimal import Decimal
 
+from app.constants import PRODUCT_SUGGESTIONS_LIMIT
 from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
 from ..types import TransactionItem
@@ -37,6 +39,7 @@ class CartMixin:
     selected_product: Dict[str, Any] | None = None
     last_scanned_label: str = ""
     wholesale_price_applied: bool = False
+    _autocomplete_debounce_seq: int = rx.field(default=0, is_var=False)
 
     async def _process_barcode(self, barcode: str):
         """Lógica compartida para procesar un código de barras."""
@@ -297,13 +300,24 @@ class CartMixin:
                         self.autocomplete_suggestions = []
                         self.autocomplete_results = []
                         return
+                    # Debounce: espera 200ms antes de consultar la BD.
+                    # Si el usuario sigue escribiendo, el seq anterior se invalida
+                    # y la consulta nunca se ejecuta (ahorra ~4 queries por palabra).
+                    self._autocomplete_debounce_seq += 1
+                    seq = self._autocomplete_debounce_seq
+                    await asyncio.sleep(0.2)
+                    if seq != self._autocomplete_debounce_seq:
+                        return
                     search = str(value).lower()
                     results = await SaleService.search_products(
                         search,
                         int(company_id),
                         int(branch_id),
-                        limit=5,
+                        limit=PRODUCT_SUGGESTIONS_LIMIT,
                     )
+                    # Verificar que no hubo otro keystroke durante la búsqueda
+                    if seq != self._autocomplete_debounce_seq:
+                        return
                     self.autocomplete_results = results
                     self.autocomplete_selected_index = 0 if results else -1
                     self.autocomplete_suggestions = [
@@ -469,7 +483,7 @@ class CartMixin:
                     desc,
                     int(company_id),
                     int(branch_id),
-                    limit=5,
+                    limit=PRODUCT_SUGGESTIONS_LIMIT,
                 )
                 for candidate in results:
                     if candidate.get("description") == desc:
@@ -563,7 +577,7 @@ class CartMixin:
                     description,
                     int(company_id),
                     int(branch_id),
-                    limit=5,
+                    limit=PRODUCT_SUGGESTIONS_LIMIT,
                 )
                 for candidate in results:
                     if candidate.get("description") == description:
@@ -576,7 +590,7 @@ class CartMixin:
                 description,
                 int(company_id),
                 int(branch_id),
-                limit=5,
+                limit=PRODUCT_SUGGESTIONS_LIMIT,
             )
             for candidate in results:
                 if candidate.get("description") == description:

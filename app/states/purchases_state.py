@@ -1,5 +1,6 @@
 """Estado de Compras - Registro de documentos de ingreso."""
 import datetime
+import logging
 from decimal import Decimal
 from typing import Any
 
@@ -9,8 +10,10 @@ from sqlalchemy import or_, func
 from sqlalchemy.orm import selectinload
 
 from app.models import Purchase, Supplier, Product, PurchaseItem, StockMovement
-from app.utils.sanitization import sanitize_text
+from app.utils.sanitization import escape_like, sanitize_text
 from .mixin_state import MixinState
+
+logger = logging.getLogger(__name__)
 
 
 class PurchasesState(MixinState):
@@ -208,7 +211,7 @@ class PurchasesState(MixinState):
         term = (self.purchase_search_term or "").strip()
         filters = []
         if term:
-            like = f"%{term}%"
+            like = f"%{escape_like(term)}%"
             filters.append(
                 or_(
                     Purchase.number.ilike(like),
@@ -383,7 +386,7 @@ class PurchasesState(MixinState):
             self.purchase_edit_supplier_suggestions = []
             return
 
-        search = f"%{term}%"
+        search = f"%{escape_like(term)}%"
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -478,41 +481,52 @@ class PurchasesState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
 
-        with rx.session() as session:
-            existing = session.exec(
-                select(Purchase).where(
-                    Purchase.company_id == company_id,
-                    Purchase.branch_id == branch_id,
-                    Purchase.id != purchase_id,
-                    Purchase.supplier_id == supplier_id,
-                    Purchase.doc_type == doc_type,
-                    Purchase.series == series,
-                    Purchase.number == number,
-                )
-            ).first()
-            if existing:
-                return rx.toast(
-                    "Documento ya registrado para este proveedor.",
-                    duration=3000,
-                )
+        try:
+            with rx.session() as session:
+                existing = session.exec(
+                    select(Purchase).where(
+                        Purchase.company_id == company_id,
+                        Purchase.branch_id == branch_id,
+                        Purchase.id != purchase_id,
+                        Purchase.supplier_id == supplier_id,
+                        Purchase.doc_type == doc_type,
+                        Purchase.series == series,
+                        Purchase.number == number,
+                    )
+                ).first()
+                if existing:
+                    return rx.toast(
+                        "Documento ya registrado para este proveedor.",
+                        duration=3000,
+                    )
 
-            purchase = session.exec(
-                select(Purchase)
-                .where(Purchase.id == purchase_id)
-                .where(Purchase.company_id == company_id)
-                .where(Purchase.branch_id == branch_id)
-            ).first()
-            if not purchase:
-                return rx.toast("Compra no encontrada.", duration=3000)
+                purchase = session.exec(
+                    select(Purchase)
+                    .where(Purchase.id == purchase_id)
+                    .where(Purchase.company_id == company_id)
+                    .where(Purchase.branch_id == branch_id)
+                ).first()
+                if not purchase:
+                    return rx.toast("Compra no encontrada.", duration=3000)
 
-            purchase.doc_type = doc_type
-            purchase.series = series
-            purchase.number = number
-            purchase.issue_date = issue_date
-            purchase.notes = notes
-            purchase.supplier_id = supplier_id
-            session.add(purchase)
-            session.commit()
+                purchase.doc_type = doc_type
+                purchase.series = series
+                purchase.number = number
+                purchase.issue_date = issue_date
+                purchase.notes = notes
+                purchase.supplier_id = supplier_id
+                session.add(purchase)
+                session.commit()
+        except Exception:
+            logger.exception(
+                "save_purchase_edit failed | company=%s branch=%s purchase=%s",
+                company_id,
+                branch_id,
+                purchase_id,
+            )
+            return rx.toast(
+                "Error al actualizar la compra.", duration=4000
+            )
 
         self._purchase_update_trigger += 1
         self._refresh_purchase_cache()
@@ -572,74 +586,95 @@ class PurchasesState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
-        with rx.session() as session:
-            purchase = session.exec(
-                select(Purchase)
-                .where(Purchase.id == purchase_id)
-                .where(Purchase.company_id == company_id)
-                .where(Purchase.branch_id == branch_id)
-                .options(selectinload(Purchase.items))
-            ).first()
-            if not purchase:
-                return rx.toast("Compra no encontrada.", duration=3000)
-
-            items = purchase.items or []
-            for item in items:
-                if not item.product_id:
-                    return rx.toast(
-                        "No se puede eliminar: item sin producto asociado.",
-                        duration=3000,
-                    )
-                product = session.exec(
-                    select(Product)
-                    .where(Product.id == item.product_id)
-                    .where(Product.company_id == company_id)
-                    .where(Product.branch_id == branch_id)
+        try:
+            with rx.session() as session:
+                purchase = session.exec(
+                    select(Purchase)
+                    .where(Purchase.id == purchase_id)
+                    .where(Purchase.company_id == company_id)
+                    .where(Purchase.branch_id == branch_id)
+                    .options(selectinload(Purchase.items))
                 ).first()
-                if not product:
-                    return rx.toast(
-                        "No se puede eliminar: producto no encontrado.",
-                        duration=3000,
-                    )
-                qty = Decimal(str(item.quantity or 0))
-                if (product.stock or Decimal("0")) - qty < 0:
-                    return rx.toast(
-                        "No se puede eliminar: el stock actual es menor al ingreso.",
-                        duration=4000,
+                if not purchase:
+                    return rx.toast("Compra no encontrada.", duration=3000)
+
+                items = purchase.items or []
+
+                # Validar que todos los items tengan product_id
+                product_ids = set()
+                for item in items:
+                    if not item.product_id:
+                        return rx.toast(
+                            "No se puede eliminar: item sin producto asociado.",
+                            duration=3000,
+                        )
+                    product_ids.add(item.product_id)
+
+                # Batch pre-load: 1 query en vez de 2N
+                products_map: dict[int, Product] = {}
+                if product_ids:
+                    _prods = session.exec(
+                        select(Product)
+                        .where(Product.id.in_(product_ids))
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                        .with_for_update()
+                    ).all()
+                    products_map = {p.id: p for p in _prods}
+
+                # Validar existencia y stock suficiente
+                for item in items:
+                    product = products_map.get(item.product_id)
+                    if not product:
+                        return rx.toast(
+                            "No se puede eliminar: producto no encontrado.",
+                            duration=3000,
+                        )
+                    qty = Decimal(str(item.quantity or 0))
+                    if (product.stock or Decimal("0")) - qty < 0:
+                        return rx.toast(
+                            "No se puede eliminar: el stock actual es menor al ingreso.",
+                            duration=4000,
+                        )
+
+                doc_type = (purchase.doc_type or "").upper()
+                series = purchase.series or ""
+                number = purchase.number or ""
+                doc_label = f"{doc_type} {series}-{number}" if series else f"{doc_type} {number}"
+                user_id = self.current_user.get("id")
+
+                # Actualizar stock y registrar movimientos (sin queries adicionales)
+                for item in items:
+                    product = products_map[item.product_id]
+                    qty = Decimal(str(item.quantity or 0))
+                    product.stock = (product.stock or Decimal("0")) - qty
+                    session.add(product)
+                    session.add(
+                        StockMovement(
+                            type="Anulacion Ingreso",
+                            product_id=product.id,
+                            quantity=-qty,
+                            description=f"Anulación compra {doc_label}",
+                            user_id=user_id,
+                            company_id=company_id,
+                            branch_id=branch_id,
+                        )
                     )
 
-            doc_type = (purchase.doc_type or "").upper()
-            series = purchase.series or ""
-            number = purchase.number or ""
-            doc_label = f"{doc_type} {series}-{number}" if series else f"{doc_type} {number}"
-            user_id = self.current_user.get("id")
-
-            for item in items:
-                product = session.exec(
-                    select(Product)
-                    .where(Product.id == item.product_id)
-                    .where(Product.company_id == company_id)
-                    .where(Product.branch_id == branch_id)
-                ).first()
-                qty = Decimal(str(item.quantity or 0))
-                product.stock = (product.stock or Decimal("0")) - qty
-                session.add(product)
-                session.add(
-                    StockMovement(
-                        type="Anulacion Ingreso",
-                        product_id=product.id,
-                        quantity=-qty,
-                        description=f"Anulación compra {doc_label}",
-                        user_id=user_id,
-                        company_id=company_id,
-                        branch_id=branch_id,
-                    )
-                )
-
-            for item in items:
-                session.delete(item)
-            session.delete(purchase)
-            session.commit()
+                for item in items:
+                    session.delete(item)
+                session.delete(purchase)
+                session.commit()
+        except Exception:
+            logger.exception(
+                "delete_purchase failed | company=%s branch=%s purchase=%s",
+                company_id,
+                branch_id,
+                purchase_id,
+            )
+            return rx.toast(
+                "Error al eliminar la compra.", duration=4000
+            )
 
         self._purchase_update_trigger += 1
         self._refresh_purchase_cache()

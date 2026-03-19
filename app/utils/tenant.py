@@ -181,11 +181,13 @@ def _apply_tenant_criteria(orm_execute_state) -> None:
         )
 
     _ensure_models_ready()
+    # Captura por valor con parámetro default para evitar
+    # bugs de closure si el loop o las variables se refactorizan.
     for model in _TENANT_COMPANY_MODELS:
         statement = statement.options(
             with_loader_criteria(
                 model,
-                lambda cls: cls.company_id == company_id,
+                lambda cls, _cid=company_id: cls.company_id == _cid,
                 include_aliases=True,
             )
         )
@@ -195,7 +197,7 @@ def _apply_tenant_criteria(orm_execute_state) -> None:
             statement = statement.options(
                 with_loader_criteria(
                     model,
-                    lambda cls: cls.branch_id == branch_id,
+                    lambda cls, _bid=branch_id: cls.branch_id == _bid,
                     include_aliases=True,
                 )
             )
@@ -212,6 +214,7 @@ def _before_flush(session, flush_context, instances) -> None:
     _ensure_models_ready()
     company_ctx, branch_ctx = get_tenant_context()
 
+    # --- Protección para objetos NUEVOS (INSERT) ---
     for obj in session.new:
         table = getattr(obj, "__table__", None)
         if table is None:
@@ -240,6 +243,48 @@ def _before_flush(session, flush_context, instances) -> None:
                     setattr(obj, "branch_id", branch_ctx)
                 elif branch_ctx is not None:
                     setattr(obj, "branch_id", branch_ctx)
+
+    # --- Protección para objetos MODIFICADOS (UPDATE) ---
+    # Impedir que company_id o branch_id sean cambiados en objetos existentes,
+    # lo cual sería un intento de mover datos entre tenants.
+    from sqlalchemy import inspect as sa_inspect
+
+    for obj in session.dirty:
+        table = getattr(obj, "__table__", None)
+        if table is None:
+            continue
+
+        insp = sa_inspect(obj, raiseerr=False)
+        if insp is None:
+            continue
+
+        if "company_id" in table.c:
+            history = insp.attrs.get("company_id")
+            if history is not None:
+                hist = history.history
+                if hist.has_changes() and hist.deleted:
+                    old_val = hist.deleted[0]
+                    new_val = getattr(obj, "company_id", None)
+                    if _coerce_int(old_val) is not None and old_val != new_val:
+                        raise RuntimeError(
+                            f"Intento de cambiar company_id de {old_val} a {new_val} "
+                            f"en {type(obj).__name__}. Operación bloqueada por seguridad."
+                        )
+
+        if "branch_id" in table.c:
+            branch_required = not getattr(table.c.get("branch_id"), "nullable", True)
+            if branch_required:
+                history = insp.attrs.get("branch_id")
+                if history is not None:
+                    hist = history.history
+                    if hist.has_changes() and hist.deleted:
+                        old_val = hist.deleted[0]
+                        new_val = getattr(obj, "branch_id", None)
+                        if _coerce_int(old_val) is not None and old_val != new_val:
+                            raise RuntimeError(
+                                f"Intento de cambiar branch_id de {old_val} a {new_val} "
+                                f"en {type(obj).__name__}. Operación bloqueada por seguridad."
+                            )
 
 
 def register_tenant_listeners() -> None:

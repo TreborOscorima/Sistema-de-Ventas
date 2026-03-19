@@ -219,9 +219,12 @@ class PaymentMixin:
         return f"{method} - {self.payment_method_description}"
 
     def _safe_amount(self, value: str) -> float:
+        """Parse amount string, clamping negatives to 0 (FIX 41)."""
         try:
             amount = float(value) if value else 0
-        except ValueError:
+        except (ValueError, TypeError):
+            amount = 0
+        if amount < 0:
             amount = 0
         return self._round_currency(amount)
 

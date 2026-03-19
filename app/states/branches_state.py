@@ -380,8 +380,11 @@ class BranchesState(MixinState):
             ).all():
                 session.delete(member)
             # Eliminar categorías huérfanas (sin productos asociados)
+            # FIX 38b: add company_id filter for tenant isolation
             for cat in session.exec(
-                select(Category).where(Category.branch_id == branch_id_int)
+                select(Category)
+                .where(Category.company_id == company_id)
+                .where(Category.branch_id == branch_id_int)
             ).all():
                 session.delete(cat)
             try:

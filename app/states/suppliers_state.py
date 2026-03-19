@@ -5,7 +5,7 @@ from sqlmodel import select
 from sqlalchemy import or_
 
 from app.models import Supplier, Purchase
-from app.utils.sanitization import sanitize_name, sanitize_dni, sanitize_phone, sanitize_text
+from app.utils.sanitization import escape_like, sanitize_name, sanitize_dni, sanitize_phone, sanitize_text
 from .mixin_state import MixinState
 
 
@@ -70,7 +70,7 @@ class SuppliersState(MixinState):
                 .where(Supplier.branch_id == branch_id)
             )
             if term:
-                like = f"%{term}%"
+                like = f"%{escape_like(term)}%"
                 query = query.where(
                     or_(
                         Supplier.name.ilike(like),

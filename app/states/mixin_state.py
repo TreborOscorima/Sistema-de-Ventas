@@ -33,6 +33,7 @@ Ejemplo de uso::
             # Solo ejecuta si la caja está abierta
             ...
 """
+import logging
 import os
 import time
 import functools
@@ -42,6 +43,9 @@ import reflex as rx
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any, Callable, TypeVar
 
+logger = logging.getLogger(__name__)
+
+from app.constants import DEFAULT_RECEIPT_WIDTH, MIN_RECEIPT_WIDTH, MAX_RECEIPT_WIDTH, DEFAULT_PAPER_WIDTH_MM
 from app.utils.tenant import set_tenant_context
 from app.utils.payment import normalize_wallet_label, payment_category
 from app.utils.timezone import (
@@ -275,7 +279,7 @@ class MixinState:
         set_tenant_context(company_id, branch_id)
         return branch_id
 
-    def _round_currency(self, value: float) -> float:
+    def _round_currency(self, value: "float | Decimal | int") -> float:
         return float(
             Decimal(str(value or 0)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         )
@@ -359,10 +363,10 @@ class MixinState:
             if paper in {"58", "58mm", "58-mm"}:
                 width = 32
             elif paper in {"80", "80mm", "80-mm"}:
-                width = 42
+                width = DEFAULT_RECEIPT_WIDTH
         if not width:
-            width = 42
-        return max(24, min(width, 64))
+            width = DEFAULT_RECEIPT_WIDTH
+        return max(MIN_RECEIPT_WIDTH, min(width, MAX_RECEIPT_WIDTH))
 
     def _receipt_paper_mm(self, branch_id: int | None = None) -> int:
         settings = self._company_settings_snapshot(branch_id=branch_id)
@@ -372,9 +376,9 @@ class MixinState:
         if paper in {"58", "58mm", "58-mm"}:
             return 58
         if paper in {"80", "80mm", "80-mm"}:
-            return 80
+            return DEFAULT_PAPER_WIDTH_MM
         width = self._receipt_width()
-        return 58 if width <= 34 else 80
+        return 58 if width <= 34 else DEFAULT_PAPER_WIDTH_MM
 
     def _company_settings_snapshot(self, branch_id: int | None = None) -> Dict[str, Any]:
         """Obtiene snapshot de configuración de empresa con labels fiscales dinámicos.
@@ -417,6 +421,7 @@ class MixinState:
             from sqlmodel import select
             from app.models import Branch, CompanySettings
         except Exception:
+            logger.exception("_company_settings_snapshot: import failure")
             return defaults
         company_id = self._company_id() if hasattr(self, "_company_id") else None
         if not company_id:
@@ -447,6 +452,10 @@ class MixinState:
                         .where(Branch.id == effective_bid)
                     ).first()
         except Exception:
+            logger.exception(
+                "_company_settings_snapshot: DB query failed | company=%s",
+                company_id,
+            )
             return defaults
         if not settings:
             return defaults

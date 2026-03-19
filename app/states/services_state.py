@@ -4,6 +4,8 @@ import datetime
 import uuid
 import logging
 import math
+
+logger = logging.getLogger(__name__)
 import calendar
 import io
 from sqlmodel import select
@@ -16,6 +18,7 @@ from app.utils.payment import (
     wallet_method_type,
 )
 from app.utils.sanitization import (
+    escape_like,
     sanitize_name,
     sanitize_dni,
     sanitize_phone,
@@ -292,6 +295,7 @@ class ServicesState(MixinState):
                 return False
             return bind.dialect.name in {"mysql", "mariadb"}
         except Exception:
+            logger.warning("_supports_named_locks: could not determine dialect")
             return False
 
     def _acquire_named_lock(self, session, key: str, timeout: int = 5) -> bool:
@@ -312,6 +316,7 @@ class ServicesState(MixinState):
                     lock_value = result
             return bool(lock_value == 1 or lock_value is True)
         except Exception:
+            logger.exception("_acquire_named_lock failed | key=%s", key)
             return False
 
     def _release_named_lock(self, session, key: str) -> None:
@@ -320,6 +325,7 @@ class ServicesState(MixinState):
         try:
             session.exec(text("SELECT RELEASE_LOCK(:key)"), params={"key": key})
         except Exception:
+            logger.exception("_release_named_lock failed | key=%s", key)
             return None
 
     def _register_reservation_advance_in_cashbox(
@@ -425,7 +431,7 @@ class ServicesState(MixinState):
                 query = query.where(FieldReservationModel.status == db_status)
 
         if self.reservation_search:
-            search = f"%{self.reservation_search.strip()}%"
+            search = f"%{escape_like(self.reservation_search.strip())}%"
             query = query.where(
                 or_(
                     FieldReservationModel.client_name.ilike(search),
@@ -773,6 +779,9 @@ class ServicesState(MixinState):
         if self.new_field_price_name and self.new_field_price_amount:
             try:
                 price = float(self.new_field_price_amount)
+                # FIX 43: reject negative prices
+                if price <= 0:
+                    return rx.toast("El precio debe ser mayor a cero.", duration=3000)
                 company_id = self._company_id()
                 branch_id = self._branch_id()
                 if not company_id or not branch_id:
@@ -803,6 +812,9 @@ class ServicesState(MixinState):
 
         try:
             price_val = float(self.new_field_price_amount)
+            # FIX 43: reject negative prices
+            if price_val <= 0:
+                return rx.toast("El precio debe ser mayor a cero.", duration=3000)
             company_id = self._company_id()
             branch_id = self._branch_id()
             if not company_id or not branch_id:
@@ -2400,13 +2412,22 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         }
 
     def _find_reservation_by_id(self, res_id: str) -> FieldReservation | None:
-        if not res_id: return None
+        if not res_id:
+            return None
         res_id = str(res_id).strip()
-        cached = next((r for r in self.service_reservations if r["id"] == res_id), None)
-        if cached: return cached
+        # 1. Buscar en la lista cargada (O(n) pero n es pequeño por paginación)
+        cached = next(
+            (r for r in self.service_reservations if str(r.get("id", "")) == res_id),
+            None,
+        )
+        if cached:
+            return cached
+        # 2. Fallback a DB con cache en service_reservations para evitar
+        #    queries repetidas (esta función se llama 12+ veces en flujos de pago).
         try:
             reservation_id = int(res_id)
-        except ValueError: return None
+        except ValueError:
+            return None
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -2418,7 +2439,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(FieldReservationModel.company_id == company_id)
                 .where(FieldReservationModel.branch_id == branch_id)
             ).first()
-            return self._reservation_to_dict(reservation) if reservation else None
+            if reservation:
+                result = self._reservation_to_dict(reservation)
+                # Cachear en la lista para que las próximas llamadas
+                # no vuelvan a la DB.
+                self.service_reservations = list(self.service_reservations) + [result]
+                return result
+            return None
 
     def _sport_label(self, sport: str) -> str:
         sport_lower = sport.lower()

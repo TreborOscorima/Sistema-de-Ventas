@@ -79,8 +79,8 @@ MAX_INSTALLMENTS: int = 36
 # =============================================================================
 import os
 
-# Longitud mínima de contraseña
-PASSWORD_MIN_LENGTH: int = 6
+# Longitud mínima de contraseña (8 es el mínimo aceptable para sistemas financieros)
+PASSWORD_MIN_LENGTH: int = int(os.getenv("PASSWORD_MIN_LENGTH", "8"))
 
 # Tiempo de bloqueo por intentos fallidos (minutos)
 LOGIN_LOCKOUT_MINUTES: int = 15
@@ -88,11 +88,18 @@ LOGIN_LOCKOUT_MINUTES: int = 15
 # Máximo de intentos de login antes de bloqueo
 MAX_LOGIN_ATTEMPTS: int = 5
 
-# Configuración de fortaleza de contraseña (activar en producción)
-# Controlado por variable de entorno para facilitar activación gradual
-PASSWORD_REQUIRE_UPPERCASE: bool = os.getenv("PASSWORD_REQUIRE_UPPERCASE", "").lower() == "true"
-PASSWORD_REQUIRE_DIGIT: bool = os.getenv("PASSWORD_REQUIRE_DIGIT", "").lower() == "true"
-PASSWORD_REQUIRE_SPECIAL: bool = os.getenv("PASSWORD_REQUIRE_SPECIAL", "").lower() == "true"
+# Configuración de fortaleza de contraseña.
+# Activados por defecto — se pueden desactivar con env var solo en desarrollo.
+def _env_bool(var_name: str, default: bool = True) -> bool:
+    val = os.getenv(var_name, "").strip().lower()
+    if not val:
+        return default
+    return val in {"1", "true", "yes", "on"}
+
+
+PASSWORD_REQUIRE_UPPERCASE: bool = _env_bool("PASSWORD_REQUIRE_UPPERCASE", True)
+PASSWORD_REQUIRE_DIGIT: bool = _env_bool("PASSWORD_REQUIRE_DIGIT", True)
+PASSWORD_REQUIRE_SPECIAL: bool = _env_bool("PASSWORD_REQUIRE_SPECIAL", False)
 
 
 # =============================================================================

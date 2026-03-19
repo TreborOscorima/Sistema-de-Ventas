@@ -27,10 +27,14 @@ class FakeSession:
         self.exec_calls = []
         self.added = []
         self.commit = Mock()
+        self.rollback = Mock()
 
     def exec(self, statement):
         self.exec_calls.append(statement)
-        return self.exec_results[len(self.exec_calls) - 1]
+        idx = len(self.exec_calls) - 1
+        if idx < len(self.exec_results):
+            return self.exec_results[idx]
+        return ExecResult()
 
     def add(self, obj):
         self.added.append(obj)
@@ -68,11 +72,15 @@ def test_delete_sale_marks_logs_voided_and_restores_stock(monkeypatch):
         notes="Venta #1",
         is_voided=False,
     )
+    # delete_sale query order:
+    # 1. select(Sale).first()          → sale_db
+    # 2. select(CashboxLog).all()      → [log]
+    # 3. select(Product).in_().all()   → [product]  (batch pre-load, FIX 24)
     fake_session = FakeSession(
         [
             ExecResult(first_item=sale_db),
             ExecResult(all_items=[log]),
-            ExecResult(first_item=product),
+            ExecResult(all_items=[product]),
         ]
     )
     monkeypatch.setattr(rx, "session", lambda: fake_session)

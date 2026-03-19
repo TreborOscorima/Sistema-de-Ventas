@@ -26,6 +26,9 @@ import datetime
 import uuid
 import logging
 import json
+from decimal import Decimal, InvalidOperation
+
+logger = logging.getLogger(__name__)
 import html
 import io
 import sqlalchemy
@@ -71,6 +74,7 @@ from app.utils.exports import (
     WARNING_FILL,
 )
 from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
+from app.utils.stock import recalculate_stock_totals
 from app.utils.tenant import set_tenant_context
 
 
@@ -209,10 +213,10 @@ class CashState(MixinState):
 
     def _calculate_petty_cash_total(self):
         try:
-            qty = float(self.petty_cash_quantity) if self.petty_cash_quantity else 0
-            cost = float(self.petty_cash_cost) if self.petty_cash_cost else 0
+            qty = Decimal(str(self.petty_cash_quantity)) if self.petty_cash_quantity else Decimal("0")
+            cost = Decimal(str(self.petty_cash_cost)) if self.petty_cash_cost else Decimal("0")
             self.petty_cash_amount = str(qty * cost)
-        except ValueError:
+        except (ValueError, InvalidOperation):
             pass
 
     @rx.event
@@ -665,7 +669,7 @@ class CashState(MixinState):
             if user_id:
                 statement = statement.where(CashboxLogModel.user_id == user_id)
             total = session.exec(statement).one()
-        return self._round_currency(float(total or 0))
+        return self._round_currency(total or 0)
 
     def _build_cashbox_summary_for_range(
         self,
@@ -704,7 +708,7 @@ class CashState(MixinState):
                 {
                     "method": label,
                     "count": int(count or 0),
-                    "total": self._round_currency(float(amount or 0)),
+                    "total": self._round_currency(amount or 0),
                 }
             )
         summary.sort(key=lambda item: item.get("total", 0), reverse=True)
@@ -764,13 +768,13 @@ class CashState(MixinState):
                         "payment_label": method_label,
                         "payment_details": payment_detail,
                         "concept": concept,
-                        "amount": self._round_currency(float(log.amount or 0)),
+                        "amount": self._round_currency(log.amount or 0),
                         "total": log.amount,
                         "is_deleted": False,
                         "payment_breakdown": [
                             {
                                 "label": method_label,
-                                "amount": self._round_currency(float(log.amount or 0)),
+                                "amount": self._round_currency(log.amount or 0),
                             }
                         ],
                         "payment_kind": "",
@@ -837,7 +841,7 @@ class CashState(MixinState):
                     CashboxLogModel.user_id == session_info["user_id"]
                 )
             total = session.exec(statement).one()
-        return self._round_currency(float(total or 0))
+        return self._round_currency(total or 0)
 
     def _build_cashbox_close_breakdown(self, date: str) -> dict[str, Any]:
         summary = self._build_cashbox_summary(date)
@@ -925,9 +929,9 @@ class CashState(MixinState):
             return rx.toast("Inicie sesión para abrir caja.", duration=3000)
 
         try:
-            amount = float(self.cashbox_open_amount_input) if self.cashbox_open_amount_input else 0
-        except ValueError:
-            amount = 0
+            amount = Decimal(str(self.cashbox_open_amount_input)) if self.cashbox_open_amount_input else Decimal("0")
+        except (ValueError, InvalidOperation):
+            amount = Decimal("0")
         amount = self._round_currency(amount)
 
         if amount < 0:
@@ -956,7 +960,7 @@ class CashState(MixinState):
                 is_open=True
             )
             session.add(new_session)
-            session.commit()
+            session.flush()
             session.refresh(new_session)
 
             log = CashboxLogModel(
@@ -969,7 +973,7 @@ class CashState(MixinState):
                 timestamp=self._event_timestamp()
             )
             session.add(log)
-            session.commit()
+            session.commit()  # Atómico: sesión + log en una sola transacción
 
         self.cashbox_open_amount_input = ""
         self._cashbox_update_trigger += 1
@@ -1712,8 +1716,8 @@ class CashState(MixinState):
             ws.cell(row=row, column=3, value=method_raw)
             ws.cell(row=row, column=4, value=method_label)
             ws.cell(row=row, column=5, value=payment_details)
-            ws.cell(row=row, column=6, value=float(sale["total"] or 0)).number_format = currency_format
-            ws.cell(row=row, column=7, value=float(sale.get("amount", 0) or 0)).number_format = currency_format
+            ws.cell(row=row, column=6, value=sale["total"] or 0).number_format = currency_format
+            ws.cell(row=row, column=7, value=sale.get("amount", 0) or 0).number_format = currency_format
             ws.cell(row=row, column=8, value=details)
 
             for col in range(1, 9):
@@ -2597,12 +2601,12 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 "Ingrese el motivo de la eliminación de la venta.", duration=3000
             )
 
-        with rx.session() as session:
-            try:
-                sale_db_id = int(sale_id)
-            except ValueError:
-                return rx.toast("ID de venta inválido.", duration=3000)
+        try:
+            sale_db_id = int(sale_id)
+        except ValueError:
+            return rx.toast("ID de venta inválido.", duration=3000)
 
+        with rx.session() as session:
             sale_db = session.exec(
                 select(Sale)
                 .where(Sale.id == sale_db_id)
@@ -2615,186 +2619,151 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             if sale_db.status == SaleStatus.cancelled:
                 return rx.toast("La venta ya fue anulada.", duration=3000)
 
-            # Marcar como cancelado en BD
-            sale_db.status = SaleStatus.cancelled
-            sale_db.delete_reason = reason
-            session.add(sale_db)
+            try:
+                # Marcar como cancelado en BD
+                sale_db.status = SaleStatus.cancelled
+                sale_db.delete_reason = reason
+                session.add(sale_db)
 
-            logs = session.exec(
-                select(CashboxLogModel)
-                .where(CashboxLogModel.sale_id == sale_db_id)
-                .where(CashboxLogModel.company_id == company_id)
-                .where(CashboxLogModel.branch_id == branch_id)
-            ).all()
-            for log in logs:
-                if log.is_voided:
-                    continue
-                log.is_voided = True
-                if reason:
-                    suffix = f" | ANULADA: {reason}"
-                    if suffix not in (log.notes or ""):
-                        log.notes = f"{log.notes or ''}{suffix}".strip()
-                session.add(log)
+                logs = session.exec(
+                    select(CashboxLogModel)
+                    .where(CashboxLogModel.sale_id == sale_db_id)
+                    .where(CashboxLogModel.company_id == company_id)
+                    .where(CashboxLogModel.branch_id == branch_id)
+                ).all()
+                for log in logs:
+                    if log.is_voided:
+                        continue
+                    log.is_voided = True
+                    if reason:
+                        suffix = f" | ANULADA: {reason}"
+                        if suffix not in (log.notes or ""):
+                            log.notes = f"{log.notes or ''}{suffix}".strip()
+                    session.add(log)
 
-            # Restaurar stock
-            products_recalc_variants: set[int] = set()
-            products_recalc_batches: set[int] = set()
-            variants_recalc_batches: set[int] = set()
-            for item in sale_db.items:
-                quantity = item.quantity or 0
-                if quantity <= 0:
-                    continue
+                # ── Restaurar stock (batch pre-carga para evitar N+1) ──
+                needed_variant_ids: set[int] = set()
+                needed_product_ids: set[int] = set()
+                needed_batch_ids: set[int] = set()
+                items_to_restore = []
+                for item in sale_db.items:
+                    quantity = item.quantity or 0
+                    if quantity <= 0:
+                        continue
+                    items_to_restore.append(item)
+                    if item.product_variant_id:
+                        needed_variant_ids.add(item.product_variant_id)
+                    if item.product_id:
+                        needed_product_ids.add(item.product_id)
+                    if item.product_batch_id:
+                        needed_batch_ids.add(item.product_batch_id)
 
-                if item.product_variant_id:
-                    variant = session.exec(
+                # Pre-cargar todos con FOR UPDATE en 3 queries batch
+                variants_map: dict[int, ProductVariant] = {}
+                if needed_variant_ids:
+                    rows = session.exec(
                         select(ProductVariant)
-                        .where(ProductVariant.id == item.product_variant_id)
+                        .where(ProductVariant.id.in_(needed_variant_ids))
                         .where(ProductVariant.company_id == company_id)
                         .where(ProductVariant.branch_id == branch_id)
                         .with_for_update()
-                    ).first()
-                    if variant:
-                        if item.product_batch_id:
-                            batch = session.exec(
-                                select(ProductBatch)
-                                .where(ProductBatch.id == item.product_batch_id)
-                                .where(ProductBatch.company_id == company_id)
-                                .where(ProductBatch.branch_id == branch_id)
-                                .with_for_update()
-                            ).first()
-                            if batch:
-                                batch.stock = (batch.stock or 0) + quantity
-                                session.add(batch)
-                                variants_recalc_batches.add(variant.id)
-                                products_recalc_variants.add(variant.product_id)
+                    ).all()
+                    variants_map = {v.id: v for v in rows}
+
+                products_map: dict[int, Product] = {}
+                if needed_product_ids:
+                    rows = session.exec(
+                        select(Product)
+                        .where(Product.id.in_(needed_product_ids))
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                        .with_for_update()
+                    ).all()
+                    products_map = {p.id: p for p in rows}
+
+                batches_map: dict[int, ProductBatch] = {}
+                if needed_batch_ids:
+                    rows = session.exec(
+                        select(ProductBatch)
+                        .where(ProductBatch.id.in_(needed_batch_ids))
+                        .where(ProductBatch.company_id == company_id)
+                        .where(ProductBatch.branch_id == branch_id)
+                        .with_for_update()
+                    ).all()
+                    batches_map = {b.id: b for b in rows}
+
+                # Restaurar stock usando los mapas pre-cargados
+                products_recalc_variants: set[int] = set()
+                products_recalc_batches: set[int] = set()
+                variants_recalc_batches: set[int] = set()
+
+                for item in items_to_restore:
+                    quantity = item.quantity or 0
+
+                    if item.product_variant_id:
+                        variant = variants_map.get(item.product_variant_id)
+                        if variant:
+                            if item.product_batch_id:
+                                batch = batches_map.get(item.product_batch_id)
+                                if batch:
+                                    batch.stock = (batch.stock or 0) + quantity
+                                    session.add(batch)
+                                    variants_recalc_batches.add(variant.id)
+                                    products_recalc_variants.add(variant.product_id)
+                                else:
+                                    variant.stock = (variant.stock or 0) + quantity
+                                    session.add(variant)
+                                    products_recalc_variants.add(variant.product_id)
                             else:
                                 variant.stock = (variant.stock or 0) + quantity
                                 session.add(variant)
                                 products_recalc_variants.add(variant.product_id)
-                        else:
-                            variant.stock = (variant.stock or 0) + quantity
-                            session.add(variant)
-                            products_recalc_variants.add(variant.product_id)
-                elif item.product_id:
-                    product = session.exec(
-                        select(Product)
-                        .where(Product.id == item.product_id)
-                        .where(Product.company_id == company_id)
-                        .where(Product.branch_id == branch_id)
-                        .with_for_update()
-                    ).first()
-                    if product:
-                        if item.product_batch_id:
-                            batch = session.exec(
-                                select(ProductBatch)
-                                .where(ProductBatch.id == item.product_batch_id)
-                                .where(ProductBatch.company_id == company_id)
-                                .where(ProductBatch.branch_id == branch_id)
-                                .with_for_update()
-                            ).first()
-                            if batch:
-                                batch.stock = (batch.stock or 0) + quantity
-                                session.add(batch)
-                                products_recalc_batches.add(product.id)
+                    elif item.product_id:
+                        product = products_map.get(item.product_id)
+                        if product:
+                            if item.product_batch_id:
+                                batch = batches_map.get(item.product_batch_id)
+                                if batch:
+                                    batch.stock = (batch.stock or 0) + quantity
+                                    session.add(batch)
+                                    products_recalc_batches.add(product.id)
+                                else:
+                                    product.stock = (product.stock or 0) + quantity
+                                    session.add(product)
                             else:
                                 product.stock = (product.stock or 0) + quantity
                                 session.add(product)
-                        else:
-                            product.stock = (product.stock or 0) + quantity
-                            session.add(product)
 
-                # Registrar movimiento de stock
-                movement = StockMovement(
-                    product_id=item.product_id,
-                    user_id=self.current_user.get("id"),
-                    type="Devolucion Venta",
-                    quantity=quantity,
-                    description=f"Venta anulada #{sale_db.id}: {reason}",
-                    timestamp=self._event_timestamp(),
+                    # Registrar movimiento de stock
+                    movement = StockMovement(
+                        product_id=item.product_id,
+                        user_id=self.current_user.get("id"),
+                        type="Devolucion Venta",
+                        quantity=quantity,
+                        description=f"Venta anulada #{sale_db.id}: {reason}",
+                        timestamp=self._event_timestamp(),
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
+                    session.add(movement)
+
+                # Recalcular totales de stock (helper centralizado)
+                recalculate_stock_totals(
+                    session=session,
                     company_id=company_id,
                     branch_id=branch_id,
+                    variants_from_batches=variants_recalc_batches,
+                    products_from_variants=products_recalc_variants,
+                    products_from_batches=products_recalc_batches,
                 )
-                session.add(movement)
-
-            if variants_recalc_batches:
-                for variant_id in variants_recalc_batches:
-                    total_query = (
-                        select(sqlalchemy.func.coalesce(sqlalchemy.func.sum(ProductBatch.stock), 0))
-                        .where(ProductBatch.product_variant_id == variant_id)
-                        .where(ProductBatch.company_id == company_id)
-                        .where(ProductBatch.branch_id == branch_id)
-                    )
-                    total_row = session.exec(total_query).first()
-                    if total_row is None:
-                        total_stock = 0
-                    elif isinstance(total_row, tuple):
-                        total_stock = total_row[0]
-                    else:
-                        total_stock = total_row
-                    variant_row = session.exec(
-                        select(ProductVariant)
-                        .where(ProductVariant.id == variant_id)
-                        .where(ProductVariant.company_id == company_id)
-                        .where(ProductVariant.branch_id == branch_id)
-                    ).first()
-                    if variant_row:
-                        variant_row.stock = total_stock
-                        session.add(variant_row)
-                        products_recalc_variants.add(variant_row.product_id)
-
-            if products_recalc_variants:
-                for product_id in products_recalc_variants:
-                    total_query = (
-                        select(sqlalchemy.func.coalesce(sqlalchemy.func.sum(ProductVariant.stock), 0))
-                        .where(ProductVariant.product_id == product_id)
-                        .where(ProductVariant.company_id == company_id)
-                        .where(ProductVariant.branch_id == branch_id)
-                    )
-                    total_row = session.exec(total_query).first()
-                    if total_row is None:
-                        total_stock = 0
-                    elif isinstance(total_row, tuple):
-                        total_stock = total_row[0]
-                    else:
-                        total_stock = total_row
-                    product_row = session.exec(
-                        select(Product)
-                        .where(Product.id == product_id)
-                        .where(Product.company_id == company_id)
-                        .where(Product.branch_id == branch_id)
-                    ).first()
-                    if product_row:
-                        product_row.stock = total_stock
-                        session.add(product_row)
-
-            if products_recalc_batches:
-                for product_id in (
-                    products_recalc_batches - products_recalc_variants
-                ):
-                    total_query = (
-                        select(sqlalchemy.func.coalesce(sqlalchemy.func.sum(ProductBatch.stock), 0))
-                        .where(ProductBatch.product_id == product_id)
-                        .where(ProductBatch.product_variant_id.is_(None))
-                        .where(ProductBatch.company_id == company_id)
-                        .where(ProductBatch.branch_id == branch_id)
-                    )
-                    total_row = session.exec(total_query).first()
-                    if total_row is None:
-                        total_stock = 0
-                    elif isinstance(total_row, tuple):
-                        total_stock = total_row[0]
-                    else:
-                        total_stock = total_row
-                    product_row = session.exec(
-                        select(Product)
-                        .where(Product.id == product_id)
-                        .where(Product.company_id == company_id)
-                        .where(Product.branch_id == branch_id)
-                    ).first()
-                    if product_row:
-                        product_row.stock = total_stock
-                        session.add(product_row)
-            session.commit()
+                session.commit()
+            except Exception:
+                session.rollback()
+                logger.exception("Error al anular venta #%s", sale_db_id)
+                return rx.toast(
+                    "Error al anular la venta. Intente nuevamente.",
+                    duration=4000,
+                )
 
         self._cashbox_update_trigger += 1
         self._refresh_cashbox_caches()
@@ -3026,33 +2995,41 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         user_id = self.current_user.get("id")
         if user_id:
             with rx.session() as session:
-                # Cerrar sesion
-                cashbox_session = session.exec(
-                    select(CashboxSessionModel)
-                    .where(CashboxSessionModel.user_id == user_id)
-                    .where(CashboxSessionModel.company_id == company_id)
-                    .where(CashboxSessionModel.branch_id == branch_id)
-                    .where(CashboxSessionModel.is_open == True)
-                ).first()
+                try:
+                    # Cerrar sesion
+                    cashbox_session = session.exec(
+                        select(CashboxSessionModel)
+                        .where(CashboxSessionModel.user_id == user_id)
+                        .where(CashboxSessionModel.company_id == company_id)
+                        .where(CashboxSessionModel.branch_id == branch_id)
+                        .where(CashboxSessionModel.is_open == True)
+                    ).first()
 
-                if cashbox_session:
-                    cashbox_session.is_open = False
-                    cashbox_session.closing_time = self._event_timestamp()
-                    cashbox_session.closing_amount = closing_total
-                    session.add(cashbox_session)
+                    if cashbox_session:
+                        cashbox_session.is_open = False
+                        cashbox_session.closing_time = self._event_timestamp()
+                        cashbox_session.closing_amount = closing_total
+                        session.add(cashbox_session)
 
-                # Crear log
-                log = CashboxLogModel(
-                    company_id=company_id,
-                    branch_id=branch_id,
-                    user_id=user_id,
-                    action="cierre",
-                    amount=closing_total,
-                    notes=f"Cierre de caja {date}",
-                    timestamp=self._event_timestamp()
-                )
-                session.add(log)
-                session.commit()
+                    # Crear log
+                    log = CashboxLogModel(
+                        company_id=company_id,
+                        branch_id=branch_id,
+                        user_id=user_id,
+                        action="cierre",
+                        amount=closing_total,
+                        notes=f"Cierre de caja {date}",
+                        timestamp=self._event_timestamp()
+                    )
+                    session.add(log)
+                    session.commit()
+                except Exception:
+                    session.rollback()
+                    logger.exception("Error al cerrar caja para usuario %s", user_id)
+                    return rx.toast(
+                        "Error al cerrar la caja. Intente nuevamente.",
+                        duration=4000,
+                    )
 
         receipt_width = self._receipt_width()
         paper_width_mm = self._receipt_paper_mm()
@@ -3265,13 +3242,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         "payment_label": method_label,
                         "payment_details": payment_detail,
                         "concept": concept,
-                        "amount": self._round_currency(float(log.amount or 0)),
+                        "amount": self._round_currency(log.amount or 0),
                         "total": log.amount,
                         "is_deleted": False,
                         "payment_breakdown": [
                             {
                                 "label": method_label,
-                                "amount": self._round_currency(float(log.amount or 0)),
+                                "amount": self._round_currency(log.amount or 0),
                             }
                         ],
                         "payment_kind": "",
@@ -3319,7 +3296,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 {
                     "method": label,
                     "count": int(count or 0),
-                    "total": self._round_currency(float(amount or 0)),
+                    "total": self._round_currency(amount or 0),
                 }
             )
         summary.sort(key=lambda item: item.get("total", 0), reverse=True)

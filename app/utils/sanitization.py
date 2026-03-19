@@ -10,6 +10,8 @@ import html
 import re
 from typing import Any
 
+from app.constants import NAME_MAX_LENGTH, NOTES_MAX_LENGTH, REASON_MAX_LENGTH
+
 
 def sanitize_text(value: Any, max_length: int = 500) -> str:
     """
@@ -70,12 +72,12 @@ def sanitize_notes(value: Any) -> str:
     Retorna:
         String sanitizado
     """
-    return sanitize_text(value, max_length=250)
+    return sanitize_text(value, max_length=NOTES_MAX_LENGTH)
 
 
 def sanitize_notes_preserve_spaces(value: Any) -> str:
     """Sanitiza notas sin eliminar espacios al final."""
-    return sanitize_text_preserve_spaces(value, max_length=250)
+    return sanitize_text_preserve_spaces(value, max_length=NOTES_MAX_LENGTH)
 
 
 def sanitize_name(value: Any) -> str:
@@ -90,7 +92,7 @@ def sanitize_name(value: Any) -> str:
     Retorna:
         String sanitizado
     """
-    return sanitize_text(value, max_length=100)
+    return sanitize_text(value, max_length=NAME_MAX_LENGTH)
 
 
 def sanitize_phone(value: Any) -> str:
@@ -171,12 +173,12 @@ def sanitize_reason(value: Any) -> str:
     Retorna:
         String sanitizado
     """
-    return sanitize_text(value, max_length=200)
+    return sanitize_text(value, max_length=REASON_MAX_LENGTH)
 
 
 def sanitize_reason_preserve_spaces(value: Any) -> str:
     """Sanitiza razones sin eliminar espacios al final (para inputs en vivo)."""
-    return sanitize_text_preserve_spaces(value, max_length=200)
+    return sanitize_text_preserve_spaces(value, max_length=REASON_MAX_LENGTH)
 
 
 def is_valid_phone(phone: str, country_code: str = "PE") -> bool:
@@ -243,4 +245,37 @@ def is_valid_dni(dni: str, country_code: str = "PE") -> bool:
         True si es un formato válido
     """
     return is_valid_personal_id(dni, country_code)
+
+
+# ── SQL LIKE pattern safety ──
+
+def escape_like(pattern: str) -> str:
+    """Escapa caracteres wildcard de SQL LIKE para búsquedas seguras.
+
+    Previene LIKE injection donde un usuario puede enviar ``%`` o ``_``
+    como parte de su búsqueda para ampliar resultados más allá de lo
+    esperado (information disclosure).
+
+    Uso::
+
+        from app.utils.sanitization import escape_like
+
+        term = escape_like(user_input)
+        query = query.where(Product.description.ilike(f"%{term}%"))
+
+    Nota: SQLAlchemy ya usa ``\\`` como carácter de escape por defecto
+    en MySQL, por lo que no se necesita pasar ``escape="\\\\"`` explícitamente.
+
+    Parámetros:
+        pattern: Texto del usuario a incluir en un LIKE/ILIKE
+
+    Retorna:
+        Texto con ``%``, ``_`` y ``\\`` escapados
+    """
+    return (
+        pattern
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
 

@@ -30,6 +30,18 @@ class Product(rx.Model, table=True):
             "category",
             "description",
         ),
+        sqlalchemy.Index(
+            "ix_product_tenant_category",
+            "company_id",
+            "branch_id",
+            "category",
+        ),
+        sqlalchemy.Index(
+            "ix_product_tenant_barcode",
+            "company_id",
+            "branch_id",
+            "barcode",
+        ),
     )
 
     barcode: str = Field(index=True, nullable=False)
@@ -84,6 +96,12 @@ class ProductVariant(rx.Model, table=True):
             "sku",
             name="uq_productvariant_company_branch_sku",
         ),
+        sqlalchemy.Index(
+            "ix_productvariant_tenant_product",
+            "company_id",
+            "branch_id",
+            "product_id",
+        ),
     )
 
     product_id: int = Field(foreign_key="product.id", index=True)
@@ -123,21 +141,36 @@ class ProductBatch(rx.Model, table=True):
             "batch_number",
             name="uq_productbatch_company_branch_product_batch",
         ),
+        sqlalchemy.Index(
+            "ix_productbatch_tenant_variant",
+            "company_id",
+            "branch_id",
+            "product_variant_id",
+        ),
+        sqlalchemy.Index(
+            "ix_productbatch_tenant_product",
+            "company_id",
+            "branch_id",
+            "product_id",
+        ),
     )
 
     batch_number: str = Field(index=True, nullable=False)
     expiration_date: Optional[datetime] = Field(
         default=None,
-        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.DateTime(timezone=False), index=True
+        ),
     )
     stock: Decimal = Field(
         default=Decimal("0.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
     )
-    product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    product_id: Optional[int] = Field(default=None, foreign_key="product.id", index=True)
     product_variant_id: Optional[int] = Field(
         default=None,
         foreign_key="productvariant.id",
+        index=True,
     )
     company_id: int = Field(
         foreign_key="company.id",
@@ -266,18 +299,35 @@ class Category(rx.Model, table=True):
 class StockMovement(rx.Model, table=True):
     """Movimientos de stock (ingresos, ajustes)."""
 
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_stockmovement_tenant_timestamp",
+            "company_id",
+            "branch_id",
+            "timestamp",
+        ),
+        sqlalchemy.Index(
+            "ix_stockmovement_tenant_product",
+            "company_id",
+            "branch_id",
+            "product_id",
+        ),
+    )
+
     timestamp: datetime = Field(
         default_factory=utc_now_naive,
-        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.DateTime(timezone=False), index=True
+        ),
     )
-    type: str = Field(nullable=False)
+    type: str = Field(nullable=False, index=True)
     quantity: Decimal = Field(
         default=Decimal("0.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
     )
     description: str = Field(default="")
 
-    product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    product_id: Optional[int] = Field(default=None, foreign_key="product.id", index=True)
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     company_id: int = Field(
         foreign_key="company.id",

@@ -23,6 +23,7 @@ Clases:
     CuentasState: Estado principal del módulo de cobranzas
 """
 import io
+import logging
 from decimal import Decimal
 import datetime
 
@@ -49,6 +50,8 @@ from app.utils.exports import (
     WARNING_FILL,
 )
 from .mixin_state import MixinState
+
+logger = logging.getLogger(__name__)
 
 
 class CuentasState(MixinState):
@@ -655,13 +658,13 @@ class CuentasState(MixinState):
         sheet.cell(row=row, column=2, value=overdue_count)
         row += 1
         sheet.cell(row=row, column=1, value=f"Total comprometido ({currency_label}):")
-        sheet.cell(row=row, column=2, value=float(total_amount)).number_format = currency_format
+        sheet.cell(row=row, column=2, value=total_amount).number_format = currency_format
         row += 1
         sheet.cell(row=row, column=1, value=f"Total cobrado ({currency_label}):")
-        sheet.cell(row=row, column=2, value=float(total_paid)).number_format = currency_format
+        sheet.cell(row=row, column=2, value=total_paid).number_format = currency_format
         row += 1
         sheet.cell(row=row, column=1, value=f"Saldo pendiente ({currency_label}):")
-        sheet.cell(row=row, column=2, value=float(total_pending)).number_format = currency_format
+        sheet.cell(row=row, column=2, value=total_pending).number_format = currency_format
         row += 2
 
         headers = [
@@ -903,7 +906,16 @@ class CuentasState(MixinState):
                     await session.commit()
                 except Exception as exc:
                     await session.rollback()
-                    self.add_notification(str(exc), "error")
+                    logger.exception(
+                        "pay_installment failed | company=%s installment=%s amount=%s",
+                        company_id,
+                        self.selected_installment_id,
+                        amount,
+                    )
+                    # FIX 40a: generic message — details in server log
+                    self.add_notification(
+                        "Error al registrar el pago. Intente nuevamente.", "error"
+                    )
                     return
 
                 client_id = None

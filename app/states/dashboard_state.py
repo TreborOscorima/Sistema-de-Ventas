@@ -7,12 +7,15 @@ Proporciona:
 - Datos para gráficos
 - Alertas del sistema
 """
+import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
 
 import reflex as rx
 from sqlmodel import select, func
 from sqlalchemy import and_
+
+logger = logging.getLogger(__name__)
 
 from app.models import (
     Sale,
@@ -170,8 +173,8 @@ class DashboardState(MixinState):
 
         try:
             self._load_dashboard_data()
-        except Exception as e:
-            print(f"Error loading dashboard: {e}")
+        except Exception:
+            logger.exception("load_dashboard failed")
         finally:
             self.dashboard_loading = False
 
@@ -187,8 +190,8 @@ class DashboardState(MixinState):
             self.dashboard_loading = True
             try:
                 self._load_dashboard_data()
-            except Exception as e:
-                print(f"Error loading dashboard: {e}")
+            except Exception:
+                logger.exception("load_dashboard_background failed")
             finally:
                 self.dashboard_loading = False
 

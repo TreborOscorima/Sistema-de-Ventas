@@ -139,7 +139,10 @@ def is_rate_limited(
     """
     key = _build_key(username, ip_address)
     if not key:
-        return False
+        # Fail-closed: sin identificador válido, bloquear por seguridad.
+        # Un username vacío no debería llegar aquí — indica un bug en el caller.
+        logger.warning("is_rate_limited llamado con username vacío — bloqueando por seguridad.")
+        return True
 
     redis_client = _get_redis()
     if redis_client is None and _strict_rate_limit_backend():
