@@ -1,374 +1,514 @@
-# 📘 TUWAYKIAPP: Sistema Integral de Gestión (ERP/POS)
+# TUWAYKIAPP: Sistema Integral de Gestion (ERP/POS)
 
-**Versión:** 2.0 (Stable - MySQL Persistence)  
-**Tecnología:** Python / Reflex / MySQL  
+**Version:** 3.0 (Multi-Country Electronic Billing)
+**Tecnologia:** Python / Reflex / MySQL / Docker
 **Autor:** Trebor Oscorima
 
 ---
 
-## 1. 🚀 Visión General
+## 1. Vision General
 
-**TUWAYKIAPP** es una solución tecnológica integral de gestión empresarial (ERP) y Punto de Venta (POS) diseñada para comercios y centros deportivos.
+**TUWAYKIAPP** es una plataforma SaaS multi-tenant de gestion empresarial (ERP) y Punto de Venta (POS) disenada para comercios, PYMES y centros deportivos en Latinoamerica.
 
-Esta versión **v2.0** marca un hito en la arquitectura del sistema al implementar una capa de persistencia robusta con **MySQL**, eliminando la volatilidad de los datos en memoria. El sistema garantiza la integridad transaccional de ventas, inventarios, cajas y reservas, permitiendo un despliegue seguro en entornos de producción local.
+La version **v3.0** incorpora **Facturacion Electronica** para Peru (SUNAT/Nubefact) y Argentina (AFIP), convirtiendo al sistema en una solucion fiscal completa lista para produccion.
 
-### 🌟 Capacidades Principales
+### Capacidades Principales
 
-*   **Persistencia Total:** Almacenamiento seguro en base de datos relacional para todos los módulos.
-*   **Punto de Venta (POS):** Procesamiento de ventas con múltiples métodos de pago, control de stock en tiempo real y emisión de comprobantes térmicos estandarizados.
-*   **Gestión Financiera:** Control estricto de sesiones de caja (Apertura/Cierre), auditoría de movimientos y estadísticas detalladas por método de pago.
-*   **Compras y Proveedores:** Registro de documentos de compra, proveedores y trazabilidad de costos.
-*   **Clientes y Cuentas Corrientes:** Gestión de clientes, límites de crédito, cuotas y cobranza.
-*   **Reportes y Exportación:** Reportes consolidados y exportación a Excel por módulo.
-*   **Gestión de Servicios:** Módulo especializado para alquiler de canchas deportivas con agenda visual, control de estados (Reserva -> Adelanto -> Pago) y emisión de constancias.
-*   **Configuración Dinámica:** Gestión de monedas, unidades de medida y métodos de pago directamente desde la interfaz.
-*   **Seguridad RBAC:** Control de acceso basado en roles y privilegios granulares.
+* **SaaS Multi-tenant:** Aislamiento por empresa y sucursal con RBAC granular.
+* **Punto de Venta (POS):** Ventas rapidas con codigos de barras, pagos mixtos y emision de comprobantes.
+* **Facturacion Electronica:** Emision de Facturas, Boletas y Notas de Credito ante SUNAT (Peru) y AFIP (Argentina).
+* **Gestion Financiera:** Sesiones de caja, arqueo automatico y auditoria de movimientos.
+* **Inventario Avanzado:** Variantes (talla/color), lotes con vencimiento y ajuste fisico por SKU.
+* **Compras y Proveedores:** Documentos de compra, trazabilidad de costos y gestion de proveedores.
+* **Clientes y Creditos:** Limites de credito, cuotas, cobranza y cuentas corrientes.
+* **Servicios y Reservas:** Agenda visual para canchas deportivas con ciclo completo de pago.
+* **Reportes y Exportacion:** Consolidados por periodo con descarga Excel/PDF.
+* **Owner Backoffice:** Panel de administracion de plataforma independiente para gestion de empresas, planes y billing.
+* **Despliegue Docker:** Arquitectura de 5 contenedores con Nginx Proxy Manager.
 
-### Novedades recientes (2026)
+### Novedades v3.0 (2026)
 
-*   **Trazabilidad de caja:** `CashboxLog` vincula cada movimiento con su venta (`sale_id`) y marca anulaciones con `is_voided` para excluirlas de reportes sin perder auditoría.
-*   **Ventas más precisas:** prioridad por código de barras ante descripciones duplicadas.
-*   **Créditos más seguros:** bloqueo de concurrencia y validación de sobrepago en cuotas.
-*   **Reservas con pagos mixtos:** desglose real por método y registro consistente en caja.
-*   **Permisos reforzados:** altas/bajas de categorías protegidas por `edit_inventario`.
-*   **Variantes y lotes en ingresos:** soporte de Tallas/Colores y Lotes/Vencimientos en compras con UI dinámica.
-*   **Exportes por ítem:** reportes de Historial y Detalle de Transacciones con una fila por ítem vendido.
-*   **Inventario por SKU:** exportación de inventario valorizado con desglose por variantes.
-*   **Caja más legible:** listas de productos en exportes con saltos de línea y ajuste de texto.
-*   **QA automatizado:** tests con pytest + CI en GitHub Actions.
+* **Facturacion Electronica Peru:** Integracion completa con Nubefact/SUNAT (REST API).
+* **Facturacion Electronica Argentina:** WSAA + WSFEv1 SOAP con certificados digitales.
+* **Validadores fiscales:** RUC con checksum SUNAT, CUIT con digito verificador Ley 20.594.
+* **Encriptacion de credenciales:** Fernet + PBKDF2 (600k iteraciones) para certificados y tokens.
+* **Worker de reintentos:** Procesamiento automatico de documentos fiscales fallidos.
+* **Consulta RUC/DNI:** Integracion con APIs de consulta de documentos (apis.net.pe).
+* **Pagina Documentos Fiscales:** Listado con filtros, paginacion y modal de detalle.
+* **Concepto AFIP configurable:** Productos (1), Servicios (2) o Ambos (3).
+* **598 tests automatizados** con pytest (validadores fiscales, AFIP, billing, seguridad).
 
----
+### Novedades v2.x (2026)
 
-## 2. 🏗️ Arquitectura del Sistema
-
-El proyecto sigue una arquitectura **Full-Stack en Python** utilizando el framework **Reflex**, que compila el frontend a React y gestiona el backend en Python puro.
-
-### 🛠️ Stack Tecnológico
-
-*   **Frontend/Backend:** Reflex (Python)
-*   **Base de Datos:** MySQL 8.0
-*   **ORM:** SQLModel (SQLAlchemy)
-*   **Migraciones:** Alembic
-*   **Estilos:** Tailwind CSS
-*   **Reportes:** Generación de HTML/JS para impresión térmica.
-
-### 📊 Modelo de Datos (E-R)
-
-La estructura de datos se define en `app/models/` y se gestiona mediante migraciones automáticas:
-
-| Módulo | Entidades Principales | Descripción |
-| :--- | :--- | :--- |
-| **Auth/RBAC** | `User`, `Role`, `Permission` | Usuarios, roles y permisos con control granular. |
-| **Clientes & Crédito** | `Client`, `SaleInstallment` | Clientes, límites de crédito, cuotas y estado de deuda. |
-| **Inventario** | `Product`, `ProductVariant`, `ProductBatch`, `Category`, `StockMovement`, `Unit` | Catálogo, variantes, lotes, movimientos y unidades de medida. |
-| **Compras/Proveedores** | `Supplier`, `Purchase`, `PurchaseItem` | Documentos de compra y relación con proveedores. |
-| **Ventas & Caja** | `Sale`, `SaleItem`, `SalePayment`, `CashboxSession`, `CashboxLog` | Ventas, pagos y auditoría de caja. |
-| **Servicios** | `FieldReservation`, `FieldPrice` | Reservas de canchas y tarifas. |
-| **Configuración** | `Currency`, `PaymentMethod`, `CompanySettings` | Monedas, métodos de pago y datos del negocio. |
+* **Trazabilidad de caja:** `CashboxLog` vincula movimientos con ventas y marca anulaciones.
+* **Prioridad por codigo de barras** ante descripciones duplicadas.
+* **Creditos seguros:** bloqueo de concurrencia y validacion de sobrepago en cuotas.
+* **Reservas con pagos mixtos:** desglose real por metodo y registro consistente en caja.
+* **Variantes y lotes en ingresos:** Tallas/Colores y Lotes/Vencimientos con UI dinamica.
+* **Normalizacion horaria:** Persistencia UTC + zona IANA del negocio para vistas.
+* **Auditoria de seguridad integral:** 360 grados con puntuacion por area.
 
 ---
 
-## 3. 📦 Estructura del Proyecto
+## 2. Arquitectura del Sistema
+
+### Stack Tecnologico
+
+| Capa | Tecnologia |
+|:-----|:-----------|
+| **Frontend** | React (compilado por Reflex desde Python) |
+| **Backend** | Python 3.11 + Reflex 0.8.26 |
+| **Base de Datos** | MySQL 8.0 + SQLModel/SQLAlchemy 2.0 |
+| **Migraciones** | Alembic 1.18 |
+| **Cache / Rate Limiting** | Redis 7 |
+| **HTTP Client** | httpx (async) para APIs fiscales |
+| **Criptografia** | cryptography (Fernet + PBKDF2) |
+| **Autenticacion** | JWT (PyJWT) + bcrypt |
+| **Estilos** | Tailwind CSS v3 |
+| **Reportes** | ReportLab (PDF) + OpenPyXL (Excel) |
+| **Testing** | pytest + pytest-asyncio + pytest-mock |
+| **Despliegue** | Docker Compose + Nginx Proxy Manager |
+| **ASGI Server** | Granian |
+
+### Arquitectura Multi-Tenant
+
+```
+Landing (tuwayki.app)     App (app.tuwayki.app)     Owner (admin.tuwayki.app)
+       |                         |                          |
+       v                         v                          v
+  [Nginx Proxy Manager - SSL/TLS termination]
+       |                         |                          |
+  tuwayki_landing           tuwayki_sys              tuwayki_admin
+  APP_SURFACE=landing       APP_SURFACE=app          APP_SURFACE=owner
+       |                         |                          |
+       +------------+------------+------------+-------------+
+                    |                         |
+              [MySQL 8.0]               [Redis 7]
+              tenant-scoped             rate limiting
+              company_id +              session cache
+              branch_id
+```
+
+### Patron Strategy — Facturacion Electronica
+
+```
+BillingStrategy (ABC)
+ |-- NoOpBillingStrategy      -> Paises sin billing / billing deshabilitado
+ |-- SUNATBillingStrategy     -> Peru via Nubefact REST API
+ +-- AFIPBillingStrategy      -> Argentina via WSAA + WSFEv1 SOAP
+
+BillingFactory.get_strategy(country_code) -> instancia concreta
+
+emit_fiscal_document() -> orquestacion:
+  1. Valida cuota mensual (rate limit por plan)
+  2. Asigna numeracion atomica (SELECT ... FOR UPDATE)
+  3. Invoca la strategy en background
+  4. Persiste FiscalDocument con resultado (authorized/error)
+```
+
+### Modelo de Datos
+
+| Modulo | Entidades | Descripcion |
+|:-------|:----------|:------------|
+| **Auth/RBAC** | `User`, `Role`, `Permission`, `RolePermission`, `UserBranch` | Usuarios, roles, permisos granulares y asignacion multi-sucursal. |
+| **Empresa** | `Company`, `Branch` | Empresas y sucursales con aislamiento de datos. |
+| **Clientes** | `Client`, `SaleInstallment` | Clientes, limites de credito y cuotas. |
+| **Inventario** | `Product`, `ProductVariant`, `ProductBatch`, `ProductKit`, `Category`, `StockMovement`, `Unit`, `PriceTier` | Catalogo, variantes, lotes, kits y movimientos. |
+| **Compras** | `Supplier`, `Purchase`, `PurchaseItem` | Documentos de compra y proveedores. |
+| **Ventas** | `Sale`, `SaleItem`, `SalePayment`, `CashboxSession`, `CashboxLog` | Ventas, pagos mixtos y auditoria de caja. |
+| **Servicios** | `FieldReservation`, `FieldPrice` | Reservas deportivas y tarifas. |
+| **Configuracion** | `Currency`, `PaymentMethod`, `CompanySettings` | Monedas, metodos de pago y datos del negocio. |
+| **Billing** | `CompanyBillingConfig`, `FiscalDocument`, `DocumentLookupCache` | Config fiscal por empresa, documentos emitidos y cache de consultas RUC/DNI. |
+| **Auditoria** | `OwnerAuditLog` | Log de acciones del Owner backoffice. |
+
+---
+
+## 3. Estructura del Proyecto
 
 ```text
 Sistema-de-Ventas/
-├── .github/             # Workflows de CI
-│   └── workflows/       # GitHub Actions
-├── alembic/             # Historial de migraciones de base de datos
-├── app/
-│   ├── components/      # Componentes UI reutilizables (Sidebar, Modales, Tablas)
-│   ├── models/          # Definición de tablas y modelos SQLModel
-│   ├── pages/           # Vistas de la aplicación (Frontend)
-│   ├── schemas/         # DTOs y validaciones
-│   ├── services/        # Servicios de negocio
-│   ├── states/          # Lógica de negocio y gestión de estado (Backend)
-│   │   ├── auth_state.py       # Autenticación y RBAC
-│   │   ├── dashboard_state.py  # KPIs y alertas
-│   │   ├── clientes_state.py   # Clientes
-│   │   ├── cuentas_state.py    # Cuentas corrientes / cuotas
-│   │   ├── ingreso_state.py    # Ingreso de productos
-│   │   ├── purchases_state.py  # Compras
-│   │   ├── suppliers_state.py  # Proveedores
-│   │   ├── inventory_state.py  # Inventario
-│   │   ├── cash_state.py       # Caja y movimientos
-│   │   ├── historial_state.py  # Historial de ventas
-│   │   ├── services_state.py   # Reservas y servicios
-│   │   ├── report_state.py     # Reportes
-│   │   ├── venta_state.py      # POS e impresión
-│   │   ├── ui_state.py         # UI global
-│   │   ├── root_state.py       # Estado raíz
-│   │   ├── mixin_state.py      # Mixins compartidos
-│   │   ├── cash/               # Subestados de caja
-│   │   └── venta/              # Subestados de venta
-│   ├── utils/           # Utilidades (Formatos, Fechas, Exports)
-│   ├── enums.py         # Enums del dominio
-│   └── app.py           # Punto de entrada
-├── assets/              # Recursos estáticos
-├── tests/               # Tests automatizados (pytest)
-├── rxconfig.py          # Configuración del entorno y conexión BD
-└── requirements.txt     # Dependencias
+|-- .github/workflows/       # CI con GitHub Actions
+|-- alembic/                 # Migraciones de base de datos
+|-- app/
+|   |-- components/          # UI reutilizable (Sidebar, Modales, Tablas)
+|   |-- models/              # Modelos SQLModel (tablas MySQL)
+|   |   |-- billing.py       # CompanyBillingConfig, FiscalDocument
+|   |   |-- lookup_cache.py  # DocumentLookupCache
+|   |   +-- ...              # auth, sales, inventory, company, etc.
+|   |-- pages/               # Vistas de la aplicacion
+|   |   |-- documentos_fiscales.py  # Listado de documentos fiscales
+|   |   +-- ...              # dashboard, venta, inventario, etc.
+|   |-- services/            # Servicios de negocio
+|   |   |-- billing_service.py           # Strategy Pattern (SUNAT/AFIP/NoOp)
+|   |   |-- afip_wsaa.py                 # WSAA: autenticacion CMS/PKCS#7
+|   |   |-- afip_wsfe.py                 # WSFEv1: FECAESolicitar SOAP
+|   |   |-- document_lookup_service.py   # Consulta RUC/DNI/CUIT
+|   |   +-- ...              # sale_service, report_service, etc.
+|   |-- states/              # Logica de negocio (Reflex State)
+|   |   |-- billing_state.py    # Config fiscal del usuario
+|   |   |-- owner_state.py      # Backoffice del Owner
+|   |   |-- venta_state.py      # POS + seleccion Boleta/Factura
+|   |   +-- ...                 # auth, dashboard, inventory, etc.
+|   |-- tasks/               # Workers en background
+|   |   +-- fiscal_retry_worker.py  # Reintentos de docs fiscales
+|   |-- utils/               # Utilidades
+|   |   |-- crypto.py            # Encriptacion Fernet + PBKDF2
+|   |   |-- fiscal_validators.py # Validadores RUC/CUIT/URL/Environment
+|   |   |-- db_seeds.py          # Datos iniciales idempotentes
+|   |   +-- ...                  # timezone, tenant, rate_limit, etc.
+|   |-- enums.py             # Enums: FiscalStatus, ReceiptType, etc.
+|   +-- app.py               # Punto de entrada y rutas
+|-- tests/                   # 598 tests automatizados
+|   |-- test_billing.py          # Tests de billing service
+|   |-- test_afip.py             # Tests de AFIP (WSAA + WSFEv1)
+|   |-- test_fiscal_validators.py # Tests de validadores fiscales
+|   |-- test_security_fixes.py   # Tests de seguridad
+|   +-- ...                      # sale_service, credit, etc.
+|-- docker-compose.yml       # Orquestacion de 5 contenedores
+|-- Dockerfile               # Imagen Python 3.11-slim
+|-- rxconfig.py              # Configuracion Reflex + DB
+|-- requirements.txt         # 62 dependencias Python
++-- .env.example             # Template de variables de entorno
 ```
 
 ---
 
-## 4. ⚙️ Guía de Instalación y Despliegue
+## 4. Guia de Instalacion
 
 ### Prerrequisitos
-*   Python 3.10 o superior.
-*   Servidor MySQL 8.0 instalado y en ejecución.
-*   Git.
 
-### Pasos de Instalación
+* Python 3.11 o superior
+* MySQL 8.0
+* Redis 7 (produccion) o memoria (desarrollo)
+* Git
+* Docker y Docker Compose (para despliegue en produccion)
 
-1.  **Clonar el repositorio:**
-    ```bash
-    git clone https://github.com/TreborOscorima/Sistema-de-Ventas.git
-    cd Sistema-de-Ventas
-    ```
+### Instalacion Local (Desarrollo)
 
-2.  **Configurar Entorno Virtual:**
-    ```bash
-    python -m venv .venv
-    # Windows:
-    .venv\Scripts\activate
-    # Linux/Mac:
-    source .venv/bin/activate
-    ```
+```bash
+# 1. Clonar repositorio
+git clone https://github.com/TreborOscorima/Sistema-de-Ventas.git
+cd Sistema-de-Ventas
 
-3.  **Instalar Dependencias:**
-    ```bash
-    pip install -r requirements.txt
-    ```
+# 2. Entorno virtual
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+# Linux/Mac:
+source .venv/bin/activate
 
-4.  **Configurar Base de Datos:**
-    *   Crea una base de datos vacía en MySQL llamada `sistema_ventas`.
-    *   Edita `rxconfig.py` con tus credenciales:
-        ```python
-        db_url="mysql+pymysql://USUARIO:PASSWORD@localhost:3306/sistema_ventas"
-        ```
+# 3. Dependencias
+pip install -r requirements.txt
 
-5.  **Ejecutar Migraciones (Inicialización):**
-    Construye las tablas en la base de datos:
-    ```bash
-    reflex db init
-    reflex db makemigrations --message "deploy_inicial"
-    reflex db migrate
-    ```
+# 4. Variables de entorno
+cp .env.example .env
+# Editar .env con credenciales de MySQL y AUTH_SECRET_KEY
 
-6.  **Iniciar el Sistema:**
-    ```bash
-    reflex run
-    ```
-    Accede a: `http://localhost:3000`
+# 5. Base de datos
+# Crear BD vacia: CREATE DATABASE sistema_ventas;
+reflex db init
+reflex db makemigrations --message "deploy_inicial"
+reflex db migrate
 
-> **Nota:** Al primer inicio, el sistema poblará automáticamente las tablas de configuración (monedas, unidades, métodos de pago) gracias al método `ensure_default_data`.
-
-### Tracking de Marketing (Landing)
-
-La landing pública se sirve en `/` cuando `APP_SURFACE=landing` (dominio `tuwayki.app`) o en `/home` cuando `APP_SURFACE=all` (modo desarrollo).
-
-Para habilitar analítica productiva en la landing:
-
-```env
-GA4_MEASUREMENT_ID=G-XXXXXXXXXX
-META_PIXEL_ID=123456789012345
+# 6. Iniciar
+reflex run
+# Acceder a http://localhost:3000
 ```
 
-Eventos instrumentados actualmente:
-- `view_landing` (una vez por sesión)
-- `click_trial_cta` (clics en CTAs clave de prueba)
+### Despliegue con Docker (Produccion)
 
-Si no configuras esos IDs, la landing sigue funcionando y guarda eventos localmente para depuración.
-
-> **Nota de consentimiento:** GA4 y Meta Pixel solo se cargan cuando el visitante acepta cookies de analítica a través del banner de consentimiento.
-
----
-
-## 5. 📖 Manual de Módulos
-
-### 📊 Dashboard
-*   **KPIs en tiempo real:** ventas, caja, reservas y crédito.
-*   **Alertas operativas:** stock bajo, cuotas vencidas y caja abierta prolongada.
-*   **Gráficos y ranking:** tendencias por período y top productos.
-
-### 🛒 Punto de Venta (Ventas)
-*   **Interfaz Ágil:** Diseñada para registro rápido mediante códigos de barras o búsqueda manual.
-*   **Prioridad por código de barras:** evita colisiones cuando hay descripciones duplicadas.
-*   **Validación de Caja:** Impide realizar ventas si no existe una sesión de caja abierta.
-*   **Pagos Flexibles:** Soporta pagos mixtos (ej: parte efectivo, parte tarjeta) y registra el detalle exacto para el arqueo.
-*   **Impresión:** Generación automática de tickets de venta estandarizados.
-*   **Crédito controlado:** valida límites y evita sobrepagos en cuotas.
-
-### 📥 Ingreso de Productos
-*   **Documento de compra:** registro de ingreso con series/número y proveedor.
-*   **Ajuste de stock:** actualiza existencias y costos de manera controlada.
-*   **Detalle de ítems:** cantidades, unidad, precio de compra y venta.
-*   **Variantes y Lotes:** ingreso por Talla/Color o por Lote/Vencimiento según categoría.
-*   **Modo camaleónico:** el formulario se adapta automáticamente al tipo de producto escaneado.
-
-### 🧾 Compras y Proveedores
-*   **Registro de compras:** historial de documentos, búsqueda y filtros.
-*   **Gestión de proveedores:** alta/edición/baja con validaciones de RUC/CUIT.
-*   **Detalle de compras:** ver ítems y totales con moneda.
-
-### 📦 Inventario
-*   **Gestión Persistente:** CRUD completo de productos conectado directamente a MySQL.
-*   **Categorización:** Creación dinámica de categorías que persisten entre sesiones.
-*   **Permisos:** crear/eliminar categorías requiere privilegio `edit_inventario`.
-*   **Variantes por SKU:** stock y movimientos separados por Talla/Color.
-*   **Ajuste físico mejorado:** búsqueda por SKU o descripción con sugerencias de variantes.
-*   **Reportes:** Exportación de inventario valorizado a Excel con desglose por variantes.
-
-### 👥 Clientes
-*   **Gestión de clientes:** datos básicos, límites de crédito y validaciones.
-*   **Edición rápida:** actualización de datos desde la interfaz.
-
-### 💳 Cuentas Corrientes
-*   **Cuotas y pagos:** control de cuotas pendientes, pagadas y vencidas.
-*   **Cobranza:** registro de pagos parciales o totales por cuota.
-
-### 💵 Gestión de Caja e Historial
-*   **Sesiones:** Control estricto de turnos por usuario.
-*   **Arqueo:** Cierre de caja con cálculo automático de totales esperados vs. registrados.
-*   **Historial Detallado:** Consulta de movimientos históricos con desglose de ítems y estadísticas precisas por método de pago (Efectivo, Tarjeta, Yape/Plin).
-*   **Anulaciones seguras:** movimientos marcados como anulados y excluidos de totales/reportes.
-*   **Reimpresión:** Capacidad de reimprimir tickets de ventas pasadas.
-*   **Exportes legibles:** productos listados con saltos de línea y celdas con ajuste de texto.
-
-### 📈 Reportes
-*   **Reportes consolidados:** ingresos por método de pago, cierres de caja y ventas.
-*   **Detalle por ítem:** historial y transacciones con una fila por ítem vendido.
-*   **Inventario por variantes:** valorizado por SKU para análisis real de stock.
-*   **Exportación:** descarga en Excel según módulo con formatos legibles.
-
-### ⚽ Servicios (Reservas)
-*   **Agenda Visual:** Planificador interactivo para canchas deportivas.
-*   **Ciclo de Vida:** Controla el flujo completo: `Reserva` -> `Adelanto` -> `Pago Final`.
-*   **Constancias:** Emisión de "Constancia de Reserva" incluso para reservas sin pago inicial, con formato ticket profesional.
-*   **Integración Contable:** Los pagos de reservas se inyectan automáticamente en la caja activa.
-*   **Pagos mixtos:** desglose real por método y registro consistente en caja.
-
-### 🔧 Configuración
-*   **Panel Administrativo:** Permite gestionar usuarios, roles, monedas, unidades y métodos de pago sin intervención técnica.
-*   **Seguridad:** gestión de roles/privilegios con RBAC.
-
-### 🔐 Acceso y Seguridad
-*   **Login y cambio de contraseña:** flujo seguro de autenticación.
-*   **Bloqueo por sesión:** tokens versionados para invalidación controlada.
-
----
-
-## 6. Pruebas Automatizadas y CI
-
-### Tests locales
 ```bash
+# 1. Configurar variables de entorno
+cp .env.example .env
+# Editar .env con valores de produccion
+
+# 2. Levantar servicios
+docker-compose up -d
+
+# Servicios desplegados:
+# - tuwayki_mysql    (MySQL 8.0, puerto 3306)
+# - tuwayki_redis    (Redis 7, puerto 6379)
+# - tuwayki_landing  (Landing page, puerto 3000)
+# - tuwayki_sys      (Aplicacion SaaS, puerto 3000)
+# - tuwayki_admin    (Owner backoffice, puerto 3000)
+```
+
+### Variables de Entorno Principales
+
+```env
+# Base de Datos
+DB_USER=app
+DB_PASSWORD=secreto_seguro
+DB_HOST=tuwayki_mysql
+DB_PORT=3306
+DB_NAME=sistema_ventas
+
+# Seguridad (OBLIGATORIO en produccion)
+AUTH_SECRET_KEY=clave_minimo_32_caracteres_aleatoria
+OWNER_ADMIN_PASSWORD_HASH=$2b$12$...  # bcrypt hash
+
+# URLs publicas
+PUBLIC_API_URL=https://api.tuwayki.app
+PUBLIC_SITE_URL=https://tuwayki.app
+PUBLIC_APP_URL=https://app.tuwayki.app
+
+# Redis
+REDIS_URL=redis://tuwayki_redis:6379/0
+
+# Entorno
+ENV=prod
+```
+
+---
+
+## 5. Modulos del Sistema
+
+### Dashboard
+* KPIs en tiempo real: ventas, caja, reservas y credito.
+* Alertas operativas: stock bajo, cuotas vencidas, caja abierta prolongada.
+* Graficos de tendencia y ranking de productos.
+
+### Punto de Venta (POS)
+* Registro rapido con codigos de barras o busqueda manual.
+* Selector de comprobante: **Nota de Venta**, **Boleta** o **Factura**.
+* Pagos mixtos (efectivo + tarjeta + Yape/Plin/transferencia).
+* Emision automatica de documento fiscal al seleccionar Boleta o Factura.
+* Validacion de caja abierta antes de operar.
+* Impresion de tickets termicos estandarizados.
+
+### Facturacion Electronica
+* **Peru (SUNAT):** Emision via Nubefact REST API (Factura, Boleta, Nota de Credito).
+* **Argentina (AFIP):** Emision via WSAA + WSFEv1 SOAP (Factura A/B/C, NC, ND).
+* **Validaciones fiscales:** RUC (checksum SUNAT), CUIT (Ley 20.594), URL HTTPS.
+* **Concepto AFIP configurable:** Productos (1), Servicios (2), Ambos (3).
+* **Datos QR:** Generacion automatica (SUNAT pipe-separated, AFIP RG 4291/2018).
+* **Reintentos automaticos:** Worker con exponential backoff (max 3 intentos).
+* **Cuota mensual por plan:** trial=0, standard=500, professional=1000, enterprise=2000.
+* **Pagina Documentos Fiscales:** Listado con filtros por estado/tipo/fecha, paginacion y detalle.
+* **Credenciales encriptadas:** Certificados X.509 y tokens con Fernet + PBKDF2.
+
+### Ingreso de Productos
+* Documento de compra con series/numero y proveedor.
+* Variantes (Talla/Color) y Lotes (Vencimiento) con UI dinamica.
+* Ajuste automatico de stock y costos.
+
+### Compras y Proveedores
+* Historial de documentos con busqueda y filtros.
+* Gestion de proveedores con validacion RUC/CUIT.
+
+### Inventario
+* CRUD completo con categorizacion dinamica.
+* Variantes por SKU con stock separado por Talla/Color.
+* Ajuste fisico por SKU o descripcion.
+* Exportacion de inventario valorizado con desglose.
+
+### Clientes y Cuentas Corrientes
+* Gestion de clientes con limites de credito.
+* Cuotas pendientes, pagadas y vencidas.
+* Cobranza con pagos parciales o totales.
+
+### Gestion de Caja
+* Sesiones estrictas por usuario (apertura/cierre).
+* Arqueo automatico con totales esperados vs. registrados.
+* Movimientos con trazabilidad (sale_id + is_voided).
+
+### Historial de Ventas
+* Consulta de ventas con desglose de items.
+* Estadisticas por metodo de pago.
+* Reimpresion de tickets.
+* Exportacion Excel con una fila por item.
+
+### Reportes
+* Consolidados por periodo (dia/semana/mes).
+* Detalle por item y por variante.
+* Inventario valorizado por SKU.
+* Exportacion Excel con formatos legibles.
+
+### Servicios (Reservas)
+* Agenda visual para canchas deportivas.
+* Ciclo completo: Reserva -> Adelanto -> Pago Final.
+* Constancias de reserva con formato ticket.
+* Pagos mixtos integrados con caja.
+
+### Configuracion
+* Datos de empresa y sucursales.
+* Gestion de usuarios y roles (RBAC).
+* Monedas, unidades de medida y metodos de pago.
+* Facturacion electronica (datos fiscales del usuario).
+* Suscripcion y plan.
+
+### Owner Backoffice
+* Panel independiente para administracion de plataforma.
+* Gestion de empresas: planes, suscripciones, estados.
+* Configuracion tecnica de billing: ambiente, series, certificados, tokens.
+* Auditoria de acciones con log persistente.
+
+---
+
+## 6. Facturacion Electronica — Guia de Activacion
+
+### Peru (SUNAT/Nubefact)
+
+1. Registrarse en [nubefact.com](https://www.nubefact.com) y obtener URL + Token de API.
+2. En SUNAT, habilitar emision electronica y autorizar al OSE (Nubefact).
+3. En el **Owner Panel** > Billing: configurar URL, Token, series (F001/B001), ambiente.
+4. En **Configuracion > Facturacion**: ingresar RUC, razon social y direccion fiscal.
+5. Probar en `sandbox` antes de cambiar a `production`.
+
+### Argentina (AFIP)
+
+1. Obtener CUIT + Clave Fiscal Nivel 3 en [afip.gob.ar](https://www.afip.gob.ar).
+2. Adherir servicios WSAA y Facturacion Electronica (wsfe).
+3. Generar certificado digital: `openssl genrsa` + `openssl req` -> subir CSR a AFIP.
+4. Habilitar Punto de Venta electronico en AFIP.
+5. En el **Owner Panel** > Billing: configurar punto de venta, condicion IVA, concepto, pegar certificado + clave privada.
+6. En **Configuracion > Facturacion**: ingresar CUIT, razon social y direccion fiscal.
+7. Probar en `sandbox` (homologacion) antes de cambiar a `production`.
+
+### Worker de Reintentos
+
+```bash
+# Ejecucion manual
+python -m app.tasks.fiscal_retry_worker
+
+# Modo preview (sin ejecutar)
+python -m app.tasks.fiscal_retry_worker --dry-run
+
+# Cron cada 5 minutos (Linux)
+*/5 * * * * cd /path/to/app && .venv/bin/python -m app.tasks.fiscal_retry_worker
+```
+
+---
+
+## 7. Pruebas Automatizadas
+
+### Ejecutar tests
+
+```bash
+# Suite completa (598 tests)
 python -m pytest -q
+
+# Solo validadores fiscales
+python -m pytest tests/test_fiscal_validators.py -v
+
+# Solo AFIP
+python -m pytest tests/test_afip.py -v
+
+# Solo billing service
+python -m pytest tests/test_billing.py -v
+
+# Solo seguridad
+python -m pytest tests/test_security_fixes.py -v
 ```
 
-### Subconjuntos útiles
-```bash
-python -m pytest -q tests/test_sale_service.py tests/test_credit_service.py
-```
+### Cobertura por area
 
-### CI
-GitHub Actions ejecuta los tests en cada push/PR desde `.github/workflows/tests.yml`.
+| Area | Tests | Cobertura |
+|:-----|------:|:----------|
+| Validadores fiscales (RUC/CUIT/URL) | 35 | Checksum, prefijos, formatos |
+| AFIP (WSAA + WSFEv1) | 30 | Auth, XML, CAE, errores |
+| Billing service (Strategy) | 45+ | Quota, Nubefact, retry, QR |
+| Seguridad (tenant isolation) | 20+ | FOR UPDATE, info leakage, RBAC |
+| Ventas y creditos | 50+ | Flujos completos, concurrencia |
+| Otros modulos | 400+ | Inventario, caja, reportes |
+| **Total** | **598** | |
+
+### CI/CD
+
+GitHub Actions ejecuta la suite completa en cada push/PR via `.github/workflows/tests.yml`.
 
 ---
 
-## 7. 🔒 Seguridad y Deployment
+## 8. Seguridad
 
-### Documentación de Seguridad
+### Encriptacion de Credenciales Fiscales
 
-Para despliegue en producción, consulta la guía completa en:
+| Aspecto | Implementacion |
+|:--------|:---------------|
+| Algoritmo | Fernet (AES-128-CBC + HMAC-SHA256) |
+| Derivacion de clave | PBKDF2-HMAC-SHA256, 600,000 iteraciones |
+| Salt | 16 bytes aleatorios por credencial |
+| Almacenamiento | Columnas `Text` en MySQL (cifrado) |
+| Clave maestra | `AUTH_SECRET_KEY` (variable de entorno) |
+| Descifrado | Solo en memoria durante llamadas API |
 
-📄 **[docs/DEPLOYMENT_SECURITY.md](docs/DEPLOYMENT_SECURITY.md)**
+### Aislamiento Multi-Tenant
 
-Incluye:
-- Configuración de headers HTTP seguros (Nginx/Caddy)
-- Variables de entorno requeridas
-- Configuración SSL/TLS con Let's Encrypt
-- Rate limiting con Redis
-- Checklist de producción
+* Todas las queries filtradas por `company_id` + `branch_id`.
+* Numeracion fiscal atomica con `SELECT ... FOR UPDATE`.
+* Credenciales fiscales separadas por empresa.
+* Contexto de tenant validado en cada operacion.
 
-### Validación de Contraseñas
+### RBAC y Autenticacion
 
-Para activar validación robusta de contraseñas en producción, añade a `.env`:
+* JWT con versionado de tokens para invalidacion.
+* bcrypt para hash de contrasenas.
+* Rate limiting con Redis (fallback a memoria).
+* Sanitizacion XSS en inputs.
+* Validacion de contrasenas configurable (mayusculas, digitos, especiales).
 
-```env
-PASSWORD_REQUIRE_UPPERCASE=true
-PASSWORD_REQUIRE_DIGIT=true
-PASSWORD_REQUIRE_SPECIAL=true
+### Documentacion de Seguridad
+
+Para despliegue en produccion, consulta:
+* **[docs/DEPLOYMENT_SECURITY.md](docs/DEPLOYMENT_SECURITY.md)** — Headers HTTP, SSL/TLS, rate limiting, checklist.
+
+---
+
+## 9. Mantenimiento
+
+### Migraciones de Base de Datos
+
+```bash
+# Con Reflex
+reflex db makemigrations --message "descripcion_cambio"
+reflex db migrate
+
+# Con Alembic directo
+alembic upgrade head
 ```
 
 ### Monitoreo de Performance
-
-El sistema incluye utilidades para detectar queries lentas:
 
 ```python
 from app.utils.performance import query_timer
 
 async with query_timer("cargar_productos"):
     products = await session.exec(select(Product))
-# Automáticamente logea si excede 1 segundo
+# Logea automaticamente si excede 1 segundo
 ```
 
-Configurar umbrales en `.env`:
+### Tracking de Marketing (Landing)
+
 ```env
-SLOW_QUERY_THRESHOLD=1.0
-CRITICAL_QUERY_THRESHOLD=5.0
+GA4_MEASUREMENT_ID=G-XXXXXXXXXX
+META_PIXEL_ID=123456789012345
 ```
+
+Eventos: `view_landing`, `click_trial_cta`. Solo se cargan con consentimiento de cookies.
 
 ---
 
-## 8. Mantenimiento
+## 10. Auditoria de Codigo
 
-### Actualizaciones de Base de Datos
-Si se realizan cambios en `app/models/`, se debe actualizar el esquema:
-
-```bash
-reflex db makemigrations --message "descripcion_cambio"
-reflex db migrate
-```
-
-Si usas Alembic directamente:
-```bash
-alembic upgrade head
-```
-
----
-
-## 9. 📊 Auditoría de Código
-
-El sistema ha pasado una auditoría integral de código (360°) con los siguientes resultados:
-
-| Área | Puntuación | Estado |
+| Area | Puntuacion | Estado |
 |:-----|:----------:|:------:|
-| Seguridad | 85/100 | ✅ Robusto |
-| Base de Datos | 90/100 | ✅ Optimizado |
-| Backend/Estado | 88/100 | ✅ Limpio |
-| Frontend/UX | 85/100 | ✅ Consistente |
-| Arquitectura | 92/100 | ✅ Bien estructurado |
-| Testing | 75/100 | ✅ Mejorado |
-
-**Fortalezas clave:**
-- JWT con versionado de tokens para invalidación
-- Rate limiting (Redis/memoria)
-- RBAC granular con permisos por rol
-- Sanitización XSS en inputs
-- Tipos `Decimal` para precisión monetaria
-- Mixins para composición de estados
-
----
-© 2025 TUWAYKIAPP. Desarrollado con ❤️ usando Reflex.
+| Seguridad | 85/100 | Robusto |
+| Base de Datos | 90/100 | Optimizado |
+| Backend/Estado | 88/100 | Limpio |
+| Frontend/UX | 85/100 | Consistente |
+| Arquitectura | 92/100 | Bien estructurado |
+| Testing | 80/100 | 598 tests |
+| Billing/Fiscal | 90/100 | Multi-pais |
 
 ---
 
-## Documentación recomendada
+## Documentacion Adicional
 
-Para documentación actualizada por capas:
+* Indice documental: `docs/README.md`
+* Guia completa del sistema: `docs/SYSTEM_FULL_DOCUMENTATION.md`
+* Seguridad de despliegue: `docs/DEPLOYMENT_SECURITY.md`
+* Runbook de canary/rollback: `docs/CANARY_ROLLOUT_RUNBOOK.md`
 
-- Índice documental: `docs/README.md`
-- Guía completa del sistema: `docs/SYSTEM_FULL_DOCUMENTATION.md`
-- Seguridad de despliegue: `docs/DEPLOYMENT_SECURITY.md`
-- Runbook de canary/rollback: `docs/CANARY_ROLLOUT_RUNBOOK.md`
-- Roadmap histórico: `plan.md`
+---
+
+&copy; 2025-2026 TUWAYKIAPP. Desarrollado con Python y Reflex.
