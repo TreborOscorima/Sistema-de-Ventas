@@ -120,6 +120,10 @@ class State(RootState):
         if hasattr(self, "check_overdue_alerts"):
             self.check_overdue_alerts()
 
+        # Billing: solo cargar flag is_active para sidebar (ligero)
+        if hasattr(self, "_refresh_billing_active_flag"):
+            self._refresh_billing_active_flag()
+
         self.runtime_ctx_loaded = True
 
         # --- datos base (solo primer carga) ---
@@ -500,6 +504,9 @@ class State(RootState):
             self._ensure_payment_method_selected()
         if hasattr(self, "_refresh_payment_feedback"):
             self._refresh_payment_feedback()
+        # Cargar configuración de facturación electrónica
+        if hasattr(self, "load_billing_config"):
+            self.load_billing_config()
         # Delta parcial: renderiza la UI de inmediato
         yield
 

@@ -364,26 +364,32 @@ def seed_new_branch_data(
     branch_id = int(branch_id)
     set_tenant_context(company_id, branch_id)
 
-    has_categories = session.exec(
-        select(Category.id)
-        .where(Category.company_id == company_id)
-        .where(Category.branch_id == branch_id)
-        .limit(1)
-    ).first()
-    if not has_categories:
-        session.add_all(
-            [
-                Category(name="General", company_id=company_id, branch_id=branch_id),
-            ]
-        )
+    # no_autoflush en todo el bloque: intercalamos SELECTs con session.add().
+    # Sin esto, SQLAlchemy hace flush prematuro al ejecutar un SELECT,
+    # intentando insertar objetos pendientes → IntegrityError por duplicados.
+    with session.no_autoflush:
+        has_categories = session.exec(
+            select(Category.id)
+            .where(Category.company_id == company_id)
+            .where(Category.branch_id == branch_id)
+            .limit(1)
+        ).first()
+        if not has_categories:
+            session.add_all(
+                [
+                    Category(name="General", company_id=company_id, branch_id=branch_id),
+                ]
+            )
 
-    has_units = session.exec(
-        select(Unit.id)
-        .where(Unit.company_id == company_id)
-        .where(Unit.branch_id == branch_id)
-        .limit(1)
-    ).first()
-    if not has_units:
+        # Unidades — inserción idempotente (evita IntegrityError por duplicados)
+        existing_unit_names = {
+            u.name
+            for u in session.exec(
+                select(Unit)
+                .where(Unit.company_id == company_id)
+                .where(Unit.branch_id == branch_id)
+            ).all()
+        }
         unit_defaults = [
             ("unidad", False),
             ("kg", True),
@@ -391,42 +397,41 @@ def seed_new_branch_data(
             ("l", True),
             ("ml", True),
         ]
-        session.add_all(
-            [
-                Unit(
-                    name=name,
-                    allows_decimal=allows,
-                    company_id=company_id,
-                    branch_id=branch_id,
+        for name, allows in unit_defaults:
+            if name not in existing_unit_names:
+                session.add(
+                    Unit(
+                        name=name,
+                        allows_decimal=allows,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
                 )
-                for name, allows in unit_defaults
-            ]
-        )
 
-    has_methods = session.exec(
-        select(PaymentMethod.id)
-        .where(PaymentMethod.company_id == company_id)
-        .where(PaymentMethod.branch_id == branch_id)
-        .limit(1)
-    ).first()
-    if not has_methods:
-        session.add_all(
-            [
-                PaymentMethod(
-                    name=data["name"],
-                    code=data["code"],
-                    is_active=True,
-                    allows_change=data["allows_change"],
-                    method_id=data["method_id"],
-                    description=data["description"],
-                    kind=data["kind"],
-                    enabled=True,
-                    company_id=company_id,
-                    branch_id=branch_id,
-                )
-                for data in DEFAULT_PAYMENT_METHODS
-            ]
-        )
+        has_methods = session.exec(
+            select(PaymentMethod.id)
+            .where(PaymentMethod.company_id == company_id)
+            .where(PaymentMethod.branch_id == branch_id)
+            .limit(1)
+        ).first()
+        if not has_methods:
+            session.add_all(
+                [
+                    PaymentMethod(
+                        name=data["name"],
+                        code=data["code"],
+                        is_active=True,
+                        allows_change=data["allows_change"],
+                        method_id=data["method_id"],
+                        description=data["description"],
+                        kind=data["kind"],
+                        enabled=True,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
+                    for data in DEFAULT_PAYMENT_METHODS
+                ]
+            )
 
 
 async def init_payment_methods(

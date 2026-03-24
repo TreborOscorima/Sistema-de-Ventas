@@ -25,8 +25,11 @@ from .sales import (
     SalePayment,
     SaleInstallment,
 )
-
 from .client import Client
+# billing DESPUÉS de sales — FiscalDocument.sale necesita que Sale
+# esté registrado en el class registry de SQLAlchemy.
+from .billing import CompanyBillingConfig, FiscalDocument
+from .lookup_cache import DocumentLookupCache
 
 __all__ = [
     "Permission",
@@ -60,4 +63,7 @@ __all__ = [
     "Currency",
     "CompanySettings",
     "OwnerAuditLog",
+    "CompanyBillingConfig",
+    "FiscalDocument",
+    "DocumentLookupCache",
 ]

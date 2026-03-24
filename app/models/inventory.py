@@ -72,6 +72,17 @@ class Product(rx.Model, table=True):
     )
     location: Optional[str] = Field(default=None)
 
+    # ── Campos fiscales (para facturación electrónica SUNAT/AFIP) ──
+    # tax_included=True → precio incluye impuesto (IGV/IVA)
+    # tax_rate=18.00 → IGV 18% Perú / IVA 21% Argentina
+    # tax_category → "gravado", "exonerado", "inafecto", "gratuito"
+    tax_included: bool = Field(default=True)
+    tax_rate: Decimal = Field(
+        default=Decimal("18.00"),
+        sa_column=sqlalchemy.Column(Numeric(5, 2), nullable=False, server_default="18.00"),
+    )
+    tax_category: str = Field(default="gravado", max_length=20)
+
     sale_items: List["SaleItem"] = Relationship(back_populates="product")
     variants: List["ProductVariant"] = Relationship(back_populates="product")
     batches: List["ProductBatch"] = Relationship(back_populates="product")

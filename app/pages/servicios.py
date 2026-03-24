@@ -1156,20 +1156,20 @@ def reservations_table() -> rx.Component:
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Campo", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-            rx.el.th("Horario", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Monto", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Acciones", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Cliente", class_name=f"{TABLE_STYLES['header_cell']} w-[13%]"),
+            rx.el.th("Campo", class_name=f"{TABLE_STYLES['header_cell']} w-[12%] hidden md:table-cell"),
+            rx.el.th("Horario", class_name=f"{TABLE_STYLES['header_cell']} w-[16%]"),
+            rx.el.th("Monto", class_name=f"{TABLE_STYLES['header_cell']} w-[10%]"),
+            rx.el.th("Estado", class_name=f"{TABLE_STYLES['header_cell']} w-[9%]"),
+            rx.el.th("Acciones", class_name=f"{TABLE_STYLES['header_cell']} w-[32%]"),
             rx.el.th(
-              "Saldo", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden md:table-cell"
+              "Saldo", class_name=f"{TABLE_STYLES['header_cell']} w-[8%] text-right hidden md:table-cell"
             ),
             class_name=TABLE_STYLES["header"],
           )
         ),
         rx.el.tbody(rx.foreach(State.paginated_reservations, reservation_row)),
-        class_name="min-w-[980px]",
+        class_name="w-full table-fixed",
       ),
       class_name="w-full overflow-x-auto rounded-lg border border-slate-200",
     ),

@@ -630,108 +630,118 @@ class ConfigState(MixinState):
             return
 
         with rx.session() as session:
-            # Unidades (universales)
-            if not session.exec(
-                select(Unit)
-                .where(Unit.company_id == company_id)
-                .where(Unit.branch_id == branch_id)
-            ).first():
+            # no_autoflush en TODO el bloque: este método intercala SELECTs
+            # con session.add(). Sin no_autoflush, SQLAlchemy hace flush
+            # prematuro al ejecutar un SELECT, intentando insertar objetos
+            # pendientes y causando IntegrityError por duplicados.
+            with session.no_autoflush:
+                # ── Unidades (universales) — inserción idempotente ──
+                existing_unit_names = {
+                    u.name
+                    for u in session.exec(
+                        select(Unit)
+                        .where(Unit.company_id == company_id)
+                        .where(Unit.branch_id == branch_id)
+                    ).all()
+                }
                 defaults = ["unidad", "pieza", "kg", "g", "l", "ml", "m", "cm", "paquete", "caja", "docena", "bolsa", "botella", "lata"]
                 decimals = {"kg", "g", "l", "ml", "m", "cm"}
                 for name in defaults:
+                    if name not in existing_unit_names:
+                        session.add(
+                            Unit(
+                                name=name,
+                                allows_decimal=name in decimals,
+                                company_id=company_id,
+                                branch_id=branch_id,
+                            )
+                        )
+
+                # Currencies - basadas en el país configurado
+                if not session.exec(select(Currency)).first():
+                    # Agregar moneda del país actual
+                    session.add(Currency(
+                        code=config["currency"],
+                        name=f"{config['currency_name']} ({config['currency']})",
+                        symbol=config["currency_symbol"]
+                    ))
+                    # Agregar USD como moneda universal si no es la del país
+                    if config["currency"] != "USD":
+                        session.add(Currency(code="USD", name="Dólar estadounidense (USD)", symbol="US$"))
+
+                # Metodos de pago
+                existing_methods = {
+                    method.method_id: method
+                    for method in session.exec(
+                        select(PaymentMethod)
+                        .where(PaymentMethod.company_id == company_id)
+                        .where(PaymentMethod.branch_id == branch_id)
+                    ).all()
+                    if method.method_id
+                }
+                defaults = [
+                    {
+                        "method_id": "cash",
+                        "name": "Efectivo",
+                        "description": "Billetes, Monedas",
+                        "kind": "cash",
+                    },
+                    {
+                        "method_id": "debit_card",
+                        "name": "Tarjeta de Debito",
+                        "description": "Pago con tarjeta debito",
+                        "kind": "debit",
+                    },
+                    {
+                        "method_id": "credit_card",
+                        "name": "Tarjeta de Credito",
+                        "description": "Pago con tarjeta credito",
+                        "kind": "credit",
+                    },
+                    {
+                        "method_id": "yape",
+                        "name": "Yape",
+                        "description": "Pago con Yape",
+                        "kind": "yape",
+                    },
+                    {
+                        "method_id": "plin",
+                        "name": "Plin",
+                        "description": "Pago con Plin",
+                        "kind": "plin",
+                    },
+                    {
+                        "method_id": "transfer",
+                        "name": "Transferencia",
+                        "description": "Transferencia",
+                        "kind": "transfer",
+                    },
+                    {
+                        "method_id": "mixed",
+                        "name": "Pago Mixto",
+                        "description": "Combinacion",
+                        "kind": "mixed",
+                    },
+                ]
+                for method in defaults:
+                    if method["method_id"] in existing_methods:
+                        continue
                     session.add(
-                        Unit(
-                            name=name,
-                            allows_decimal=name in decimals,
+                        PaymentMethod(
+                            method_id=method["method_id"],
+                            code=method["method_id"],
+                            name=method["name"],
+                            description=method["description"],
+                            kind=method["kind"],
+                            enabled=True,
+                            is_active=True,
+                            allows_change=method["method_id"] == "cash",
                             company_id=company_id,
                             branch_id=branch_id,
                         )
                     )
 
-            # Currencies - basadas en el país configurado
-            if not session.exec(select(Currency)).first():
-                # Agregar moneda del país actual
-                session.add(Currency(
-                    code=config["currency"],
-                    name=f"{config['currency_name']} ({config['currency']})",
-                    symbol=config["currency_symbol"]
-                ))
-                # Agregar USD como moneda universal si no es la del país
-                if config["currency"] != "USD":
-                    session.add(Currency(code="USD", name="Dólar estadounidense (USD)", symbol="US$"))
-
-            # Metodos de pago
-            existing_methods = {
-                method.method_id: method
-                for method in session.exec(
-                    select(PaymentMethod)
-                    .where(PaymentMethod.company_id == company_id)
-                    .where(PaymentMethod.branch_id == branch_id)
-                ).all()
-                if method.method_id
-            }
-            defaults = [
-                {
-                    "method_id": "cash",
-                    "name": "Efectivo",
-                    "description": "Billetes, Monedas",
-                    "kind": "cash",
-                },
-                {
-                    "method_id": "debit_card",
-                    "name": "Tarjeta de Debito",
-                    "description": "Pago con tarjeta debito",
-                    "kind": "debit",
-                },
-                {
-                    "method_id": "credit_card",
-                    "name": "Tarjeta de Credito",
-                    "description": "Pago con tarjeta credito",
-                    "kind": "credit",
-                },
-                {
-                    "method_id": "yape",
-                    "name": "Yape",
-                    "description": "Pago con Yape",
-                    "kind": "yape",
-                },
-                {
-                    "method_id": "plin",
-                    "name": "Plin",
-                    "description": "Pago con Plin",
-                    "kind": "plin",
-                },
-                {
-                    "method_id": "transfer",
-                    "name": "Transferencia",
-                    "description": "Transferencia",
-                    "kind": "transfer",
-                },
-                {
-                    "method_id": "mixed",
-                    "name": "Pago Mixto",
-                    "description": "Combinacion",
-                    "kind": "mixed",
-                },
-            ]
-            for method in defaults:
-                if method["method_id"] in existing_methods:
-                    continue
-                session.add(
-                    PaymentMethod(
-                        method_id=method["method_id"],
-                        code=method["method_id"],
-                        name=method["name"],
-                        description=method["description"],
-                        kind=method["kind"],
-                        enabled=True,
-                        is_active=True,
-                        allows_change=method["method_id"] == "cash",
-                        company_id=company_id,
-                        branch_id=branch_id,
-                    )
-                )
-
+            # Commit fuera de no_autoflush — ahora sí flush + commit
             session.commit()
         self.load_config_data()
 

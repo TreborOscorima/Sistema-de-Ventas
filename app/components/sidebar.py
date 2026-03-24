@@ -9,6 +9,7 @@ CONFIG_SUBSECTIONS = [
     {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
     {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
     {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
+    {"key": "facturacion", "label": "Facturacion Electronica", "icon": "file-text"},
     {"key": "suscripcion", "label": "Suscripcion", "icon": "sparkles"},
 ]
 

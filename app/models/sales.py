@@ -44,6 +44,10 @@ class Sale(rx.Model, table=True):
     status: SaleStatus = Field(default=SaleStatus.completed, index=True)
     delete_reason: Optional[str] = Field(default=None)
     payment_condition: str = Field(default="contado")
+    # Tipo de comprobante fiscal asociado a esta venta (boleta, factura, nota_venta, etc.)
+    # Se persiste para auditoría/histórico; el documento fiscal puede consultarse
+    # a través de FiscalDocument.sale_id.
+    receipt_type: Optional[str] = Field(default=None, index=False)
 
     company_id: int = Field(
         foreign_key="company.id",

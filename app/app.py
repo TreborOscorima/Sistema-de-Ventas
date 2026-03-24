@@ -29,6 +29,7 @@ from app.pages.cuentas import cuentas_page
 from app.pages.clientes import clientes_page
 from app.pages.dashboard import dashboard_page
 from app.pages.reportes import reportes_page
+from app.pages.documentos_fiscales import documentos_fiscales_page
 from app.pages.owner import owner_page, owner_login_page
 from app.components.notification import NotificationHolder
 from app.api import health_app
@@ -651,6 +652,11 @@ def page_servicios() -> rx.Component:
 def page_configuracion() -> rx.Component:
     return authenticated_layout(configuracion_page())
 
+
+def page_documentos_fiscales() -> rx.Component:
+    return authenticated_layout(documentos_fiscales_page())
+
+
 def page_cambiar_contrasena() -> rx.Component:
     return cambiar_contrasena_page()
 
@@ -966,6 +972,12 @@ def _register_app_routes():
         route="/configuracion",
         title="Configuración - TUWAYKIAPP",
         on_load=State.page_init_configuracion,
+    )
+    _add_private_page(
+        page_documentos_fiscales,
+        route="/documentos-fiscales",
+        title="Documentos Fiscales - TUWAYKIAPP",
+        on_load=State.page_init_documentos_fiscales,
     )
 
 

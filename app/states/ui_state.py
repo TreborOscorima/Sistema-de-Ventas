@@ -18,6 +18,7 @@ ROUTE_TO_PAGE = {
     "/reportes": "Reportes",
     "/servicios": "Servicios",
     "/configuracion": "Configuracion",
+    "/documentos-fiscales": "Documentos Fiscales",
 }
 
 PAGE_TO_ROUTE = {
@@ -33,9 +34,10 @@ PAGE_TO_ROUTE = {
     "Reportes": "/reportes",
     "Servicios": "/servicios",
     "Configuracion": "/configuracion",
+    "Documentos Fiscales": "/documentos-fiscales",
 }
 
-CONFIG_TABS = {"empresa", "sucursales", "usuarios", "monedas", "unidades", "pagos", "suscripcion"}
+CONFIG_TABS = {"empresa", "sucursales", "usuarios", "monedas", "unidades", "pagos", "facturacion", "suscripcion"}
 CASH_TABS = {"resumen", "movimientos"}
 SERVICES_TABS = {"campo", "precios_campo"}
 
@@ -286,6 +288,12 @@ class UIState(MixinState):
             {"label": "Historial", "icon": "history", "page": "Historial", "route": "/historial"},
             {"label": "Reportes", "icon": "file-chart-column", "page": "Reportes", "route": "/reportes"},
             {"label": "Servicios", "icon": "calendar-days", "page": "Servicios", "route": "/servicios"},
+            {
+                "label": "Fact. Electrónica",
+                "icon": "receipt",
+                "page": "Documentos Fiscales",
+                "route": "/documentos-fiscales",
+            },
             {"label": "Configuracion", "icon": "settings", "page": "Configuracion", "route": "/configuracion"},
         ]
 
@@ -303,6 +311,7 @@ class UIState(MixinState):
             "Reportes": "export_data",
             "Servicios": "view_servicios",
             "Configuracion": "manage_config",
+            "Documentos Fiscales": "view_ventas",  # Visible para quienes pueden ver ventas
         }
 
     def _can_access_page(self, page: str) -> bool:
@@ -312,6 +321,11 @@ class UIState(MixinState):
             return bool(self.can_view_cuentas)
         if page == "Servicios":
             return bool(self.can_view_servicios)
+        # Documentos Fiscales: solo visible si facturación electrónica está activa
+        if page == "Documentos Fiscales":
+            billing_active = getattr(self, "billing_is_active", False)
+            if not billing_active:
+                return False
         required = self._page_permission_map().get(page)
         if not required:
             return True

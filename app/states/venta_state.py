@@ -37,6 +37,13 @@ from app.constants import (
 )
 from app.models import Client
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
+from app.enums import ReceiptType
+from app.models.billing import CompanyBillingConfig
+from app.services.billing_service import emit_fiscal_document
+from app.services.document_lookup_service import (
+    determine_ar_cbte_tipo,
+    lookup_document,
+)
 from app.services.sale_service import SaleService, StockError
 from app.utils.db import get_async_session
 from app.utils.logger import get_logger
@@ -77,6 +84,14 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     credit_interval_days: int = DEFAULT_CREDIT_INTERVAL_DAYS
     credit_initial_payment: str = "0"
     is_processing_sale: bool = False
+    sale_receipt_type_selection: str = "nota_venta"
+
+    # ── Fiscal document lookup ─────────────────────────────────
+    fiscal_doc_number: str = ""
+    fiscal_lookup_result: dict = {}
+    fiscal_lookup_loading: bool = False
+    fiscal_lookup_error: str = ""
+    fiscal_ar_cbte_letra: str = ""  # "A", "B", "C" — auto-determinado
 
     @rx.var(cache=True)
     def selected_client_credit_available(self) -> float:
@@ -176,6 +191,110 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         self.selected_client = None
 
     @rx.event
+    def set_sale_receipt_type(self, value: str):
+        """Setter para selección manual de tipo de comprobante."""
+        self.sale_receipt_type_selection = value or "nota_venta"
+        # Limpiar lookup si vuelve a nota_venta
+        if value == "nota_venta":
+            self._clear_fiscal_lookup()
+
+    @rx.event
+    async def lookup_fiscal_document(self, doc_number: str):
+        """Consulta RUC/CUIT/DNI en la API fiscal correspondiente."""
+        doc_number = (doc_number or "").strip().replace("-", "")
+        self.fiscal_doc_number = doc_number
+
+        if not doc_number.isdigit() or len(doc_number) < 8:
+            self.fiscal_lookup_result = {}
+            self.fiscal_lookup_error = ""
+            self.fiscal_ar_cbte_letra = ""
+            return
+
+        self.fiscal_lookup_loading = True
+        self.fiscal_lookup_error = ""
+        yield
+
+        try:
+            # Obtener config de billing para saber el país y token
+            company_id = self._company_id()
+            config = None
+            if company_id:
+                with rx.session() as session:
+                    config = session.exec(
+                        select(CompanyBillingConfig)
+                        .where(CompanyBillingConfig.company_id == company_id)
+                    ).first()
+
+            country = (config.country if config else "PE") or "PE"
+
+            result = await lookup_document(
+                doc_number=doc_number,
+                country=country,
+                config=config,
+            )
+
+            if result.error and not result.found:
+                self.fiscal_lookup_error = result.error
+                self.fiscal_lookup_result = {}
+                self.fiscal_ar_cbte_letra = ""
+            elif result.found:
+                self.fiscal_lookup_result = {
+                    "doc_number": result.doc_number,
+                    "doc_type": result.doc_type,
+                    "legal_name": result.legal_name,
+                    "fiscal_address": result.fiscal_address,
+                    "status": result.status,
+                    "condition": result.condition,
+                    "iva_condition": result.iva_condition,
+                    "iva_condition_code": str(result.iva_condition_code),
+                }
+                self.fiscal_lookup_error = ""
+
+                # Validar estado para Perú
+                if country == "PE" and result.doc_type == "RUC":
+                    if result.status and result.status != "ACTIVO":
+                        self.fiscal_lookup_error = (
+                            f"RUC con estado {result.status}. "
+                            "No se puede emitir factura."
+                        )
+                    elif result.condition and result.condition not in ("HABIDO", ""):
+                        self.fiscal_lookup_error = (
+                            f"RUC con condicion {result.condition}. "
+                            "Verifique con el cliente."
+                        )
+
+                # Auto-determinar tipo comprobante AR
+                if country == "AR" and result.iva_condition:
+                    emisor_iva = (config.emisor_iva_condition if config else "RI") or "RI"
+                    letra, _ = determine_ar_cbte_tipo(emisor_iva, result.iva_condition)
+                    self.fiscal_ar_cbte_letra = letra
+                else:
+                    self.fiscal_ar_cbte_letra = ""
+            else:
+                self.fiscal_lookup_result = {}
+                self.fiscal_lookup_error = f"No se encontró el documento {doc_number}."
+                self.fiscal_ar_cbte_letra = ""
+        except Exception as exc:
+            logger.exception("lookup_fiscal_document error: %s", exc)
+            self.fiscal_lookup_error = "Error al consultar documento fiscal."
+            self.fiscal_lookup_result = {}
+        finally:
+            self.fiscal_lookup_loading = False
+
+    @rx.event
+    def clear_fiscal_lookup(self):
+        """Limpia el resultado del lookup fiscal."""
+        self._clear_fiscal_lookup()
+
+    def _clear_fiscal_lookup(self):
+        """Helper interno para limpiar lookup."""
+        self.fiscal_doc_number = ""
+        self.fiscal_lookup_result = {}
+        self.fiscal_lookup_error = ""
+        self.fiscal_lookup_loading = False
+        self.fiscal_ar_cbte_letra = ""
+
+    @rx.event
     def toggle_credit_mode(self, value: bool | str):
         if isinstance(value, str):
             value = value.lower() in ["true", "1", "on", "yes"]
@@ -221,6 +340,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         self.credit_installments = DEFAULT_INSTALLMENTS_COUNT
         self.credit_interval_days = DEFAULT_CREDIT_INTERVAL_DAYS
         self.payment_cash_amount = 0
+        self.sale_receipt_type_selection = "nota_venta"
         if hasattr(self, "clear_pending_reservation"):
             self.clear_pending_reservation()
         else:
@@ -394,6 +514,35 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     )
                     return
 
+            # ── Capturar datos fiscales ANTES de limpiar el state ──
+            # _reset_credit_context() borra selected_client, por lo que
+            # debemos extraer tipo de comprobante y datos del comprador aquí.
+            fiscal_sale_id = result.sale.id
+            fiscal_company_id = self.current_user.get("company_id")
+            fiscal_branch_id = self._branch_id()
+            receipt_type = self._determine_receipt_type(result.sale)
+            buyer_doc_type, buyer_doc_number, buyer_name = (
+                self._extract_buyer_info()
+            )
+
+            # Persistir receipt_type en la Sale para histórico/auditoría.
+            # Usa getattr para compatibilidad si la columna aún no existe en la DB.
+            _sale_receipt_type_db = getattr(result.sale, "receipt_type", None)
+            if receipt_type and not _sale_receipt_type_db:
+                try:
+                    with rx.session() as sess:
+                        from sqlmodel import select as sel_
+                        from app.models.sales import Sale as Sale_
+                        sale_obj = sess.exec(
+                            sel_(Sale_).where(Sale_.id == fiscal_sale_id)
+                        ).first()
+                        if sale_obj and hasattr(sale_obj, "receipt_type"):
+                            sale_obj.receipt_type = receipt_type
+                            sess.add(sale_obj)
+                            sess.commit()
+                except Exception:
+                    pass  # Non-critical — fiscal doc has the receipt_type
+
             # Actualizamos el estado visual (UI) de Reflex.
             self.last_sale_receipt = result.receipt_items
             self.last_sale_reservation_context = result.reservation_context
@@ -415,7 +564,144 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 self._cashbox_update_trigger += 1
 
             self.add_notification("Venta confirmada.", "success")
+
+            # ── Fiscal document emission (fire-and-forget background) ──
+            # Solo emitir si el tipo de comprobante NO es nota_venta (ticket
+            # interno). Las notas de venta no requieren emisión fiscal.
+            if receipt_type and receipt_type != ReceiptType.nota_venta:
+                import asyncio
+                asyncio.ensure_future(
+                    self._fire_fiscal_emission(
+                        fiscal_sale_id,
+                        fiscal_company_id or 0,
+                        fiscal_branch_id or 0,
+                        receipt_type,
+                        buyer_doc_type,
+                        buyer_doc_number,
+                        buyer_name,
+                    )
+                )
             return
         finally:
             self.is_processing_sale = False
             self.is_loading = False
+
+    def _determine_receipt_type(self, sale) -> str:
+        """Determina el tipo de comprobante fiscal para la venta.
+
+        IMPORTANTE: Debe llamarse ANTES de _reset_credit_context()
+        porque lee self.selected_client para detectar RUC/CUIT.
+
+        Prioridad:
+        1. Selección explícita del cajero en el UI (sale_receipt_type_selection).
+        2. Campo receipt_type en la venta (si fue asignado programáticamente).
+        3. Auto-detección por tipo de documento del cliente.
+        4. Default: nota_venta (sin emisión fiscal).
+        """
+        # 1. Selección manual del usuario en el POS
+        if self.sale_receipt_type_selection and self.sale_receipt_type_selection != "nota_venta":
+            return self.sale_receipt_type_selection
+        # 2. Campo explícito en la venta
+        if hasattr(sale, "receipt_type") and sale.receipt_type:
+            return sale.receipt_type
+        # 3. Auto-detección por RUC/CUIT del cliente
+        if self.selected_client and isinstance(self.selected_client, dict):
+            dni = (self.selected_client.get("dni") or "").strip()
+            if len(dni) == 11 and dni.isdigit():
+                return ReceiptType.factura
+        # 4. Default: nota_venta (ticket interno, sin emisión fiscal)
+        return self.sale_receipt_type_selection or ReceiptType.nota_venta
+
+    def _extract_buyer_info(self) -> tuple[str | None, str | None, str | None]:
+        """Extrae datos del comprador para el documento fiscal.
+
+        PRIORIDAD 1: Datos del lookup fiscal (SUNAT/AFIP — más autoritativos).
+        PRIORIDAD 2: Datos del cliente seleccionado localmente.
+
+        IMPORTANTE: Debe llamarse ANTES de _reset_credit_context()
+        porque lee self.selected_client.
+
+        Returns:
+            (buyer_doc_type, buyer_doc_number, buyer_name)
+        """
+        # Prioridad 1: lookup fiscal result
+        if self.fiscal_lookup_result and isinstance(self.fiscal_lookup_result, dict):
+            doc_num = self.fiscal_lookup_result.get("doc_number", "")
+            doc_type_name = self.fiscal_lookup_result.get("doc_type", "")
+            legal_name = self.fiscal_lookup_result.get("legal_name", "")
+
+            if doc_num:
+                # Mapear tipo de documento a código fiscal
+                if doc_type_name == "RUC":
+                    fiscal_doc_type = "6"
+                elif doc_type_name == "CUIT":
+                    fiscal_doc_type = "80"
+                elif doc_type_name == "DNI":
+                    fiscal_doc_type = "1"
+                else:
+                    fiscal_doc_type = "0"
+                return fiscal_doc_type, doc_num, legal_name or None
+
+        # Prioridad 2: cliente seleccionado localmente
+        if not self.selected_client or not isinstance(self.selected_client, dict):
+            return None, None, None
+        dni = (self.selected_client.get("dni") or "").strip()
+        name = (self.selected_client.get("name") or "").strip()
+        if not dni:
+            return None, None, name or None
+        # Clasificar tipo de documento
+        if len(dni) == 11 and dni.isdigit():
+            doc_type = "6"  # RUC (PE) / CUIT (AR) usa 80 internamente
+        elif len(dni) == 8 and dni.isdigit():
+            doc_type = "1"  # DNI peruano
+        else:
+            doc_type = "0"
+        return doc_type, dni, name or None
+
+    async def _fire_fiscal_emission(
+        self,
+        sale_id: int,
+        company_id: int,
+        branch_id: int,
+        receipt_type: str,
+        buyer_doc_type: str | None = None,
+        buyer_doc_number: str | None = None,
+        buyer_name: str | None = None,
+    ):
+        """Emite el documento fiscal de forma fire-and-forget.
+
+        Se invoca via ``asyncio.ensure_future`` desde ``confirm_sale``
+        para no bloquear la UI. Si billing no está configurado, retorna
+        silenciosamente. Si falla, el FiscalDocument queda en estado
+        ``error`` para reintento manual posterior.
+        """
+        try:
+            fiscal_doc = await emit_fiscal_document(
+                sale_id=sale_id,
+                company_id=company_id,
+                branch_id=branch_id,
+                receipt_type=receipt_type,
+                buyer_doc_type=buyer_doc_type,
+                buyer_doc_number=buyer_doc_number,
+                buyer_name=buyer_name,
+            )
+            if fiscal_doc is not None:
+                if fiscal_doc.fiscal_status == "authorized":
+                    logger.info(
+                        "Documento fiscal %s autorizado para venta %s",
+                        fiscal_doc.full_number,
+                        sale_id,
+                    )
+                elif fiscal_doc.fiscal_status in ("error", "rejected"):
+                    logger.warning(
+                        "Documento fiscal con problemas: status=%s sale_id=%s errors=%s",
+                        fiscal_doc.fiscal_status,
+                        sale_id,
+                        fiscal_doc.fiscal_errors,
+                    )
+        except Exception as exc:
+            logger.exception(
+                "Error en _fire_fiscal_emission | sale_id=%s: %s",
+                sale_id,
+                exc,
+            )

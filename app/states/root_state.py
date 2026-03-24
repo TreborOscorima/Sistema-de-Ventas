@@ -16,6 +16,7 @@ from sqlmodel import select
 
 from app.models import SaleInstallment
 from .auth_state import AuthState
+from .billing_state import BillingState
 from .ui_state import UIState
 from .config_state import ConfigState
 from .branches_state import BranchesState
@@ -51,6 +52,7 @@ _mixins = [
     InventoryState,
     BranchesState,
     ConfigState,
+    BillingState,
     UIState,
     RegisterState,
     AuthState,

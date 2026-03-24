@@ -17,12 +17,21 @@ import reflex as rx
 from sqlmodel import select
 
 from app.models.auth import User as UserModel
+from app.models.billing import CompanyBillingConfig
 from app.models.company import PlanType, SubscriptionStatus
 from app.services.owner_service import OwnerService, OwnerServiceError
+from app.utils.crypto import encrypt_credential, encrypt_text
+from app.utils.fiscal_validators import (
+    validate_environment,
+    validate_nubefact_url,
+    validate_tax_id,
+    validate_business_name,
+)
 from app.utils.db import AsyncSessionLocal
 from app.utils.logger import get_logger
 from app.utils.rate_limit import is_rate_limited, record_failed_attempt, clear_login_attempts
 from app.utils.tenant import tenant_bypass
+from app.utils.timezone import utc_now_naive
 
 logger = get_logger("OwnerState")
 
@@ -373,6 +382,12 @@ class OwnerState:
         self.owner_login_email = ""
         self.owner_login_password = ""
         self.owner_login_error = ""
+        # Limpiar estado residual de modals y formularios
+        self.owner_modal_open = False
+        self.owner_reset_modal_open = False
+        self.owner_billing_modal_open = False
+        self.owner_reset_users = []
+        self.owner_reset_temp_password = ""
         logger.info("Owner logout")
         return rx.redirect(OWNER_LOGIN_PATH)
 
@@ -720,7 +735,7 @@ class OwnerState:
                         max_users=max_users,
                         max_branches=max_branches,
                         has_reservations_module=self.owner_form_has_reservations,
-                        has_services_module=self.owner_form_has_reservations,
+                        has_services_module=self.owner_form_has_services,
                         has_clients_module=self.owner_form_has_clients,
                         has_credits_module=self.owner_form_has_credits,
                         has_electronic_billing=self.owner_form_has_billing,
@@ -882,3 +897,453 @@ class OwnerState:
             logger.exception("Error reseteando contraseña")
             self.owner_reset_loading = False
             yield rx.toast("Error inesperado al resetear. Revise los logs.", duration=5000)
+
+    # ═══════════════════════════════════════════════════════════
+    # GESTIÓN DE BILLING POR EMPRESA (campos técnicos del Owner)
+    # ═══════════════════════════════════════════════════════════
+
+    owner_billing_modal_open: bool = False
+    owner_billing_company_id: int = 0
+    owner_billing_company_name: str = ""
+    owner_billing_loading: bool = False
+
+    # Form fields — campos técnicos que solo el Owner gestiona
+    owner_billing_is_active: bool = False
+    owner_billing_environment: str = "sandbox"
+    owner_billing_nubefact_url: str = ""
+    owner_billing_nubefact_token_display: str = ""
+    owner_billing_serie_factura: str = "F001"
+    owner_billing_serie_boleta: str = "B001"
+    owner_billing_max_limit: str = "500"
+    owner_billing_afip_punto_venta: str = "1"
+    owner_billing_emisor_iva: str = "RI"
+    owner_billing_afip_concepto: str = "1"
+    owner_billing_ar_threshold: str = "68782"
+    # Read-only context
+    owner_billing_country: str = "PE"
+    owner_billing_tax_id: str = ""
+    owner_billing_business_name: str = ""
+    owner_billing_config_exists: bool = False
+
+    @rx.event
+    async def owner_open_billing_modal(self, company_id: int, company_name: str):
+        """Abre modal de gestión de billing y carga config existente."""
+        if not self.is_owner_authenticated:
+            return
+        self.owner_billing_modal_open = True
+        self.owner_billing_company_id = company_id
+        self.owner_billing_company_name = company_name
+        self.owner_billing_loading = True
+        yield
+
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from sqlmodel import select as sel_
+                    config = (await session.execute(
+                        sel_(CompanyBillingConfig).where(
+                            CompanyBillingConfig.company_id == company_id
+                        )
+                    )).scalars().first()
+
+                    if config:
+                        self.owner_billing_config_exists = True
+                        self.owner_billing_is_active = config.is_active
+                        self.owner_billing_environment = config.environment or "sandbox"
+                        self.owner_billing_country = config.country or "PE"
+                        self.owner_billing_tax_id = config.tax_id or ""
+                        self.owner_billing_business_name = config.business_name or ""
+                        self.owner_billing_nubefact_url = config.nubefact_url or ""
+                        self.owner_billing_nubefact_token_display = (
+                            "****configurado****" if config.nubefact_token else ""
+                        )
+                        self.owner_billing_serie_factura = config.serie_factura or "F001"
+                        self.owner_billing_serie_boleta = config.serie_boleta or "B001"
+                        self.owner_billing_max_limit = str(config.max_billing_limit or 500)
+                        self.owner_billing_afip_punto_venta = str(config.afip_punto_venta or 1)
+                        self.owner_billing_emisor_iva = config.emisor_iva_condition or "RI"
+                        self.owner_billing_afip_concepto = str(getattr(config, "afip_concepto", 1) or 1)
+                        self.owner_billing_ar_threshold = str(
+                            config.ar_identification_threshold or "68782"
+                        )
+                        # Estado de certificados AFIP
+                        self.owner_billing_cert_display = (
+                            "****certificado****"
+                            if config.encrypted_certificate else ""
+                        )
+                        self.owner_billing_key_display = (
+                            "****clave_privada****"
+                            if config.encrypted_private_key else ""
+                        )
+                    else:
+                        self.owner_billing_config_exists = False
+                        self.owner_billing_is_active = False
+                        self.owner_billing_environment = "sandbox"
+                        self.owner_billing_country = "PE"
+                        self.owner_billing_tax_id = ""
+                        self.owner_billing_business_name = ""
+                        self.owner_billing_nubefact_url = ""
+                        self.owner_billing_nubefact_token_display = ""
+                        self.owner_billing_serie_factura = "F001"
+                        self.owner_billing_serie_boleta = "B001"
+                        self.owner_billing_max_limit = "500"
+                        self.owner_billing_afip_punto_venta = "1"
+                        self.owner_billing_emisor_iva = "RI"
+                        self.owner_billing_afip_concepto = "1"
+                        self.owner_billing_ar_threshold = "68782"
+                        self.owner_billing_cert_display = ""
+                        self.owner_billing_key_display = ""
+        except Exception as e:
+            logger.exception("Error cargando billing config para owner")
+            yield rx.toast("Error al cargar config de billing.", duration=4000)
+        finally:
+            self.owner_billing_loading = False
+
+    @rx.event
+    def owner_close_billing_modal(self):
+        self.owner_billing_modal_open = False
+
+    @rx.event
+    def owner_set_billing_is_active(self, value: bool):
+        self.owner_billing_is_active = value
+
+    @rx.event
+    def owner_set_billing_environment(self, value: str):
+        self.owner_billing_environment = value or "sandbox"
+
+    @rx.event
+    def owner_set_billing_nubefact_url(self, value: str):
+        self.owner_billing_nubefact_url = value or ""
+
+    @rx.event
+    def owner_set_billing_serie_factura(self, value: str):
+        value = (value or "F001").strip().upper()
+        import re
+        if not re.match(r'^[A-Z]\d{3}$', value):
+            return rx.toast("Formato inválido. Usar: F001, F002, etc.", duration=3000)
+        self.owner_billing_serie_factura = value
+
+    @rx.event
+    def owner_set_billing_serie_boleta(self, value: str):
+        value = (value or "B001").strip().upper()
+        import re
+        if not re.match(r'^[A-Z]\d{3}$', value):
+            return rx.toast("Formato inválido. Usar: B001, B002, etc.", duration=3000)
+        self.owner_billing_serie_boleta = value
+
+    @rx.event
+    def owner_set_billing_max_limit(self, value: str | float):
+        self.owner_billing_max_limit = _normalize_non_negative_int_input(str(value))
+
+    @rx.event
+    def owner_set_billing_afip_punto_venta(self, value: str | float):
+        self.owner_billing_afip_punto_venta = _normalize_non_negative_int_input(str(value))
+
+    @rx.event
+    def owner_set_billing_emisor_iva(self, value: str):
+        self.owner_billing_emisor_iva = value or "RI"
+
+    @rx.event
+    def owner_set_billing_afip_concepto(self, value: str):
+        self.owner_billing_afip_concepto = value if value in ("1", "2", "3") else "1"
+
+    @rx.event
+    def owner_set_billing_ar_threshold(self, value: str | float):
+        self.owner_billing_ar_threshold = _normalize_non_negative_int_input(str(value))
+
+    @rx.event
+    async def owner_save_billing_config(self):
+        """Guarda la configuración técnica de billing desde el Owner panel."""
+        if not self.is_owner_authenticated:
+            yield rx.toast("Acceso denegado.", duration=3000)
+            return
+
+        company_id = self.owner_billing_company_id
+        if not company_id:
+            yield rx.toast("Empresa no seleccionada.", duration=3000)
+            return
+
+        actor_email = self.owner_session_email or "unknown"
+        if _is_owner_rate_limited(actor_email):
+            yield rx.toast(
+                f"Demasiadas acciones. Espera {OWNER_ACTION_WINDOW_SECONDS}s.",
+                duration=5000,
+            )
+            return
+
+        # ── Validaciones técnicas ──────────────────────────────
+        # 1. Validar environment siempre
+        env_ok, env_err = validate_environment(
+            self.owner_billing_environment
+        )
+        if not env_ok:
+            yield rx.toast(env_err, duration=4000)
+            return
+
+        if self.owner_billing_is_active:
+            # 2. Razón social obligatoria si billing activo
+            bname_ok, bname_err = validate_business_name(
+                self.owner_billing_business_name
+            )
+            if not bname_ok:
+                yield rx.toast(
+                    f"Razón social: {bname_err}", duration=4000
+                )
+                return
+
+            # 3. Validar RUC/CUIT según país
+            if self.owner_billing_tax_id.strip():
+                tid_ok, tid_err = validate_tax_id(
+                    self.owner_billing_tax_id,
+                    self.owner_billing_country,
+                )
+                if not tid_ok:
+                    yield rx.toast(tid_err, duration=5000)
+                    return
+
+            # 4. Validaciones específicas por país
+            if self.owner_billing_country == "PE":
+                nf_url = self.owner_billing_nubefact_url.strip()
+                if not nf_url:
+                    yield rx.toast(
+                        "La URL de Nubefact es obligatoria para Perú.",
+                        duration=4000,
+                    )
+                    return
+                url_ok, url_err = validate_nubefact_url(nf_url)
+                if not url_ok:
+                    yield rx.toast(url_err, duration=5000)
+                    return
+
+        self.owner_billing_loading = True
+        yield
+
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from sqlmodel import select as sel_
+                    config = (await session.execute(
+                        sel_(CompanyBillingConfig).where(
+                            CompanyBillingConfig.company_id == company_id
+                        )
+                    )).scalars().first()
+
+                    if config is None:
+                        config = CompanyBillingConfig(company_id=company_id)
+                        session.add(config)
+
+                    # Campos técnicos gestionados por el Owner
+                    config.is_active = self.owner_billing_is_active
+                    config.environment = self.owner_billing_environment.strip()
+                    config.nubefact_url = self.owner_billing_nubefact_url.strip() or None
+                    config.serie_factura = self.owner_billing_serie_factura.strip() or "F001"
+                    config.serie_boleta = self.owner_billing_serie_boleta.strip() or "B001"
+                    config.afip_punto_venta = max(1, int(
+                        self.owner_billing_afip_punto_venta or "1"
+                    ))
+                    config.emisor_iva_condition = self.owner_billing_emisor_iva.strip() or "RI"
+                    try:
+                        concepto_val = int(self.owner_billing_afip_concepto or "1")
+                        config.afip_concepto = concepto_val if concepto_val in (1, 2, 3) else 1
+                    except (TypeError, ValueError):
+                        config.afip_concepto = 1
+                    try:
+                        config.ar_identification_threshold = max(
+                            0, int(float(self.owner_billing_ar_threshold or "68782"))
+                        )
+                    except (TypeError, ValueError):
+                        config.ar_identification_threshold = 68782
+                    try:
+                        config.max_billing_limit = max(
+                            0, int(self.owner_billing_max_limit or "500")
+                        )
+                    except (TypeError, ValueError):
+                        config.max_billing_limit = 500
+                    config.updated_at = utc_now_naive()
+
+                    session.add(config)
+                    await session.commit()
+
+            _record_owner_action(actor_email)
+            self.owner_billing_config_exists = True
+            logger.info(
+                "Owner billing config saved company_id=%s actor=%s active=%s",
+                company_id, actor_email, self.owner_billing_is_active,
+            )
+            yield rx.toast("Configuración de billing guardada.", duration=4000)
+        except Exception as e:
+            logger.exception("Error guardando billing config desde owner")
+            yield rx.toast("Error al guardar config de billing.", duration=5000)
+        finally:
+            self.owner_billing_loading = False
+
+    @rx.event
+    async def owner_save_billing_nubefact_token(self, token: str):
+        """Guarda el token de Nubefact encriptado desde el Owner panel."""
+        if not self.is_owner_authenticated:
+            return
+        token = (token or "").strip()
+        if not token:
+            yield rx.toast("El token no puede estar vacío.", duration=3000)
+            return
+
+        company_id = self.owner_billing_company_id
+        if not company_id:
+            return
+
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from sqlmodel import select as sel_
+                    config = (await session.execute(
+                        sel_(CompanyBillingConfig).where(
+                            CompanyBillingConfig.company_id == company_id
+                        )
+                    )).scalars().first()
+
+                    if config is None:
+                        yield rx.toast(
+                            "Guarde la configuración de billing primero.", duration=4000
+                        )
+                        return
+
+                    config.nubefact_token = encrypt_text(token)
+                    config.updated_at = utc_now_naive()
+                    session.add(config)
+                    await session.commit()
+
+            self.owner_billing_nubefact_token_display = "****configurado****"
+            yield rx.toast("Token de Nubefact guardado.", duration=3000)
+        except Exception as e:
+            logger.exception("Error guardando nubefact token desde owner")
+            yield rx.toast("Error al guardar token.", duration=5000)
+
+    # ── Certificados AFIP (Argentina) ─────────────────────────
+    owner_billing_cert_display: str = ""
+    owner_billing_key_display: str = ""
+
+    @rx.event
+    async def owner_save_afip_certificate(self, cert_pem: str):
+        """Guarda certificado X.509 PEM encriptado para AFIP."""
+        if not self.is_owner_authenticated:
+            return
+        cert_pem = (cert_pem or "").strip()
+        if not cert_pem:
+            yield rx.toast("El certificado no puede estar vacío.", duration=3000)
+            return
+        if "BEGIN CERTIFICATE" not in cert_pem:
+            yield rx.toast(
+                "Formato inválido. Pegue el contenido completo del .pem "
+                "(incluyendo BEGIN/END CERTIFICATE).",
+                duration=5000,
+            )
+            return
+
+        company_id = self.owner_billing_company_id
+        if not company_id:
+            return
+
+        try:
+            # Validar que es un certificado X.509 válido
+            from cryptography import x509 as x509_mod
+            x509_mod.load_pem_x509_certificate(cert_pem.encode("utf-8"))
+        except Exception as exc:
+            yield rx.toast(
+                f"Certificado inválido: {exc}", duration=5000
+            )
+            return
+
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from sqlmodel import select as sel_
+                    config = (await session.execute(
+                        sel_(CompanyBillingConfig).where(
+                            CompanyBillingConfig.company_id == company_id
+                        )
+                    )).scalars().first()
+                    if config is None:
+                        yield rx.toast(
+                            "Guarde la configuración de billing primero.",
+                            duration=4000,
+                        )
+                        return
+                    config.encrypted_certificate = encrypt_credential(
+                        cert_pem.encode("utf-8")
+                    )
+                    config.updated_at = utc_now_naive()
+                    session.add(config)
+                    await session.commit()
+
+            self.owner_billing_cert_display = "****certificado****"
+            logger.info(
+                "Owner saved AFIP certificate company_id=%s",
+                company_id,
+            )
+            yield rx.toast("Certificado AFIP guardado.", duration=3000)
+        except Exception as e:
+            logger.exception("Error guardando certificado AFIP")
+            yield rx.toast("Error al guardar certificado.", duration=5000)
+
+    @rx.event
+    async def owner_save_afip_private_key(self, key_pem: str):
+        """Guarda clave privada RSA PEM encriptada para AFIP."""
+        if not self.is_owner_authenticated:
+            return
+        key_pem = (key_pem or "").strip()
+        if not key_pem:
+            yield rx.toast("La clave privada no puede estar vacía.", duration=3000)
+            return
+        if "BEGIN" not in key_pem or "KEY" not in key_pem:
+            yield rx.toast(
+                "Formato inválido. Pegue el contenido completo del .key "
+                "(incluyendo BEGIN/END ...KEY).",
+                duration=5000,
+            )
+            return
+
+        company_id = self.owner_billing_company_id
+        if not company_id:
+            return
+
+        try:
+            # Validar que es una clave privada válida
+            from cryptography.hazmat.primitives import serialization as ser_
+            ser_.load_pem_private_key(key_pem.encode("utf-8"), password=None)
+        except Exception as exc:
+            yield rx.toast(
+                f"Clave privada inválida: {exc}", duration=5000
+            )
+            return
+
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from sqlmodel import select as sel_
+                    config = (await session.execute(
+                        sel_(CompanyBillingConfig).where(
+                            CompanyBillingConfig.company_id == company_id
+                        )
+                    )).scalars().first()
+                    if config is None:
+                        yield rx.toast(
+                            "Guarde la configuración de billing primero.",
+                            duration=4000,
+                        )
+                        return
+                    config.encrypted_private_key = encrypt_credential(
+                        key_pem.encode("utf-8")
+                    )
+                    config.updated_at = utc_now_naive()
+                    session.add(config)
+                    await session.commit()
+
+            self.owner_billing_key_display = "****clave_privada****"
+            logger.info(
+                "Owner saved AFIP private key company_id=%s",
+                company_id,
+            )
+            yield rx.toast("Clave privada AFIP guardada.", duration=3000)
+        except Exception as e:
+            logger.exception("Error guardando clave privada AFIP")
+            yield rx.toast("Error al guardar clave privada.", duration=5000)
