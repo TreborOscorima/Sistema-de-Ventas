@@ -4,8 +4,13 @@ from app.components.ui import (
   date_range_filter,
   select_filter,
   section_header,
+  BADGE_STYLES,
   BUTTON_STYLES,
+  CARD_STYLES,
+  INPUT_STYLES,
+  SELECT_STYLES,
   TABLE_STYLES,
+  TYPOGRAPHY,
   pagination_controls,
   page_title,
   permission_guard,
@@ -44,7 +49,7 @@ def payment_method_selector_compact() -> rx.Component:
   Reutiliza State.enabled_payment_methods y State.select_payment_method.
   """
   return rx.el.div(
-    rx.el.label("Método de pago", class_name="text-sm font-medium text-slate-700"),
+    rx.el.label("Método de pago", class_name=TYPOGRAPHY["label"]),
     rx.el.div(
       rx.foreach(
         State.enabled_payment_methods,
@@ -85,10 +90,10 @@ def sport_selector() -> rx.Component:
   """Selector de deporte para reservas de canchas."""
   return rx.el.div(
     rx.el.div(
-      rx.el.p("ALQUILER DE CAMPOS DE FUTBOL Y VOLEY", class_name="text-lg font-semibold text-slate-800"),
+      rx.el.p("ALQUILER DE CAMPOS DE FUTBOL Y VOLEY", class_name=TYPOGRAPHY["section_title"]),
       rx.el.p(
         "Elige el deporte para gestionar reservas, pagos y cancelaciones.",
-        class_name="text-sm text-slate-600",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="flex flex-col gap-1",
     ),
@@ -193,7 +198,7 @@ def sport_selector() -> rx.Component:
       ),
       class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
     ),
-    class_name="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col gap-3",
+    class_name=f"{CARD_STYLES['default']} flex flex-col gap-3",
   )
 
 
@@ -317,7 +322,7 @@ def mini_calendar_sidebar() -> rx.Component:
     rx.el.button(
       "Hoy",
       on_click=State.go_to_today,
-      class_name="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-sm",
+      class_name=f"{BUTTON_STYLES['secondary']} mt-3 w-full shadow-sm font-semibold",
     ),
     rx.grid(
       *[
@@ -334,7 +339,7 @@ def mini_calendar_sidebar() -> rx.Component:
       columns="7",
       class_name="mt-3 gap-2",
     ),
-    class_name="bg-white rounded-xl shadow-sm p-4 border border-slate-200",
+    class_name=CARD_STYLES["default"],
   )
 
 
@@ -361,7 +366,7 @@ def schedule_controls() -> rx.Component:
       rx.icon("sun", class_name="h-4 w-4"),
       "Hoy",
       on_click=State.go_to_today,
-      class_name="flex items-center justify-center gap-2 px-3 py-2 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm sm:w-32",
+      class_name=f"{BUTTON_STYLES['secondary']} shadow-sm sm:w-32",
     ),
     class_name="flex flex-col sm:flex-row sm:items-end gap-3 rounded-xl border border-slate-200 bg-gradient-to-r from-indigo-50 via-white to-emerald-50 p-4 lg:hidden",
   )
@@ -428,8 +433,8 @@ def schedule_planner() -> rx.Component:
             disabled=rx.cond(State.schedule_selected_slots_count == 0, True, False),
             class_name=rx.cond(
               State.schedule_selected_slots_count == 0,
-              "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed min-h-[38px]",
-              "flex items-center justify-center gap-2 px-3 py-2 rounded-md border text-slate-700 hover:bg-slate-50 min-h-[38px]",
+              f"{BUTTON_STYLES['disabled_sm']} min-h-[38px]",
+              f"{BUTTON_STYLES['secondary_sm']} min-h-[38px]",
             ),
           ),
           rx.el.button(
@@ -439,8 +444,8 @@ def schedule_planner() -> rx.Component:
             disabled=rx.cond(State.schedule_selection_valid, False, True),
             class_name=rx.cond(
               State.schedule_selection_valid,
-              "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[38px]",
-              "flex items-center justify-center gap-2 px-3 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed min-h-[38px]",
+              f"{BUTTON_STYLES['primary_sm']} min-h-[38px]",
+              f"{BUTTON_STYLES['disabled_sm']} min-h-[38px]",
             ),
           ),
           class_name="flex flex-col sm:flex-row gap-2 sm:items-center",
@@ -449,7 +454,7 @@ def schedule_planner() -> rx.Component:
       ),
       class_name="p-4 sm:p-6 flex flex-col gap-5",
     ),
-    class_name="flex-1 min-w-0 bg-white rounded-xl shadow-sm border border-slate-200 h-fit",
+    class_name=f"flex-1 min-w-0 {CARD_STYLES['default']} h-fit",
   )
 def reservation_modal() -> rx.Component:
   return rx.cond(
@@ -467,7 +472,7 @@ def reservation_modal() -> rx.Component:
               "Detalle de reserva",
               "Nueva reserva",
             ),
-            class_name="text-lg font-semibold text-slate-800",
+            class_name=TYPOGRAPHY["section_title"],
           ),
           rx.el.p(
             rx.cond(
@@ -475,7 +480,7 @@ def reservation_modal() -> rx.Component:
               "Consulta el estado y acciones de la reserva seleccionada.",
               "Completa los datos para crear la reserva en el horario elegido.",
             ),
-            class_name="text-sm text-slate-600",
+            class_name=TYPOGRAPHY["body_secondary"],
           ),
           class_name="flex flex-col gap-1",
         ),
@@ -577,29 +582,29 @@ def reservation_modal() -> rx.Component:
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Cliente", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Cliente", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
                 placeholder="Nombre completo",
                 default_value=State.reservation_form["client_name"],
                 on_blur=lambda value: State.update_reservation_form("client_name", value),
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
                 debounce_timeout=600,
               ),
               class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Telefono", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Telefono", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="999 999 999",
           default_value=State.reservation_form["phone"],
           on_blur=lambda value: State.update_reservation_form("phone", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Deporte", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Deporte", class_name=TYPOGRAPHY["label"]),
         rx.el.select(
           rx.el.option("Selecciona un deporte", value=""),
           rx.foreach(
@@ -611,54 +616,54 @@ def reservation_modal() -> rx.Component:
           ),
           default_value=State.reservation_form["selected_price_id"],
           on_change=State.select_reservation_field_price,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Campo", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Campo", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="Cancha / Campo",
           key=State.reservation_form["selected_price_id"] + "-" + State.reservation_form["field_name"],
           default_value=State.reservation_form["field_name"],
                 on_blur=lambda value: State.update_reservation_form("field_name", value),
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
                 debounce_timeout=600,
               ),
               class_name="flex flex-col gap-1",
             ),
       rx.el.div(
-        rx.el.label("Adelanto", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Adelanto", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           type="number",
           step="0.01",
           default_value=State.reservation_form["advance_amount"],
           on_blur=lambda value: State.update_reservation_form("advance_amount", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       payment_method_selector_compact(),
             rx.el.div(
-              rx.el.label("Monto total", class_name="text-sm font-medium text-slate-700"),
+              rx.el.label("Monto total", class_name=TYPOGRAPHY["label"]),
               rx.el.input(
                 type="number",
                 step="0.01",
                 key=State.reservation_form["selected_price_id"] + "-" + State.reservation_form["start_time"] + "-" + State.reservation_form["end_time"] + "-" + State.reservation_form["total_amount"],
                 default_value=State.reservation_form["total_amount"],
                 on_blur=lambda value: State.update_reservation_form("total_amount", value),
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
               ),
               class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-              rx.el.label("Estado", class_name="text-sm font-medium text-slate-700"),
+              rx.el.label("Estado", class_name=TYPOGRAPHY["label"]),
               rx.el.select(
                 rx.el.option("Pendiente", value="pendiente"),
                 rx.el.option("Pagado", value="pagado"),
                 default_value=State.reservation_form["status"],
                 on_change=lambda value: State.update_reservation_form("status", value),
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
               ),
               class_name="flex flex-col gap-1",
             ),
@@ -673,14 +678,14 @@ def reservation_modal() -> rx.Component:
               rx.icon("printer", class_name="h-4 w-4"),
               "Imprimir Comprobante",
               on_click=lambda: State.print_reservation_receipt(State.reservation_modal_reservation_id),
-              class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-slate-700 hover:bg-slate-50 min-h-[42px]",
+              class_name=f"{BUTTON_STYLES['secondary']} min-h-[42px]",
             ),
             rx.fragment(),
           ),
           rx.el.button(
             "Cerrar",
             on_click=State.close_reservation_modal,
-            class_name="px-4 py-2 rounded-md border text-slate-700 hover:bg-slate-50 min-h-[42px]",
+            class_name=f"{BUTTON_STYLES['secondary']} min-h-[42px]",
           ),
           rx.cond(
             State.reservation_modal_mode == "new",
@@ -707,8 +712,8 @@ def reservation_modal() -> rx.Component:
                 | (State.reservation_form["total_amount"] == "0")
                 | (State.reservation_form["total_amount"] == "")
                 | (State.schedule_selected_date == ""),
-                "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed min-h-[42px]",
-                "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[42px]",
+                f"{BUTTON_STYLES['disabled']} min-h-[42px]",
+                f"{BUTTON_STYLES['primary']} min-h-[42px]",
               ),
             ),
             rx.fragment(),
@@ -726,7 +731,7 @@ def reservation_modal() -> rx.Component:
 def reservation_form_card() -> rx.Component:
   return rx.el.div(
     rx.el.div(
-      rx.el.h3("Registro de reservas", class_name="text-lg font-semibold text-slate-800"),
+      rx.el.h3("Registro de reservas", class_name=TYPOGRAPHY["section_title"]),
       rx.el.p(
         "Captura los datos del cliente, horario y adelantos opcionales.",
         class_name="text-sm text-slate-600",
@@ -735,112 +740,112 @@ def reservation_form_card() -> rx.Component:
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Nombre completo", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Nombre completo", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="Ej: Juan Perez",
           default_value=State.reservation_form["client_name"],
           on_blur=lambda value: State.update_reservation_form("client_name", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("DNI (opcional)", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("DNI (opcional)", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="Documento",
           default_value=State.reservation_form["dni"],
           on_blur=lambda value: State.update_reservation_form("dni", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Telefono (opcional)", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Telefono (opcional)", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="999 999 999",
           default_value=State.reservation_form["phone"],
           on_blur=lambda value: State.update_reservation_form("phone", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Campo", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Campo", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="Campo A / Cancha 1",
           key=State.reservation_form["selected_price_id"] + "-" + State.reservation_form["field_name"],
           default_value=State.reservation_form["field_name"],
           on_blur=lambda value: State.update_reservation_form("field_name", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Fecha", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Fecha", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           type="date",
           default_value=State.reservation_form["date"],
           on_blur=lambda value: State.update_reservation_form("date", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Hora inicio", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Hora inicio", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           type="time",
           default_value=State.reservation_form["start_time"],
           on_blur=lambda value: State.update_reservation_form("start_time", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Hora fin", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Hora fin", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           type="time",
           default_value=State.reservation_form["end_time"],
           on_blur=lambda value: State.update_reservation_form("end_time", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Adelanto", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Adelanto", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           type="number",
           step="0.01",
           default_value=State.reservation_form["advance_amount"],
           on_blur=lambda value: State.update_reservation_form("advance_amount", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       payment_method_selector_compact(),
       rx.el.div(
-        rx.el.label("Monto total", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Monto total", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           type="number",
           step="0.01",
           key=State.reservation_form["selected_price_id"] + "-" + State.reservation_form["start_time"] + "-" + State.reservation_form["end_time"] + "-" + State.reservation_form["total_amount"],
           default_value=State.reservation_form["total_amount"],
           on_blur=lambda value: State.update_reservation_form("total_amount", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Estado", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Estado", class_name=TYPOGRAPHY["label"]),
         rx.el.select(
           rx.el.option("Pendiente", value="pendiente"),
           rx.el.option("Pagado", value="pagado"),
           default_value=State.reservation_form["status"],
           on_change=lambda value: State.update_reservation_form("status", value),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
@@ -851,11 +856,11 @@ def reservation_form_card() -> rx.Component:
         rx.icon("check", class_name="h-4 w-4"),
         "Guardar reserva",
         on_click=State.create_field_reservation,
-        class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[44px]",
+        class_name=f"{BUTTON_STYLES['primary']} min-h-[44px]",
       ),
       class_name="flex justify-end",
     ),
-    class_name="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col gap-4",
+    class_name=f"{CARD_STYLES['default']} flex flex-col gap-4",
   )
 
 
@@ -867,7 +872,7 @@ def reservation_delete_modal() -> rx.Component:
       ),
       rx.radix.primitives.dialog.content(
         rx.el.div(
-          rx.el.h3("Eliminar reserva", class_name="text-lg font-semibold text-slate-800"),
+          rx.el.h3("Eliminar reserva", class_name=TYPOGRAPHY["section_title"]),
           rx.el.p(
             "Esta accion marcara la reserva como Eliminada y liberara el horario. Ingresa un sustento obligatorio.",
             class_name="text-sm text-slate-600",
@@ -901,7 +906,7 @@ def reservation_delete_modal() -> rx.Component:
           ),
         ),
         rx.el.div(
-          rx.el.label("Sustento de eliminacion", class_name="text-sm font-medium text-slate-700"),
+          rx.el.label("Sustento de eliminacion", class_name=TYPOGRAPHY["label"]),
           rx.el.textarea(
             placeholder="Ej: Registro duplicado o datos incorrectos",
             default_value=State.reservation_delete_reason,
@@ -916,7 +921,7 @@ def reservation_delete_modal() -> rx.Component:
           rx.el.button(
             "Cancelar",
             on_click=lambda _: State.close_reservation_delete_modal(),
-            class_name="px-4 py-2 rounded-md border text-slate-700 hover:bg-slate-50 min-h-[40px]",
+            class_name=f"{BUTTON_STYLES['secondary']} min-h-[40px]",
           ),
           rx.el.button(
             rx.icon("trash-2", class_name="h-4 w-4"),
@@ -925,8 +930,8 @@ def reservation_delete_modal() -> rx.Component:
             disabled=State.reservation_delete_button_disabled,
             class_name=rx.cond(
               State.reservation_delete_button_disabled,
-              "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed min-h-[40px]",
-              "flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 min-h-[40px]",
+              f"{BUTTON_STYLES['disabled']} min-h-[40px]",
+              f"{BUTTON_STYLES['danger']} min-h-[40px]",
             ),
           ),
           class_name="flex justify-end gap-3",
@@ -951,26 +956,151 @@ def reservation_status_badge(reservation: rx.Var[dict]) -> rx.Component:
     reservation["status"] == "pagado",
     rx.el.span(
       "Pagado",
-      class_name="px-2 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700",
+      class_name=BADGE_STYLES["success"],
     ),
     rx.cond(
       reservation["status"] == "cancelado",
       rx.el.span(
         "Cancelado",
-        class_name="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700",
+        class_name=BADGE_STYLES["danger"],
       ),
       rx.cond(
         reservation["status"] == "eliminado",
         rx.el.span(
           "Eliminado",
-          class_name="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 text-slate-700",
+          class_name=BADGE_STYLES["neutral"],
         ),
         rx.el.span(
           "Pendiente",
-          class_name="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700",
+          class_name=BADGE_STYLES["warning"],
         ),
       ),
     ),
+  )
+
+
+def reservation_mobile_card(reservation: rx.Var[dict]) -> rx.Component:
+  """Tarjeta compacta de reserva para vista movil."""
+  return rx.el.div(
+    # Header: cliente + estado
+    rx.el.div(
+      rx.el.span(reservation["client_name"], class_name=TYPOGRAPHY["card_title"]),
+      reservation_status_badge(reservation),
+      class_name="flex items-center justify-between gap-2",
+    ),
+    # Campo + Horario
+    rx.el.div(
+      rx.el.div(
+        rx.el.span("Campo", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(reservation["field_name"], class_name=TYPOGRAPHY["body"]),
+        class_name="flex flex-col",
+      ),
+      rx.el.div(
+        rx.el.span("Horario", class_name=TYPOGRAPHY["caption"]),
+        rx.el.div(
+          rx.el.span(reservation["start_datetime"], class_name=TYPOGRAPHY["mono_value"]),
+          rx.el.span(reservation["end_datetime"], class_name=TYPOGRAPHY["caption"]),
+          class_name="flex flex-col",
+        ),
+        class_name="flex flex-col",
+      ),
+      class_name="grid grid-cols-2 gap-3",
+    ),
+    # Montos
+    rx.el.div(
+      rx.el.div(
+        rx.el.span("Total", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(
+          State.currency_symbol, reservation["total_amount"].to_string(),
+          class_name=TYPOGRAPHY["mono_value"],
+        ),
+        class_name="flex flex-col",
+      ),
+      rx.el.div(
+        rx.el.span("Pagado", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(
+          State.currency_symbol, reservation["paid_amount"].to_string(),
+          class_name=TYPOGRAPHY["mono_value"],
+        ),
+        class_name="flex flex-col",
+      ),
+      rx.el.div(
+        rx.el.span("Saldo", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(
+          State.currency_symbol,
+          (reservation["total_amount"] - reservation["advance_amount"]).to_string(),
+          class_name=TYPOGRAPHY["mono_value"],
+        ),
+        class_name="flex flex-col",
+      ),
+      class_name="grid grid-cols-3 gap-3",
+    ),
+    # Sustento de eliminacion (si aplica)
+    rx.cond(
+      reservation["status"] == "eliminado",
+      rx.el.span(
+        "Sustento: ",
+        reservation.get("delete_reason", ""),
+        class_name=TYPOGRAPHY["caption"],
+      ),
+      rx.fragment(),
+    ),
+    # Acciones
+    rx.el.div(
+      rx.el.button(
+        rx.icon("trash-2", class_name="h-4 w-4"),
+        on_click=lambda _, rid=reservation["id"]: State.start_reservation_delete(rid),
+        disabled=reservation["status"] != "pendiente",
+        title="Eliminar reserva",
+        aria_label="Eliminar reserva",
+        class_name=rx.cond(
+          reservation["status"] != "pendiente",
+          "p-2 rounded-full bg-slate-200 text-slate-500 cursor-not-allowed",
+          BUTTON_STYLES["icon_danger"],
+        ),
+      ),
+      rx.el.button(
+        rx.icon("eye", class_name="h-4 w-4"),
+        rx.el.span("Ver", class_name="text-sm font-semibold"),
+        on_click=lambda _, rid=reservation["id"]: State.view_reservation_details(rid),
+        class_name=BUTTON_STYLES["link_primary"],
+      ),
+      rx.el.button(
+        rx.icon("printer", class_name="h-4 w-4"),
+        rx.el.span("Imprimir", class_name="text-sm font-semibold"),
+        on_click=lambda _, rid=reservation["id"]: State.print_reservation_receipt(rid),
+        class_name=BUTTON_STYLES["secondary_sm"],
+      ),
+      rx.el.button(
+        rx.icon("credit-card", class_name="h-4 w-4"),
+        rx.el.span("Pagar", class_name="text-sm font-semibold"),
+        on_click=lambda _, rid=reservation["id"]: State.go_to_sale_for_reservation(rid),
+        disabled=rx.cond(
+          reservation["status"] == "eliminado",
+          True,
+          rx.cond(
+            reservation["status"] == "cancelado",
+            True,
+            rx.cond(reservation["status"] == "pagado", True, False),
+          ),
+        ),
+        class_name=rx.cond(
+          reservation["status"] == "eliminado",
+          BUTTON_STYLES["disabled_sm"],
+          rx.cond(
+            reservation["status"] == "cancelado",
+            BUTTON_STYLES["disabled_sm"],
+            rx.cond(
+              reservation["status"] == "pagado",
+              BUTTON_STYLES["disabled_sm"],
+              BUTTON_STYLES["success_sm"],
+            ),
+          ),
+        ),
+      ),
+      class_name="flex flex-wrap gap-2",
+    ),
+    class_name=f"{CARD_STYLES['compact']} flex flex-col gap-3",
   )
 
 
@@ -1026,20 +1156,20 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
           class_name=rx.cond(
             reservation["status"] != "pendiente",
             "p-2 rounded-full bg-slate-200 text-slate-500 cursor-not-allowed",
-            "p-2 rounded-full border text-red-600 hover:bg-red-50",
+            BUTTON_STYLES["icon_danger"],
           ),
         ),
         rx.el.button(
           rx.icon("eye", class_name="h-4 w-4"),
           rx.el.span("Ver", class_name="text-sm font-semibold"),
           on_click=lambda _, rid=reservation["id"]: State.view_reservation_details(rid),
-          class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-blue-600 hover:bg-blue-50",
+          class_name=BUTTON_STYLES["link_primary"],
         ),
         rx.el.button(
           rx.icon("printer", class_name="h-4 w-4"),
           rx.el.span("Imprimir", class_name="text-sm font-semibold"),
           on_click=lambda _, rid=reservation["id"]: State.print_reservation_receipt(rid),
-          class_name="flex items-center gap-2 px-3 py-2 rounded-md border text-slate-600 hover:bg-slate-50",
+          class_name=BUTTON_STYLES["secondary_sm"],
         ),
         rx.el.button(
           rx.icon("credit-card", class_name="h-4 w-4"),
@@ -1056,14 +1186,14 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
           ),
           class_name=rx.cond(
             reservation["status"] == "eliminado",
-            "flex items-center gap-2 px-3 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed",
+            BUTTON_STYLES["disabled_sm"],
             rx.cond(
               reservation["status"] == "cancelado",
-              "flex items-center gap-2 px-3 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed",
+              BUTTON_STYLES["disabled_sm"],
               rx.cond(
                 reservation["status"] == "pagado",
-                "flex items-center gap-2 px-3 py-2 rounded-md bg-slate-200 text-slate-500 cursor-not-allowed",
-                "flex items-center gap-2 px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700",
+                BUTTON_STYLES["disabled_sm"],
+                BUTTON_STYLES["success_sm"],
               ),
             ),
           ),
@@ -1087,7 +1217,7 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
 def reservations_table() -> rx.Component:
   return rx.el.div(
     rx.el.div(
-      rx.el.h3("RESERVAS REGISTRADAS", class_name="text-lg font-semibold text-slate-800"),
+      rx.el.h3("RESERVAS REGISTRADAS", class_name=TYPOGRAPHY["section_title"]),
       rx.el.p(
         "Revisa el estado de cada reserva por deporte.",
         class_name="text-sm text-slate-600",
@@ -1101,7 +1231,7 @@ def reservations_table() -> rx.Component:
             placeholder="Buscar por cliente, campo o horario...",
             default_value=State.reservation_staged_search,
             on_change=State.set_reservation_staged_search,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           debounce_timeout=600,
         ),
@@ -1113,19 +1243,19 @@ def reservations_table() -> rx.Component:
           rx.el.option("Eliminado", value="eliminado"),
           default_value=State.reservation_staged_status,
           on_change=State.set_reservation_staged_status,
-          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=SELECT_STYLES["default"],
         ),
         rx.el.input(
           type="date",
           default_value=State.reservation_staged_start_date,
           on_blur=State.set_reservation_staged_start_date,
-          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=SELECT_STYLES["default"],
         ),
         rx.el.input(
           type="date",
           default_value=State.reservation_staged_end_date,
           on_blur=State.set_reservation_staged_end_date,
-          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=SELECT_STYLES["default"],
         ),
         class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2",
       ),
@@ -1134,36 +1264,42 @@ def reservations_table() -> rx.Component:
           rx.icon("search", class_name="h-4 w-4"),
           "Buscar",
           on_click=State.apply_reservation_filters,
-          class_name="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white hover:bg-blue-700",
+          class_name=BUTTON_STYLES["primary"],
         ),
         rx.el.button(
           rx.icon("rotate-ccw", class_name="h-4 w-4"),
           "Limpiar",
           on_click=State.reset_reservation_filters,
-          class_name="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-700 hover:bg-slate-50",
+          class_name=BUTTON_STYLES["secondary"],
         ),
         rx.el.button(
           rx.icon("download", class_name="h-4 w-4"),
           "Exportar",
           on_click=State.export_reservations_excel,
-          class_name="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-emerald-600 px-3.5 text-sm font-medium text-white hover:bg-emerald-700",
+          class_name=BUTTON_STYLES["success"],
         ),
         class_name="flex flex-col sm:flex-row sm:flex-wrap gap-2 xl:justify-end",
       ),
       class_name="flex flex-col gap-2",
     ),
+    # Mobile card view
+    rx.el.div(
+      rx.foreach(State.paginated_reservations, reservation_mobile_card),
+      class_name="flex flex-col gap-3 md:hidden",
+    ),
+    # Desktop table view
     rx.el.div(
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Cliente", class_name=f"{TABLE_STYLES['header_cell']} w-[13%]"),
-            rx.el.th("Campo", class_name=f"{TABLE_STYLES['header_cell']} w-[12%] hidden md:table-cell"),
-            rx.el.th("Horario", class_name=f"{TABLE_STYLES['header_cell']} w-[16%]"),
-            rx.el.th("Monto", class_name=f"{TABLE_STYLES['header_cell']} w-[10%]"),
-            rx.el.th("Estado", class_name=f"{TABLE_STYLES['header_cell']} w-[9%]"),
-            rx.el.th("Acciones", class_name=f"{TABLE_STYLES['header_cell']} w-[32%]"),
+            rx.el.th("Cliente", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[13%]"),
+            rx.el.th("Campo", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[12%] hidden md:table-cell"),
+            rx.el.th("Horario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[16%]"),
+            rx.el.th("Monto", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[10%]"),
+            rx.el.th("Estado", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[9%]"),
+            rx.el.th("Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[32%]"),
             rx.el.th(
-              "Saldo", class_name=f"{TABLE_STYLES['header_cell']} w-[8%] text-right hidden md:table-cell"
+              "Saldo", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[8%] text-right hidden md:table-cell"
             ),
             class_name=TABLE_STYLES["header"],
           )
@@ -1171,7 +1307,7 @@ def reservations_table() -> rx.Component:
         rx.el.tbody(rx.foreach(State.paginated_reservations, reservation_row)),
         class_name="w-full table-fixed",
       ),
-      class_name="w-full overflow-x-auto rounded-lg border border-slate-200",
+      class_name="hidden md:block w-full overflow-x-auto rounded-lg border border-slate-200",
     ),
     rx.cond(
       State.service_reservations_for_sport.length() == 0,
@@ -1186,14 +1322,14 @@ def reservations_table() -> rx.Component:
         on_next=State.next_reservation_page,
       ),
     ),
-    class_name="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col gap-3",
+    class_name=f"{CARD_STYLES['default']} flex flex-col gap-3",
   )
 
 
 def payments_card() -> rx.Component:
   return rx.el.div(
     rx.el.div(
-      rx.el.h3("Pagos y adelantos", class_name="text-lg font-semibold text-slate-800"),
+      rx.el.h3("Pagos y adelantos", class_name=TYPOGRAPHY["section_title"]),
       rx.el.p(
         "Registra pagos parciales, saldo pendiente y genera comprobante.",
         class_name="text-sm text-slate-600",
@@ -1202,7 +1338,7 @@ def payments_card() -> rx.Component:
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Reserva", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Reserva", class_name=TYPOGRAPHY["label"]),
         rx.el.select(
           rx.el.option("Selecciona una reserva", value=""),
           rx.foreach(
@@ -1211,19 +1347,19 @@ def payments_card() -> rx.Component:
           ),
           default_value=State.reservation_payment_id,
           on_change=State.select_reservation_for_payment,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Monto a registrar", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Monto a registrar", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           type="number",
           step="0.01",
           placeholder="Ej: 80.00",
           default_value=State.reservation_payment_amount,
           on_blur=State.set_reservation_payment_amount,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
@@ -1240,13 +1376,13 @@ def payments_card() -> rx.Component:
         rx.icon("wallet", class_name="h-4 w-4"),
         "Registrar pago",
         on_click=State.apply_reservation_payment,
-        class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 min-h-[44px]",
+        class_name=f"{BUTTON_STYLES['success']} min-h-[44px]",
       ),
       rx.el.button(
         rx.icon("badge-check", class_name="h-4 w-4"),
         "Pagar saldo",
         on_click=State.pay_reservation_balance,
-        class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md border text-indigo-700 hover:bg-indigo-50 min-h-[44px]",
+        class_name=f"{BUTTON_STYLES['link_primary']} min-h-[44px]",
       ),
       class_name="flex flex-col sm:flex-row gap-3",
     ),
@@ -1284,14 +1420,14 @@ def payments_card() -> rx.Component:
         class_name="rounded-lg border border-emerald-100 bg-emerald-50 p-3 flex flex-col gap-2",
       ),
     ),
-    class_name="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col gap-4",
+    class_name=f"{CARD_STYLES['default']} flex flex-col gap-4",
   )
 
 
 def cancellation_card() -> rx.Component:
   return rx.el.div(
     rx.el.div(
-      rx.el.h3("Cancelacion de reservas", class_name="text-lg font-semibold text-slate-800"),
+      rx.el.h3("Cancelacion de reservas", class_name=TYPOGRAPHY["section_title"]),
       rx.el.p(
         "Selecciona la reserva, registra el motivo y marca el estado como cancelado.",
         class_name="text-sm text-slate-600",
@@ -1299,7 +1435,7 @@ def cancellation_card() -> rx.Component:
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.label("Reserva a cancelar", class_name="text-sm font-medium text-slate-700"),
+      rx.el.label("Reserva a cancelar", class_name=TYPOGRAPHY["label"]),
       rx.el.select(
         rx.el.option("Selecciona una reserva", value=""),
         rx.foreach(
@@ -1308,12 +1444,12 @@ def cancellation_card() -> rx.Component:
         ),
         default_value=State.reservation_cancel_selection,
         on_change=State.select_reservation_to_cancel,
-        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+        class_name=INPUT_STYLES["default"],
       ),
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.label("Motivo de cancelacion", class_name="text-sm font-medium text-slate-700"),
+      rx.el.label("Motivo de cancelacion", class_name=TYPOGRAPHY["label"]),
       rx.el.textarea(
         placeholder="Describe el motivo",
         default_value=State.reservation_cancel_reason,
@@ -1326,9 +1462,9 @@ def cancellation_card() -> rx.Component:
       rx.icon("ban", class_name="h-4 w-4"),
       "Cancelar reserva",
       on_click=State.cancel_reservation,
-      class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 min-h-[44px]",
+      class_name=f"{BUTTON_STYLES['danger']} min-h-[44px]",
     ),
-    class_name="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm flex flex-col gap-3",
+    class_name=f"{CARD_STYLES['default']} flex flex-col gap-3",
   )
 
 
@@ -1347,7 +1483,61 @@ def log_type_badge(entry: rx.Var[dict]) -> rx.Component:
         ),
       ),
     ),
-    class_name="px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700",
+    class_name=BADGE_STYLES["neutral"],
+  )
+
+
+def admin_log_mobile_card(entry: rx.Var[dict]) -> rx.Component:
+  """Tarjeta compacta de log administrativo para vista movil."""
+  return rx.el.div(
+    # Header: tipo + estado
+    rx.el.div(
+      log_type_badge(entry),
+      rx.el.span(entry["status"].capitalize(), class_name=TYPOGRAPHY["body"]),
+      class_name="flex items-center justify-between gap-2",
+    ),
+    # Fecha + Cliente
+    rx.el.div(
+      rx.el.div(
+        rx.el.span("Fecha", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(entry["timestamp"], class_name=TYPOGRAPHY["mono_value"]),
+        class_name="flex flex-col",
+      ),
+      rx.el.div(
+        rx.el.span("Cliente", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(entry["client_name"], class_name=TYPOGRAPHY["body"]),
+        class_name="flex flex-col",
+      ),
+      class_name="grid grid-cols-2 gap-3",
+    ),
+    # Campo + Monto
+    rx.el.div(
+      rx.el.div(
+        rx.el.span("Campo", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(entry["field_name"], class_name=TYPOGRAPHY["body"]),
+        class_name="flex flex-col",
+      ),
+      rx.el.div(
+        rx.el.span("Monto", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(
+          State.currency_symbol, entry["amount"].to_string(),
+          class_name=TYPOGRAPHY["mono_value"],
+        ),
+        class_name="flex flex-col",
+      ),
+      class_name="grid grid-cols-2 gap-3",
+    ),
+    # Notas (si existen)
+    rx.cond(
+      entry["notes"] != "",
+      rx.el.div(
+        rx.el.span("Notas", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(entry["notes"], class_name=TYPOGRAPHY["body"]),
+        class_name="flex flex-col",
+      ),
+      rx.fragment(),
+    ),
+    class_name=f"{CARD_STYLES['compact']} flex flex-col gap-2",
   )
 
 
@@ -1424,23 +1614,29 @@ def admin_log_table() -> rx.Component:
       "Movimientos de reservas, cancelaciones y pagos con filtros por fecha, deporte y estado.",
     ),
     admin_log_filters(),
+    # Mobile card view
+    rx.el.div(
+      rx.foreach(State.filtered_service_admin_log, admin_log_mobile_card),
+      class_name="flex flex-col gap-3 md:hidden",
+    ),
+    # Desktop table view
     rx.el.table(
       rx.el.thead(
         rx.el.tr(
-          rx.el.th("Fecha y hora", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Movimiento", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Campo", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+          rx.el.th("Fecha y hora", scope="col", class_name=TABLE_STYLES["header_cell"]),
+          rx.el.th("Movimiento", scope="col", class_name=TABLE_STYLES["header_cell"]),
+          rx.el.th("Cliente", scope="col", class_name=TABLE_STYLES["header_cell"]),
+          rx.el.th("Campo", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
           rx.el.th(
-            "Monto", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+            "Monto", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
           ),
-          rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
-          rx.el.th("Notas", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+          rx.el.th("Estado", scope="col", class_name=TABLE_STYLES["header_cell"]),
+          rx.el.th("Notas", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
           class_name=TABLE_STYLES["header"],
         )
       ),
       rx.el.tbody(rx.foreach(State.filtered_service_admin_log, admin_log_row)),
-      class_name="min-w-full",
+      class_name="hidden md:table min-w-full",
     ),
     rx.cond(
       State.filtered_service_admin_log.length() == 0,
@@ -1450,7 +1646,7 @@ def admin_log_table() -> rx.Component:
       ),
       rx.fragment(),
     ),
-    class_name="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm overflow-x-auto flex flex-col gap-4",
+    class_name=f"{CARD_STYLES['default']} overflow-x-auto flex flex-col gap-4",
   )
 
 
@@ -1479,7 +1675,7 @@ def campo_tab() -> rx.Component:
 def field_prices_tab() -> rx.Component:
   return rx.el.div(
     rx.el.div(
-      rx.el.h3("PRECIOS DE CAMPO", class_name="text-lg font-semibold text-slate-800"),
+      rx.el.h3("PRECIOS DE CAMPO", class_name=TYPOGRAPHY["section_title"]),
       rx.el.p(
         "Configura las tarifas por deporte y nombre de campo para usarlas directamente al registrar reservas.",
         class_name="text-sm text-slate-600",
@@ -1493,14 +1689,14 @@ def field_prices_tab() -> rx.Component:
           placeholder="Deporte (ej: Futbol, Voley)",
           default_value=State.new_field_price_sport,
           on_blur=State.set_new_field_price_sport,
-          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=SELECT_STYLES["default"],
           debounce_timeout=600,
         ),
         rx.el.input(
           placeholder="Nombre del campo (ej: Futbol 5)",
           default_value=State.new_field_price_name,
           on_blur=State.set_new_field_price_name,
-          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=SELECT_STYLES["default"],
           debounce_timeout=600,
         ),
         rx.el.input(
@@ -1509,13 +1705,13 @@ def field_prices_tab() -> rx.Component:
           placeholder="Precio por hora",
           default_value=State.new_field_price_amount,
           on_blur=State.set_new_field_price_amount,
-          class_name="h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=SELECT_STYLES["default"],
         ),
         rx.el.button(
           rx.icon("plus", class_name="h-4 w-4"),
           "Agregar",
           on_click=State.add_field_price,
-          class_name="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-indigo-600 px-3.5 text-sm font-medium text-white hover:bg-indigo-700",
+          class_name=BUTTON_STYLES["primary"],
         ),
         rx.el.button(
           rx.icon("refresh-ccw", class_name="h-4 w-4"),
@@ -1524,8 +1720,8 @@ def field_prices_tab() -> rx.Component:
           is_disabled=rx.cond(State.editing_field_price_id == "", True, False),
           class_name=rx.cond(
             State.editing_field_price_id == "",
-            "inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-200 px-3.5 text-sm font-medium text-slate-500 cursor-not-allowed",
-            "inline-flex h-10 items-center justify-center gap-2 rounded-md bg-amber-500 px-3.5 text-sm font-medium text-white hover:bg-amber-600",
+            BUTTON_STYLES["disabled"],
+            BUTTON_STYLES["warning"],
           ),
         ),
         class_name="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-2 sm:gap-3 items-end bg-white p-3.5 sm:p-4 rounded-xl shadow-sm border border-slate-200",
@@ -1546,16 +1742,59 @@ def field_prices_tab() -> rx.Component:
       ),
       rx.fragment(),
     ),
+    # Mobile card view for field prices
+    rx.el.div(
+      rx.foreach(
+        State.field_prices,
+        lambda price: rx.el.div(
+          rx.el.div(
+            rx.el.span(price["sport"], class_name=TYPOGRAPHY["card_title"]),
+            rx.el.span(price["name"], class_name=TYPOGRAPHY["body"]),
+            class_name="flex items-center justify-between gap-2",
+          ),
+          rx.el.div(
+            rx.el.span("Precio/hora", class_name=TYPOGRAPHY["caption"]),
+            rx.el.span(
+              price["price"].to_string(),
+              class_name=TYPOGRAPHY["mono_value"],
+            ),
+            class_name="flex items-center justify-between",
+          ),
+          rx.cond(
+            State.can_manage_config,
+            rx.el.div(
+              rx.el.button(
+                rx.icon("pencil", class_name="h-4 w-4"),
+                rx.el.span("Editar", class_name="text-sm font-semibold"),
+                on_click=lambda _, pid=price["id"]: State.edit_field_price(pid),
+                class_name=BUTTON_STYLES["link_primary"],
+              ),
+              rx.el.button(
+                rx.icon("trash-2", class_name="h-4 w-4"),
+                rx.el.span("Eliminar", class_name="text-sm font-semibold"),
+                on_click=lambda _, pid=price["id"]: State.remove_field_price(pid),
+                class_name=BUTTON_STYLES["link_danger"],
+              ),
+              class_name="flex flex-wrap gap-2",
+            ),
+            rx.el.span("Solo lectura", class_name=TYPOGRAPHY["caption"]),
+          ),
+          class_name=f"{CARD_STYLES['compact']} flex flex-col gap-2",
+        ),
+      ),
+      class_name="flex flex-col gap-3 md:hidden",
+    ),
+    # Desktop table view for field prices
     rx.el.div(
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Deporte", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Campo", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Precio (por hora)", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Deporte", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Campo", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Precio (por hora)", scope="col", class_name=TABLE_STYLES["header_cell"]),
             rx.el.th(
               "Acciones",
-              class_name=f"{TABLE_STYLES['header_cell']} text-center",
+              scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
             ),
             class_name=TABLE_STYLES["header"],
           )
@@ -1575,7 +1814,7 @@ def field_prices_tab() -> rx.Component:
                     pid, value
                   ),
                   disabled=~State.can_manage_config,
-                  class_name="w-full sm:w-36 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:bg-slate-100 disabled:text-slate-500",
+                  class_name=f"{INPUT_STYLES['default']} sm:w-36 disabled:bg-slate-100 disabled:text-slate-500",
                 ),
                 class_name="py-2 px-3",
               ),
@@ -1588,14 +1827,14 @@ def field_prices_tab() -> rx.Component:
                       on_click=lambda _, pid=price["id"]: State.edit_field_price(pid),
                       title="Editar",
                       aria_label="Editar",
-                      class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
+                      class_name=BUTTON_STYLES["icon_primary"],
                     ),
                     rx.el.button(
                       rx.icon("trash-2", class_name="h-4 w-4"),
                       on_click=lambda _, pid=price["id"]: State.remove_field_price(pid),
                       title="Eliminar",
                       aria_label="Eliminar",
-                      class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                      class_name=BUTTON_STYLES["icon_danger"],
                     ),
                     class_name="flex items-center justify-center gap-2",
                   ),
@@ -1609,7 +1848,7 @@ def field_prices_tab() -> rx.Component:
         ),
         class_name="min-w-full",
       ),
-      class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm overflow-x-auto",
+      class_name=f"hidden md:block {CARD_STYLES['default']} overflow-x-auto",
     ),
     class_name="flex flex-col gap-4",
   )
@@ -1618,11 +1857,11 @@ def field_prices_tab() -> rx.Component:
 def servicio_card(title: str, description: str) -> rx.Component:
   return rx.el.div(
     rx.el.div(
-      rx.el.span(title, class_name="text-lg font-semibold text-slate-800"),
+      rx.el.span(title, class_name=TYPOGRAPHY["section_title"]),
       rx.el.p(description, class_name="text-sm text-slate-600"),
       class_name="flex flex-col gap-2",
     ),
-    class_name="w-full bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-sm",
+    class_name=f"w-full {CARD_STYLES['default']}",
   )
 
 

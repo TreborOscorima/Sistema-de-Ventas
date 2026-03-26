@@ -23,8 +23,10 @@ Flujo típico:
     4. Confirma venta -> process_sale()
     5. Se genera recibo (ReceiptMixin)
 """
+import json
 import reflex as rx
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 from sqlmodel import select
@@ -42,8 +44,10 @@ from app.models.billing import CompanyBillingConfig
 from app.services.billing_service import emit_fiscal_document
 from app.services.document_lookup_service import (
     determine_ar_cbte_tipo,
+    get_cache_ttl,
     lookup_document,
 )
+from app.models.lookup_cache import DocumentLookupCache
 from app.services.sale_service import SaleService, StockError
 from app.utils.db import get_async_session
 from app.utils.logger import get_logger
@@ -200,7 +204,15 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
 
     @rx.event
     async def lookup_fiscal_document(self, doc_number: str):
-        """Consulta RUC/CUIT/DNI en la API fiscal correspondiente."""
+        """Consulta RUC/CUIT/DNI en la API fiscal correspondiente.
+
+        Flujo:
+        1. Validar input (solo dígitos, mínimo 8 caracteres).
+        2. Consultar caché local (DocumentLookupCache) — si TTL vigente, usar.
+        3. Llamar API externa vía lookup_document().
+        4. Guardar resultado en caché para futuras consultas.
+        5. Auto-determinar tipo comprobante AR si aplica.
+        """
         doc_number = (doc_number or "").strip().replace("-", "")
         self.fiscal_doc_number = doc_number
 
@@ -226,7 +238,49 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     ).first()
 
             country = (config.country if config else "PE") or "PE"
+            country_code = country[:2].upper() if country else "PE"
 
+            # ── Consultar caché local ────────────────────────────
+            with rx.session() as session:
+                cache_stmt = select(DocumentLookupCache).where(
+                    DocumentLookupCache.doc_number == doc_number,
+                    DocumentLookupCache.country == country_code,
+                )
+                cached = session.exec(cache_stmt).first()
+
+                if cached:
+                    ttl = get_cache_ttl(cached.doc_type, not cached.not_found)
+                    age = (
+                        datetime.now(timezone.utc)
+                        - cached.fetched_at.replace(tzinfo=timezone.utc)
+                    )
+                    if age < ttl and not cached.not_found:
+                        self.fiscal_lookup_result = {
+                            "doc_number": cached.doc_number,
+                            "doc_type": cached.doc_type,
+                            "legal_name": cached.legal_name,
+                            "fiscal_address": cached.fiscal_address,
+                            "status": cached.status,
+                            "condition": cached.condition,
+                            "iva_condition": cached.iva_condition,
+                            "iva_condition_code": str(cached.iva_condition_code),
+                        }
+                        self.fiscal_lookup_error = ""
+                        # Auto-determinar tipo comprobante AR desde caché
+                        if country_code == "AR" and cached.iva_condition:
+                            emisor_iva = (
+                                (config.emisor_iva_condition if config else "RI") or "RI"
+                            )
+                            letra, _ = determine_ar_cbte_tipo(
+                                emisor_iva, cached.iva_condition
+                            )
+                            self.fiscal_ar_cbte_letra = letra
+                        else:
+                            self.fiscal_ar_cbte_letra = ""
+                        self.fiscal_lookup_loading = False
+                        return
+
+            # ── Llamar API externa ───────────────────────────────
             result = await lookup_document(
                 doc_number=doc_number,
                 country=country,
@@ -251,7 +305,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 self.fiscal_lookup_error = ""
 
                 # Validar estado para Perú
-                if country == "PE" and result.doc_type == "RUC":
+                if country_code == "PE" and result.doc_type == "RUC":
                     if result.status and result.status != "ACTIVO":
                         self.fiscal_lookup_error = (
                             f"RUC con estado {result.status}. "
@@ -264,16 +318,83 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                         )
 
                 # Auto-determinar tipo comprobante AR
-                if country == "AR" and result.iva_condition:
+                if country_code == "AR" and result.iva_condition:
                     emisor_iva = (config.emisor_iva_condition if config else "RI") or "RI"
                     letra, _ = determine_ar_cbte_tipo(emisor_iva, result.iva_condition)
                     self.fiscal_ar_cbte_letra = letra
                 else:
                     self.fiscal_ar_cbte_letra = ""
+
+                # ── Guardar en caché ─────────────────────────────
+                try:
+                    with rx.session() as session:
+                        existing = session.exec(
+                            select(DocumentLookupCache).where(
+                                DocumentLookupCache.doc_number == doc_number,
+                                DocumentLookupCache.country == country_code,
+                            )
+                        ).first()
+                        if existing:
+                            existing.legal_name = result.legal_name
+                            existing.fiscal_address = result.fiscal_address
+                            existing.status = result.status
+                            existing.condition = result.condition
+                            existing.iva_condition = result.iva_condition
+                            existing.iva_condition_code = result.iva_condition_code
+                            existing.doc_type = result.doc_type
+                            existing.raw_json = json.dumps(
+                                result.raw_data, default=str
+                            )
+                            existing.fetched_at = datetime.now(timezone.utc)
+                            existing.not_found = False
+                        else:
+                            cache_entry = DocumentLookupCache(
+                                country=country_code,
+                                doc_type=result.doc_type,
+                                doc_number=doc_number,
+                                legal_name=result.legal_name,
+                                fiscal_address=result.fiscal_address,
+                                status=result.status,
+                                condition=result.condition,
+                                iva_condition=result.iva_condition,
+                                iva_condition_code=result.iva_condition_code,
+                                raw_json=json.dumps(
+                                    result.raw_data, default=str
+                                ),
+                                not_found=False,
+                            )
+                            session.add(cache_entry)
+                        session.commit()
+                except Exception:
+                    pass  # Cache save failure is not critical
             else:
                 self.fiscal_lookup_result = {}
                 self.fiscal_lookup_error = f"No se encontró el documento {doc_number}."
                 self.fiscal_ar_cbte_letra = ""
+
+                # Cache negativo (not_found)
+                try:
+                    with rx.session() as session:
+                        existing = session.exec(
+                            select(DocumentLookupCache).where(
+                                DocumentLookupCache.doc_number == doc_number,
+                                DocumentLookupCache.country == country_code,
+                            )
+                        ).first()
+                        if existing:
+                            existing.not_found = True
+                            existing.fetched_at = datetime.now(timezone.utc)
+                        else:
+                            cache_entry = DocumentLookupCache(
+                                country=country_code,
+                                doc_type=result.doc_type or "",
+                                doc_number=doc_number,
+                                not_found=True,
+                            )
+                            session.add(cache_entry)
+                        session.commit()
+                except Exception:
+                    pass
         except Exception as exc:
             logger.exception("lookup_fiscal_document error: %s", exc)
             self.fiscal_lookup_error = "Error al consultar documento fiscal."
@@ -604,12 +725,19 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         # 2. Campo explícito en la venta
         if hasattr(sale, "receipt_type") and sale.receipt_type:
             return sale.receipt_type
-        # 3. Auto-detección por RUC/CUIT del cliente
+        # 3. Auto-detección por fiscal lookup result (RUC/CUIT consultado)
+        if self.fiscal_lookup_result and isinstance(self.fiscal_lookup_result, dict):
+            doc_type = self.fiscal_lookup_result.get("doc_type", "")
+            if doc_type in ("RUC", "CUIT"):
+                return ReceiptType.factura
+            if doc_type == "DNI":
+                return ReceiptType.boleta
+        # 4. Auto-detección por RUC/CUIT del cliente seleccionado
         if self.selected_client and isinstance(self.selected_client, dict):
             dni = (self.selected_client.get("dni") or "").strip()
             if len(dni) == 11 and dni.isdigit():
                 return ReceiptType.factura
-        # 4. Default: nota_venta (ticket interno, sin emisión fiscal)
+        # 5. Default: nota_venta (ticket interno, sin emisión fiscal)
         return self.sale_receipt_type_selection or ReceiptType.nota_venta
 
     def _extract_buyer_info(self) -> tuple[str | None, str | None, str | None]:

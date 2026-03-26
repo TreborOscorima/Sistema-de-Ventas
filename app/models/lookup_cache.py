@@ -1,13 +1,12 @@
-"""Caché de consultas de documentos fiscales (RUC/DNI/CUIT).
+"""Modelo de caché para consultas de documentos fiscales (RUC/CUIT/DNI).
 
-Tabla tenant-agnostic: los datos fiscales son registros públicos
-(padrón reducido SUNAT, padrón AFIP) y pueden ser compartidos
-entre todos los tenants sin riesgo de filtración de datos.
+Los datos fiscales son registros públicos, por lo que la caché es
+tenant-agnostic (compartida entre todas las empresas).
 
-TTLs:
-    - RUC/CUIT: 24 horas (el padrón se actualiza diariamente)
-    - DNI: 7 días (nombres casi nunca cambian)
-    - Not found: 1 hora (cache negativo corto para permitir reintentos)
+TTLs sugeridos:
+    - RUC/CUIT: 24 horas (el padrón se actualiza diariamente).
+    - DNI: 7 días (nombres casi nunca cambian).
+    - Not found: 1 hora (cache negativo corto para permitir reintentos).
 """
 from __future__ import annotations
 
@@ -15,32 +14,92 @@ from datetime import datetime
 from typing import Optional
 
 import reflex as rx
-from sqlalchemy import Column, String, UniqueConstraint
+import sqlalchemy
+from sqlalchemy import Text, UniqueConstraint
 from sqlmodel import Field
+
+from app.utils.timezone import utc_now_naive
 
 
 class DocumentLookupCache(rx.Model, table=True):
-    """Caché de resultados de consulta de documentos fiscales."""
+    """Cache de resultados de consulta a APIs fiscales externas."""
 
-    country: str = Field(sa_column=Column(String(5), nullable=False, index=True))
-    doc_type: str = Field(sa_column=Column(String(10), nullable=False))
-    doc_number: str = Field(sa_column=Column(String(20), nullable=False, index=True))
-
-    legal_name: str = Field(default="", sa_column=Column(String(255), nullable=False, server_default=""))
-    fiscal_address: str = Field(default="", sa_column=Column(String(500), nullable=False, server_default=""))
-    status: str = Field(default="", sa_column=Column(String(30), nullable=False, server_default=""))
-    condition: str = Field(default="", sa_column=Column(String(30), nullable=False, server_default=""))
-
-    # Argentina: condición IVA del contribuyente consultado
-    iva_condition: str = Field(default="", sa_column=Column(String(30), nullable=False, server_default=""))
-    iva_condition_code: int = Field(default=0)
-
-    # Respuesta completa para debug/auditoría
-    raw_json: Optional[str] = Field(default=None)
-
-    # Timestamp de la consulta externa (para TTL)
-    fetched_at: datetime = Field(default_factory=datetime.utcnow)
+    __tablename__ = "document_lookup_cache"
 
     __table_args__ = (
-        UniqueConstraint("country", "doc_number", name="uq_lookup_cache_country_doc"),
+        UniqueConstraint(
+            "country",
+            "doc_number",
+            name="uq_lookupcache_country_docnumber",
+        ),
+    )
+
+    # ── Identificación del documento ──────────────────────────
+    country: str = Field(
+        max_length=5,
+        index=True,
+        description="Código ISO país: 'PE' (Perú) o 'AR' (Argentina).",
+    )
+    doc_type: str = Field(
+        max_length=10,
+        description="Tipo de documento: 'RUC', 'DNI', 'CUIT'.",
+    )
+    doc_number: str = Field(
+        max_length=20,
+        index=True,
+        description="Número de documento fiscal consultado.",
+    )
+
+    # ── Datos del contribuyente ───────────────────────────────
+    legal_name: str = Field(
+        default="",
+        max_length=300,
+        description="Razón social o nombre completo.",
+    )
+    fiscal_address: str = Field(
+        default="",
+        max_length=500,
+        description="Domicilio fiscal registrado.",
+    )
+    status: str = Field(
+        default="",
+        max_length=30,
+        description="Estado del contribuyente: 'ACTIVO', 'BAJA', etc.",
+    )
+    condition: str = Field(
+        default="",
+        max_length=30,
+        description="Condición tributaria PE: 'HABIDO', 'NO HABIDO'.",
+    )
+
+    # ── Campos específicos Argentina ──────────────────────────
+    iva_condition: str = Field(
+        default="",
+        max_length=50,
+        description="Condición IVA AR: 'RI', 'monotributo', 'exento'.",
+    )
+    iva_condition_code: int = Field(
+        default=0,
+        description="Código numérico condición IVA AR: 1=RI, 4=exento, 6=monotributo.",
+    )
+
+    # ── Respuesta cruda ───────────────────────────────────────
+    raw_json: str = Field(
+        default="{}",
+        sa_column=sqlalchemy.Column(Text, nullable=False),
+        description="Respuesta completa de la API fiscal serializada como JSON.",
+    )
+
+    # ── Metadatos ─────────────────────────────────────────────
+    fetched_at: datetime = Field(
+        default_factory=utc_now_naive,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.DateTime(timezone=False),
+            server_default=sqlalchemy.func.now(),
+        ),
+        description="Momento UTC en que se obtuvo la respuesta.",
+    )
+    not_found: bool = Field(
+        default=False,
+        description="True si el documento no fue encontrado en la API fiscal.",
     )

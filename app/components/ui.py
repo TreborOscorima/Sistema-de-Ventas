@@ -4,11 +4,13 @@ Componentes de UI reutilizables para la aplicacion Sistema de Ventas.
 Este modulo brinda componentes comunes que siguen el principio DRY
 para reducir duplicacion de codigo entre paginas.
 
-Design System v2.0 - Estandarización UI/UX:
+Design System v3.0 - Estandarización UI/UX Professional Premium:
 - Border radius: sm (inputs/botones), md (cards), lg (modales)
 - Espaciado: Escala de 4px (p-1, p-2, p-3, p-4, p-6, p-8)
-- Colores: indigo-600 (primario), green-600 (éxito), red-600 (peligro)
-- Tipografía: tabular-nums para valores monetarios
+- Colores: indigo-600 (primario), emerald-600 (éxito), red-600 (peligro)
+- Tipografía: Escala semántica (page_title, section_title, body, caption)
+- Badges: Tokens centralizados por estado y tipo
+- Accesibilidad: ARIA labels, focus rings, roles semánticos
 """
 import reflex as rx
 from typing import Callable
@@ -33,9 +35,9 @@ RADIUS = {
 SHADOWS = {
     "none": "",
     "sm": "shadow-sm",
-    "md": "shadow-sm",
-    "lg": "shadow-md",
-    "xl": "shadow-lg",
+    "md": "shadow-md",
+    "lg": "shadow-lg",
+    "xl": "shadow-xl",
 }
 
 # Transiciones suaves
@@ -47,6 +49,88 @@ TRANSITIONS = {
 
 # Focus states para accesibilidad
 FOCUS_RING = "focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+
+
+# =============================================================================
+# TYPOGRAPHY TOKENS - Escala tipográfica semántica
+# =============================================================================
+
+TYPOGRAPHY = {
+    "page_title": "text-xl sm:text-2xl lg:text-[1.65rem] font-bold text-slate-900 tracking-tight leading-tight",
+    "section_title": "text-lg font-semibold text-slate-800",
+    "card_title": "text-base font-semibold text-slate-800",
+    "body": "text-sm text-slate-700",
+    "body_secondary": "text-sm text-slate-500",
+    "caption": "text-xs text-slate-500",
+    "label": "text-sm font-medium text-slate-700",
+    "label_secondary": "text-sm font-medium text-slate-600",
+    "mono_value": "text-sm font-semibold text-slate-900 tabular-nums",
+    "error_message": "text-sm text-red-600 font-medium",
+}
+
+
+# =============================================================================
+# BADGE STYLES - Tokens centralizados para badges de estado
+# =============================================================================
+
+_BADGE_BASE = "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold"
+
+BADGE_STYLES = {
+    # Estados generales
+    "success": f"{_BADGE_BASE} bg-emerald-100 text-emerald-700",
+    "warning": f"{_BADGE_BASE} bg-amber-100 text-amber-700",
+    "danger": f"{_BADGE_BASE} bg-red-100 text-red-700",
+    "info": f"{_BADGE_BASE} bg-indigo-100 text-indigo-700",
+    "neutral": f"{_BADGE_BASE} bg-slate-100 text-slate-700",
+    # Estados fiscales
+    "authorized": f"{_BADGE_BASE} bg-emerald-100 text-emerald-700",
+    "pending": f"{_BADGE_BASE} bg-amber-100 text-amber-700",
+    "sent": f"{_BADGE_BASE} bg-indigo-100 text-indigo-700",
+    "error": f"{_BADGE_BASE} bg-red-100 text-red-700",
+    "rejected": f"{_BADGE_BASE} bg-red-100 text-red-700",
+    # Tipos de comprobante
+    "boleta": "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-700",
+    "factura": "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700",
+    "nota_credito": "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700",
+    "nota_debito": "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700",
+}
+
+
+# =============================================================================
+# ICON COLORS - Colores semánticos para iconos por contexto
+# =============================================================================
+
+ICON_COLORS = {
+    "primary": "text-indigo-500",
+    "danger": "text-red-500",
+    "success": "text-emerald-500",
+    "warning": "text-amber-500",
+    "neutral": "text-slate-500",
+    "info": "text-indigo-500",
+}
+
+
+# =============================================================================
+# SPACING TOKENS - Espaciado semántico
+# =============================================================================
+
+SPACING = {
+    "page_gap": "gap-6",
+    "card_gap": "gap-4",
+    "form_gap": "gap-4",
+    "field_gap": "gap-1.5",
+    "inline_gap": "gap-2",
+    "section_mb": "mb-6",
+}
+
+
+# =============================================================================
+# SELECT STYLES - Para selects nativos (consistentes con inputs)
+# =============================================================================
+
+SELECT_STYLES = {
+    "default": f"w-full h-10 px-3 text-sm bg-white border border-slate-200 {RADIUS['md']} {TRANSITIONS['fast']} {FOCUS_RING}",
+}
 
 
 # =============================================================================
@@ -730,7 +814,7 @@ def _method_chip(label: rx.Var | str, color_classes: str) -> rx.Component:
         label,
         class_name=(
             "inline-flex items-center rounded-full px-2 py-0.5 "
-            f"text-[11px] font-semibold tracking-wide {color_classes}"
+            f"text-xs font-semibold tracking-wide {color_classes}"
         ),
     )
 
@@ -759,11 +843,11 @@ def payment_method_badge(method: rx.Var[str]) -> rx.Component:
             ("Transferencia", _method_chip("Transferencia", "bg-sky-100 text-sky-700")),
             ("Transferencia Bancaria", _method_chip("Transferencia", "bg-sky-100 text-sky-700")),
             # Tarjetas
-            ("Tarjeta", _method_chip(method, "bg-blue-100 text-blue-700")),
-            ("T. Debito", _method_chip("T. Débito", "bg-blue-100 text-blue-700")),
-            ("T. Credito", _method_chip("T. Crédito", "bg-blue-100 text-blue-700")),
-            ("Tarjeta de Débito", _method_chip("Tarjeta Débito", "bg-blue-100 text-blue-700")),
-            ("Tarjeta de Crédito", _method_chip("Tarjeta Crédito", "bg-blue-100 text-blue-700")),
+            ("Tarjeta", _method_chip(method, "bg-indigo-100 text-indigo-700")),
+            ("T. Debito", _method_chip("T. Débito", "bg-indigo-100 text-indigo-700")),
+            ("T. Credito", _method_chip("T. Crédito", "bg-indigo-100 text-indigo-700")),
+            ("Tarjeta de Débito", _method_chip("Tarjeta Débito", "bg-indigo-100 text-indigo-700")),
+            ("Tarjeta de Crédito", _method_chip("Tarjeta Crédito", "bg-indigo-100 text-indigo-700")),
             # Pago mixto
             ("Pago Mixto", _method_chip("Mixto", "bg-amber-100 text-amber-700")),
             # Fallback
@@ -947,7 +1031,7 @@ def info_badge(
         "success": "bg-emerald-100 text-emerald-700",
         "warning": "bg-amber-100 text-amber-700",
         "danger": "bg-red-100 text-red-700",
-        "info": "bg-blue-100 text-blue-700",
+        "info": "bg-indigo-100 text-indigo-700",
     }
     style_class = variant_styles.get(variant, variant_styles["default"])
 
@@ -1078,12 +1162,12 @@ def select_filter(
     ]
 
     return rx.el.div(
-        rx.el.label(label, class_name="text-sm font-medium text-slate-600"),
+        rx.el.label(label, class_name=TYPOGRAPHY["label_secondary"]),
         rx.el.select(
             *option_elements,
             value=value,
             on_change=on_change,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=SELECT_STYLES["default"],
         ),
-        class_name="flex flex-col gap-1",
+        class_name=f"flex flex-col {SPACING['field_gap']}",
     )

@@ -3,8 +3,13 @@ from typing import Callable
 
 from app.state import State
 from app.components.ui import (
+  BADGE_STYLES,
   BUTTON_STYLES,
+  CARD_STYLES,
+  INPUT_STYLES,
+  SELECT_STYLES,
   TABLE_STYLES,
+  TYPOGRAPHY,
   empty_state,
   pagination_controls,
   page_title,
@@ -44,7 +49,7 @@ def stats_dashboard_component(
         rx.el.div(
           rx.el.p(
             "Cuotas Pagadas",
-            class_name="text-sm font-semibold text-slate-600",
+            class_name=TYPOGRAPHY["label_secondary"],
           ),
           rx.el.p(
             pagadas.to_string(),
@@ -56,10 +61,9 @@ def stats_dashboard_component(
       ),
       on_click=paid_click if paid_click else None,
       class_name=(
-        "bg-white rounded-xl border border-slate-200 shadow-sm p-4 "
-        "cursor-pointer hover:bg-slate-50 transition-colors"
+        f"{CARD_STYLES['compact']} cursor-pointer hover:bg-slate-50 transition-colors"
         if paid_click
-        else "bg-white rounded-xl border border-slate-200 shadow-sm p-4"
+        else CARD_STYLES["compact"]
       ),
     ),
     rx.el.div(
@@ -74,7 +78,7 @@ def stats_dashboard_component(
         rx.el.div(
           rx.el.p(
             "Cuotas Pendientes",
-            class_name="text-sm font-semibold text-slate-600",
+            class_name=TYPOGRAPHY["label_secondary"],
           ),
           rx.el.p(
             pendientes.to_string(),
@@ -86,10 +90,9 @@ def stats_dashboard_component(
       ),
       on_click=pending_click if pending_click else None,
       class_name=(
-        "bg-white rounded-xl border border-slate-200 shadow-sm p-4 "
-        "cursor-pointer hover:bg-slate-50 transition-colors"
+        f"{CARD_STYLES['compact']} cursor-pointer hover:bg-slate-50 transition-colors"
         if pending_click
-        else "bg-white rounded-xl border border-slate-200 shadow-sm p-4"
+        else CARD_STYLES["compact"]
       ),
     ),
   ]
@@ -108,11 +111,11 @@ def stats_dashboard_component(
           rx.el.div(
             rx.el.p(
               "Cuotas Vencidas",
-              class_name="text-sm font-semibold text-rose-700",
+              class_name="text-sm font-semibold text-red-700",
             ),
             rx.el.p(
               overdue.to_string(),
-              class_name="text-3xl font-bold text-rose-700",
+              class_name="text-3xl font-bold text-red-700",
             ),
             class_name="flex flex-col gap-1",
           ),
@@ -131,15 +134,15 @@ def stats_dashboard_component(
       rx.el.div(
         rx.el.span(
           "Reporte de Cuentas",
-          class_name="text-xs font-semibold uppercase tracking-wide text-indigo-600",
+          class_name=f"{TYPOGRAPHY['caption']} font-semibold uppercase tracking-wide text-indigo-600",
         ),
         rx.el.p(
           "Descarga el reporte completo de cuotas.",
-          class_name="text-sm font-semibold text-slate-800",
+          class_name=TYPOGRAPHY["label"],
         ),
         rx.el.p(
           "Incluye fecha, cliente, concepto, monto y estado.",
-          class_name="text-xs text-slate-500",
+          class_name=TYPOGRAPHY["caption"],
         ),
         class_name="flex flex-col gap-1",
       ),
@@ -147,9 +150,9 @@ def stats_dashboard_component(
                 rx.icon("download", class_name="h-4 w-4"),
                 "Exportar",
                 on_click=export_event,
-                class_name="w-full h-10 flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 text-white font-medium hover:bg-indigo-700",
+                class_name=f"{BUTTON_STYLES['primary']} w-full",
             ),
-      class_name="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col gap-4",
+      class_name=f"{CARD_STYLES['compact']} flex flex-col gap-4",
     ),
   )
 
@@ -163,6 +166,160 @@ def stats_dashboard_component(
     columns="1",
     class_name=grid_cols,
   )
+
+
+# ════════════════════════════════════════════════════════════
+# CARDS MÓVILES (vista responsiva para pantallas pequeñas)
+# ════════════════════════════════════════════════════════════
+
+
+def _account_card(client: rx.Var) -> rx.Component:
+    """Card de cuenta deudora para vista móvil."""
+    return rx.el.div(
+        # Header: Nombre del cliente
+        rx.el.div(
+            rx.el.span(
+                client["name"],
+                class_name="font-medium text-slate-900 text-sm",
+            ),
+            class_name="flex items-center justify-between gap-2",
+        ),
+        # Body: DNI + Cuotas
+        rx.el.div(
+            rx.cond(
+                client["dni"] != None,
+                rx.el.div(
+                    rx.el.span("DNI:", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(client["dni"], class_name="text-sm text-slate-700"),
+                    class_name="flex items-center gap-2",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                client["phone"] != None,
+                rx.el.div(
+                    rx.el.span("Tel:", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(client["phone"], class_name="text-sm text-slate-700"),
+                    class_name="flex items-center gap-2",
+                ),
+                rx.fragment(),
+            ),
+            class_name="flex flex-col gap-1 mt-2",
+        ),
+        # Footer: Deuda + Acción
+        rx.el.div(
+            rx.el.div(
+                rx.el.span("Deuda total", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                rx.el.span(
+                    State.currency_symbol, " ", client["current_debt"].to_string(),
+                    class_name="font-semibold tabular-nums text-rose-600",
+                ),
+                class_name="flex flex-col",
+            ),
+            rx.el.button(
+                rx.icon("eye", class_name="h-4 w-4"),
+                " Ver Cuenta",
+                on_click=lambda _, client=client: State.open_detail(client),
+                title="Ver detalle de la cuenta",
+                aria_label="Ver detalle de la cuenta",
+                class_name=BUTTON_STYLES["link_primary"],
+            ),
+            class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+        ),
+        class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
+    )
+
+
+def _installment_card(installment: rx.Var) -> rx.Component:
+    """Card de cuota para vista móvil."""
+    return rx.el.div(
+        # Header: Cliente + Estado
+        rx.el.div(
+            rx.el.span(
+                installment["client_name"],
+                class_name="font-medium text-slate-900 text-sm",
+            ),
+            rx.el.span(
+                installment["status_label"],
+                class_name=rx.match(
+                    installment["status"],
+                    ("paid", BADGE_STYLES["success"]),
+                    ("partial", BADGE_STYLES["warning"]),
+                    ("pending", BADGE_STYLES["neutral"]),
+                    BADGE_STYLES["neutral"],
+                ),
+            ),
+            class_name="flex items-center justify-between gap-2",
+        ),
+        # Body: Vencimiento + Montos
+        rx.el.div(
+            rx.el.div(
+                rx.el.span("Vence:", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                rx.el.span(
+                    installment["due_date"],
+                    class_name=rx.cond(
+                        installment["is_overdue"],
+                        "text-sm text-red-600 font-semibold",
+                        "text-sm text-slate-700",
+                    ),
+                ),
+                class_name="flex items-center gap-2",
+            ),
+            rx.el.div(
+                rx.el.div(
+                    rx.el.span("Monto", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(
+                        State.currency_symbol, installment["amount"].to_string(),
+                        class_name="text-sm text-slate-800",
+                    ),
+                    class_name="flex flex-col",
+                ),
+                rx.el.div(
+                    rx.el.span("Pagado", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(
+                        State.currency_symbol, installment["paid_amount"].to_string(),
+                        class_name="text-sm text-emerald-700",
+                    ),
+                    class_name="flex flex-col",
+                ),
+                rx.el.div(
+                    rx.el.span("Pendiente", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(
+                        State.currency_symbol, installment["pending_amount"].to_string(),
+                        class_name=rx.cond(
+                            installment["has_pending"],
+                            "text-sm font-semibold text-amber-700",
+                            "text-sm text-slate-500",
+                        ),
+                    ),
+                    class_name="flex flex-col",
+                ),
+                class_name="flex items-start gap-4 mt-1",
+            ),
+            class_name="flex flex-col gap-1.5 mt-2",
+        ),
+        # Footer: Acción
+        rx.el.div(
+            rx.cond(
+                installment["client"] != None,
+                rx.el.button(
+                    rx.icon("eye", class_name="h-4 w-4"),
+                    " Ver Cuenta",
+                    on_click=lambda _, client=installment["client"]: State.open_detail(client),
+                    title="Ver detalle de la cuenta",
+                    aria_label="Ver detalle de la cuenta",
+                    class_name=BUTTON_STYLES["link_primary"],
+                ),
+                rx.el.span("-", class_name="text-slate-400"),
+            ),
+            class_name="flex items-center justify-end mt-3 pt-2 border-t border-slate-100",
+        ),
+        class_name=rx.cond(
+            installment["is_overdue"],
+            "bg-red-50/40 border border-red-200 rounded-xl p-4 shadow-sm",
+            "bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
+        ),
+    )
 
 
 def debtor_row(client: rx.Var[dict]) -> rx.Component:
@@ -243,19 +400,10 @@ def installment_overview_row(installment: rx.Var[dict]) -> rx.Component:
         installment["status_label"],
         class_name=rx.match(
           installment["status"],
-          (
-            "paid",
-            "px-2 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700",
-          ),
-          (
-            "partial",
-            "px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700",
-          ),
-          (
-            "pending",
-            "px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700",
-          ),
-          "px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700",
+          ("paid", BADGE_STYLES["success"]),
+          ("partial", BADGE_STYLES["warning"]),
+          ("pending", BADGE_STYLES["neutral"]),
+          BADGE_STYLES["neutral"],
         ),
       ),
       class_name="py-3 px-4",
@@ -301,7 +449,7 @@ def installment_action(installment: rx.Var[dict]) -> rx.Component:
         rx.el.div(
           rx.el.span(
             "Metodo de pago",
-            class_name="text-[11px] uppercase tracking-wide text-slate-500",
+            class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide",
           ),
           rx.el.select(
             *[
@@ -310,7 +458,7 @@ def installment_action(installment: rx.Var[dict]) -> rx.Component:
             ],
             value=State.installment_payment_method,
             on_change=State.set_installment_payment_method,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=SELECT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1",
         ),
@@ -326,7 +474,7 @@ def installment_action(installment: rx.Var[dict]) -> rx.Component:
             default_value=State.payment_amount,
             on_blur=State.set_payment_amount,
             placeholder="Monto",
-            class_name="w-full h-10 pl-8 pr-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=f"{INPUT_STYLES['default']} pl-8",
           ),
           class_name="relative",
         ),
@@ -394,19 +542,10 @@ def installment_row(installment: rx.Var[dict]) -> rx.Component:
         installment["status_label"],
         class_name=rx.match(
           installment["status"],
-          (
-            "paid",
-            "px-2 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700",
-          ),
-          (
-            "partial",
-            "px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700",
-          ),
-          (
-            "pending",
-            "px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700",
-          ),
-          "px-2 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700",
+          ("paid", BADGE_STYLES["success"]),
+          ("partial", BADGE_STYLES["warning"]),
+          ("pending", BADGE_STYLES["neutral"]),
+          BADGE_STYLES["neutral"],
         ),
       ),
       class_name="py-3 px-4",
@@ -437,7 +576,7 @@ def cuentas_detail_modal() -> rx.Component:
             State.selected_client == None,
             rx.el.p(
               "Cliente no disponible.",
-              class_name="text-sm text-slate-600",
+              class_name=TYPOGRAPHY["body_secondary"],
             ),
             rx.el.div(
               rx.el.div(
@@ -448,7 +587,7 @@ def cuentas_detail_modal() -> rx.Component:
                 rx.el.div(
                   rx.el.span(
                     "DNI:",
-                    class_name="text-xs uppercase tracking-wide text-slate-400",
+                    class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide",
                   ),
                   rx.el.span(
                     State.selected_client["dni"],
@@ -459,7 +598,7 @@ def cuentas_detail_modal() -> rx.Component:
                 rx.el.div(
                   rx.el.span(
                     "Telefono:",
-                    class_name="text-xs uppercase tracking-wide text-slate-400",
+                    class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide",
                   ),
                   rx.el.span(
                     rx.cond(
@@ -476,7 +615,7 @@ def cuentas_detail_modal() -> rx.Component:
               rx.el.div(
                 rx.el.span(
                   "Deuda Total",
-                  class_name="text-xs uppercase tracking-wide text-slate-400",
+                  class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide",
                 ),
                 rx.el.p(
                   State.currency_symbol,
@@ -493,7 +632,7 @@ def cuentas_detail_modal() -> rx.Component:
             on_click=State.close_detail,
             title="Cerrar detalle",
             aria_label="Cerrar detalle",
-            class_name="p-2 rounded-full hover:bg-slate-100",
+            class_name=BUTTON_STYLES["icon_ghost"],
           ),
           class_name="flex items-start justify-between gap-4",
         ),
@@ -509,7 +648,7 @@ def cuentas_detail_modal() -> rx.Component:
           rx.el.div(
             rx.el.h4(
               "Estado de Cuenta",
-              class_name="text-lg font-semibold text-slate-800",
+              class_name=TYPOGRAPHY["section_title"],
             ),
             rx.el.div(
               rx.el.table(
@@ -517,31 +656,31 @@ def cuentas_detail_modal() -> rx.Component:
                                     rx.el.tr(
                                         rx.el.th(
                                             "Nro",
-                                            class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                                            scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                                         ),
                                         rx.el.th(
                                             "Vencimiento",
-                                            class_name=TABLE_STYLES["header_cell"],
+                                            scope="col", class_name=TABLE_STYLES["header_cell"],
                                         ),
                                         rx.el.th(
                                             "Total",
-                                            class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                            scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                                         ),
                                         rx.el.th(
                                             "Pagado",
-                                            class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                            scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                                         ),
                                         rx.el.th(
                                             "Pendiente",
-                                            class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                            scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                                         ),
                                         rx.el.th(
                                             "Estado",
-                                            class_name=TABLE_STYLES["header_cell"],
+                                            scope="col", class_name=TABLE_STYLES["header_cell"],
                                         ),
                                         rx.el.th(
                                             "Acciones",
-                                            class_name=TABLE_STYLES["header_cell"],
+                                            scope="col", class_name=TABLE_STYLES["header_cell"],
                                         ),
                                         class_name=TABLE_STYLES["header"],
                                     )
@@ -626,7 +765,7 @@ def cuentas_page() -> rx.Component:
                   ("overdue", "Filtro: Vencidas"),
                   "Filtro: Todas",
                 ),
-                class_name="text-xs font-semibold text-slate-500 uppercase tracking-wide",
+                class_name=f"{TYPOGRAPHY['caption']} font-semibold uppercase tracking-wide",
               ),
               rx.el.button(
                 "Ver todas",
@@ -637,7 +776,7 @@ def cuentas_page() -> rx.Component:
             ),
             rx.el.span(
               "Listado: Clientes con saldo pendiente",
-              class_name="text-xs font-semibold text-slate-500 uppercase tracking-wide",
+              class_name=f"{TYPOGRAPHY['caption']} font-semibold uppercase tracking-wide",
             ),
           ),
         ),
@@ -647,31 +786,40 @@ def cuentas_page() -> rx.Component:
         rx.cond(
           State.view_mode == "clients",
           rx.el.div(
-            rx.el.table(
-              rx.el.thead(
-                rx.el.tr(
-                  rx.el.th(
-                    "Cliente", class_name=TABLE_STYLES["header_cell"]
-                  ),
-                  rx.el.th(
-                    "DNI", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
-                  ),
-                  rx.el.th(
-                    "Telefono", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
-                  ),
-                  rx.el.th(
-                    "Deuda",
-                    class_name=f"{TABLE_STYLES['header_cell']} text-right",
-                  ),
-                  rx.el.th(
-                    "Acciones",
-                    class_name=f"{TABLE_STYLES['header_cell']} text-center",
-                  ),
-                  class_name=TABLE_STYLES["header"],
-                )
+            # Vista móvil: Cards (visible en < md)
+            rx.el.div(
+              rx.foreach(State.paginated_debtors, _account_card),
+              class_name="flex flex-col gap-3 md:hidden",
+            ),
+            # Vista desktop: Tabla (oculta en < md)
+            rx.el.div(
+              rx.el.table(
+                rx.el.thead(
+                  rx.el.tr(
+                    rx.el.th(
+                      "Cliente", scope="col", class_name=TABLE_STYLES["header_cell"]
+                    ),
+                    rx.el.th(
+                      "DNI", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
+                    ),
+                    rx.el.th(
+                      "Telefono", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
+                    ),
+                    rx.el.th(
+                      "Deuda",
+                      scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                    ),
+                    rx.el.th(
+                      "Acciones",
+                      scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                    ),
+                    class_name=TABLE_STYLES["header"],
+                  )
+                ),
+                rx.el.tbody(rx.foreach(State.paginated_debtors, debtor_row)),
+                class_name="min-w-full text-sm",
               ),
-              rx.el.tbody(rx.foreach(State.paginated_debtors, debtor_row)),
-              class_name="min-w-full text-sm",
+              class_name="hidden md:block overflow-x-auto",
             ),
             rx.cond(
               State.debtors.length() == 0,
@@ -691,48 +839,57 @@ def cuentas_page() -> rx.Component:
             class_name="flex flex-col gap-4",
           ),
           rx.el.div(
-            rx.el.table(
-              rx.el.thead(
-                rx.el.tr(
-                  rx.el.th(
-                    "Cliente", class_name=TABLE_STYLES["header_cell"]
-                  ),
-                  rx.el.th(
-                    "DNI", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
-                  ),
-                  rx.el.th(
-                    "Vencimiento", class_name=TABLE_STYLES["header_cell"]
-                  ),
-                  rx.el.th(
-                    "Monto",
-                    class_name=f"{TABLE_STYLES['header_cell']} text-right",
-                  ),
-                  rx.el.th(
-                    "Pagado",
-                    class_name=f"{TABLE_STYLES['header_cell']} text-right hidden md:table-cell",
-                  ),
-                  rx.el.th(
-                    "Pendiente",
-                    class_name=f"{TABLE_STYLES['header_cell']} text-right",
-                  ),
-                  rx.el.th(
-                    "Estado",
-                    class_name=TABLE_STYLES["header_cell"],
-                  ),
-                  rx.el.th(
-                    "Acciones",
-                    class_name=f"{TABLE_STYLES['header_cell']} text-center",
-                  ),
-                  class_name=TABLE_STYLES["header"],
-                )
+            # Vista móvil: Cards (visible en < md)
+            rx.el.div(
+              rx.foreach(State.paginated_installments_rows, _installment_card),
+              class_name="flex flex-col gap-3 md:hidden",
+            ),
+            # Vista desktop: Tabla (oculta en < md)
+            rx.el.div(
+              rx.el.table(
+                rx.el.thead(
+                  rx.el.tr(
+                    rx.el.th(
+                      "Cliente", scope="col", class_name=TABLE_STYLES["header_cell"]
+                    ),
+                    rx.el.th(
+                      "DNI", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
+                    ),
+                    rx.el.th(
+                      "Vencimiento", scope="col", class_name=TABLE_STYLES["header_cell"]
+                    ),
+                    rx.el.th(
+                      "Monto",
+                      scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                    ),
+                    rx.el.th(
+                      "Pagado",
+                      scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden md:table-cell",
+                    ),
+                    rx.el.th(
+                      "Pendiente",
+                      scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                    ),
+                    rx.el.th(
+                      "Estado",
+                      scope="col", class_name=TABLE_STYLES["header_cell"],
+                    ),
+                    rx.el.th(
+                      "Acciones",
+                      scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                    ),
+                    class_name=TABLE_STYLES["header"],
+                  )
+                ),
+                rx.el.tbody(
+                  rx.foreach(
+                    State.paginated_installments_rows,
+                    installment_overview_row,
+                  )
+                ),
+                class_name="min-w-full text-sm",
               ),
-              rx.el.tbody(
-                rx.foreach(
-                  State.paginated_installments_rows,
-                  installment_overview_row,
-                )
-              ),
-              class_name="min-w-full text-sm",
+              class_name="hidden md:block overflow-x-auto",
             ),
             rx.cond(
               State.installments_rows.length() == 0,
@@ -752,7 +909,7 @@ def cuentas_page() -> rx.Component:
             class_name="flex flex-col gap-4",
           ),
         ),
-        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto flex flex-col gap-4",
+        class_name=f"{CARD_STYLES['default']} overflow-x-auto flex flex-col gap-4",
       ),
       class_name="flex flex-col gap-6 p-4 sm:p-6 w-full",
     ),

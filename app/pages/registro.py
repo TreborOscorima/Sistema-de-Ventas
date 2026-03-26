@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import INPUT_STYLES, BUTTON_STYLES, RADIUS, SHADOWS, TRANSITIONS
+from app.components.ui import INPUT_STYLES, BUTTON_STYLES, TYPOGRAPHY, RADIUS, SHADOWS, TRANSITIONS
 
 
 COUNTRY_DIAL_OPTIONS = [
@@ -42,7 +42,7 @@ def registro_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Nombre de la Empresa",
-                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                     ),
                     rx.el.input(
                         placeholder="Mi Negocio",
@@ -54,7 +54,7 @@ def registro_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Usuario",
-                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                     ),
                     rx.el.input(
                         placeholder="admin",
@@ -67,7 +67,7 @@ def registro_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Correo",
-                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                     ),
                     rx.el.input(
                         placeholder="tu@empresa.com",
@@ -81,7 +81,7 @@ def registro_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Número de contacto",
-                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                     ),
                     rx.el.div(
                         rx.el.select(
@@ -93,7 +93,7 @@ def registro_page() -> rx.Component:
                             default_value="+54",
                             class_name=(
                                 INPUT_STYLES["default"]
-                                + " !w-full !px-2 sm:!px-3 text-xs sm:text-sm"
+                                + " w-full px-2 sm:px-3 text-xs sm:text-sm"
                             ),
                         ),
                         rx.el.input(
@@ -102,20 +102,20 @@ def registro_page() -> rx.Component:
                             type="tel",
                             auto_complete="tel-national",
                             input_mode="numeric",
-                            class_name=INPUT_STYLES["default"] + " !w-full",
+                            class_name=INPUT_STYLES["default"],
                         ),
                         class_name="grid grid-cols-[116px_1fr] sm:grid-cols-[130px_1fr] items-center gap-2",
                     ),
                     rx.el.p(
                         "Selecciona el código de país y luego escribe tu número.",
-                        class_name="text-xs text-slate-500",
+                        class_name=TYPOGRAPHY["caption"],
                     ),
                     class_name="space-y-1",
                 ),
                 rx.el.div(
                     rx.el.label(
                         "Contraseña",
-                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                     ),
                     rx.el.div(
                         rx.el.input(
@@ -160,7 +160,7 @@ def registro_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Confirmar Contraseña",
-                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                     ),
                     rx.el.div(
                         rx.el.input(
@@ -222,7 +222,8 @@ def registro_page() -> rx.Component:
                         "circle-alert",
                         class_name="h-5 w-5 text-red-500 flex-shrink-0",
                     ),
-                    rx.el.p(State.register_error, class_name="text-sm text-red-700"),
+                    rx.el.p(State.register_error, class_name=TYPOGRAPHY["error_message"]),
+                    role="alert",
                     class_name=(
                         "flex items-center gap-3 mt-5 bg-red-50 p-4 "
                         f"{RADIUS['lg']} border border-red-200"
@@ -241,5 +242,4 @@ def registro_page() -> rx.Component:
             class_name=f"w-full max-w-md p-6 sm:p-8 bg-white {RADIUS['xl']} {SHADOWS['xl']} border border-slate-100",
         ),
         class_name="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4",
-        style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
     )

@@ -3,8 +3,10 @@ import reflex as rx
 from app.state import State
 from app.components.ui import (
   BUTTON_STYLES,
+  CARD_STYLES,
   INPUT_STYLES,
   TABLE_STYLES,
+  TYPOGRAPHY,
   empty_state,
   modal_container,
   page_header,
@@ -43,7 +45,7 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
         rx.el.button(
           rx.icon("pencil", class_name="h-4 w-4"),
           on_click=lambda _, c=client: State.open_modal(c),
-          class_name="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full",
+          class_name=BUTTON_STYLES["icon_primary"],
           title="Editar",
           aria_label="Editar",
         ),
@@ -52,7 +54,7 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
           on_click=lambda _, c_id=client["id"]: State.delete_client(c_id),
           disabled=State.is_loading,
           loading=State.is_loading,
-          class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
+          class_name=BUTTON_STYLES["icon_danger"],
           title="Eliminar",
           aria_label="Eliminar",
         ),
@@ -61,6 +63,80 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
       class_name="py-3 px-4 text-center",
     ),
     class_name="border-b hover:bg-slate-50 transition-colors",
+  )
+
+
+# ════════════════════════════════════════════════════════════
+# CARD MÓVIL (vista responsiva para pantallas pequeñas)
+# ════════════════════════════════════════════════════════════
+
+def _client_card(client: rx.Var) -> rx.Component:
+  """Card de cliente para vista móvil."""
+  return rx.el.div(
+    # Header: Nombre
+    rx.el.div(
+      rx.el.span(
+        client["name"],
+        class_name="font-medium text-slate-900 text-sm",
+      ),
+      class_name="flex items-center justify-between gap-2",
+    ),
+    # Body: Documento, Teléfono, Dirección
+    rx.el.div(
+      rx.el.div(
+        rx.el.span(State.personal_id_label, class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(": "),
+        rx.el.span(client["dni"], class_name="text-sm text-slate-800"),
+        class_name="flex items-center gap-0.5",
+      ),
+      rx.el.div(
+        rx.el.span("Tel: ", class_name=TYPOGRAPHY["caption"]),
+        rx.cond(
+          (client["phone"] == None) | (client["phone"] == ""),
+          rx.el.span("-", class_name="text-slate-400 text-sm"),
+          rx.el.span(client["phone"], class_name="text-sm text-slate-800"),
+        ),
+        class_name="flex items-center gap-0.5",
+      ),
+      rx.el.div(
+        rx.el.span("Dir: ", class_name=TYPOGRAPHY["caption"]),
+        rx.cond(
+          (client["address"] == None) | (client["address"] == ""),
+          rx.el.span("-", class_name="text-slate-400 text-sm"),
+          rx.el.span(client["address"], class_name="text-sm text-slate-800"),
+        ),
+        class_name="flex items-center gap-0.5",
+      ),
+      class_name="flex flex-col gap-1.5 mt-2",
+    ),
+    # Footer: Crédito + Acciones
+    rx.el.div(
+      rx.el.span(
+        State.currency_symbol, " ", client["credit_available"].to_string(),
+        class_name="font-semibold tabular-nums text-emerald-700",
+      ),
+      rx.el.div(
+        rx.el.button(
+          rx.icon("pencil", class_name="h-4 w-4"),
+          on_click=lambda _, c=client: State.open_modal(c),
+          class_name=BUTTON_STYLES["icon_primary"],
+          title="Editar",
+          aria_label="Editar cliente",
+        ),
+        rx.el.button(
+          rx.icon("trash-2", class_name="h-4 w-4"),
+          on_click=lambda _, c_id=client["id"]: State.delete_client(c_id),
+          disabled=State.is_loading,
+          loading=State.is_loading,
+          class_name=BUTTON_STYLES["icon_danger"],
+          title="Eliminar",
+          aria_label="Eliminar cliente",
+        ),
+        class_name="flex items-center gap-2",
+      ),
+      class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+    ),
+    class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
   )
 
 
@@ -78,7 +154,7 @@ def client_form_modal() -> rx.Component:
     children=[
       rx.el.div(
         rx.el.div(
-          rx.el.label("Nombre", class_name="text-sm font-medium text-slate-700"),
+          rx.el.label("Nombre", class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.current_client["name"],
             on_blur=lambda v: State.update_current_client("name", v),
@@ -88,7 +164,7 @@ def client_form_modal() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label(State.personal_id_label, class_name="text-sm font-medium text-slate-700"),
+          rx.el.label(State.personal_id_label, class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.current_client["dni"],
             on_blur=lambda v: State.update_current_client("dni", v),
@@ -98,7 +174,7 @@ def client_form_modal() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label("Telefono", class_name="text-sm font-medium text-slate-700"),
+          rx.el.label("Telefono", class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.current_client["phone"],
             on_blur=lambda v: State.update_current_client("phone", v),
@@ -108,7 +184,7 @@ def client_form_modal() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label("Direccion", class_name="text-sm font-medium text-slate-700"),
+          rx.el.label("Direccion", class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.current_client["address"],
             on_blur=lambda v: State.update_current_client("address", v),
@@ -119,7 +195,7 @@ def client_form_modal() -> rx.Component:
         ),
         rx.el.div(
           rx.el.label(
-            "Limite de credito", class_name="text-sm font-medium text-slate-700"
+            "Limite de credito", class_name=TYPOGRAPHY["label"]
           ),
           rx.el.input(
             type="number",
@@ -185,36 +261,45 @@ def clientes_page() -> rx.Component:
           ),
           debounce_timeout=600,
         ),
-        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm",
+        class_name=CARD_STYLES["default"],
       ),
       rx.el.div(
-        rx.el.table(
-          rx.el.thead(
-            rx.el.tr(
-              rx.el.th("Nombre", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th(State.personal_id_label, class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th("Teléfono", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th("Direccion", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th(
-                "Credito Disp.",
-                class_name=f"{TABLE_STYLES['header_cell']} text-right",
-              ),
-              rx.el.th(
-                "Acciones",
-                class_name=f"{TABLE_STYLES['header_cell']} text-center",
-              ),
-              class_name=TABLE_STYLES["header"],
-            )
+        # Vista móvil: Cards (visible en < md)
+        rx.el.div(
+          rx.foreach(State.clients_view, _client_card),
+          class_name="flex flex-col gap-3 md:hidden",
+        ),
+        # Vista desktop: Tabla (oculta en < md)
+        rx.el.div(
+          rx.el.table(
+            rx.el.thead(
+              rx.el.tr(
+                rx.el.th("Nombre", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th(State.personal_id_label, scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Teléfono", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Direccion", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th(
+                  "Credito Disp.",
+                  scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                ),
+                rx.el.th(
+                  "Acciones",
+                  scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                ),
+                class_name=TABLE_STYLES["header"],
+              )
+            ),
+            rx.el.tbody(rx.foreach(State.clients_view, client_row)),
+            class_name="min-w-full text-sm",
           ),
-          rx.el.tbody(rx.foreach(State.clients_view, client_row)),
-          class_name="min-w-full text-sm",
+          class_name="hidden md:block overflow-x-auto",
         ),
         rx.cond(
           State.clients_view.length() == 0,
           empty_state("No hay clientes registrados."),
           rx.fragment(),
         ),
-        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto flex flex-col gap-4",
+        class_name=f"{CARD_STYLES['default']} flex flex-col gap-4",
       ),
       class_name="flex flex-col gap-6 p-4 sm:p-6 w-full",
     ),

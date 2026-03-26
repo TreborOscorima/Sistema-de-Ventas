@@ -60,7 +60,25 @@ config = rx.Config(
     app_name="app",
     db_url=db_url,
     api_url=api_url,
-    plugins=[rx.plugins.TailwindV3Plugin()],
+    plugins=[
+        rx.plugins.TailwindV3Plugin(
+            config={
+                "plugins": ["@tailwindcss/typography@0.5.19"],
+                "theme": {
+                    "extend": {
+                        "screens": {
+                            "motion-safe": {
+                                "raw": "(prefers-reduced-motion: no-preference)",
+                            },
+                            "motion-reduce": {
+                                "raw": "(prefers-reduced-motion: reduce)",
+                            },
+                        },
+                    },
+                },
+            }
+        ),
+    ],
     disable_plugins=["reflex.plugins.sitemap.SitemapPlugin"],
     telemetry_enabled=not is_prod,
     show_built_with_reflex=False,

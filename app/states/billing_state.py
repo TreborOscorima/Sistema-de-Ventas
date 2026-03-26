@@ -46,7 +46,7 @@ class BillingState(MixinState):
     billing_lookup_api_token_display: str = ""
     # ── Argentina extras ───────────────────────────────────────
     billing_emisor_iva: str = "RI"
-    billing_ar_threshold: str = "68782"
+    billing_ar_threshold: str = "68782.00"
 
     # ── Read-only display ─────────────────────────────────────
     billing_current_count: int = 0
@@ -173,6 +173,11 @@ class BillingState(MixinState):
             config.tax_id_type = self.billing_tax_id_type.strip()
             config.business_name = self.billing_business_name.strip()
             config.business_address = self.billing_business_address.strip()
+            config.lookup_api_url = self.billing_lookup_api_url.strip()
+            config.emisor_iva_condition = self.billing_emisor_iva.strip() or "RI"
+            config.ar_identification_threshold = (
+                self.billing_ar_threshold.strip() or "68782.00"
+            )
             config.updated_at = utc_now_naive()
 
             session.add(config)
@@ -233,6 +238,28 @@ class BillingState(MixinState):
     @rx.event
     def set_billing_business_address(self, value: str):
         self.billing_business_address = value or ""
+
+    @rx.event
+    def set_lookup_api_url(self, value: str):
+        self.billing_lookup_api_url = value or ""
+
+    @rx.event
+    def set_lookup_api_token(self, value: str):
+        """Almacena el token crudo y muestra versión enmascarada."""
+        raw = (value or "").strip()
+        self._lookup_api_token_raw = raw
+        if raw:
+            self.billing_lookup_api_token_display = raw[:4] + "****" + raw[-4:] if len(raw) > 8 else "****"
+        else:
+            self.billing_lookup_api_token_display = ""
+
+    @rx.event
+    def set_emisor_iva(self, value: str):
+        self.billing_emisor_iva = value or "RI"
+
+    @rx.event
+    def set_ar_threshold(self, value: float | str):
+        self.billing_ar_threshold = str(value) if value else "68782.00"
 
     @rx.event
     def save_lookup_api_token(self, token: str):

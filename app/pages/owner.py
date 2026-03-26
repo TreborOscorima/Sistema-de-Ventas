@@ -17,8 +17,10 @@ from app.components.ui import (
     CARD_STYLES,
     INPUT_STYLES,
     RADIUS,
+    SELECT_STYLES,
     SHADOWS,
     TRANSITIONS,
+    TYPOGRAPHY,
 )
 
 APP_SURFACE: str = (os.getenv("APP_SURFACE") or "all").strip().lower()
@@ -72,7 +74,7 @@ def _copy_text_script(target_id: str) -> str:
 
 _BADGE_PLAN = {
     "trial": "bg-amber-100 text-amber-700",
-    "standard": "bg-blue-100 text-blue-700",
+    "standard": "bg-indigo-100 text-indigo-700",
     "professional": "bg-purple-100 text-purple-700",
     "enterprise": "bg-emerald-100 text-emerald-700",
 }
@@ -154,7 +156,7 @@ def _owner_action_icon_button(
             class_name=(
                 "pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 "
                 "-translate-y-[125%] whitespace-nowrap rounded-md bg-slate-900 px-2.5 "
-                "py-1 text-[11px] font-semibold text-white shadow-lg opacity-0 scale-95 "
+                "py-1 text-xs font-semibold text-white shadow-lg opacity-0 scale-95 "
                 "transition-all duration-150 group-hover:opacity-100 group-hover:scale-100"
             ),
         ),
@@ -182,7 +184,7 @@ def _owner_module_icon_badge(
             class_name=(
                 "pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 "
                 "-translate-y-[125%] whitespace-nowrap rounded-md bg-slate-900 px-2.5 "
-                "py-1 text-[11px] font-semibold text-white shadow-lg opacity-0 scale-95 "
+                "py-1 text-xs font-semibold text-white shadow-lg opacity-0 scale-95 "
                 "transition-all duration-150 group-hover:opacity-100 group-hover:scale-100"
             ),
         ),
@@ -234,7 +236,7 @@ def _search_bar() -> rx.Component:
             rx.el.span(
                 State.owner_companies_total,
                 " empresas",
-                class_name="text-sm text-slate-500",
+                class_name=TYPOGRAPHY["body_secondary"],
             ),
             class_name="flex flex-col-reverse sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full sm:w-auto",
         ),
@@ -300,7 +302,7 @@ def _company_modules(company: rx.Var) -> rx.Component:
             _owner_module_icon_badge(
                 "file-text",
                 "Facturación Electrónica",
-                "bg-blue-50 text-blue-600",
+                "bg-indigo-50 text-indigo-600",
             ),
             rx.fragment(),
         ),
@@ -369,16 +371,16 @@ def _company_row(company: rx.Var) -> rx.Component:
                 rx.el.p(company["name"], class_name="font-medium text-slate-800 text-sm"),
                 rx.el.p(
                     "RUC: ", company["ruc"],
-                    class_name="text-xs text-slate-500",
+                    class_name=TYPOGRAPHY["caption"],
                 ),
                 rx.el.div(
                     rx.icon("mail", class_name="h-3 w-3 text-slate-400"),
-                    rx.el.span(company["admin_email"], class_name="text-xs text-slate-500"),
+                    rx.el.span(company["admin_email"], class_name=TYPOGRAPHY["caption"]),
                     class_name="flex items-center gap-1 mt-1",
                 ),
                 rx.el.div(
                     rx.icon("phone", class_name="h-3 w-3 text-slate-400"),
-                    rx.el.span(company["company_phone"], class_name="text-xs text-slate-500"),
+                    rx.el.span(company["company_phone"], class_name=TYPOGRAPHY["caption"]),
                     class_name="flex items-center gap-1",
                 ),
                 class_name="flex flex-col gap-0.5",
@@ -422,7 +424,7 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
                 ),
                 rx.el.p(
                     "RUC: ", company["ruc"],
-                    class_name="text-xs text-slate-500 mt-0.5",
+                    class_name=f"{TYPOGRAPHY['caption']} mt-0.5",
                 ),
                 class_name="flex flex-col min-w-0",
             ),
@@ -432,24 +434,24 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.icon("mail", class_name="h-3 w-3 text-slate-400"),
-                rx.el.span(company["admin_email"], class_name="text-xs text-slate-500"),
+                rx.el.span(company["admin_email"], class_name=TYPOGRAPHY["caption"]),
                 class_name="flex items-center gap-1",
             ),
             rx.el.div(
                 rx.icon("phone", class_name="h-3 w-3 text-slate-400"),
-                rx.el.span(company["company_phone"], class_name="text-xs text-slate-500"),
+                rx.el.span(company["company_phone"], class_name=TYPOGRAPHY["caption"]),
                 class_name="flex items-center gap-1",
             ),
             class_name="flex flex-col gap-1 mt-2 min-w-0",
         ),
         rx.el.div(
             rx.el.div(
-                rx.el.span("Plan", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+                rx.el.span("Plan", class_name="text-xs text-slate-400 uppercase tracking-wide"),
                 _plan_badge(company["plan_type"]),
                 class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-                rx.el.span("Usuarios", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+                rx.el.span("Usuarios", class_name="text-xs text-slate-400 uppercase tracking-wide"),
                 rx.el.span(
                     company["current_users"],
                     "/",
@@ -459,7 +461,7 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
                 class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-                rx.el.span("Sucursales", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+                rx.el.span("Sucursales", class_name="text-xs text-slate-400 uppercase tracking-wide"),
                 rx.el.span(
                     company["current_branches"],
                     "/",
@@ -469,7 +471,7 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
                 class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-                rx.el.span("Vence", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
+                rx.el.span("Vence", class_name="text-xs text-slate-400 uppercase tracking-wide"),
                 _company_due_value(company),
                 class_name="flex flex-col gap-1",
             ),
@@ -478,7 +480,7 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
         rx.el.div(
             rx.el.span(
                 "Módulos",
-                class_name="text-[11px] text-slate-400 uppercase tracking-wide mt-0.5",
+                class_name="text-xs text-slate-400 uppercase tracking-wide mt-0.5",
             ),
             _company_modules(company),
             class_name="flex flex-col gap-2 mt-3",
@@ -486,7 +488,7 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
         rx.el.div(
             rx.el.span(
                 "Acciones",
-                class_name="text-[11px] text-slate-400 uppercase tracking-wide mt-0.5",
+                class_name="text-xs text-slate-400 uppercase tracking-wide mt-0.5",
             ),
             _company_actions(company),
             class_name="flex flex-col gap-2 mt-3",
@@ -505,14 +507,14 @@ def _companies_table() -> rx.Component:
             rx.el.table(
                 rx.el.thead(
                     rx.el.tr(
-                        rx.el.th("Empresa", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
-                        rx.el.th("Plan", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
-                        rx.el.th("Estado", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
-                        rx.el.th("Usuarios", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
-                        rx.el.th("Sucursales", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
-                        rx.el.th("Vence", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
-                        rx.el.th("Módulos", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
-                        rx.el.th("Acciones", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
+                        rx.el.th("Empresa", scope="col", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
+                        rx.el.th("Plan", scope="col", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
+                        rx.el.th("Estado", scope="col", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
+                        rx.el.th("Usuarios", scope="col", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
+                        rx.el.th("Sucursales", scope="col", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
+                        rx.el.th("Vence", scope="col", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
+                        rx.el.th("Módulos", scope="col", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
+                        rx.el.th("Acciones", scope="col", class_name="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider"),
                         class_name="bg-slate-50 border-b border-slate-200",
                     ),
                 ),
@@ -605,7 +607,7 @@ _REASON_PRESETS = {
 def _info_pill(label: str, value: rx.Var, color: str = "slate") -> rx.Component:
     """Pequeño pill informativo de solo lectura."""
     return rx.el.div(
-        rx.el.span(label, class_name=f"text-[11px] text-{color}-400 uppercase tracking-wider font-semibold"),
+        rx.el.span(label, class_name=f"text-xs text-{color}-400 uppercase tracking-wider font-semibold"),
         rx.el.span(value, class_name=f"text-sm font-medium text-{color}-700"),
         class_name=f"flex flex-col gap-0.5 bg-{color}-50 px-3 py-1.5 {RADIUS['md']}",
     )
@@ -617,7 +619,7 @@ def _reason_selector(action_key: str) -> rx.Component:
     return rx.el.div(
         rx.el.label(
             "Motivo (obligatorio)",
-            class_name="text-sm font-medium text-slate-700",
+            class_name=TYPOGRAPHY["label"],
         ),
         rx.el.select(
             rx.el.option("— Selecciona un motivo —", value=""),
@@ -625,7 +627,7 @@ def _reason_selector(action_key: str) -> rx.Component:
             rx.el.option("✏️ Escribir motivo personalizado", value="custom"),
             value=State.owner_form_reason_preset,
             on_change=State.owner_set_form_reason_preset,
-            class_name=INPUT_STYLES["default"],
+            class_name=SELECT_STYLES["default"],
         ),
         rx.el.textarea(
             value=State.owner_form_reason,
@@ -643,7 +645,7 @@ def _date_and_notes_section() -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.el.div(
-                rx.el.label("Fecha de aplicación", class_name="text-sm font-medium text-slate-700"),
+                rx.el.label("Fecha de aplicación", class_name=TYPOGRAPHY["label"]),
                 rx.el.div(
                     rx.icon("calendar", class_name="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"),
                     rx.el.input(
@@ -658,7 +660,7 @@ def _date_and_notes_section() -> rx.Component:
             class_name="w-full",
         ),
         rx.el.div(
-            rx.el.label("Notas adicionales (opcional)", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Notas adicionales (opcional)", class_name=TYPOGRAPHY["label"]),
             rx.debounce_input(
                 rx.input(
                     value=State.owner_form_notes,
@@ -688,7 +690,7 @@ def _form_change_plan() -> rx.Component:
         rx.el.div(class_name="border-t border-slate-100"),
         # Nuevo plan
         rx.el.div(
-            rx.el.label("Nuevo Plan", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Nuevo Plan", class_name=TYPOGRAPHY["label"]),
             rx.el.select(
                 rx.el.option("Prueba", value="trial"),
                 rx.el.option("Estándar", value="standard"),
@@ -696,7 +698,7 @@ def _form_change_plan() -> rx.Component:
                 rx.el.option("Empresarial", value="enterprise"),
                 value=State.owner_form_plan,
                 on_change=State.owner_set_form_plan,
-                class_name=INPUT_STYLES["default"],
+                class_name=SELECT_STYLES["default"],
             ),
             class_name="flex flex-col gap-1.5",
         ),
@@ -704,7 +706,7 @@ def _form_change_plan() -> rx.Component:
         rx.cond(
             State.owner_form_plan != "trial",
             rx.el.div(
-                rx.el.label("Duración de suscripción", class_name="text-sm font-medium text-slate-700"),
+                rx.el.label("Duración de suscripción", class_name=TYPOGRAPHY["label"]),
                 rx.el.div(
                     *[
                         rx.el.button(
@@ -779,7 +781,7 @@ def _form_change_status() -> rx.Component:
         rx.el.div(class_name="border-t border-slate-100"),
         # Nuevo estado
         rx.el.div(
-            rx.el.label("Nuevo Estado", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Nuevo Estado", class_name=TYPOGRAPHY["label"]),
             rx.el.select(
                 rx.el.option("Activo", value="active"),
                 rx.el.option("Advertencia", value="warning"),
@@ -787,7 +789,7 @@ def _form_change_status() -> rx.Component:
                 rx.el.option("Suspendido", value="suspended"),
                 value=State.owner_form_status,
                 on_change=State.owner_set_form_status,
-                class_name=INPUT_STYLES["default"],
+                class_name=SELECT_STYLES["default"],
             ),
             class_name="flex flex-col gap-1.5",
         ),
@@ -818,7 +820,7 @@ def _form_extend_trial() -> rx.Component:
         rx.el.div(class_name="border-t border-slate-100"),
         # Presets rápidos de días
         rx.el.div(
-            rx.el.label("Extensión rápida", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Extensión rápida", class_name=TYPOGRAPHY["label"]),
             rx.el.div(
                 *[
                     rx.el.button(
@@ -838,7 +840,7 @@ def _form_extend_trial() -> rx.Component:
         ),
         # Input manual de días
         rx.el.div(
-            rx.el.label("Días a extender (personalizado)", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Días a extender (personalizado)", class_name=TYPOGRAPHY["label"]),
             rx.debounce_input(
                 rx.input(
                     type="number",
@@ -884,16 +886,16 @@ def _module_card(
                         included_by_plan,
                         rx.el.span(
                             "Incluido en plan",
-                            class_name=f"text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                            class_name=f"text-xs font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 {RADIUS['sm']}",
                         ),
                         rx.el.span(
                             "Extra",
-                            class_name=f"text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                            class_name=f"text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 {RADIUS['sm']}",
                         ),
                     ),
                     class_name="flex items-center gap-2",
                 ),
-                rx.el.p(description, class_name="text-xs text-slate-500 mt-0.5"),
+                rx.el.p(description, class_name=f"{TYPOGRAPHY['caption']} mt-0.5"),
                 class_name="flex flex-col flex-1",
             ),
             # Toggle switch
@@ -939,7 +941,7 @@ def _form_adjust_limits() -> rx.Component:
         # Usuarios y Sucursales en grid
         rx.el.div(
             rx.el.div(
-                rx.el.label("Máx. Usuarios", class_name="text-sm font-medium text-slate-700"),
+                rx.el.label("Máx. Usuarios", class_name=TYPOGRAPHY["label"]),
                 rx.debounce_input(
                     rx.input(
                         type="number",
@@ -953,7 +955,7 @@ def _form_adjust_limits() -> rx.Component:
                 class_name="flex flex-col gap-1.5",
             ),
             rx.el.div(
-                rx.el.label("Máx. Sucursales", class_name="text-sm font-medium text-slate-700"),
+                rx.el.label("Máx. Sucursales", class_name=TYPOGRAPHY["label"]),
                 rx.debounce_input(
                     rx.input(
                         type="number",
@@ -1069,7 +1071,7 @@ def _reset_user_row(user: rx.Var[dict[str, str]]) -> rx.Component:
                         user["email"],
                         "Sin correo",
                     ),
-                    class_name="text-xs text-slate-500 break-all",
+                    class_name=f"{TYPOGRAPHY['caption']} break-all",
                 ),
                 class_name="flex flex-col min-w-0",
             ),
@@ -1078,17 +1080,17 @@ def _reset_user_row(user: rx.Var[dict[str, str]]) -> rx.Component:
         rx.el.div(
             rx.el.span(
                 user["role_name"],
-                class_name="text-[11px] text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full",
+                class_name="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full",
             ),
             rx.cond(
                 user["is_active"] == "true",
                 rx.el.span(
                     "Activo",
-                    class_name="text-[11px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full",
+                    class_name="text-xs text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full",
                 ),
                 rx.el.span(
                     "Inactivo",
-                    class_name="text-[11px] text-red-600 bg-red-50 px-2 py-0.5 rounded-full",
+                    class_name="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded-full",
                 ),
             ),
             rx.el.button(
@@ -1134,11 +1136,11 @@ def _reset_password_modal() -> rx.Component:
                         rx.el.div(
                             rx.el.h2(
                                 "Resetear Contraseña",
-                                class_name="text-lg font-semibold text-slate-800",
+                                class_name=TYPOGRAPHY["section_title"],
                             ),
                             rx.el.p(
                                 State.owner_reset_company_name,
-                                class_name="text-sm text-slate-500",
+                                class_name=TYPOGRAPHY["body_secondary"],
                             ),
                             class_name="flex flex-col",
                         ),
@@ -1148,6 +1150,8 @@ def _reset_password_modal() -> rx.Component:
                         rx.icon("x", class_name="h-5 w-5"),
                         on_click=State.owner_close_reset_modal,
                         type="button",
+                        title="Cerrar",
+                        aria_label="Cerrar",
                         class_name=BUTTON_STYLES["icon_ghost"],
                     ),
                     class_name="flex items-start justify-between gap-4 mb-4 pb-4 border-b border-slate-100",
@@ -1220,7 +1224,7 @@ def _reset_password_modal() -> rx.Component:
                     State.owner_reset_loading,
                     rx.el.div(
                         rx.icon("loader-circle", class_name="h-5 w-5 text-slate-400 animate-spin"),
-                        rx.el.span("Cargando...", class_name="text-sm text-slate-500"),
+                        rx.el.span("Cargando...", class_name=TYPOGRAPHY["body_secondary"]),
                         class_name="flex items-center gap-2 justify-center py-6",
                     ),
                     rx.fragment(),
@@ -1231,7 +1235,7 @@ def _reset_password_modal() -> rx.Component:
                     rx.el.div(
                         rx.el.p(
                             "Selecciona el usuario a resetear:",
-                            class_name="text-sm text-slate-600 mb-2 font-medium",
+                            class_name=f"{TYPOGRAPHY['label_secondary']} mb-2",
                         ),
                         rx.el.div(
                             rx.foreach(State.owner_reset_users, _reset_user_row),
@@ -1243,7 +1247,7 @@ def _reset_password_modal() -> rx.Component:
                         ~State.owner_reset_loading,
                         rx.el.p(
                             "No se encontraron usuarios en esta empresa.",
-                            class_name="text-sm text-slate-500 text-center py-6",
+                            class_name=f"{TYPOGRAPHY['body_secondary']} text-center py-6",
                         ),
                         rx.fragment(),
                     ),
@@ -1288,7 +1292,7 @@ def _action_modal() -> rx.Component:
                         rx.el.div(
                             rx.match(
                                 State.owner_modal_action,
-                                ("change_plan", rx.icon("repeat", class_name="h-5 w-5 text-blue-600")),
+                                ("change_plan", rx.icon("repeat", class_name="h-5 w-5 text-indigo-600")),
                                 ("change_status", rx.icon("toggle-right", class_name="h-5 w-5 text-indigo-600")),
                                 ("extend_trial", rx.icon("calendar-plus", class_name="h-5 w-5 text-amber-600")),
                                 ("adjust_limits", rx.icon("sliders-horizontal", class_name="h-5 w-5 text-emerald-600")),
@@ -1306,11 +1310,11 @@ def _action_modal() -> rx.Component:
                                     ("adjust_limits", "Ajustar Límites"),
                                     "Acción",
                                 ),
-                                class_name="text-lg font-semibold text-slate-800",
+                                class_name=TYPOGRAPHY["section_title"],
                             ),
                             rx.el.p(
                                 State.owner_modal_company_name,
-                                class_name="text-sm text-slate-500",
+                                class_name=TYPOGRAPHY["body_secondary"],
                             ),
                             class_name="flex flex-col",
                         ),
@@ -1319,6 +1323,8 @@ def _action_modal() -> rx.Component:
                     rx.el.button(
                         rx.icon("x", class_name="h-5 w-5"),
                         on_click=State.owner_close_modal,
+                        title="Cerrar",
+                        aria_label="Cerrar",
                         class_name=BUTTON_STYLES["icon_ghost"],
                     ),
                     class_name="flex items-start justify-between gap-4 mb-5 pb-4 border-b border-slate-100",
@@ -1372,33 +1378,33 @@ def _audit_log_card(log: rx.Var) -> rx.Component:
     return rx.el.article(
         rx.el.div(
             rx.el.div(
-                rx.el.span("Fecha", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
-                rx.el.p(log["created_at"], class_name="text-xs text-slate-500"),
+                rx.el.span("Fecha", class_name="text-xs text-slate-400 uppercase tracking-wide"),
+                rx.el.p(log["created_at"], class_name=TYPOGRAPHY["caption"]),
                 class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-                rx.el.span("Acción", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
-                rx.el.p(log["action"], class_name="text-sm font-medium text-slate-700 break-words"),
+                rx.el.span("Acción", class_name="text-xs text-slate-400 uppercase tracking-wide"),
+                rx.el.p(log["action"], class_name=f"{TYPOGRAPHY['label']} break-words"),
                 class_name="flex flex-col gap-1",
             ),
             class_name="grid grid-cols-1 gap-3 sm:grid-cols-2",
         ),
         rx.el.div(
             rx.el.div(
-                rx.el.span("Actor", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
-                rx.el.p(log["actor_email"], class_name="text-sm text-slate-700 break-all"),
+                rx.el.span("Actor", class_name="text-xs text-slate-400 uppercase tracking-wide"),
+                rx.el.p(log["actor_email"], class_name=f"{TYPOGRAPHY['body']} break-all"),
                 class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-                rx.el.span("Empresa", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
-                rx.el.p(log["target_company_name"], class_name="text-sm text-slate-700 break-words"),
+                rx.el.span("Empresa", class_name="text-xs text-slate-400 uppercase tracking-wide"),
+                rx.el.p(log["target_company_name"], class_name=f"{TYPOGRAPHY['body']} break-words"),
                 class_name="flex flex-col gap-1",
             ),
             class_name="grid grid-cols-1 gap-3 sm:grid-cols-2",
         ),
         rx.el.div(
-            rx.el.span("Motivo", class_name="text-[11px] text-slate-400 uppercase tracking-wide"),
-            rx.el.p(log["reason"], class_name="text-sm text-slate-500 break-words"),
+            rx.el.span("Motivo", class_name="text-xs text-slate-400 uppercase tracking-wide"),
+            rx.el.p(log["reason"], class_name=f"{TYPOGRAPHY['body_secondary']} break-words"),
             class_name="flex flex-col gap-1",
         ),
         class_name=f"flex flex-col gap-4 border border-slate-200 bg-white p-4 {RADIUS['lg']}",
@@ -1410,7 +1416,7 @@ def _audit_section() -> rx.Component:
             rx.el.h3(
                 rx.icon("shield-check", class_name="h-5 w-5 text-indigo-600"),
                 "Registro de Auditoría",
-                class_name="flex items-center gap-2 text-lg font-semibold text-slate-800",
+                class_name=f"flex items-center gap-2 {TYPOGRAPHY['section_title']}",
             ),
             rx.el.button(
                 rx.icon("refresh-cw", class_name="h-4 w-4"),
@@ -1431,11 +1437,11 @@ def _audit_section() -> rx.Component:
                     rx.el.table(
                         rx.el.thead(
                             rx.el.tr(
-                                rx.el.th("Fecha", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                                rx.el.th("Actor", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                                rx.el.th("Empresa", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                                rx.el.th("Acción", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
-                                rx.el.th("Motivo", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Fecha", scope="col", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Actor", scope="col", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Empresa", scope="col", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Acción", scope="col", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
+                                rx.el.th("Motivo", scope="col", class_name="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase"),
                                 class_name="bg-slate-50 border-b border-slate-200",
                             ),
                         ),
@@ -1499,7 +1505,7 @@ def _audit_section() -> rx.Component:
                     State.owner_audit_page,
                     " de ",
                     State.owner_audit_total_pages,
-                    class_name="text-sm text-slate-500",
+                    class_name=TYPOGRAPHY["body_secondary"],
                 ),
                 rx.el.button(
                     "Siguiente",
@@ -1532,7 +1538,7 @@ def _access_denied() -> rx.Component:
             ),
             rx.el.p(
                 "Este panel es de uso exclusivo para administradores de la plataforma.",
-                class_name="text-slate-500 mt-2 text-center max-w-md",
+                class_name=f"{TYPOGRAPHY['body_secondary']} mt-2 text-center max-w-md",
             ),
             rx.el.p(
                 "Si llegaste aquí por error, regresa al sistema principal.",
@@ -1575,7 +1581,7 @@ def _owner_header() -> rx.Component:
                     ),
                     rx.el.span(
                         "Admin Plataforma",
-                        class_name="text-[10px] text-slate-400 uppercase tracking-widest",
+                        class_name="text-xs text-slate-400 uppercase tracking-widest",
                     ),
                     class_name="flex flex-col leading-tight",
                 ),
@@ -1607,7 +1613,7 @@ def _owner_header() -> rx.Component:
                         ),
                         rx.el.p(
                             "Propietario",
-                            class_name=f"text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 {RADIUS['full']} inline-block",
+                            class_name=f"text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 {RADIUS['full']} inline-block",
                         ),
                         class_name="flex flex-col",
                     ),
@@ -1618,6 +1624,7 @@ def _owner_header() -> rx.Component:
                     rx.icon("log-out", class_name="h-4 w-4"),
                     on_click=State.owner_logout,
                     title="Cerrar sesión del backoffice",
+                    aria_label="Cerrar sesión del backoffice",
                     class_name=f"p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 {RADIUS['md']} {TRANSITIONS['fast']}",
                 ),
                 class_name="flex items-center gap-2 sm:gap-3 flex-wrap justify-center sm:justify-end w-full sm:w-auto",
@@ -1630,12 +1637,10 @@ def _owner_header() -> rx.Component:
 
 def _billing_modal() -> rx.Component:
     """Modal de gestión de billing técnico para una empresa."""
-    _input = (
-        "w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md "
-        "focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-    )
-    _label = "text-sm font-medium text-slate-700"
-    _help = "text-xs text-slate-500"
+    _input = INPUT_STYLES["default"]
+    _select = SELECT_STYLES["default"]
+    _label = TYPOGRAPHY["label"]
+    _help = TYPOGRAPHY["caption"]
 
     return rx.cond(
         State.owner_billing_modal_open,
@@ -1651,17 +1656,17 @@ def _billing_modal() -> rx.Component:
                 rx.el.div(
                     rx.el.div(
                         rx.el.div(
-                            rx.icon("file-text", class_name="h-5 w-5 text-blue-600"),
-                            class_name=f"p-2 bg-blue-50 {RADIUS['lg']}",
+                            rx.icon("file-text", class_name="h-5 w-5 text-indigo-600"),
+                            class_name=f"p-2 bg-indigo-50 {RADIUS['lg']}",
                         ),
                         rx.el.div(
                             rx.el.h2(
                                 "Configuración de Billing",
-                                class_name="text-lg font-bold text-slate-800",
+                                class_name=TYPOGRAPHY["section_title"],
                             ),
                             rx.el.p(
                                 State.owner_billing_company_name,
-                                class_name="text-sm text-slate-500",
+                                class_name=TYPOGRAPHY["body_secondary"],
                             ),
                         ),
                         class_name="flex items-center gap-3",
@@ -1669,7 +1674,9 @@ def _billing_modal() -> rx.Component:
                     rx.el.button(
                         rx.icon("x", class_name="h-5 w-5"),
                         on_click=State.owner_close_billing_modal,
-                        class_name="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100",
+                        title="Cerrar",
+                        aria_label="Cerrar",
+                        class_name=BUTTON_STYLES["icon_ghost"],
                     ),
                     class_name="flex items-center justify-between p-4 border-b border-slate-200",
                 ),
@@ -1685,12 +1692,12 @@ def _billing_modal() -> rx.Component:
                         rx.el.div(
                             rx.el.span(
                                 "País: ", State.owner_billing_country,
-                                class_name="text-xs text-slate-500",
+                                class_name=TYPOGRAPHY["caption"],
                             ),
                             rx.el.span(" | ", class_name="text-xs text-slate-300"),
                             rx.el.span(
                                 "RUC/CUIT: ", State.owner_billing_tax_id,
-                                class_name="text-xs text-slate-500",
+                                class_name=TYPOGRAPHY["caption"],
                             ),
                             rx.el.span(" | ", class_name="text-xs text-slate-300"),
                             rx.el.span(
@@ -1721,7 +1728,7 @@ def _billing_modal() -> rx.Component:
                                 rx.el.option("Producción", value="production"),
                                 value=State.owner_billing_environment,
                                 on_change=State.owner_set_billing_environment,
-                                class_name=_input,
+                                class_name=_select,
                             ),
                             class_name="flex flex-col gap-1",
                         ),
@@ -1788,7 +1795,7 @@ def _billing_modal() -> rx.Component:
                                         rx.el.option("Exento", value="exento"),
                                         value=State.owner_billing_emisor_iva,
                                         on_change=State.owner_set_billing_emisor_iva,
-                                        class_name=_input,
+                                        class_name=_select,
                                     ),
                                     class_name="flex flex-col gap-1",
                                 ),
@@ -1800,7 +1807,7 @@ def _billing_modal() -> rx.Component:
                                         rx.el.option("Productos y Servicios", value="3"),
                                         value=State.owner_billing_afip_concepto,
                                         on_change=State.owner_set_billing_afip_concepto,
-                                        class_name=_input,
+                                        class_name=_select,
                                     ),
                                     class_name="flex flex-col gap-1",
                                 ),
@@ -1940,10 +1947,7 @@ def _billing_modal() -> rx.Component:
                     rx.el.button(
                         "Cancelar",
                         on_click=State.owner_close_billing_modal,
-                        class_name=(
-                            "px-4 py-2 text-sm font-medium text-slate-600 bg-white "
-                            "border border-slate-200 rounded-md hover:bg-slate-50"
-                        ),
+                        class_name=BUTTON_STYLES["secondary"],
                     ),
                     rx.el.button(
                         rx.cond(
@@ -1954,10 +1958,10 @@ def _billing_modal() -> rx.Component:
                         " Guardar Configuración",
                         on_click=State.owner_save_billing_config,
                         disabled=State.owner_billing_loading,
-                        class_name=(
-                            "inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium "
-                            "text-white bg-indigo-600 rounded-md hover:bg-indigo-700 "
-                            "disabled:opacity-50 disabled:cursor-not-allowed"
+                        class_name=rx.cond(
+                            State.owner_billing_loading,
+                            BUTTON_STYLES["disabled"],
+                            BUTTON_STYLES["primary"],
                         ),
                     ),
                     class_name="flex items-center justify-end gap-3 p-4 border-t border-slate-200",
@@ -1985,7 +1989,7 @@ def _owner_content() -> rx.Component:
                 ),
                 rx.el.p(
                     "Administra empresas, planes, suscripciones y activaciones",
-                    class_name="text-sm text-slate-500 mt-1",
+                    class_name=f"{TYPOGRAPHY['body_secondary']} mt-1",
                 ),
                 class_name="flex flex-col text-center sm:text-left",
             ),
@@ -1996,7 +2000,7 @@ def _owner_content() -> rx.Component:
             State.owner_loading,
             rx.el.div(
                 rx.icon("loader-circle", class_name="h-6 w-6 text-slate-500 animate-spin"),
-                rx.el.p("Cargando empresas...", class_name="text-sm text-slate-500"),
+                rx.el.p("Cargando empresas...", class_name=TYPOGRAPHY["body_secondary"]),
                 class_name="flex items-center gap-3 py-8 justify-center",
             ),
             rx.fragment(),
@@ -2048,7 +2052,7 @@ def owner_page() -> rx.Component:
                         ),
                         rx.el.p(
                             "Debes iniciar sesión en el panel de administración.",
-                            class_name="text-slate-500 mt-2",
+                            class_name=f"{TYPOGRAPHY['body_secondary']} mt-2",
                         ),
                         rx.el.a(
                             rx.el.button(
@@ -2143,7 +2147,7 @@ def owner_login_page() -> rx.Component:
                         ),
                         rx.el.p(
                             "Ingrese sus credenciales de administrador de plataforma.",
-                            class_name="text-slate-500 text-sm mt-1 mb-6 text-center",
+                            class_name=f"{TYPOGRAPHY['body_secondary']} mt-1 mb-6 text-center",
                         ),
                         # Error message
                         rx.cond(
@@ -2157,6 +2161,7 @@ def owner_login_page() -> rx.Component:
                                     ),
                                     class_name="flex items-center gap-2",
                                 ),
+                                role="alert",
                                 class_name=f"p-3 bg-red-50 border border-red-200 {RADIUS['lg']} mb-4",
                             ),
                         ),
@@ -2166,7 +2171,7 @@ def owner_login_page() -> rx.Component:
                                 rx.el.label(
                                     "Email o Usuario",
                                     html_for="owner_email",
-                                    class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                                    class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                                 ),
                                 rx.el.input(
                                     name="owner_email",
@@ -2182,7 +2187,7 @@ def owner_login_page() -> rx.Component:
                                 rx.el.label(
                                     "Contraseña",
                                     html_for="owner_password",
-                                    class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                                    class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                                 ),
                                 rx.el.input(
                                     name="owner_password",

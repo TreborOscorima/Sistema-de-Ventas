@@ -1,10 +1,23 @@
 import reflex as rx
 from app.state import State
 from app.components.ui import (
+  BUTTON_STYLES,
+  CARD_STYLES,
+  INPUT_STYLES,
+  TYPOGRAPHY,
+  BADGE_STYLES,
+  SPACING,
+  SELECT_STYLES,
+  RADIUS,
+  SHADOWS,
+  TRANSITIONS,
+  FOCUS_RING,
   TABLE_STYLES,
   page_title,
   pagination_controls,
   permission_guard,
+  select_filter,
+  modal_container,
   toggle_switch,
 )
 
@@ -22,39 +35,39 @@ def edit_product_modal() -> rx.Component:
         rx.el.div(
           rx.el.h3(
             "Editar Producto",
-            class_name="text-xl font-semibold text-slate-800",
+            class_name=TYPOGRAPHY["section_title"],
           ),
           rx.el.button(
             rx.icon("x", class_name="h-4 w-4"),
             on_click=State.cancel_edit_product,
             title="Cerrar",
             aria_label="Cerrar",
-            class_name="p-2 rounded-full hover:bg-slate-100",
+            class_name=BUTTON_STYLES["icon_ghost"],
           ),
           class_name="flex items-start justify-between gap-4 mb-4",
         ),
         rx.divider(color="slate-100"),
         rx.el.div(
           rx.el.div(
-            rx.el.label("Código de Barra", class_name="block text-sm font-medium text-slate-700"),
+            rx.el.label("Código de Barra", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.input(
               default_value=State.editing_product["barcode"],
               on_blur=lambda v: State.handle_edit_product_change("barcode", v),
-              class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+              class_name=INPUT_STYLES["default"],
               debounce_timeout=600,
             ),
           ),
           rx.el.div(
-            rx.el.label("Descripción", class_name="block text-sm font-medium text-slate-700"),
+            rx.el.label("Descripción", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.input(
               default_value=State.editing_product["description"],
               on_blur=lambda v: State.handle_edit_product_change("description", v),
-              class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+              class_name=INPUT_STYLES["default"],
               debounce_timeout=600,
             ),
           ),
           rx.el.div(
-            rx.el.label("Categoría", class_name="block text-sm font-medium text-slate-700"),
+            rx.el.label("Categoría", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.select(
               rx.foreach(
                 State.categories,
@@ -62,7 +75,7 @@ def edit_product_modal() -> rx.Component:
               ),
               default_value=State.editing_product["category"],
               on_change=lambda v: State.handle_edit_product_change("category", v),
-              class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+              class_name=SELECT_STYLES["default"],
             ),
           ),
           rx.el.div(
@@ -71,31 +84,31 @@ def edit_product_modal() -> rx.Component:
               rx.el.div(
                 rx.el.label(
                   "Stock Total (calculado)",
-                  class_name="block text-sm font-medium text-slate-700",
+                  class_name=f"block {TYPOGRAPHY['label']}",
                 ),
                 rx.el.input(
                   type="number",
                   value=State.variants_stock_total.to_string(),
                   is_disabled=True,
-                  class_name="w-full h-10 px-3 text-sm bg-slate-100 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  class_name=INPUT_STYLES["disabled"],
                 ),
               ),
               rx.el.div(
                 rx.el.label(
                   "Stock",
-                  class_name="block text-sm font-medium text-slate-700",
+                  class_name=f"block {TYPOGRAPHY['label']}",
                 ),
                 rx.el.input(
                   type="number",
                   default_value=State.editing_product["stock"].to_string(),
                   on_blur=lambda v: State.handle_edit_product_change("stock", v),
-                  class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  class_name=INPUT_STYLES["default"],
                 ),
               ),
             )
           ),
           rx.el.div(
-            rx.el.label("Unidad", class_name="block text-sm font-medium text-slate-700"),
+            rx.el.label("Unidad", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.select(
               rx.el.option("Unidad", value="Unidad"),
               rx.el.option("Kg", value="Kg"),
@@ -104,25 +117,25 @@ def edit_product_modal() -> rx.Component:
               rx.el.option("Caja", value="Caja"),
               default_value=State.editing_product["unit"],
               on_change=lambda v: State.handle_edit_product_change("unit", v),
-              class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+              class_name=SELECT_STYLES["default"],
             ),
           ),
           rx.el.div(
-            rx.el.label("Precio Compra", class_name="block text-sm font-medium text-slate-700"),
+            rx.el.label("Precio Compra", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.input(
               type="number",
               default_value=State.editing_product["purchase_price"].to_string(),
               on_blur=lambda v: State.handle_edit_product_change("purchase_price", v),
-              class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+              class_name=INPUT_STYLES["default"],
             ),
           ),
           rx.el.div(
-            rx.el.label("Precio Venta", class_name="block text-sm font-medium text-slate-700"),
+            rx.el.label("Precio Venta", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.input(
               type="number",
               default_value=State.editing_product["sale_price"].to_string(),
               on_blur=lambda v: State.handle_edit_product_change("sale_price", v),
-              class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+              class_name=INPUT_STYLES["default"],
             ),
           ),
           class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
@@ -131,7 +144,7 @@ def edit_product_modal() -> rx.Component:
           rx.el.div(
             rx.el.label(
               "Tiene Variantes",
-              class_name="text-sm font-medium text-slate-700",
+              class_name=TYPOGRAPHY["label"],
             ),
             rx.el.div(
               toggle_switch(
@@ -140,7 +153,7 @@ def edit_product_modal() -> rx.Component:
               ),
               rx.el.span(
                 "Tallas/colores con stock individual",
-                class_name="text-xs text-slate-500",
+                class_name=TYPOGRAPHY["caption"],
               ),
               class_name="flex items-center gap-2",
             ),
@@ -149,7 +162,7 @@ def edit_product_modal() -> rx.Component:
           rx.el.div(
             rx.el.label(
               "Precios Mayoristas",
-              class_name="text-sm font-medium text-slate-700",
+              class_name=TYPOGRAPHY["label"],
             ),
             rx.el.div(
               toggle_switch(
@@ -158,7 +171,7 @@ def edit_product_modal() -> rx.Component:
               ),
               rx.el.span(
                 "Escalas por cantidad mínima",
-                class_name="text-xs text-slate-500",
+                class_name=TYPOGRAPHY["caption"],
               ),
               class_name="flex items-center gap-2",
             ),
@@ -181,18 +194,18 @@ def edit_product_modal() -> rx.Component:
               ),
               rx.el.p(
                 "Se eliminarán todas las escalas de precio configuradas para este producto. Esta acción no se puede deshacer.",
-                class_name="text-xs text-slate-500 mt-2",
+                class_name=f"{TYPOGRAPHY['caption']} mt-2",
               ),
               rx.el.div(
                 rx.el.button(
                   "Cancelar",
                   on_click=State.confirm_disable_wholesale_no,
-                  class_name="px-3 py-1.5 text-xs rounded-md border text-slate-700 hover:bg-slate-50",
+                  class_name=BUTTON_STYLES["secondary_sm"],
                 ),
                 rx.el.button(
                   "Sí, desactivar",
                   on_click=State.confirm_disable_wholesale_yes,
-                  class_name="px-3 py-1.5 text-xs rounded-md bg-red-600 text-white hover:bg-red-700",
+                  class_name=BUTTON_STYLES["danger_sm"],
                 ),
                 class_name="flex justify-end gap-2 mt-3",
               ),
@@ -208,25 +221,25 @@ def edit_product_modal() -> rx.Component:
             rx.el.div(
               rx.el.h4(
                 "Variantes",
-                class_name="text-sm font-semibold text-slate-700",
+                class_name=TYPOGRAPHY["label"],
               ),
               rx.el.button(
                 rx.icon("plus", class_name="h-4 w-4"),
                 "Agregar variante",
                 on_click=State.add_variant_row,
-                class_name="flex items-center gap-2 px-3 py-2 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+                class_name=BUTTON_STYLES["primary_sm"],
               ),
               class_name="flex items-center justify-between",
             ),
             rx.el.div(
               rx.el.div(
                 rx.el.span(
-                  "SKU", class_name="text-xs text-slate-500 uppercase sm:col-span-2"
+                  "SKU", class_name=f"{TYPOGRAPHY['caption']} uppercase sm:col-span-2"
                 ),
-                rx.el.span("Talla", class_name="text-xs text-slate-500 uppercase"),
-                rx.el.span("Color", class_name="text-xs text-slate-500 uppercase"),
-                rx.el.span("Stock", class_name="text-xs text-slate-500 uppercase"),
-                rx.el.span("Acción", class_name="text-xs text-slate-500 uppercase"),
+                rx.el.span("Talla", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                rx.el.span("Color", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                rx.el.span("Stock", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                rx.el.span("Acción", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 class_name="hidden sm:grid sm:grid-cols-6 gap-2",
               ),
               rx.foreach(
@@ -242,7 +255,7 @@ def edit_product_modal() -> rx.Component:
                     on_key_down=lambda k, index=row["index"]: State.handle_variant_sku_keydown(
                       k, index
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 sm:col-span-2",
+                    class_name=f"{INPUT_STYLES['default']} sm:col-span-2",
                   ),
                   rx.el.input(
                     placeholder="Talla",
@@ -250,7 +263,7 @@ def edit_product_modal() -> rx.Component:
                     on_blur=lambda v, index=row["index"]: State.update_variant_field(
                       index, "size", v
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=INPUT_STYLES["default"],
                   ),
                   rx.el.input(
                     placeholder="Color",
@@ -258,7 +271,7 @@ def edit_product_modal() -> rx.Component:
                     on_blur=lambda v, index=row["index"]: State.update_variant_field(
                       index, "color", v
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=INPUT_STYLES["default"],
                   ),
                   rx.el.input(
                     type="number",
@@ -267,7 +280,7 @@ def edit_product_modal() -> rx.Component:
                     on_blur=lambda v, index=row["index"]: State.update_variant_field(
                       index, "stock", v
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=INPUT_STYLES["default"],
                   ),
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
@@ -276,7 +289,7 @@ def edit_product_modal() -> rx.Component:
                     ),
                     title="Eliminar variante",
                     aria_label="Eliminar variante",
-                    class_name="p-2 text-red-600 hover:bg-red-50 rounded-md",
+                    class_name=BUTTON_STYLES["icon_danger"],
                   ),
                   class_name="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center",
                 ),
@@ -293,25 +306,25 @@ def edit_product_modal() -> rx.Component:
             rx.el.div(
               rx.el.h4(
                 "Precios Mayoristas",
-                class_name="text-sm font-semibold text-slate-700",
+                class_name=TYPOGRAPHY["label"],
               ),
               rx.el.button(
                 rx.icon("plus", class_name="h-4 w-4"),
                 "Agregar regla",
                 on_click=State.add_tier_row,
-                class_name="flex items-center gap-2 px-3 py-2 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+                class_name=BUTTON_STYLES["primary_sm"],
               ),
               class_name="flex items-center justify-between",
             ),
             rx.el.div(
               rx.el.div(
                 rx.el.span(
-                  "Cantidad mínima", class_name="text-xs text-slate-500 uppercase"
+                  "Cantidad mínima", class_name=f"{TYPOGRAPHY['caption']} uppercase"
                 ),
                 rx.el.span(
-                  "Precio unitario", class_name="text-xs text-slate-500 uppercase"
+                  "Precio unitario", class_name=f"{TYPOGRAPHY['caption']} uppercase"
                 ),
-                rx.el.span("Acción", class_name="text-xs text-slate-500 uppercase"),
+                rx.el.span("Acción", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 class_name="hidden sm:grid sm:grid-cols-3 gap-2",
               ),
               rx.foreach(
@@ -324,7 +337,7 @@ def edit_product_modal() -> rx.Component:
                     on_blur=lambda v, index=row["index"]: State.update_tier_field(
                       index, "min_qty", v
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=INPUT_STYLES["default"],
                   ),
                   rx.el.input(
                     type="number",
@@ -333,7 +346,7 @@ def edit_product_modal() -> rx.Component:
                     on_blur=lambda v, index=row["index"]: State.update_tier_field(
                       index, "price", v
                     ),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=INPUT_STYLES["default"],
                   ),
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
@@ -342,7 +355,7 @@ def edit_product_modal() -> rx.Component:
                     ),
                     title="Eliminar regla",
                     aria_label="Eliminar regla",
-                    class_name="p-2 text-red-600 hover:bg-red-50 rounded-md",
+                    class_name=BUTTON_STYLES["icon_danger"],
                   ),
                   class_name="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center",
                 ),
@@ -358,14 +371,14 @@ def edit_product_modal() -> rx.Component:
           rx.el.button(
             "Cancelar",
             on_click=State.cancel_edit_product,
-            class_name="px-4 py-2 rounded-md border text-slate-700 hover:bg-slate-50",
+            class_name=BUTTON_STYLES["secondary"],
           ),
           rx.el.button(
             "Guardar Cambios",
             on_click=State.save_edited_product,
             disabled=State.is_loading,
             loading=State.is_loading,
-            class_name="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+            class_name=BUTTON_STYLES["primary"],
           ),
           class_name="flex flex-col sm:flex-row sm:justify-end gap-3 mt-6",
         ),
@@ -397,7 +410,7 @@ def stock_details_modal() -> rx.Component:
             on_click=State.close_stock_details,
             title="Cerrar",
             aria_label="Cerrar",
-            class_name="p-2 rounded-full hover:bg-slate-100",
+            class_name=BUTTON_STYLES["icon_ghost"],
           ),
           class_name="flex items-start justify-between gap-4 mb-4",
         ),
@@ -407,11 +420,11 @@ def stock_details_modal() -> rx.Component:
           rx.el.table(
             rx.el.thead(
               rx.el.tr(
-                rx.el.th("SKU", class_name=TABLE_STYLES["header_cell"]),
-                rx.el.th("Talla", class_name=TABLE_STYLES["header_cell"]),
-                rx.el.th("Color", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("SKU", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Talla", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Color", scope="col", class_name=TABLE_STYLES["header_cell"]),
                 rx.el.th(
-                  "Stock", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+                  "Stock", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
                 ),
                 class_name=TABLE_STYLES["header"],
               )
@@ -438,11 +451,11 @@ def stock_details_modal() -> rx.Component:
             rx.el.table(
               rx.el.thead(
                 rx.el.tr(
-                  rx.el.th("Lote", class_name=TABLE_STYLES["header_cell"]),
-                  rx.el.th("Vencimiento", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Lote", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Vencimiento", scope="col", class_name=TABLE_STYLES["header_cell"]),
                   rx.el.th(
                     "Stock",
-                    class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                    scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                   ),
                   class_name=TABLE_STYLES["header"],
                 )
@@ -465,7 +478,7 @@ def stock_details_modal() -> rx.Component:
             ),
             rx.el.p(
               "Producto único sin variantes.",
-              class_name="text-sm text-slate-500",
+              class_name=TYPOGRAPHY["body_secondary"],
             ),
           ),
         ),
@@ -473,7 +486,7 @@ def stock_details_modal() -> rx.Component:
           rx.el.button(
             "Cerrar",
             on_click=State.close_stock_details,
-            class_name="px-4 py-2 rounded-md border text-slate-700 hover:bg-slate-50",
+            class_name=BUTTON_STYLES["secondary"],
           ),
           class_name="flex justify-end mt-6",
         ),
@@ -505,7 +518,7 @@ def inventory_adjustment_modal() -> rx.Component:
             on_click=State.close_inventory_check_modal,
             title="Cerrar",
             aria_label="Cerrar",
-            class_name="p-2 rounded-full hover:bg-slate-100",
+            class_name=BUTTON_STYLES["icon_ghost"],
           ),
           class_name="flex items-start justify-between gap-4",
         ),
@@ -542,12 +555,12 @@ def inventory_adjustment_modal() -> rx.Component:
           rx.el.div(
             rx.el.h4(
               "Productos con diferencias",
-              class_name="text-sm font-semibold text-slate-700",
+              class_name=TYPOGRAPHY["label"],
             ),
             rx.el.div(
               rx.el.label(
                 "Buscar producto",
-                class_name="text-sm font-medium text-slate-600",
+                class_name=TYPOGRAPHY["label_secondary"],
               ),
               rx.el.div(
                 rx.debounce_input(
@@ -563,7 +576,7 @@ def inventory_adjustment_modal() -> rx.Component:
                       k, "inventory-adjustment-search"
                     ),
                     auto_complete=False,
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=INPUT_STYLES["default"],
                   ),
                   debounce_timeout=600,
                 ),
@@ -594,47 +607,47 @@ def inventory_adjustment_modal() -> rx.Component:
               rx.el.div(
                 rx.el.label(
                   "Codigo de barra",
-                  class_name="text-xs text-slate-500 uppercase",
+                  class_name=f"{TYPOGRAPHY['caption']} uppercase",
                 ),
                 rx.el.input(
                   value=State.inventory_adjustment_item["barcode"],
                   is_disabled=True,
-                  class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-100",
+                  class_name=INPUT_STYLES["disabled"],
                 ),
               ),
               rx.el.div(
                 rx.el.label(
                   "Categoria",
-                  class_name="text-xs text-slate-500 uppercase",
+                  class_name=f"{TYPOGRAPHY['caption']} uppercase",
                 ),
                 rx.el.input(
                   value=State.inventory_adjustment_item["category"],
                   is_disabled=True,
-                  class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-100",
+                  class_name=INPUT_STYLES["disabled"],
                 ),
               ),
               rx.el.div(
                 rx.el.label(
                   "Unidad",
-                  class_name="text-xs text-slate-500 uppercase",
+                  class_name=f"{TYPOGRAPHY['caption']} uppercase",
                 ),
                 rx.el.input(
                   value=State.inventory_adjustment_item["unit"],
                   is_disabled=True,
-                  class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-100",
+                  class_name=INPUT_STYLES["disabled"],
                 ),
               ),
               rx.el.div(
                 rx.el.label(
                   "Stock disponible",
-                  class_name="text-xs text-slate-500 uppercase",
+                  class_name=f"{TYPOGRAPHY['caption']} uppercase",
                 ),
                 rx.el.input(
                   value=State.inventory_adjustment_item[
                     "current_stock"
                   ].to_string(),
                   is_disabled=True,
-                  class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-100",
+                  class_name=INPUT_STYLES["disabled"],
                 ),
               ),
               class_name="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4",
@@ -643,7 +656,7 @@ def inventory_adjustment_modal() -> rx.Component:
               rx.el.div(
                 rx.el.label(
                   "Cantidad a ajustar",
-                  class_name="text-sm font-medium text-slate-700",
+                  class_name=TYPOGRAPHY["label"],
                 ),
                 rx.el.input(
                   type="number",
@@ -655,13 +668,13 @@ def inventory_adjustment_modal() -> rx.Component:
                   on_blur=lambda value: State.handle_inventory_adjustment_change(
                     "adjust_quantity", value
                   ),
-                  class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  class_name=INPUT_STYLES["default"],
                 ),
               ),
               rx.el.div(
                 rx.el.label(
                   "Motivo del ajuste",
-                  class_name="text-sm font-medium text-slate-700",
+                  class_name=TYPOGRAPHY["label"],
                 ),
                 rx.el.textarea(
                   placeholder="Ej: Producto dañado, consumo interno, vencido, etc.",
@@ -669,7 +682,7 @@ def inventory_adjustment_modal() -> rx.Component:
                   on_blur=lambda value: State.handle_inventory_adjustment_change(
                     "reason", value
                   ),
-                  class_name="w-full h-24 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                  class_name=f"{INPUT_STYLES['default']} h-24",
                 ),
               ),
               class_name="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4",
@@ -678,7 +691,7 @@ def inventory_adjustment_modal() -> rx.Component:
               rx.icon("plus", class_name="h-4 w-4"),
               "Agregar producto al ajuste",
               on_click=State.add_inventory_adjustment_item,
-              class_name="mt-4 flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[42px]",
+              class_name=f"{BUTTON_STYLES['primary']} mt-4 w-full",
             ),
             rx.cond(
               State.inventory_adjustment_items.length() > 0,
@@ -688,27 +701,27 @@ def inventory_adjustment_modal() -> rx.Component:
                     rx.el.tr(
                       rx.el.th(
                         "Producto",
-                        class_name=TABLE_STYLES["header_cell"],
+                        scope="col", class_name=TABLE_STYLES["header_cell"],
                       ),
                       rx.el.th(
                         "Unidad",
-                        class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                        scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                       ),
                       rx.el.th(
                         "Stock",
-                        class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                        scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                       ),
                       rx.el.th(
                         "Cantidad Ajuste",
-                        class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                        scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                       ),
                       rx.el.th(
                         "Motivo",
-                        class_name=TABLE_STYLES["header_cell"],
+                        scope="col", class_name=TABLE_STYLES["header_cell"],
                       ),
                       rx.el.th(
                         "Accion",
-                        class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                        scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                       ),
                       class_name=TABLE_STYLES["header"],
                     )
@@ -753,7 +766,9 @@ def inventory_adjustment_modal() -> rx.Component:
                             ]: State.remove_inventory_adjustment_item(
                               temp_id
                             ),
-                            class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                            title="Eliminar",
+                            aria_label="Eliminar",
+                            class_name=BUTTON_STYLES["icon_danger"],
                           ),
                           class_name="py-2 px-3 text-center",
                         ),
@@ -767,13 +782,13 @@ def inventory_adjustment_modal() -> rx.Component:
               ),
               rx.el.p(
                 "Aun no hay productos seleccionados para el ajuste.",
-                class_name="mt-4 text-sm text-slate-500",
+                class_name=f"mt-4 {TYPOGRAPHY['body_secondary']}",
               ),
             ),
             rx.el.div(
               rx.el.label(
                 "Notas generales del ajuste",
-                class_name="text-sm font-semibold text-slate-700 mt-4",
+                class_name=f"{TYPOGRAPHY['label']} mt-4",
               ),
               rx.el.textarea(
                 placeholder="Detalles adicionales que respalden el ajuste realizado.",
@@ -792,7 +807,7 @@ def inventory_adjustment_modal() -> rx.Component:
           rx.el.button(
             "Cancelar",
             on_click=State.close_inventory_check_modal,
-            class_name="px-4 py-2 rounded-md border text-slate-700 hover:bg-slate-50",
+            class_name=BUTTON_STYLES["secondary"],
           ),
           rx.el.button(
             rx.icon("save", class_name="h-4 w-4"),
@@ -800,7 +815,7 @@ def inventory_adjustment_modal() -> rx.Component:
             on_click=State.submit_inventory_check,
             disabled=State.is_loading,
             loading=State.is_loading,
-            class_name="flex items-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700",
+            class_name=BUTTON_STYLES["primary"],
           ),
           class_name="flex flex-col gap-3 sm:flex-row sm:justify-end",
         ),
@@ -814,13 +829,116 @@ def inventory_adjustment_modal() -> rx.Component:
 
 def inventory_stat_card(title: str, value: rx.Var, value_class: str) -> rx.Component:
   return rx.el.div(
-    rx.el.p(title, class_name="text-sm text-slate-500"),
+    rx.el.p(title, class_name=TYPOGRAPHY["body_secondary"]),
     rx.el.p(
       value,
       class_name=f"text-3xl font-semibold tracking-tight {value_class}",
     ),
-    class_name="bg-white rounded-xl border border-slate-100 shadow-sm p-4 sm:p-5",
+    class_name=CARD_STYLES["compact"],
   )
+
+
+# ════════════════════════════════════════════════════════════
+# CARD MÓVIL (vista responsiva para pantallas pequeñas)
+# ════════════════════════════════════════════════════════════
+
+def _product_card(product: rx.Var) -> rx.Component:
+    """Card de producto para vista móvil."""
+    return rx.el.div(
+        # Header: Nombre + Estado activo/inactivo
+        rx.el.div(
+            rx.el.div(
+                rx.el.span(
+                    product["description"],
+                    class_name="font-medium text-slate-900 text-sm",
+                ),
+                rx.el.span(
+                    product["category"],
+                    class_name=TYPOGRAPHY["caption"],
+                ),
+                class_name="flex flex-col",
+            ),
+            rx.cond(
+                product["is_active"],
+                rx.el.span(
+                    "Activo",
+                    class_name=BADGE_STYLES["success"],
+                ),
+                rx.el.span(
+                    "Inactivo",
+                    class_name=BADGE_STYLES["danger"],
+                ),
+            ),
+            class_name="flex items-start justify-between gap-2",
+        ),
+        # Body: Stock + Precio
+        rx.el.div(
+            rx.el.div(
+                rx.el.span("Stock", class_name=TYPOGRAPHY["caption"]),
+                rx.el.div(
+                    rx.el.span(
+                        product["stock"].to_string(),
+                        class_name=rx.cond(
+                            product["stock_is_low"],
+                            "font-bold text-red-600",
+                            rx.cond(
+                                product["stock_is_medium"],
+                                "font-semibold text-amber-600",
+                                "font-semibold text-green-600",
+                            ),
+                        ),
+                    ),
+                    rx.cond(
+                        product["stock_is_low"],
+                        rx.el.span(
+                            "Bajo",
+                            class_name="ml-1.5 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800",
+                        ),
+                        rx.cond(
+                            product["stock_is_medium"],
+                            rx.el.span(
+                                "Moderado",
+                                class_name="ml-1.5 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800",
+                            ),
+                            rx.fragment(),
+                        ),
+                    ),
+                    class_name="flex items-center",
+                ),
+                class_name="flex flex-col gap-0.5",
+            ),
+            rx.el.div(
+                rx.el.span("Precio Venta", class_name=TYPOGRAPHY["caption"]),
+                rx.el.span(
+                    State.currency_symbol, " ", product["sale_price"].to_string(),
+                    class_name="font-semibold tabular-nums text-green-600",
+                ),
+                class_name="flex flex-col gap-0.5 text-right",
+            ),
+            class_name="flex items-end justify-between mt-2",
+        ),
+        # Footer: Acciones
+        rx.el.div(
+            rx.el.button(
+                rx.icon("pencil", class_name="h-4 w-4"),
+                " Editar",
+                on_click=lambda: State.open_edit_product(product),
+                title="Editar producto",
+                aria_label="Editar producto",
+                class_name=BUTTON_STYLES["link_primary"],
+            ),
+            rx.el.button(
+                rx.icon("eye", class_name="h-4 w-4"),
+                " Desglose",
+                on_click=lambda: State.open_stock_details(product),
+                title="Ver desglose de stock",
+                aria_label="Ver desglose de stock",
+                class_name=BUTTON_STYLES["link_primary"],
+            ),
+            class_name="flex items-center justify-end gap-3 mt-3 pt-2 border-t border-slate-100",
+        ),
+        class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
+    )
 
 
 def inventario_page() -> rx.Component:
@@ -858,7 +976,7 @@ def inventario_page() -> rx.Component:
         rx.el.div(
           rx.el.h2(
             "CATEGORIAS DE PRODUCTOS",
-            class_name="text-lg font-semibold text-slate-700",
+            class_name=TYPOGRAPHY["section_title"],
           ),
           rx.el.span(
             State.categories.length().to_string(),
@@ -891,16 +1009,13 @@ def inventario_page() -> rx.Component:
           placeholder="Nombre de la categoría",
           default_value=State.new_category_name,
           on_blur=lambda v: State.update_new_category_name(v),
-          class_name="flex-1 h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=f"{INPUT_STYLES['default']} flex-1",
         ),
         rx.el.button(
           rx.icon("plus", class_name="h-4 w-4"),
           "Agregar",
           on_click=State.add_category,
-          class_name=(
-            "inline-flex h-10 items-center justify-center gap-2 rounded-md "
-            "bg-indigo-600 px-3.5 text-sm font-medium text-white hover:bg-indigo-700"
-          ),
+          class_name=BUTTON_STYLES["primary"],
         ),
         class_name="flex flex-col sm:flex-row gap-3 mb-3",
       ),
@@ -942,11 +1057,11 @@ def inventario_page() -> rx.Component:
             "Vista expandida de categorías.",
             "Vista compacta: desliza horizontalmente para ver más.",
           ),
-          class_name="text-xs text-slate-500 mt-2",
+          class_name=f"{TYPOGRAPHY['caption']} mt-2",
         ),
         rx.fragment(),
       ),
-      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm mb-6",
+      class_name=f"{CARD_STYLES['default']} mb-6",
     ),
     rx.el.div(
       rx.el.div(
@@ -954,7 +1069,7 @@ def inventario_page() -> rx.Component:
           rx.input(
             placeholder="Buscar producto...",
             on_change=State.set_inventory_search_term,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           debounce_timeout=600,
         ),
@@ -963,60 +1078,54 @@ def inventario_page() -> rx.Component:
             rx.icon("plus", class_name="h-4 w-4"),
             "Nuevo Producto",
             on_click=State.open_create_product_modal,
-            class_name=(
-              "inline-flex h-9 items-center justify-center gap-1.5 rounded-md "
-              "bg-indigo-600 px-3.5 text-sm font-medium text-white shadow-sm "
-              "transition-colors duration-150 hover:bg-indigo-700"
-            ),
+            class_name=BUTTON_STYLES["primary_sm"],
           ),
           rx.el.button(
             rx.icon("download", class_name="h-4 w-4"),
             "Exportar Inventario",
             on_click=State.export_inventory_to_excel,
-            class_name=(
-              "inline-flex h-9 items-center justify-center gap-1.5 rounded-md "
-              "bg-emerald-600 px-3.5 text-sm font-medium text-white shadow-sm "
-              "transition-colors duration-150 hover:bg-emerald-700"
-            ),
+            class_name=BUTTON_STYLES["success_sm"],
           ),
           rx.el.button(
             rx.icon("clipboard_check", class_name="h-4 w-4"),
             "Registrar Fisico",
             on_click=State.open_inventory_check_modal,
-            class_name=(
-              "inline-flex h-9 items-center justify-center gap-1.5 rounded-md "
-              "bg-amber-600 px-3.5 text-sm font-medium text-white shadow-sm "
-              "transition-colors duration-150 hover:bg-amber-700"
-            ),
+            class_name=BUTTON_STYLES["warning"],
           ),
           class_name="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end",
         ),
         class_name="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-4 border-b border-slate-200",
       ),
+      # Vista móvil: Cards (visible en < md)
+      rx.el.div(
+        rx.foreach(State.inventory_list, _product_card),
+        class_name="flex flex-col gap-3 md:hidden",
+      ),
+      # Vista desktop: Tabla (oculta en < md)
       rx.el.div(
         rx.el.table(
           rx.el.thead(
             rx.el.tr(
-              rx.el.th("Codigo de Barra", class_name=f"{TABLE_STYLES['header_cell']} hidden lg:table-cell"),
-              rx.el.th("Descripción", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th("Categoría", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+              rx.el.th("Codigo de Barra", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden lg:table-cell"),
+              rx.el.th("Descripción", scope="col", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Categoría", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
               rx.el.th(
-                "Stock", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+                "Stock", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
               ),
               rx.el.th(
-                "Unidad", class_name=f"{TABLE_STYLES['header_cell']} text-center hidden md:table-cell"
+                "Unidad", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center hidden md:table-cell"
               ),
               rx.el.th(
-                "Precio Compra", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell"
+                "Precio Compra", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell"
               ),
               rx.el.th(
-                "Precio Venta", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+                "Precio Venta", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
               ),
               rx.el.th(
-                "Valor Total Stock", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell"
+                "Valor Total Stock", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell"
               ),
               rx.el.th(
-                "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+                "Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
               ),
               class_name=TABLE_STYLES["header"],
             )
@@ -1085,14 +1194,14 @@ def inventario_page() -> rx.Component:
                     rx.el.button(
                       rx.icon("pencil", class_name="h-4 w-4"),
                       on_click=lambda: State.open_edit_product(product),
-                      class_name="p-2 text-blue-600 hover:bg-blue-50 rounded-full",
+                      class_name=BUTTON_STYLES["icon_primary"],
                       title="Editar",
                       aria_label="Editar",
                     ),
                     rx.el.button(
                       rx.icon("eye", class_name="h-4 w-4"),
                       on_click=lambda: State.open_stock_details(product),
-                      class_name="p-2 text-slate-600 hover:bg-slate-100 rounded-full",
+                      class_name=BUTTON_STYLES["icon_ghost"],
                       title="Ver Desglose",
                       aria_label="Ver desglose",
                     ),
@@ -1104,7 +1213,7 @@ def inventario_page() -> rx.Component:
                         on_click=lambda: State.delete_product(product["id"]),
                         disabled=State.is_loading,
                         loading=State.is_loading,
-                        class_name="p-2 text-red-600 hover:bg-red-50 rounded-full",
+                        class_name=BUTTON_STYLES["icon_danger"],
                         title="Eliminar",
                         aria_label="Eliminar",
                       ),
@@ -1119,7 +1228,7 @@ def inventario_page() -> rx.Component:
           ),
           class_name="min-w-[980px]",
         ),
-        class_name="w-full overflow-x-auto",
+        class_name="hidden md:block w-full overflow-x-auto",
       ),
       rx.cond(
         State.inventory_list.length() == 0,
@@ -1139,13 +1248,13 @@ def inventario_page() -> rx.Component:
         ),
         rx.fragment(),
       ),
-      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4",
+      class_name=f"{CARD_STYLES['default']} flex flex-col {SPACING['card_gap']}",
     ),
     inventory_adjustment_modal(),
     edit_product_modal(),
     stock_details_modal(),
     on_mount=State.refresh_inventory_cache,
-    class_name="w-full flex flex-col gap-6",
+    class_name=f"w-full flex flex-col {SPACING['page_gap']}",
   )
   return permission_guard(
     has_permission=State.can_view_inventario,

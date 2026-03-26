@@ -7,7 +7,11 @@ from app.components.ui import (
   date_range_filter,
   payment_method_badge,
   BUTTON_STYLES,
+  CARD_STYLES,
+  INPUT_STYLES,
+  SELECT_STYLES,
   TABLE_STYLES,
+  TYPOGRAPHY,
   page_title,
   permission_guard,
 )
@@ -32,7 +36,7 @@ def history_filters() -> rx.Component:
       rx.el.div(
         rx.el.label(
           "Categoria",
-          class_name="text-sm font-medium text-slate-600",
+          class_name=TYPOGRAPHY["label_secondary"],
         ),
         rx.el.select(
           rx.foreach(
@@ -43,19 +47,19 @@ def history_filters() -> rx.Component:
           ),
           value=State.staged_history_filter_category,
           on_change=State.set_staged_history_filter_category,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=SELECT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
         rx.el.label(
           "Buscar por producto",
-          class_name="text-sm font-medium text-slate-600",
+          class_name=TYPOGRAPHY["label_secondary"],
         ),
         rx.el.input(
           placeholder="Descripción del producto",
           on_blur=lambda v: State.set_staged_history_filter_product(v),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           default_value=State.staged_history_filter_product,
         ),
         class_name="flex flex-col gap-1",
@@ -135,6 +139,64 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
     class_name="border-b border-slate-100 hover:bg-slate-50/80",
   )
 
+# ════════════════════════════════════════════════════════════
+# CARD MOVIL (vista responsiva para pantallas pequenas)
+# ════════════════════════════════════════════════════════════
+
+def _sale_card(sale: rx.Var) -> rx.Component:
+  """Card de venta para vista movil."""
+  return rx.el.div(
+    # Header: Fecha
+    rx.el.div(
+      rx.el.span(
+        sale["timestamp"],
+        class_name="font-mono font-medium text-slate-900 text-sm",
+      ),
+      class_name="flex items-center justify-between gap-2",
+    ),
+    # Body: Cliente + Metodo de pago
+    rx.el.div(
+      rx.el.div(
+        rx.el.span("Cliente", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(
+          sale["client_name"],
+          class_name="text-sm font-medium text-slate-800",
+        ),
+        class_name="flex flex-col gap-0.5",
+      ),
+      rx.el.div(
+        rx.el.span("Pago", class_name=TYPOGRAPHY["caption"]),
+        payment_method_badge(sale.get("payment_method")),
+        class_name="flex flex-col gap-0.5",
+      ),
+      class_name="flex flex-col gap-1.5 mt-2",
+    ),
+    # Footer: Total + Accion
+    rx.el.div(
+      rx.el.div(
+        rx.el.span("Total", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(
+          State.currency_symbol,
+          " ",
+          sale["total"].to_string(),
+          class_name=TYPOGRAPHY["mono_value"],
+        ),
+        class_name="flex flex-col gap-0.5",
+      ),
+      rx.el.button(
+        rx.icon("eye", class_name="h-4 w-4"),
+        " Ver detalle",
+        on_click=State.open_sale_detail(sale["sale_id"]),
+        title="Ver detalle de la venta",
+        aria_label="Ver detalle de la venta",
+        class_name=BUTTON_STYLES["link_primary"],
+      ),
+      class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+    ),
+    class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
+  )
+
+
 def sale_detail_modal() -> rx.Component:
   """Modal de detalle de una venta del historial."""
   return rx.radix.primitives.dialog.root(
@@ -144,21 +206,21 @@ def sale_detail_modal() -> rx.Component:
       ),
       rx.radix.primitives.dialog.content(
         rx.el.div(
-          rx.el.h3("Detalle de venta", class_name="text-lg font-semibold text-slate-800"),
+          rx.el.h3("Detalle de venta", class_name=TYPOGRAPHY["section_title"]),
           rx.el.p(
             "Productos y resumen del comprobante seleccionado.",
-            class_name="text-sm text-slate-600",
+            class_name=TYPOGRAPHY["body_secondary"],
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.divider(color="slate-100"),
         rx.cond(
           State.selected_sale_id == "",
-          rx.el.p("Venta no disponible.", class_name="text-sm text-slate-600"),
+          rx.el.p("Venta no disponible.", class_name=TYPOGRAPHY["body_secondary"]),
           rx.el.div(
             rx.el.div(
               rx.el.div(
-                rx.el.span("Fecha", class_name="text-xs uppercase text-slate-500"),
+                rx.el.span("Fecha", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 rx.el.span(
                   State.selected_sale_summary["timestamp"],
                   class_name="text-sm font-semibold text-slate-900",
@@ -166,7 +228,7 @@ def sale_detail_modal() -> rx.Component:
                 class_name="flex flex-col gap-1",
               ),
               rx.el.div(
-                rx.el.span("Cliente", class_name="text-xs uppercase text-slate-500"),
+                rx.el.span("Cliente", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 rx.el.span(
                   State.selected_sale_summary["client_name"],
                   class_name="text-sm font-semibold text-slate-900",
@@ -174,7 +236,7 @@ def sale_detail_modal() -> rx.Component:
                 class_name="flex flex-col gap-1",
               ),
               rx.el.div(
-                rx.el.span("Usuario", class_name="text-xs uppercase text-slate-500"),
+                rx.el.span("Usuario", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 rx.el.span(
                   State.selected_sale_summary["user"],
                   class_name="text-sm font-semibold text-slate-900",
@@ -185,12 +247,12 @@ def sale_detail_modal() -> rx.Component:
           ),
             rx.el.div(
               rx.el.div(
-                rx.el.span("Metodo de pago", class_name="text-xs uppercase text-slate-500"),
+                rx.el.span("Metodo de pago", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 payment_method_badge(State.selected_sale_summary["payment_method"]),
                 class_name="flex flex-col gap-1",
               ),
               rx.el.div(
-                rx.el.span("Total", class_name="text-xs uppercase text-slate-500"),
+                rx.el.span("Total", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 rx.el.span(
                   State.currency_symbol,
                   State.selected_sale_summary["total"].to_string(),
@@ -201,29 +263,29 @@ def sale_detail_modal() -> rx.Component:
             class_name="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3",
           ),
             rx.el.div(
-              rx.el.h4("Productos", class_name="text-sm font-semibold text-slate-700"),
+              rx.el.h4("Productos", class_name=TYPOGRAPHY["label"]),
               rx.cond(
                 State.selected_sale_items_view.length() == 0,
                 rx.el.p(
                   "Sin productos registrados.",
-                  class_name="text-sm text-slate-600",
+                  class_name=TYPOGRAPHY["body_secondary"],
                 ),
                 rx.el.div(
                   rx.el.table(
                     rx.el.thead(
                       rx.el.tr(
-                        rx.el.th("Producto", class_name=TABLE_STYLES["header_cell"]),
+                        rx.el.th("Producto", scope="col", class_name=TABLE_STYLES["header_cell"]),
                         rx.el.th(
                           "Cantidad",
-                          class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                          scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                         ),
                         rx.el.th(
                           "Precio",
-                          class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                          scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                         ),
                         rx.el.th(
                           "Subtotal",
-                          class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                          scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                         ),
                         class_name=TABLE_STYLES["header"],
                       )
@@ -263,7 +325,7 @@ def sale_detail_modal() -> rx.Component:
         rx.el.button(
           "Cerrar",
           on_click=State.close_sale_detail,
-          class_name="h-10 px-4 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-medium",
+          class_name=BUTTON_STYLES["secondary"],
         ),
         class_name="flex justify-end gap-3",
       ),
@@ -292,7 +354,7 @@ def credit_sales_card() -> rx.Component:
       rx.el.div(
         rx.el.p(
           "Saldo por cobrar (Credito)",
-          class_name="text-sm font-medium text-slate-500",
+          class_name=TYPOGRAPHY["body_secondary"],
         ),
         rx.el.p(
           rx.el.span(
@@ -304,14 +366,14 @@ def credit_sales_card() -> rx.Component:
       ),
       class_name="flex items-center gap-4",
     ),
-    class_name="bg-white p-4 rounded-xl shadow-sm border",
+    class_name=CARD_STYLES["compact"],
   )
 
 
 def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
   icon_class = rx.match(
     card["color"],
-    ("blue", "h-6 w-6 text-blue-600"),
+    ("blue", "h-6 w-6 text-indigo-600"),
     ("indigo", "h-6 w-6 text-indigo-600"),
     ("violet", "h-6 w-6 text-violet-600"),
     ("pink", "h-6 w-6 text-pink-600"),
@@ -323,7 +385,7 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
   )
   icon_wrapper = rx.match(
     card["color"],
-    ("blue", "p-3 rounded-lg bg-blue-100"),
+    ("blue", "p-3 rounded-lg bg-indigo-100"),
     ("indigo", "p-3 rounded-lg bg-indigo-100"),
     ("violet", "p-3 rounded-lg bg-violet-100"),
     ("pink", "p-3 rounded-lg bg-pink-100"),
@@ -350,7 +412,7 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
         class_name=icon_wrapper,
       ),
       rx.el.div(
-        rx.el.p(card["name"], class_name="text-sm font-medium text-slate-500"),
+        rx.el.p(card["name"], class_name=TYPOGRAPHY["body_secondary"]),
         rx.el.p(
           rx.el.span(
             State.currency_symbol, card["amount"].to_string()
@@ -361,7 +423,7 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
       ),
       class_name="flex items-center gap-4",
     ),
-    class_name="bg-white p-4 rounded-xl shadow-sm border",
+    class_name=CARD_STYLES["compact"],
   )
 
 
@@ -380,30 +442,39 @@ def historial_page() -> rx.Component:
       ),
       rx.el.div(
         history_filters(),
-        rx.el.table(
-          rx.el.thead(
-            rx.el.tr(
-              rx.el.th("Fecha y Hora", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th(
-                "Total", class_name=f"{TABLE_STYLES['header_cell']} text-right"
-              ),
-              rx.el.th("Metodo de Pago", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-              rx.el.th(
-                "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
-              ),
-              class_name=TABLE_STYLES["header"],
-            )
+        # Vista movil: Cards (visible en < md)
+        rx.el.div(
+          rx.foreach(State.filtered_history, _sale_card),
+          class_name="flex flex-col gap-3 md:hidden",
+        ),
+        # Vista desktop: Tabla (oculta en < md)
+        rx.el.div(
+          rx.el.table(
+            rx.el.thead(
+              rx.el.tr(
+                rx.el.th("Fecha y Hora", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Cliente", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th(
+                  "Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+                ),
+                rx.el.th("Metodo de Pago", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+                rx.el.th(
+                  "Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+                ),
+                class_name=TABLE_STYLES["header"],
+              )
+            ),
+            rx.el.tbody(rx.foreach(State.filtered_history, history_table_row)),
           ),
-          rx.el.tbody(rx.foreach(State.filtered_history, history_table_row)),
+          class_name="hidden md:block overflow-x-auto",
         ),
         rx.cond(
           State.filtered_history.length() == 0,
           empty_state("No hay movimientos que coincidan con los filtros."),
           rx.fragment(),
         ),
-        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto flex flex-col gap-4",
+        class_name=f"{CARD_STYLES['default']} flex flex-col gap-4",
       ),
       pagination_controls(
         current_page=State.current_page_history,
@@ -422,7 +493,7 @@ def historial_page() -> rx.Component:
             "Los reportes de ingresos por método de pago, detalle de cobros y cierres de caja ahora se generan desde el módulo ",
             rx.link("Reportes", href="/reportes", class_name="text-indigo-600 hover:underline font-medium"),
             " para garantizar datos 100% exactos y consolidados.",
-            class_name="text-sm text-slate-600",
+            class_name=TYPOGRAPHY["body_secondary"],
           ),
           class_name="flex-1",
         ),

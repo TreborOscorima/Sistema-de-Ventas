@@ -33,9 +33,9 @@ def cookies_page() -> rx.Component:
                         rx.el.table(
                             rx.el.thead(
                                 rx.el.tr(
-                                    rx.el.th("Cookie", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
-                                    rx.el.th("Propósito", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
-                                    rx.el.th("Duración", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Cookie", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Propósito", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Duración", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
                                 ),
                             ),
                             rx.el.tbody(
@@ -65,10 +65,10 @@ def cookies_page() -> rx.Component:
                         rx.el.table(
                             rx.el.thead(
                                 rx.el.tr(
-                                    rx.el.th("Cookie", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
-                                    rx.el.th("Proveedor", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
-                                    rx.el.th("Propósito", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
-                                    rx.el.th("Duración", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Cookie", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Proveedor", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Propósito", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Duración", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
                                 ),
                             ),
                             rx.el.tbody(
@@ -94,10 +94,10 @@ def cookies_page() -> rx.Component:
                         rx.el.table(
                             rx.el.thead(
                                 rx.el.tr(
-                                    rx.el.th("Cookie", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
-                                    rx.el.th("Proveedor", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
-                                    rx.el.th("Propósito", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
-                                    rx.el.th("Duración", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Cookie", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Proveedor", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Propósito", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
+                                    rx.el.th("Duración", scope="col", class_name="text-left px-4 py-2 text-sm font-semibold text-slate-700"),
                                 ),
                             ),
                             rx.el.tbody(

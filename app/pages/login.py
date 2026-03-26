@@ -3,6 +3,7 @@ from app.state import State
 from app.components.ui import (
     INPUT_STYLES,
     BUTTON_STYLES,
+    TYPOGRAPHY,
     RADIUS,
     SHADOWS,
     TRANSITIONS,
@@ -35,7 +36,7 @@ def login_page() -> rx.Component:
                     ),
                     rx.el.p(
                         "Tu socio en el Negocio",
-                        class_name="text-xs text-slate-500",
+                        class_name=TYPOGRAPHY["caption"],
                     ),
                     class_name="text-center",
                 ),
@@ -46,7 +47,7 @@ def login_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Correo o usuario",
-                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                     ),
                     rx.el.input(
                         placeholder="correo@empresa.com",
@@ -59,7 +60,7 @@ def login_page() -> rx.Component:
                 rx.el.div(
                     rx.el.label(
                         "Contraseña",
-                        class_name="block text-sm font-medium text-slate-700 mb-1.5",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
                     ),
                     rx.el.div(
                         rx.el.input(
@@ -115,7 +116,8 @@ def login_page() -> rx.Component:
                 State.error_message != "",
                 rx.el.div(
                     rx.icon("circle-alert", class_name="h-5 w-5 text-red-500 flex-shrink-0"),
-                    rx.el.p(State.error_message, class_name="text-sm text-red-700"),
+                    rx.el.p(State.error_message, class_name=TYPOGRAPHY["error_message"]),
+                    role="alert",
                     class_name=f"flex items-center gap-3 mt-5 bg-red-50 p-4 {RADIUS['lg']} border border-red-200",
                 ),
             ),
@@ -145,5 +147,4 @@ def login_page() -> rx.Component:
             class_name=f"w-full max-w-md p-6 sm:p-8 bg-white {RADIUS['xl']} {SHADOWS['xl']} border border-slate-100",
         ),
         class_name="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 px-4",
-        style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
     )

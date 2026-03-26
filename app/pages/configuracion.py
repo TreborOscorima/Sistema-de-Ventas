@@ -2,8 +2,11 @@ import reflex as rx
 from app.state import State
 from app.components.ui import (
   BUTTON_STYLES,
+  CARD_STYLES,
   INPUT_STYLES,
+  SELECT_STYLES,
   TABLE_STYLES,
+  TYPOGRAPHY,
   action_button,
   limit_reached_modal,
   modal_container,
@@ -148,7 +151,7 @@ PRIVILEGE_LABELS: list[tuple[str, str]] = [
 
 def privilege_switch(label: str, privilege: str) -> rx.Component:
   return rx.el.div(
-    rx.el.label(label, class_name="text-sm font-medium text-slate-700"),
+    rx.el.label(label, class_name=TYPOGRAPHY["label"]),
     rx.el.div(
       toggle_switch(
         checked=State.new_user_data["privileges"][privilege],
@@ -164,7 +167,7 @@ def privilege_switch(label: str, privilege: str) -> rx.Component:
 
 def privilege_section(title: str, privileges: list[tuple[str, str]]) -> rx.Component:
   return rx.el.div(
-    rx.el.p(title, class_name="text-sm font-semibold text-slate-600"),
+    rx.el.p(title, class_name=TYPOGRAPHY["label_secondary"]),
     rx.el.div(
       *[privilege_switch(label, key) for label, key in privileges],
       class_name="grid grid-cols-1 md:grid-cols-2 gap-3",
@@ -205,7 +208,7 @@ def config_nav() -> rx.Component:
               rx.el.span(section["label"], class_name="font-semibold"),
               rx.el.span(
                 section["description"],
-                class_name="text-xs text-slate-500",
+                class_name=TYPOGRAPHY["caption"],
               ),
               class_name="flex flex-col items-start",
             ),
@@ -223,7 +226,7 @@ def config_nav() -> rx.Component:
       ],
       class_name="flex flex-col gap-2",
     ),
-    class_name="bg-white rounded-xl shadow-sm border p-4 space-y-3",
+    class_name=f"{CARD_STYLES['compact']} space-y-3",
   )
 
 
@@ -281,9 +284,9 @@ def billing_config_section() -> rx.Component:
   básicos (RUC, Razón Social, Dirección). Los campos técnicos
   (Nubefact, ambiente, series) se gestionan desde el panel Owner.
   """
-  _input = "w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-  _label = "text-sm font-medium"
-  _help = "text-xs text-slate-500"
+  _input = INPUT_STYLES["default"]
+  _label = TYPOGRAPHY["label"]
+  _help = TYPOGRAPHY["caption"]
   _fk = State.billing_form_key.to_string()
   _badge_active = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"
   _badge_inactive = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-slate-50 text-slate-500 border border-slate-200"
@@ -297,7 +300,7 @@ def billing_config_section() -> rx.Component:
       ),
       rx.el.p(
         "Datos fiscales de tu empresa para la emision de boletas y facturas electronicas.",
-        class_name="text-sm text-slate-500",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
     ),
@@ -329,7 +332,7 @@ def billing_config_section() -> rx.Component:
             value=State.billing_country,
             on_change=State.set_billing_country,
             key=_fk + "-bcountry",
-            class_name=_input,
+            class_name=SELECT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1",
         ),
@@ -393,6 +396,100 @@ def billing_config_section() -> rx.Component:
           class_name="flex flex-col gap-1 md:col-span-2",
         ),
         class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
+      ),
+      # ── API de Consulta RUC/DNI (solo Perú) ──
+      rx.cond(
+        State.billing_country == "PE",
+        rx.el.div(
+          rx.el.h3(
+            "API de Consulta RUC/DNI",
+            class_name="text-base font-semibold text-slate-600 border-b pb-1",
+          ),
+          rx.el.div(
+            rx.el.div(
+              rx.el.label("URL de API de Consulta", class_name=_label),
+              rx.el.input(
+                default_value=State.billing_lookup_api_url,
+                on_blur=State.set_lookup_api_url,
+                placeholder="https://api.apis.net.pe/v2",
+                key=_fk + "-blookupurl",
+                class_name=_input,
+              ),
+              rx.el.p(
+                "Endpoint para consultar RUC y DNI (apis.net.pe)",
+                class_name=_help,
+              ),
+              class_name="flex flex-col gap-1",
+            ),
+            rx.el.div(
+              rx.el.label("Token de Consulta", class_name=_label),
+              rx.el.input(
+                default_value=State.billing_lookup_api_token_display,
+                on_blur=State.set_lookup_api_token,
+                placeholder="Bearer token",
+                type="password",
+                key=_fk + "-blookuptoken",
+                class_name=_input,
+              ),
+              rx.el.p(
+                "Bearer token para autenticacion",
+                class_name=_help,
+              ),
+              class_name="flex flex-col gap-1",
+            ),
+            class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
+          ),
+          class_name="space-y-3",
+        ),
+        rx.fragment(),
+      ),
+      # ── Configuración Argentina (solo AR) ──
+      rx.cond(
+        State.billing_country == "AR",
+        rx.el.div(
+          rx.el.h3(
+            "Configuracion Fiscal Argentina",
+            class_name="text-base font-semibold text-slate-600 border-b pb-1",
+          ),
+          rx.el.div(
+            rx.el.div(
+              rx.el.label("Condicion IVA del Emisor", class_name=_label),
+              rx.el.select(
+                rx.el.option("Responsable Inscripto", value="RI"),
+                rx.el.option("Monotributo", value="monotributo"),
+                rx.el.option("Exento", value="exento"),
+                value=State.billing_emisor_iva,
+                on_change=State.set_emisor_iva,
+                key=_fk + "-bemisoriva",
+                class_name=SELECT_STYLES["default"],
+              ),
+              rx.el.p(
+                "Determina el tipo de comprobante (A/B/C)",
+                class_name=_help,
+              ),
+              class_name="flex flex-col gap-1",
+            ),
+            rx.el.div(
+              rx.el.label("Umbral Factura B (AFIP)", class_name=_label),
+              rx.el.input(
+                default_value=State.billing_ar_threshold,
+                on_blur=State.set_ar_threshold,
+                placeholder="68782.00",
+                type="number",
+                key=_fk + "-barthreshold",
+                class_name=_input,
+              ),
+              rx.el.p(
+                "Monto a partir del cual se requiere identificar al comprador en Factura B",
+                class_name=_help,
+              ),
+              class_name="flex flex-col gap-1",
+            ),
+            class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
+          ),
+          class_name="space-y-3",
+        ),
+        rx.fragment(),
       ),
       # ── Series / Numeración (solo lectura) ──
       rx.cond(
@@ -471,11 +568,11 @@ def billing_config_section() -> rx.Component:
             rx.el.div(
               rx.el.p(
                 "Para activar la facturacion electronica, completa tus datos fiscales y guarda.",
-                class_name="text-sm text-slate-700",
+                class_name=TYPOGRAPHY["body"],
               ),
               rx.el.p(
                 "El equipo de TuWaykiApp configurara la conexion con el servicio de emision (Nubefact/AFIP) y activara tu cuenta.",
-                class_name="text-xs text-slate-500 mt-1",
+                class_name=f"{TYPOGRAPHY['caption']} mt-1",
               ),
             ),
             class_name="flex gap-2",
@@ -494,13 +591,13 @@ def billing_config_section() -> rx.Component:
           rx.el.button(
             "Guardar Datos Fiscales",
             on_click=State.save_billing_config,
-            class_name="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[44px]",
+            class_name=f"{BUTTON_STYLES['primary']} w-full sm:w-auto min-h-[44px]",
           ),
           class_name="flex justify-end sm:justify-start",
         ),
         class_name="flex flex-col sm:flex-row sm:items-center justify-between gap-3",
       ),
-      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-5",
+      class_name=f"{CARD_STYLES['default']} space-y-5",
     ),
     # ── Documentos fiscales con errores ──
     rx.cond(
@@ -533,7 +630,7 @@ def billing_config_section() -> rx.Component:
           ),
         ),
         on_mount=State.load_failed_fiscal_docs,
-        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-3",
+        class_name=f"{CARD_STYLES['default']} space-y-3",
       ),
       rx.fragment(),
     ),
@@ -551,7 +648,7 @@ def company_settings_section() -> rx.Component:
       ),
       rx.el.p(
         "Actualiza la informacion que aparece en recibos y reportes.",
-        class_name="text-sm text-slate-500",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
     ),
@@ -559,52 +656,52 @@ def company_settings_section() -> rx.Component:
       rx.el.div(
         rx.el.div(
           rx.el.label(
-            "Razón Social / Nombre de Empresa", class_name="text-sm font-medium"
+            "Razón Social / Nombre de Empresa", class_name=TYPOGRAPHY["label"]
           ),
           rx.el.input(
             default_value=State.company_name,
             on_blur=State.set_company_name,
             placeholder="Ej: Tu Empresa SAC",
             key=State.company_form_key.to_string() + "-company_name",
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label("N° de Registro de Empresa", class_name="text-sm font-medium"),
+          rx.el.label("N° de Registro de Empresa", class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.ruc,
             on_blur=State.set_ruc,
             placeholder="N° de Registro de Empresa",
             key=State.company_form_key.to_string() + "-ruc",
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label("Dirección Fiscal", class_name="text-sm font-medium"),
+          rx.el.label("Dirección Fiscal", class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.address,
             on_blur=State.set_address,
             placeholder="Ej: Av. Principal 123",
             key=State.company_form_key.to_string() + "-address",
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1 md:col-span-2",
         ),
         rx.el.div(
-          rx.el.label("Teléfono / Celular", class_name="text-sm font-medium"),
+          rx.el.label("Teléfono / Celular", class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.phone,
             on_blur=State.set_phone,
             placeholder="Ej: 999 999 999",
             key=State.company_form_key.to_string() + "-phone",
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label("Zona Horaria (IANA)", class_name="text-sm font-medium"),
+          rx.el.label("Zona Horaria (IANA)", class_name=TYPOGRAPHY["label"]),
           rx.el.select(
             rx.el.option(
               rx.cond(
@@ -621,41 +718,41 @@ def company_settings_section() -> rx.Component:
             value=State.timezone,
             on_change=State.set_timezone,
             key=State.company_form_key.to_string() + "-timezone",
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=SELECT_STYLES["default"],
           ),
           rx.el.p(
             "Selecciona una zona horaria IANA. Deja en blanco para usar la zona del país.",
-            class_name="text-xs text-slate-500",
+            class_name=TYPOGRAPHY["caption"],
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
           rx.el.label(
-            "Mensaje en Recibo/Ticket", class_name="text-sm font-medium"
+            "Mensaje en Recibo/Ticket", class_name=TYPOGRAPHY["label"]
           ),
           rx.el.input(
             default_value=State.footer_message,
             on_blur=State.set_footer_message,
             placeholder="Ej: Gracias por su compra",
             key=State.company_form_key.to_string() + "-footer_message",
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1 md:col-span-2",
         ),
         rx.el.div(
-          rx.el.label("Papel de Impresion", class_name="text-sm font-medium"),
+          rx.el.label("Papel de Impresion", class_name=TYPOGRAPHY["label"]),
           rx.el.select(
             rx.el.option("80 mm (default)", value="80"),
             rx.el.option("58 mm", value="58"),
             value=State.receipt_paper,
             on_change=State.set_receipt_paper,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=SELECT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
           rx.el.label(
-            "Ancho de Recibo (opcional)", class_name="text-sm font-medium"
+            "Ancho de Recibo (opcional)", class_name=TYPOGRAPHY["label"]
           ),
           rx.el.input(
             default_value=State.receipt_width,
@@ -665,11 +762,11 @@ def company_settings_section() -> rx.Component:
             min="24",
             max="64",
             key=State.company_form_key.to_string() + "-receipt_width",
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           rx.el.p(
             "Deja en blanco para usar el ancho automatico.",
-            class_name="text-xs text-slate-500",
+            class_name=TYPOGRAPHY["caption"],
           ),
           class_name="flex flex-col gap-1",
         ),
@@ -678,19 +775,19 @@ def company_settings_section() -> rx.Component:
       rx.el.div(
         rx.el.p(
           "Estos datos se muestran en recibos y reportes.",
-          class_name="text-xs text-slate-500",
+          class_name=TYPOGRAPHY["caption"],
         ),
         rx.el.div(
           rx.el.button(
             "Guardar Configuracion",
             on_click=State.save_settings,
-            class_name="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 min-h-[44px]",
+            class_name=f"{BUTTON_STYLES['primary']} w-full sm:w-auto min-h-[44px]",
           ),
           class_name="flex justify-end sm:justify-start",
         ),
         class_name="flex flex-col sm:flex-row sm:items-center justify-between gap-3",
       ),
-            class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4",
+            class_name=f"{CARD_STYLES['default']} space-y-4",
     ),
     class_name="space-y-4",
   )
@@ -712,7 +809,7 @@ def _usage_meter(
         class_name="p-2 rounded-lg bg-slate-100",
       ),
       rx.el.div(
-        rx.el.p(title, class_name="text-sm font-medium text-slate-600"),
+        rx.el.p(title, class_name=TYPOGRAPHY["label_secondary"]),
         rx.el.p(
           rx.el.span(used, class_name="tabular-nums"),
           rx.el.span(" / ", class_name="text-slate-400"),
@@ -737,7 +834,7 @@ def _usage_meter(
         class_name="h-2",
       ),
     ),
-    class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3",
+    class_name=f"{CARD_STYLES['compact']} space-y-3",
   )
 
 
@@ -772,7 +869,7 @@ def subscription_section() -> rx.Component:
       rx.el.h2("MI SUSCRIPCION", class_name="text-xl font-semibold text-slate-700"),
       rx.el.p(
         "Consulta tu plan actual y el consumo de recursos.",
-        class_name="text-sm text-slate-500",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
     ),
@@ -807,7 +904,7 @@ def subscription_section() -> rx.Component:
             rx.el.p(
               rx.el.span("Vence: ", class_name="text-slate-500"),
               State.subscription_snapshot["trial_ends_on"],
-              class_name="text-xs text-slate-500",
+              class_name=TYPOGRAPHY["caption"],
             ),
             rx.fragment(),
           ),
@@ -815,7 +912,7 @@ def subscription_section() -> rx.Component:
         ),
         class_name="flex items-start justify-between",
       ),
-      class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm",
+      class_name=CARD_STYLES["compact"],
     ),
     rx.el.div(
       _usage_meter(
@@ -874,12 +971,12 @@ def user_form() -> rx.Component:
         rx.radix.primitives.dialog.content(
           rx.radix.primitives.dialog.title(
             rx.cond(State.editing_user, "Editar Usuario", "Crear Nuevo Usuario"),
-            class_name="text-lg font-semibold text-slate-800 flex-shrink-0",
+            class_name=f"{TYPOGRAPHY['section_title']} flex-shrink-0",
           ),
           rx.divider(color="slate-100"),
           rx.el.div(
           rx.el.div(
-            rx.el.label("Nombre de Usuario", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Nombre de Usuario", class_name=TYPOGRAPHY["label"]),
             rx.el.input(
               default_value=State.new_user_data["username"],
               on_blur=lambda v: State.handle_new_user_change(
@@ -891,7 +988,7 @@ def user_form() -> rx.Component:
             class_name="mb-4",
           ),
           rx.el.div(
-            rx.el.label("Correo", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Correo", class_name=TYPOGRAPHY["label"]),
             rx.el.input(
               type="email",
               placeholder="usuario@empresa.com",
@@ -904,7 +1001,7 @@ def user_form() -> rx.Component:
             class_name="mb-4",
           ),
           rx.el.div(
-            rx.el.label("Rol", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Rol", class_name=TYPOGRAPHY["label"]),
             rx.el.select(
               rx.foreach(
                 State.roles,
@@ -912,16 +1009,16 @@ def user_form() -> rx.Component:
               ),
               value=State.new_user_data["role"],
               on_change=lambda v: State.handle_new_user_change("role", v),
-              class_name=f"{INPUT_STYLES['default']} mt-1",
+              class_name=f"{SELECT_STYLES['default']} mt-1",
             ),
             rx.el.p(
               "Los privilegios se cargan de acuerdo al rol seleccionado. Puedes afinar y guardar nuevos roles debajo.",
-              class_name="text-xs text-slate-500 mt-2",
+              class_name=f"{TYPOGRAPHY['caption']} mt-2",
             ),
             class_name="mb-4",
           ),
           rx.el.div(
-            rx.el.label("Crear nuevo rol", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Crear nuevo rol", class_name=TYPOGRAPHY["label"]),
             rx.el.div(
               rx.el.input(
                 placeholder="Ej: Administrador, Cajero, Auditor",
@@ -939,7 +1036,7 @@ def user_form() -> rx.Component:
             class_name="mb-4",
           ),
           rx.el.div(
-            rx.el.label("Contraseña", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Contraseña", class_name=TYPOGRAPHY["label"]),
             rx.el.div(
               rx.el.input(
                 type=rx.cond(
@@ -987,7 +1084,7 @@ def user_form() -> rx.Component:
             class_name="mb-4",
           ),
           rx.el.div(
-            rx.el.label("Confirmar Contraseña", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Confirmar Contraseña", class_name=TYPOGRAPHY["label"]),
             rx.el.div(
               rx.el.input(
                 type=rx.cond(
@@ -1032,11 +1129,11 @@ def user_form() -> rx.Component:
           rx.el.div(
             rx.el.div(
               rx.el.h3(
-                "Privilegios", class_name="text-base font-semibold text-slate-800"
+                "Privilegios", class_name=TYPOGRAPHY["card_title"]
               ),
               rx.el.p(
                 "Asigna los accesos para el rol elegido. Si necesitas volver a los permisos sugeridos del rol, usa el boton.",
-                class_name="text-sm text-slate-500",
+                class_name=TYPOGRAPHY["body_secondary"],
               ),
               class_name="flex flex-col gap-1",
             ),
@@ -1103,7 +1200,7 @@ def user_section() -> rx.Component:
         ),
         rx.el.p(
           "Crea usuarios, roles y ajusta sus privilegios.",
-          class_name="text-sm text-slate-500",
+          class_name=TYPOGRAPHY["body_secondary"],
         ),
         class_name="flex flex-col",
       ),
@@ -1114,11 +1211,11 @@ def user_section() -> rx.Component:
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} w-32"),
-            rx.el.th("Rol", class_name=f"{TABLE_STYLES['header_cell']} w-28"),
-            rx.el.th("Privilegios", class_name=f"{TABLE_STYLES['header_cell']} w-full"),
+            rx.el.th("Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-32"),
+            rx.el.th("Rol", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-28"),
+            rx.el.th("Privilegios", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-full"),
             rx.el.th(
-              "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center w-24"
+              "Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center w-24"
             ),
             class_name=TABLE_STYLES["header"],
           )
@@ -1143,7 +1240,7 @@ def user_section() -> rx.Component:
                     ),
                     title="Editar usuario",
                     aria_label="Editar usuario",
-                    class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
+                    class_name=BUTTON_STYLES["icon_primary"],
                   ),
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
@@ -1153,7 +1250,7 @@ def user_section() -> rx.Component:
                     ),
                     title="Eliminar usuario",
                     aria_label="Eliminar usuario",
-                    class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                    class_name=BUTTON_STYLES["icon_danger"],
                   ),
                   class_name="flex justify-center gap-2",
                 )
@@ -1164,7 +1261,7 @@ def user_section() -> rx.Component:
           )
         ),
       ),
-      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto",
+      class_name=f"{CARD_STYLES['default']} overflow-x-auto",
     ),
     class_name="space-y-4",
   )
@@ -1188,7 +1285,7 @@ def branch_users_modal() -> rx.Component:
             on_click=State.close_branch_users,
             title="Cerrar",
             aria_label="Cerrar",
-            class_name="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100",
+            class_name=BUTTON_STYLES["icon_ghost"],
           ),
           class_name="flex items-start justify-between",
         ),
@@ -1202,7 +1299,7 @@ def branch_users_modal() -> rx.Component:
                     rx.el.span(user["username"], class_name="font-semibold text-slate-800"),
                     rx.el.span(
                       user["role"],
-                      class_name="text-xs text-slate-500",
+                      class_name=TYPOGRAPHY["caption"],
                     ),
                     class_name="flex flex-col",
                   ),
@@ -1252,14 +1349,14 @@ def branch_section() -> rx.Component:
       ),
       rx.el.p(
         "Crea sucursales y asigna usuarios por empresa.",
-        class_name="text-sm text-slate-500",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
     ),
     branch_users_modal(),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Nombre de Sucursal", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Nombre de Sucursal", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=rx.cond(
             State.editing_branch_id != "",
@@ -1274,7 +1371,7 @@ def branch_section() -> rx.Component:
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Dirección", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Dirección", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=rx.cond(
             State.editing_branch_id != "",
@@ -1305,16 +1402,16 @@ def branch_section() -> rx.Component:
         ),
         class_name="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end",
       ),
-      class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm",
+      class_name=f"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 {CARD_STYLES['compact']}",
     ),
     rx.el.div(
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Sucursal", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Dirección", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Usuarios", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+            rx.el.th("Sucursal", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Dirección", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Usuarios", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
             class_name=TABLE_STYLES["header"],
           )
         ),
@@ -1332,21 +1429,21 @@ def branch_section() -> rx.Component:
                     on_click=lambda _, bid=branch["id"]: State.open_branch_users(bid),
                     title="Gestionar usuarios por sucursal",
                     aria_label="Gestionar usuarios por sucursal",
-                    class_name="p-2 text-indigo-500 hover:bg-indigo-100 rounded-full",
+                    class_name=BUTTON_STYLES["icon_primary"],
                   ),
                   rx.el.button(
                     rx.icon("pencil", class_name="h-4 w-4"),
                     on_click=lambda _, bid=branch["id"]: State.start_edit_branch(bid),
                     title="Editar sucursal",
                     aria_label="Editar sucursal",
-                    class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
+                    class_name=BUTTON_STYLES["icon_primary"],
                   ),
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
                     on_click=lambda _, bid=branch["id"]: State.delete_branch(bid),
                     title="Eliminar sucursal",
                     aria_label="Eliminar sucursal",
-                    class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                    class_name=BUTTON_STYLES["icon_danger"],
                   ),
                   class_name="flex justify-center gap-2",
                 ),
@@ -1359,7 +1456,7 @@ def branch_section() -> rx.Component:
         ),
         class_name="w-full table-fixed",
       ),
-      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm overflow-x-auto",
+      class_name=f"{CARD_STYLES['default']} overflow-x-auto",
     ),
     class_name="space-y-4",
   )
@@ -1373,40 +1470,40 @@ def currency_section() -> rx.Component:
       ),
       rx.el.p(
         "Configura las monedas disponibles y el simbolo que se muestra en los modulos.",
-        class_name="text-sm text-slate-500",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Codigo", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Codigo", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.new_currency_code,
           on_blur=State.set_new_currency_code,
           placeholder="PEN, USD, EUR",
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Nombre", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Nombre", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.new_currency_name,
           on_blur=State.set_new_currency_name,
           placeholder="Sol peruano, Dolar, Peso",
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Simbolo", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Simbolo", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.new_currency_symbol,
           on_blur=State.set_new_currency_symbol,
           placeholder="S/, $, EUR",
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
@@ -1415,7 +1512,7 @@ def currency_section() -> rx.Component:
         rx.icon("plus", class_name="h-4 w-4"),
         "Agregar moneda",
         on_click=State.add_currency,
-        class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
+        class_name=f"{BUTTON_STYLES['success']} w-full md:w-auto min-h-[44px]",
       ),
       class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
     ),
@@ -1442,7 +1539,7 @@ def currency_section() -> rx.Component:
                   State.selected_currency_code == currency["code"],
                   rx.el.span(
                     "Activa",
-                    class_name="px-2 py-0.5 text-[10px] rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
+                    class_name="px-2 py-0.5 text-xs rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
                   ),
                   rx.fragment(),
                 ),
@@ -1450,14 +1547,14 @@ def currency_section() -> rx.Component:
               ),
               rx.el.p(
                 currency["name"],
-                class_name="text-xs text-slate-500",
+                class_name=TYPOGRAPHY["caption"],
               ),
               class_name="flex flex-col gap-1",
             ),
             rx.el.div(
               rx.el.span(
                 currency["symbol"],
-                class_name="px-2 py-0.5 text-[10px] rounded-md bg-slate-100 text-slate-600 border border-slate-200",
+                class_name="px-2 py-0.5 text-xs rounded-md bg-slate-100 text-slate-600 border border-slate-200",
               ),
               class_name="flex items-center gap-2",
             ),
@@ -1476,7 +1573,7 @@ def currency_section() -> rx.Component:
               code=currency["code"]: State.remove_currency(code),
               title="Eliminar moneda",
               aria_label="Eliminar moneda",
-              class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+              class_name=BUTTON_STYLES["icon_danger"],
             ),
             class_name="flex items-center justify-end gap-2",
           ),
@@ -1501,24 +1598,24 @@ def unit_section() -> rx.Component:
       ),
       rx.el.p(
         "Define las unidades que podras seleccionar en inventario, ingresos y ventas.",
-        class_name="text-sm text-slate-500",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Nombre de la unidad", class_name="text-sm font-medium"),
+        rx.el.label("Nombre de la unidad", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="Ej: Caja, Paquete, Docena",
           default_value=State.new_unit_name,
           on_blur=State.set_new_unit_name,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Permite decimales", class_name="text-sm font-medium"),
+        rx.el.label("Permite decimales", class_name=TYPOGRAPHY["label"]),
         toggle_switch(
           checked=State.new_unit_allows_decimal,
           on_change=State.set_new_unit_allows_decimal,
@@ -1529,7 +1626,7 @@ def unit_section() -> rx.Component:
         rx.icon("plus", class_name="h-4 w-4"),
         "Agregar unidad",
         on_click=State.add_unit,
-        class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
+        class_name=f"{BUTTON_STYLES['success']} w-full md:w-auto min-h-[44px]",
       ),
       class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
     ),
@@ -1547,11 +1644,11 @@ def unit_section() -> rx.Component:
                 unit["allows_decimal"],
                 rx.el.span(
                   "Si",
-                  class_name="px-2 py-0.5 text-[10px] rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
+                  class_name="px-2 py-0.5 text-xs rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
                 ),
                 rx.el.span(
                   "No",
-                  class_name="px-2 py-0.5 text-[10px] rounded-md bg-slate-100 text-slate-600 border border-slate-200",
+                  class_name="px-2 py-0.5 text-xs rounded-md bg-slate-100 text-slate-600 border border-slate-200",
                 ),
               ),
               class_name="flex items-center gap-2",
@@ -1559,7 +1656,7 @@ def unit_section() -> rx.Component:
             rx.el.div(
               rx.el.span(
                 "Decimales",
-                class_name="text-[10px] text-slate-500 hidden sm:inline",
+                class_name=f"{TYPOGRAPHY['caption']} hidden sm:inline",
               ),
               toggle_switch(
                 checked=unit["allows_decimal"].bool(),
@@ -1577,7 +1674,7 @@ def unit_section() -> rx.Component:
                 ),
                 title="Eliminar unidad",
                 aria_label="Eliminar unidad",
-                class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                class_name=BUTTON_STYLES["icon_danger"],
               ),
               class_name="flex items-center gap-2",
             ),
@@ -1600,35 +1697,35 @@ def payment_methods_section() -> rx.Component:
       ),
       rx.el.p(
         "Activa, crea o elimina los botones que veras en el modulo de Venta.",
-        class_name="text-sm text-slate-500",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Nombre", class_name="text-sm font-medium"),
+        rx.el.label("Nombre", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="Ej: Transferencia, Deposito",
           default_value=State.new_payment_method_name,
           on_blur=State.set_new_payment_method_name,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Descripcion", class_name="text-sm font-medium"),
+        rx.el.label("Descripcion", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           placeholder="Breve detalle del metodo",
           default_value=State.new_payment_method_description,
           on_blur=State.set_new_payment_method_description,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Tipo", class_name="text-sm font-medium"),
+        rx.el.label("Tipo", class_name=TYPOGRAPHY["label"]),
         rx.el.select(
           *[
             rx.el.option(PAYMENT_KIND_LABELS[kind], value=kind)
@@ -1645,7 +1742,7 @@ def payment_methods_section() -> rx.Component:
           ],
           value=State.new_payment_method_kind,
           on_change=State.set_new_payment_method_kind,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=SELECT_STYLES["default"],
         ),
         class_name="flex flex-col gap-1",
       ),
@@ -1653,7 +1750,7 @@ def payment_methods_section() -> rx.Component:
         rx.icon("plus", class_name="h-4 w-4"),
         "Agregar metodo",
         on_click=State.add_payment_method,
-        class_name="w-full md:w-auto bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center justify-center gap-2 min-h-[44px]",
+        class_name=f"{BUTTON_STYLES['success']} w-full md:w-auto min-h-[44px]",
       ),
       class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 bg-white p-3 rounded-xl shadow-sm border items-end",
     ),
@@ -1672,7 +1769,7 @@ def payment_methods_section() -> rx.Component:
                   State.payment_method == method["name"],
                   rx.el.span(
                     "En uso",
-                    class_name="px-2 py-0.5 text-[10px] rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
+                    class_name="px-2 py-0.5 text-xs rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
                   ),
                   rx.fragment(),
                 ),
@@ -1681,17 +1778,17 @@ def payment_methods_section() -> rx.Component:
               rx.el.div(
                 rx.el.span(
                   PAYMENT_KIND_LABELS.get(method["kind"], "Otro"),
-                  class_name="px-2 py-0.5 text-[10px] rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
+                  class_name="px-2 py-0.5 text-xs rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100",
                 ),
                 rx.cond(
                   method["enabled"],
                   rx.el.span(
                     "Activo",
-                    class_name="px-2 py-0.5 text-[10px] rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100",
+                    class_name="px-2 py-0.5 text-xs rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100",
                   ),
                   rx.el.span(
                     "Inactivo",
-                    class_name="px-2 py-0.5 text-[10px] rounded-md bg-slate-100 text-slate-600 border border-slate-200",
+                    class_name="px-2 py-0.5 text-xs rounded-md bg-slate-100 text-slate-600 border border-slate-200",
                   ),
                 ),
                 class_name="flex items-center gap-2",
@@ -1700,7 +1797,7 @@ def payment_methods_section() -> rx.Component:
                 method["description"] != "Sin descripcion",
                 rx.el.p(
                   method["description"],
-                  class_name="text-xs text-slate-500",
+                  class_name=TYPOGRAPHY["caption"],
                 ),
                 rx.fragment(),
               ),
@@ -1710,7 +1807,7 @@ def payment_methods_section() -> rx.Component:
               rx.el.div(
                 rx.el.span(
                   "Visible en Venta",
-                  class_name="text-[10px] text-slate-500 hidden sm:inline",
+                  class_name=f"{TYPOGRAPHY['caption']} hidden sm:inline",
                 ),
                 toggle_switch(
                   checked=method["enabled"],
@@ -1727,7 +1824,7 @@ def payment_methods_section() -> rx.Component:
                 mid=method["id"]: State.remove_payment_method(mid),
                 title="Eliminar método de pago",
                 aria_label="Eliminar método de pago",
-                class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                class_name=BUTTON_STYLES["icon_danger"],
               ),
               class_name="flex items-center gap-2",
             ),

@@ -7,20 +7,30 @@ para evaluaciones administrativas, contables y financieras.
 import reflex as rx
 
 from app.state import State
-from app.components.ui import page_title, permission_guard
+from app.components.ui import (
+    BUTTON_STYLES,
+    CARD_STYLES,
+    INPUT_STYLES,
+    SPACING,
+    TYPOGRAPHY,
+    page_title,
+    permission_guard,
+)
 
 
 def _report_type_card(report_type: dict) -> rx.Component:
-    """Tarjeta de tipo de reporte."""
+    """Tarjeta de tipo de reporte — responsive y accesible."""
     is_selected = State.report_type == report_type["value"]
-    
+
     return rx.el.button(
         rx.el.div(
-            rx.icon(report_type["icon"], class_name="w-8 h-8 mb-2"),
+            rx.icon(report_type["icon"], class_name="w-7 h-7 sm:w-8 sm:h-8 mb-2"),
             rx.el.p(report_type["label"], class_name="text-sm font-medium text-center"),
-            class_name="flex flex-col items-center p-4",
+            class_name="flex flex-col items-center p-3 sm:p-4",
         ),
         on_click=State.set_report_type(report_type["value"]),
+        title=report_type["label"],
+        aria_label=report_type["label"],
         class_name=rx.cond(
             is_selected,
             "bg-indigo-50 border-2 border-indigo-500 rounded-xl text-indigo-700 transition-all",
@@ -30,16 +40,18 @@ def _report_type_card(report_type: dict) -> rx.Component:
 
 
 def _period_button(period: dict) -> rx.Component:
-    """Botón de período."""
+    """Botón de período — accesible."""
     is_selected = State.report_period == period["value"]
-    
+
     return rx.el.button(
         period["label"],
         on_click=State.set_report_period(period["value"]),
+        title=period["label"],
+        aria_label=period["label"],
         class_name=rx.cond(
             is_selected,
-            "px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md",
-            "px-4 py-2 text-sm font-medium bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200",
+            "px-3 sm:px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-md",
+            "px-3 sm:px-4 py-2 text-sm font-medium bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200",
         ),
     )
 
@@ -50,22 +62,24 @@ def _custom_date_picker() -> rx.Component:
         State.report_period == "custom",
         rx.el.div(
             rx.el.div(
-                rx.el.label("Desde:", class_name="text-sm font-medium text-slate-700"),
+                rx.el.label("Desde:", class_name=TYPOGRAPHY["label"]),
                 rx.el.input(
                     type="date",
                     value=State.custom_start_date,
                     on_change=State.set_custom_start,
-                    class_name="mt-1 block w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    aria_label="Fecha de inicio del periodo",
+                    class_name=f"mt-1 {INPUT_STYLES['default']}",
                 ),
                 class_name="flex-1",
             ),
             rx.el.div(
-                rx.el.label("Hasta:", class_name="text-sm font-medium text-slate-700"),
+                rx.el.label("Hasta:", class_name=TYPOGRAPHY["label"]),
                 rx.el.input(
                     type="date",
                     value=State.custom_end_date,
                     on_change=State.set_custom_end,
-                    class_name="mt-1 block w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    aria_label="Fecha de fin del periodo",
+                    class_name=f"mt-1 {INPUT_STYLES['default']}",
                 ),
                 class_name="flex-1",
             ),
@@ -183,7 +197,7 @@ def _report_description() -> rx.Component:
 
 
 def _generate_button() -> rx.Component:
-    """Botón para generar el reporte."""
+    """Botón para generar el reporte — accesible."""
     return rx.el.button(
         rx.cond(
             State.report_loading,
@@ -198,19 +212,23 @@ def _generate_button() -> rx.Component:
         ),
         on_click=State.generate_report,
         disabled=State.report_loading,
-        class_name="w-full h-10 flex items-center justify-center px-6 bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors",
+        title="Generar reporte en formato Excel",
+        aria_label="Generar reporte en formato Excel",
+        class_name=f"{BUTTON_STYLES['success']} w-full disabled:opacity-50 disabled:cursor-not-allowed",
     )
 
 
 def _download_button() -> rx.Component:
-    """Botón para descargar el reporte generado."""
+    """Botón para descargar el reporte generado — accesible."""
     return rx.el.button(
         rx.fragment(
             rx.icon("download", class_name="w-5 h-5 mr-2"),
             "Descargar Reporte",
         ),
         on_click=State.download_report,
-        class_name="w-full h-10 flex items-center justify-center px-6 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 transition-colors",
+        title="Descargar reporte generado",
+        aria_label="Descargar reporte generado en Excel",
+        class_name=f"{BUTTON_STYLES['primary']} w-full",
     )
 
 
@@ -221,6 +239,7 @@ def _error_message() -> rx.Component:
         rx.el.div(
             rx.icon("circle-alert", class_name="w-5 h-5 mr-2"),
             State.report_error,
+            role="alert",
             class_name="flex items-center p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl",
         ),
         rx.fragment(),
@@ -241,25 +260,25 @@ def reportes_page() -> rx.Component:
             rx.el.div(
                 # Tipo de reporte
                 rx.el.div(
-                    rx.el.h3("1. SELECCIONA EL TIPO DE REPORTE", class_name="text-lg font-semibold text-slate-800 mb-4"),
+                    rx.el.h3("1. SELECCIONA EL TIPO DE REPORTE", class_name=f"{TYPOGRAPHY['section_title']} mb-4"),
                     rx.el.div(
                         rx.foreach(State.report_types, _report_type_card),
-                        class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
+                        class_name="grid grid-cols-2 sm:grid-cols-2 gap-3",
                     ),
-                    class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm mb-4",
+                    class_name=f"{CARD_STYLES['default']} mb-4",
                 ),
                 
                 # Período (solo para ventas y caja)
                 rx.cond(
                     (State.report_type == "ventas") | (State.report_type == "caja"),
                     rx.el.div(
-                        rx.el.h3("2. SELECCIONA EL PERIODO", class_name="text-lg font-semibold text-slate-800 mb-4"),
+                        rx.el.h3("2. SELECCIONA EL PERIODO", class_name=f"{TYPOGRAPHY['section_title']} mb-4"),
                         rx.el.div(
                             rx.foreach(State.period_options, _period_button),
                             class_name="flex flex-wrap gap-2",
                         ),
                         _custom_date_picker(),
-                        class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm mb-4",
+                        class_name=f"{CARD_STYLES['default']} mb-4",
                     ),
                     rx.fragment(),
                 ),
@@ -288,7 +307,7 @@ def reportes_page() -> rx.Component:
             # Columna derecha: Descripción y generar
             rx.el.div(
                 rx.el.div(
-                    rx.el.h3("CONTENIDO DEL REPORTE", class_name="text-lg font-semibold text-slate-800 mb-4"),
+                    rx.el.h3("CONTENIDO DEL REPORTE", class_name=f"{TYPOGRAPHY['section_title']} mb-4"),
                     _report_description(),
                     rx.el.div(
                         rx.el.p(
@@ -298,12 +317,12 @@ def reportes_page() -> rx.Component:
                         ),
                         class_name="mt-4",
                     ),
-                    class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm mb-4",
+                    class_name=f"{CARD_STYLES['default']} mb-4",
                 ),
                 
                 # Resumen de selección
                 rx.el.div(
-                    rx.el.h3("RESUMEN", class_name="text-lg font-semibold text-slate-800 mb-4"),
+                    rx.el.h3("RESUMEN", class_name=f"{TYPOGRAPHY['section_title']} mb-4"),
                     rx.el.div(
                         rx.el.div(
                             rx.el.span("Reporte:", class_name="text-slate-500"),

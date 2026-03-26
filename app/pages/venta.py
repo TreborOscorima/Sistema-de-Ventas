@@ -82,7 +82,7 @@ def _fiscal_lookup_input() -> rx.Component:
                             ),
                             rx.el.span(
                                 State.fiscal_lookup_result["fiscal_address"],
-                                class_name="text-[10px] text-emerald-700 line-clamp-1",
+                                class_name="text-xs text-emerald-700 line-clamp-1",
                             ),
                             class_name="flex flex-col min-w-0",
                         ),
@@ -95,12 +95,12 @@ def _fiscal_lookup_input() -> rx.Component:
                             rx.el.span(
                                 "Factura ",
                                 rx.el.strong(State.fiscal_ar_cbte_letra),
-                                class_name="text-[10px] font-medium text-indigo-700",
+                                class_name="text-xs font-medium text-indigo-700",
                             ),
                             rx.el.span(
                                 " | IVA: ",
                                 State.fiscal_lookup_result["iva_condition"],
-                                class_name="text-[10px] text-indigo-600",
+                                class_name="text-xs text-indigo-600",
                             ),
                             class_name="flex items-center gap-1 mt-1 px-2 py-0.5 bg-indigo-50 rounded",
                         ),
@@ -113,7 +113,7 @@ def _fiscal_lookup_input() -> rx.Component:
                             rx.icon("triangle-alert", class_name="h-3 w-3 text-amber-600 shrink-0"),
                             rx.el.span(
                                 State.fiscal_lookup_error,
-                                class_name="text-[10px] text-amber-700",
+                                class_name="text-xs text-amber-700",
                             ),
                             class_name="flex items-center gap-1 mt-1",
                         ),
@@ -133,6 +133,7 @@ def _fiscal_lookup_input() -> rx.Component:
                         State.fiscal_lookup_error,
                         class_name="text-xs text-red-600",
                     ),
+                    role="alert",
                     class_name="flex items-center gap-1.5 p-2 bg-red-50 border border-red-200 rounded-md",
                 ),
                 rx.fragment(),
@@ -142,7 +143,7 @@ def _fiscal_lookup_input() -> rx.Component:
                 State.fiscal_doc_number != "",
                 rx.el.button(
                     rx.icon("x", class_name="h-3 w-3"),
-                    rx.el.span("Limpiar", class_name="text-[10px]"),
+                    rx.el.span("Limpiar", class_name="text-xs"),
                     on_click=State.clear_fiscal_lookup,
                     class_name="flex items-center gap-0.5 text-slate-400 hover:text-slate-600 self-end",
                 ),
@@ -601,7 +602,7 @@ def quick_add_bar() -> rx.Component:
                     State.last_scanned_label != "",
                     rx.el.span(
                         State.last_scanned_label,
-                        class_name="text-[11px] text-slate-500 truncate",
+                        class_name="text-xs text-slate-500 truncate",
                     ),
                     rx.fragment(),
                 ),
@@ -674,7 +675,7 @@ def quick_add_bar() -> rx.Component:
                         State.wholesale_price_applied,
                         rx.el.span(
                             "Mayorista",
-                            class_name="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 leading-none",
+                            class_name="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 leading-none",
                         ),
                         rx.fragment(),
                     ),
@@ -770,25 +771,25 @@ def products_table(embedded: bool = False) -> rx.Component:
                             rx.el.tr(
                                 rx.el.th(
                                     "Código",
-                                    class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell",
+                                    scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell",
                                 ),
                                 rx.el.th(
-                                    "Producto", class_name=TABLE_STYLES["header_cell"]
+                                    "Producto", scope="col", class_name=TABLE_STYLES["header_cell"]
                                 ),
                                 rx.el.th(
                                     "Cant.",
-                                    class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                                    scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                                 ),
                                 rx.el.th(
                                     "Precio",
-                                    class_name=f"{TABLE_STYLES['header_cell']} text-right hidden sm:table-cell",
+                                    scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden sm:table-cell",
                                 ),
                                 rx.el.th(
                                     "Subtotal",
-                                    class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                    scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                                 ),
                                 rx.el.th(
-                                    "", class_name=f"{TABLE_STYLES['header_cell']} w-10"
+                                    "", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-10"
                                 ),
                                 class_name=TABLE_STYLES["header"],
                             ),
@@ -1007,7 +1008,7 @@ def payment_sidebar() -> rx.Component:
                 rx.hstack(
                     rx.el.div(
                         rx.el.span("VENTA A CREDITO / FIADO", class_name="text-xs font-medium text-slate-600"),
-                        rx.el.span("Configurar cuotas y pago inicial", class_name="text-[11px] text-slate-400"),
+                        rx.el.span("Configurar cuotas y pago inicial", class_name="text-xs text-slate-400"),
                         class_name="flex flex-col",
                     ),
                     toggle_switch(

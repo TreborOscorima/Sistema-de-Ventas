@@ -10,6 +10,7 @@ from app.components.ui import (
   RADIUS,
   SHADOWS,
   TRANSITIONS,
+  TYPOGRAPHY,
   page_header,
 )
 
@@ -39,11 +40,11 @@ def _plan_summary_card() -> rx.Component:
         rx.el.div(
           rx.el.p(
             State.subscription_snapshot["plan_display"],
-            class_name="text-sm font-semibold text-slate-800",
+            class_name=TYPOGRAPHY["card_title"],
           ),
           rx.el.p(
             "Estado de suscripción",
-            class_name="text-xs text-slate-500",
+            class_name=TYPOGRAPHY["caption"],
           ),
           class_name="flex flex-col",
         ),
@@ -82,7 +83,7 @@ def _plan_summary_card() -> rx.Component:
           rx.el.span(
             "Vence: ",
             State.subscription_snapshot["trial_ends_on"],
-            class_name="text-xs text-slate-500",
+            class_name=TYPOGRAPHY["caption"],
           ),
           rx.fragment(),
         ),
@@ -104,7 +105,7 @@ def _plan_summary_card() -> rx.Component:
       ),
       class_name="space-y-2",
     ),
-    class_name="bg-white p-4 rounded-xl border border-slate-200 shadow-sm",
+    class_name=CARD_STYLES["compact"],
   )
 
 
@@ -123,14 +124,14 @@ def _payment_alert_banner() -> rx.Component:
         State.payment_alert_info["message"],
         class_name=rx.cond(
           State.payment_alert_info["color"] == "red",
-          "font-semibold text-red-950",
+          "font-semibold text-red-700",
           "font-semibold text-amber-950",
         ),
       ),
       color=State.payment_alert_info["color"],
       class_name=rx.cond(
         State.payment_alert_info["color"] == "red",
-        "mt-4 border border-red-300 bg-red-100 text-red-950",
+        "mt-4 border border-red-300 bg-red-100 text-red-700",
         "mt-4 border border-amber-400 bg-amber-200 text-amber-950",
       ),
     ),
@@ -148,7 +149,7 @@ def _stat_card(
 ) -> rx.Component:
   """Tarjeta de estadística clickeable."""
   color_classes = {
-    "blue": "bg-blue-50 text-blue-600",
+    "blue": "bg-indigo-50 text-indigo-600",
     "green": "bg-emerald-50 text-emerald-600",
     "purple": "bg-purple-50 text-purple-600",
     "amber": "bg-amber-50 text-amber-600",
@@ -163,7 +164,7 @@ def _stat_card(
         class_name=f"p-2 {RADIUS['lg']} {icon_bg}",
       ),
       rx.el.div(
-        rx.el.p(title, class_name="text-sm text-slate-500"),
+        rx.el.p(title, class_name=TYPOGRAPHY["body_secondary"]),
         rx.el.p(value, class_name="text-2xl font-bold text-slate-900 tabular-nums"),
         rx.cond(
           subtitle != "",
@@ -209,7 +210,7 @@ def _alert_item(alert: dict) -> rx.Component:
     "critical": ("bg-red-100 border-red-300 text-red-800", "circle_alert", "text-red-600"),
     "error": ("bg-red-50 border-red-200 text-red-700", "triangle_alert", "text-red-500"),
     "warning": ("bg-amber-50 border-amber-200 text-amber-700", "triangle_alert", "text-amber-500"),
-    "info": ("bg-blue-50 border-blue-200 text-blue-700", "info", "text-blue-500"),
+    "info": ("bg-indigo-50 border-indigo-200 text-indigo-700", "info", "text-indigo-500"),
   }
 
   severity = alert.get("severity", "info")
@@ -225,6 +226,7 @@ def _alert_item(alert: dict) -> rx.Component:
       ),
       class_name="flex items-start",
     ),
+    role="alert",
     class_name=f"p-3 {RADIUS['lg']} border {styles[0]}",
   )
 
@@ -232,7 +234,7 @@ def _alert_item(alert: dict) -> rx.Component:
 def _sales_chart() -> rx.Component:
   """Gráfico de ventas de los últimos 7 días."""
   return rx.el.div(
-    rx.el.h3("VENTAS - ÚLTIMOS 7 DÍAS", class_name="text-lg font-semibold text-slate-900 mb-4"),
+    rx.el.h3("VENTAS - ÚLTIMOS 7 DÍAS", class_name=f"{TYPOGRAPHY['section_title']} mb-4"),
     rx.recharts.bar_chart(
       rx.recharts.bar(
         data_key="total",
@@ -263,7 +265,7 @@ def _top_products_list() -> rx.Component:
             rx.el.p(p["name"], class_name="font-medium text-slate-900 truncate"),
             rx.el.p(
               rx.text(f"{p['quantity']} vendidos"),
-              class_name="text-sm text-slate-500",
+              class_name=TYPOGRAPHY["body_secondary"],
             ),
             class_name="flex-1 min-w-0",
           ),
@@ -289,7 +291,7 @@ def _top_products_list() -> rx.Component:
   return rx.el.div(
     rx.el.h3(
       rx.text(f"TOP PRODUCTOS - {State.period_label}"),
-      class_name="text-lg font-semibold text-slate-900 mb-4",
+      class_name=f"{TYPOGRAPHY['section_title']} mb-4",
     ),
     rx.el.div(
       list_body,
@@ -306,13 +308,13 @@ def _category_chart() -> rx.Component:
     rx.el.div(
       rx.el.h3(
         rx.text(f"VENTAS POR CATEGORÍA - {State.period_label}"),
-        class_name="text-lg font-semibold text-slate-900",
+        class_name=TYPOGRAPHY["section_title"],
       ),
       rx.el.button(
         rx.icon("file-spreadsheet", class_name="w-4 h-4 mr-1.5"),
         "Exportar Excel",
         on_click=State.export_categories_excel,
-        class_name=BUTTON_STYLES["success"] + " !py-1.5 !px-3 text-sm",
+        class_name=BUTTON_STYLES["success_sm"],
       ),
       class_name="flex items-center justify-between mb-4",
     ),
@@ -395,7 +397,7 @@ def _alerts_panel() -> rx.Component:
   """Panel de alertas del sistema."""
   return rx.el.div(
     rx.el.div(
-      rx.el.h3("ALERTAS DEL SISTEMA", class_name="text-lg font-semibold text-slate-900"),
+      rx.el.h3("ALERTAS DEL SISTEMA", class_name=TYPOGRAPHY["section_title"]),
       rx.cond(
         State.alert_count > 0,
         rx.el.span(
@@ -434,7 +436,7 @@ def _kpis_grid() -> rx.Component:
             class_name=f"p-3 {RADIUS['lg']} bg-indigo-100 text-indigo-600",
           ),
           rx.el.div(
-            rx.el.p(State.period_label, class_name="text-sm text-slate-500"),
+            rx.el.p(State.period_label, class_name=TYPOGRAPHY["body_secondary"]),
             rx.el.p(State.formatted_period_sales, class_name="text-3xl font-bold text-slate-900 tabular-nums tracking-tight"),
             rx.el.div(
               rx.el.span(
@@ -472,7 +474,7 @@ def _kpis_grid() -> rx.Component:
             class_name=f"p-2 {RADIUS['lg']} bg-cyan-50 text-cyan-600",
           ),
           rx.el.div(
-            rx.el.p("Reservas", class_name="text-sm text-slate-500"),
+            rx.el.p("Reservas", class_name=TYPOGRAPHY["body_secondary"]),
             rx.el.p(
               State.period_reservations_count,
               class_name="text-2xl font-bold text-slate-900 tabular-nums",
@@ -496,7 +498,7 @@ def _kpis_grid() -> rx.Component:
             class_name=f"p-2 {RADIUS['lg']} bg-emerald-50 text-emerald-600",
           ),
           rx.el.div(
-            rx.el.p("Transacciones", class_name="text-sm text-slate-500"),
+            rx.el.p("Transacciones", class_name=TYPOGRAPHY["body_secondary"]),
             rx.el.p(State.period_sales_count, class_name="text-2xl font-bold text-slate-900 tabular-nums"),
             rx.el.p(State.period_label, class_name="text-xs text-slate-400"),
             class_name="ml-auto text-right",

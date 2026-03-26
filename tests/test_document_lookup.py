@@ -1,19 +1,17 @@
-"""Tests para el servicio de consulta de documentos fiscales.
+"""Tests para app.services.document_lookup_service.
 
 Cubre:
-    - PEDocumentLookup: RUC encontrado, RUC no encontrado, RUC en BAJA, DNI,
-      formato inválido, token faltante, timeout, error HTTP.
-    - ARDocumentLookup: CUIT encontrado (RI, monotributo, CF, exento),
-      CUIT no encontrado, formato inválido, timeout.
-    - determine_ar_cbte_tipo: matriz completa A/B/C.
-    - DocumentLookupFactory: países soportados y no soportados.
-    - LookupResult: dataclass defaults.
-    - _get_ttl: TTL por tipo de documento y resultado.
+    - PEDocumentLookup: RUC/DNI exitoso, 404, longitud invalida, timeout, HTTP error.
+    - ARDocumentLookup: CUIT exitoso (RI, monotributo, CF), errorGetData, longitud
+      invalida, timeout.
+    - determine_ar_cbte_tipo: matriz A/B/C completa.
+    - DocumentLookupFactory: paises soportados, alias, no soportados.
+    - _map_ar_iva_condition: mapeo de texto AFIP a tupla normalizada.
+    - lookup_document: validaciones de entrada (vacio, no digitos, pais, longitud).
 """
 from __future__ import annotations
 
 import os
-from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -24,615 +22,567 @@ os.environ.setdefault("TENANT_STRICT", "0")
 
 from app.services.document_lookup_service import (
     ARDocumentLookup,
-    CACHE_TTL_DNI,
-    CACHE_TTL_NOT_FOUND,
-    CACHE_TTL_RUC_CUIT,
     DocumentLookupFactory,
     LookupResult,
     PEDocumentLookup,
-    _get_ttl,
+    _map_ar_iva_condition,
     determine_ar_cbte_tipo,
+    lookup_document,
 )
 
 
-# ═════════════════════════════════════════════════════════════
-# LookupResult DATACLASS
-# ═════════════════════════════════════════════════════════════
+# ── helpers ───────────────────────────────────────────────
 
 
-class TestLookupResult:
-    def test_defaults(self):
-        r = LookupResult()
-        assert r.found is False
-        assert r.doc_number == ""
-        assert r.doc_type == ""
-        assert r.legal_name == ""
-        assert r.fiscal_address == ""
-        assert r.status == ""
-        assert r.condition == ""
-        assert r.iva_condition == ""
-        assert r.iva_condition_code == 0
-        assert r.error == ""
-        assert r.raw_data == {}
+def _mock_httpx_client(mock_response=None, side_effect=None):
+    """Patch context-manager para httpx.AsyncClient."""
+    patcher = patch("app.services.document_lookup_service.httpx.AsyncClient")
+    mock_cls = patcher.start()
+    mock_client = AsyncMock()
+    if side_effect is not None:
+        mock_client.get.side_effect = side_effect
+    else:
+        mock_client.get.return_value = mock_response
+    mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+    return patcher, mock_client
 
-    def test_with_values(self):
-        r = LookupResult(
-            found=True,
-            doc_number="20123456789",
-            doc_type="RUC",
-            legal_name="EMPRESA SAC",
-            status="ACTIVO",
-            condition="HABIDO",
+
+def _make_response(status_code: int, json_data: dict | None = None) -> MagicMock:
+    resp = MagicMock(spec=httpx.Response)
+    resp.status_code = status_code
+    resp.json.return_value = json_data or {}
+    if status_code >= 400:
+        resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+            f"HTTP {status_code}",
+            request=MagicMock(),
+            response=resp,
         )
-        assert r.found is True
-        assert r.legal_name == "EMPRESA SAC"
+    else:
+        resp.raise_for_status = MagicMock()
+    return resp
 
 
-# ═════════════════════════════════════════════════════════════
-# PERÚ — PEDocumentLookup
-# ═════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════
+# PEDocumentLookup
+# ═══════════════════════════════════════════════════════════
 
 
 class TestPEDocumentLookup:
-    """Tests para la estrategia de consulta de Perú.
-
-    El token y URL de API se leen de variables de entorno de plataforma
-    (LOOKUP_API_URL, LOOKUP_API_TOKEN), no de CompanyBillingConfig.
-    """
+    """Consulta de RUC/DNI para Peru via apis.net.pe."""
 
     @pytest.fixture
     def strategy(self):
-        return PEDocumentLookup()
+        return PEDocumentLookup(api_url="https://api.test.pe/v2", api_token="tok123")
 
-    @pytest.fixture
-    def mock_config(self):
-        """Config de empresa (ya no se usa para token, pero se pasa por interfaz)."""
-        config = MagicMock()
-        config.lookup_api_url = ""
-        config.lookup_api_token = None
-        return config
-
-    def _mock_response(self, status_code: int, json_data: dict) -> httpx.Response:
-        response = MagicMock(spec=httpx.Response)
-        response.status_code = status_code
-        response.json.return_value = json_data
-        return response
+    # ── RUC exitoso ───────────────────────────────────────
 
     @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "https://api.test.pe/v2", "LOOKUP_API_TOKEN": "test_token"})
-    async def test_ruc_found_activo_habido(self, strategy, mock_config):
-        """RUC válido con estado ACTIVO y condición HABIDO."""
-        api_data = {
-            "nombre": "EMPRESA DE PRUEBA SAC",
-            "direccion": "AV AREQUIPA 1234",
+    async def test_successful_ruc_lookup(self, strategy):
+        """RUC valido con datos SUNAT-like."""
+        data = {
+            "razonSocial": "EMPRESA SAC",
+            "direccion": "AV. LIMA 123",
             "estado": "ACTIVO",
             "condicion": "HABIDO",
         }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("20123456789", config=mock_config)
+        resp = _make_response(200, data)
+        patcher, client = _mock_httpx_client(mock_response=resp)
+        try:
+            result = await strategy.lookup("20123456789")
+        finally:
+            patcher.stop()
 
         assert result.found is True
         assert result.doc_type == "RUC"
-        assert result.legal_name == "EMPRESA DE PRUEBA SAC"
-        assert result.fiscal_address == "AV AREQUIPA 1234"
+        assert result.legal_name == "EMPRESA SAC"
+        assert result.fiscal_address == "AV. LIMA 123"
         assert result.status == "ACTIVO"
         assert result.condition == "HABIDO"
         assert result.error == ""
-        mock_client.get.assert_called_once()
+        assert result.raw_data == data
+
+    # ── DNI exitoso ───────────────────────────────────────
 
     @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "https://api.test.pe/v2", "LOOKUP_API_TOKEN": "test_token"})
-    async def test_ruc_baja(self, strategy, mock_config):
-        """RUC en estado BAJA — debe retornar found=True con status BAJA."""
-        api_data = {
-            "nombre": "EMPRESA CERRADA SRL",
-            "direccion": "JR LIMA 567",
-            "estado": "BAJA DE OFICIO",
-            "condicion": "NO HABIDO",
-        }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("20999888777", config=mock_config)
-
-        assert result.found is True
-        assert result.status == "BAJA DE OFICIO"
-        assert result.condition == "NO HABIDO"
-
-    @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "https://api.test.pe/v2", "LOOKUP_API_TOKEN": "test_token"})
-    async def test_ruc_not_found_404(self, strategy, mock_config):
-        """RUC no encontrado — API retorna 404."""
-        mock_response = self._mock_response(404, {})
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("20000000000", config=mock_config)
-
-        assert result.found is False
-        assert "no encontrado" in result.error
-
-    @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "https://api.test.pe/v2", "LOOKUP_API_TOKEN": "test_token"})
-    async def test_dni_found(self, strategy, mock_config):
-        """DNI válido (8 dígitos) — retorna nombre completo."""
-        api_data = {
+    async def test_successful_dni_lookup(self, strategy):
+        """DNI valido (8 digitos) retorna nombre completo."""
+        data = {
             "nombres": "JUAN CARLOS",
             "apellidoPaterno": "PEREZ",
             "apellidoMaterno": "GOMEZ",
         }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("12345678", config=mock_config)
+        resp = _make_response(200, data)
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
+            result = await strategy.lookup("12345678")
+        finally:
+            patcher.stop()
 
         assert result.found is True
         assert result.doc_type == "DNI"
-        assert result.legal_name == "PEREZ GOMEZ JUAN CARLOS"
+        assert result.legal_name == "JUAN CARLOS PEREZ GOMEZ"
+        assert result.error == ""
+
+    # ── RUC no encontrado (404) ───────────────────────────
 
     @pytest.mark.asyncio
-    async def test_invalid_length(self, strategy, mock_config):
-        """Formato inválido — longitud incorrecta."""
-        result = await strategy.lookup("12345", config=mock_config)
+    async def test_ruc_not_found_404(self, strategy):
+        resp = _make_response(404)
+        # 404 is handled before raise_for_status, so reset side_effect
+        resp.raise_for_status = MagicMock()
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
+            result = await strategy.lookup("20000000000")
+        finally:
+            patcher.stop()
+
         assert result.found is False
-        assert "Formato inválido" in result.error
+        assert result.doc_type == "RUC"
+        assert "no encontrado" in result.error
+
+    # ── Longitud invalida ─────────────────────────────────
 
     @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "", "LOOKUP_API_TOKEN": ""})
-    async def test_no_token(self, strategy):
-        """Sin token configurado — retorna error."""
-        result = await strategy.lookup("20123456789")
+    async def test_invalid_document_length(self, strategy):
+        """Documento con longitud que no es 8 ni 11 retorna error sin llamar API."""
+        result = await strategy.lookup("12345")
+
         assert result.found is False
-        assert "no disponible" in result.error or "Contacte" in result.error
+        assert "dígitos" in result.error
+        assert "5" in result.error
+
+    # ── Timeout ───────────────────────────────────────────
 
     @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "https://api.test.pe/v2", "LOOKUP_API_TOKEN": "test_token"})
-    async def test_timeout(self, strategy, mock_config):
-        """Timeout en la API externa."""
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.side_effect = httpx.TimeoutException("timeout")
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("20123456789", config=mock_config)
+    async def test_timeout_handling(self, strategy):
+        patcher, _ = _mock_httpx_client(side_effect=httpx.TimeoutException("timed out"))
+        try:
+            result = await strategy.lookup("20123456789")
+        finally:
+            patcher.stop()
 
         assert result.found is False
         assert "Timeout" in result.error
 
+    # ── HTTP error generico ───────────────────────────────
+
     @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "https://api.test.pe/v2", "LOOKUP_API_TOKEN": "test_token"})
-    async def test_http_error(self, strategy, mock_config):
-        """Error HTTP (ej. 500)."""
-        mock_response = self._mock_response(500, {})
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("20123456789", config=mock_config)
+    async def test_http_error_handling(self, strategy):
+        resp = _make_response(500)
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
+            result = await strategy.lookup("20123456789")
+        finally:
+            patcher.stop()
 
         assert result.found is False
         assert "HTTP 500" in result.error
 
-    @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "https://custom-api.pe/v1", "LOOKUP_API_TOKEN": "test_token"})
-    async def test_custom_base_url(self, strategy):
-        """Usa URL custom de env var."""
-        api_data = {"nombre": "TEST", "direccion": "", "estado": "ACTIVO", "condicion": "HABIDO"}
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("20123456789")
-
-        assert result.found is True
-        call_args = mock_client.get.call_args
-        assert "custom-api.pe" in call_args[0][0]
+    # ── Campo razonSocial alternativo ─────────────────────
 
     @pytest.mark.asyncio
-    @patch.dict(os.environ, {"LOOKUP_API_URL": "https://api.test.pe/v2", "LOOKUP_API_TOKEN": "test_token"})
-    async def test_ruc_alternative_field_names(self, strategy, mock_config):
-        """Prueba campos alternativos de la API (razonSocial en vez de nombre)."""
-        api_data = {
-            "razonSocial": "ALTERNATIVA SRL",
-            "direccion": "CALLE 123",
-            "estado": "activo",
-            "condicion": "habido",
+    async def test_ruc_razon_social_field(self, strategy):
+        """Cuando existe razonSocial se usa en vez de nombre."""
+        data = {
+            "razonSocial": "RAZON SOCIAL SRL",
+            "nombre": "NOMBRE FALLBACK",
+            "direccion": "",
+            "estado": "ACTIVO",
+            "condicion": "HABIDO",
         }
-        mock_response = self._mock_response(200, api_data)
+        resp = _make_response(200, data)
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
+            result = await strategy.lookup("20123456789")
+        finally:
+            patcher.stop()
 
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("20123456789", config=mock_config)
-
-        assert result.found is True
-        assert result.legal_name == "ALTERNATIVA SRL"
+        assert result.legal_name == "RAZON SOCIAL SRL"
 
 
-# ═════════════════════════════════════════════════════════════
-# ARGENTINA — ARDocumentLookup
-# ═════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════
+# ARDocumentLookup
+# ═══════════════════════════════════════════════════════════
 
 
 class TestARDocumentLookup:
-    """Tests para la estrategia de consulta de Argentina."""
+    """Consulta de CUIT para Argentina via tangofactura."""
 
     @pytest.fixture
     def strategy(self):
         return ARDocumentLookup()
 
-    def _mock_response(self, status_code: int, json_data: dict) -> httpx.Response:
-        response = MagicMock(spec=httpx.Response)
-        response.status_code = status_code
-        response.json.return_value = json_data
-        return response
+    # ── CUIT exitoso con RI ───────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_cuit_found_ri(self, strategy):
-        """CUIT encontrado — Responsable Inscripto (IdCondicionIVA=1)."""
-        api_data = {
+    async def test_successful_cuit_lookup_ri(self, strategy):
+        data = {
             "Denominacion": "EMPRESA ARGENTINA SA",
-            "Domicilio": "AV CORRIENTES 1234, CABA",
-            "IdCondicionIVA": 1,
-            "EstadoClave": "ACTIVO",
+            "Domicilio": "AV CORRIENTES 1234",
+            "tipoResponsable": "IVA Responsable Inscripto",
+            "EstadoClave": "ACTIVA",
+            "errorGetData": False,
         }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
+        resp = _make_response(200, data)
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
             result = await strategy.lookup("20345678901")
+        finally:
+            patcher.stop()
 
         assert result.found is True
         assert result.doc_type == "CUIT"
         assert result.legal_name == "EMPRESA ARGENTINA SA"
-        assert result.fiscal_address == "AV CORRIENTES 1234, CABA"
+        assert result.fiscal_address == "AV CORRIENTES 1234"
         assert result.iva_condition == "RI"
         assert result.iva_condition_code == 1
+        assert result.error == ""
+
+    # ── CUIT monotributo ──────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_cuit_found_monotributo(self, strategy):
-        """CUIT Monotributista (IdCondicionIVA=6)."""
-        api_data = {
-            "Denominacion": "GARCIA JUAN",
-            "Domicilio": "CALLE FALSA 123",
-            "IdCondicionIVA": 6,
+    async def test_cuit_with_monotributo(self, strategy):
+        data = {
+            "Denominacion": "PERSONA MONOTRIBUTO",
+            "Domicilio": "CALLE FALSA 456",
+            "tipoResponsable": "Responsable Monotributo",
+            "EstadoClave": "ACTIVA",
+            "errorGetData": False,
         }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
+        resp = _make_response(200, data)
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
             result = await strategy.lookup("27123456789")
+        finally:
+            patcher.stop()
 
         assert result.found is True
         assert result.iva_condition == "monotributo"
         assert result.iva_condition_code == 6
 
+    # ── CUIT consumidor final ─────────────────────────────
+
     @pytest.mark.asyncio
-    async def test_cuit_found_consumidor_final(self, strategy):
-        """CUIT Consumidor Final (IdCondicionIVA=5)."""
-        api_data = {
-            "Denominacion": "PEREZ MARIA",
+    async def test_cuit_with_consumidor_final(self, strategy):
+        data = {
+            "Denominacion": "CONSUMIDOR",
             "Domicilio": "",
-            "IdCondicionIVA": 5,
+            "tipoResponsable": "Consumidor Final",
+            "errorGetData": False,
         }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
+        resp = _make_response(200, data)
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
             result = await strategy.lookup("20111222333")
+        finally:
+            patcher.stop()
 
         assert result.found is True
         assert result.iva_condition == "CF"
         assert result.iva_condition_code == 5
 
-    @pytest.mark.asyncio
-    async def test_cuit_found_exento(self, strategy):
-        """CUIT IVA Exento (IdCondicionIVA=4)."""
-        api_data = {
-            "Denominacion": "FUNDACION EXENTA",
-            "Domicilio": "AV RIVADAVIA 5678",
-            "IdCondicionIVA": 4,
-        }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("30111222334")
-
-        assert result.found is True
-        assert result.iva_condition == "exento"
-        assert result.iva_condition_code == 4
+    # ── CUIT no encontrado (errorGetData=True) ────────────
 
     @pytest.mark.asyncio
-    async def test_cuit_not_found(self, strategy):
-        """CUIT no encontrado — Denominacion vacía."""
-        api_data = {"Denominacion": "", "Domicilio": ""}
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
+    async def test_cuit_not_found_error_get_data(self, strategy):
+        data = {"errorGetData": True}
+        resp = _make_response(200, data)
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
             result = await strategy.lookup("20000000000")
+        finally:
+            patcher.stop()
 
         assert result.found is False
         assert "no encontrado" in result.error
 
+    # ── Longitud invalida de CUIT ─────────────────────────
+
     @pytest.mark.asyncio
-    async def test_cuit_invalid_format(self, strategy):
-        """CUIT con formato inválido — menos de 11 dígitos."""
-        result = await strategy.lookup("12345")
+    async def test_invalid_cuit_length(self, strategy):
+        result = await strategy.lookup("1234567")
         assert result.found is False
-        assert "inválido" in result.error
+        assert "11 dígitos" in result.error
+
+    # ── Timeout ───────────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_cuit_non_numeric(self, strategy):
-        """CUIT con caracteres no numéricos."""
-        result = await strategy.lookup("20-3456789-1")  # hyphens stripped, becomes 2034567891
-        # After strip, "20-3456789-1" → "2034567891" which is 10 digits
-        assert result.found is False
-
-    @pytest.mark.asyncio
-    async def test_cuit_timeout(self, strategy):
-        """Timeout en tangofactura."""
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.side_effect = httpx.TimeoutException("timeout")
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
+    async def test_timeout_handling(self, strategy):
+        patcher, _ = _mock_httpx_client(side_effect=httpx.TimeoutException("timed out"))
+        try:
             result = await strategy.lookup("20345678901")
+        finally:
+            patcher.stop()
 
         assert result.found is False
         assert "Timeout" in result.error
 
-    @pytest.mark.asyncio
-    async def test_cuit_unknown_iva_defaults_to_cf(self, strategy):
-        """IVA condition desconocida → defaults to CF."""
-        api_data = {
-            "Denominacion": "DESCONOCIDO SRL",
-            "Domicilio": "",
-            "IdCondicionIVA": 999,
-        }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
-            result = await strategy.lookup("20345678901")
-
-        assert result.found is True
-        assert result.iva_condition == "CF"
-        assert result.iva_condition_code == 5
+    # ── Fallback a IdCondicionIVA numerico ────────────────
 
     @pytest.mark.asyncio
-    async def test_cuit_monotributo_social(self, strategy):
-        """Monotributo Social (IdCondicionIVA=13) → maps to monotributo."""
-        api_data = {
-            "Denominacion": "MONOTRIBUTO SOCIAL",
+    async def test_fallback_to_id_condicion_iva(self, strategy):
+        """Cuando tipoResponsable esta vacio, usa IdCondicionIVA numerico."""
+        data = {
+            "Denominacion": "SIN TIPO RESPONSABLE",
             "Domicilio": "",
-            "IdCondicionIVA": 13,
+            "tipoResponsable": "",
+            "IdCondicionIVA": 6,
+            "errorGetData": False,
         }
-        mock_response = self._mock_response(200, api_data)
-
-        with patch("httpx.AsyncClient") as MockClient:
-            mock_client = AsyncMock()
-            mock_client.get.return_value = mock_response
-            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
-
+        resp = _make_response(200, data)
+        patcher, _ = _mock_httpx_client(mock_response=resp)
+        try:
             result = await strategy.lookup("20345678901")
+        finally:
+            patcher.stop()
 
         assert result.found is True
         assert result.iva_condition == "monotributo"
         assert result.iva_condition_code == 6
 
 
-# ═════════════════════════════════════════════════════════════
-# DETERMINE AR CBTE TIPO — MATRIZ COMPLETA
-# ═════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════
+# determine_ar_cbte_tipo
+# ═══════════════════════════════════════════════════════════
 
 
 class TestDetermineARCbteTipo:
-    """Prueba la matriz completa de determinación de comprobante AR."""
+    """Matriz de tipo de comprobante Argentina."""
 
-    # Emisor RI
-    def test_ri_to_ri_gives_factura_a(self):
+    def test_ri_to_ri_factura_a(self):
         letra, cbte = determine_ar_cbte_tipo("RI", "RI")
         assert letra == "A"
         assert cbte == 1
 
-    def test_ri_to_monotributo_gives_factura_b(self):
+    def test_ri_to_monotributo_factura_b(self):
         letra, cbte = determine_ar_cbte_tipo("RI", "monotributo")
         assert letra == "B"
         assert cbte == 6
 
-    def test_ri_to_exento_gives_factura_b(self):
-        letra, cbte = determine_ar_cbte_tipo("RI", "exento")
-        assert letra == "B"
-        assert cbte == 6
-
-    def test_ri_to_cf_gives_factura_b(self):
+    def test_ri_to_cf_factura_b(self):
         letra, cbte = determine_ar_cbte_tipo("RI", "CF")
         assert letra == "B"
         assert cbte == 6
 
-    # Emisor Monotributo → siempre C
-    def test_mono_to_ri_gives_factura_c(self):
-        letra, cbte = determine_ar_cbte_tipo("monotributo", "RI")
-        assert letra == "C"
-        assert cbte == 11
+    def test_monotributo_to_any_factura_c(self):
+        for receptor in ("RI", "monotributo", "exento", "CF"):
+            letra, cbte = determine_ar_cbte_tipo("monotributo", receptor)
+            assert letra == "C", f"Expected C for monotributo -> {receptor}"
+            assert cbte == 11
 
-    def test_mono_to_mono_gives_factura_c(self):
-        letra, cbte = determine_ar_cbte_tipo("monotributo", "monotributo")
-        assert letra == "C"
-        assert cbte == 11
+    def test_exento_to_any_factura_c(self):
+        for receptor in ("RI", "monotributo", "exento", "CF"):
+            letra, cbte = determine_ar_cbte_tipo("exento", receptor)
+            assert letra == "C", f"Expected C for exento -> {receptor}"
+            assert cbte == 11
 
-    def test_mono_to_exento_gives_factura_c(self):
-        letra, cbte = determine_ar_cbte_tipo("monotributo", "exento")
-        assert letra == "C"
-        assert cbte == 11
+    def test_ri_to_exento_factura_b(self):
+        letra, cbte = determine_ar_cbte_tipo("RI", "exento")
+        assert letra == "B"
+        assert cbte == 6
 
-    def test_mono_to_cf_gives_factura_c(self):
-        letra, cbte = determine_ar_cbte_tipo("monotributo", "CF")
-        assert letra == "C"
-        assert cbte == 11
-
-    # Emisor Exento → siempre C
-    def test_exento_to_ri_gives_factura_c(self):
-        letra, cbte = determine_ar_cbte_tipo("exento", "RI")
-        assert letra == "C"
-        assert cbte == 11
-
-    def test_exento_to_cf_gives_factura_c(self):
-        letra, cbte = determine_ar_cbte_tipo("exento", "CF")
-        assert letra == "C"
-        assert cbte == 11
-
-    # Fallbacks
     def test_ri_unknown_receptor_fallback_b(self):
-        """RI con receptor desconocido → fallback a B."""
+        """RI con receptor no mapeado -> fallback conservador a B."""
         letra, cbte = determine_ar_cbte_tipo("RI", "desconocido")
         assert letra == "B"
         assert cbte == 6
 
     def test_unknown_emisor_fallback_c(self):
-        """Emisor desconocido → fallback a C."""
+        """Emisor desconocido -> fallback a C."""
         letra, cbte = determine_ar_cbte_tipo("otro", "RI")
         assert letra == "C"
         assert cbte == 11
 
-    # Whitespace handling
     def test_whitespace_stripped(self):
         letra, cbte = determine_ar_cbte_tipo("  RI  ", "  CF  ")
         assert letra == "B"
         assert cbte == 6
 
 
-# ═════════════════════════════════════════════════════════════
-# FACTORY
-# ═════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════
+# DocumentLookupFactory
+# ═══════════════════════════════════════════════════════════
 
 
 class TestDocumentLookupFactory:
-    def test_pe_strategy(self):
+    """Fabrica que selecciona la estrategia segun el pais."""
+
+    def test_pe_creates_pe_strategy(self):
         strategy = DocumentLookupFactory.get_strategy("PE")
         assert isinstance(strategy, PEDocumentLookup)
 
-    def test_ar_strategy(self):
+    def test_ar_creates_ar_strategy(self):
         strategy = DocumentLookupFactory.get_strategy("AR")
         assert isinstance(strategy, ARDocumentLookup)
 
-    def test_unsupported_country_raises(self):
+    def test_unknown_country_raises_value_error(self):
         with pytest.raises(ValueError, match="no soportado"):
             DocumentLookupFactory.get_strategy("BR")
 
+    @pytest.mark.parametrize("alias", ["pe", "PER", "PERU"])
+    def test_peru_country_variants(self, alias):
+        strategy = DocumentLookupFactory.get_strategy(alias)
+        assert isinstance(strategy, PEDocumentLookup)
 
-# ═════════════════════════════════════════════════════════════
-# TTL HELPER
-# ═════════════════════════════════════════════════════════════
+    @pytest.mark.parametrize("alias", ["ar", "ARG", "ARGENTINA"])
+    def test_argentina_country_variants(self, alias):
+        strategy = DocumentLookupFactory.get_strategy(alias)
+        assert isinstance(strategy, ARDocumentLookup)
+
+    def test_pe_uses_config_credentials(self):
+        config = MagicMock()
+        config.lookup_api_url = "https://custom.api/v2"
+        config.lookup_api_token = "custom_token_abc"
+
+        strategy = DocumentLookupFactory.get_strategy("PE", config=config)
+        assert isinstance(strategy, PEDocumentLookup)
+        assert strategy.api_url == "https://custom.api/v2"
+        assert strategy.api_token == "custom_token_abc"
+
+    def test_pe_falls_back_to_env_vars(self):
+        with patch.dict(
+            os.environ,
+            {"LOOKUP_API_URL": "https://env.api/v2", "LOOKUP_API_TOKEN": "env_tok"},
+        ):
+            strategy = DocumentLookupFactory.get_strategy("PE")
+        assert isinstance(strategy, PEDocumentLookup)
+        assert strategy.api_url == "https://env.api/v2"
+        assert strategy.api_token == "env_tok"
+
+    def test_empty_string_raises(self):
+        with pytest.raises(ValueError, match="no soportado"):
+            DocumentLookupFactory.get_strategy("")
+
+    def test_none_raises(self):
+        with pytest.raises(ValueError, match="no soportado"):
+            DocumentLookupFactory.get_strategy(None)
 
 
-class TestGetTTL:
-    def test_ruc_found_24h(self):
-        assert _get_ttl("RUC", found=True) == CACHE_TTL_RUC_CUIT
-
-    def test_cuit_found_24h(self):
-        assert _get_ttl("CUIT", found=True) == CACHE_TTL_RUC_CUIT
-
-    def test_dni_found_7d(self):
-        assert _get_ttl("DNI", found=True) == CACHE_TTL_DNI
-
-    def test_not_found_1h(self):
-        assert _get_ttl("RUC", found=False) == CACHE_TTL_NOT_FOUND
-        assert _get_ttl("DNI", found=False) == CACHE_TTL_NOT_FOUND
-        assert _get_ttl("CUIT", found=False) == CACHE_TTL_NOT_FOUND
-
-    def test_ttl_values(self):
-        assert CACHE_TTL_RUC_CUIT == timedelta(hours=24)
-        assert CACHE_TTL_DNI == timedelta(days=7)
-        assert CACHE_TTL_NOT_FOUND == timedelta(hours=1)
+# ═══════════════════════════════════════════════════════════
+# _map_ar_iva_condition
+# ═══════════════════════════════════════════════════════════
 
 
-# ═════════════════════════════════════════════════════════════
-# AR IVA CONDITION MAPPING
-# ═════════════════════════════════════════════════════════════
+class TestMapArIvaCondition:
+    """Mapeo de condicion IVA de AFIP (texto) a tupla normalizada."""
 
+    def test_responsable_inscripto(self):
+        cond, code = _map_ar_iva_condition("Responsable Inscripto")
+        assert cond == "RI"
+        assert code == 1
 
-class TestARIvaMapping:
-    """Tests para _map_iva_condition de ARDocumentLookup."""
+    def test_iva_responsable_inscripto(self):
+        cond, code = _map_ar_iva_condition("IVA Responsable Inscripto")
+        assert cond == "RI"
+        assert code == 1
 
-    def test_ri(self):
-        assert ARDocumentLookup._map_iva_condition(1) == ("RI", 1)
-
-    def test_exento(self):
-        assert ARDocumentLookup._map_iva_condition(4) == ("exento", 4)
-
-    def test_cf(self):
-        assert ARDocumentLookup._map_iva_condition(5) == ("CF", 5)
-
-    def test_monotributo(self):
-        assert ARDocumentLookup._map_iva_condition(6) == ("monotributo", 6)
-
-    def test_monotributo_social(self):
-        cond, code = ARDocumentLookup._map_iva_condition(13)
+    def test_responsable_monotributo(self):
+        cond, code = _map_ar_iva_condition("Responsable Monotributo")
         assert cond == "monotributo"
-        assert code == 6  # normalized to 6
+        assert code == 6
 
-    def test_unknown_defaults_cf(self):
-        cond, code = ARDocumentLookup._map_iva_condition(999)
+    def test_iva_sujeto_exento(self):
+        cond, code = _map_ar_iva_condition("IVA Sujeto Exento")
+        assert cond == "exento"
+        assert code == 4
+
+    def test_consumidor_final(self):
+        cond, code = _map_ar_iva_condition("Consumidor Final")
         assert cond == "CF"
         assert code == 5
+
+    def test_unknown_empty_returns_desconocido(self):
+        cond, code = _map_ar_iva_condition("")
+        assert cond == "desconocido"
+        assert code == 0
+
+    def test_unknown_text_preserved(self):
+        """Texto no reconocido se preserva como condicion."""
+        cond, code = _map_ar_iva_condition("Tipo Raro Nuevo")
+        assert cond == "Tipo Raro Nuevo"
+        assert code == 0
+
+    def test_case_insensitive(self):
+        cond, code = _map_ar_iva_condition("responsable inscripto")
+        assert cond == "RI"
+        assert code == 1
+
+    def test_ri_shorthand(self):
+        cond, code = _map_ar_iva_condition("RI")
+        assert cond == "RI"
+        assert code == 1
+
+
+# ═══════════════════════════════════════════════════════════
+# lookup_document (funcion de orquestacion)
+# ═══════════════════════════════════════════════════════════
+
+
+class TestLookupDocument:
+    """Validaciones de entrada de la funcion principal."""
+
+    @pytest.mark.asyncio
+    async def test_empty_doc_number(self):
+        result = await lookup_document("", "PE")
+        assert result.found is False
+        assert "dígitos" in result.error
+
+    @pytest.mark.asyncio
+    async def test_non_digit_doc_number(self):
+        result = await lookup_document("ABC123XYZ", "PE")
+        assert result.found is False
+        assert "dígitos" in result.error
+
+    @pytest.mark.asyncio
+    async def test_unsupported_country(self):
+        result = await lookup_document("12345678901", "BR")
+        assert result.found is False
+        assert "no soportado" in result.error
+
+    @pytest.mark.asyncio
+    async def test_pe_wrong_length_not_8_or_11(self):
+        result = await lookup_document("12345", "PE")
+        assert result.found is False
+        assert "8 (DNI) u 11 (RUC)" in result.error
+
+    @pytest.mark.asyncio
+    async def test_ar_wrong_length_not_11(self):
+        result = await lookup_document("12345", "AR")
+        assert result.found is False
+        assert "11 dígitos" in result.error
+
+    @pytest.mark.asyncio
+    async def test_whitespace_only(self):
+        result = await lookup_document("   ", "PE")
+        assert result.found is False
+        assert "dígitos" in result.error
+
+    @pytest.mark.asyncio
+    async def test_none_doc_number(self):
+        result = await lookup_document(None, "PE")
+        assert result.found is False
+
+    @pytest.mark.asyncio
+    async def test_hyphens_stripped(self):
+        """Guiones se eliminan antes de validar longitud."""
+        # "20-123456-789" stripped -> "20123456789" (11 digits) -> valid RUC length
+        # Should attempt API call (not fail on format)
+        patcher, _ = _mock_httpx_client(
+            mock_response=_make_response(
+                200,
+                {
+                    "razonSocial": "TEST",
+                    "direccion": "",
+                    "estado": "ACTIVO",
+                    "condicion": "HABIDO",
+                },
+            )
+        )
+        try:
+            result = await lookup_document("20-123456-789", "PE")
+        finally:
+            patcher.stop()
+
+        # Should have passed validation and reached the API
+        assert result.found is True or result.error == ""

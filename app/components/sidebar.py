@@ -196,7 +196,7 @@ def _sidebar_guest_content() -> rx.Component:
                 class_name="flex items-center gap-2",
             ),
             rx.el.div(
-                rx.icon("package", class_name="h-4 w-4 text-blue-500 shrink-0"),
+                rx.icon("package", class_name="h-4 w-4 text-indigo-500 shrink-0"),
                 rx.el.span("Inventario y stock automatizado", class_name="text-xs text-slate-600"),
                 class_name="flex items-center gap-2",
             ),
@@ -418,7 +418,7 @@ def sidebar() -> rx.Component:
                                 ),
                                 rx.el.span(
                                     "Sistema de Ventas",
-                                    class_name="text-[10px] text-slate-400 uppercase tracking-wider truncate",
+                                    class_name="text-xs text-slate-400 uppercase tracking-wider truncate",
                                 ),
                                 class_name="flex flex-col leading-tight min-w-0",
                             ),
@@ -494,88 +494,7 @@ rx.cond(
             ),
         ),
         # CSS + JS para auto-hide y reveal por hover/tap en el borde izquierdo
-        rx.script("""
-            (function(){
-                function getBtn(){
-                    return document.querySelector('.sidebar-toggle-btn');
-                }
-                function getZone(){
-                    return document.querySelector('.sidebar-hover-zone');
-                }
-                if(!window.__sidebarToggleRuntime){
-                    var hideTimer = null;
-                    function clearHide(){
-                        clearTimeout(hideTimer);
-                    }
-                    function showBtn(){
-                        var btn = getBtn();
-                        if(!btn) return;
-                        btn.style.opacity = '1';
-                        btn.style.pointerEvents = 'auto';
-                        btn.style.transition = 'opacity 0.2s ease';
-                    }
-                    function hideBtn(){
-                        var btn = getBtn();
-                        if(!btn) return;
-                        btn.style.opacity = '0';
-                        btn.style.pointerEvents = 'none';
-                        btn.style.transition = 'opacity 0.45s ease';
-                    }
-                    function scheduleHide(delay){
-                        clearHide();
-                        hideTimer = setTimeout(hideBtn, delay || 2000);
-                    }
-                    window.__sidebarToggleRuntime = {
-                        showBtn: showBtn,
-                        hideBtn: hideBtn,
-                        scheduleHide: scheduleHide,
-                        clearHide: clearHide
-                    };
-                    document.addEventListener('mousemove', function(e){
-                        var zone = getZone();
-                        if(!zone) return;
-                        var rect = zone.getBoundingClientRect();
-                        if(
-                            e.clientX <= rect.right &&
-                            e.clientY >= rect.top &&
-                            e.clientY <= rect.bottom
-                        ){
-                            showBtn();
-                            clearHide();
-                        }
-                    });
-                    document.addEventListener('mouseover', function(e){
-                        var btn = getBtn();
-                        if(btn && btn.contains(e.target)){
-                            clearHide();
-                        }
-                    });
-                    document.addEventListener('mouseout', function(e){
-                        var btn = getBtn();
-                        if(btn && btn.contains(e.target)){
-                            scheduleHide(1800);
-                        }
-                    });
-                    document.addEventListener('touchstart', function(e){
-                        var zone = getZone();
-                        if(zone && zone.contains(e.target)){
-                            showBtn();
-                            scheduleHide(2200);
-                            return;
-                        }
-                        var btn = getBtn();
-                        if(btn && btn.contains(e.target)){
-                            clearHide();
-                        }
-                    }, {passive: true});
-                }
-                setTimeout(function(){
-                    if(!window.__sidebarToggleRuntime) return;
-                    window.__sidebarToggleRuntime.showBtn();
-                    window.__sidebarToggleRuntime.scheduleHide(2200);
-                }, 80);
-            })();
-        """),
+        rx.script(src="/js/sidebar-toggle.js"),
     ),
     rx.fragment(),
 )

@@ -1,6 +1,17 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import TABLE_STYLES, page_title, permission_guard
+from app.components.ui import (
+    BADGE_STYLES,
+    BUTTON_STYLES,
+    CARD_STYLES,
+    INPUT_STYLES,
+    SELECT_STYLES,
+    SPACING,
+    TABLE_STYLES,
+    TYPOGRAPHY,
+    page_title,
+    permission_guard,
+)
 
 
 def _ingreso_autocomplete_shortcuts() -> rx.Component:
@@ -31,6 +42,95 @@ def _ingreso_autocomplete_shortcuts() -> rx.Component:
             });
         })();
         """
+    )
+
+
+# ════════════════════════════════════════════════════════════
+# CARD MÓVIL (vista responsiva para pantallas pequeñas)
+# ════════════════════════════════════════════════════════════
+
+
+def _entry_card(item: rx.Var) -> rx.Component:
+    """Card de producto a ingresar para vista móvil."""
+    return rx.el.div(
+        # Header: Descripción
+        rx.el.div(
+            rx.el.span(
+                item["display_description"],
+                class_name="font-medium text-slate-900 text-sm",
+            ),
+            rx.el.span(
+                item.get("category", "General"),
+                class_name=BADGE_STYLES["neutral"],
+            ),
+            class_name="flex items-center justify-between gap-2",
+        ),
+        # Body: Código + Cantidad + Precios
+        rx.el.div(
+            rx.cond(
+                item["barcode"] != "",
+                rx.el.div(
+                    rx.el.span("Código:", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(item["barcode"], class_name="text-sm font-mono text-slate-700"),
+                    class_name="flex items-center gap-2",
+                ),
+                rx.fragment(),
+            ),
+            rx.el.div(
+                rx.el.div(
+                    rx.el.span("Cant.", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(
+                        item["quantity"].to_string(), " ", item["unit"],
+                        class_name="text-sm text-slate-800",
+                    ),
+                    class_name="flex flex-col",
+                ),
+                rx.el.div(
+                    rx.el.span("P. Compra", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(
+                        State.currency_symbol, item["price"].to_string(),
+                        class_name="text-sm text-slate-800",
+                    ),
+                    class_name="flex flex-col",
+                ),
+                rx.el.div(
+                    rx.el.span("P. Venta", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
+                    rx.el.span(
+                        State.currency_symbol, item["sale_price"].to_string(),
+                        class_name="text-sm text-green-600",
+                    ),
+                    class_name="flex flex-col",
+                ),
+                class_name="flex items-start gap-4 mt-1",
+            ),
+            class_name="flex flex-col gap-1.5 mt-2",
+        ),
+        # Footer: Subtotal + Acciones
+        rx.el.div(
+            rx.el.span(
+                State.currency_symbol, " ", item["subtotal"].to_string(),
+                class_name="font-semibold tabular-nums text-slate-900",
+            ),
+            rx.el.div(
+                rx.el.button(
+                    rx.icon("pencil", class_name="h-4 w-4"),
+                    on_click=lambda: State.edit_item_from_entry(item["temp_id"]),
+                    title="Editar",
+                    aria_label="Editar",
+                    class_name=BUTTON_STYLES["icon_primary"],
+                ),
+                rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda: State.remove_item_from_entry(item["temp_id"]),
+                    title="Eliminar",
+                    aria_label="Eliminar",
+                    class_name=BUTTON_STYLES["icon_danger"],
+                ),
+                class_name="flex items-center gap-2",
+            ),
+            class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+        ),
+        class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
     )
 
 
@@ -68,21 +168,21 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
                         temp_id, value
                     ),
                     disabled=item.get("is_existing_product", False),
-                    class_name="w-full sm:w-40 min-w-[8rem] h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=f"{SELECT_STYLES['default']} sm:w-40 min-w-[8rem]",
                 ),
                 rx.el.button(
                     rx.icon("pencil", class_name="h-4 w-4"),
                     on_click=lambda: State.edit_item_from_entry(item["temp_id"]),
                     title="Editar",
                     aria_label="Editar",
-                    class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
+                    class_name=BUTTON_STYLES["icon_primary"],
                 ),
                 rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
                     on_click=lambda: State.remove_item_from_entry(item["temp_id"]),
                     title="Eliminar",
                     aria_label="Eliminar",
-                    class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+                    class_name=BUTTON_STYLES["icon_danger"],
                 ),
                 class_name="flex justify-center items-center gap-2",
             ),
@@ -96,20 +196,20 @@ def ingreso_page() -> rx.Component:
     purchase_header = rx.el.div(
         rx.el.h2(
             "DATOS DEL DOCUMENTO DE COMPRA",
-            class_name="text-lg font-semibold text-slate-700",
+            class_name=TYPOGRAPHY["section_title"],
         ),
         rx.el.p(
             "Completa la información básica del documento y selecciona el proveedor.",
-            class_name="text-sm text-slate-500",
+            class_name=TYPOGRAPHY["body_secondary"],
         ),
-        class_name="flex flex-col gap-1 pb-4 mb-4 border-b border-slate-100",
+        class_name=f"flex flex-col {SPACING['field_gap']} pb-4 mb-4 border-b border-slate-100",
     )
 
     purchase_fields = rx.el.div(
         rx.el.div(
             rx.el.label(
                 "Buscar Proveedor",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.div(
                 rx.el.div(
@@ -120,7 +220,7 @@ def ingreso_page() -> rx.Component:
                             value=State.purchase_supplier_query,
                             on_change=State.search_supplier_change,
                             on_key_down=State.handle_supplier_search_keydown,
-                            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                            class_name=INPUT_STYLES["default"],
                             auto_complete=False,
                         ),
                         debounce_timeout=400,
@@ -168,20 +268,20 @@ def ingreso_page() -> rx.Component:
                 rx.el.button(
                     "Limpiar Proveedor",
                     on_click=State.clear_supplier_search,
-                    class_name="h-10 px-3 rounded-md border border-slate-200 bg-white text-slate-600 text-sm hover:bg-slate-50 w-full sm:w-auto",
+                    class_name=f"{BUTTON_STYLES['secondary']} w-full sm:w-auto",
                 ),
                 class_name="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center",
             ),
             rx.el.p(
                 "Si no existe el proveedor, gestionelo en Compras > Proveedores.",
-                class_name="text-xs text-slate-500 mt-2",
+                class_name=f"{TYPOGRAPHY['caption']} mt-2",
             ),
             class_name="w-full sm:col-span-2 lg:col-span-4 relative",
         ),
         rx.el.div(
             rx.el.label(
                 "Razón Social",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 value=rx.cond(
@@ -191,14 +291,14 @@ def ingreso_page() -> rx.Component:
                 ),
                 placeholder="Razón Social / Nombre de Empresa",
                 read_only=True,
-                class_name="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["disabled"],
             ),
             class_name="w-full",
         ),
         rx.el.div(
             rx.el.label(
                 "N° Registro",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 value=rx.cond(
@@ -208,34 +308,34 @@ def ingreso_page() -> rx.Component:
                 ),
                 placeholder="N° de Registro de Empresa",
                 read_only=True,
-                class_name="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono",
+                class_name=f"{INPUT_STYLES['disabled']} font-mono",
             ),
             class_name="w-full",
         ),
         rx.el.div(
             rx.el.label(
                 "Tipo de Documento",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.select(
                 rx.el.option("Boleta", value="boleta"),
                 rx.el.option("Factura", value="factura"),
                 default_value=State.purchase_doc_type,
                 on_change=State.set_purchase_doc_type,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=SELECT_STYLES["default"],
             ),
             class_name="w-full",
         ),
         rx.el.div(
             rx.el.label(
                 "Serie",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 placeholder="Ej: F001",
                 on_blur=State.set_purchase_series,
                 default_value=State.purchase_series,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
                 debounce_timeout=600,
             ),
             class_name="w-full",
@@ -243,13 +343,13 @@ def ingreso_page() -> rx.Component:
         rx.el.div(
             rx.el.label(
                 "Numero",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 placeholder="Ej: 000123",
                 on_blur=State.set_purchase_number,
                 default_value=State.purchase_number,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
                 debounce_timeout=600,
             ),
             class_name="w-full",
@@ -257,13 +357,13 @@ def ingreso_page() -> rx.Component:
         rx.el.div(
             rx.el.label(
                 "Fecha de Emision",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 type="date",
                 on_blur=State.set_purchase_issue_date,
                 default_value=State.purchase_issue_date,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
             ),
             class_name="w-full",
         ),
@@ -278,7 +378,7 @@ def ingreso_page() -> rx.Component:
     variant_existing_inputs = rx.el.div(
         rx.el.label(
             "Talla/Color",
-            class_name="block text-sm font-medium text-slate-600 mb-1",
+            class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
         ),
         rx.el.select(
             rx.el.option("Seleccionar Talla/Color", value=""),
@@ -290,7 +390,7 @@ def ingreso_page() -> rx.Component:
             ),
             default_value=State.selected_variant_id,
             on_change=State.set_selected_variant,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=SELECT_STYLES["default"],
         ),
         class_name="w-full",
     )
@@ -299,26 +399,26 @@ def ingreso_page() -> rx.Component:
         rx.el.div(
             rx.el.label(
                 "Talla",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 placeholder="Ej: 40",
                 on_blur=State.set_variant_size,
                 default_value=State.variant_size,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
             ),
             class_name="w-full",
         ),
         rx.el.div(
             rx.el.label(
                 "Color",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 placeholder="Ej: Negro",
                 on_blur=State.set_variant_color,
                 default_value=State.variant_color,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
             ),
             class_name="w-full",
         ),
@@ -329,26 +429,26 @@ def ingreso_page() -> rx.Component:
         rx.el.div(
             rx.el.label(
                 "Nro Lote",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 placeholder="Ej: L123",
                 on_blur=State.set_batch_code,
                 default_value=State.batch_code,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
             ),
             class_name="w-full",
         ),
         rx.el.div(
             rx.el.label(
                 "Vencimiento",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.input(
                 type="date",
                 on_blur=State.set_batch_date,
                 default_value=State.batch_date,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=INPUT_STYLES["default"],
             ),
             class_name="w-full",
         ),
@@ -358,14 +458,14 @@ def ingreso_page() -> rx.Component:
     quantity_field = rx.el.div(
         rx.el.label(
             "Cantidad",
-            class_name="block text-sm font-medium text-slate-600 mb-1",
+            class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
         ),
         rx.el.input(
             type="number",
             key=State.entry_form_key.to_string() + "_qty",
             on_blur=lambda val: State.handle_entry_change("quantity", val),
             on_key_down=lambda key: State.handle_entry_field_keydown(key),
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
             default_value=State.new_entry_item["quantity"].to_string(),
         ),
         class_name="w-full",
@@ -383,7 +483,7 @@ def ingreso_page() -> rx.Component:
         rx.el.div(
             rx.el.label(
                 "Tipo",
-                class_name="block text-sm font-medium text-slate-600 mb-1",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
             ),
             rx.el.select(
                 rx.el.option("Estándar", value="standard"),
@@ -391,7 +491,7 @@ def ingreso_page() -> rx.Component:
                 rx.el.option("Lotes", value="batch"),
                 default_value=State.entry_mode,
                 on_change=State.set_entry_mode,
-                class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                class_name=SELECT_STYLES["default"],
             ),
             class_name="w-full",
         ),
@@ -400,14 +500,14 @@ def ingreso_page() -> rx.Component:
     entry_item_form = rx.el.div(
         rx.el.div(
             rx.el.h2(
-                "AÑADIR PRODUCTOS", class_name="text-lg font-semibold text-slate-700"
+                "AÑADIR PRODUCTOS", class_name=TYPOGRAPHY["section_title"]
             ),
             rx.el.button(
                 rx.icon("eraser", class_name="h-4 w-4"),
                 "Limpiar",
                 on_click=State.clear_entry_item_form,
                 type="button",
-                class_name="flex items-center gap-1.5 h-8 px-3 rounded-md border border-slate-200 bg-white text-slate-600 text-sm hover:bg-slate-50",
+                class_name=BUTTON_STYLES["secondary_sm"],
             ),
             class_name="flex items-center justify-between mb-4",
         ),
@@ -415,7 +515,7 @@ def ingreso_page() -> rx.Component:
             rx.el.div(
                 rx.el.label(
                     "Codigo de Barra",
-                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
                 ),
                 rx.el.form(
                     rx.el.input(
@@ -424,7 +524,7 @@ def ingreso_page() -> rx.Component:
                         key=State.entry_form_key.to_string(),
                         default_value=State.new_entry_item["barcode"],
                         placeholder="Ej: 7791234567890",
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        class_name=INPUT_STYLES["default"],
                         type="text",
                         auto_complete="off",
                     ),
@@ -435,7 +535,7 @@ def ingreso_page() -> rx.Component:
             rx.el.div(
                 rx.el.label(
                     "Descripción",
-                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
                 ),
                 rx.debounce_input(
                     rx.input(
@@ -445,7 +545,7 @@ def ingreso_page() -> rx.Component:
                         ),
                         on_key_down=State.handle_entry_description_keydown,
                         placeholder="Descripción del producto",
-                        class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        class_name=INPUT_STYLES["default"],
                         is_read_only=State.is_existing_product,
                     ),
                     debounce_timeout=600,
@@ -498,7 +598,7 @@ def ingreso_page() -> rx.Component:
             rx.el.div(
                 rx.el.label(
                     "Unidad",
-                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
                 ),
                 rx.el.select(
                     rx.foreach(
@@ -506,21 +606,21 @@ def ingreso_page() -> rx.Component:
                     ),
                     default_value=State.new_entry_item["unit"],
                     on_change=lambda val: State.handle_entry_change("unit", val),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=SELECT_STYLES["default"],
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
             ),
             rx.el.div(
                 rx.el.label(
                     "Precio Compra",
-                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
                 ),
                 rx.el.input(
                     type="number",
                     key=State.entry_form_key.to_string() + "_price",
                     on_blur=lambda val: State.handle_entry_change("price", val),
                     on_key_down=lambda key: State.handle_entry_field_keydown(key),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=INPUT_STYLES["default"],
                     default_value=State.new_entry_item["price"].to_string(),
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
@@ -528,14 +628,14 @@ def ingreso_page() -> rx.Component:
             rx.el.div(
                 rx.el.label(
                     "Precio Venta",
-                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
                 ),
                 rx.el.input(
                     type="number",
                     key=State.entry_form_key.to_string() + "_sprice",
                     on_blur=lambda val: State.handle_entry_change("sale_price", val),
                     on_key_down=lambda key: State.handle_entry_field_keydown(key),
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    class_name=INPUT_STYLES["default"],
                     default_value=State.new_entry_item["sale_price"].to_string(),
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
@@ -543,7 +643,7 @@ def ingreso_page() -> rx.Component:
             rx.el.div(
                 rx.el.label(
                     "Subtotal",
-                    class_name="block text-sm font-medium text-slate-600 mb-1",
+                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
                 ),
                 rx.el.div(
                     State.currency_symbol,
@@ -558,7 +658,7 @@ def ingreso_page() -> rx.Component:
                     "Añadir",
                     id="entry-add-btn",
                     on_click=State.add_item_to_entry,
-                    class_name="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-indigo-600 text-white font-medium hover:bg-indigo-700",
+                    class_name=BUTTON_STYLES["primary"],
                 ),
                 class_name="col-span-12 sm:col-span-4 lg:col-span-2 flex items-end",
             ),
@@ -571,7 +671,7 @@ def ingreso_page() -> rx.Component:
         purchase_header,
         purchase_grid,
         entry_item_form,
-        class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm",
+        class_name=CARD_STYLES["default"],
     )
 
     content = rx.el.div(
@@ -584,44 +684,50 @@ def ingreso_page() -> rx.Component:
         rx.el.div(
             rx.el.h2(
                 "PRODUCTOS A INGRESAR",
-                class_name="text-lg font-semibold text-slate-700 mb-4",
+                class_name=f"{TYPOGRAPHY['section_title']} mb-4",
             ),
+            # Vista móvil: Cards (visible en < md)
+            rx.el.div(
+                rx.foreach(State.new_entry_items, _entry_card),
+                class_name="flex flex-col gap-3 md:hidden",
+            ),
+            # Vista desktop: Tabla (oculta en < md)
             rx.el.div(
                 rx.el.table(
                     rx.el.thead(
                         rx.el.tr(
                             rx.el.th(
-                                "Codigo de Barra", class_name=f"{TABLE_STYLES['header_cell']} hidden lg:table-cell"
+                                "Codigo de Barra", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden lg:table-cell"
                             ),
                             rx.el.th(
-                                "Descripción", class_name=TABLE_STYLES["header_cell"]
+                                "Descripción", scope="col", class_name=TABLE_STYLES["header_cell"]
                             ),
                             rx.el.th(
-                                "Categoría", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
+                                "Categoría", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"
                             ),
                             rx.el.th(
                                 "Cantidad",
-                                class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                                scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                             ),
                             rx.el.th(
                                 "Unidad",
-                                class_name=f"{TABLE_STYLES['header_cell']} text-center hidden md:table-cell",
+                                scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center hidden md:table-cell",
                             ),
                             rx.el.th(
                                 "P. Compra",
-                                class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                             ),
                             rx.el.th(
                                 "P. Venta",
-                                class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell",
+                                scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden lg:table-cell",
                             ),
                             rx.el.th(
                                 "Subtotal",
-                                class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                             ),
                             rx.el.th(
                                 "Acción",
-                                class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                                scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                             ),
                         ),
                         class_name=TABLE_STYLES["header"],
@@ -629,7 +735,7 @@ def ingreso_page() -> rx.Component:
                     rx.el.tbody(rx.foreach(State.new_entry_items, item_entry_row)),
                     class_name="w-full",
                 ),
-                class_name="overflow-x-auto",
+                class_name="hidden md:block overflow-x-auto",
             ),
             rx.cond(
                 State.new_entry_items.length() == 0,
@@ -652,13 +758,13 @@ def ingreso_page() -> rx.Component:
                 rx.el.button(
                     "Confirmar Ingreso",
                     on_click=State.confirm_entry,
-                    class_name="w-full sm:w-auto bg-green-600 text-white h-10 px-5 rounded-md hover:bg-green-700 font-medium",
+                    class_name=f"{BUTTON_STYLES['success']} w-full sm:w-auto",
                 ),
                 class_name="pt-4 mt-4 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4",
             ),
-            class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4",
+            class_name=f"{CARD_STYLES['default']} flex flex-col {SPACING['card_gap']}",
         ),
-        class_name="p-4 sm:p-6 w-full flex flex-col gap-4",
+        class_name=f"p-4 sm:p-6 w-full flex flex-col {SPACING['card_gap']}",
     )
 
     return permission_guard(

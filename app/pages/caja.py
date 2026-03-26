@@ -5,6 +5,9 @@ from app.components.ui import (
   filter_action_buttons,
   section_header,
   BUTTON_STYLES,
+  BADGE_STYLES,
+  CARD_STYLES,
+  TYPOGRAPHY,
   modal_container,
   status_badge,
   pagination_controls,
@@ -30,7 +33,7 @@ def cashbox_filters() -> rx.Component:
   )
 
   toggle_section = rx.el.div(
-    rx.el.label("Mostrar adelantos", class_name="text-sm font-medium text-slate-600"),
+    rx.el.label("Mostrar adelantos", class_name=TYPOGRAPHY["label_secondary"]),
     rx.el.div(
       toggle_switch(
         checked=State.show_cashbox_advances,
@@ -38,11 +41,11 @@ def cashbox_filters() -> rx.Component:
       ),
       rx.el.span(
         "Incluir adelantos en el listado",
-        class_name="text-sm text-slate-600",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="flex items-center gap-2",
     ),
-    class_name="flex flex-col gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2",
+    class_name=f"{CARD_STYLES['compact']} flex flex-col gap-2",
   )
 
   return rx.el.div(
@@ -108,10 +111,10 @@ def cashbox_payments_header() -> rx.Component:
 
   return rx.el.div(
     rx.el.div(
-      rx.el.h2("LISTADO DE PAGOS", class_name="text-lg font-semibold text-slate-900"),
+      rx.el.h2("LISTADO DE PAGOS", class_name=TYPOGRAPHY["section_title"]),
       rx.el.p(
         "Ventas registradas según el rango seleccionado.",
-        class_name="text-sm text-slate-500",
+        class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="flex flex-col gap-1",
     ),
@@ -119,7 +122,7 @@ def cashbox_payments_header() -> rx.Component:
       rx.el.span(
         rx.icon("calendar", class_name="h-3.5 w-3.5 text-slate-400"),
         date_range,
-        class_name="inline-flex items-center gap-1.5 rounded-full bg-slate-100/70 px-3 py-1 text-[11px] font-semibold text-slate-600",
+        class_name="inline-flex items-center gap-1.5 rounded-full bg-slate-100/70 px-3 py-1 text-xs font-semibold text-slate-600",
       ),
       rx.el.span(
         rx.cond(
@@ -129,8 +132,8 @@ def cashbox_payments_header() -> rx.Component:
         ),
         class_name=rx.cond(
           State.show_cashbox_advances,
-          "inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700",
-          "inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-semibold text-amber-700",
+          BADGE_STYLES["success"],
+          BADGE_STYLES["warning"],
         ),
       ),
       rx.el.span(
@@ -138,7 +141,7 @@ def cashbox_payments_header() -> rx.Component:
         State.cashbox_current_page.to_string(),
         " de ",
         State.cashbox_total_pages.to_string(),
-        class_name="inline-flex items-center rounded-full bg-slate-100/70 px-3 py-1 text-[11px] font-semibold text-slate-600",
+        class_name="inline-flex items-center rounded-full bg-slate-100/70 px-3 py-1 text-xs font-semibold text-slate-600",
       ),
       class_name="flex flex-wrap items-center gap-2",
     ),
@@ -166,7 +169,7 @@ def cashbox_opening_card() -> rx.Component:
               "CAJA ABIERTA",
               "APERTURA DE CAJA REQUIRIDA",
             ),
-            class_name="text-sm font-semibold text-slate-900",
+            class_name=TYPOGRAPHY["label"],
           ),
           rx.el.p(
             rx.cond(
@@ -174,7 +177,7 @@ def cashbox_opening_card() -> rx.Component:
               "La caja sigue abierta hasta que confirmes el cierre.",
               "Ingresa el monto inicial para comenzar la jornada.",
             ),
-            class_name="text-[11px] text-slate-600",
+            class_name=TYPOGRAPHY["caption"],
           ),
           class_name="flex flex-col",
         ),
@@ -186,19 +189,19 @@ def cashbox_opening_card() -> rx.Component:
           rx.el.div(
             rx.el.span(
               "Monto inicial",
-              class_name="text-xs uppercase tracking-wide text-slate-500",
+              class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide",
             ),
             rx.el.span(
               State.currency_symbol,
               State.cashbox_opening_amount_display,
-              class_name="text-base font-semibold text-slate-900",
+              class_name=TYPOGRAPHY["mono_value"],
             ),
             class_name="flex flex-col gap-0.5 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-1.5",
           ),
           rx.el.div(
             rx.el.span(
               "Apertura",
-              class_name="text-xs uppercase tracking-wide text-slate-500",
+              class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide",
             ),
             rx.el.span(
               rx.cond(
@@ -206,7 +209,7 @@ def cashbox_opening_card() -> rx.Component:
                 "Sin registro",
                 State.cashbox_opening_time,
               ),
-              class_name="text-sm font-medium text-slate-800",
+              class_name=TYPOGRAPHY["label"],
             ),
             class_name="flex flex-col gap-0.5 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5",
           ),
@@ -217,7 +220,7 @@ def cashbox_opening_card() -> rx.Component:
       class_name="flex flex-col md:flex-row justify-between gap-2",
     ),
     rx.el.div(
-      rx.el.label("Caja inicial", class_name="text-sm font-medium text-slate-800"),
+      rx.el.label("Caja inicial", class_name=TYPOGRAPHY["label"]),
       rx.el.form(
         rx.el.div(
           rx.el.input(
@@ -262,7 +265,7 @@ def cashbox_opening_card() -> rx.Component:
       ),
       rx.el.p(
         "Consejo: registra el efectivo inicial real para un cuadre correcto al cierre.",
-        class_name="text-[11px] text-slate-500",
+        class_name=TYPOGRAPHY["caption"],
       ),
       class_name="flex flex-col gap-1",
     ),
@@ -292,12 +295,12 @@ def sale_items_list(
           item["quantity"].to_string(),
           " x ",
           item["sale_price"].to_string(),
-          class_name="text-[11px] text-slate-500",
+          class_name=TYPOGRAPHY["caption"],
         ),
         rx.el.span(
           State.currency_symbol,
           item["subtotal"].to_string(),
-          class_name="text-[11px] font-semibold text-slate-700",
+          class_name="text-xs font-semibold text-slate-700",
         ),
         class_name="flex justify-between items-center",
       ),
@@ -320,7 +323,7 @@ def sale_items_list(
           "Ver ",
           hidden_count.to_string(),
           " item(s) más",
-          class_name="text-[11px] text-indigo-600 font-medium",
+          class_name="text-xs text-indigo-600 font-medium",
         ),
         class_name="pt-1",
       ),
@@ -340,14 +343,104 @@ def render_payment_details(details: rx.Var[str]) -> rx.Component:
       rx.el.span(
         rx.icon("info", class_name="h-3 w-3"),
         "Detalle",
-        class_name="inline-flex items-center gap-1 rounded-full bg-slate-100/80 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-200 cursor-help",
+        class_name="inline-flex items-center gap-1 rounded-full bg-slate-100/80 px-2 py-0.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 cursor-help",
       ),
       content=details,
       side="bottom",
       align="start",
       side_offset=6,
     ),
-    rx.el.p(details, class_name="text-[11px] text-slate-500"),
+    rx.el.p(details, class_name=TYPOGRAPHY["caption"]),
+  )
+
+
+# ════════════════════════════════════════════════════════════
+# CARD MÓVIL (vista responsiva para pantallas pequeñas)
+# ════════════════════════════════════════════════════════════
+
+def _cashbox_sale_card(sale: rx.Var[dict]) -> rx.Component:
+  """Card de venta de caja para vista móvil."""
+  return rx.el.div(
+    # Header: Hora + Método de pago
+    rx.el.div(
+      rx.el.span(
+        sale["timestamp"],
+        class_name="font-mono text-xs text-slate-500",
+      ),
+      payment_method_badge(sale["payment_method"]),
+      class_name="flex items-center justify-between gap-2",
+    ),
+    # Body: Usuario + Detalle de pago
+    rx.el.div(
+      rx.el.div(
+        rx.el.span(sale["user"], class_name="text-sm font-medium text-slate-800"),
+        render_payment_details(sale["payment_details"]),
+        class_name="flex flex-col gap-0.5",
+      ),
+      rx.cond(
+        sale["is_deleted"],
+        rx.el.div(
+          info_badge("Venta eliminada", variant="danger"),
+          rx.el.p(
+            sale["delete_reason"],
+            class_name="text-xs text-red-600 mt-1",
+          ),
+          class_name="mt-1",
+        ),
+        rx.fragment(),
+      ),
+      class_name="flex flex-col gap-1 mt-2",
+    ),
+    # Items preview
+    rx.el.div(
+      sale_items_list(
+        sale["items"],
+        sale["items_preview"],
+        sale["items_hidden_count"],
+        sale["sale_id"],
+      ),
+      on_click=lambda _, sale_id=sale["sale_id"]: State.toggle_cashbox_sale_detail(sale_id),
+      class_name="mt-2 cursor-pointer",
+    ),
+    # Footer: Monto + Acciones
+    rx.el.div(
+      rx.el.span(
+        State.currency_symbol,
+        sale["amount"].to_string(),
+        class_name="text-base font-semibold tabular-nums text-slate-900",
+      ),
+      rx.el.div(
+        rx.el.button(
+          rx.icon("printer", class_name="h-4 w-4"),
+          " Reimprimir",
+          on_click=lambda _, sale_id=sale["sale_id"]: State.reprint_sale_receipt(sale_id),
+          disabled=sale["is_deleted"],
+          title="Reimprimir",
+          aria_label="Reimprimir",
+          class_name=rx.cond(
+            sale["is_deleted"],
+            "inline-flex items-center gap-1 text-xs text-slate-300 cursor-not-allowed",
+            BUTTON_STYLES["link_primary"],
+          ),
+        ),
+        rx.el.button(
+          rx.icon("trash-2", class_name="h-4 w-4"),
+          " Eliminar",
+          on_click=lambda _, sale_id=sale["sale_id"]: State.open_sale_delete_modal(sale_id),
+          disabled=sale["is_deleted"] | ~State.current_user["privileges"]["delete_sales"],
+          title="Eliminar",
+          aria_label="Eliminar",
+          class_name=rx.cond(
+            sale["is_deleted"] | ~State.current_user["privileges"]["delete_sales"],
+            "inline-flex items-center gap-1 text-xs text-slate-300 cursor-not-allowed",
+            BUTTON_STYLES["link_danger"],
+          ),
+        ),
+        class_name="flex items-center gap-3",
+      ),
+      class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+    ),
+    class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
   )
 
 
@@ -410,7 +503,7 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
           class_name=rx.cond(
             sale["is_deleted"],
             "p-2 rounded-md text-slate-300 bg-transparent cursor-not-allowed",
-            "p-2 rounded-md text-indigo-600 hover:bg-indigo-50 active:bg-indigo-100 transition-colors",
+            BUTTON_STYLES["icon_primary"],
           ),
         ),
         rx.el.button(
@@ -422,7 +515,7 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
           class_name=rx.cond(
             sale["is_deleted"] | ~State.current_user["privileges"]["delete_sales"],
             "p-2 rounded-md text-slate-300 bg-transparent cursor-not-allowed",
-            "p-2 rounded-md text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors",
+            BUTTON_STYLES["icon_danger"],
           ),
         ),
         class_name=(
@@ -468,7 +561,7 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
           on_click=lambda _, log_id=log["id"]: State.show_cashbox_log(log_id),
           title="Visualizar",
           aria_label="Visualizar",
-          class_name="p-2 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors",
+          class_name=BUTTON_STYLES["icon_primary"],
         ),
         rx.cond(
           log["action"] == "cierre",
@@ -479,7 +572,7 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
             ),
             title="Descargar PDF",
             aria_label="Descargar PDF",
-            class_name="p-2 rounded-md text-red-600 hover:bg-red-50 transition-colors",
+            class_name=BUTTON_STYLES["icon_danger"],
           ),
           rx.fragment(),
         ),
@@ -492,7 +585,7 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
             ),
             title="Reimprimir resumen",
             aria_label="Reimprimir resumen",
-            class_name="p-2 rounded-md text-indigo-600 hover:bg-indigo-50 transition-colors",
+            class_name=BUTTON_STYLES["icon_primary"],
           ),
           rx.fragment(),
         ),
@@ -515,17 +608,17 @@ def cashbox_logs_section() -> rx.Component:
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Fecha y Hora", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Evento", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Fecha y Hora", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Evento", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
             rx.el.th(
-              "Monto Apertura", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden md:table-cell"
+              "Monto Apertura", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right hidden md:table-cell"
             ),
             rx.el.th(
-              "Monto Cierre", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+              "Monto Cierre", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
             ),
             rx.el.th(
-              "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+              "Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
             ),
             class_name=TABLE_STYLES["header"],
           )
@@ -600,7 +693,7 @@ def close_cashbox_modal() -> rx.Component:
       rx.el.div(
         rx.el.h4(
           "Resumen de caja",
-          class_name="text-sm font-semibold text-slate-700 mb-2",
+          class_name=f"{TYPOGRAPHY['card_title']} mb-2",
         ),
         rx.el.table(
           rx.el.tbody(
@@ -647,16 +740,16 @@ def close_cashbox_modal() -> rx.Component:
       rx.el.div(
         rx.el.h4(
           "Ingresos por metodo",
-          class_name="text-sm font-semibold text-slate-700 mb-2",
+          class_name=f"{TYPOGRAPHY['card_title']} mb-2",
         ),
         rx.el.table(
           rx.el.thead(
             rx.el.tr(
-              rx.el.th("Metodo", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Metodo", scope="col", class_name=TABLE_STYLES["header_cell"]),
               rx.el.th(
-                "Movimientos", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+                "Movimientos", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
               ),
-              rx.el.th("Total", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+              rx.el.th("Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
               class_name=TABLE_STYLES["header"],
             )
           ),
@@ -702,16 +795,16 @@ def close_cashbox_modal() -> rx.Component:
       rx.el.div(
         rx.el.h4(
           "Detalle de ingresos",
-          class_name="text-sm font-semibold text-slate-700 mb-2",
+          class_name=f"{TYPOGRAPHY['card_title']} mb-2",
         ),
         rx.el.div(
           rx.el.table(
             rx.el.thead(
               rx.el.tr(
-                rx.el.th("Hora", class_name=TABLE_STYLES["header_cell"]),
-                rx.el.th("Concepto", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Hora", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Concepto", scope="col", class_name=TABLE_STYLES["header_cell"]),
                 rx.el.th(
-                  "Monto", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+                  "Monto", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
                 ),
                 class_name=TABLE_STYLES["header"],
               )
@@ -760,10 +853,7 @@ def close_cashbox_modal() -> rx.Component:
           rx.icon("file-text", class_name="h-4 w-4"),
           "Descargar PDF",
           on_click=State.export_cashbox_close_pdf,
-          class_name=(
-            "flex items-center gap-2 bg-red-600 text-white px-4 py-2 "
-            "rounded-md hover:bg-red-700 transition-colors"
-          ),
+          class_name=BUTTON_STYLES["danger"],
         ),
         rx.fragment(),
       ),
@@ -771,7 +861,7 @@ def close_cashbox_modal() -> rx.Component:
         rx.icon("lock", class_name="h-4 w-4"),
         "Confirmar Cierre",
         on_click=State.close_cashbox_day,
-        class_name="flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 min-h-[42px]",
+        class_name=f"{BUTTON_STYLES['primary']} min-h-[42px]",
       ),
       class_name="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 mt-4",
     ),
@@ -792,12 +882,12 @@ def cashbox_log_modal() -> rx.Component:
         rx.el.div(
           rx.el.div(
             rx.el.div(
-              rx.el.span("Fecha y hora", class_name="text-xs uppercase tracking-wide text-slate-500"),
+              rx.el.span("Fecha y hora", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
               rx.el.p(State.cashbox_log_selected["timestamp"], class_name="text-sm font-semibold text-slate-900"),
               class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-              rx.el.span("Evento", class_name="text-xs uppercase tracking-wide text-slate-500"),
+              rx.el.span("Evento", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
               rx.cond(
                 State.cashbox_log_selected["action"] == "apertura",
                 status_badge("Apertura", status_colors={"apertura": ("bg-emerald-100", "text-emerald-700")}),
@@ -806,7 +896,7 @@ def cashbox_log_modal() -> rx.Component:
               class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-              rx.el.span("Usuario", class_name="text-xs uppercase tracking-wide text-slate-500"),
+              rx.el.span("Usuario", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
               rx.el.p(State.cashbox_log_selected["user"], class_name="text-sm font-semibold text-slate-900"),
               class_name="flex flex-col gap-1",
             ),
@@ -814,12 +904,12 @@ def cashbox_log_modal() -> rx.Component:
           ),
           rx.el.div(
             rx.el.div(
-              rx.el.span("Monto apertura", class_name="text-xs uppercase tracking-wide text-slate-500"),
+              rx.el.span("Monto apertura", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
               rx.el.p(State.currency_symbol, State.cashbox_log_selected["opening_amount"].to_string(), class_name="text-lg font-semibold text-slate-900"),
               class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-              rx.el.span("Monto cierre", class_name="text-xs uppercase tracking-wide text-slate-500"),
+              rx.el.span("Monto cierre", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
               rx.el.p(State.currency_symbol, State.cashbox_log_selected["closing_total"].to_string(), class_name="text-lg font-semibold text-slate-900"),
               class_name="flex flex-col gap-1",
             ),
@@ -838,8 +928,8 @@ def cashbox_log_modal() -> rx.Component:
                 rx.foreach(
                   State.cashbox_log_selected["totals_by_method"],
                   lambda item: rx.el.li(
-                    rx.el.span(item["method"], class_name="text-sm text-slate-700"),
-                    rx.el.span(State.currency_symbol, item["amount"].to_string(), class_name="text-sm font-semibold text-slate-900"),
+                    rx.el.span(item["method"], class_name=TYPOGRAPHY["body"]),
+                    rx.el.span(State.currency_symbol, item["amount"].to_string(), class_name=TYPOGRAPHY["mono_value"]),
                     class_name="flex items-center justify-between",
                   ),
                 ),
@@ -849,14 +939,14 @@ def cashbox_log_modal() -> rx.Component:
             ),
           ),
           rx.el.div(
-            rx.el.span("Notas", class_name="text-xs uppercase tracking-wide text-slate-500"),
+            rx.el.span("Notas", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
             rx.el.p(
               rx.cond(
                 State.cashbox_log_selected["notes"] == "",
                 "Sin notas adicionales.",
                 State.cashbox_log_selected["notes"],
               ),
-              class_name="text-sm text-slate-700",
+              class_name=TYPOGRAPHY["body"],
             ),
             class_name="flex flex-col gap-1",
           ),
@@ -891,18 +981,18 @@ def petty_cash_modal() -> rx.Component:
         ),
         rx.el.div(
           rx.el.div(
-            rx.el.label("Cantidad", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Cantidad", class_name=TYPOGRAPHY["label"]),
             rx.el.input(
               type="number",
               step="0.01",
               default_value=State.petty_cash_quantity,
               on_blur=State.set_petty_cash_quantity,
-              class_name=INPUT_STYLES,
+              class_name=INPUT_STYLES["default"],
             ),
             class_name="flex flex-col gap-2"
           ),
           rx.el.div(
-            rx.el.label("Unidad", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Unidad", class_name=TYPOGRAPHY["label"]),
             rx.el.select(
               rx.el.option("Unidad", value="Unidad"),
               rx.el.option("Kg", value="Kg"),
@@ -912,7 +1002,7 @@ def petty_cash_modal() -> rx.Component:
               rx.el.option("Otro", value="Otro"),
               default_value=State.petty_cash_unit,
               on_change=State.set_petty_cash_unit,
-              class_name=INPUT_STYLES,
+              class_name=INPUT_STYLES["default"],
             ),
             class_name="flex flex-col gap-2"
           ),
@@ -920,7 +1010,7 @@ def petty_cash_modal() -> rx.Component:
         ),
         rx.el.div(
           rx.el.div(
-            rx.el.label("Costo Unitario", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Costo Unitario", class_name=TYPOGRAPHY["label"]),
             rx.el.div(
               rx.el.span(State.currency_symbol, class_name="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium"),
               rx.el.input(
@@ -929,14 +1019,14 @@ def petty_cash_modal() -> rx.Component:
                 default_value=State.petty_cash_cost,
                 on_blur=State.set_petty_cash_cost,
                 placeholder="0.00",
-                class_name="w-full h-10 pl-8 pr-4 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all",
+                class_name=f"{INPUT_STYLES['default']} pl-8 pr-4",
               ),
               class_name="relative"
             ),
             class_name="flex flex-col gap-2"
           ),
           rx.el.div(
-            rx.el.label("Total", class_name="text-sm font-medium text-slate-700"),
+            rx.el.label("Total", class_name=TYPOGRAPHY["label"]),
             rx.el.div(
               rx.el.span(State.currency_symbol, class_name="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium"),
               rx.el.input(
@@ -945,7 +1035,7 @@ def petty_cash_modal() -> rx.Component:
                 value=State.petty_cash_amount,
                 read_only=True,
                 placeholder="0.00",
-                class_name="w-full h-10 pl-8 pr-4 text-sm bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all",
+                class_name=f"{INPUT_STYLES['disabled']} pl-8 pr-4",
               ),
               class_name="relative"
             ),
@@ -978,13 +1068,13 @@ def petty_cash_view() -> rx.Component:
     rx.el.div(
       rx.el.div(
         rx.el.div(
-          rx.el.h2("MOVIMIENTOS DE CAJA CHICA", class_name="text-xl font-semibold text-slate-800"),
-          rx.el.p("Gestión de gastos y salidas de efectivo.", class_name="text-sm text-slate-500"),
+          rx.el.h2("MOVIMIENTOS DE CAJA CHICA", class_name=TYPOGRAPHY["section_title"]),
+          rx.el.p("Gestión de gastos y salidas de efectivo.", class_name=TYPOGRAPHY["body_secondary"]),
           class_name="flex flex-col mb-4 lg:mb-0",
         ),
         rx.el.div(
           rx.el.div(
-            rx.el.span("Saldo Actual", class_name="text-xs font-medium text-slate-500 uppercase tracking-wider"),
+            rx.el.span("Saldo Actual", class_name=f"{TYPOGRAPHY['caption']} font-medium uppercase tracking-wider"),
             rx.el.span(
               State.currency_symbol + " " + State.cashbox_opening_amount_display,
               class_name="text-2xl font-bold text-indigo-600"
@@ -1016,25 +1106,25 @@ def petty_cash_view() -> rx.Component:
             rx.el.tr(
               rx.el.th(
                 "Fecha y Hora",
-                class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap",
+                scope="col", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap",
               ),
               rx.el.th(
-                "Usuario", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap hidden md:table-cell"
+                "Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap hidden md:table-cell"
               ),
               rx.el.th(
-                "Motivo", class_name=f"{TABLE_STYLES['header_cell']} min-w-[180px]"
+                "Motivo", scope="col", class_name=f"{TABLE_STYLES['header_cell']} min-w-[180px]"
               ),
               rx.el.th(
-                "Cant.", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap hidden md:table-cell"
+                "Cant.", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap hidden md:table-cell"
               ),
               rx.el.th(
-                "Unidad", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap hidden md:table-cell"
+                "Unidad", scope="col", class_name=f"{TABLE_STYLES['header_cell']} whitespace-nowrap hidden md:table-cell"
               ),
               rx.el.th(
-                "Costo", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap hidden md:table-cell"
+                "Costo", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap hidden md:table-cell"
               ),
               rx.el.th(
-                "Total", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap"
+                "Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right whitespace-nowrap"
               ),
               class_name=TABLE_STYLES["header"],
             )
@@ -1084,7 +1174,7 @@ def petty_cash_view() -> rx.Component:
         ),
         rx.fragment(),
       ),
-      class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm w-full",
+      class_name=f"{CARD_STYLES['default']} w-full",
     ),
     petty_cash_modal(),
     class_name="space-y-4 w-full",
@@ -1107,19 +1197,25 @@ def cashbox_page() -> rx.Component:
             cashbox_filters(),
             class_name="bg-slate-50/80 border border-slate-200/80 rounded-xl p-4 sm:p-5",
           ),
+          # Vista móvil: Cards (visible en < md)
+          rx.el.div(
+            rx.foreach(State.filtered_cashbox_sales, _cashbox_sale_card),
+            class_name="flex flex-col gap-3 md:hidden",
+          ),
+          # Vista desktop: Tabla (oculta en < md)
           rx.el.div(
             rx.el.table(
               rx.el.thead(
                 rx.el.tr(
-                  rx.el.th("Fecha y Hora", class_name=TABLE_STYLES["header_cell"]),
-                  rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"]),
-                  rx.el.th("Metodo", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Fecha y Hora", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Usuario", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Metodo", scope="col", class_name=TABLE_STYLES["header_cell"]),
                   rx.el.th(
-                    "Total", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+                    "Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
                   ),
-                  rx.el.th("Detalle", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Detalle", scope="col", class_name=TABLE_STYLES["header_cell"]),
                   rx.el.th(
-                    "Acciones", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+                    "Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
                   ),
                   class_name=TABLE_STYLES["header"],
                 )
@@ -1129,7 +1225,7 @@ def cashbox_page() -> rx.Component:
               ),
               class_name="min-w-full",
             ),
-            class_name="overflow-x-auto rounded-xl border border-slate-200 bg-white",
+            class_name="hidden md:block overflow-x-auto rounded-xl border border-slate-200 bg-white",
           ),
           rx.cond(
             State.filtered_cashbox_sales.length() == 0,

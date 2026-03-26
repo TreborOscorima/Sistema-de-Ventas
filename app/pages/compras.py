@@ -1,7 +1,13 @@
 import reflex as rx
 from app.state import State
 from app.components.ui import (
+  BUTTON_STYLES,
+  CARD_STYLES,
+  INPUT_STYLES,
+  SELECT_STYLES,
+  SPACING,
   TABLE_STYLES,
+  TYPOGRAPHY,
   modal_container,
   page_title,
   pagination_controls,
@@ -17,14 +23,14 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
       on_click=lambda _: State.open_purchase_detail(purchase["id"]),
       title="Ver detalle",
       aria_label="Ver detalle",
-      class_name="px-3 py-2 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700",
+      class_name=BUTTON_STYLES["primary_sm"],
     ),
     rx.cond(
       State.can_manage_compras,
       rx.el.button(
         rx.icon("pencil", class_name="h-4 w-4"),
         on_click=lambda _: State.open_purchase_edit_modal(purchase["id"]),
-        class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
+        class_name=BUTTON_STYLES["icon_primary"],
         title="Editar",
         aria_label="Editar",
       ),
@@ -35,7 +41,7 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
       rx.el.button(
         rx.icon("trash-2", class_name="h-4 w-4"),
         on_click=lambda _: State.open_purchase_delete_modal(purchase["id"]),
-        class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+        class_name=BUTTON_STYLES["icon_danger"],
         title="Eliminar",
         aria_label="Eliminar",
       ),
@@ -51,7 +57,7 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
           purchase["registered_time"] != "",
           rx.el.span(
             purchase["registered_time"],
-            class_name="text-xs text-slate-500",
+            class_name=TYPOGRAPHY["caption"],
           ),
           rx.fragment(),
         ),
@@ -63,7 +69,7 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
       rx.el.div(
         rx.el.span(purchase["supplier_name"], class_name="font-medium"),
         rx.el.span(
-          purchase["supplier_tax_id"], class_name="text-xs text-slate-500"
+          purchase["supplier_tax_id"], class_name=TYPOGRAPHY["caption"]
         ),
         class_name="flex flex-col",
       ),
@@ -100,6 +106,160 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
   )
 
 
+def _purchase_card(purchase: rx.Var) -> rx.Component:
+  """Card de compra para vista móvil."""
+  return rx.el.div(
+    # Header: Fecha + Total
+    rx.el.div(
+      rx.el.div(
+        rx.el.span(purchase["issue_date"], class_name="font-medium text-slate-900 text-sm"),
+        rx.cond(
+          purchase["registered_time"] != "",
+          rx.el.span(purchase["registered_time"], class_name=TYPOGRAPHY["caption"]),
+          rx.fragment(),
+        ),
+        class_name="flex flex-col",
+      ),
+      rx.el.div(
+        rx.el.span(
+          State.currency_symbol,
+          " ",
+          purchase["total_amount"].to_string(),
+          class_name="font-semibold tabular-nums text-slate-900",
+        ),
+        rx.el.span(purchase["currency_code"], class_name=TYPOGRAPHY["caption"]),
+        class_name="flex flex-col items-end",
+      ),
+      class_name="flex items-start justify-between gap-2",
+    ),
+    # Body: Proveedor + Items
+    rx.el.div(
+      rx.el.div(
+        rx.el.span(purchase["supplier_name"], class_name="text-sm font-medium text-slate-800"),
+        rx.el.span(purchase["supplier_tax_id"], class_name=TYPOGRAPHY["caption"]),
+        class_name="flex flex-col",
+      ),
+      rx.el.div(
+        rx.icon("package", class_name="h-3.5 w-3.5 text-slate-400"),
+        rx.el.span(
+          purchase["items_count"].to_string(),
+          " productos",
+          class_name=TYPOGRAPHY["caption"],
+        ),
+        class_name="flex items-center gap-1",
+      ),
+      class_name="flex flex-col gap-1.5 mt-2",
+    ),
+    # Footer: Acciones
+    rx.el.div(
+      rx.el.button(
+        rx.icon("eye", class_name="h-4 w-4"),
+        " Detalle",
+        on_click=lambda _: State.open_purchase_detail(purchase["id"]),
+        title="Ver detalle",
+        aria_label="Ver detalle",
+        class_name=BUTTON_STYLES["link_primary"],
+      ),
+      rx.el.div(
+        rx.cond(
+          State.can_manage_compras,
+          rx.el.button(
+            rx.icon("pencil", class_name="h-4 w-4"),
+            on_click=lambda _: State.open_purchase_edit_modal(purchase["id"]),
+            class_name=BUTTON_STYLES["icon_primary"],
+            title="Editar",
+            aria_label="Editar",
+          ),
+          rx.fragment(),
+        ),
+        rx.cond(
+          State.can_manage_compras,
+          rx.el.button(
+            rx.icon("trash-2", class_name="h-4 w-4"),
+            on_click=lambda _: State.open_purchase_delete_modal(purchase["id"]),
+            class_name=BUTTON_STYLES["icon_danger"],
+            title="Eliminar",
+            aria_label="Eliminar",
+          ),
+          rx.fragment(),
+        ),
+        class_name="flex items-center gap-2",
+      ),
+      class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+    ),
+    class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
+  )
+
+
+def _supplier_card(supplier: rx.Var) -> rx.Component:
+  """Card de proveedor para vista móvil."""
+  actions = rx.el.div(
+    rx.el.button(
+      rx.icon("pencil", class_name="h-4 w-4"),
+      on_click=lambda _: State.open_supplier_modal(supplier),
+      title="Editar proveedor",
+      aria_label="Editar proveedor",
+      class_name=BUTTON_STYLES["icon_primary"],
+    ),
+    rx.el.button(
+      rx.icon("trash-2", class_name="h-4 w-4"),
+      on_click=lambda _: State.delete_supplier(supplier["id"]),
+      title="Eliminar proveedor",
+      aria_label="Eliminar proveedor",
+      class_name=BUTTON_STYLES["icon_danger"],
+    ),
+    class_name="flex items-center gap-2",
+  )
+  return rx.el.div(
+    # Header: Nombre + Acciones
+    rx.el.div(
+      rx.el.div(
+        rx.el.span(supplier["name"], class_name="font-medium text-slate-900 text-sm"),
+        rx.el.span(supplier["tax_id"], class_name=TYPOGRAPHY["caption"]),
+        class_name="flex flex-col",
+      ),
+      rx.cond(
+        State.can_manage_proveedores,
+        actions,
+        rx.el.span("Solo lectura", class_name=TYPOGRAPHY["caption"]),
+      ),
+      class_name="flex items-start justify-between gap-2",
+    ),
+    # Body: Contacto
+    rx.el.div(
+      rx.cond(
+        supplier["phone"] != "",
+        rx.el.div(
+          rx.icon("phone", class_name="h-3.5 w-3.5 text-slate-400"),
+          rx.el.span(supplier["phone"], class_name="text-sm text-slate-600"),
+          class_name="flex items-center gap-1.5",
+        ),
+        rx.fragment(),
+      ),
+      rx.cond(
+        supplier["email"] != "",
+        rx.el.div(
+          rx.icon("mail", class_name="h-3.5 w-3.5 text-slate-400"),
+          rx.el.span(supplier["email"], class_name="text-sm text-slate-600"),
+          class_name="flex items-center gap-1.5",
+        ),
+        rx.fragment(),
+      ),
+      rx.cond(
+        supplier["address"] != "",
+        rx.el.div(
+          rx.icon("map-pin", class_name="h-3.5 w-3.5 text-slate-400"),
+          rx.el.span(supplier["address"], class_name="text-sm text-slate-600"),
+          class_name="flex items-center gap-1.5",
+        ),
+        rx.fragment(),
+      ),
+      class_name="flex flex-col gap-1.5 mt-2",
+    ),
+    class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
+  )
+
+
 def supplier_row(supplier: rx.Var[dict]) -> rx.Component:
   actions = rx.el.div(
     rx.el.button(
@@ -107,14 +267,14 @@ def supplier_row(supplier: rx.Var[dict]) -> rx.Component:
       on_click=lambda _: State.open_supplier_modal(supplier),
       title="Editar proveedor",
       aria_label="Editar proveedor",
-      class_name="p-2 text-blue-500 hover:bg-blue-100 rounded-full",
+      class_name=BUTTON_STYLES["icon_primary"],
     ),
     rx.el.button(
       rx.icon("trash-2", class_name="h-4 w-4"),
       on_click=lambda _: State.delete_supplier(supplier["id"]),
       title="Eliminar proveedor",
       aria_label="Eliminar proveedor",
-      class_name="p-2 text-red-500 hover:bg-red-100 rounded-full",
+      class_name=BUTTON_STYLES["icon_danger"],
     ),
     class_name="flex items-center justify-center gap-2",
   )
@@ -153,19 +313,19 @@ def purchase_detail_modal() -> rx.Component:
   """Modal de detalle de una compra."""
   summary_grid = rx.el.div(
     rx.el.div(
-      rx.el.p("Proveedor", class_name="text-xs text-slate-500"),
+      rx.el.p("Proveedor", class_name=TYPOGRAPHY["caption"]),
       rx.el.p(
         State.purchase_detail["supplier_name"],
         class_name="font-semibold",
       ),
       rx.el.p(
         State.purchase_detail["supplier_tax_id"],
-        class_name="text-xs text-slate-500",
+        class_name=TYPOGRAPHY["caption"],
       ),
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.p("Tipo de documento", class_name="text-xs text-slate-500"),
+      rx.el.p("Tipo de documento", class_name=TYPOGRAPHY["caption"]),
       rx.el.p(
         State.purchase_detail["doc_type"],
         class_name="font-semibold",
@@ -173,7 +333,7 @@ def purchase_detail_modal() -> rx.Component:
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.p("Serie", class_name="text-xs text-slate-500"),
+      rx.el.p("Serie", class_name=TYPOGRAPHY["caption"]),
       rx.el.p(
         State.purchase_detail["series"],
         class_name="font-semibold",
@@ -181,7 +341,7 @@ def purchase_detail_modal() -> rx.Component:
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.p("Numero", class_name="text-xs text-slate-500"),
+      rx.el.p("Numero", class_name=TYPOGRAPHY["caption"]),
       rx.el.p(
         State.purchase_detail["number"],
         class_name="font-semibold",
@@ -193,7 +353,7 @@ def purchase_detail_modal() -> rx.Component:
 
   secondary_grid = rx.el.div(
     rx.el.div(
-      rx.el.p("Usuario", class_name="text-xs text-slate-500"),
+      rx.el.p("Usuario", class_name=TYPOGRAPHY["caption"]),
       rx.el.p(
         State.purchase_detail["user"],
         class_name="font-semibold",
@@ -201,7 +361,7 @@ def purchase_detail_modal() -> rx.Component:
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.p("Items", class_name="text-xs text-slate-500"),
+      rx.el.p("Items", class_name=TYPOGRAPHY["caption"]),
       rx.el.p(
         State.purchase_detail["items_count"].to_string(),
         class_name="font-semibold",
@@ -209,7 +369,7 @@ def purchase_detail_modal() -> rx.Component:
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.p("Fecha", class_name="text-xs text-slate-500"),
+      rx.el.p("Fecha", class_name=TYPOGRAPHY["caption"]),
       rx.el.p(
         State.purchase_detail["issue_date"],
         class_name="font-semibold",
@@ -218,14 +378,14 @@ def purchase_detail_modal() -> rx.Component:
         State.purchase_detail["registered_time"] != "",
         rx.el.p(
           State.purchase_detail["registered_time"],
-          class_name="text-xs text-slate-500",
+          class_name=TYPOGRAPHY["caption"],
         ),
         rx.fragment(),
       ),
       class_name="flex flex-col gap-1",
     ),
     rx.el.div(
-      rx.el.p("Total", class_name="text-xs text-slate-500"),
+      rx.el.p("Total", class_name=TYPOGRAPHY["caption"]),
       rx.el.p(
         State.currency_symbol,
         State.purchase_detail["total_amount"].to_string(),
@@ -233,7 +393,7 @@ def purchase_detail_modal() -> rx.Component:
       ),
       rx.el.p(
         State.purchase_detail["currency_code"],
-        class_name="text-xs text-slate-500",
+        class_name=TYPOGRAPHY["caption"],
       ),
       class_name="flex flex-col gap-1",
     ),
@@ -249,15 +409,15 @@ def purchase_detail_modal() -> rx.Component:
     rx.el.table(
       rx.el.thead(
         rx.el.tr(
-          rx.el.th("Producto", class_name=TABLE_STYLES["header_cell"]),
+          rx.el.th("Producto", scope="col", class_name=TABLE_STYLES["header_cell"]),
           rx.el.th(
-            "Cantidad", class_name=f"{TABLE_STYLES['header_cell']} text-center"
+            "Cantidad", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
           ),
           rx.el.th(
-            "Costo Unit.", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+            "Costo Unit.", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
           ),
           rx.el.th(
-            "Subtotal", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+            "Subtotal", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
           ),
           class_name=TABLE_STYLES["header"],
         )
@@ -271,7 +431,7 @@ def purchase_detail_modal() -> rx.Component:
                 rx.el.span(item["description"], class_name="font-medium"),
                 rx.el.span(
                   item["barcode"],
-                  class_name="text-xs text-slate-500",
+                  class_name=TYPOGRAPHY["caption"],
                 ),
                 class_name="flex flex-col",
               ),
@@ -323,7 +483,7 @@ def purchase_detail_modal() -> rx.Component:
       rx.el.button(
         "Cerrar",
         on_click=State.close_purchase_detail,
-        class_name="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100",
+        class_name=BUTTON_STYLES["secondary"],
       ),
       class_name="flex justify-end",
     ),
@@ -345,7 +505,7 @@ def purchase_edit_modal() -> rx.Component:
             ),
             rx.el.span(
               supplier["tax_id"],
-              class_name="text-xs text-slate-500",
+              class_name=TYPOGRAPHY["caption"],
             ),
             class_name="flex flex-col text-left",
           ),
@@ -371,7 +531,7 @@ def purchase_edit_modal() -> rx.Component:
         ),
         rx.el.span(
           State.purchase_edit_form["supplier_tax_id"],
-          class_name="text-xs text-slate-500",
+          class_name=TYPOGRAPHY["caption"],
         ),
         class_name="flex flex-col",
       ),
@@ -397,7 +557,7 @@ def purchase_edit_modal() -> rx.Component:
         rx.el.div(
           rx.el.label(
             "Tipo de Documento",
-            class_name="block text-sm font-medium text-slate-600 mb-1",
+            class_name=f"{TYPOGRAPHY['label_secondary']} block mb-1",
           ),
           rx.el.select(
             rx.el.option("Boleta", value="boleta"),
@@ -406,14 +566,14 @@ def purchase_edit_modal() -> rx.Component:
             on_change=lambda value: State.update_purchase_edit_field(
               "doc_type", value
             ),
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=SELECT_STYLES["default"],
           ),
           class_name="w-full",
         ),
         rx.el.div(
           rx.el.label(
             "Serie",
-            class_name="block text-sm font-medium text-slate-600 mb-1",
+            class_name=f"{TYPOGRAPHY['label_secondary']} block mb-1",
           ),
           rx.el.input(
             placeholder="Ej: F001",
@@ -421,7 +581,7 @@ def purchase_edit_modal() -> rx.Component:
             on_blur=lambda value: State.update_purchase_edit_field(
               "series", value
             ),
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
             debounce_timeout=600,
           ),
           class_name="w-full",
@@ -429,7 +589,7 @@ def purchase_edit_modal() -> rx.Component:
         rx.el.div(
           rx.el.label(
             "Numero",
-            class_name="block text-sm font-medium text-slate-600 mb-1",
+            class_name=f"{TYPOGRAPHY['label_secondary']} block mb-1",
           ),
           rx.el.input(
             placeholder="Ej: 000123",
@@ -437,7 +597,7 @@ def purchase_edit_modal() -> rx.Component:
             on_blur=lambda value: State.update_purchase_edit_field(
               "number", value
             ),
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
             debounce_timeout=600,
           ),
           class_name="w-full",
@@ -445,7 +605,7 @@ def purchase_edit_modal() -> rx.Component:
         rx.el.div(
           rx.el.label(
             "Fecha de Emision",
-            class_name="block text-sm font-medium text-slate-600 mb-1",
+            class_name=f"{TYPOGRAPHY['label_secondary']} block mb-1",
           ),
           rx.el.input(
             type="date",
@@ -453,7 +613,7 @@ def purchase_edit_modal() -> rx.Component:
             on_blur=lambda value: State.update_purchase_edit_field(
               "issue_date", value
             ),
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           class_name="w-full",
         ),
@@ -462,7 +622,7 @@ def purchase_edit_modal() -> rx.Component:
       rx.el.div(
         rx.el.label(
           "Notas",
-          class_name="block text-sm font-medium text-slate-600 mb-1",
+          class_name=f"{TYPOGRAPHY['label_secondary']} block mb-1",
         ),
         rx.el.textarea(
           placeholder="Observaciones del documento o compra",
@@ -470,7 +630,7 @@ def purchase_edit_modal() -> rx.Component:
           on_blur=lambda value: State.update_purchase_edit_field(
             "notes", value
           ),
-          class_name="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[80px]",
+          class_name=f"{INPUT_STYLES['default']} min-h-[80px] h-auto py-2",
         ),
         class_name="w-full",
       ),
@@ -484,7 +644,7 @@ def purchase_edit_modal() -> rx.Component:
             placeholder="Buscar por nombre o N° de Registro de Empresa",
             value=State.purchase_edit_supplier_query,
             on_change=State.search_purchase_edit_supplier,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           debounce_timeout=600,
         ),
@@ -497,12 +657,12 @@ def purchase_edit_modal() -> rx.Component:
       rx.el.button(
         "Cancelar",
         on_click=State.close_purchase_edit_modal,
-        class_name="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100",
+        class_name=BUTTON_STYLES["secondary"],
       ),
       rx.el.button(
         "Guardar cambios",
         on_click=State.save_purchase_edit,
-        class_name="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700",
+        class_name=BUTTON_STYLES["primary"],
       ),
       class_name="flex justify-end gap-2",
     ),
@@ -523,7 +683,7 @@ def purchase_delete_modal() -> rx.Component:
         State.purchase_delete_target != None,
         rx.el.div(
           rx.el.div(
-            rx.el.p("Documento", class_name="text-xs text-slate-500"),
+            rx.el.p("Documento", class_name=TYPOGRAPHY["caption"]),
             rx.el.p(
               State.purchase_delete_target["doc_type"],
               class_name="font-semibold",
@@ -531,7 +691,7 @@ def purchase_delete_modal() -> rx.Component:
             class_name="flex flex-col gap-1",
           ),
           rx.el.div(
-            rx.el.p("Serie", class_name="text-xs text-slate-500"),
+            rx.el.p("Serie", class_name=TYPOGRAPHY["caption"]),
             rx.el.p(
               State.purchase_delete_target["series"],
               class_name="font-semibold",
@@ -539,7 +699,7 @@ def purchase_delete_modal() -> rx.Component:
             class_name="flex flex-col gap-1",
           ),
           rx.el.div(
-            rx.el.p("Numero", class_name="text-xs text-slate-500"),
+            rx.el.p("Numero", class_name=TYPOGRAPHY["caption"]),
             rx.el.p(
               State.purchase_delete_target["number"],
               class_name="font-semibold",
@@ -547,14 +707,14 @@ def purchase_delete_modal() -> rx.Component:
             class_name="flex flex-col gap-1",
           ),
           rx.el.div(
-            rx.el.p("Proveedor", class_name="text-xs text-slate-500"),
+            rx.el.p("Proveedor", class_name=TYPOGRAPHY["caption"]),
             rx.el.p(
               State.purchase_delete_target["supplier_name"],
               class_name="font-semibold",
             ),
             rx.el.p(
               State.purchase_delete_target["supplier_tax_id"],
-              class_name="text-xs text-slate-500",
+              class_name=TYPOGRAPHY["caption"],
             ),
             class_name="flex flex-col gap-1",
           ),
@@ -567,13 +727,13 @@ def purchase_delete_modal() -> rx.Component:
       rx.el.button(
         "Cancelar",
         on_click=State.close_purchase_delete_modal,
-        class_name="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100",
+        class_name=BUTTON_STYLES["secondary"],
       ),
       rx.el.button(
         rx.icon("trash-2", class_name="h-4 w-4"),
         "Eliminar",
         on_click=State.delete_purchase,
-        class_name="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700",
+        class_name=BUTTON_STYLES["danger"],
       ),
       class_name="flex justify-end gap-2",
     ),
@@ -589,51 +749,51 @@ def supplier_modal() -> rx.Component:
     description="Registrar o editar proveedor.",
     children=[
       rx.el.div(
-        rx.el.label("Razón Social / Nombre de Empresa", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Razón Social / Nombre de Empresa", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.current_supplier["name"],
           on_blur=lambda val: State.update_current_supplier("name", val),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("N° de Registro de Empresa", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("N° de Registro de Empresa", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.current_supplier["tax_id"],
           on_blur=lambda val: State.update_current_supplier("tax_id", val),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Telefono", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Telefono", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.current_supplier["phone"],
           on_blur=lambda val: State.update_current_supplier("phone", val),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Email", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Email", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.current_supplier["email"],
           on_blur=lambda val: State.update_current_supplier("email", val),
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
           debounce_timeout=600,
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Direccion", class_name="text-sm font-medium text-slate-700"),
+        rx.el.label("Direccion", class_name=TYPOGRAPHY["label"]),
         rx.el.textarea(
           default_value=State.current_supplier["address"],
           on_blur=lambda val: State.update_current_supplier("address", val),
-          class_name="w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[80px]",
+          class_name=f"{INPUT_STYLES['default']} min-h-[80px] h-auto py-2",
         ),
         class_name="flex flex-col gap-1",
       ),
@@ -642,12 +802,12 @@ def supplier_modal() -> rx.Component:
       rx.el.button(
         "Cancelar",
         on_click=State.close_supplier_modal,
-        class_name="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100",
+        class_name=BUTTON_STYLES["secondary"],
       ),
       rx.el.button(
         "Guardar",
         on_click=State.save_supplier,
-        class_name="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700",
+        class_name=BUTTON_STYLES["primary"],
       ),
       class_name="flex justify-end gap-2",
     ),
@@ -680,71 +840,71 @@ def compras_page() -> rx.Component:
   filters_card = rx.el.div(
     rx.el.div(
       rx.el.div(
-        rx.el.h3("Filtros de búsqueda", class_name="text-base font-semibold text-slate-700"),
+        rx.el.h3("Filtros de búsqueda", class_name=TYPOGRAPHY["card_title"]),
         rx.el.p(
           "Filtra por documento, proveedor o rango de fechas.",
-          class_name="text-sm text-slate-500",
+          class_name=TYPOGRAPHY["body_secondary"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.button(
         "Limpiar",
         on_click=State.reset_purchase_filters,
-        class_name="px-4 py-2 border rounded-md text-slate-600 hover:bg-slate-100",
+        class_name=BUTTON_STYLES["secondary"],
       ),
       class_name="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3",
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Buscar", class_name="text-sm font-medium text-slate-600 mb-1"),
+        rx.el.label("Buscar", class_name=f"{TYPOGRAPHY['label_secondary']} mb-1"),
         rx.debounce_input(
           rx.input(
             placeholder="Documento, Proveedor, N° de Registro de Empresa",
             value=State.purchase_search_term,
             on_change=State.set_purchase_search_term,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           debounce_timeout=600,
         ),
         class_name="w-full",
       ),
       rx.el.div(
-        rx.el.label("Fecha inicio", class_name="text-sm font-medium text-slate-600 mb-1"),
+        rx.el.label("Fecha inicio", class_name=f"{TYPOGRAPHY['label_secondary']} mb-1"),
         rx.el.input(
           type="date",
           value=State.purchase_start_date,
           on_change=State.set_purchase_start_date,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="w-full",
       ),
       rx.el.div(
-        rx.el.label("Fecha fin", class_name="text-sm font-medium text-slate-600 mb-1"),
+        rx.el.label("Fecha fin", class_name=f"{TYPOGRAPHY['label_secondary']} mb-1"),
         rx.el.input(
           type="date",
           value=State.purchase_end_date,
           on_change=State.set_purchase_end_date,
-          class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+          class_name=INPUT_STYLES["default"],
         ),
         class_name="w-full",
       ),
       class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4",
     ),
-    class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm",
+    class_name=CARD_STYLES["default"],
   )
 
   table_card = rx.el.div(
     rx.el.div(
       rx.el.div(
-        rx.el.h3("COMPRAS REGISTRADAS", class_name="text-base font-semibold text-slate-700"),
+        rx.el.h3("COMPRAS REGISTRADAS", class_name=TYPOGRAPHY["card_title"]),
         rx.el.p(
           "Historial de documentos ingresados.",
-          class_name="text-sm text-slate-500",
+          class_name=TYPOGRAPHY["body_secondary"],
         ),
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.span("Resultados:", class_name="text-sm text-slate-500"),
+        rx.el.span("Resultados:", class_name=TYPOGRAPHY["body_secondary"]),
         rx.el.span(
           State.purchase_records.length().to_string(),
           class_name="text-sm font-semibold text-slate-700",
@@ -753,26 +913,32 @@ def compras_page() -> rx.Component:
       ),
       class_name="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3",
     ),
+    # Vista móvil: Cards (visible en < md)
+    rx.el.div(
+      rx.foreach(State.purchase_records, _purchase_card),
+      class_name="flex flex-col gap-3 md:hidden",
+    ),
+    # Vista desktop: Tabla (oculta en < md)
     rx.el.div(
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Fecha", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Proveedor", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Documento", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-            rx.el.th("Serie", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-            rx.el.th("Numero", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-            rx.el.th("Total", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
-            rx.el.th("Usuario", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-            rx.el.th("Items", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
-            rx.el.th("Accion", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+            rx.el.th("Fecha", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Proveedor", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Documento", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Serie", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Numero", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+            rx.el.th("Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Items", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+            rx.el.th("Accion", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
           ),
           class_name=TABLE_STYLES["header"],
         ),
         rx.el.tbody(rx.foreach(State.purchase_records, purchase_row)),
         class_name="w-full text-sm",
       ),
-      class_name="overflow-x-auto border border-slate-100 rounded-lg",
+      class_name="hidden md:block overflow-x-auto border border-slate-100 rounded-lg",
     ),
     rx.cond(
       State.purchase_records.length() == 0,
@@ -788,7 +954,7 @@ def compras_page() -> rx.Component:
       on_prev=State.prev_purchase_page,
       on_next=State.next_purchase_page,
     ),
-    class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4",
+    class_name=f"{CARD_STYLES['default']} flex flex-col {SPACING['card_gap']}",
   )
 
   registro_content = rx.el.div(
@@ -800,13 +966,13 @@ def compras_page() -> rx.Component:
   proveedores_content = rx.el.div(
     rx.el.div(
       rx.el.div(
-        rx.el.label("Buscar proveedor", class_name="text-sm font-medium text-slate-600 mb-1"),
+        rx.el.label("Buscar proveedor", class_name=f"{TYPOGRAPHY['label_secondary']} mb-1"),
         rx.debounce_input(
           rx.input(
             placeholder="Razón Social, N° de Registro de Empresa, telefono",
             value=State.supplier_search_query,
             on_change=State.set_supplier_search_query,
-            class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+            class_name=INPUT_STYLES["default"],
           ),
           debounce_timeout=600,
         ),
@@ -818,7 +984,7 @@ def compras_page() -> rx.Component:
           rx.icon("plus", class_name="h-4 w-4"),
           "Nuevo proveedor",
           on_click=lambda _: State.open_supplier_modal(None),
-          class_name="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700",
+          class_name=BUTTON_STYLES["primary"],
         ),
         rx.el.span(
           "Solo lectura",
@@ -827,23 +993,29 @@ def compras_page() -> rx.Component:
       ),
       class_name="flex flex-wrap items-end justify-between gap-4",
     ),
+    # Vista móvil: Cards (visible en < md)
+    rx.el.div(
+      rx.foreach(State.suppliers_view, _supplier_card),
+      class_name="flex flex-col gap-3 md:hidden",
+    ),
+    # Vista desktop: Tabla (oculta en < md)
     rx.el.div(
       rx.el.table(
         rx.el.thead(
           rx.el.tr(
-            rx.el.th("Proveedor", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("N° de Registro de Empresa", class_name=TABLE_STYLES["header_cell"]),
-            rx.el.th("Telefono", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-            rx.el.th("Email", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-            rx.el.th("Direccion", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-            rx.el.th("Accion", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+            rx.el.th("Proveedor", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("N° de Registro de Empresa", scope="col", class_name=TABLE_STYLES["header_cell"]),
+            rx.el.th("Telefono", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Email", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Direccion", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
+            rx.el.th("Accion", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
           ),
           class_name=TABLE_STYLES["header"],
         ),
         rx.el.tbody(rx.foreach(State.suppliers_view, supplier_row)),
         class_name="w-full text-sm",
       ),
-      class_name="overflow-x-auto border border-slate-100 rounded-lg",
+      class_name="hidden md:block overflow-x-auto border border-slate-100 rounded-lg",
     ),
     rx.cond(
       State.suppliers_view.length() == 0,
@@ -853,7 +1025,7 @@ def compras_page() -> rx.Component:
       ),
       rx.fragment(),
     ),
-    class_name="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4",
+    class_name=f"{CARD_STYLES['default']} flex flex-col {SPACING['card_gap']}",
   )
 
   content = rx.el.div(

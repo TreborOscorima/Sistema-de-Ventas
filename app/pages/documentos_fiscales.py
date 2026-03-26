@@ -7,8 +7,14 @@ y emisión de Notas de Crédito para anular comprobantes autorizados.
 import reflex as rx
 from app.state import State
 from app.components.ui import (
+    BADGE_STYLES,
     BUTTON_STYLES,
+    CARD_STYLES,
+    INPUT_STYLES,
+    SELECT_STYLES,
+    SPACING,
     TABLE_STYLES,
+    TYPOGRAPHY,
     page_title,
     permission_guard,
 )
@@ -19,60 +25,27 @@ from app.components.ui import (
 # ════════════════════════════════════════════════════════════
 
 def _status_badge(status: rx.Var) -> rx.Component:
-    """Badge coloreado según el estado fiscal."""
+    """Badge coloreado según el estado fiscal — usa tokens centralizados."""
     return rx.match(
         status,
-        ("authorized", rx.el.span(
-            "Autorizado",
-            class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800",
-        )),
-        ("pending", rx.el.span(
-            "Pendiente",
-            class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800",
-        )),
-        ("sent", rx.el.span(
-            "Enviado",
-            class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800",
-        )),
-        ("error", rx.el.span(
-            "Error",
-            class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800",
-        )),
-        ("rejected", rx.el.span(
-            "Rechazado",
-            class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-700",
-        )),
-        rx.el.span(
-            status,
-            class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700",
-        ),
+        ("authorized", rx.el.span("Autorizado", class_name=BADGE_STYLES["authorized"])),
+        ("pending", rx.el.span("Pendiente", class_name=BADGE_STYLES["pending"])),
+        ("sent", rx.el.span("Enviado", class_name=BADGE_STYLES["sent"])),
+        ("error", rx.el.span("Error", class_name=BADGE_STYLES["error"])),
+        ("rejected", rx.el.span("Rechazado", class_name=BADGE_STYLES["rejected"])),
+        rx.el.span(status, class_name=BADGE_STYLES["neutral"]),
     )
 
 
 def _receipt_badge(receipt_type: rx.Var) -> rx.Component:
-    """Badge según el tipo de comprobante."""
+    """Badge según el tipo de comprobante — usa tokens centralizados."""
     return rx.match(
         receipt_type,
-        ("boleta", rx.el.span(
-            "Boleta",
-            class_name="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-800",
-        )),
-        ("factura", rx.el.span(
-            "Factura",
-            class_name="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800",
-        )),
-        ("nota_credito", rx.el.span(
-            "NC",
-            class_name="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800",
-        )),
-        ("nota_debito", rx.el.span(
-            "ND",
-            class_name="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800",
-        )),
-        rx.el.span(
-            receipt_type,
-            class_name="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700",
-        ),
+        ("boleta", rx.el.span("Boleta", class_name=BADGE_STYLES["boleta"])),
+        ("factura", rx.el.span("Factura", class_name=BADGE_STYLES["factura"])),
+        ("nota_credito", rx.el.span("NC", class_name=BADGE_STYLES["nota_credito"])),
+        ("nota_debito", rx.el.span("ND", class_name=BADGE_STYLES["nota_debito"])),
+        rx.el.span(receipt_type, class_name=BADGE_STYLES.get("neutral", "")),
     )
 
 
@@ -81,13 +54,13 @@ def _receipt_badge(receipt_type: rx.Var) -> rx.Component:
 # ════════════════════════════════════════════════════════════
 
 def _fiscal_filters() -> rx.Component:
-    """Barra de filtros para el dashboard fiscal."""
+    """Barra de filtros para el dashboard fiscal — responsive y accesible."""
     return rx.el.div(
-        # ── Fila de filtros ─────────────────────────────────
+        # ── Fila de filtros — responsive grid ────────────────
         rx.el.div(
             # Estado
             rx.el.div(
-                rx.el.label("Estado", class_name="text-sm font-medium text-slate-600"),
+                rx.el.label("Estado", class_name=TYPOGRAPHY["label_secondary"]),
                 rx.el.select(
                     rx.el.option("Todos los estados", value="todos"),
                     rx.el.option("Autorizado", value="authorized"),
@@ -97,13 +70,14 @@ def _fiscal_filters() -> rx.Component:
                     rx.el.option("Rechazado", value="rejected"),
                     value=State.fiscal_docs_status_filter,
                     on_change=State.set_fiscal_docs_status_filter,
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    aria_label="Filtrar por estado fiscal",
+                    class_name=SELECT_STYLES["default"],
                 ),
-                class_name="flex flex-col gap-1 min-w-[160px] flex-1",
+                class_name=f"flex flex-col {SPACING['field_gap']}",
             ),
             # Tipo de comprobante
             rx.el.div(
-                rx.el.label("Tipo", class_name="text-sm font-medium text-slate-600"),
+                rx.el.label("Tipo", class_name=TYPOGRAPHY["label_secondary"]),
                 rx.el.select(
                     rx.el.option("Todos los tipos", value="todos"),
                     rx.el.option("Boleta", value="boleta"),
@@ -112,44 +86,48 @@ def _fiscal_filters() -> rx.Component:
                     rx.el.option("Nota de Débito", value="nota_debito"),
                     value=State.fiscal_docs_receipt_filter,
                     on_change=State.set_fiscal_docs_receipt_filter,
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    aria_label="Filtrar por tipo de comprobante",
+                    class_name=SELECT_STYLES["default"],
                 ),
-                class_name="flex flex-col gap-1 min-w-[160px] flex-1",
+                class_name=f"flex flex-col {SPACING['field_gap']}",
             ),
             # Búsqueda
             rx.el.div(
-                rx.el.label("Buscar", class_name="text-sm font-medium text-slate-600"),
+                rx.el.label("Buscar", class_name=TYPOGRAPHY["label_secondary"]),
                 rx.el.input(
                     placeholder="Nro., receptor, RUC/CUIT...",
                     on_blur=State.set_fiscal_docs_search,
                     default_value=State.fiscal_docs_search,
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    aria_label="Buscar documentos fiscales",
+                    class_name=INPUT_STYLES["default"],
                 ),
-                class_name="flex flex-col gap-1 min-w-[200px] flex-1",
+                class_name=f"flex flex-col {SPACING['field_gap']} sm:col-span-2 lg:col-span-1",
             ),
             # Fecha desde
             rx.el.div(
-                rx.el.label("Desde", class_name="text-sm font-medium text-slate-600"),
+                rx.el.label("Desde", class_name=TYPOGRAPHY["label_secondary"]),
                 rx.el.input(
                     type="date",
                     value=State.fiscal_docs_date_from,
                     on_change=State.set_fiscal_docs_date_from,
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    aria_label="Fecha desde",
+                    class_name=INPUT_STYLES["default"],
                 ),
-                class_name="flex flex-col gap-1 min-w-[145px]",
+                class_name=f"flex flex-col {SPACING['field_gap']}",
             ),
             # Fecha hasta
             rx.el.div(
-                rx.el.label("Hasta", class_name="text-sm font-medium text-slate-600"),
+                rx.el.label("Hasta", class_name=TYPOGRAPHY["label_secondary"]),
                 rx.el.input(
                     type="date",
                     value=State.fiscal_docs_date_to,
                     on_change=State.set_fiscal_docs_date_to,
-                    class_name="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                    aria_label="Fecha hasta",
+                    class_name=INPUT_STYLES["default"],
                 ),
-                class_name="flex flex-col gap-1 min-w-[145px]",
+                class_name=f"flex flex-col {SPACING['field_gap']}",
             ),
-            class_name="flex flex-wrap lg:flex-nowrap gap-3 items-end",
+            class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end",
         ),
         # ── Botones de acción ────────────────────────────────
         rx.el.div(
@@ -157,11 +135,15 @@ def _fiscal_filters() -> rx.Component:
                 rx.icon("search", class_name="h-4 w-4"),
                 "Buscar",
                 on_click=State.apply_fiscal_docs_filters,
+                title="Aplicar filtros",
+                aria_label="Aplicar filtros de busqueda",
                 class_name=BUTTON_STYLES["primary"],
             ),
             rx.el.button(
                 "Limpiar",
                 on_click=State.reset_fiscal_docs_filters,
+                title="Limpiar filtros",
+                aria_label="Limpiar todos los filtros",
                 class_name=BUTTON_STYLES["secondary"],
             ),
             class_name="flex flex-wrap gap-2 justify-end",
@@ -236,6 +218,8 @@ def _fiscal_doc_row(doc: rx.Var) -> rx.Component:
                 rx.icon("eye", class_name="h-4 w-4"),
                 " Detalle",
                 on_click=State.open_fiscal_doc_detail(doc["id"]),
+                title="Ver detalle del comprobante",
+                aria_label="Ver detalle del comprobante",
                 class_name=BUTTON_STYLES["link_primary"],
             ),
             class_name="py-3 px-4 text-center whitespace-nowrap",
@@ -245,7 +229,57 @@ def _fiscal_doc_row(doc: rx.Var) -> rx.Component:
 
 
 # ════════════════════════════════════════════════════════════
-# TABLA PRINCIPAL
+# CARD MÓVIL (vista responsiva para pantallas pequeñas)
+# ════════════════════════════════════════════════════════════
+
+def _fiscal_doc_card(doc: rx.Var) -> rx.Component:
+    """Card de documento fiscal para vista móvil."""
+    return rx.el.div(
+        # Header: Número + Estado
+        rx.el.div(
+            rx.el.span(
+                doc["full_number"],
+                class_name="font-mono font-medium text-slate-900 text-sm",
+            ),
+            _status_badge(doc["status"]),
+            class_name="flex items-center justify-between gap-2",
+        ),
+        # Body: Tipo + Receptor + Monto
+        rx.el.div(
+            rx.el.div(
+                _receipt_badge(doc["receipt_type"]),
+                rx.el.span(doc["created_at"], class_name=TYPOGRAPHY["caption"]),
+                class_name="flex items-center gap-2",
+            ),
+            rx.el.div(
+                rx.el.span(doc["buyer_name"], class_name="text-sm font-medium text-slate-800"),
+                rx.el.span(doc["buyer_doc_number"], class_name=TYPOGRAPHY["caption"]),
+                class_name="flex flex-col",
+            ),
+            class_name="flex flex-col gap-1.5 mt-2",
+        ),
+        # Footer: Monto + Acción
+        rx.el.div(
+            rx.el.span(
+                State.currency_symbol, " ", doc["total_amount"],
+                class_name="font-semibold tabular-nums text-slate-900",
+            ),
+            rx.el.button(
+                rx.icon("eye", class_name="h-4 w-4"),
+                " Detalle",
+                on_click=State.open_fiscal_doc_detail(doc["id"]),
+                title="Ver detalle del comprobante",
+                aria_label="Ver detalle del comprobante",
+                class_name=BUTTON_STYLES["link_primary"],
+            ),
+            class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+        ),
+        class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
+    )
+
+
+# ════════════════════════════════════════════════════════════
+# TABLA PRINCIPAL (desktop) + CARDS (móvil)
 # ════════════════════════════════════════════════════════════
 
 def _fiscal_docs_table() -> rx.Component:
@@ -261,27 +295,32 @@ def _fiscal_docs_table() -> rx.Component:
             rx.cond(
                 State.fiscal_docs_list,
                 rx.el.div(
-                    # Tabla
+                    # Vista móvil: Cards (visible en < md)
+                    rx.el.div(
+                        rx.foreach(State.fiscal_docs_list, _fiscal_doc_card),
+                        class_name="flex flex-col gap-3 md:hidden",
+                    ),
+                    # Vista desktop: Tabla (oculta en < md)
                     rx.el.div(
                         rx.el.table(
                             rx.el.thead(
                                 rx.el.tr(
-                                    rx.el.th("Fecha", class_name=TABLE_STYLES["header_cell"]),
-                                    rx.el.th("Número", class_name=TABLE_STYLES["header_cell"]),
-                                    rx.el.th("Tipo", class_name=TABLE_STYLES["header_cell"]),
-                                    rx.el.th("Receptor", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Fecha", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Número", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Tipo", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Receptor", scope="col", class_name=TABLE_STYLES["header_cell"]),
                                     rx.el.th(
                                         "Total",
-                                        class_name=f"{TABLE_STYLES['header_cell']} text-right",
+                                        scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
                                     ),
-                                    rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Estado", scope="col", class_name=TABLE_STYLES["header_cell"]),
                                     rx.el.th(
                                         "Reintentos",
-                                        class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                                        scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                                     ),
                                     rx.el.th(
                                         "Acciones",
-                                        class_name=f"{TABLE_STYLES['header_cell']} text-center",
+                                        scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center",
                                     ),
                                 ),
                                 class_name=TABLE_STYLES["header"],
@@ -291,7 +330,7 @@ def _fiscal_docs_table() -> rx.Component:
                             ),
                             class_name="w-full text-left border-collapse",
                         ),
-                        class_name="overflow-x-auto",
+                        class_name="overflow-x-auto hidden md:block",
                     ),
                     # Paginación
                     rx.el.div(
@@ -307,6 +346,8 @@ def _fiscal_docs_table() -> rx.Component:
                                 " Anterior",
                                 on_click=State.fiscal_docs_prev_page,
                                 disabled=~State.fiscal_docs_has_prev,
+                                title="Pagina anterior",
+                                aria_label="Ir a la pagina anterior",
                                 class_name=rx.cond(
                                     State.fiscal_docs_has_prev,
                                     BUTTON_STYLES["secondary"],
@@ -322,6 +363,8 @@ def _fiscal_docs_table() -> rx.Component:
                                 rx.icon("chevron-right", class_name="h-4 w-4"),
                                 on_click=State.fiscal_docs_next_page,
                                 disabled=~State.fiscal_docs_has_next,
+                                title="Pagina siguiente",
+                                aria_label="Ir a la pagina siguiente",
                                 class_name=rx.cond(
                                     State.fiscal_docs_has_next,
                                     BUTTON_STYLES["secondary"],
@@ -390,6 +433,8 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                         rx.el.button(
                             rx.icon("x", class_name="h-5 w-5"),
                             on_click=State.close_fiscal_doc_detail,
+                            title="Cerrar detalle",
+                            aria_label="Cerrar detalle del comprobante",
                             class_name="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100",
                         ),
                         class_name="flex items-start justify-between pb-4 border-b border-slate-200",
@@ -509,13 +554,14 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                             rx.el.div(
                                 rx.el.span(
                                     "Detalle del error",
-                                    class_name="text-xs text-red-500 font-semibold block mb-1",
+                                    class_name="text-xs text-red-600 font-semibold block mb-1",
                                 ),
                                 rx.el.div(
                                     rx.el.code(
                                         doc.get("errors", ""),
                                         class_name="text-xs font-mono text-red-700 whitespace-pre-wrap break-all",
                                     ),
+                                    role="alert",
                                     class_name="bg-red-50 border border-red-200 rounded p-3 max-h-32 overflow-y-auto",
                                 ),
                                 class_name="border-t border-slate-200 pt-3",
@@ -647,13 +693,13 @@ def documentos_fiscales_page() -> rx.Component:
                 # Panel de filtros
                 rx.el.div(
                     _fiscal_filters(),
-                    class_name="bg-white border border-slate-200 rounded-xl shadow-sm p-4",
+                    class_name=f"{CARD_STYLES['compact']}",
                 ),
 
                 # Tabla
                 rx.el.div(
                     _fiscal_docs_table(),
-                    class_name="bg-white border border-slate-200 rounded-xl shadow-sm p-4",
+                    class_name=f"{CARD_STYLES['compact']}",
                 ),
 
                 # Modal de detalle
