@@ -38,13 +38,35 @@ def _mock_httpx_client(mock_response=None, side_effect=None):
     """Patch context-manager para httpx.AsyncClient."""
     patcher = patch("app.services.document_lookup_service.httpx.AsyncClient")
     mock_cls = patcher.start()
-    mock_client = AsyncMock()
+    # Usamos MagicMock base con funciones async reales para evitar
+    # coroutines internas de AsyncMock que el GC de Python 3.13 reporta.
+    mock_client = MagicMock()
     if side_effect is not None:
-        mock_client.get.side_effect = side_effect
+        _exc = side_effect
+
+        async def _raise(*args, **kwargs):
+            raise _exc
+
+        mock_client.get = _raise
     else:
-        mock_client.get.return_value = mock_response
-    mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        _resp = mock_response
+
+        async def _get(*args, **kwargs):
+            return _resp
+
+        mock_client.get = _get
+
+    # Funciones async reales para el context manager (evitan GC warnings)
+    _ref = mock_client
+
+    async def _aenter(*args, **kwargs):
+        return _ref
+
+    async def _aexit(*args, **kwargs):
+        return False
+
+    mock_cls.return_value.__aenter__ = _aenter
+    mock_cls.return_value.__aexit__ = _aexit
     return patcher, mock_client
 
 

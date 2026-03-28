@@ -531,6 +531,7 @@ class TestEmitFiscalDocument:
         from app.services.billing_service import emit_fiscal_document
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         # exec returns result with .first() returning None (no existing doc, no config)
         exec_result = MagicMock()
         exec_result.first.return_value = None
@@ -554,6 +555,7 @@ class TestEmitFiscalDocument:
         existing_doc.full_number = "B001-00000001"
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         exec_result = MagicMock()
         exec_result.first.return_value = existing_doc
         mock_session.exec.return_value = exec_result
@@ -574,6 +576,7 @@ class TestEmitFiscalDocument:
         from app.services.billing_service import emit_fiscal_document
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         # First exec: no existing doc
         no_doc = MagicMock()
         no_doc.first.return_value = None
@@ -609,6 +612,7 @@ class TestEmitFiscalDocument:
         mock_config.country = "XX"  # Unknown country → NoOp strategy
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         # Call sequence: 1) no existing doc, 2) config, 3) sale, 4) items
         no_doc = MagicMock()
         no_doc.first.return_value = None
@@ -640,6 +644,7 @@ class TestEmitFiscalDocument:
         from app.services.billing_service import emit_fiscal_document
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         no_doc = MagicMock()
         no_doc.first.return_value = None
         config_result = MagicMock()
@@ -689,6 +694,7 @@ class TestEmitFiscalDocument:
         from app.services.billing_service import emit_fiscal_document
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         no_doc = MagicMock()
         no_doc.first.return_value = None
         config_result = MagicMock()
@@ -732,6 +738,7 @@ class TestEmitFiscalDocument:
         from app.services.billing_service import emit_fiscal_document
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         no_doc = MagicMock()
         no_doc.first.return_value = None
         config_result = MagicMock()
@@ -934,6 +941,7 @@ class TestEndToEndBillingFlow:
         from app.services.billing_service import emit_fiscal_document
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         # No existing doc
         no_doc = MagicMock()
         no_doc.first.return_value = None
@@ -999,6 +1007,7 @@ class TestEndToEndBillingFlow:
         item2.product_name_snapshot = "Aceite Vegetal 1L"
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         no_doc = MagicMock()
         no_doc.first.return_value = None
         config_result = MagicMock()
@@ -1065,6 +1074,7 @@ class TestEndToEndBillingFlow:
         existing.sale_id = 200
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         existing_result = MagicMock()
         existing_result.first.return_value = existing
         mock_session.exec.return_value = existing_result
@@ -1118,6 +1128,7 @@ class TestEndToEndBillingFlow:
         item.product_name_snapshot = "Gaseosa 500ml"
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         no_doc = MagicMock()
         no_doc.first.return_value = None
         config_result = MagicMock()
@@ -1185,6 +1196,7 @@ class TestRetryFiscalDocument:
         item = MagicMock()
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         doc_result = MagicMock()
         doc_result.first.return_value = fiscal_doc
         config_result = MagicMock()
@@ -1231,6 +1243,7 @@ class TestRetryFiscalDocument:
         fiscal_doc.retry_count = 3  # MAX_RETRY_ATTEMPTS
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         doc_result = MagicMock()
         doc_result.first.return_value = fiscal_doc
         mock_session.exec.return_value = doc_result
@@ -1258,6 +1271,7 @@ class TestRetryFiscalDocument:
         fiscal_doc.fiscal_status = FiscalStatus.authorized
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         doc_result = MagicMock()
         doc_result.first.return_value = fiscal_doc
         mock_session.exec.return_value = doc_result
@@ -1279,6 +1293,7 @@ class TestRetryFiscalDocument:
         from app.services.billing_service import retry_fiscal_document
 
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
         doc_result = MagicMock()
         doc_result.first.return_value = None
         mock_session.exec.return_value = doc_result
