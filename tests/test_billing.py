@@ -294,6 +294,23 @@ class TestFiscalAmounts:
         assert base == Decimal("50.00")
         assert tax == Decimal("9.00")
 
+    def test_argentina_iva_21(self):
+        from app.services.billing_service import _compute_fiscal_amounts
+        sale = MagicMock()
+        sale.total_amount = Decimal("121.00")
+        base, tax, total = _compute_fiscal_amounts(sale, [], country="AR")
+        assert total == Decimal("121.00")
+        assert base == Decimal("100.00")
+        assert tax == Decimal("21.00")
+
+    def test_unknown_country_defaults_to_pe(self):
+        from app.services.billing_service import _compute_fiscal_amounts
+        sale = MagicMock()
+        sale.total_amount = Decimal("118.00")
+        base, tax, total = _compute_fiscal_amounts(sale, [], country="XX")
+        assert base == Decimal("100.00")
+        assert tax == Decimal("18.00")
+
 
 # ═════════════════════════════════════════════════════════════
 # QR DATA
