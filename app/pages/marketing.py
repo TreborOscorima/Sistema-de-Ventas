@@ -579,7 +579,7 @@ def _announcement_banner() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.p(
-                    rx.el.span("Nuevo", class_name="mr-2 rounded bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"),
+                    rx.el.span("Nuevo", class_name="mr-2 rounded bg-emerald-500 px-1.5 py-0.5 text-xs font-bold uppercase text-white"),
                     "Modulo de Reservas con cobro parcial integrado",
                     class_name="text-sm font-medium text-white",
                 ),
