@@ -1226,7 +1226,7 @@ def inventario_page() -> rx.Component:
               ),
             )
           ),
-          class_name="min-w-[980px]",
+          class_name="min-w-full",
         ),
         class_name="hidden md:block w-full overflow-x-auto",
       ),

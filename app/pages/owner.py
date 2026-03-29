@@ -521,7 +521,7 @@ def _companies_table() -> rx.Component:
                 rx.el.tbody(
                     rx.foreach(State.owner_companies, _company_row),
                 ),
-                class_name="w-full table-auto min-w-[980px]",
+                class_name="w-full table-auto min-w-full",
             ),
             class_name="hidden xl:block overflow-x-auto",
         ),
@@ -1473,7 +1473,7 @@ def _audit_section() -> rx.Component:
                                 ),
                             ),
                         ),
-                        class_name="w-full table-auto min-w-[920px]",
+                        class_name="w-full table-auto min-w-full",
                     ),
                     class_name="hidden xl:block overflow-x-auto",
                 ),

@@ -263,7 +263,7 @@ def reportes_page() -> rx.Component:
                     rx.el.h3("1. SELECCIONA EL TIPO DE REPORTE", class_name=f"{TYPOGRAPHY['section_title']} mb-4"),
                     rx.el.div(
                         rx.foreach(State.report_types, _report_type_card),
-                        class_name="grid grid-cols-2 sm:grid-cols-2 gap-3",
+                        class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
                     ),
                     class_name=f"{CARD_STYLES['default']} mb-4",
                 ),
@@ -363,7 +363,7 @@ def reportes_page() -> rx.Component:
                     class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm",
                 ),
                 
-                class_name="w-full xl:w-[23rem] 2xl:w-[25rem] shrink-0",
+                class_name="w-full xl:w-80 2xl:w-96 shrink-0",
             ),
             
             class_name="flex flex-col xl:flex-row gap-4 lg:gap-6",
