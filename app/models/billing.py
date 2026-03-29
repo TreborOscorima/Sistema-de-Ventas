@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Optional
 
 import reflex as rx
 import sqlalchemy
-from sqlalchemy import Numeric, Text, UniqueConstraint
+from sqlalchemy import DateTime, Numeric, Text, UniqueConstraint
 from sqlmodel import Field, Relationship
 
 from app.enums import FiscalStatus, ReceiptType
@@ -109,6 +109,31 @@ class CompanyBillingConfig(rx.Model, table=True):
         sa_column=sqlalchemy.Column(Text, nullable=True),
         description="Clave privada (.key) encriptada con Fernet. "
         "Para AFIP: RSA PEM. Para SUNAT: se extrae del PFX.",
+    )
+
+    # ── Metadatos de certificado (para alertas de expiración) ─
+    cert_subject: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Subject (CN) del certificado X.509. "
+        "Ej: 'SERIALNUMBER=CUIT 20123456789, CN=nombre'.",
+    )
+    cert_issuer: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Emisor (Issuer) del certificado. "
+        "Ej: 'CN=AC AFIP, O=AFIP'.",
+    )
+    cert_not_before: Optional[datetime] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(DateTime, nullable=True),
+        description="Fecha de inicio de validez del certificado (UTC).",
+    )
+    cert_not_after: Optional[datetime] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(DateTime, nullable=True),
+        description="Fecha de expiración del certificado (UTC). "
+        "Usado para alertas de renovación.",
     )
 
     # ── Nubefact / OSE (Perú) ────────────────────────────────

@@ -13,7 +13,7 @@ from sqlmodel import select
 from app.enums import FiscalStatus, ReceiptType
 from app.models.billing import CompanyBillingConfig, FiscalDocument
 from app.services.billing_service import retry_fiscal_document, emit_fiscal_document
-from app.utils.crypto import encrypt_text
+from app.utils.crypto import encrypt_text, parse_certificate_pem
 from app.utils.fiscal_validators import validate_tax_id, validate_business_name
 from app.i18n import MSG
 from app.utils.logger import get_logger
@@ -50,6 +50,9 @@ class BillingState(MixinState):
     billing_ar_threshold: str = "68782.00"
     billing_cert_status: str = ""  # "", "configurado", "no configurado"
     billing_key_status: str = ""
+    billing_cert_subject: str = ""
+    billing_cert_not_after: str = ""  # ISO date for display
+    billing_cert_days_remaining: int = -1  # -1 = no cert
 
     # ── Read-only display ─────────────────────────────────────
     billing_current_count: int = 0
@@ -132,6 +135,19 @@ class BillingState(MixinState):
             self.billing_key_status = (
                 "configurado" if config.encrypted_private_key else "no configurado"
             )
+            # ── Metadatos de certificado (expiración) ──
+            if config.cert_not_after:
+                from datetime import datetime as _dt, timezone as _tz
+                self.billing_cert_subject = (config.cert_subject or "")[:100]
+                self.billing_cert_not_after = config.cert_not_after.strftime("%Y-%m-%d")
+                delta = config.cert_not_after.replace(
+                    tzinfo=_tz.utc
+                ) - _dt.now(_tz.utc)
+                self.billing_cert_days_remaining = delta.days
+            else:
+                self.billing_cert_subject = ""
+                self.billing_cert_not_after = ""
+                self.billing_cert_days_remaining = -1
             self.billing_form_key += 1
 
     @rx.event
@@ -290,6 +306,18 @@ class BillingState(MixinState):
                 )
                 return
             config.encrypted_certificate = encrypt_text(cert_pem)
+            # Extraer metadatos del certificado para alertas de expiración
+            cert_meta = parse_certificate_pem(cert_pem)
+            if cert_meta:
+                config.cert_subject = cert_meta.subject[:500]
+                config.cert_issuer = cert_meta.issuer[:500]
+                config.cert_not_before = cert_meta.not_before
+                config.cert_not_after = cert_meta.not_after
+                self.billing_cert_subject = cert_meta.subject[:100]
+                self.billing_cert_not_after = (
+                    cert_meta.not_after.strftime("%Y-%m-%d")
+                )
+                self.billing_cert_days_remaining = cert_meta.days_remaining
             config.updated_at = utc_now_naive()
             session.add(config)
             session.commit()

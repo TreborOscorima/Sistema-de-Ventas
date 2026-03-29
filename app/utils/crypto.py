@@ -24,9 +24,13 @@ import base64
 import logging
 import os
 
+from dataclasses import dataclass
+from datetime import datetime, timezone
+
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.x509 import load_pem_x509_certificate
 
 logger = logging.getLogger(__name__)
 
@@ -153,3 +157,55 @@ def decrypt_text(ciphertext: str) -> str:
         Texto original desencriptado.
     """
     return decrypt_credential(ciphertext).decode("utf-8")
+
+
+# ── Utilidades de certificados X.509 ─────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class CertMetadata:
+    """Metadatos extraídos de un certificado X.509 PEM."""
+
+    subject: str
+    issuer: str
+    not_before: datetime
+    not_after: datetime
+    serial_number: str
+
+    @property
+    def days_remaining(self) -> int:
+        """Días hasta la expiración (negativo si ya expiró)."""
+        delta = self.not_after - datetime.now(timezone.utc)
+        return delta.days
+
+    @property
+    def is_expired(self) -> bool:
+        return self.days_remaining < 0
+
+
+def parse_certificate_pem(pem_text: str) -> CertMetadata | None:
+    """Parsea un certificado PEM y extrae sus metadatos.
+
+    Args:
+        pem_text: contenido PEM del certificado (con BEGIN/END headers).
+
+    Returns:
+        CertMetadata con subject, issuer, fechas, serial; o None si falla.
+    """
+    try:
+        cert = load_pem_x509_certificate(pem_text.encode("utf-8"))
+        subject = cert.subject.rfc4514_string()
+        issuer = cert.issuer.rfc4514_string()
+        not_before = cert.not_valid_before_utc
+        not_after = cert.not_valid_after_utc
+        serial = format(cert.serial_number, "x").upper()
+        return CertMetadata(
+            subject=subject,
+            issuer=issuer,
+            not_before=not_before,
+            not_after=not_after,
+            serial_number=serial,
+        )
+    except Exception as exc:
+        logger.warning("Error parseando certificado PEM: %s", exc)
+        return None

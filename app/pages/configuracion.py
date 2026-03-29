@@ -502,7 +502,24 @@ def billing_config_section() -> rx.Component:
                   rx.el.div(
                     rx.icon("check-circle", class_name="h-4 w-4 text-emerald-500 inline mr-1"),
                     rx.el.span("Certificado configurado", class_name="text-sm text-emerald-600"),
-                    class_name="flex items-center gap-1 mb-1",
+                    # Alerta de expiración
+                    rx.cond(
+                      State.billing_cert_days_remaining >= 0,
+                      rx.cond(
+                        State.billing_cert_days_remaining <= 30,
+                        rx.el.span(
+                          rx.icon("alert-triangle", class_name="h-3.5 w-3.5 inline mr-0.5"),
+                          rx.text(f"Expira en {State.billing_cert_days_remaining} días ({State.billing_cert_not_after})"),
+                          class_name="text-xs text-amber-600 ml-2",
+                        ),
+                        rx.el.span(
+                          f"Válido hasta {State.billing_cert_not_after}",
+                          class_name="text-xs text-slate-400 ml-2",
+                        ),
+                      ),
+                      rx.fragment(),
+                    ),
+                    class_name="flex items-center gap-1 mb-1 flex-wrap",
                   ),
                   rx.fragment(),
                 ),

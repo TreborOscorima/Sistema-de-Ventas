@@ -1385,3 +1385,109 @@ class TestFiscalRetryWorkerConfig:
         assert "AR" in _TAX_RATE_BY_COUNTRY
         assert _TAX_RATE_BY_COUNTRY["PE"] == Decimal("0.18")
         assert _TAX_RATE_BY_COUNTRY["AR"] == Decimal("0.21")
+
+
+class TestCertificateMetadata:
+    """Tests para parse_certificate_pem y CertMetadata."""
+
+    def test_parse_valid_self_signed_cert(self):
+        """Parsea un certificado auto-firmado generado en runtime."""
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from datetime import datetime, timezone, timedelta
+        from app.utils.crypto import parse_certificate_pem
+
+        # Generar cert auto-firmado para test
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "AR"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Test CUIT 20123456789"),
+            x509.NameAttribute(NameOID.COMMON_NAME, "testcert"),
+        ])
+        not_before = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        not_after = datetime(2027, 1, 1, tzinfo=timezone.utc)
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(not_before)
+            .not_valid_after(not_after)
+            .sign(key, hashes.SHA256())
+        )
+        pem = cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+
+        result = parse_certificate_pem(pem)
+        assert result is not None
+        assert "testcert" in result.subject
+        assert "Test CUIT 20123456789" in result.subject
+        assert result.not_before == not_before
+        assert result.not_after == not_after
+        assert result.days_remaining > 0
+        assert result.is_expired is False
+        assert len(result.serial_number) > 0
+
+    def test_parse_expired_cert(self):
+        """Verifica que CertMetadata detecta certificados expirados."""
+        from cryptography import x509
+        from cryptography.x509.oid import NameOID
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from datetime import datetime, timezone
+        from app.utils.crypto import parse_certificate_pem
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, "expired"),
+        ])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime(2020, 1, 1, tzinfo=timezone.utc))
+            .not_valid_after(datetime(2021, 1, 1, tzinfo=timezone.utc))
+            .sign(key, hashes.SHA256())
+        )
+        pem = cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+
+        result = parse_certificate_pem(pem)
+        assert result is not None
+        assert result.is_expired is True
+        assert result.days_remaining < 0
+
+    def test_parse_invalid_pem_returns_none(self):
+        from app.utils.crypto import parse_certificate_pem
+        assert parse_certificate_pem("not a certificate") is None
+
+    def test_parse_empty_string_returns_none(self):
+        from app.utils.crypto import parse_certificate_pem
+        assert parse_certificate_pem("") is None
+
+    def test_cert_metadata_days_remaining_property(self):
+        from datetime import datetime, timezone, timedelta
+        from app.utils.crypto import CertMetadata
+
+        future = datetime.now(timezone.utc) + timedelta(days=30)
+        meta = CertMetadata(
+            subject="CN=test",
+            issuer="CN=issuer",
+            not_before=datetime.now(timezone.utc),
+            not_after=future,
+            serial_number="ABC123",
+        )
+        assert 28 <= meta.days_remaining <= 30
+        assert meta.is_expired is False
+
+    def test_cert_metadata_model_fields_exist(self):
+        """Verifica que CompanyBillingConfig tiene los campos de metadatos."""
+        from app.models.billing import CompanyBillingConfig
+        fields = CompanyBillingConfig.model_fields
+        assert "cert_subject" in fields
+        assert "cert_issuer" in fields
+        assert "cert_not_before" in fields
+        assert "cert_not_after" in fields
