@@ -153,7 +153,44 @@ class TestMSGReportLabels:
             "REPORT_DAILY_SHEET", "REPORT_DAILY_TITLE",
             "REPORT_CATEGORY_SHEET", "REPORT_CATEGORY_TITLE",
             "REPORT_PORTFOLIO_SHEET", "REPORT_CASH_SHEET",
+            "REPORT_BY_SELLER_SHEET", "REPORT_TX_DETAIL_SHEET",
+            "REPORT_TOP_PRODUCTS_SHEET", "REPORT_HOURLY_SHEET",
+            "REPORT_VALUATION_SHEET", "REPORT_INVENTORY_SHEET",
+            "REPORT_BY_CLIENT_SHEET", "REPORT_INSTALLMENTS_SHEET",
+            "REPORT_CASH_MOVES_SHEET", "REPORT_DAILY_SALES_SHEET",
+            "REPORT_CLOSINGS_SHEET", "REPORT_CAT_SALES_SHEET",
         ]:
             val = getattr(MSG, attr)
             assert isinstance(val, str), f"{attr} should be str, got {type(val)}"
             assert len(val) > 0, f"{attr} should not be empty"
+
+
+class TestMSGFallbacksAndActions:
+    """Valida constantes de fallbacks y acciones."""
+
+    def test_fallback_constants_exist(self):
+        for attr in [
+            "FALLBACK_UNKNOWN", "FALLBACK_UNIT", "FALLBACK_NO_ROLE",
+            "FALLBACK_NO_NUMBER", "FALLBACK_NOT_SPECIFIED",
+            "FALLBACK_NO_CLIENT", "FALLBACK_NO_CATEGORY",
+            "FALLBACK_NO_DETAIL", "FALLBACK_NO_DESC", "FALLBACK_PRODUCT",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_action_constants_exist(self):
+        for attr in [
+            "ACTION_OPENING", "ACTION_CLOSING", "ACTION_SALE",
+            "ACTION_INITIAL_CREDIT", "ACTION_INSTALLMENT_PAYMENT",
+            "ACTION_INCOME",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_alert_constants_exist(self):
+        for attr in [
+            "ALERT_CRITICAL_STOCK", "ALERT_LOW_STOCK", "ALERT_NO_STOCK",
+            "ALERT_OVERDUE_INSTALLMENTS", "ALERT_OPEN_CASHBOX",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"

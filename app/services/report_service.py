@@ -953,7 +953,7 @@ def generate_sales_report(
     # =================
     # HOJA 5: POR VENDEDOR (con fórmulas)
     # =================
-    ws_user = wb.create_sheet("Por Vendedor")
+    ws_user = wb.create_sheet(MSG.REPORT_BY_SELLER_SHEET)
     row = _add_company_header(
         ws_user,
         company_name,
@@ -1013,7 +1013,7 @@ def generate_sales_report(
     # =================
     # HOJA 6: DETALLE DE TRANSACCIONES (por item)
     # =================
-    ws_detail = wb.create_sheet("Detalle Transacciones")
+    ws_detail = wb.create_sheet(MSG.REPORT_TX_DETAIL_SHEET)
     row = _add_company_header(
         ws_detail,
         company_name,
@@ -1099,7 +1099,7 @@ def generate_sales_report(
                 column=3,
                 value=_safe_string(
                     sale.client.name if sale.client else None,
-                    "Cliente General",
+                    MSG.REPORT_GENERAL_CLIENT,
                 ),
             )
             ws_detail.cell(
@@ -1150,7 +1150,7 @@ def generate_sales_report(
     # =================
     # HOJA 7: PRODUCTOS MÁS VENDIDOS (TOP 20, con fórmulas)
     # =================
-    ws_top_products = wb.create_sheet("Top Productos")
+    ws_top_products = wb.create_sheet(MSG.REPORT_TOP_PRODUCTS_SHEET)
     row = _add_company_header(
         ws_top_products,
         company_name,
@@ -1240,7 +1240,7 @@ def generate_sales_report(
     # =================
     # HOJA 8: ANÁLISIS HORARIO (con fórmulas)
     # =================
-    ws_hourly = wb.create_sheet("Análisis Horario")
+    ws_hourly = wb.create_sheet(MSG.REPORT_HOURLY_SHEET)
     row = _add_company_header(
         ws_hourly,
         company_name,
@@ -1425,7 +1425,7 @@ def generate_inventory_report(
     # HOJA 1: RESUMEN
     # =================
     ws_summary = wb.active
-    ws_summary.title = "Resumen Valorización"
+    ws_summary.title = MSG.REPORT_VALUATION_SHEET
 
     row = _add_company_header(
         ws_summary,
@@ -1570,7 +1570,7 @@ def generate_inventory_report(
     # =================
     # HOJA 3: DETALLE COMPLETO (con fórmulas)
     # =================
-    ws_detail = wb.create_sheet("Detalle Inventario")
+    ws_detail = wb.create_sheet(MSG.REPORT_INVENTORY_SHEET)
     row = _add_company_header(
         ws_detail,
         company_name,
@@ -2008,7 +2008,7 @@ def generate_receivables_report(
     # =================
     # HOJA 2: POR CLIENTE (con fórmulas)
     # =================
-    ws_client = wb.create_sheet("Por Cliente")
+    ws_client = wb.create_sheet(MSG.REPORT_BY_CLIENT_SHEET)
     row = _add_company_header(
         ws_client,
         company_name,
@@ -2069,7 +2069,7 @@ def generate_receivables_report(
     # =================
     # HOJA 3: DETALLE (mejorado)
     # =================
-    ws_detail = wb.create_sheet("Detalle Cuotas")
+    ws_detail = wb.create_sheet(MSG.REPORT_INSTALLMENTS_SHEET)
     row = _add_company_header(
         ws_detail,
         company_name,
@@ -2442,7 +2442,7 @@ def generate_cashbox_report(
     # =================
     # HOJA 2: MOVIMIENTOS DE CAJA
     # =================
-    ws_logs = wb.create_sheet("Movimientos Caja")
+    ws_logs = wb.create_sheet(MSG.REPORT_CASH_MOVES_SHEET)
     row = _add_company_header(
         ws_logs,
         company_name,
@@ -2657,7 +2657,7 @@ def generate_cashbox_report(
     # =================
     # HOJA 4: VENTAS POR DÍA (con fórmulas)
     # =================
-    ws_daily = wb.create_sheet("Ventas Diarias")
+    ws_daily = wb.create_sheet(MSG.REPORT_DAILY_SALES_SHEET)
     row = _add_company_header(
         ws_daily,
         company_name,

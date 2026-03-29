@@ -21,6 +21,7 @@ from sqlalchemy import and_, or_
 
 from app.models import Product, SaleInstallment, Sale, CashboxSession
 from app.enums import SaleStatus
+from app.i18n import MSG
 from app.utils.formatting import format_currency
 from app.utils.tenant import set_tenant_context
 
@@ -116,7 +117,7 @@ def get_low_stock_alerts(
             alerts.append(Alert(
                 type=AlertType.STOCK_CRITICAL,
                 severity=AlertSeverity.CRITICAL,
-                title="Stock Crítico",
+                title=MSG.ALERT_CRITICAL_STOCK,
                 message=f"{len(critical_products)} producto(s) con stock crítico (≤{STOCK_CRITICAL_THRESHOLD} unidades)",
                 count=len(critical_products),
                 details={
@@ -145,7 +146,7 @@ def get_low_stock_alerts(
             alerts.append(Alert(
                 type=AlertType.STOCK_LOW,
                 severity=AlertSeverity.WARNING,
-                title="Stock Bajo",
+                title=MSG.ALERT_LOW_STOCK,
                 message=f"{len(low_stock_products)} producto(s) con stock bajo ({STOCK_CRITICAL_THRESHOLD + 1}-{STOCK_LOW_THRESHOLD} unidades)",
                 count=len(low_stock_products),
                 details={
@@ -181,7 +182,7 @@ def get_low_stock_alerts(
             alerts.append(Alert(
                 type=AlertType.STOCK_CRITICAL,
                 severity=AlertSeverity.ERROR,
-                title="Sin Stock",
+                title=MSG.ALERT_NO_STOCK,
                 message=f"{out_of_stock} producto(s) sin stock disponible",
                 count=out_of_stock,
             ))
@@ -268,7 +269,7 @@ def get_installment_alerts(
             alerts.append(Alert(
                 type=AlertType.INSTALLMENT_OVERDUE,
                 severity=AlertSeverity.ERROR,
-                title="Cuotas Vencidas",
+                title=MSG.ALERT_OVERDUE_INSTALLMENTS,
                 message=(
                     f"{overdue_count} cuota(s) vencida(s) por "
                     f"{_format_alert_currency(overdue_amount, currency_symbol)}"
@@ -376,7 +377,7 @@ def get_cashbox_alerts(
             alerts.append(Alert(
                 type=AlertType.CASHBOX_OPEN_LONG,
                 severity=AlertSeverity.WARNING,
-                title="Caja Abierta",
+                title=MSG.ALERT_OPEN_CASHBOX,
                 message=f"Caja abierta por más de {CASHBOX_OPEN_HOURS} horas",
                 count=len(long_open_sessions),
                 details={

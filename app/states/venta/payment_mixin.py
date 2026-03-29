@@ -120,7 +120,7 @@ class PaymentMixin:
         method: PaymentMethodConfig = {
             "id": str(uuid.uuid4()),
             "name": name,
-            "description": description or "Sin descripcion",
+            "description": description or "Sin descripción",
             "kind": kind,
             "enabled": True,
         }

@@ -1084,7 +1084,7 @@ class ConfigState(MixinState):
                 method_id=method_id,
                 code=method_id,
                 name=name,
-                description=description or "Sin descripcion",
+                description=description or "Sin descripción",
                 kind=kind,
                 enabled=True,
                 is_active=True,
@@ -1102,7 +1102,7 @@ class ConfigState(MixinState):
         method: PaymentMethodConfig = {
             "id": method_id,
             "name": name,
-            "description": description or "Sin descripcion",
+            "description": description or "Sin descripción",
             "kind": kind,
             "enabled": True,
         }

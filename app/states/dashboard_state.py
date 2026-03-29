@@ -28,6 +28,7 @@ from app.models import (
 )
 from .inventory_state import LOW_STOCK_THRESHOLD
 from app.enums import SaleStatus, ReservationStatus
+from app.i18n import MSG
 from app.services.alert_service import get_alert_summary
 from .mixin_state import MixinState
 
@@ -546,7 +547,7 @@ class DashboardState(MixinState):
             category_expr = func.coalesce(
                 func.nullif(func.trim(SaleItem.product_category_snapshot), ""),
                 Product.category,
-                "Sin categoría",
+                MSG.FALLBACK_NO_CATEGORY,
             )
             query = (
                 select(
@@ -577,7 +578,7 @@ class DashboardState(MixinState):
         total_sales = sum(float(row[1] or 0) for row in rows)
         return [
             {
-                "category": row[0] or "Sin categoría",
+                "category": row[0] or MSG.FALLBACK_NO_CATEGORY,
                 "total": float(row[1] or 0),
                 "percentage": (
                     round((float(row[1] or 0) / total_sales * 100), 1)
@@ -704,7 +705,7 @@ class DashboardState(MixinState):
 
         wb = Workbook()
         ws = wb.active
-        ws.title = "Ventas por Categoría"
+        ws.title = MSG.REPORT_CAT_SALES_SHEET
         export_categories = self._query_sales_by_category(limit=None)
 
         # Estilos

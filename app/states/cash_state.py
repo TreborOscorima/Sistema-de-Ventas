@@ -156,7 +156,7 @@ class CashState(MixinState):
     cash_active_tab: str = "resumen"
     petty_cash_amount: str = "" # Este será el Total calculado o manual
     petty_cash_quantity: str = "1"
-    petty_cash_unit: str = "Unidad"
+    petty_cash_unit: str = MSG.FALLBACK_UNIT
     petty_cash_cost: str = ""
     petty_cash_reason: str = ""
     petty_cash_modal_open: bool = False
@@ -313,7 +313,7 @@ class CashState(MixinState):
         self.petty_cash_amount = ""
         self.petty_cash_quantity = "1"
         self.petty_cash_cost = ""
-        self.petty_cash_unit = "Unidad"
+        self.petty_cash_unit = MSG.FALLBACK_UNIT
         self.petty_cash_reason = ""
         self.petty_cash_modal_open = False
         self._cashbox_update_trigger += 1
@@ -383,7 +383,7 @@ class CashState(MixinState):
                     "notes": log.notes,
                     "amount": log.amount,
                     "quantity": qty,
-                    "unit": log.unit or "Unidad",
+                    "unit": log.unit or MSG.FALLBACK_UNIT,
                     "cost": cost,
                     "formatted_amount": f"{log.amount:.2f}",
                     "formatted_cost": f"{cost:.2f}",
@@ -681,7 +681,7 @@ class CashState(MixinState):
         user_id: int | None = None,
     ) -> list[dict]:
         method_col = sqlalchemy.func.coalesce(
-            CashboxLogModel.payment_method, "No especificado"
+            CashboxLogModel.payment_method, MSG.FALLBACK_NOT_SPECIFIED
         )
         statement = (
             select(
@@ -704,7 +704,7 @@ class CashState(MixinState):
             results = session.exec(statement).all()
         summary: list[dict] = []
         for method, count, amount in results:
-            label = (method or "No especificado").strip() or "No especificado"
+            label = (method or MSG.FALLBACK_NOT_SPECIFIED).strip() or MSG.FALLBACK_NOT_SPECIFIED
             summary.append(
                 {
                     "method": label,
@@ -744,7 +744,7 @@ class CashState(MixinState):
 
             result: list[CashboxSale] = []
             for log, username in logs:
-                method_label = (log.payment_method or "No especificado").strip() or "No especificado"
+                method_label = (log.payment_method or MSG.FALLBACK_NOT_SPECIFIED).strip() or MSG.FALLBACK_NOT_SPECIFIED
                 payment_detail = log.notes or ""
                 concept = payment_detail.strip()
                 if concept:
@@ -764,7 +764,7 @@ class CashState(MixinState):
                         "sale_id": str(log.id),
                         "timestamp": self._format_event_timestamp(log.timestamp),
                         "time": time_label,
-                        "user": username or "Desconocido",
+                        "user": username or MSG.FALLBACK_UNKNOWN,
                         "payment_method": method_label,
                         "payment_label": method_label,
                         "payment_details": payment_detail,
@@ -1423,7 +1423,7 @@ class CashState(MixinState):
                 {
                     "description": item.product_name_snapshot,
                     "quantity": item.quantity,
-                    "unit": "Unidad",
+                    "unit": MSG.FALLBACK_UNIT,
                     "price": item.unit_price,
                     "sale_price": item.unit_price,
                     "subtotal": item.subtotal,
@@ -1436,7 +1436,7 @@ class CashState(MixinState):
         sale_dict: CashboxSale = {
             "sale_id": str(sale.id),
             "timestamp": self._format_event_timestamp(sale.timestamp),
-            "user": user.username if user else "Desconocido",
+            "user": user.username if user else MSG.FALLBACK_UNKNOWN,
             "payment_method": method_label,
             "payment_label": method_label,
             "payment_details": details_text,
@@ -1477,7 +1477,7 @@ class CashState(MixinState):
             return []
         return [
             {
-                "method": item.get("method", "No especificado"),
+                "method": item.get("method", MSG.FALLBACK_NOT_SPECIFIED),
                 "count": str(int(item.get("count", 0))),
                 "total": self._format_currency(item.get("total", 0)),
             }
@@ -1688,12 +1688,12 @@ class CashState(MixinState):
                     if (method_label or "").strip().lower() not in invalid_labels:
                         method_raw = method_label
                     else:
-                        method_raw = "No especificado"
+                        method_raw = MSG.FALLBACK_NOT_SPECIFIED
                 if (method_label or "").strip().lower() in invalid_labels:
                     if (method_raw or "").strip().lower() not in invalid_labels:
                         method_label = method_raw
                     else:
-                        method_label = "No especificado"
+                        method_label = MSG.FALLBACK_NOT_SPECIFIED
                 if (payment_details or "").strip().lower() in invalid_labels:
                     if (method_label or "").strip().lower() not in invalid_labels:
                         payment_details = f"Pago en {method_label}"
@@ -1783,7 +1783,7 @@ class CashState(MixinState):
             total = item.get("total", 0) or 0
             if total <= 0:
                 continue
-            method = (item.get("method", "No especificado") or "").strip() or "No especificado"
+            method = (item.get("method", MSG.FALLBACK_NOT_SPECIFIED) or "").strip() or MSG.FALLBACK_NOT_SPECIFIED
             info_dict[f"Total {method}"] = self._format_currency(total)
             total_value += float(total)
 
@@ -1822,7 +1822,7 @@ class CashState(MixinState):
             operation = str(operation_raw).replace("_", " ").strip().title() or "Venta"
             method_raw = sale.get("payment_label") or sale.get("payment_method") or ""
             method_label = (
-                self._normalize_wallet_label(method_raw) if method_raw else "No especificado"
+                self._normalize_wallet_label(method_raw) if method_raw else MSG.FALLBACK_NOT_SPECIFIED
             )
             reference = self._payment_details_text(sale.get("payment_details", ""))
             reference_clean = re.sub(r"#\s*\d+", "", reference or "").strip()
@@ -1934,7 +1934,7 @@ class CashState(MixinState):
             total = item.get("total", 0) or 0
             if total <= 0:
                 continue
-            method = (item.get("method", "No especificado") or "").strip() or "No especificado"
+            method = (item.get("method", MSG.FALLBACK_NOT_SPECIFIED) or "").strip() or MSG.FALLBACK_NOT_SPECIFIED
             info_dict[f"Total {method}"] = self._format_currency(total)
         info_dict["Apertura"] = self._format_currency(opening_amount)
         info_dict["Ingresos reales"] = self._format_currency(income_total)
@@ -1969,7 +1969,7 @@ class CashState(MixinState):
             operation = str(operation_raw).replace("_", " ").strip().title() or "Venta"
             method_raw = sale.get("payment_label") or sale.get("payment_method") or ""
             method_label = (
-                self._normalize_wallet_label(method_raw) if method_raw else "No especificado"
+                self._normalize_wallet_label(method_raw) if method_raw else MSG.FALLBACK_NOT_SPECIFIED
             )
             reference = self._payment_details_text(sale.get("payment_details", ""))
             reference_clean = re.sub(r"#\s*\d+", "", reference or "").strip()
@@ -2072,7 +2072,7 @@ class CashState(MixinState):
 
         totals_list = [
             {
-                "method": item.get("method", "No especificado"),
+                "method": item.get("method", MSG.FALLBACK_NOT_SPECIFIED),
                 "amount": self._round_currency(item.get("total", 0)),
             }
             for item in summary
@@ -2146,7 +2146,7 @@ class CashState(MixinState):
         for item in totals_list:
             amount = item.get("amount", 0)
             if amount > 0:
-                method = item.get("method", "No especificado")
+                method = item.get("method", MSG.FALLBACK_NOT_SPECIFIED)
                 receipt_lines.append(
                     row(f"{method}:", self._format_currency(amount))
                 )
@@ -2337,7 +2337,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
             ws.cell(row=row, column=1, value=log.get("timestamp", ""))
             ws.cell(row=row, column=2, value=action_display)
-            ws.cell(row=row, column=3, value=log.get("user", "Desconocido"))
+            ws.cell(row=row, column=3, value=log.get("user", MSG.FALLBACK_UNKNOWN))
             ws.cell(row=row, column=4, value=opening_amount).number_format = currency_format
             ws.cell(row=row, column=5, value=closing_amount).number_format = currency_format
             ws.cell(row=row, column=6, value=totals_detail)
@@ -2452,7 +2452,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "Responsable",
             "Concepto/Motivo",
             "Cantidad",
-            "Unidad",
+            MSG.FALLBACK_UNIT,
             f"Costo Unitario ({currency_label})",
             f"Total Egreso ({currency_label})",
         ]
@@ -2466,7 +2466,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             cost = _parse_numeric(item.get("formatted_cost", "0"))
 
             ws.cell(row=row, column=1, value=item.get("timestamp", ""))
-            ws.cell(row=row, column=2, value=item.get("user", "Desconocido"))
+            ws.cell(row=row, column=2, value=item.get("user", MSG.FALLBACK_UNKNOWN))
             ws.cell(row=row, column=3, value=item.get("notes", "") or "Sin motivo especificado")
             ws.cell(row=row, column=4, value=quantity)
             ws.cell(row=row, column=5, value=item.get("unit", "Unid."))
@@ -2801,7 +2801,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         items_data.append({
                             "description": item.product_name_snapshot,
                             "quantity": item.quantity,
-                            "unit": "Unidad",
+                            "unit": MSG.FALLBACK_UNIT,
                             "price": item.unit_price,
                             "subtotal": item.subtotal
                         })
@@ -2816,7 +2816,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                             sale.payments or []
                         ),
                         "items": items_data,
-                        "user": sale.user.username if sale.user else "Desconocido"
+                        "user": sale.user.username if sale.user else MSG.FALLBACK_UNKNOWN
                     }
             except ValueError:
                 pass
@@ -2982,7 +2982,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         closing_timestamp = self._display_now().strftime("%Y-%m-%d %H:%M:%S")
         totals_list = [
             {
-                "method": item.get("method", "No especificado"),
+                "method": item.get("method", MSG.FALLBACK_NOT_SPECIFIED),
                 "amount": self._round_currency(item.get("total", 0)),
             }
             for item in summary
@@ -3102,7 +3102,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         for item in summary:
             amount = item.get("total", 0)
             if amount > 0:
-                method = item.get("method", "No especificado")
+                method = item.get("method", MSG.FALLBACK_NOT_SPECIFIED)
                 receipt_lines.append(
                     row(f"{method}:", self._format_currency(amount))
                 )
@@ -3218,7 +3218,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
             result: list[CashboxSale] = []
             for log, username in logs:
-                method_label = (log.payment_method or "No especificado").strip() or "No especificado"
+                method_label = (log.payment_method or MSG.FALLBACK_NOT_SPECIFIED).strip() or MSG.FALLBACK_NOT_SPECIFIED
                 payment_detail = log.notes or ""
                 concept = payment_detail.strip()
                 if concept:
@@ -3238,7 +3238,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         "sale_id": str(log.id),
                         "timestamp": self._format_event_timestamp(log.timestamp),
                         "time": time_label,
-                        "user": username or "Desconocido",
+                        "user": username or MSG.FALLBACK_UNKNOWN,
                         "payment_method": method_label,
                         "payment_label": method_label,
                         "payment_details": payment_detail,
@@ -3264,7 +3264,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not company_id or not branch_id:
             return []
         method_col = sqlalchemy.func.coalesce(
-            CashboxLogModel.payment_method, "No especificado"
+            CashboxLogModel.payment_method, MSG.FALLBACK_NOT_SPECIFIED
         )
         statement = (
             select(
@@ -3292,7 +3292,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         with rx.session() as session:
             results = session.exec(statement).all()
         for method, count, amount in results:
-            label = (method or "No especificado").strip() or "No especificado"
+            label = (method or MSG.FALLBACK_NOT_SPECIFIED).strip() or MSG.FALLBACK_NOT_SPECIFIED
             summary.append(
                 {
                     "method": label,

@@ -331,7 +331,7 @@ class HistorialState(MixinState):
         self,
         sale: Sale | None,
         user_lookup: dict[int, str] | None = None,
-        default: str = "Desconocido",
+        default: str = MSG.FALLBACK_UNKNOWN,
     ) -> str:
         if sale and sale.user and getattr(sale.user, "username", None):
             user_name = str(sale.user.username).strip()
@@ -389,7 +389,7 @@ class HistorialState(MixinState):
                     if sale and sale.status == SaleStatus.cancelled:
                         continue
                     user_name = self._sale_username(
-                        sale, sale_user_lookup, "Desconocido"
+                        sale, sale_user_lookup, MSG.FALLBACK_UNKNOWN
                     )
                     if user_filter != "Todos" and user_name != user_filter:
                         continue
@@ -446,7 +446,7 @@ class HistorialState(MixinState):
                 logs = session.exec(log_query).all()
 
                 for log, username in logs:
-                    user_name = username or "Desconocido"
+                    user_name = username or MSG.FALLBACK_UNKNOWN
                     if user_filter != "Todos" and user_name != user_filter:
                         continue
                     method_key = self._method_key_from_label(
@@ -509,7 +509,7 @@ class HistorialState(MixinState):
             logs = session.exec(log_query).all()
 
             for log, username in logs:
-                user_name = username or "Desconocido"
+                user_name = username or MSG.FALLBACK_UNKNOWN
                 if user_filter != "Todos" and user_name != user_filter:
                     continue
                 action_label = (
@@ -805,10 +805,10 @@ class HistorialState(MixinState):
                     payment_method = fallback.get("payment_method", payment_method)
                     payment_details = fallback.get("payment_details", payment_details)
                 client_name = (
-                    sale.client.name if sale.client else "Sin cliente"
+                    sale.client.name if sale.client else MSG.FALLBACK_NO_CLIENT
                 )
                 user_name = self._sale_username(
-                    sale, sale_user_lookup, "Desconocido"
+                    sale, sale_user_lookup, MSG.FALLBACK_UNKNOWN
                 )
                 total_amount = self._round_currency(sale.total_amount or 0)
                 rows.append(
@@ -1462,9 +1462,9 @@ class HistorialState(MixinState):
                 "timestamp": self._format_company_datetime(sale.timestamp)
                 if sale.timestamp
                 else "",
-                "client_name": sale.client.name if sale.client else "Sin cliente",
+                "client_name": sale.client.name if sale.client else MSG.FALLBACK_NO_CLIENT,
                 "user": self._sale_username(
-                    sale, sale_user_lookup, "Desconocido"
+                    sale, sale_user_lookup, MSG.FALLBACK_UNKNOWN
                 ),
                 "payment_method": payment_method,
                 "payment_details": self._payment_details_text(payment_details),
@@ -1747,7 +1747,7 @@ class HistorialState(MixinState):
             if not rows:
                 return rx.toast(MSG.HIST_NO_CLOSINGS_EXPORT, duration=3000)
 
-            wb, ws = create_excel_workbook("Cierres de Caja")
+            wb, ws = create_excel_workbook(MSG.REPORT_CLOSINGS_SHEET)
 
             # Encabezado profesional
             row = add_company_header(
@@ -1776,7 +1776,7 @@ class HistorialState(MixinState):
 
                 ws.cell(row=row, column=1, value=item.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=action_display)
-                ws.cell(row=row, column=3, value=item.get("user", "Desconocido"))
+                ws.cell(row=row, column=3, value=item.get("user", MSG.FALLBACK_UNKNOWN))
                 ws.cell(row=row, column=4, value=item.get("amount", 0) or 0).number_format = currency_format
                 ws.cell(row=row, column=5, value=item.get("notes", "") or "Sin observaciones")
 

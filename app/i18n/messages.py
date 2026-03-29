@@ -209,5 +209,47 @@ class _Messages:
     REPORT_NOTE_PROFIT = "Utilidad = Venta Bruta"
     REPORT_NOTE_MARGIN = "Margen = Utilidad"
 
+    # ── Fallbacks de display (usados en múltiples módulos) ────
+    FALLBACK_UNKNOWN = "Desconocido"
+    FALLBACK_UNIT = "Unidad"
+    FALLBACK_NO_ROLE = "Sin rol"
+    FALLBACK_NO_NUMBER = "Sin número"
+    FALLBACK_NOT_SPECIFIED = "No especificado"
+    FALLBACK_NO_CLIENT = "Sin cliente"
+    FALLBACK_NO_CATEGORY = "Sin categoría"
+    FALLBACK_NO_DETAIL = "Sin detalle"
+    FALLBACK_NO_DESC = "Sin descripción"
+    FALLBACK_PRODUCT = "Producto"
+
+    # ── Acciones de caja / movimientos ────────────────────────
+    ACTION_OPENING = "Apertura de caja"
+    ACTION_CLOSING = "Cierre de caja"
+    ACTION_SALE = "Venta"
+    ACTION_INITIAL_CREDIT = "Inicial Credito"
+    ACTION_INSTALLMENT_PAYMENT = "Cobro de Cuota"
+    ACTION_INCOME = "Ingreso"
+
+    # ── Alertas de stock ──────────────────────────────────────
+    ALERT_CRITICAL_STOCK = "Stock Crítico"
+    ALERT_LOW_STOCK = "Stock Bajo"
+    ALERT_NO_STOCK = "Sin Stock"
+    ALERT_OVERDUE_INSTALLMENTS = "Cuotas Vencidas"
+    ALERT_OPEN_CASHBOX = "Caja Abierta"
+
+    # ── Reportes — hojas adicionales ──────────────────────────
+    REPORT_BY_SELLER_SHEET = "Por Vendedor"
+    REPORT_TX_DETAIL_SHEET = "Detalle Transacciones"
+    REPORT_TOP_PRODUCTS_SHEET = "Top Productos"
+    REPORT_HOURLY_SHEET = "Análisis Horario"
+    REPORT_VALUATION_SHEET = "Resumen Valorización"
+    REPORT_INVENTORY_SHEET = "Detalle Inventario"
+    REPORT_BY_CLIENT_SHEET = "Por Cliente"
+    REPORT_INSTALLMENTS_SHEET = "Detalle Cuotas"
+    REPORT_CASH_MOVES_SHEET = "Movimientos Caja"
+    REPORT_DAILY_SALES_SHEET = "Ventas Diarias"
+    REPORT_CLOSINGS_SHEET = "Cierres de Caja"
+    REPORT_CAT_SALES_SHEET = "Ventas por Categoría"
+    REPORT_GENERAL_CLIENT = "Cliente General"
+
 
 MSG = _Messages()
