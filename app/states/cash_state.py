@@ -74,6 +74,7 @@ from app.utils.exports import (
     WARNING_FILL,
 )
 from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
+from app.i18n import MSG
 from app.utils.stock import recalculate_stock_totals
 from app.utils.tenant import set_tenant_context
 
@@ -263,34 +264,34 @@ class CashState(MixinState):
     @rx.event
     def add_petty_cash_movement(self):
         if not self.current_user["privileges"]["manage_cashbox"]:
-            return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH, duration=3000)
         block = self._require_active_subscription()
         if block:
             return block
         if not self.cashbox_is_open:
-            return rx.toast("Debe aperturar la caja para registrar movimientos.", duration=3000)
+            return rx.toast(MSG.CASH_OPEN_REQUIRED, duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
 
         try:
             amount = float(self.petty_cash_amount)
             if amount <= 0:
-                return rx.toast("El monto total debe ser mayor a 0.", duration=3000)
+                return rx.toast(MSG.VAL_AMOUNT_GT_ZERO, duration=3000)
 
             quantity = float(self.petty_cash_quantity) if self.petty_cash_quantity else 1.0
             cost = float(self.petty_cash_cost) if self.petty_cash_cost else amount
 
         except ValueError:
-            return rx.toast("Valores numéricos inválidos.", duration=3000)
+            return rx.toast(MSG.VAL_INVALID_NUMERIC, duration=3000)
 
         if not self.petty_cash_reason:
-            return rx.toast("Ingrese un motivo.", duration=3000)
+            return rx.toast(MSG.VAL_ENTER_REASON, duration=3000)
 
         user_id = self.current_user.get("id")
         if not user_id:
-            return rx.toast("Usuario no encontrado.", duration=3000)
+            return rx.toast(MSG.VAL_USER_NOT_FOUND, duration=3000)
 
         with rx.session() as session:
 
@@ -317,7 +318,7 @@ class CashState(MixinState):
         self.petty_cash_modal_open = False
         self._cashbox_update_trigger += 1
         self._refresh_cashbox_caches()
-        return rx.toast("Movimiento registrado correctamente.", duration=3000)
+        return rx.toast(MSG.CASH_MOVEMENT_OK, duration=3000)
 
     def _petty_cash_query(self):
         company_id = self._company_id()
@@ -555,15 +556,15 @@ class CashState(MixinState):
 
     def _require_cashbox_open(self):
         if not self.cashbox_is_open:
-            return rx.toast("Debe aperturar la caja para operar.", duration=3000)
+            return rx.toast(MSG.CASH_OPEN_REQUIRED_OP, duration=3000)
         return None
 
     def _cashbox_guard(self):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         if not self.cashbox_is_open:
             return rx.toast(
-                "Debe aperturar la caja para operar la gestion de caja.",
+                MSG.CASH_OPEN_REQUIRED_MGMT,
                 duration=3000,
             )
         return None
@@ -916,7 +917,7 @@ class CashState(MixinState):
     @rx.event
     def open_cashbox_session(self):
         if not self.current_user["privileges"]["manage_cashbox"]:
-            return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH, duration=3000)
         block = self._require_active_subscription()
         if block:
             return block
@@ -924,9 +925,9 @@ class CashState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         if self.current_user["role"].lower() == "cajero" and not hasattr(self, "token"):
-            return rx.toast("Inicie sesión para abrir caja.", duration=3000)
+            return rx.toast(MSG.VAL_SESSION_REQUIRED, duration=3000)
 
         try:
             amount = Decimal(str(self.cashbox_open_amount_input)) if self.cashbox_open_amount_input else Decimal("0")
@@ -935,10 +936,10 @@ class CashState(MixinState):
         amount = self._round_currency(amount)
 
         if amount < 0:
-            return rx.toast("Ingrese un monto válido para la caja inicial.", duration=3000)
+            return rx.toast(MSG.CASH_INVALID_INITIAL, duration=3000)
 
         if not user_id:
-            return rx.toast("Usuario no encontrado.", duration=3000)
+            return rx.toast(MSG.VAL_USER_NOT_FOUND, duration=3000)
         with rx.session() as session:
             existing = session.exec(
                 select(CashboxSessionModel)
@@ -949,7 +950,7 @@ class CashState(MixinState):
             ).first()
 
             if existing:
-                 return rx.toast("Ya existe una caja abierta.", duration=3000)
+                 return rx.toast(MSG.CASH_ALREADY_OPEN, duration=3000)
 
             new_session = CashboxSessionModel(
                 company_id=company_id,
@@ -978,7 +979,7 @@ class CashState(MixinState):
         self.cashbox_open_amount_input = ""
         self._cashbox_update_trigger += 1
         self._refresh_cashbox_caches()
-        return rx.toast("Caja abierta. Jornada iniciada.", duration=3000)
+        return rx.toast(MSG.CASH_OPENED, duration=3000)
 
     def _close_cashbox_session(self):
         user_id = self.current_user.get("id")
@@ -1120,19 +1121,19 @@ class CashState(MixinState):
     @rx.event
     def set_cashbox_log_staged_start_date(self, value: str):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         self.cashbox_log_staged_start_date = value or ""
 
     @rx.event
     def set_cashbox_log_staged_end_date(self, value: str):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         self.cashbox_log_staged_end_date = value or ""
 
     @rx.event
     def apply_cashbox_log_filters(self):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         self.cashbox_log_filter_start_date = self.cashbox_log_staged_start_date
         self.cashbox_log_filter_end_date = self.cashbox_log_staged_end_date
         self.cashbox_log_current_page = 1
@@ -1141,7 +1142,7 @@ class CashState(MixinState):
     @rx.event
     def reset_cashbox_log_filters(self):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         self.cashbox_log_filter_start_date = ""
         self.cashbox_log_filter_end_date = ""
         self.cashbox_log_staged_start_date = ""
@@ -1152,7 +1153,7 @@ class CashState(MixinState):
     @rx.event
     def set_cashbox_log_page(self, page: int):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         if 1 <= page <= self.cashbox_log_total_pages:
             self.cashbox_log_current_page = page
             self._refresh_cashbox_caches()
@@ -1160,7 +1161,7 @@ class CashState(MixinState):
     @rx.event
     def prev_cashbox_log_page(self):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         if self.cashbox_log_current_page > 1:
             self.cashbox_log_current_page -= 1
             self._refresh_cashbox_caches()
@@ -1168,7 +1169,7 @@ class CashState(MixinState):
     @rx.event
     def next_cashbox_log_page(self):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         if self.cashbox_log_current_page < self.cashbox_log_total_pages:
             self.cashbox_log_current_page += 1
             self._refresh_cashbox_caches()
@@ -1530,7 +1531,7 @@ class CashState(MixinState):
         summary = breakdown["summary"]
         if not day_sales and not summary and breakdown["opening_amount"] == 0:
             self.cashbox_close_modal_open = False
-            yield rx.toast("No hay movimientos de caja hoy.", duration=3000)
+            yield rx.toast(MSG.CASH_NO_MOVEMENTS_TODAY, duration=3000)
             return
         self.summary_by_method = summary
         self.cashbox_close_summary_sales = day_sales
@@ -1553,11 +1554,11 @@ class CashState(MixinState):
         if denial:
             return denial
         if not self.current_user["privileges"]["export_data"]:
-            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+            return rx.toast(MSG.PERM_EXPORT, duration=3000)
 
         sales = self._fetch_cashbox_sales()
         if not sales:
-            return rx.toast("No hay ventas para exportar.", duration=3000)
+            return rx.toast(MSG.SALE_NO_EXPORT, duration=3000)
 
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
@@ -1763,7 +1764,7 @@ class CashState(MixinState):
             self.current_user["privileges"]["view_cashbox"]
             and self.current_user["privileges"]["export_data"]
         ):
-            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+            return rx.toast(MSG.PERM_EXPORT, duration=3000)
 
         report_date = self.cashbox_close_summary_date or self._current_local_date_str()
         breakdown = self._build_cashbox_close_breakdown(report_date)
@@ -1771,7 +1772,7 @@ class CashState(MixinState):
         day_sales = self.cashbox_close_summary_sales or self._get_day_sales(report_date)
 
         if not summary and not day_sales and breakdown["opening_amount"] == 0:
-            return rx.toast("No hay movimientos de caja para exportar.", duration=3000)
+            return rx.toast(MSG.CASH_NO_MOVEMENTS_EXPORT, duration=3000)
 
         info_dict = {
             "Fecha Cierre": report_date,
@@ -1862,16 +1863,16 @@ class CashState(MixinState):
             self.current_user["privileges"]["view_cashbox"]
             and self.current_user["privileges"]["export_data"]
         ):
-            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+            return rx.toast(MSG.PERM_EXPORT, duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa o sucursal no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_BRANCH_UNDEFINED, duration=3000)
         set_tenant_context(company_id, branch_id)
         try:
             log_id_int = int(log_id)
         except (TypeError, ValueError):
-            return rx.toast("Registro de cierre no valido.", duration=3000)
+            return rx.toast(MSG.CASH_CLOSE_INVALID, duration=3000)
         with rx.session() as session:
             log = session.exec(
                 select(CashboxLogModel)
@@ -1884,7 +1885,7 @@ class CashState(MixinState):
                 )
             ).first()
         if not log or (log.action or "").lower() != "cierre":
-            return rx.toast("El registro seleccionado no es un cierre.", duration=3000)
+            return rx.toast(MSG.CASH_CLOSE_NOT_CLOSE, duration=3000)
 
         start_dt, end_dt, user_id, report_date, closing_timestamp = self._cashbox_range_for_log(log)
         company_id = int(log.company_id or company_id)
@@ -1923,7 +1924,7 @@ class CashState(MixinState):
         )
 
         if not summary and not day_sales and opening_amount == 0:
-            return rx.toast("No hay movimientos de caja para exportar.", duration=3000)
+            return rx.toast(MSG.CASH_NO_MOVEMENTS_EXPORT, duration=3000)
 
         info_dict = {
             "Fecha Cierre": report_date,
@@ -2006,16 +2007,16 @@ class CashState(MixinState):
     @rx.event
     def print_cashbox_close_summary_for_log(self, log_id: str):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa o sucursal no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_BRANCH_UNDEFINED, duration=3000)
         set_tenant_context(company_id, branch_id)
         try:
             log_id_int = int(log_id)
         except (TypeError, ValueError):
-            return rx.toast("Registro de cierre no valido.", duration=3000)
+            return rx.toast(MSG.CASH_CLOSE_INVALID, duration=3000)
         with rx.session() as session:
             log = session.exec(
                 select(CashboxLogModel)
@@ -2028,7 +2029,7 @@ class CashState(MixinState):
                 )
             ).first()
         if not log or (log.action or "").lower() != "cierre":
-            return rx.toast("El registro seleccionado no es un cierre.", duration=3000)
+            return rx.toast(MSG.CASH_CLOSE_NOT_CLOSE, duration=3000)
 
         start_dt, end_dt, user_id, report_date, closing_timestamp = self._cashbox_range_for_log(log)
         company_id = int(log.company_id or company_id)
@@ -2067,7 +2068,7 @@ class CashState(MixinState):
         )
 
         if not summary and not day_sales and opening_amount == 0:
-            return rx.toast("No hay movimientos de caja para imprimir.", duration=3000)
+            return rx.toast(MSG.CASH_NO_MOVEMENTS_PRINT, duration=3000)
 
         totals_list = [
             {
@@ -2233,12 +2234,12 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     @rx.event
     def export_cashbox_sessions(self):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         if not self.current_user["privileges"]["export_data"]:
-            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+            return rx.toast(MSG.PERM_EXPORT, duration=3000)
         logs = self._fetch_cashbox_logs()
         if not logs:
-            return rx.toast("No hay aperturas o cierres para exportar.", duration=3000)
+            return rx.toast(MSG.CASH_NO_OPENCLOSE_EXPORT, duration=3000)
 
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
@@ -2379,13 +2380,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     @rx.event
     def export_petty_cash_report(self):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         if not self.current_user["privileges"]["export_data"]:
-            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+            return rx.toast(MSG.PERM_EXPORT, duration=3000)
 
         movements = self.petty_cash_movements
         if not movements:
-            return rx.toast("No hay movimientos para exportar.", duration=3000)
+            return rx.toast(MSG.CASH_NO_MOVEMENTS_GENERIC, duration=3000)
 
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
@@ -2510,11 +2511,11 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     @rx.event
     def show_cashbox_log(self, log_id: str):
         if not self.current_user["privileges"]["view_cashbox"]:
-            return rx.toast("No tiene permisos para Gestion de Caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH_MGMT, duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         with rx.session() as session:
             log = session.exec(
                 select(CashboxLogModel)
@@ -2523,7 +2524,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 .where(CashboxLogModel.branch_id == branch_id)
             ).first()
             if not log:
-                return rx.toast("Registro de caja no encontrado.", duration=3000)
+                return rx.toast(MSG.CASH_RECORD_NOT_FOUND, duration=3000)
 
             # Obtener username via user_id
             user = session.get(UserModel, log.user_id)
@@ -2584,27 +2585,27 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if denial:
             return denial
         if not self.current_user["privileges"]["delete_sales"]:
-            return rx.toast("No tiene permisos para eliminar ventas.", duration=3000)
+            return rx.toast(MSG.PERM_DELETE_SALE, duration=3000)
         block = self._require_active_subscription()
         if block:
             return block
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         sale_id = self.sale_to_delete
         reason = sanitize_reason(self.sale_delete_reason).strip()
         if not sale_id:
-            return rx.toast("Seleccione una venta a eliminar.", duration=3000)
+            return rx.toast(MSG.SALE_SELECT_DELETE, duration=3000)
         if not reason:
             return rx.toast(
-                "Ingrese el motivo de la eliminación de la venta.", duration=3000
+                MSG.SALE_ENTER_DELETE_REASON, duration=3000
             )
 
         try:
             sale_db_id = int(sale_id)
         except ValueError:
-            return rx.toast("ID de venta inválido.", duration=3000)
+            return rx.toast(MSG.VAL_INVALID_SALE_ID, duration=3000)
 
         with rx.session() as session:
             sale_db = session.exec(
@@ -2778,7 +2779,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         sale_data = None
         with rx.session() as session:
             try:
@@ -2957,7 +2958,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
     @rx.event
     def close_cashbox_day(self):
         if not self.current_user["privileges"]["manage_cashbox"]:
-            return rx.toast("No tiene permisos para gestionar la caja.", duration=3000)
+            return rx.toast(MSG.PERM_CASH, duration=3000)
         denial = self._cashbox_guard()
         if denial:
             return denial
@@ -2967,7 +2968,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         date = self.cashbox_close_summary_date or self._current_local_date_str()
         breakdown = self._build_cashbox_close_breakdown(date)
         summary = breakdown["summary"]
@@ -2977,7 +2978,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             and not summary
             and breakdown["opening_amount"] == 0
         ):
-            return rx.toast("No hay movimientos de caja hoy.", duration=3000)
+            return rx.toast(MSG.CASH_NO_MOVEMENTS_TODAY, duration=3000)
         closing_timestamp = self._display_now().strftime("%Y-%m-%d %H:%M:%S")
         totals_list = [
             {

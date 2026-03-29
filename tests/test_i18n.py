@@ -1,0 +1,159 @@
+"""Tests para el módulo de internacionalización (i18n).
+
+Valida integridad de las constantes de mensajes y su uso correcto
+con .format() placeholders.
+"""
+
+import pytest
+from app.i18n import MSG
+from app.i18n.messages import _Messages
+
+
+class TestMSGIntegrity:
+    """Verifica que MSG expone todas las constantes esperadas."""
+
+    def test_msg_is_singleton(self):
+        """MSG es una instancia única de _Messages."""
+        assert isinstance(MSG, _Messages)
+
+    def test_permission_constants_exist(self):
+        assert MSG.PERM_CASH
+        assert MSG.PERM_CASH_MGMT
+        assert MSG.PERM_SALES
+        assert MSG.PERM_DELETE_SALE
+        assert MSG.PERM_EXPORT
+
+    def test_validation_constants_exist(self):
+        assert MSG.VAL_COMPANY_UNDEFINED
+        assert MSG.VAL_COMPANY_BRANCH_UNDEFINED
+        assert MSG.VAL_USER_NOT_FOUND
+        assert MSG.VAL_SESSION_REQUIRED
+        assert MSG.VAL_INVALID_NUMERIC
+        assert MSG.VAL_AMOUNT_GT_ZERO
+        assert MSG.VAL_ENTER_REASON
+        assert MSG.VAL_INVALID_SALE_ID
+
+    def test_cash_constants_exist(self):
+        assert MSG.CASH_OPEN_REQUIRED
+        assert MSG.CASH_OPEN_REQUIRED_OP
+        assert MSG.CASH_OPEN_REQUIRED_MGMT
+        assert MSG.CASH_INVALID_INITIAL
+        assert MSG.CASH_ALREADY_OPEN
+        assert MSG.CASH_OPENED
+        assert MSG.CASH_MOVEMENT_OK
+        assert MSG.CASH_RECORD_NOT_FOUND
+
+    def test_sale_constants_exist(self):
+        assert MSG.SALE_CONFIRMED
+        assert MSG.SALE_NOT_FOUND
+        assert MSG.SALE_SELECT_DELETE
+        assert MSG.SALE_ENTER_DELETE_REASON
+        assert MSG.SALE_INVALID_DATA
+        assert MSG.SALE_PROCESS_ERROR
+        assert MSG.SALE_NO_EXPORT
+
+    def test_fiscal_constants_exist(self):
+        assert MSG.FISCAL_CONFIG_SAVED
+        assert MSG.FISCAL_TOKEN_EMPTY
+        assert MSG.FISCAL_TOKEN_SAVED
+        assert MSG.FISCAL_CERT_EMPTY
+        assert MSG.FISCAL_CERT_INVALID_PEM
+        assert MSG.FISCAL_KEY_EMPTY
+        assert MSG.FISCAL_KEY_INVALID_PEM
+        assert MSG.FISCAL_KEY_SAVED
+        assert MSG.FISCAL_DOC_NOT_FOUND
+        assert MSG.FISCAL_NC_FAILED
+        assert MSG.FISCAL_NC_ERROR
+
+    def test_report_dicts_not_empty(self):
+        assert len(MSG.REPORT_MOVEMENT_TYPES) >= 8
+        assert len(MSG.REPORT_PAYMENT_METHODS) >= 10
+        assert len(MSG.REPORT_AGING_LABELS) >= 5
+
+
+class TestMSGFormatStrings:
+    """Valida que los mensajes con placeholders funcionan con .format()."""
+
+    def test_sale_invalid_data_format(self):
+        result = MSG.SALE_INVALID_DATA.format(error_id="ABC123")
+        assert "ABC123" in result
+
+    def test_sale_process_error_format(self):
+        result = MSG.SALE_PROCESS_ERROR.format(error_id="XYZ789")
+        assert "XYZ789" in result
+
+    def test_fiscal_doc_authorized_format(self):
+        result = MSG.FISCAL_DOC_AUTHORIZED.format(full_number="F001-00001")
+        assert "F001-00001" in result
+
+    def test_fiscal_doc_errors_format(self):
+        result = MSG.FISCAL_DOC_ERRORS.format(full_number="B001-00002")
+        assert "B001-00002" in result
+
+    def test_fiscal_doc_status_format(self):
+        result = MSG.FISCAL_DOC_STATUS.format(
+            full_number="F001-00003", status="pending"
+        )
+        assert "F001-00003" in result
+        assert "pending" in result
+
+    def test_fiscal_nc_exists_format(self):
+        result = MSG.FISCAL_NC_EXISTS.format(full_number="NC01-00001")
+        assert "NC01-00001" in result
+
+    def test_fiscal_nc_authorized_format(self):
+        result = MSG.FISCAL_NC_AUTHORIZED.format(full_number="NC01-00002")
+        assert "NC01-00002" in result
+
+    def test_fiscal_nc_status_format(self):
+        result = MSG.FISCAL_NC_STATUS.format(
+            full_number="NC01-00003", status="error"
+        )
+        assert "NC01-00003" in result
+        assert "error" in result
+
+    def test_lookup_ruc_bad_status_format(self):
+        result = MSG.LOOKUP_RUC_BAD_STATUS.format(status="BAJA")
+        assert "BAJA" in result
+
+    def test_lookup_ruc_bad_condition_format(self):
+        result = MSG.LOOKUP_RUC_BAD_CONDITION.format(condition="NO HABIDO")
+        assert "NO HABIDO" in result
+
+    def test_lookup_not_found_format(self):
+        result = MSG.LOOKUP_NOT_FOUND.format(doc_number="20123456789")
+        assert "20123456789" in result
+
+
+class TestMSGReportLabels:
+    """Valida las etiquetas de reportes."""
+
+    def test_movement_types_keys(self):
+        expected_keys = {
+            "apertura", "cierre", "venta", "reserva",
+            "adelanto", "cobranza", "inicial_credito", "gasto_caja_chica",
+        }
+        assert set(MSG.REPORT_MOVEMENT_TYPES.keys()) == expected_keys
+
+    def test_payment_methods_keys(self):
+        expected_keys = {
+            "efectivo", "tarjeta_debito", "tarjeta_credito",
+            "yape", "plin", "transferencia", "billetera_digital",
+            "mixto", "otro", "credito", "cheque", "no_especificado",
+        }
+        assert set(MSG.REPORT_PAYMENT_METHODS.keys()) == expected_keys
+
+    def test_aging_labels_keys(self):
+        expected_keys = {"current", "1_30", "31_60", "61_90", "90_plus"}
+        assert set(MSG.REPORT_AGING_LABELS.keys()) == expected_keys
+
+    def test_report_sheet_titles_are_strings(self):
+        for attr in [
+            "REPORT_SUMMARY_SHEET", "REPORT_TITLE", "REPORT_KPI_HEADER",
+            "REPORT_DAILY_SHEET", "REPORT_DAILY_TITLE",
+            "REPORT_CATEGORY_SHEET", "REPORT_CATEGORY_TITLE",
+            "REPORT_PORTFOLIO_SHEET", "REPORT_CASH_SHEET",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str), f"{attr} should be str, got {type(val)}"
+            assert len(val) > 0, f"{attr} should not be empty"

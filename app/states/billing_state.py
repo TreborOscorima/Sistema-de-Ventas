@@ -15,6 +15,7 @@ from app.models.billing import CompanyBillingConfig, FiscalDocument
 from app.services.billing_service import retry_fiscal_document, emit_fiscal_document
 from app.utils.crypto import encrypt_text
 from app.utils.fiscal_validators import validate_tax_id, validate_business_name
+from app.i18n import MSG
 from app.utils.logger import get_logger
 from app.utils.timezone import utc_now_naive
 from .mixin_state import MixinState
@@ -142,7 +143,7 @@ class BillingState(MixinState):
 
         company_id = self._company_id()
         if not company_id:
-            self.add_notification("No se pudo determinar la empresa.", "error")
+            self.add_notification(MSG.FISCAL_COMPANY_UNDEFINED, "error")
             return
 
         # Validaciones — el usuario final solo gestiona datos fiscales básicos.
@@ -193,8 +194,8 @@ class BillingState(MixinState):
             session.commit()
 
         self.billing_config_exists = True
-        self.add_notification("Configuración de facturación guardada.", "success")
-        return rx.toast("Configuración guardada", duration=3000)
+        self.add_notification(MSG.FISCAL_CONFIG_SAVED, "success")
+        return rx.toast(MSG.FISCAL_CONFIG_SAVED_SHORT, duration=3000)
 
     @rx.event
     def save_billing_token(self, token: str):
@@ -204,7 +205,7 @@ class BillingState(MixinState):
             return block
         token = (token or "").strip()
         if not token:
-            self.add_notification("El token no puede estar vacío.", "warning")
+            self.add_notification(MSG.FISCAL_TOKEN_EMPTY, "warning")
             return
         company_id = self._company_id()
         if not company_id:
@@ -216,7 +217,7 @@ class BillingState(MixinState):
             ).first()
             if config is None:
                 self.add_notification(
-                    "Guarde la configuración primero.", "warning"
+                    MSG.FISCAL_SAVE_FIRST, "warning"
                 )
                 return
             config.nubefact_token = encrypt_text(token)
@@ -224,7 +225,7 @@ class BillingState(MixinState):
             session.add(config)
             session.commit()
         self.billing_nubefact_token_display = "****configurado****"
-        self.add_notification("Token de Nubefact guardado de forma segura.", "success")
+        self.add_notification(MSG.FISCAL_TOKEN_SAVED, "success")
 
     # ── Setters usados por la UI del usuario final ──────────
 
@@ -270,14 +271,10 @@ class BillingState(MixinState):
             return block
         cert_pem = (cert_pem or "").strip()
         if not cert_pem:
-            self.add_notification("El certificado no puede estar vacío.", "warning")
+            self.add_notification(MSG.FISCAL_CERT_EMPTY, "warning")
             return
         if "-----BEGIN CERTIFICATE-----" not in cert_pem:
-            self.add_notification(
-                "Formato inválido. Pegue el contenido PEM completo "
-                "(incluyendo -----BEGIN CERTIFICATE-----).",
-                "warning",
-            )
+            self.add_notification(MSG.FISCAL_CERT_INVALID_PEM, "warning")
             return
         company_id = self._company_id()
         if not company_id:
@@ -289,7 +286,7 @@ class BillingState(MixinState):
             ).first()
             if config is None:
                 self.add_notification(
-                    "Guarde la configuración fiscal primero.", "warning"
+                    MSG.FISCAL_SAVE_FIRST_FISCAL, "warning"
                 )
                 return
             config.encrypted_certificate = encrypt_text(cert_pem)
@@ -297,7 +294,7 @@ class BillingState(MixinState):
             session.add(config)
             session.commit()
         self.billing_cert_status = "configurado"
-        self.add_notification("Certificado AFIP guardado de forma segura.", "success")
+        self.add_notification(MSG.FISCAL_CERT_SAVED, "success")
 
     @rx.event
     def save_afip_private_key(self, key_pem: str):
@@ -307,14 +304,10 @@ class BillingState(MixinState):
             return block
         key_pem = (key_pem or "").strip()
         if not key_pem:
-            self.add_notification("La clave privada no puede estar vacía.", "warning")
+            self.add_notification(MSG.FISCAL_KEY_EMPTY, "warning")
             return
         if "-----BEGIN" not in key_pem or "PRIVATE KEY" not in key_pem:
-            self.add_notification(
-                "Formato inválido. Pegue el contenido PEM completo "
-                "(incluyendo -----BEGIN RSA PRIVATE KEY-----).",
-                "warning",
-            )
+            self.add_notification(MSG.FISCAL_KEY_INVALID_PEM, "warning")
             return
         company_id = self._company_id()
         if not company_id:
@@ -326,7 +319,7 @@ class BillingState(MixinState):
             ).first()
             if config is None:
                 self.add_notification(
-                    "Guarde la configuración fiscal primero.", "warning"
+                    MSG.FISCAL_SAVE_FIRST_FISCAL, "warning"
                 )
                 return
             config.encrypted_private_key = encrypt_text(key_pem)
@@ -334,7 +327,7 @@ class BillingState(MixinState):
             session.add(config)
             session.commit()
         self.billing_key_status = "configurado"
-        self.add_notification("Clave privada AFIP guardada de forma segura.", "success")
+        self.add_notification(MSG.FISCAL_KEY_SAVED, "success")
 
     @rx.event
     def set_emisor_iva(self, value: str):
@@ -352,7 +345,7 @@ class BillingState(MixinState):
             return block
         token = (token or "").strip()
         if not token:
-            self.add_notification("El token no puede estar vacío.", "warning")
+            self.add_notification(MSG.FISCAL_TOKEN_EMPTY, "warning")
             return
         company_id = self._company_id()
         if not company_id:
@@ -364,7 +357,7 @@ class BillingState(MixinState):
             ).first()
             if config is None:
                 self.add_notification(
-                    "Guarde la configuración primero.", "warning"
+                    MSG.FISCAL_SAVE_FIRST, "warning"
                 )
                 return
             config.lookup_api_token = encrypt_text(token)
@@ -372,7 +365,7 @@ class BillingState(MixinState):
             session.add(config)
             session.commit()
         self.billing_lookup_api_token_display = "****configurado****"
-        self.add_notification("Token de consulta guardado de forma segura.", "success")
+        self.add_notification(MSG.FISCAL_LOOKUP_TOKEN_SAVED, "success")
 
     # ── Failed fiscal documents (panel en Configuración) ───────
     failed_fiscal_docs: list[dict[str, str]] = []
@@ -436,7 +429,7 @@ class BillingState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.add_notification("No se pudo determinar empresa/sucursal.", "error")
+            self.add_notification(MSG.FISCAL_BRANCH_UNDEFINED, "error")
             return
 
         self.retry_loading = True
@@ -450,29 +443,28 @@ class BillingState(MixinState):
             )
             if result is None:
                 self.add_notification(
-                    "No se pudo reintentar el documento.", "error"
+                    MSG.FISCAL_RETRY_FAILED, "error"
                 )
             elif result.fiscal_status == FiscalStatus.authorized:
                 self.add_notification(
-                    f"Documento {result.full_number} autorizado correctamente.",
+                    MSG.FISCAL_DOC_AUTHORIZED.format(full_number=result.full_number),
                     "success",
                 )
             elif result.fiscal_status in (FiscalStatus.error, FiscalStatus.rejected):
                 self.add_notification(
-                    f"Documento {result.full_number} sigue con errores. "
-                    "Verifique la configuración e intente de nuevo.",
+                    MSG.FISCAL_DOC_ERRORS.format(full_number=result.full_number),
                     "warning",
                 )
             else:
                 self.add_notification(
-                    f"Documento {result.full_number} en estado: {result.fiscal_status}.",
+                    MSG.FISCAL_DOC_STATUS.format(
+                        full_number=result.full_number, status=result.fiscal_status,
+                    ),
                     "info",
                 )
         except Exception as exc:
             logger.exception("Error en retry_fiscal_doc: %s", exc)
-            self.add_notification(
-                "Error al reintentar el documento fiscal.", "error"
-            )
+            self.add_notification(MSG.FISCAL_RETRY_ERROR, "error")
         finally:
             self.retry_loading = False
 
@@ -695,7 +687,7 @@ class BillingState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.add_notification("No se pudo determinar empresa/sucursal.", "error")
+            self.add_notification(MSG.FISCAL_BRANCH_UNDEFINED, "error")
             return
 
         self.fiscal_docs_loading = True
@@ -708,27 +700,28 @@ class BillingState(MixinState):
                 branch_id=branch_id,
             )
             if result is None:
-                self.add_notification("No se pudo reintentar el documento.", "error")
+                self.add_notification(MSG.FISCAL_RETRY_FAILED, "error")
             elif result.fiscal_status == FiscalStatus.authorized:
                 self.add_notification(
-                    f"Documento {result.full_number} autorizado correctamente.",
+                    MSG.FISCAL_DOC_AUTHORIZED.format(full_number=result.full_number),
                     "success",
                 )
                 self.fiscal_doc_detail_open = False
             elif result.fiscal_status in (FiscalStatus.error, FiscalStatus.rejected):
                 self.add_notification(
-                    f"Documento {result.full_number} sigue con errores. "
-                    "Verifique la configuración.",
+                    MSG.FISCAL_DOC_ERRORS_SHORT.format(full_number=result.full_number),
                     "warning",
                 )
             else:
                 self.add_notification(
-                    f"Documento {result.full_number} en estado: {result.fiscal_status}.",
+                    MSG.FISCAL_DOC_STATUS.format(
+                        full_number=result.full_number, status=result.fiscal_status,
+                    ),
                     "info",
                 )
         except Exception as exc:
             logger.exception("Error en retry_fiscal_doc_from_dashboard: %s", exc)
-            self.add_notification("Error al reintentar el documento fiscal.", "error")
+            self.add_notification(MSG.FISCAL_RETRY_ERROR, "error")
         finally:
             self.fiscal_docs_loading = False
 
@@ -751,7 +744,7 @@ class BillingState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.add_notification("No se pudo determinar empresa/sucursal.", "error")
+            self.add_notification(MSG.FISCAL_BRANCH_UNDEFINED, "error")
             return
 
         self.nota_credito_loading = True
@@ -774,12 +767,12 @@ class BillingState(MixinState):
                 ).first()
 
                 if not original:
-                    self.add_notification("Documento fiscal no encontrado.", "error")
+                    self.add_notification(MSG.FISCAL_DOC_NOT_FOUND, "error")
                     return
 
                 if original.fiscal_status != FiscalStatus.authorized:
                     self.add_notification(
-                        "Solo se puede anular un documento autorizado por SUNAT/AFIP.",
+                        MSG.FISCAL_ANNUL_AUTHORIZED_ONLY,
                         "warning",
                     )
                     return
@@ -794,7 +787,7 @@ class BillingState(MixinState):
                 ).first()
                 if nc_exists:
                     self.add_notification(
-                        f"Ya existe una Nota de Crédito para este documento: {nc_exists.full_number}.",
+                        MSG.FISCAL_NC_EXISTS.format(full_number=nc_exists.full_number),
                         "warning",
                     )
                     return
@@ -807,7 +800,7 @@ class BillingState(MixinState):
                 orig_id = original.id
 
             if orig_sale_id is None:
-                self.add_notification("Error leyendo datos del documento.", "error")
+                self.add_notification(MSG.FISCAL_READ_ERROR, "error")
                 return
 
             # Emitir la nota de crédito vía billing_service
@@ -825,22 +818,23 @@ class BillingState(MixinState):
 
             if result and result.fiscal_status == FiscalStatus.authorized:
                 self.add_notification(
-                    f"Nota de Crédito {result.full_number} emitida y autorizada.",
+                    MSG.FISCAL_NC_AUTHORIZED.format(full_number=result.full_number),
                     "success",
                 )
             elif result:
                 self.add_notification(
-                    f"Nota de Crédito {result.full_number} en estado: {result.fiscal_status}. "
-                    "Revise los documentos fiscales.",
+                    MSG.FISCAL_NC_STATUS.format(
+                        full_number=result.full_number, status=result.fiscal_status,
+                    ),
                     "warning",
                 )
             else:
                 self.add_notification(
-                    "No se pudo emitir la Nota de Crédito.", "error"
+                    MSG.FISCAL_NC_FAILED, "error"
                 )
         except Exception as exc:
             logger.exception("Error en emit_credit_note: %s", exc)
-            self.add_notification("Error al emitir la Nota de Crédito.", "error")
+            self.add_notification(MSG.FISCAL_NC_ERROR, "error")
         finally:
             self.nota_credito_loading = False
 

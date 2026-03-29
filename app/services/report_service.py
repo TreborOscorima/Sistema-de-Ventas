@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User
 from app.enums import SaleStatus, PaymentMethodType
+from app.i18n import MSG
 from app.utils.tenant import set_tenant_context, tenant_bypass
 from app.utils.exports import _safe_decimal, _sanitize_excel_value
 from app.utils.timezone import format_local_datetime, to_local_datetime, utc_now_naive
@@ -333,7 +334,7 @@ _build_cashbox_log_user_lookup = _build_user_lookup
 def _resolve_sale_username(
     sale: Sale,
     user_lookup: dict[int, str],
-    default: str = "Desconocido",
+    default: str = MSG.REPORT_UNKNOWN,
 ) -> str:
     """Resuelve el usuario de una venta usando relación y fallback por user_id."""
     if sale.user and getattr(sale.user, "username", None):
@@ -347,15 +348,15 @@ def _resolve_sale_username(
 def _translate_cashbox_action(action: str | None) -> str:
     raw = _safe_string(action).lower()
     mapping = {
-        "apertura": "Apertura de Caja",
-        "cierre": "Cierre de Caja",
-        "venta": "Venta",
-        "reserva": "Reserva",
-        "adelanto": "Adelanto",
-        "cobranza": "Cobranza",
-        "inicial credito": "Inicial Crédito",
-        "gasto_caja_chica": "Gasto Caja Chica",
-        "gasto caja chica": "Gasto Caja Chica",
+        "apertura": MSG.REPORT_MOVEMENT_TYPES["apertura"],
+        "cierre": MSG.REPORT_MOVEMENT_TYPES["cierre"],
+        "venta": MSG.REPORT_MOVEMENT_TYPES["venta"],
+        "reserva": MSG.REPORT_MOVEMENT_TYPES["reserva"],
+        "adelanto": MSG.REPORT_MOVEMENT_TYPES["adelanto"],
+        "cobranza": MSG.REPORT_MOVEMENT_TYPES["cobranza"],
+        "inicial credito": MSG.REPORT_MOVEMENT_TYPES["inicial_credito"],
+        "gasto_caja_chica": MSG.REPORT_MOVEMENT_TYPES["gasto_caja_chica"],
+        "gasto caja chica": MSG.REPORT_MOVEMENT_TYPES["gasto_caja_chica"],
     }
     if raw in mapping:
         return mapping[raw]
@@ -411,45 +412,46 @@ def _translate_payment_method(method: str) -> str:
     Returns:
         Nombre en español del método de pago
     """
+    _pm = MSG.REPORT_PAYMENT_METHODS
     translations = {
         # Códigos del enum PaymentMethodType
-        "cash": "Efectivo",
-        "efectivo": "Efectivo",
-        "debit": "Tarjeta de Débito",
-        "debito": "Tarjeta de Débito",
-        "tarjeta de débito": "Tarjeta de Débito",
-        "tarjeta de debito": "Tarjeta de Débito",
-        "credit": "Tarjeta de Crédito",
-        "credito": "Tarjeta de Crédito",
-        "tarjeta de crédito": "Tarjeta de Crédito",
-        "tarjeta de credito": "Tarjeta de Crédito",
+        "cash": _pm["efectivo"],
+        "efectivo": _pm["efectivo"],
+        "debit": _pm["tarjeta_debito"],
+        "debito": _pm["tarjeta_debito"],
+        "tarjeta de débito": _pm["tarjeta_debito"],
+        "tarjeta de debito": _pm["tarjeta_debito"],
+        "credit": _pm["tarjeta_credito"],
+        "credito": _pm["tarjeta_credito"],
+        "tarjeta de crédito": _pm["tarjeta_credito"],
+        "tarjeta de credito": _pm["tarjeta_credito"],
         "card": "Tarjeta",
         "tarjeta": "Tarjeta",
-        "yape": "Yape",
-        "plin": "Plin",
-        "transfer": "Transferencia Bancaria",
-        "transferencia": "Transferencia Bancaria",
-        "transferencia bancaria": "Transferencia Bancaria",
-        "bank_transfer": "Transferencia Bancaria",
-        "wallet": "Billetera Digital",
-        "billetera": "Billetera Digital",
-        "mixed": "Pago Mixto",
-        "mixto": "Pago Mixto",
-        "pago mixto": "Pago Mixto",
-        "other": "Otro",
-        "otro": "Otro",
+        "yape": _pm["yape"],
+        "plin": _pm["plin"],
+        "transfer": _pm["transferencia"],
+        "transferencia": _pm["transferencia"],
+        "transferencia bancaria": _pm["transferencia"],
+        "bank_transfer": _pm["transferencia"],
+        "wallet": _pm["billetera_digital"],
+        "billetera": _pm["billetera_digital"],
+        "mixed": _pm["mixto"],
+        "mixto": _pm["mixto"],
+        "pago mixto": _pm["mixto"],
+        "other": _pm["otro"],
+        "otro": _pm["otro"],
         # Ventas a crédito/fiado (condición de pago, no método)
-        "fiado": "Venta a Crédito/Fiado",
-        "venta a credito": "Venta a Crédito/Fiado",
-        "venta a crédito": "Venta a Crédito/Fiado",
-        "credito_fiado": "Venta a Crédito/Fiado",
+        "fiado": _pm["credito"],
+        "venta a credito": _pm["credito"],
+        "venta a crédito": _pm["credito"],
+        "credito_fiado": _pm["credito"],
         # Códigos legacy
-        "credit_card": "Tarjeta de Crédito",
-        "debit_card": "Tarjeta de Débito",
-        "check": "Cheque",
-        "cheque": "Cheque",
-        "no especificado": "No Especificado",
-        "": "No Especificado",
+        "credit_card": _pm["tarjeta_credito"],
+        "debit_card": _pm["tarjeta_debito"],
+        "check": _pm["cheque"],
+        "cheque": _pm["cheque"],
+        "no especificado": _pm["no_especificado"],
+        "": _pm["no_especificado"],
     }
 
     method_lower = method.lower().strip()
@@ -547,12 +549,12 @@ def generate_sales_report(
     # HOJA 1: RESUMEN EJECUTIVO
     # =================
     ws_summary = wb.active
-    ws_summary.title = "Resumen Ejecutivo"
+    ws_summary.title = MSG.REPORT_SUMMARY_SHEET
 
     row = _add_company_header(
         ws_summary,
         company_name,
-        "REPORTE DE VENTAS CONSOLIDADO",
+        MSG.REPORT_TITLE,
         period_str,
         generated_at=generated_at,
         country_code=country_code,
@@ -612,7 +614,7 @@ def generate_sales_report(
         by_day[day_key]["total"] += sale_total
 
         # Por usuario
-        user_name = _resolve_sale_username(sale, sale_user_lookup, "Desconocido")
+        user_name = _resolve_sale_username(sale, sale_user_lookup, MSG.REPORT_UNKNOWN)
         if user_name not in by_user:
             by_user[user_name] = {"count": 0, "total": Decimal("0")}
         by_user[user_name]["count"] += 1
@@ -649,20 +651,20 @@ def generate_sales_report(
 
     # Escribir resumen
     row += 1
-    ws_summary.cell(row=row, column=1, value="INDICADORES PRINCIPALES").font = SUBTITLE_FONT
+    ws_summary.cell(row=row, column=1, value=MSG.REPORT_KPI_HEADER).font = SUBTITLE_FONT
     row += 1
 
     indicators = [
-        ("Total Ventas Brutas:", _format_currency(total_ventas, currency_symbol)),
+        (MSG.REPORT_KPI_GROSS_SALES, _format_currency(total_ventas, currency_symbol)),
         ("(-) Costo de Ventas:", _format_currency(total_costo, currency_symbol)),
         ("(=) Utilidad Bruta:", _format_currency(utilidad_bruta, currency_symbol)),
-        ("Margen Bruto:", f"{margen_bruto:.2f}%"),
+        (MSG.REPORT_KPI_MARGIN, f"{margen_bruto:.2f}%"),
         ("", ""),
-        ("Número de Transacciones:", ventas_count),
-        ("Ticket Promedio:", _format_currency(ticket_promedio, currency_symbol)),
+        (MSG.REPORT_KPI_TRANSACTIONS, ventas_count),
+        (MSG.REPORT_KPI_AVG_TICKET, _format_currency(ticket_promedio, currency_symbol)),
         ("", ""),
-        ("Ventas al Contado:", f"{ventas_contado} ({_format_currency(monto_contado, currency_symbol)})"),
-        ("Ventas a Crédito:", f"{ventas_credito} ({_format_currency(monto_credito, currency_symbol)})"),
+        (MSG.REPORT_KPI_CASH_SALES, f"{ventas_contado} ({_format_currency(monto_contado, currency_symbol)})"),
+        (MSG.REPORT_KPI_CREDIT_SALES, f"{ventas_credito} ({_format_currency(monto_credito, currency_symbol)})"),
     ]
 
     for label, value in indicators:
@@ -681,11 +683,11 @@ def generate_sales_report(
     # =================
     # HOJA 2: VENTAS POR DÍA (con fórmulas de Excel)
     # =================
-    ws_daily = wb.create_sheet("Ventas por Día")
+    ws_daily = wb.create_sheet(MSG.REPORT_DAILY_SHEET)
     row = _add_company_header(
         ws_daily,
         company_name,
-        "VENTAS DIARIAS DETALLADAS",
+        MSG.REPORT_DAILY_TITLE,
         period_str,
         columns=6,
         **header_kwargs,
@@ -743,11 +745,11 @@ def generate_sales_report(
     # =================
     # HOJA 3: VENTAS POR CATEGORÍA (con fórmulas de Excel)
     # =================
-    ws_category = wb.create_sheet("Por Categoría")
+    ws_category = wb.create_sheet(MSG.REPORT_CATEGORY_SHEET)
     row = _add_company_header(
         ws_category,
         company_name,
-        "ANÁLISIS DE VENTAS POR CATEGORÍA",
+        MSG.REPORT_CATEGORY_TITLE,
         period_str,
         columns=7,
         **header_kwargs,
@@ -1501,7 +1503,7 @@ def generate_inventory_report(
     # =================
     # HOJA 2: POR CATEGORÍA (con fórmulas)
     # =================
-    ws_category = wb.create_sheet("Por Categoría")
+    ws_category = wb.create_sheet(MSG.REPORT_CATEGORY_SHEET)
     row = _add_company_header(
         ws_category,
         company_name,
@@ -1815,11 +1817,11 @@ def generate_receivables_report(
 
     # Clasificar por antigüedad
     aging_buckets = {
-        "current": {"label": "Vigente (no vencido)", "days": "0", "amount": Decimal("0"), "count": 0},
-        "0-30": {"label": "1-30 días", "days": "1-30", "amount": Decimal("0"), "count": 0},
-        "31-60": {"label": "31-60 días", "days": "31-60", "amount": Decimal("0"), "count": 0},
-        "61-90": {"label": "61-90 días", "days": "61-90", "amount": Decimal("0"), "count": 0},
-        "90+": {"label": "Más de 90 días", "days": ">90", "amount": Decimal("0"), "count": 0},
+        "current": {"label": MSG.REPORT_AGING_LABELS["current"], "days": "0", "amount": Decimal("0"), "count": 0},
+        "0-30": {"label": MSG.REPORT_AGING_LABELS["1_30"], "days": "1-30", "amount": Decimal("0"), "count": 0},
+        "31-60": {"label": MSG.REPORT_AGING_LABELS["31_60"], "days": "31-60", "amount": Decimal("0"), "count": 0},
+        "61-90": {"label": MSG.REPORT_AGING_LABELS["61_90"], "days": "61-90", "amount": Decimal("0"), "count": 0},
+        "90+": {"label": MSG.REPORT_AGING_LABELS["90_plus"], "days": ">90", "amount": Decimal("0"), "count": 0},
     }
 
     # Provisiones sugeridas
@@ -1918,7 +1920,7 @@ def generate_receivables_report(
     # HOJA 1: RESUMEN (mejorado)
     # =================
     ws_summary = wb.active
-    ws_summary.title = "Resumen Cartera"
+    ws_summary.title = MSG.REPORT_PORTFOLIO_SHEET
 
     row = _add_company_header(
         ws_summary,
@@ -2341,7 +2343,7 @@ def generate_cashbox_report(
     # HOJA 1: RESUMEN (mejorado)
     # =================
     ws_summary = wb.active
-    ws_summary.title = "Resumen Caja"
+    ws_summary.title = MSG.REPORT_CASH_SHEET
 
     row = _add_company_header(
         ws_summary,

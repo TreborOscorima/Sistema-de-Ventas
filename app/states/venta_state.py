@@ -49,6 +49,7 @@ from app.services.document_lookup_service import (
 )
 from app.models.lookup_cache import DocumentLookupCache
 from app.services.sale_service import SaleService, StockError
+from app.i18n import MSG
 from app.utils.db import get_async_session
 from app.utils.logger import get_logger
 from app.utils.sanitization import escape_like
@@ -308,13 +309,11 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 if country_code == "PE" and result.doc_type == "RUC":
                     if result.status and result.status != "ACTIVO":
                         self.fiscal_lookup_error = (
-                            f"RUC con estado {result.status}. "
-                            "No se puede emitir factura."
+                            MSG.LOOKUP_RUC_BAD_STATUS.format(status=result.status)
                         )
                     elif result.condition and result.condition not in ("HABIDO", ""):
                         self.fiscal_lookup_error = (
-                            f"RUC con condicion {result.condition}. "
-                            "Verifique con el cliente."
+                            MSG.LOOKUP_RUC_BAD_CONDITION.format(condition=result.condition)
                         )
 
                 # Auto-determinar tipo comprobante AR
@@ -369,7 +368,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     pass  # Cache save failure is not critical
             else:
                 self.fiscal_lookup_result = {}
-                self.fiscal_lookup_error = f"No se encontró el documento {doc_number}."
+                self.fiscal_lookup_error = MSG.LOOKUP_NOT_FOUND.format(doc_number=doc_number)
                 self.fiscal_ar_cbte_letra = ""
 
                 # Cache negativo (not_found)
@@ -397,7 +396,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     pass
         except Exception as exc:
             logger.exception("lookup_fiscal_document error: %s", exc)
-            self.fiscal_lookup_error = "Error al consultar documento fiscal."
+            self.fiscal_lookup_error = MSG.LOOKUP_ERROR
             self.fiscal_lookup_result = {}
         finally:
             self.fiscal_lookup_loading = False
@@ -485,7 +484,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         try:
             if not self.current_user["privileges"]["create_ventas"]:
                 self.add_notification(
-                    "No tiene permisos para crear ventas.", "error"
+                    MSG.PERM_SALES, "error"
                 )
                 return
             block = self._require_active_subscription()
@@ -501,7 +500,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 denial = self._require_cashbox_open()
                 if denial:
                     self.add_notification(
-                        "Debe aperturar la caja para operar.", "error"
+                        MSG.CASH_OPEN_REQUIRED_OP, "error"
                     )
                     return
 
@@ -589,7 +588,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     str(exc),
                 )
                 self.add_notification(
-                    f"Datos de venta inválidos. Código: {error_id}", "error"
+                    MSG.SALE_INVALID_DATA.format(error_id=error_id), "error"
                 )
                 return
 
@@ -630,7 +629,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                         exc_info=True,
                     )
                     self.add_notification(
-                        f"Error al procesar la venta. Código: {error_id}",
+                        MSG.SALE_PROCESS_ERROR.format(error_id=error_id),
                         "error",
                     )
                     return
@@ -684,7 +683,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             if hasattr(self, "_cashbox_update_trigger"):
                 self._cashbox_update_trigger += 1
 
-            self.add_notification("Venta confirmada.", "success")
+            self.add_notification(MSG.SALE_CONFIRMED, "success")
 
             # ── Fiscal document emission (fire-and-forget background) ──
             # Solo emitir si el tipo de comprobante NO es nota_venta (ticket

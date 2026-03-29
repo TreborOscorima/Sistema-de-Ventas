@@ -9,6 +9,7 @@ from sqlmodel import select
 import sqlalchemy as sa
 from sqlalchemy.orm import selectinload
 from app.enums import PaymentMethodType, SaleStatus
+from app.i18n import MSG
 from app.utils.payment import payment_method_label
 from app.utils.sanitization import escape_like
 from app.models import (
@@ -1403,15 +1404,15 @@ class HistorialState(MixinState):
     @rx.event
     def open_sale_detail(self, sale_id: str):
         if not sale_id:
-            return rx.toast("Venta no encontrada.", duration=3000)
+            return rx.toast(MSG.SALE_NOT_FOUND, duration=3000)
         try:
             sale_db_id = int(sale_id)
         except ValueError:
-            return rx.toast("Venta no encontrada.", duration=3000)
+            return rx.toast(MSG.SALE_NOT_FOUND, duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         with rx.session() as session:
             # FIX 38c: add branch_id filter for branch-level isolation
             sale = session.exec(
@@ -1427,7 +1428,7 @@ class HistorialState(MixinState):
                 )
             ).first()
             if not sale:
-                return rx.toast("Venta no encontrada.", duration=3000)
+                return rx.toast(MSG.SALE_NOT_FOUND, duration=3000)
             payments = sale.payments or []
             payment_method = self._payment_method_display(payments)
             payment_details = self._payment_summary_from_payments(payments)
@@ -1492,11 +1493,11 @@ class HistorialState(MixinState):
     @rx.event
     def export_to_excel(self):
         if not self.current_user["privileges"]["export_data"]:
-            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+            return rx.toast(MSG.PERM_EXPORT, duration=3000)
 
         company_id = self._company_id()
         if not company_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
 
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
@@ -1722,7 +1723,7 @@ class HistorialState(MixinState):
     @rx.event
     def export_report_data(self):
         if not self.current_user["privileges"]["export_data"]:
-            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+            return rx.toast(MSG.PERM_EXPORT, duration=3000)
 
         currency_label = self._currency_symbol_clean()
         currency_format = self._currency_excel_format()
@@ -1744,7 +1745,7 @@ class HistorialState(MixinState):
         if active_tab == "cierres":
             rows = self._build_report_closings()
             if not rows:
-                return rx.toast("No hay cierres para exportar.", duration=3000)
+                return rx.toast(MSG.HIST_NO_CLOSINGS_EXPORT, duration=3000)
 
             wb, ws = create_excel_workbook("Cierres de Caja")
 
@@ -1807,7 +1808,7 @@ class HistorialState(MixinState):
 
         entries = self._build_report_entries()
         if not entries:
-            return rx.toast("No hay ingresos para exportar.", duration=3000)
+            return rx.toast(MSG.HIST_NO_INCOMES_EXPORT, duration=3000)
 
         if active_tab == "detalle":
             wb, ws = create_excel_workbook("Detalle de Cobros")
