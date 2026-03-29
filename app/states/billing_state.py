@@ -47,6 +47,8 @@ class BillingState(MixinState):
     # ── Argentina extras ───────────────────────────────────────
     billing_emisor_iva: str = "RI"
     billing_ar_threshold: str = "68782.00"
+    billing_cert_status: str = ""  # "", "configurado", "no configurado"
+    billing_key_status: str = ""
 
     # ── Read-only display ─────────────────────────────────────
     billing_current_count: int = 0
@@ -122,6 +124,13 @@ class BillingState(MixinState):
             self.billing_current_count = config.current_billing_count or 0
             self.billing_seq_factura = config.current_sequence_factura or 0
             self.billing_seq_boleta = config.current_sequence_boleta or 0
+            # ── Estado de certificados AFIP ──
+            self.billing_cert_status = (
+                "configurado" if config.encrypted_certificate else "no configurado"
+            )
+            self.billing_key_status = (
+                "configurado" if config.encrypted_private_key else "no configurado"
+            )
             self.billing_form_key += 1
 
     @rx.event
@@ -252,6 +261,80 @@ class BillingState(MixinState):
             self.billing_lookup_api_token_display = raw[:4] + "****" + raw[-4:] if len(raw) > 8 else "****"
         else:
             self.billing_lookup_api_token_display = ""
+
+    @rx.event
+    def save_afip_certificate(self, cert_pem: str):
+        """Guarda el certificado X.509 PEM de AFIP encriptado."""
+        block = self._require_manage_config()
+        if block:
+            return block
+        cert_pem = (cert_pem or "").strip()
+        if not cert_pem:
+            self.add_notification("El certificado no puede estar vacío.", "warning")
+            return
+        if "-----BEGIN CERTIFICATE-----" not in cert_pem:
+            self.add_notification(
+                "Formato inválido. Pegue el contenido PEM completo "
+                "(incluyendo -----BEGIN CERTIFICATE-----).",
+                "warning",
+            )
+            return
+        company_id = self._company_id()
+        if not company_id:
+            return
+        with rx.session() as session:
+            config = session.exec(
+                select(CompanyBillingConfig)
+                .where(CompanyBillingConfig.company_id == company_id)
+            ).first()
+            if config is None:
+                self.add_notification(
+                    "Guarde la configuración fiscal primero.", "warning"
+                )
+                return
+            config.encrypted_certificate = encrypt_text(cert_pem)
+            config.updated_at = utc_now_naive()
+            session.add(config)
+            session.commit()
+        self.billing_cert_status = "configurado"
+        self.add_notification("Certificado AFIP guardado de forma segura.", "success")
+
+    @rx.event
+    def save_afip_private_key(self, key_pem: str):
+        """Guarda la clave privada RSA PEM de AFIP encriptada."""
+        block = self._require_manage_config()
+        if block:
+            return block
+        key_pem = (key_pem or "").strip()
+        if not key_pem:
+            self.add_notification("La clave privada no puede estar vacía.", "warning")
+            return
+        if "-----BEGIN" not in key_pem or "PRIVATE KEY" not in key_pem:
+            self.add_notification(
+                "Formato inválido. Pegue el contenido PEM completo "
+                "(incluyendo -----BEGIN RSA PRIVATE KEY-----).",
+                "warning",
+            )
+            return
+        company_id = self._company_id()
+        if not company_id:
+            return
+        with rx.session() as session:
+            config = session.exec(
+                select(CompanyBillingConfig)
+                .where(CompanyBillingConfig.company_id == company_id)
+            ).first()
+            if config is None:
+                self.add_notification(
+                    "Guarde la configuración fiscal primero.", "warning"
+                )
+                return
+            config.encrypted_private_key = encrypt_text(key_pem)
+            config.updated_at = utc_now_naive()
+            session.add(config)
+            session.commit()
+        self.billing_key_status = "configurado"
+        self.add_notification("Clave privada AFIP guardada de forma segura.", "success")
 
     @rx.event
     def set_emisor_iva(self, value: str):

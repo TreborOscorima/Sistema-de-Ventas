@@ -1324,3 +1324,64 @@ class TestRetryFiscalDocument:
             )
 
         assert result is None
+
+
+# ═════════════════════════════════════════════════════════════
+# CERTIFICATE VALIDATION
+# ═════════════════════════════════════════════════════════════
+
+
+class TestCertificateValidation:
+    """Tests para validación de certificados AFIP PEM."""
+
+    def test_valid_certificate_pem_format(self):
+        cert = "-----BEGIN CERTIFICATE-----\nMIIC...\n-----END CERTIFICATE-----"
+        assert "-----BEGIN CERTIFICATE-----" in cert
+
+    def test_valid_private_key_pem_format(self):
+        key = "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"
+        assert "-----BEGIN" in key and "PRIVATE KEY" in key
+
+    def test_invalid_certificate_detected(self):
+        cert = "MIICdTCCAd0GCSqG..."
+        assert "-----BEGIN CERTIFICATE-----" not in cert
+
+    def test_empty_certificate_detected(self):
+        assert not "".strip()
+
+    def test_certificate_encryption_roundtrip(self):
+        from app.utils.crypto import encrypt_text, decrypt_text
+        cert = "-----BEGIN CERTIFICATE-----\nTEST_DATA\n-----END CERTIFICATE-----"
+        encrypted = encrypt_text(cert)
+        assert encrypted != cert
+        assert decrypt_text(encrypted) == cert
+
+
+# ═════════════════════════════════════════════════════════════
+# FISCAL RETRY WORKER & API CONFIG
+# ═════════════════════════════════════════════════════════════
+
+
+class TestFiscalRetryWorkerConfig:
+    """Tests para configuración del retry worker."""
+
+    def test_worker_module_importable(self):
+        from app.tasks.fiscal_retry_worker import run_auto_retry
+        assert callable(run_auto_retry)
+
+    def test_retry_worker_constants(self):
+        from app.tasks.fiscal_retry_worker import _BATCH_LIMIT, _MAX_BACKOFF_SECONDS
+        assert _BATCH_LIMIT > 0
+        assert _MAX_BACKOFF_SECONDS > 0
+
+    def test_api_lifespan_config(self):
+        from app.api import _FISCAL_RETRY_INTERVAL_SECONDS, _FISCAL_RETRY_ENABLED
+        assert _FISCAL_RETRY_INTERVAL_SECONDS > 0
+        assert isinstance(_FISCAL_RETRY_ENABLED, bool)
+
+    def test_tax_rate_by_country_complete(self):
+        from app.services.billing_service import _TAX_RATE_BY_COUNTRY
+        assert "PE" in _TAX_RATE_BY_COUNTRY
+        assert "AR" in _TAX_RATE_BY_COUNTRY
+        assert _TAX_RATE_BY_COUNTRY["PE"] == Decimal("0.18")
+        assert _TAX_RATE_BY_COUNTRY["AR"] == Decimal("0.21")

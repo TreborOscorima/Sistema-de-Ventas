@@ -487,6 +487,67 @@ def billing_config_section() -> rx.Component:
             ),
             class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
           ),
+          # ── Certificados AFIP ──
+          rx.el.div(
+            rx.el.h4(
+              "Certificados AFIP",
+              class_name="text-sm font-semibold text-slate-500 mt-2",
+            ),
+            rx.el.div(
+              # Certificado X.509
+              rx.el.div(
+                rx.el.label("Certificado X.509 (.crt / .pem)", class_name=_label),
+                rx.cond(
+                  State.billing_cert_status == "configurado",
+                  rx.el.div(
+                    rx.icon("check-circle", class_name="h-4 w-4 text-emerald-500 inline mr-1"),
+                    rx.el.span("Certificado configurado", class_name="text-sm text-emerald-600"),
+                    class_name="flex items-center gap-1 mb-1",
+                  ),
+                  rx.fragment(),
+                ),
+                rx.el.textarea(
+                  placeholder="-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+                  rows=4,
+                  on_blur=State.save_afip_certificate,
+                  key=_fk + "-bcert",
+                  class_name=_input + " font-mono text-xs resize-none",
+                ),
+                rx.el.p(
+                  "Pegue el contenido completo del archivo .crt o .pem",
+                  class_name=_help,
+                ),
+                class_name="flex flex-col gap-1",
+              ),
+              # Clave privada RSA
+              rx.el.div(
+                rx.el.label("Clave Privada RSA (.key)", class_name=_label),
+                rx.cond(
+                  State.billing_key_status == "configurado",
+                  rx.el.div(
+                    rx.icon("check-circle", class_name="h-4 w-4 text-emerald-500 inline mr-1"),
+                    rx.el.span("Clave privada configurada", class_name="text-sm text-emerald-600"),
+                    class_name="flex items-center gap-1 mb-1",
+                  ),
+                  rx.fragment(),
+                ),
+                rx.el.textarea(
+                  placeholder="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
+                  rows=4,
+                  on_blur=State.save_afip_private_key,
+                  key=_fk + "-bkey",
+                  class_name=_input + " font-mono text-xs resize-none",
+                ),
+                rx.el.p(
+                  "Pegue el contenido completo del archivo .key (nunca se muestra en pantalla)",
+                  class_name=_help,
+                ),
+                class_name="flex flex-col gap-1",
+              ),
+              class_name="grid grid-cols-1 gap-4",
+            ),
+            class_name="space-y-2",
+          ),
           class_name="space-y-3",
         ),
         rx.fragment(),
