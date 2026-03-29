@@ -10,6 +10,7 @@ from app.models import (
     Sale, Purchase, CashboxSession, Product,
     Category, CashboxLog, Client,
 )
+from app.i18n import MSG
 from app.utils.db_seeds import seed_new_branch_data
 from app.utils.logger import get_logger
 from app.utils.tenant import set_tenant_context
@@ -49,7 +50,7 @@ class BranchesState(MixinState):
         if hasattr(self, "current_user") and not self.current_user["privileges"].get(
             "manage_config"
         ):
-            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
+            return rx.toast(MSG.AUTH_PERM_CONFIG, duration=3000)
         return None
 
     def load_branches(self):
@@ -111,18 +112,18 @@ class BranchesState(MixinState):
             return block
         company_id = self._company_id()
         if not company_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         name = (self.new_branch_name or "").strip()
         address = (self.new_branch_address or "").strip()
         if not name:
-            return rx.toast("Ingrese el nombre de la sucursal.", duration=2500)
+            return rx.toast(MSG.BRANCH_NAME_REQUIRED, duration=2500)
         try:
             with rx.session() as session:
                 company = session.exec(
                     select(Company).where(Company.id == company_id)
                 ).first()
                 if not company:
-                    return rx.toast("Empresa no definida.", duration=3000)
+                    return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
                 max_branches_raw = getattr(company, "max_branches", None)
                 try:
                     max_branches = int(max_branches_raw)
@@ -235,7 +236,7 @@ class BranchesState(MixinState):
             self.refresh_auth_runtime_cache()
         return [
             self._emit_runtime_sync_event(),
-            rx.toast("Sucursal creada.", duration=2500),
+            rx.toast(MSG.BRANCH_CREATED, duration=2500),
         ]
 
     @rx.event
@@ -279,13 +280,13 @@ class BranchesState(MixinState):
             return block
         company_id = self._company_id()
         if not company_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         if not self.editing_branch_id:
             return
         name = (self.editing_branch_name or "").strip()
         address = (self.editing_branch_address or "").strip()
         if not name:
-            return rx.toast("Ingrese el nombre de la sucursal.", duration=2500)
+            return rx.toast(MSG.BRANCH_NAME_REQUIRED, duration=2500)
         branch_id = int(self.editing_branch_id)
         with rx.session() as session:
             existing = session.exec(
@@ -313,7 +314,7 @@ class BranchesState(MixinState):
             self.refresh_auth_runtime_cache()
         return [
             self._emit_runtime_sync_event(),
-            rx.toast("Sucursal actualizada.", duration=2500),
+            rx.toast(MSG.BRANCH_UPDATED, duration=2500),
         ]
 
     @rx.event
@@ -326,7 +327,7 @@ class BranchesState(MixinState):
             return block
         company_id = self._company_id()
         if not company_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         if not branch_id:
             return
         branch_id_int = int(branch_id)
@@ -406,7 +407,7 @@ class BranchesState(MixinState):
             self.refresh_auth_runtime_cache()
         return [
             self._emit_runtime_sync_event(),
-            rx.toast("Sucursal eliminada.", duration=2500),
+            rx.toast(MSG.BRANCH_DELETED, duration=2500),
         ]
 
     @rx.event
@@ -416,7 +417,7 @@ class BranchesState(MixinState):
             return toast
         company_id = self._company_id()
         if not company_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         # Gestión de accesos por sucursal: alcance por empresa.
         set_tenant_context(company_id, None)
         branch_id_int = int(branch_id)
@@ -445,7 +446,7 @@ class BranchesState(MixinState):
                     {
                         "id": user.id,
                         "username": user.username,
-                        "role": user.role.name if user.role else "Sin rol",
+                        "role": user.role.name if user.role else MSG.FALLBACK_NO_ROLE,
                         "email": getattr(user, "email", "") or "",
                         "has_access": user.id in existing_ids,
                     }
@@ -490,7 +491,7 @@ class BranchesState(MixinState):
                 current_user_id = None
         company_id = self._company_id()
         if not company_id:
-            return rx.toast("Empresa no definida.", duration=3000)
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         # Gestión de accesos por sucursal: alcance por empresa.
         set_tenant_context(company_id, None)
         desired_ids = {

@@ -250,6 +250,131 @@ class _Messages:
     REPORT_CLOSINGS_SHEET = "Cierres de Caja"
     REPORT_CAT_SALES_SHEET = "Ventas por Categoría"
     REPORT_GENERAL_CLIENT = "Cliente General"
+    REPORT_PAYMENTS_SHEET = "Detalle de Cobros"
+    REPORT_PAYMENTS_TITLE = "DETALLE DE COBROS E INGRESOS"
+    REPORT_TOTAL_INCOME = "TOTAL INGRESOS"
+
+    # ── Auth / Roles / Suscripción ────────────────────────────
+    ROLE_SUPERADMIN = "Superadmin"
+    ROLE_ADMIN = "Administrador"
+    ROLE_USER = "Usuario"
+    ROLE_CASHIER = "Cajero"
+    ROLE_GUEST = "Invitado"
+
+    STATUS_ACTIVE = "Activo"
+    STATUS_EXPIRED = "Vencido"
+    STATUS_ABOUT_TO_EXPIRE = "Por vencer"
+    STATUS_PAST_DUE = "Pago vencido"
+    STATUS_SUSPENDED = "Suspendido"
+    STATUS_UNLIMITED = "Ilimitado"
+
+    # ── Auth — mensajes ───────────────────────────────────────
+    AUTH_USER_NOT_FOUND = "Usuario no encontrado."
+    AUTH_BRANCH_INVALID = "Sucursal invalida."
+    AUTH_BRANCH_NO_ACCESS = "No tiene acceso a esta sucursal."
+    AUTH_BRANCH_UPDATED = "Sucursal actualizada."
+    AUTH_PASSWORD_UPDATED = "Contraseña actualizada."
+    AUTH_PERM_CONFIG = "No tiene permisos para configurar el sistema."
+
+    # ── Branches — mensajes ───────────────────────────────────
+    BRANCH_NAME_REQUIRED = "Ingrese el nombre de la sucursal."
+    BRANCH_CREATED = "Sucursal creada."
+    BRANCH_UPDATED = "Sucursal actualizada."
+    BRANCH_DELETED = "Sucursal eliminada."
+
+    # ── Cuentas / Créditos ────────────────────────────────────
+    CREDIT_STATUS_PAID = "Pagado"
+    CREDIT_STATUS_PARTIAL = "Parcial"
+    CREDIT_STATUS_PENDING = "Pendiente"
+    CREDIT_PAYMENT_REGISTERED = "Pago registrado."
+
+    FALLBACK_CLIENT = "Cliente"
+    FALLBACK_CLIENT_NOT_REGISTERED = "Cliente no registrado"
+    FALLBACK_NO_DATE = "Sin fecha"
+    FALLBACK_SYSTEM = "Sistema"
+    FALLBACK_NO_OBS = "Sin observaciones"
+    FALLBACK_NO_REFERENCE = "Sin referencia"
+    FALLBACK_NO_PRODUCTS = "Sin productos"
+    FALLBACK_GENERAL = "General"
+    FALLBACK_SERVICES = "Servicios"
+
+    # ── Cuentas — headers Excel ───────────────────────────────
+    ACCOUNTS_INSTALLMENTS_REGISTERED = "Cuotas registradas:"
+    ACCOUNTS_INSTALLMENTS_PAID = "Cuotas pagadas:"
+    ACCOUNTS_INSTALLMENTS_PENDING = "Cuotas pendientes:"
+    ACCOUNTS_INSTALLMENTS_OVERDUE = "Cuotas vencidas:"
+
+    # ── Sale Service — validaciones ───────────────────────────
+    SALE_VAL_PAYMENT_METHOD = "Seleccione un metodo de pago."
+    SALE_VAL_COMPANY = "Empresa no definida para procesar la venta."
+    SALE_VAL_BRANCH = "Sucursal no definida para procesar la venta."
+    SALE_VAL_CANCELLED_RESERVATION = (
+        "No se puede cobrar una reserva cancelada o eliminada."
+    )
+    SALE_VAL_ALREADY_PAID = "La reserva ya esta pagada."
+    SALE_VAL_NO_PRODUCTS = "No hay productos en la venta."
+    SALE_VAL_NO_DESCRIPTION = "Producto sin descripcion."
+    SALE_VAL_INVALID_QTY = "Cantidad invalida para {description}."
+    SALE_VAL_MULTI_MATCH = (
+        "Producto '{description}' tiene multiples coincidencias "
+        "en inventario. Use codigo de barras."
+    )
+    SALE_VAL_NOT_FOUND = "Producto {identifier} no encontrado en inventario."
+    SALE_VAL_INVALID_PRICE = "Precio invalido para {description}."
+    SALE_VAL_INSUFFICIENT_STOCK = "Stock insuficiente para {description}."
+    SALE_VAL_NO_AMOUNT = "No hay importe para cobrar."
+    SALE_VAL_INVALID_INITIAL = "Monto inicial invalido."
+    SALE_VAL_CASH_AMOUNT = "Ingrese un monto valido en efectivo."
+    SALE_VAL_MIXED_AMOUNTS = "Complete los montos del pago mixto."
+    SALE_VAL_CLIENT_REQUIRED = "Cliente requerido para venta a credito."
+    SALE_VAL_CLIENT_NOT_FOUND = "Cliente no encontrado."
+    SALE_VAL_CREDIT_LIMIT = "Limite de credito excedido."
+    SALE_VAL_INVALID_INSTALLMENTS = "Cantidad de cuotas invalida."
+
+    SALE_ACTION_CREDIT_INITIAL = "Crédito c/ Inicial"
+    SALE_ACTION_CREDIT = "Crédito"
+
+    # ── Historial — labels de display ─────────────────────────
+    HIST_FILTER_ALL = "Todos"
+    HIST_FILTER_ALL_F = "Todas"  # femenino (categorías)
+    HIST_SOURCE_SALE = "Venta"
+    HIST_SOURCE_COLLECTION = "Cobranza"
+    HIST_CREDIT_SALE = "Venta a Crédito / Fiado"
+    HIST_CREDIT_COMPLETED = "Crédito (Completado)"
+    HIST_CREDIT_PENDING = "Crédito (Pendiente Total)"
+    HIST_PAYMENT_IN = "Pago en {method}"
+    HIST_PAYMENT_REGISTERED = "Pago registrado"
+    HIST_CASH_SALE = "Venta al contado"
+
+    # Abreviaturas de métodos de pago (para tablas compactas)
+    HIST_PAY_ABBR: dict[str, str] = {
+        "efectivo": "Efe",
+        "tarjeta_debito": "Deb",
+        "tarjeta_credito": "Cre",
+        "yape": "Yap",
+        "plin": "Plin",
+        "transferencia": "Transf",
+        "mixto": "Mixto",
+        "otro": "Otro",
+    }
+
+    # ── Config — defaults de métodos de pago ──────────────────
+    DEFAULT_PM_CASH = "Efectivo"
+    DEFAULT_PM_CASH_DESC = "Billetes, Monedas"
+    DEFAULT_PM_DEBIT = "Tarjeta de Debito"
+    DEFAULT_PM_DEBIT_DESC = "Pago con tarjeta debito"
+    DEFAULT_PM_CREDIT = "Tarjeta de Credito"
+    DEFAULT_PM_CREDIT_DESC = "Pago con tarjeta credito"
+    DEFAULT_PM_YAPE = "Yape"
+    DEFAULT_PM_YAPE_DESC = "Pago con Yape"
+    DEFAULT_PM_PLIN = "Plin"
+    DEFAULT_PM_PLIN_DESC = "Pago con Plin"
+    DEFAULT_PM_TRANSFER = "Transferencia"
+    DEFAULT_PM_MIXED = "Pago Mixto"
+    DEFAULT_PM_MIXED_DESC = "Combinacion"
+
+    # ── Ingreso (stock) ───────────────────────────────────────
+    INGRESO_DUPLICATE_DOC = "Documento ya registrado para este proveedor."
 
 
 MSG = _Messages()

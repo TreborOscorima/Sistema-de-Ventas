@@ -46,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession  # ✅ IMPORTANTE
 
 from app.constants import CASHBOX_INCOME_ACTIONS
 from app.enums import PaymentMethodType, ReservationStatus, SaleStatus
+from app.i18n import MSG
 from app.models import (
     CashboxLog,
     Client,
@@ -1062,13 +1063,13 @@ class SaleService:
         else:
             symbol = "S/ "
         if not payment_method:
-            raise ValueError("Seleccione un metodo de pago.")
+            raise ValueError(MSG.SALE_VAL_PAYMENT_METHOD)
 
         if not company_id:
-            raise ValueError("Empresa no definida para procesar la venta.")
+            raise ValueError(MSG.SALE_VAL_COMPANY)
         company_id = int(company_id)
         if not branch_id:
-            raise ValueError("Sucursal no definida para procesar la venta.")
+            raise ValueError(MSG.SALE_VAL_BRANCH)
         branch_id = int(branch_id)
 
         all_methods = (
@@ -1117,7 +1118,7 @@ class SaleService:
                     "eliminado",
                 }:
                     raise ValueError(
-                        "No se puede cobrar una reserva cancelada o eliminada."
+                        MSG.SALE_VAL_CANCELLED_RESERVATION
                     )
             if reservation:
                 raw_balance = reservation.total_amount - reservation.paid_amount
@@ -1127,8 +1128,8 @@ class SaleService:
 
         if not items and reservation_balance <= Decimal("0.00"):
             if reservation:
-                raise ValueError("La reserva ya esta pagada.")
-            raise ValueError("No hay productos en la venta.")
+                raise ValueError(MSG.SALE_VAL_ALREADY_PAID)
+            raise ValueError(MSG.SALE_VAL_NO_PRODUCTS)
 
         units = (
             await session.exec(
@@ -1145,7 +1146,7 @@ class SaleService:
         for item in items:
             description = (item.description or "").strip()
             if not description:
-                raise ValueError("Producto sin descripcion.")
+                raise ValueError(MSG.SALE_VAL_NO_DESCRIPTION)
             unit = (item.unit or "").strip()
             allows_decimal = decimal_units.get(unit.lower(), False)
             quantity_receipt = _quantity_for_receipt(
@@ -1154,7 +1155,7 @@ class SaleService:
             quantity_db = _round_quantity(item.quantity, allows_decimal)
             if quantity_db <= 0:
                 raise ValueError(
-                    f"Cantidad invalida para {description}."
+                    MSG.SALE_VAL_INVALID_QTY.format(description=description)
                 )
             pending_items.append(
                 {
@@ -1354,8 +1355,7 @@ class SaleService:
                 description = item.get("description", "")
                 if description in ambiguous_descriptions:
                     raise StockError(
-                        f"Producto '{description}' tiene multiples coincidencias en inventario. "
-                        "Use codigo de barras."
+                        MSG.SALE_VAL_MULTI_MATCH.format(description=description)
                     )
                 product = products_by_description.get(description)
 
@@ -1370,7 +1370,7 @@ class SaleService:
                     identifier = "desconocido"
 
                 raise StockError(
-                    f"Producto {identifier} no encontrado en inventario."
+                    MSG.SALE_VAL_NOT_FOUND.format(identifier=identifier)
                 )
 
             unit_price = await _calculate_item_price(
@@ -1383,7 +1383,7 @@ class SaleService:
             )
             if unit_price <= 0:
                 raise ValueError(
-                    f"Precio invalido para {item['description']}."
+                    MSG.SALE_VAL_INVALID_PRICE.format(description=item["description"])
                 )
             subtotal = calculate_subtotal(item["quantity"], unit_price)
 
@@ -1449,7 +1449,7 @@ class SaleService:
 
             if available_stock < item["quantity"]:
                 raise StockError(
-                    f"Stock insuficiente para {item['description']}."
+                    MSG.SALE_VAL_INSUFFICIENT_STOCK.format(description=item["description"])
                 )
 
             resolved_items.append(
@@ -1465,12 +1465,12 @@ class SaleService:
         items_total = calculate_total(decimal_snapshot)
         sale_total = _round_money(items_total + reservation_balance)
         if sale_total <= Decimal("0.00"):
-            raise ValueError("No hay importe para cobrar.")
+            raise ValueError(MSG.SALE_VAL_NO_AMOUNT)
 
         is_credit = bool(payment_data.is_credit)
         initial_payment = _round_money(payment_data.initial_payment)
         if initial_payment < 0:
-            raise ValueError("Monto inicial invalido.")
+            raise ValueError(MSG.SALE_VAL_INVALID_INITIAL)
         initial_payment_input = initial_payment
 
         kind = (payment_data.method_kind or "other").strip().lower()
@@ -1482,13 +1482,13 @@ class SaleService:
                 if cash_amount <= 0 or cash_amount < sale_total:
                     message = (
                         payment_data.cash.message
-                        or "Ingrese un monto valido en efectivo."
+                        or MSG.SALE_VAL_CASH_AMOUNT
                     )
                     raise ValueError(message)
             elif cash_amount < 0:
                 message = (
                     payment_data.cash.message
-                    or "Ingrese un monto valido en efectivo."
+                    or MSG.SALE_VAL_CASH_AMOUNT
                 )
                 raise ValueError(message)
         elif kind == "mixed":
@@ -1501,13 +1501,13 @@ class SaleService:
                 if total_paid_now <= 0 or total_paid_now < sale_total:
                     message = (
                         payment_data.mixed.message
-                        or "Complete los montos del pago mixto."
+                        or MSG.SALE_VAL_MIXED_AMOUNTS
                     )
                     raise ValueError(message)
             elif total_paid_now < 0:
                 message = (
                     payment_data.mixed.message
-                    or "Complete los montos del pago mixto."
+                    or MSG.SALE_VAL_MIXED_AMOUNTS
                 )
                 raise ValueError(message)
         else:
@@ -1531,9 +1531,9 @@ class SaleService:
         sale_payment_label = payment_method
         if is_credit:
             sale_payment_label = (
-                "Crédito c/ Inicial"
+                MSG.SALE_ACTION_CREDIT_INITIAL
                 if initial_payment > Decimal("0.00")
-                else "Crédito"
+                else MSG.SALE_ACTION_CREDIT
             )
 
         client = None
@@ -1541,7 +1541,7 @@ class SaleService:
         financed_amount = Decimal("0.00")
         if is_credit:
             if payment_data.client_id is None:
-                raise ValueError("Cliente requerido para venta a credito.")
+                raise ValueError(MSG.SALE_VAL_CLIENT_REQUIRED)
             client_query = select(Client).where(Client.id == payment_data.client_id)
             client = (
                 await session.exec(
@@ -1551,14 +1551,14 @@ class SaleService:
                 )
             ).first()
             if not client:
-                raise ValueError("Cliente no encontrado.")
+                raise ValueError(MSG.SALE_VAL_CLIENT_NOT_FOUND)
             credit_base = _round_money(sale_total - initial_payment)
             if credit_base < Decimal("0.00"):
                 credit_base = Decimal("0.00")
             if _round_money(client.current_debt) + credit_base > _round_money(
                 client.credit_limit
             ):
-                raise ValueError("Limite de credito excedido.")
+                raise ValueError(MSG.SALE_VAL_CREDIT_LIMIT)
 
         try:
             timestamp = utc_now_naive()
@@ -1635,7 +1635,7 @@ class SaleService:
                         _method_type_from_kind(kind)
                     )
                 cashbox_method_id = resolve_payment_method_id(main_payment_code)
-                action_label = "Venta"
+                action_label = MSG.ACTION_SALE
                 summary_items: list[str] = []
                 if reservation is not None:
                     field_name = (reservation.field_name or "").strip()
@@ -1656,7 +1656,7 @@ class SaleService:
                 summary_text = ", ".join(summary_items)
                 notes = f"#{new_sale.id}: {summary_text}"
                 if is_credit:
-                    action_label = "Inicial Credito"
+                    action_label = MSG.ACTION_INITIAL_CREDIT
                     client_name = ""
                     if client:
                         client_name = (client.name or "").strip() or f"ID {client.id}"
@@ -1687,7 +1687,7 @@ class SaleService:
                 if financed_amount > 0:
                     installments_count = int(payment_data.installments or 1)
                     if installments_count < 1:
-                        raise ValueError("Cantidad de cuotas invalida.")
+                        raise ValueError(MSG.SALE_VAL_INVALID_INSTALLMENTS)
                     interval_days = int(payment_data.interval_days or 0)
                     if interval_days <= 0:
                         interval_days = 30

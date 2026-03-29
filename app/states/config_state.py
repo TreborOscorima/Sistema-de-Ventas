@@ -12,6 +12,7 @@ from app.utils.db_seeds import (
 )
 from app.utils.timezone import is_valid_timezone
 from app.enums import PaymentMethodType
+from app.i18n import MSG
 from .types import CurrencyOption, PaymentMethodConfig
 from .mixin_state import MixinState
 from app.constants import WHATSAPP_SALES_URL
@@ -682,44 +683,44 @@ class ConfigState(MixinState):
                 defaults = [
                     {
                         "method_id": "cash",
-                        "name": "Efectivo",
-                        "description": "Billetes, Monedas",
+                        "name": MSG.DEFAULT_PM_CASH,
+                        "description": MSG.DEFAULT_PM_CASH_DESC,
                         "kind": "cash",
                     },
                     {
                         "method_id": "debit_card",
-                        "name": "Tarjeta de Debito",
-                        "description": "Pago con tarjeta debito",
+                        "name": MSG.DEFAULT_PM_DEBIT,
+                        "description": MSG.DEFAULT_PM_DEBIT_DESC,
                         "kind": "debit",
                     },
                     {
                         "method_id": "credit_card",
-                        "name": "Tarjeta de Credito",
-                        "description": "Pago con tarjeta credito",
+                        "name": MSG.DEFAULT_PM_CREDIT,
+                        "description": MSG.DEFAULT_PM_CREDIT_DESC,
                         "kind": "credit",
                     },
                     {
                         "method_id": "yape",
-                        "name": "Yape",
-                        "description": "Pago con Yape",
+                        "name": MSG.DEFAULT_PM_YAPE,
+                        "description": MSG.DEFAULT_PM_YAPE_DESC,
                         "kind": "yape",
                     },
                     {
                         "method_id": "plin",
-                        "name": "Plin",
-                        "description": "Pago con Plin",
+                        "name": MSG.DEFAULT_PM_PLIN,
+                        "description": MSG.DEFAULT_PM_PLIN_DESC,
                         "kind": "plin",
                     },
                     {
                         "method_id": "transfer",
-                        "name": "Transferencia",
-                        "description": "Transferencia",
+                        "name": MSG.DEFAULT_PM_TRANSFER,
+                        "description": MSG.DEFAULT_PM_TRANSFER,
                         "kind": "transfer",
                     },
                     {
                         "method_id": "mixed",
-                        "name": "Pago Mixto",
-                        "description": "Combinacion",
+                        "name": MSG.DEFAULT_PM_MIXED,
+                        "description": MSG.DEFAULT_PM_MIXED_DESC,
                         "kind": "mixed",
                     },
                 ]

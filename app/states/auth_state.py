@@ -54,6 +54,7 @@ from app.utils.rate_limit import (
     clear_login_attempts as _clear_login_attempts,
     remaining_lockout_time as _remaining_lockout_time,
 )
+from app.i18n import MSG
 from app.utils.validators import validate_email, validate_password
 from app.constants import (
     MAX_LOGIN_ATTEMPTS,
@@ -207,7 +208,7 @@ class AuthState(MixinState):
     subscription_snapshot: Dict[str, Any] = {
         "plan_type": "",
         "plan_display": "PLAN",
-        "status_label": "Activo",
+        "status_label": MSG.STATUS_ACTIVE,
         "status_tone": "success",
         "is_trial": False,
         "trial_days_left": 0,
@@ -277,7 +278,7 @@ class AuthState(MixinState):
     @rx.var(cache=True)
     def is_authenticated(self) -> bool:
         user = self.current_user
-        return bool(user and user.get("username") != "Invitado")
+        return bool(user and user.get("username") != MSG.ROLE_GUEST)
 
     @rx.var(cache=True)
     def current_user(self) -> User:
@@ -352,7 +353,7 @@ class AuthState(MixinState):
                 if getattr(user, "token_version", 0) != token_version:
                     self._cached_user = self._guest_user()
                 else:
-                    role_name = user.role.name if user.role else "Sin rol"
+                    role_name = user.role.name if user.role else MSG.FALLBACK_NO_ROLE
                     set_tenant_context(
                         getattr(user, "company_id", None),
                         getattr(user, "branch_id", None),
@@ -392,7 +393,7 @@ class AuthState(MixinState):
         return {
             "plan_type": "",
             "plan_display": "PLAN",
-            "status_label": "Activo",
+            "status_label": MSG.STATUS_ACTIVE,
             "status_tone": "success",
             "is_trial": False,
             "trial_days_left": 0,
@@ -461,7 +462,7 @@ class AuthState(MixinState):
         is_expired = bool(
             is_trial and (not trial_ends_at or trial_ends_at.date() < today)
         )
-        status_label = "Vencido" if is_expired else "Activo"
+        status_label = MSG.STATUS_EXPIRED if is_expired else MSG.STATUS_ACTIVE
         status_tone = "danger" if is_expired else ("warning" if is_trial else "success")
         if not is_trial:
             # Plan de pago: verificar subscription_ends_at
@@ -472,16 +473,16 @@ class AuthState(MixinState):
 
             # Fecha de suscripción vencida → forzar suspendido
             if subscription_ends_at and subscription_ends_at.date() < today:
-                status_label = "Suspendido"
+                status_label = MSG.STATUS_SUSPENDED
                 status_tone = "danger"
             elif sub_status == SubscriptionStatus.WARNING.value:
-                status_label = "Por vencer"
+                status_label = MSG.STATUS_ABOUT_TO_EXPIRE
                 status_tone = "warning"
             elif sub_status == SubscriptionStatus.PAST_DUE.value:
-                status_label = "Pago vencido"
+                status_label = MSG.STATUS_PAST_DUE
                 status_tone = "danger"
             elif sub_status == SubscriptionStatus.SUSPENDED.value:
-                status_label = "Suspendido"
+                status_label = MSG.STATUS_SUSPENDED
                 status_tone = "danger"
 
         trial_days_left = 0
@@ -532,8 +533,8 @@ class AuthState(MixinState):
             "users_percent": users_percent,
             "branches_full": branches_full,
             "users_full": users_full,
-            "branches_limit_label": "Ilimitado" if branches_unlimited else str(max_branches),
-            "users_limit_label": "Ilimitado" if users_unlimited else str(max_users),
+            "branches_limit_label": MSG.STATUS_UNLIMITED if branches_unlimited else str(max_branches),
+            "users_limit_label": MSG.STATUS_UNLIMITED if users_unlimited else str(max_users),
             "users_unlimited": users_unlimited,
             "branches_unlimited": branches_unlimited,
         }
@@ -919,7 +920,7 @@ class AuthState(MixinState):
             self._load_roles_cache(session, company_id=company_id)
             normalized_users = []
             for user in users:
-                role_name = user.role.name if user.role else "Sin rol"
+                role_name = user.role.name if user.role else MSG.FALLBACK_NO_ROLE
                 normalized_users.append({
                     "id": user.id,
                     "company_id": getattr(user, "company_id", None),
@@ -937,9 +938,9 @@ class AuthState(MixinState):
         return {
             "id": None,
             "company_id": None,
-            "username": "Invitado",
+            "username": MSG.ROLE_GUEST,
             "email": "",
-            "role": "Invitado",
+            "role": MSG.ROLE_GUEST,
             "privileges": EMPTY_PRIVILEGES.copy(),
             "must_change_password": False,
             "is_platform_owner": False,
@@ -1555,7 +1556,7 @@ class AuthState(MixinState):
         try:
             branch_id_int = int(branch_id)
         except (TypeError, ValueError):
-            return rx.toast("Sucursal invalida.", duration=3000)
+            return rx.toast(MSG.AUTH_BRANCH_INVALID, duration=3000)
         with rx.session() as session:
             allowed = session.exec(
                 select(UserBranch)
@@ -1565,7 +1566,7 @@ class AuthState(MixinState):
                 .where(Branch.company_id == company_id)
             ).first()
             if not allowed:
-                return rx.toast("No tiene acceso a esta sucursal.", duration=3000)
+                return rx.toast(MSG.AUTH_BRANCH_NO_ACCESS, duration=3000)
         self.selected_branch_id = str(branch_id_int)
         self.refresh_auth_runtime_cache()
         if hasattr(self, "refresh_cashbox_status"):
@@ -1652,7 +1653,7 @@ class AuthState(MixinState):
             self.cashbox_log_filter_end_date = ""
             self.cashbox_log_staged_start_date = ""
             self.cashbox_log_staged_end_date = ""
-        return rx.toast("Sucursal actualizada.", duration=2000)
+        return rx.toast(MSG.AUTH_BRANCH_UPDATED, duration=2000)
 
     @rx.event
     def login(self, form_data: dict):
@@ -1976,7 +1977,7 @@ class AuthState(MixinState):
         # Invalidar cache para forzar recarga con nuevos datos
         self.invalidate_user_cache()
         self.password_change_error = ""
-        yield rx.toast("Contraseña actualizada.", duration=3000)
+        yield rx.toast(MSG.AUTH_PASSWORD_UPDATED, duration=3000)
         yield rx.redirect(
             self._default_route_for_privileges(
                 self.current_user["privileges"]
@@ -2059,7 +2060,7 @@ class AuthState(MixinState):
                 return rx.toast("Usuario a editar no encontrado.", duration=3000)
 
             # Convertir a dict
-            role_name = user.role.name if user.role else "Sin rol"
+            role_name = user.role.name if user.role else MSG.FALLBACK_NO_ROLE
             user_dict = {
                 "id": user.id,
                 "username": user.username,

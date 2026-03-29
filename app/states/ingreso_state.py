@@ -16,6 +16,7 @@ from app.models import (
     Purchase,
     PurchaseItem,
 )
+from app.i18n import MSG
 from .types import TransactionItem
 from .mixin_state import MixinState
 from app.utils.barcode import clean_barcode, validate_barcode
@@ -59,9 +60,9 @@ class IngresoState(MixinState):
         "barcode": "",
         "description": "",
         "display_description": "",
-        "category": "General",
+        "category": MSG.FALLBACK_GENERAL,
         "quantity": 0,
-        "unit": "Unidad",
+        "unit": MSG.FALLBACK_UNIT,
         "price": 0,
         "sale_price": 0,
         "subtotal": 0,
@@ -490,7 +491,7 @@ class IngresoState(MixinState):
             fallback_category = (
                 self.categories[0]
                 if hasattr(self, "categories") and self.categories
-                else "General"
+                else MSG.FALLBACK_GENERAL
             )
             self.new_entry_item["category"] = fallback_category
         if (
@@ -711,7 +712,7 @@ class IngresoState(MixinState):
                 ).first()
                 if existing_doc:
                     return rx.toast(
-                        "Documento ya registrado para este proveedor.",
+                        MSG.INGRESO_DUPLICATE_DOC,
                         duration=3000,
                     )
 
@@ -1102,7 +1103,7 @@ class IngresoState(MixinState):
                         barcode_snapshot=product_barcode or barcode,
                         category_snapshot=product_category or item.get("category", ""),
                         quantity=quantity,
-                        unit=item.get("unit", "Unidad"),
+                        unit=item.get("unit", MSG.FALLBACK_UNIT),
                         unit_cost=unit_cost,
                         subtotal=subtotal,
                     )
@@ -1152,7 +1153,7 @@ class IngresoState(MixinState):
             "display_description": "",
             "category": self.categories[0] if hasattr(self, "categories") and self.categories else "",
             "quantity": 0,
-            "unit": "Unidad",
+            "unit": MSG.FALLBACK_UNIT,
             "price": 0,
             "sale_price": 0,
             "subtotal": 0,
@@ -1231,8 +1232,8 @@ class IngresoState(MixinState):
     def _fill_entry_item_from_product(self, product: Dict[str, Any]):
         self.new_entry_item["barcode"] = product.get("barcode", "")
         self.new_entry_item["description"] = product.get("description", "")
-        self.new_entry_item["category"] = product.get("category") or "General"
-        self.new_entry_item["unit"] = product.get("unit") or "Unidad"
+        self.new_entry_item["category"] = product.get("category") or MSG.FALLBACK_GENERAL
+        self.new_entry_item["unit"] = product.get("unit") or MSG.FALLBACK_UNIT
         self.new_entry_item["price"] = product.get("purchase_price", 0)
         self.new_entry_item["sale_price"] = product.get("sale_price", 0)
         self.new_entry_item["product_id"] = product.get("product_id") or product.get("id")

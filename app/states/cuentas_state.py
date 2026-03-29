@@ -31,6 +31,7 @@ import reflex as rx
 from sqlmodel import select
 from sqlalchemy import func
 
+from app.i18n import MSG
 from app.models import Client, Sale, SaleInstallment
 from app.services.credit_service import CreditService
 from app.services.alert_service import get_overdue_count
@@ -141,14 +142,14 @@ class CuentasState(MixinState):
     def _installment_status_label(self, status: str) -> str:
         value = (status or "").strip().lower()
         mapping = {
-            "paid": "Pagado",
-            "completed": "Pagado",
-            "partial": "Parcial",
-            "pending": "Pendiente",
+            "paid": MSG.CREDIT_STATUS_PAID,
+            "completed": MSG.CREDIT_STATUS_PAID,
+            "partial": MSG.CREDIT_STATUS_PARTIAL,
+            "pending": MSG.CREDIT_STATUS_PENDING,
         }
         if value in mapping:
             return mapping[value]
-        return value.capitalize() if value else "Pendiente"
+        return value.capitalize() if value else MSG.CREDIT_STATUS_PENDING
 
     def _installment_snapshot(self, installment: SaleInstallment) -> dict:
         return {
@@ -426,7 +427,7 @@ class CuentasState(MixinState):
                 {
                     "id": installment.id,
                     "client": client_payload,
-                    "client_name": client.name if client else "Cliente no registrado",
+                    "client_name": client.name if client else MSG.FALLBACK_CLIENT_NOT_REGISTERED,
                     "client_dni": client.dni if client else "-",
                     "due_date": due_date_display,
                     "amount": float(amount),
@@ -645,16 +646,16 @@ class CuentasState(MixinState):
         row += 1
         sheet.cell(row=row, column=1, value="RESUMEN DE CARTERA")
         row += 1
-        sheet.cell(row=row, column=1, value="Cuotas registradas:")
+        sheet.cell(row=row, column=1, value=MSG.ACCOUNTS_INSTALLMENTS_REGISTERED)
         sheet.cell(row=row, column=2, value=total_installments)
         row += 1
-        sheet.cell(row=row, column=1, value="Cuotas pagadas:")
+        sheet.cell(row=row, column=1, value=MSG.ACCOUNTS_INSTALLMENTS_PAID)
         sheet.cell(row=row, column=2, value=paid_count)
         row += 1
-        sheet.cell(row=row, column=1, value="Cuotas pendientes:")
+        sheet.cell(row=row, column=1, value=MSG.ACCOUNTS_INSTALLMENTS_PENDING)
         sheet.cell(row=row, column=2, value=pending_count)
         row += 1
-        sheet.cell(row=row, column=1, value="Cuotas vencidas:")
+        sheet.cell(row=row, column=1, value=MSG.ACCOUNTS_INSTALLMENTS_OVERDUE)
         sheet.cell(row=row, column=2, value=overdue_count)
         row += 1
         sheet.cell(row=row, column=1, value=f"Total comprometido ({currency_label}):")
@@ -687,9 +688,9 @@ class CuentasState(MixinState):
                     "%d/%m/%Y",
                 )
                 if installment.due_date
-                else "Sin fecha"
+                else MSG.FALLBACK_NO_DATE
             )
-            client_name = client.name if client else "Cliente no registrado"
+            client_name = client.name if client else MSG.FALLBACK_CLIENT_NOT_REGISTERED
             concept = (
                 f"Venta #{installment.sale_id} - Cuota {installment.number}"
             )
@@ -978,5 +979,5 @@ class CuentasState(MixinState):
 
         self.selected_installment_id = None
         self.payment_amount = ""
-        self.add_notification("Pago registrado.", "success")
+        self.add_notification(MSG.CREDIT_PAYMENT_REGISTERED, "success")
         return

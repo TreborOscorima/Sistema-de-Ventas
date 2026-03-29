@@ -617,17 +617,18 @@ class HistorialState(MixinState):
         return payment_method_label(method_key)
 
     def _payment_method_abbrev(self, method_key: str) -> str:
+        _abbr = MSG.HIST_PAY_ABBR
         mapping = {
-            "cash": "Efe",
-            "debit": "Deb",
-            "credit": "Cre",
-            "yape": "Yap",
-            "plin": "Plin",
-            "transfer": "Transf",
-            "mixed": "Mixto",
-            "other": "Otro",
+            "cash": _abbr["efectivo"],
+            "debit": _abbr["tarjeta_debito"],
+            "credit": _abbr["tarjeta_credito"],
+            "yape": _abbr["yape"],
+            "plin": _abbr["plin"],
+            "transfer": _abbr["transferencia"],
+            "mixed": _abbr["mixto"],
+            "other": _abbr["otro"],
         }
-        return mapping.get(method_key, "Otro")
+        return mapping.get(method_key, _abbr["otro"])
 
     def _sorted_payment_keys(self, keys: list[str]) -> list[str]:
         order = [
@@ -702,12 +703,12 @@ class HistorialState(MixinState):
         explicit = (getattr(sale, "payment_method", "") or "").strip()
         credit_label = self._credit_sale_payment_label(sale, payments)
         if credit_label:
-            if explicit and explicit not in {"-", "No especificado"}:
+            if explicit and explicit not in {"-", MSG.FALLBACK_NOT_SPECIFIED}:
                 normalized = explicit.lower()
                 if normalized.startswith("credito") or normalized.startswith("crédito"):
                     return explicit
             return credit_label
-        if explicit and explicit not in {"-", "No especificado"}:
+        if explicit and explicit not in {"-", MSG.FALLBACK_NOT_SPECIFIED}:
             return explicit
         return fallback
 
@@ -770,8 +771,8 @@ class HistorialState(MixinState):
             if sale_id not in sale_ids or sale_id in info:
                 continue
             info[sale_id] = {
-                "payment_method": (log.payment_method or "No especificado").strip()
-                or "No especificado",
+                "payment_method": (log.payment_method or MSG.FALLBACK_NOT_SPECIFIED).strip()
+                or MSG.FALLBACK_NOT_SPECIFIED,
                 "payment_details": notes,
             }
         return info
@@ -796,12 +797,12 @@ class HistorialState(MixinState):
                 payment_method = self._payment_method_display(payments)
                 payment_details = self._payment_summary_from_payments(payments)
                 if payment_method.strip() in {"", "-"}:
-                    payment_method = "No especificado"
+                    payment_method = MSG.FALLBACK_NOT_SPECIFIED
                 payment_method = self._sale_payment_method_label(
                     sale, payments, payment_method
                 )
                 fallback = log_payment_info.get(sale.id)
-                if fallback and payment_method == "No especificado":
+                if fallback and payment_method == MSG.FALLBACK_NOT_SPECIFIED:
                     payment_method = fallback.get("payment_method", payment_method)
                     payment_details = fallback.get("payment_details", payment_details)
                 client_name = (
@@ -1114,7 +1115,7 @@ class HistorialState(MixinState):
                 payments = sale.payments or []
                 payment_method = self._payment_method_display(payments)
                 if payment_method.strip() in {"", "-"}:
-                    payment_method = "No especificado"
+                    payment_method = MSG.FALLBACK_NOT_SPECIFIED
                 payment_method = self._sale_payment_method_label(
                     sale, payments, payment_method
                 )
@@ -1433,11 +1434,11 @@ class HistorialState(MixinState):
             payment_method = self._payment_method_display(payments)
             payment_details = self._payment_summary_from_payments(payments)
             if payment_method.strip() in {"", "-"}:
-                payment_method = "No especificado"
+                payment_method = MSG.FALLBACK_NOT_SPECIFIED
             payment_method = self._sale_payment_method_label(
                 sale, payments, payment_method
             )
-            if payment_method == "No especificado":
+            if payment_method == MSG.FALLBACK_NOT_SPECIFIED:
                 log_info = self._sale_log_payment_info(session, [sale.id]).get(
                     sale.id, {}
                 )
@@ -1533,7 +1534,7 @@ class HistorialState(MixinState):
             "Cliente",
             "Vendedor",
             "Método de Pago",
-            "Producto",
+            MSG.FALLBACK_PRODUCT,
             "Variante",
             "Categoría",
             "Cantidad",
@@ -1570,12 +1571,12 @@ class HistorialState(MixinState):
                 payment_method = self._payment_method_display(payments)
                 payment_details = self._payment_summary_from_payments(payments)
                 if payment_method.strip() in {"", "-"}:
-                    payment_method = "No especificado"
+                    payment_method = MSG.FALLBACK_NOT_SPECIFIED
                 payment_method = self._sale_payment_method_label(
                     sale, payments, payment_method
                 )
                 fallback = log_payment_info.get(sale.id)
-                if fallback and payment_method == "No especificado":
+                if fallback and payment_method == MSG.FALLBACK_NOT_SPECIFIED:
                     payment_method = fallback.get("payment_method", payment_method)
                     payment_details = fallback.get(
                         "payment_details", payment_details
@@ -1600,7 +1601,7 @@ class HistorialState(MixinState):
                 amount_paid_total = paid_total + installments_paid
                 total_amount_value = Decimal(str(sale.total_amount or 0))
                 if is_credit:
-                    payment_method = "Venta a Crédito / Fiado"
+                    payment_method = MSG.HIST_CREDIT_SALE
                     if total_amount_value > 0 and amount_paid_total >= total_amount_value:
                         payment_details = "Crédito (Completado)"
                     elif amount_paid_total > 0:
@@ -1611,15 +1612,15 @@ class HistorialState(MixinState):
                         payment_details = "Crédito (Pendiente Total)"
                 else:
                     if (payment_method or "").strip().lower() in invalid_labels:
-                        payment_method = "No especificado"
+                        payment_method = MSG.FALLBACK_NOT_SPECIFIED
                     if (payment_details or "").strip().lower() in invalid_labels:
                         if (payment_method or "").strip().lower() not in invalid_labels:
                             payment_details = f"Pago en {payment_method}"
                         else:
-                            payment_details = "Pago registrado"
+                            payment_details = MSG.HIST_PAYMENT_REGISTERED
 
-                client_name = sale.client.name if sale.client else "Venta al contado"
-                user_name = self._sale_username(sale, sale_user_lookup, "Sistema")
+                client_name = sale.client.name if sale.client else MSG.HIST_CASH_SALE
+                user_name = self._sale_username(sale, sale_user_lookup, MSG.FALLBACK_SYSTEM)
                 if is_credit:
                     method_display = payment_method
                 else:
@@ -1631,9 +1632,9 @@ class HistorialState(MixinState):
 
                 for item in sale_items:
                     if item is None:
-                        product_name = "Sin productos"
+                        product_name = MSG.FALLBACK_NO_PRODUCTS
                         variant_label = "-"
-                        category = "Sin categoría"
+                        category = MSG.FALLBACK_NO_CATEGORY
                         quantity = Decimal("0")
                         unit_price = Decimal("0")
                         subtotal = Decimal("0")
@@ -1651,7 +1652,7 @@ class HistorialState(MixinState):
                             snapshot = (item.product_name_snapshot or "").strip()
                             if snapshot and snapshot.endswith(")") and "(" in snapshot:
                                 variant_label = snapshot.rsplit("(", 1)[-1].rstrip(")") or "-"
-                        name_snapshot = (item.product_name_snapshot or "").strip() or "Producto"
+                        name_snapshot = (item.product_name_snapshot or "").strip() or MSG.FALLBACK_PRODUCT
                         if variant_label != "-" and name_snapshot.endswith(")") and "(" in name_snapshot:
                             product_name = name_snapshot.rsplit("(", 1)[0].strip() or name_snapshot
                         else:
@@ -1778,7 +1779,7 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=2, value=action_display)
                 ws.cell(row=row, column=3, value=item.get("user", MSG.FALLBACK_UNKNOWN))
                 ws.cell(row=row, column=4, value=item.get("amount", 0) or 0).number_format = currency_format
-                ws.cell(row=row, column=5, value=item.get("notes", "") or "Sin observaciones")
+                ws.cell(row=row, column=5, value=item.get("notes", "") or MSG.FALLBACK_NO_OBS)
 
                 for col in range(1, 6):
                     ws.cell(row=row, column=col).border = THIN_BORDER
@@ -1811,13 +1812,13 @@ class HistorialState(MixinState):
             return rx.toast(MSG.HIST_NO_INCOMES_EXPORT, duration=3000)
 
         if active_tab == "detalle":
-            wb, ws = create_excel_workbook("Detalle de Cobros")
+            wb, ws = create_excel_workbook(MSG.REPORT_PAYMENTS_SHEET)
 
             # Encabezado profesional
             row = add_company_header(
                 ws,
                 company_name,
-                "DETALLE DE COBROS E INGRESOS",
+                MSG.REPORT_PAYMENTS_TITLE,
                 period_label,
                 columns=6,
                 generated_at=self._display_now(),
@@ -1838,10 +1839,10 @@ class HistorialState(MixinState):
             for entry in entries:
                 ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
-                ws.cell(row=row, column=3, value=entry.get("method_label", "No especificado"))
+                ws.cell(row=row, column=3, value=entry.get("method_label", MSG.FALLBACK_NOT_SPECIFIED))
                 ws.cell(row=row, column=4, value=entry.get("amount", 0) or 0).number_format = currency_format
-                ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
-                ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
+                ws.cell(row=row, column=5, value=entry.get("user", MSG.FALLBACK_SYSTEM))
+                ws.cell(row=row, column=6, value=entry.get("reference", "") or MSG.FALLBACK_NO_REFERENCE)
 
                 for col in range(1, 7):
                     ws.cell(row=row, column=col).border = THIN_BORDER
@@ -1850,7 +1851,7 @@ class HistorialState(MixinState):
             # Totales
             totals_row = row
             add_totals_row_with_formulas(ws, totals_row, data_start, [
-                {"type": "label", "value": "TOTAL INGRESOS"},
+                {"type": "label", "value": MSG.REPORT_TOTAL_INCOME},
                 {"type": "text", "value": ""},
                 {"type": "text", "value": ""},
                 {"type": "sum", "col_letter": "D", "number_format": currency_format},
@@ -1954,11 +1955,11 @@ class HistorialState(MixinState):
         auto_adjust_column_widths(ws)
 
         # Segunda hoja: Detalle
-        detail_ws = wb.create_sheet("Detalle de Cobros")
+        detail_ws = wb.create_sheet(MSG.REPORT_PAYMENTS_SHEET)
         row = add_company_header(
             detail_ws,
             company_name,
-            "DETALLE DE COBROS E INGRESOS",
+            MSG.REPORT_PAYMENTS_TITLE,
             period_label,
             columns=6,
             generated_at=self._display_now(),
@@ -1979,10 +1980,10 @@ class HistorialState(MixinState):
         for entry in entries:
             detail_ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
             detail_ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
-            detail_ws.cell(row=row, column=3, value=entry.get("method_label", "No especificado"))
+            detail_ws.cell(row=row, column=3, value=entry.get("method_label", MSG.FALLBACK_NOT_SPECIFIED))
             detail_ws.cell(row=row, column=4, value=entry.get("amount", 0) or 0).number_format = currency_format
-            detail_ws.cell(row=row, column=5, value=entry.get("user", "Sistema"))
-            detail_ws.cell(row=row, column=6, value=entry.get("reference", "") or "Sin referencia")
+            detail_ws.cell(row=row, column=5, value=entry.get("user", MSG.FALLBACK_SYSTEM))
+            detail_ws.cell(row=row, column=6, value=entry.get("reference", "") or MSG.FALLBACK_NO_REFERENCE)
 
             for col in range(1, 7):
                 detail_ws.cell(row=row, column=col).border = THIN_BORDER

@@ -194,3 +194,131 @@ class TestMSGFallbacksAndActions:
         ]:
             val = getattr(MSG, attr)
             assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+
+class TestMSGAuthAndRoles:
+    """Valida constantes de autenticación, roles y suscripción."""
+
+    def test_role_constants_exist(self):
+        for attr in [
+            "ROLE_SUPERADMIN", "ROLE_ADMIN", "ROLE_USER",
+            "ROLE_CASHIER", "ROLE_GUEST",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_status_constants_exist(self):
+        for attr in [
+            "STATUS_ACTIVE", "STATUS_EXPIRED", "STATUS_ABOUT_TO_EXPIRE",
+            "STATUS_PAST_DUE", "STATUS_SUSPENDED", "STATUS_UNLIMITED",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_auth_message_constants_exist(self):
+        for attr in [
+            "AUTH_USER_NOT_FOUND", "AUTH_BRANCH_INVALID",
+            "AUTH_BRANCH_NO_ACCESS", "AUTH_BRANCH_UPDATED",
+            "AUTH_PASSWORD_UPDATED", "AUTH_PERM_CONFIG",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_branch_message_constants_exist(self):
+        for attr in [
+            "BRANCH_NAME_REQUIRED", "BRANCH_CREATED",
+            "BRANCH_UPDATED", "BRANCH_DELETED",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+
+class TestMSGSaleValidations:
+    """Valida constantes de validación del servicio de ventas."""
+
+    def test_sale_validation_constants_exist(self):
+        for attr in [
+            "SALE_VAL_PAYMENT_METHOD", "SALE_VAL_COMPANY", "SALE_VAL_BRANCH",
+            "SALE_VAL_CANCELLED_RESERVATION", "SALE_VAL_ALREADY_PAID",
+            "SALE_VAL_NO_PRODUCTS", "SALE_VAL_NO_DESCRIPTION",
+            "SALE_VAL_NO_AMOUNT", "SALE_VAL_INVALID_INITIAL",
+            "SALE_VAL_CASH_AMOUNT", "SALE_VAL_MIXED_AMOUNTS",
+            "SALE_VAL_CLIENT_REQUIRED", "SALE_VAL_CLIENT_NOT_FOUND",
+            "SALE_VAL_CREDIT_LIMIT", "SALE_VAL_INVALID_INSTALLMENTS",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_sale_validation_format_strings(self):
+        assert "{description}" in MSG.SALE_VAL_INVALID_QTY
+        assert "{description}" in MSG.SALE_VAL_MULTI_MATCH
+        assert "{identifier}" in MSG.SALE_VAL_NOT_FOUND
+        assert "{description}" in MSG.SALE_VAL_INVALID_PRICE
+        assert "{description}" in MSG.SALE_VAL_INSUFFICIENT_STOCK
+
+    def test_sale_action_constants(self):
+        assert MSG.SALE_ACTION_CREDIT_INITIAL
+        assert MSG.SALE_ACTION_CREDIT
+
+
+class TestMSGCreditsAndAccounts:
+    """Valida constantes de créditos y cuentas por cobrar."""
+
+    def test_credit_status_constants(self):
+        for attr in ["CREDIT_STATUS_PAID", "CREDIT_STATUS_PARTIAL", "CREDIT_STATUS_PENDING"]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_accounts_headers(self):
+        for attr in [
+            "ACCOUNTS_INSTALLMENTS_REGISTERED", "ACCOUNTS_INSTALLMENTS_PAID",
+            "ACCOUNTS_INSTALLMENTS_PENDING", "ACCOUNTS_INSTALLMENTS_OVERDUE",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_extended_fallbacks(self):
+        for attr in [
+            "FALLBACK_CLIENT", "FALLBACK_CLIENT_NOT_REGISTERED",
+            "FALLBACK_NO_DATE", "FALLBACK_SYSTEM", "FALLBACK_NO_OBS",
+            "FALLBACK_NO_REFERENCE", "FALLBACK_NO_PRODUCTS",
+            "FALLBACK_GENERAL", "FALLBACK_SERVICES",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+
+class TestMSGDefaultPaymentMethods:
+    """Valida constantes de métodos de pago por defecto."""
+
+    def test_default_pm_constants(self):
+        for attr in [
+            "DEFAULT_PM_CASH", "DEFAULT_PM_CASH_DESC",
+            "DEFAULT_PM_DEBIT", "DEFAULT_PM_DEBIT_DESC",
+            "DEFAULT_PM_CREDIT", "DEFAULT_PM_CREDIT_DESC",
+            "DEFAULT_PM_YAPE", "DEFAULT_PM_YAPE_DESC",
+            "DEFAULT_PM_PLIN", "DEFAULT_PM_PLIN_DESC",
+            "DEFAULT_PM_TRANSFER", "DEFAULT_PM_MIXED", "DEFAULT_PM_MIXED_DESC",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_hist_pay_abbr_dict(self):
+        assert len(MSG.HIST_PAY_ABBR) >= 8
+        assert "efectivo" in MSG.HIST_PAY_ABBR
+        assert "yape" in MSG.HIST_PAY_ABBR
+
+    def test_hist_display_labels(self):
+        for attr in [
+            "HIST_FILTER_ALL", "HIST_FILTER_ALL_F",
+            "HIST_SOURCE_SALE", "HIST_SOURCE_COLLECTION",
+            "HIST_CREDIT_SALE", "HIST_CREDIT_COMPLETED",
+            "HIST_CREDIT_PENDING", "HIST_PAYMENT_REGISTERED",
+            "HIST_CASH_SALE",
+        ]:
+            val = getattr(MSG, attr)
+            assert isinstance(val, str) and len(val) > 0, f"{attr} missing"
+
+    def test_hist_payment_in_format(self):
+        result = MSG.HIST_PAYMENT_IN.format(method="Yape")
+        assert "Yape" in result
