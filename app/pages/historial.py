@@ -107,36 +107,34 @@ def history_filters() -> rx.Component:
 
 
 def history_table_row(movement: rx.Var[dict]) -> rx.Component:
-  """Renderiza una fila del listado de historial."""
+  """Renderiza una fila del listado de historial (clickeable → abre detalle)."""
   return rx.el.tr(
-    rx.el.td(movement["timestamp"], class_name="py-3 px-4 text-sm text-slate-700"),
+    rx.el.td(movement["timestamp"], class_name="py-3 px-4 text-sm text-slate-700 whitespace-nowrap"),
     rx.el.td(
       movement["client_name"],
       class_name="py-3 px-4 text-sm text-slate-700",
-    ),
-    rx.el.td(
-      State.currency_symbol,
-      movement["total"].to_string(),
-      class_name="py-3 px-4 text-right font-semibold tabular-nums text-slate-900",
     ),
     rx.el.td(
       payment_method_badge(movement.get("payment_method")),
       class_name="py-3 px-4",
     ),
     rx.el.td(
-      movement.get("user", "Desconocido"),
-      class_name="py-3 px-4 text-sm text-slate-700 hidden md:table-cell",
+      movement.get("payment_details", ""),
+      class_name="py-3 px-4 text-sm text-slate-500 hidden lg:table-cell max-w-[200px] truncate",
+      title=movement.get("payment_details", ""),
     ),
     rx.el.td(
-      rx.el.button(
-        rx.icon("eye", class_name="h-4 w-4"),
-        "Ver Detalle",
-        on_click=lambda _, sale_id=movement["sale_id"]: State.open_sale_detail(sale_id),
-        class_name=BUTTON_STYLES["link_primary"],
-      ),
-      class_name="py-3 px-4 text-center",
+      State.currency_symbol,
+      " ",
+      movement["total"].to_string(),
+      class_name="py-3 px-4 text-right font-semibold tabular-nums text-slate-900 whitespace-nowrap",
     ),
-    class_name="border-b border-slate-100 hover:bg-slate-50/80",
+    rx.el.td(
+      movement.get("user", "Desconocido"),
+      class_name="py-3 px-4 text-sm text-slate-500 hidden xl:table-cell",
+    ),
+    on_click=State.open_sale_detail(movement["sale_id"]),
+    class_name="border-b border-slate-100 hover:bg-indigo-50/60 cursor-pointer transition-colors duration-150",
   )
 
 # ════════════════════════════════════════════════════════════
@@ -144,56 +142,45 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
 # ════════════════════════════════════════════════════════════
 
 def _sale_card(sale: rx.Var) -> rx.Component:
-  """Card de venta para vista movil."""
+  """Card de venta para vista móvil (clickeable → abre detalle)."""
   return rx.el.div(
-    # Header: Fecha
+    # Header: Fecha + Total
     rx.el.div(
       rx.el.span(
         sale["timestamp"],
         class_name="font-mono font-medium text-slate-900 text-sm",
       ),
+      rx.el.span(
+        State.currency_symbol,
+        " ",
+        sale["total"].to_string(),
+        class_name="text-base font-bold text-slate-900 tabular-nums",
+      ),
       class_name="flex items-center justify-between gap-2",
     ),
-    # Body: Cliente + Metodo de pago
+    # Body: Cliente + Método de pago (2 columnas)
     rx.el.div(
       rx.el.div(
         rx.el.span("Cliente", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
           sale["client_name"],
-          class_name="text-sm font-medium text-slate-800",
+          class_name="text-sm font-medium text-slate-800 truncate",
         ),
-        class_name="flex flex-col gap-0.5",
+        class_name="flex flex-col gap-0.5 min-w-0",
       ),
       rx.el.div(
         rx.el.span("Pago", class_name=TYPOGRAPHY["caption"]),
         payment_method_badge(sale.get("payment_method")),
         class_name="flex flex-col gap-0.5",
       ),
-      class_name="flex flex-col gap-1.5 mt-2",
+      class_name="grid grid-cols-2 gap-3 mt-2",
     ),
-    # Footer: Total + Accion
-    rx.el.div(
-      rx.el.div(
-        rx.el.span("Total", class_name=TYPOGRAPHY["caption"]),
-        rx.el.span(
-          State.currency_symbol,
-          " ",
-          sale["total"].to_string(),
-          class_name=TYPOGRAPHY["mono_value"],
-        ),
-        class_name="flex flex-col gap-0.5",
-      ),
-      rx.el.button(
-        rx.icon("eye", class_name="h-4 w-4"),
-        " Ver detalle",
-        on_click=State.open_sale_detail(sale["sale_id"]),
-        title="Ver detalle de la venta",
-        aria_label="Ver detalle de la venta",
-        class_name=BUTTON_STYLES["link_primary"],
-      ),
-      class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+    on_click=State.open_sale_detail(sale["sale_id"]),
+    class_name=(
+      "bg-white border border-slate-200 rounded-xl p-4 shadow-sm "
+      "cursor-pointer hover:border-indigo-300 hover:shadow-md active:bg-indigo-50/40 "
+      "transition-all duration-150"
     ),
-    class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
   )
 
 
@@ -454,18 +441,17 @@ def historial_page() -> rx.Component:
               rx.el.tr(
                 rx.el.th("Fecha y Hora", scope="col", class_name=TABLE_STYLES["header_cell"]),
                 rx.el.th("Cliente", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Método de Pago", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Detalle Pago", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden lg:table-cell"),
                 rx.el.th(
                   "Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
                 ),
-                rx.el.th("Metodo de Pago", scope="col", class_name=TABLE_STYLES["header_cell"]),
-                rx.el.th("Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden md:table-cell"),
-                rx.el.th(
-                  "Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
-                ),
+                rx.el.th("Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden xl:table-cell"),
                 class_name=TABLE_STYLES["header"],
               )
             ),
             rx.el.tbody(rx.foreach(State.filtered_history, history_table_row)),
+            class_name="min-w-full",
           ),
           class_name="hidden md:block overflow-x-auto",
         ),
