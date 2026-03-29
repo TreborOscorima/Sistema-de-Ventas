@@ -22,14 +22,14 @@ def NotificationHolder() -> rx.Component:
 
     icon = rx.cond(
         State.notification_type == "success",
-        rx.icon("check-check", class_name="h-5 w-5 text-emerald-600"),
+        rx.icon("check-check", class_name="h-5 w-5 text-emerald-600 shrink-0"),
         rx.cond(
             State.notification_type == "error",
-            rx.icon("triangle-alert", class_name="h-5 w-5 text-red-600"),
+            rx.icon("circle-x", class_name="h-5 w-5 text-red-600 shrink-0"),
             rx.cond(
                 State.notification_type == "warning",
-                rx.icon("triangle-alert", class_name="h-5 w-5 text-amber-600"),
-                rx.icon("info", class_name="h-5 w-5 text-sky-600"),
+                rx.icon("triangle-alert", class_name="h-5 w-5 text-amber-600 shrink-0"),
+                rx.icon("info", class_name="h-5 w-5 text-sky-600 shrink-0"),
             ),
         ),
     )
@@ -57,7 +57,7 @@ def NotificationHolder() -> rx.Component:
         State.is_notification_open,
         rx.el.div(
             content,
-            class_name="fixed top-4 right-4 z-[9999] w-[90vw] max-w-sm",
+            class_name="fixed top-4 right-4 z-[9999] w-[90vw] max-w-sm animate-in slide-in-from-right-4 fade-in duration-300",
         ),
         rx.fragment(),
     )

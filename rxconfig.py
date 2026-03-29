@@ -66,6 +66,10 @@ config = rx.Config(
                 "plugins": ["@tailwindcss/typography@0.5.19"],
                 "theme": {
                     "extend": {
+                        "fontFamily": {
+                            "sans": ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+                            "grotesk": ["'Space Grotesk'", "system-ui", "sans-serif"],
+                        },
                         "screens": {
                             "motion-safe": {
                                 "raw": "(prefers-reduced-motion: no-preference)",
@@ -85,6 +89,8 @@ config = rx.Config(
     theme=rx.theme(
         has_background=True,
         radius="medium",
+        accent_color="indigo",
+        gray_color="slate",
         spacing="relaxed",
         transitions="gentle",
     ),

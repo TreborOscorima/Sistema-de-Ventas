@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import INPUT_STYLES, BUTTON_STYLES, TYPOGRAPHY, RADIUS, SHADOWS, TRANSITIONS
+from app.components.ui import INPUT_STYLES, BUTTON_STYLES, TYPOGRAPHY, RADIUS, SHADOWS, TRANSITIONS, GRADIENT_BRAND_BAR
 
 
 COUNTRY_DIAL_OPTIONS = [
@@ -17,10 +17,7 @@ def registro_page() -> rx.Component:
     """Página de registro de empresa y usuario administrador."""
     return rx.el.div(
         rx.el.div(
-            class_name=(
-                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
-                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
-            ),
+            class_name=f"fixed top-0 left-0 right-0 h-[3px] {GRADIENT_BRAND_BAR} z-[60]",
         ),
         rx.el.div(
             rx.el.div(
@@ -33,7 +30,7 @@ def registro_page() -> rx.Component:
                     class_name="text-2xl font-bold text-slate-900 tracking-tight text-center",
                 ),
                 rx.el.p(
-                    "Crea tu empresa y comienza tu prueba gratis de 15 dias.",
+                    "Crea tu empresa y comienza tu prueba gratis de 15 días.",
                     class_name="text-sm text-slate-600 text-center",
                 ),
                 class_name="flex flex-col items-center gap-3 mb-8",

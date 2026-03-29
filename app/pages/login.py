@@ -7,6 +7,7 @@ from app.components.ui import (
     RADIUS,
     SHADOWS,
     TRANSITIONS,
+    GRADIENT_BRAND_BAR,
 )
 from app.constants import WHATSAPP_NUMBER
 
@@ -16,10 +17,7 @@ def login_page() -> rx.Component:
     return rx.el.div(
         # Barra de gradiente superior
         rx.el.div(
-            class_name=(
-                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
-                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
-            ),
+            class_name=f"fixed top-0 left-0 right-0 h-[3px] {GRADIENT_BRAND_BAR} z-[60]",
         ),
         # Tarjeta de inicio de sesión
         rx.el.div(
@@ -120,6 +118,16 @@ def login_page() -> rx.Component:
                     role="alert",
                     class_name=f"flex items-center gap-3 mt-5 bg-red-50 p-4 {RADIUS['lg']} border border-red-200",
                 ),
+            ),
+            # Enlace a registro
+            rx.el.div(
+                rx.el.span("¿Sin cuenta?", class_name="text-slate-400"),
+                rx.el.a(
+                    "Regístrate gratis",
+                    href="/registro",
+                    class_name=f"text-indigo-600 hover:text-indigo-700 {TRANSITIONS['fast']} font-medium",
+                ),
+                class_name="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center gap-2 text-xs",
             ),
             # Pie de página
             rx.el.div(

@@ -6,6 +6,7 @@ from app.components.ui import (
     BUTTON_STYLES,
     TYPOGRAPHY,
     RADIUS,
+    GRADIENT_BRAND_BAR,
 )
 
 
@@ -13,10 +14,7 @@ def cambiar_contrasena_page() -> rx.Component:
     """Página de cambio obligatorio de contraseña inicial."""
     return rx.el.div(
         rx.el.div(
-            class_name=(
-                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
-                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
-            ),
+            class_name=f"fixed top-0 left-0 right-0 h-[3px] {GRADIENT_BRAND_BAR} z-[60]",
         ),
         rx.el.div(
             rx.el.div(

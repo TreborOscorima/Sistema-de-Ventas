@@ -33,9 +33,17 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     )
     show_badge = has_overdue & State.sidebar_open
 
-    # Estilos para item activo vs inactivo
-    active_class = f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}"
-    inactive_class = f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}"
+    # Estilos para item activo vs inactivo (responsive: rail vs expandido)
+    active_class = rx.cond(
+        State.sidebar_open,
+        f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}",
+        f"relative flex items-center justify-center {RADIUS['lg']} bg-indigo-600 text-white p-2.5 {TRANSITIONS['fast']}",
+    )
+    inactive_class = rx.cond(
+        State.sidebar_open,
+        f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}",
+        f"relative flex items-center justify-center {RADIUS['lg']} p-2.5 text-slate-600 hover:bg-white/60 hover:text-slate-900 {TRANSITIONS['fast']}",
+    )
 
     target_route = rx.cond(
         has_overdue,
@@ -71,6 +79,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         ),
         href=target_route,
         underline="none",
+        title=rx.cond(State.sidebar_open, "", text),
         class_name="block w-full min-w-0 text-left",
     )
     return rx.cond(
@@ -383,7 +392,12 @@ def _sidebar_auth_footer() -> rx.Component:
             rx.icon("log-out", class_name="h-5 w-5"),
             rx.cond(State.sidebar_open, rx.el.span("Cerrar Sesión"), rx.fragment()),
             on_click=State.logout,
-            class_name=f"flex items-center gap-3 w-full text-left px-4 py-3 text-red-500 hover:bg-red-50 {TRANSITIONS['fast']}",
+            title=rx.cond(State.sidebar_open, "", "Cerrar Sesión"),
+            class_name=rx.cond(
+                State.sidebar_open,
+                f"flex items-center gap-3 w-full text-left px-4 py-3 text-red-500 hover:bg-red-50 {TRANSITIONS['fast']}",
+                f"flex items-center justify-center w-full px-2 py-3 text-red-500 hover:bg-red-50 {TRANSITIONS['fast']}",
+            ),
         ),
     )
 
@@ -427,13 +441,20 @@ def sidebar() -> rx.Component:
                         class_name="flex items-center gap-3 min-w-0 flex-1",
                     ),
                     rx.el.button(
-                        rx.icon("panel-left-close", class_name="h-5 w-5 text-slate-400"),
+                        rx.icon(
+                            rx.cond(State.sidebar_open, "panel-left-close", "panel-left-open"),
+                            class_name="h-5 w-5 text-slate-400",
+                        ),
                         on_click=State.toggle_sidebar,
-                        title="Ocultar menu lateral",
-                        aria_label="Ocultar menu lateral",
+                        title=rx.cond(State.sidebar_open, "Ocultar menu lateral", "Mostrar menu lateral"),
+                        aria_label=rx.cond(State.sidebar_open, "Ocultar menu lateral", "Mostrar menu lateral"),
                         class_name=f"p-2 shrink-0 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
                     ),
-                    class_name="flex h-16 items-center justify-between px-4",
+                    class_name=rx.cond(
+                        State.sidebar_open,
+                        "flex h-16 items-center justify-between px-4",
+                        "hidden md:flex h-14 items-center justify-center px-2",
+                    ),
                 ),
                 # Contenido condicional: autenticado vs invitado
                 rx.cond(
@@ -453,7 +474,7 @@ def sidebar() -> rx.Component:
             class_name=rx.cond(
         State.sidebar_open,
         f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
-        f"fixed inset-y-0 left-0 z-50 w-0 overflow-hidden {TRANSITIONS['slow']}",
+        f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-0 md:w-16",
     ),
     style={"height": "100dvh"},
     key="sidebar-root",
@@ -471,22 +492,22 @@ rx.cond(
 rx.cond(
     ~State.sidebar_open,
     rx.el.div(
-        # Zona sensible del borde izquierdo para desktop (hover) y móvil (tap)
+        # Zona sensible del borde izquierdo — solo en móvil (desktop usa icon rail)
         rx.el.button(
             on_click=State.toggle_sidebar,
             title="Abrir menu lateral",
             aria_label="Abrir menu lateral",
             type="button",
-            class_name="sidebar-hover-zone fixed top-3 left-0 z-[54] h-14 w-5 border-0 bg-transparent p-0 m-0 appearance-none md:top-0 md:h-32 md:w-6",
+            class_name="sidebar-hover-zone fixed top-3 left-0 z-[54] h-14 w-5 border-0 bg-transparent p-0 m-0 appearance-none md:hidden",
         ),
-        # Botón de menú: visible al colapsar y se auto-oculta en desktop y móvil
+        # Botón de menú: visible al colapsar en móvil — en desktop el icon rail es suficiente
         rx.el.button(
             rx.icon("menu", class_name="h-4 w-4 text-indigo-500"),
             on_click=State.toggle_sidebar,
             title="Mostrar menu lateral",
             aria_label="Mostrar menu lateral",
             class_name=(
-                f"sidebar-toggle-btn fixed top-4 left-4 md:top-5 md:left-5 z-[55] "
+                f"sidebar-toggle-btn fixed top-4 left-4 z-[55] md:hidden "
                 f"p-2 bg-white/80 backdrop-blur-sm {RADIUS['xl']} {SHADOWS['sm']} "
                 f"hover:bg-white border border-slate-200/40 {TRANSITIONS['fast']} "
                 f"hover:scale-105 hover:shadow-md hover:border-slate-300/60 "

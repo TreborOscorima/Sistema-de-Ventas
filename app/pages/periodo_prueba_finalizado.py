@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import BUTTON_STYLES, RADIUS, SHADOWS, TRANSITIONS
+from app.components.ui import BUTTON_STYLES, GRADIENT_BRAND_BAR, RADIUS, SHADOWS, TRANSITIONS
 from app.constants import WHATSAPP_NUMBER
 
 
@@ -8,10 +8,7 @@ def periodo_prueba_finalizado_page() -> rx.Component:
     """Página mostrada cuando el periodo de prueba ha expirado."""
     return rx.el.div(
         rx.el.div(
-            class_name=(
-                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
-                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
-            ),
+            class_name=f"fixed top-0 left-0 right-0 h-[3px] {GRADIENT_BRAND_BAR} z-[60]",
         ),
         rx.el.div(
             rx.el.div(

@@ -1,7 +1,7 @@
 import reflex as rx
 
 from app.state import State
-from app.components.ui import BUTTON_STYLES, RADIUS, SHADOWS, TRANSITIONS
+from app.components.ui import BUTTON_STYLES, GRADIENT_BRAND_BAR, RADIUS, SHADOWS, TRANSITIONS
 from app.constants import WHATSAPP_SALES_URL
 
 
@@ -9,10 +9,7 @@ def cuenta_suspendida_page() -> rx.Component:
     """Página mostrada cuando la cuenta está suspendida."""
     return rx.el.div(
         rx.el.div(
-            class_name=(
-                "fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r "
-                "from-amber-400 via-rose-500 to-indigo-500 z-[60]"
-            ),
+            class_name=f"fixed top-0 left-0 right-0 h-[3px] {GRADIENT_BRAND_BAR} z-[60]",
         ),
         rx.el.div(
             rx.el.div(

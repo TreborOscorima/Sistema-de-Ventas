@@ -14,10 +14,14 @@ from app.components.ui import (
   page_header,
 )
 
+# Colores de marca para gráficos Recharts — centralizados
+_CHART_PRIMARY = "#4f46e5"    # indigo-600
+_CHART_SECONDARY = "#6366f1"  # indigo-500
+
 
 def _plan_summary_card() -> rx.Component:
   """Tarjeta resumen del plan de suscripción actual."""
-  return rx.card(
+  return rx.el.div(
     rx.el.div(
       rx.el.div(
         rx.el.div(
@@ -238,7 +242,7 @@ def _sales_chart() -> rx.Component:
     rx.recharts.bar_chart(
       rx.recharts.bar(
         data_key="total",
-        fill="#4f46e5",
+        fill=_CHART_PRIMARY,
         radius=[6, 6, 0, 0],
       ),
       rx.recharts.x_axis(data_key="day"),
@@ -330,7 +334,7 @@ def _category_chart() -> rx.Component:
           inner_radius=40,
           outer_radius=80,
           padding_angle=2,
-          fill="#6366f1",
+          fill=_CHART_SECONDARY,
           label=True,
         ),
         rx.recharts.graphing_tooltip(),

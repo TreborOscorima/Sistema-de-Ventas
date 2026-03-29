@@ -50,6 +50,9 @@ TRANSITIONS = {
 # Focus states para accesibilidad
 FOCUS_RING = "focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
 
+# Gradiente de marca — barra decorativa superior (login, registro)
+GRADIENT_BRAND_BAR = "bg-gradient-to-r from-amber-400 via-rose-500 to-indigo-500"
+
 
 # =============================================================================
 # TYPOGRAPHY TOKENS - Escala tipográfica semántica
@@ -157,7 +160,6 @@ BUTTON_STYLES = {
     "disabled_sm": f"flex items-center justify-center gap-2 h-9 px-3 {RADIUS['md']} bg-slate-100 text-slate-400 cursor-not-allowed text-sm opacity-60",
     "icon_danger": f"p-2 text-red-500 hover:bg-red-100 active:bg-red-200 {RADIUS['full']} {TRANSITIONS['fast']}",
     "icon_primary": f"p-2 text-indigo-500 hover:bg-indigo-100 active:bg-indigo-200 {RADIUS['full']} {TRANSITIONS['fast']}",
-    "icon_indigo": f"p-2 text-indigo-500 hover:bg-indigo-100 active:bg-indigo-200 {RADIUS['full']} {TRANSITIONS['fast']}",
     "icon_ghost": f"p-2 text-slate-500 hover:bg-slate-100 active:bg-slate-200 {RADIUS['full']} {TRANSITIONS['fast']}",
 }
 
@@ -492,16 +494,32 @@ def status_badge(
     )
 
 
-def empty_state(message: str) -> rx.Component:
+def empty_state(
+    message: str,
+    title: str = "",
+    icon: str = "inbox",
+) -> rx.Component:
     """
-    Crea un mensaje de estado vacio centrado.
+    Crea un estado vacío centrado con ícono, título y mensaje.
 
-    Parametros:
-        message: Mensaje a mostrar
+    Parámetros:
+        message: Mensaje descriptivo (subtítulo)
+        title: Título principal opcional
+        icon: Nombre de ícono Lucide (default: "inbox")
     """
-    return rx.el.p(
-        message,
-        class_name="text-slate-500 text-center py-8",
+    parts: list[rx.Component] = [
+        rx.icon(icon, class_name="w-10 h-10 text-slate-300 mx-auto"),
+    ]
+    if title:
+        parts.append(
+            rx.el.p(title, class_name="text-sm font-semibold text-slate-600 text-center mt-2")
+        )
+    parts.append(
+        rx.el.p(message, class_name="text-sm text-slate-400 text-center mt-1")
+    )
+    return rx.el.div(
+        *parts,
+        class_name="flex flex-col items-center py-10",
     )
 
 
@@ -516,7 +534,7 @@ def page_title(title: str, subtitle: str = "") -> rx.Component:
     return rx.el.div(
         rx.el.h1(
             title,
-            class_name="text-xl sm:text-2xl lg:text-[1.65rem] font-bold text-slate-900 tracking-tight leading-tight",
+            class_name=TYPOGRAPHY["page_title"],
         ),
         rx.el.p(subtitle, class_name="text-sm sm:text-[15px] text-slate-500")
         if subtitle
@@ -666,7 +684,7 @@ def pricing_modal(
         def _bullet(item: str) -> rx.Component:
             return rx.el.li(
                 rx.icon(
-                    "circle_check",
+                    "circle-check",
                     class_name="h-4 w-4 text-emerald-600 flex-shrink-0",
                 ),
                 rx.el.span(item, class_name="text-sm text-slate-700"),
@@ -920,13 +938,14 @@ def pagination_controls(
     """
     return rx.el.div(
         rx.el.button(
+            rx.icon("chevron-left", class_name="h-4 w-4"),
             "Anterior",
             on_click=on_prev,
             disabled=current_page <= 1,
             class_name=rx.cond(
                 current_page <= 1,
-                "px-4 py-2 bg-slate-200 text-slate-500 rounded-md cursor-not-allowed min-h-[40px]",
-                "px-4 py-2 bg-slate-200 rounded-md hover:bg-slate-300 min-h-[40px]",
+                BUTTON_STYLES["disabled"],
+                BUTTON_STYLES["secondary"],
             ),
         ),
         rx.el.span(
@@ -934,16 +953,17 @@ def pagination_controls(
             current_page.to_string(),
             " de ",
             total_pages.to_string(),
-            class_name="text-sm text-slate-600",
+            class_name="text-sm text-slate-500 tabular-nums",
         ),
         rx.el.button(
             "Siguiente",
+            rx.icon("chevron-right", class_name="h-4 w-4"),
             on_click=on_next,
             disabled=current_page >= total_pages,
             class_name=rx.cond(
                 current_page >= total_pages,
-                "px-4 py-2 bg-slate-200 text-slate-500 rounded-md cursor-not-allowed min-h-[40px]",
-                "px-4 py-2 bg-slate-200 rounded-md hover:bg-slate-300 min-h-[40px]",
+                BUTTON_STYLES["disabled"],
+                BUTTON_STYLES["secondary"],
             ),
         ),
         class_name="flex flex-col sm:flex-row justify-center items-center gap-3 sm:gap-4 mt-6",
@@ -1068,7 +1088,7 @@ def form_textarea(
     min_height = rows * TEXTAREA_ROW_HEIGHT
     textarea_props = {
         "placeholder": placeholder,
-        "class_name": f"w-full px-3 py-2 text-sm bg-white border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 min-h-[{min_height}px]",
+        "class_name": f"{INPUT_STYLES['default']} min-h-[{min_height}px] h-auto py-2",
     }
     if default_value is not None:
         textarea_props["default_value"] = default_value
