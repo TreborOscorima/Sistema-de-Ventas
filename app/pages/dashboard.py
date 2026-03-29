@@ -23,11 +23,11 @@ def _plan_summary_card() -> rx.Component:
         rx.el.div(
           rx.match(
             State.subscription_snapshot["plan_type"],
-            ("trial", rx.icon("clock_3", class_name="w-5 h-5 text-amber-700")),
+            ("trial", rx.icon("clock-3", class_name="w-5 h-5 text-amber-700")),
             ("standard", rx.icon("sparkles", class_name="w-5 h-5 text-amber-600")),
             ("professional", rx.icon("crown", class_name="w-5 h-5 text-amber-600")),
             ("enterprise", rx.icon("rocket", class_name="w-5 h-5 text-emerald-600")),
-            rx.icon("badge_check", class_name="w-5 h-5 text-indigo-600"),
+            rx.icon("badge-check", class_name="w-5 h-5 text-indigo-600"),
           ),
           class_name=rx.match(
             State.subscription_snapshot["plan_type"],
@@ -70,7 +70,7 @@ def _plan_summary_card() -> rx.Component:
             class_name="flex items-center gap-2",
           ),
           rx.el.div(
-            rx.icon("circle_check", class_name="w-4 h-4 text-emerald-600"),
+            rx.icon("circle-check", class_name="w-4 h-4 text-emerald-600"),
             rx.el.span(
               "Plan activo",
               class_name="text-sm text-emerald-700 font-medium",
@@ -116,8 +116,8 @@ def _payment_alert_banner() -> rx.Component:
       rx.callout.icon(
         rx.cond(
           State.payment_alert_info["color"] == "red",
-          rx.icon("circle_alert", class_name="h-4 w-4 text-red-600"),
-          rx.icon("triangle_alert", class_name="h-4 w-4 text-amber-700"),
+          rx.icon("circle-alert", class_name="h-4 w-4 text-red-600"),
+          rx.icon("triangle-alert", class_name="h-4 w-4 text-amber-700"),
         ),
       ),
       rx.callout.text(
@@ -207,9 +207,9 @@ def _period_selector() -> rx.Component:
 def _alert_item(alert: dict) -> rx.Component:
   """Item de alerta."""
   severity_styles = {
-    "critical": ("bg-red-100 border-red-300 text-red-800", "circle_alert", "text-red-600"),
-    "error": ("bg-red-50 border-red-200 text-red-700", "triangle_alert", "text-red-500"),
-    "warning": ("bg-amber-50 border-amber-200 text-amber-700", "triangle_alert", "text-amber-500"),
+    "critical": ("bg-red-100 border-red-300 text-red-800", "circle-alert", "text-red-600"),
+    "error": ("bg-red-50 border-red-200 text-red-700", "triangle-alert", "text-red-500"),
+    "warning": ("bg-amber-50 border-amber-200 text-amber-700", "triangle-alert", "text-amber-500"),
     "info": ("bg-indigo-50 border-indigo-200 text-indigo-700", "info", "text-indigo-500"),
   }
 

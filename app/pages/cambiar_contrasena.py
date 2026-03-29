@@ -97,7 +97,7 @@ def cambiar_contrasena_page() -> rx.Component:
             rx.cond(
                 State.password_change_error != "",
                 rx.el.div(
-                    rx.icon("flag_triangle_right", class_name="h-5 w-5 text-red-500"),
+                    rx.icon("flag-triangle-right", class_name="h-5 w-5 text-red-500"),
                     rx.el.p(
                         State.password_change_error,
                         class_name=TYPOGRAPHY["error_message"],

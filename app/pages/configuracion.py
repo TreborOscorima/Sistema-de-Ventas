@@ -1136,7 +1136,7 @@ def user_form() -> rx.Component:
               rx.el.button(
                 rx.cond(
                   State.show_user_form_password,
-                  rx.icon("eye_off", class_name="h-4 w-4"),
+                  rx.icon("eye-off", class_name="h-4 w-4"),
                   rx.icon("eye", class_name="h-4 w-4"),
                 ),
                 type="button",
@@ -1179,7 +1179,7 @@ def user_form() -> rx.Component:
               rx.el.button(
                 rx.cond(
                   State.show_user_form_confirm_password,
-                  rx.icon("eye_off", class_name="h-4 w-4"),
+                  rx.icon("eye-off", class_name="h-4 w-4"),
                   rx.icon("eye", class_name="h-4 w-4"),
                 ),
                 type="button",

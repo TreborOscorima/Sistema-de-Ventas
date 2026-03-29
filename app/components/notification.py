@@ -22,7 +22,7 @@ def NotificationHolder() -> rx.Component:
 
     icon = rx.cond(
         State.notification_type == "success",
-        rx.icon("check_check", class_name="h-5 w-5 text-emerald-600"),
+        rx.icon("check-check", class_name="h-5 w-5 text-emerald-600"),
         rx.cond(
             State.notification_type == "error",
             rx.icon("triangle-alert", class_name="h-5 w-5 text-red-600"),

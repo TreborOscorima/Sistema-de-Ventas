@@ -529,7 +529,7 @@ def inventory_adjustment_modal() -> rx.Component:
         rx.divider(color="slate-100"),
         rx.el.div(
           rx.el.button(
-            rx.icon("circle_check", class_name="h-4 w-4"),
+            rx.icon("circle-check", class_name="h-4 w-4"),
             "Inventario Perfecto",
             on_click=lambda: State.set_inventory_check_status("perfecto"),
                         class_name=rx.cond(
@@ -539,7 +539,7 @@ def inventory_adjustment_modal() -> rx.Component:
                         ),
                     ),
                     rx.el.button(
-                        rx.icon("triangle_alert", class_name="h-4 w-4"),
+                        rx.icon("triangle-alert", class_name="h-4 w-4"),
                         "Re Ajuste de Inventario",
                         on_click=lambda: State.set_inventory_check_status("ajuste"),
                         class_name=rx.cond(
@@ -1087,7 +1087,7 @@ def inventario_page() -> rx.Component:
             class_name=BUTTON_STYLES["success_sm"],
           ),
           rx.el.button(
-            rx.icon("clipboard_check", class_name="h-4 w-4"),
+            rx.icon("clipboard-check", class_name="h-4 w-4"),
             "Registrar Fisico",
             on_click=State.open_inventory_check_modal,
             class_name=BUTTON_STYLES["warning"],

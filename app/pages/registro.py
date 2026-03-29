@@ -132,7 +132,7 @@ def registro_page() -> rx.Component:
                         rx.el.button(
                             rx.cond(
                                 State.show_register_password,
-                                rx.icon("eye_off", class_name="h-4 w-4"),
+                                rx.icon("eye-off", class_name="h-4 w-4"),
                                 rx.icon("eye", class_name="h-4 w-4"),
                             ),
                             type="button",
@@ -177,7 +177,7 @@ def registro_page() -> rx.Component:
                         rx.el.button(
                             rx.cond(
                                 State.show_register_confirm_password,
-                                rx.icon("eye_off", class_name="h-4 w-4"),
+                                rx.icon("eye-off", class_name="h-4 w-4"),
                                 rx.icon("eye", class_name="h-4 w-4"),
                             ),
                             type="button",
