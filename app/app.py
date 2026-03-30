@@ -112,7 +112,7 @@ def cashbox_banner() -> rx.Component:
 def _toast_provider() -> rx.Component:
     """Proveedor global de notificaciones toast (posición, estilos y duración)."""
     return rx.toast.provider(
-        position="bottom-center",
+        position="top-center",  # top-center garantiza visibilidad sobre cualquier modal/overlay
         close_button=True,
         rich_colors=True,
         toast_options=rx.toast.options(
@@ -120,12 +120,13 @@ def _toast_provider() -> rx.Component:
             style={
                 "background": "#111827",
                 "color": "white",
-                "fontSize": "18px",
-                "padding": "18px 28px",
-                "borderRadius": "14px",
-                "boxShadow": "0 25px 60px rgba(15,23,42,0.35)",
+                "fontSize": "16px",
+                "padding": "14px 24px",
+                "borderRadius": "12px",
+                "boxShadow": "0 25px 60px rgba(15,23,42,0.45)",
                 "border": "1px solid rgba(255,255,255,0.15)",
                 "textAlign": "center",
+                "zIndex": "2147483647",  # max z-index — siempre sobre modales
             },
         ),
     )
