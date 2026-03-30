@@ -182,32 +182,40 @@ class BillingState(MixinState):
             self.add_notification(bname_err, "warning")
             return
 
-        with rx.session() as session:
-            config = session.exec(
-                select(CompanyBillingConfig)
-                .where(CompanyBillingConfig.company_id == company_id)
-            ).first()
+        try:
+            with rx.session() as session:
+                config = session.exec(
+                    select(CompanyBillingConfig)
+                    .where(CompanyBillingConfig.company_id == company_id)
+                ).first()
 
-            if config is None:
-                config = CompanyBillingConfig(company_id=company_id)
+                if config is None:
+                    config = CompanyBillingConfig(company_id=company_id)
 
-            # Solo actualizar campos que el usuario final gestiona.
-            # Campos técnicos (nubefact_url, nubefact_token, environment,
-            # series, is_active, etc.) los gestiona el Owner.
-            config.country = self.billing_country.strip()
-            config.tax_id = self.billing_tax_id.strip()
-            config.tax_id_type = self.billing_tax_id_type.strip()
-            config.business_name = self.billing_business_name.strip()
-            config.business_address = self.billing_business_address.strip()
-            config.lookup_api_url = self.billing_lookup_api_url.strip()
-            config.emisor_iva_condition = self.billing_emisor_iva.strip() or "RI"
-            config.ar_identification_threshold = (
-                self.billing_ar_threshold.strip() or "68782.00"
-            )
-            config.updated_at = utc_now_naive()
+                # Solo actualizar campos que el usuario final gestiona.
+                # Campos técnicos (nubefact_url, nubefact_token, environment,
+                # series, is_active, etc.) los gestiona el Owner.
+                config.country = self.billing_country.strip()
+                config.tax_id = self.billing_tax_id.strip()
+                config.tax_id_type = self.billing_tax_id_type.strip()
+                config.business_name = self.billing_business_name.strip()
+                config.business_address = self.billing_business_address.strip()
+                config.lookup_api_url = self.billing_lookup_api_url.strip()
+                config.emisor_iva_condition = self.billing_emisor_iva.strip() or "RI"
+                try:
+                    config.ar_identification_threshold = float(
+                        self.billing_ar_threshold.strip() or "68782.00"
+                    )
+                except (ValueError, TypeError):
+                    config.ar_identification_threshold = 68782.00
+                config.updated_at = utc_now_naive()
 
-            session.add(config)
-            session.commit()
+                session.add(config)
+                session.commit()
+        except Exception as exc:
+            logger.exception("Error guardando configuración fiscal company_id=%s", company_id)
+            self.add_notification(f"Error al guardar: {exc}", "error")
+            return rx.toast("Error al guardar la configuración fiscal.", duration=4000)
 
         self.billing_config_exists = True
         self.add_notification(MSG.FISCAL_CONFIG_SAVED, "success")

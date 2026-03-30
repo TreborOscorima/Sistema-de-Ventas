@@ -425,14 +425,14 @@ def billing_config_section() -> rx.Component:
               rx.el.label("Token de Consulta", class_name=_label),
               rx.el.input(
                 default_value=State.billing_lookup_api_token_display,
-                on_blur=State.set_lookup_api_token,
+                on_blur=State.save_lookup_api_token,  # guarda encriptado al salir del campo
                 placeholder="Bearer token",
                 type="password",
                 key=_fk + "-blookuptoken",
                 class_name=_input,
               ),
               rx.el.p(
-                "Bearer token para autenticacion",
+                "Se guarda encriptado al salir del campo.",
                 class_name=_help,
               ),
               class_name="flex flex-col gap-1",
