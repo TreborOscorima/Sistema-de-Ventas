@@ -1075,16 +1075,41 @@ class OwnerState:
                             if config.encrypted_private_key else ""
                         )
                     else:
+                        # ── Config nueva: pre-poblar desde CompanySettings ──
+                        # Detectar país del cliente desde sus Datos de Empresa
+                        # para evitar que el Owner tenga que seleccionarlo manualmente.
+                        from app.models.sales import CompanySettings
+                        cs = (await session.execute(
+                            sel_(CompanySettings).where(
+                                CompanySettings.company_id == company_id
+                            )
+                        )).scalars().first()
+
+                        detected_country = (
+                            (cs.country_code if cs else None) or "PE"
+                        ).upper().strip()
+
+                        # Defaults de serie según país
+                        # AR: punto de venta AFIP usa formato "0001"
+                        # PE: SUNAT usa "F001" / "B001"
+                        default_serie_factura = "0001" if detected_country == "AR" else "F001"
+                        default_serie_boleta  = "0001" if detected_country == "AR" else "B001"
+
                         self.owner_billing_config_exists = False
                         self.owner_billing_is_active = False
                         self.owner_billing_environment = "sandbox"
-                        self.owner_billing_country = "PE"
-                        self.owner_billing_tax_id = ""
-                        self.owner_billing_business_name = ""
+                        self.owner_billing_country = detected_country
+                        # Pre-llenar RUC/CUIT y razón social desde Datos de Empresa
+                        self.owner_billing_tax_id = (
+                            (cs.ruc if cs else "") or ""
+                        ).strip()
+                        self.owner_billing_business_name = (
+                            (cs.company_name if cs else "") or ""
+                        ).strip()
                         self.owner_billing_nubefact_url = ""
                         self.owner_billing_nubefact_token_display = ""
-                        self.owner_billing_serie_factura = "F001"
-                        self.owner_billing_serie_boleta = "B001"
+                        self.owner_billing_serie_factura = default_serie_factura
+                        self.owner_billing_serie_boleta  = default_serie_boleta
                         self.owner_billing_max_limit = "500"
                         self.owner_billing_afip_punto_venta = "1"
                         self.owner_billing_emisor_iva = "RI"
@@ -1092,6 +1117,11 @@ class OwnerState:
                         self.owner_billing_ar_threshold = "68782"
                         self.owner_billing_cert_display = ""
                         self.owner_billing_key_display = ""
+                        logger.info(
+                            "owner_open_billing_modal: nueva config empresa_id=%s "
+                            "country_detectado=%s desde CompanySettings",
+                            company_id, detected_country,
+                        )
         except Exception as e:
             logger.exception("Error cargando billing config para owner")
             yield rx.toast("Error al cargar config de billing.", duration=4000)
