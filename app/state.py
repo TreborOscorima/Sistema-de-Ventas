@@ -740,6 +740,7 @@ class State(RootState):
             self.owner_loading = False
         yield
         yield State.owner_load_audit_logs(0)  # type: ignore[attr-defined]
+        yield State.load_platform_billing_config()  # type: ignore[attr-defined]
 
     @rx.event
     async def page_init_owner_login(self):
