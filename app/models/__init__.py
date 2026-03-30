@@ -30,6 +30,7 @@ from .client import Client
 # esté registrado en el class registry de SQLAlchemy.
 from .billing import CompanyBillingConfig, FiscalDocument
 from .lookup_cache import DocumentLookupCache
+from .platform_config import PlatformBillingSettings
 
 __all__ = [
     "Permission",
@@ -66,4 +67,5 @@ __all__ = [
     "CompanyBillingConfig",
     "FiscalDocument",
     "DocumentLookupCache",
+    "PlatformBillingSettings",
 ]

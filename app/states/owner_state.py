@@ -902,6 +902,12 @@ class OwnerState:
     # GESTIÓN DE BILLING POR EMPRESA (campos técnicos del Owner)
     # ═══════════════════════════════════════════════════════════
 
+    # ── Configuración Global de Billing (nivel plataforma SaaS) ──────
+    platform_billing_configured: bool = False
+    platform_nubefact_url: str = ""
+    platform_nubefact_token_display: str = ""  # masked para UI
+    platform_billing_loading: bool = False
+
     owner_billing_modal_open: bool = False
     owner_billing_company_id: int = 0
     owner_billing_company_name: str = ""
@@ -924,6 +930,97 @@ class OwnerState:
     owner_billing_tax_id: str = ""
     owner_billing_business_name: str = ""
     owner_billing_config_exists: bool = False
+
+    @rx.event
+    async def load_platform_billing_config(self):
+        """Carga la configuración global de billing (singleton) desde DB."""
+        if not self.is_owner_authenticated:
+            return
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from app.models.platform_config import PlatformBillingSettings, PLATFORM_CONFIG_ID
+                    platform = await session.get(PlatformBillingSettings, PLATFORM_CONFIG_ID)
+                    if platform:
+                        self.platform_nubefact_url = platform.pe_nubefact_master_url or ""
+                        self.platform_nubefact_token_display = (
+                            "****configurado****" if platform.pe_nubefact_master_token else ""
+                        )
+                        self.platform_billing_configured = bool(
+                            platform.pe_nubefact_master_url
+                            and platform.pe_nubefact_master_token
+                        )
+                    else:
+                        self.platform_nubefact_url = ""
+                        self.platform_nubefact_token_display = ""
+                        self.platform_billing_configured = False
+        except Exception:
+            logger.exception("Error cargando platform billing config")
+
+    @rx.event
+    def platform_set_nubefact_url(self, value: str):
+        """Setter para la URL maestra de Nubefact."""
+        self.platform_nubefact_url = value or ""
+
+    @rx.event
+    async def save_platform_nubefact_url(self):
+        """Persiste la URL maestra de Nubefact en DB."""
+        if not self.is_owner_authenticated:
+            return
+        url = self.platform_nubefact_url.strip()
+        if url:
+            from app.utils.fiscal_validators import validate_nubefact_url
+            ok, err = validate_nubefact_url(url)
+            if not ok:
+                yield rx.toast(err, duration=4000)
+                return
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from app.models.platform_config import PlatformBillingSettings, PLATFORM_CONFIG_ID
+                    from app.utils.timezone import utc_now_naive
+                    platform = await session.get(PlatformBillingSettings, PLATFORM_CONFIG_ID)
+                    if platform is None:
+                        platform = PlatformBillingSettings(id=PLATFORM_CONFIG_ID)
+                        session.add(platform)
+                    platform.pe_nubefact_master_url = url or None
+                    platform.updated_at = utc_now_naive()
+                    await session.commit()
+            self.platform_billing_configured = bool(
+                url and self.platform_nubefact_token_display
+            )
+            yield rx.toast("URL Nubefact maestra guardada.", duration=3000)
+        except Exception:
+            logger.exception("Error guardando platform nubefact url")
+            yield rx.toast("Error al guardar URL.", duration=4000)
+
+    @rx.event
+    async def save_platform_nubefact_token(self, token: str):
+        """Persiste el token maestro de Nubefact encriptado en DB."""
+        if not self.is_owner_authenticated:
+            return
+        token = (token or "").strip()
+        if not token:
+            yield rx.toast("El token no puede estar vacío.", duration=3000)
+            return
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from app.models.platform_config import PlatformBillingSettings, PLATFORM_CONFIG_ID
+                    from app.utils.timezone import utc_now_naive
+                    platform = await session.get(PlatformBillingSettings, PLATFORM_CONFIG_ID)
+                    if platform is None:
+                        platform = PlatformBillingSettings(id=PLATFORM_CONFIG_ID)
+                        session.add(platform)
+                    platform.pe_nubefact_master_token = encrypt_text(token)
+                    platform.updated_at = utc_now_naive()
+                    await session.commit()
+            self.platform_nubefact_token_display = "****configurado****"
+            self.platform_billing_configured = bool(self.platform_nubefact_url)
+            yield rx.toast("Token Nubefact maestro guardado y encriptado.", duration=3000)
+        except Exception:
+            logger.exception("Error guardando platform nubefact token")
+            yield rx.toast("Error al guardar token.", duration=4000)
 
     @rx.event
     async def owner_open_billing_modal(self, company_id: int, company_name: str):
@@ -1102,17 +1199,14 @@ class OwnerState:
                     return
 
             # 4. Validaciones específicas por país
-            if self.owner_billing_country == "PE":
-                nf_url = self.owner_billing_nubefact_url.strip()
-                if not nf_url:
+            # Para PE: verificar que la plataforma tenga credenciales maestras
+            if self.owner_billing_country == "PE" and self.owner_billing_is_active:
+                if not self.platform_billing_configured:
                     yield rx.toast(
-                        "La URL de Nubefact es obligatoria para Perú.",
-                        duration=4000,
+                        "Configure primero las credenciales maestras de Nubefact "
+                        "en 'Configuración Global de Billing' antes de activar una empresa PE.",
+                        duration=6000,
                     )
-                    return
-                url_ok, url_err = validate_nubefact_url(nf_url)
-                if not url_ok:
-                    yield rx.toast(url_err, duration=5000)
                     return
 
         self.owner_billing_loading = True
@@ -1135,7 +1229,8 @@ class OwnerState:
                     # Campos técnicos gestionados por el Owner
                     config.is_active = self.owner_billing_is_active
                     config.environment = self.owner_billing_environment.strip()
-                    config.nubefact_url = self.owner_billing_nubefact_url.strip() or None
+                    # nubefact_url per-empresa desactivado — se usa credencial maestra de plataforma
+                    # config.nubefact_url = self.owner_billing_nubefact_url.strip() or None
                     config.serie_factura = self.owner_billing_serie_factura.strip() or "F001"
                     config.serie_boleta = self.owner_billing_serie_boleta.strip() or "B001"
                     config.afip_punto_venta = max(1, int(

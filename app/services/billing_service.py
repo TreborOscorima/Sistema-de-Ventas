@@ -35,6 +35,7 @@ from sqlmodel import select
 
 from app.enums import FiscalStatus, ReceiptType
 from app.models.billing import CompanyBillingConfig, FiscalDocument
+from app.models.platform_config import PlatformBillingSettings, PLATFORM_CONFIG_ID
 from app.models.sales import Sale, SaleItem
 from app.utils.crypto import decrypt_text
 from app.utils.db import get_async_session
@@ -218,6 +219,43 @@ class SUNATBillingStrategy(BillingStrategy):
     - Almacenar CDR y generar PDF.
     """
 
+    async def _resolve_nubefact_credentials(
+        self, config: "CompanyBillingConfig"
+    ) -> tuple[str, str]:
+        """Resuelve credenciales Nubefact: master plataforma > per-empresa (fallback).
+
+        Prioridad:
+          1. PlatformBillingSettings.pe_nubefact_master_* (cuenta integrador SaaS)
+          2. CompanyBillingConfig.nubefact_url / nubefact_token (legacy/override)
+
+        Returns:
+            (url, token_decrypted) — strings vacíos si no hay credenciales.
+        """
+        try:
+            async with get_async_session() as session:
+                platform = await session.get(PlatformBillingSettings, PLATFORM_CONFIG_ID)
+            if (
+                platform
+                and platform.pe_nubefact_master_url
+                and platform.pe_nubefact_master_token
+            ):
+                return (
+                    platform.pe_nubefact_master_url,
+                    decrypt_text(platform.pe_nubefact_master_token),
+                )
+        except Exception:
+            logger.warning(
+                "No se pudo leer PlatformBillingSettings; usando fallback per-empresa."
+            )
+
+        # Fallback: credenciales per-empresa (backward compat o empresas enterprise)
+        if config.nubefact_url and config.nubefact_token:
+            try:
+                return config.nubefact_url, decrypt_text(config.nubefact_token)
+            except Exception:
+                pass
+        return "", ""
+
     async def send_document(
         self,
         fiscal_doc: FiscalDocument,
@@ -226,21 +264,16 @@ class SUNATBillingStrategy(BillingStrategy):
         config: CompanyBillingConfig,
     ) -> FiscalDocument:
         """Envía comprobante a Nubefact y procesa la respuesta."""
-        if not config.nubefact_url or not config.nubefact_token:
+        # ── Resolver credenciales Nubefact (master plataforma > per-empresa) ──
+        nubefact_url, api_token = await self._resolve_nubefact_credentials(config)
+        if not nubefact_url or not api_token:
             fiscal_doc.fiscal_status = FiscalStatus.error
             fiscal_doc.fiscal_errors = json.dumps({
-                "error": "Configuración Nubefact incompleta",
-                "detail": "nubefact_url o nubefact_token no configurados",
-            })
-            return fiscal_doc
-
-        try:
-            api_token = decrypt_text(config.nubefact_token)
-        except (ValueError, RuntimeError) as exc:
-            fiscal_doc.fiscal_status = FiscalStatus.error
-            fiscal_doc.fiscal_errors = json.dumps({
-                "error": "Error desencriptando token Nubefact",
-                "detail": str(exc),
+                "error": "Credenciales Nubefact no configuradas",
+                "detail": (
+                    "Configure las credenciales maestras de Nubefact en "
+                    "Panel Owner → Configuración Global de Billing."
+                ),
             })
             return fiscal_doc
 
@@ -253,7 +286,7 @@ class SUNATBillingStrategy(BillingStrategy):
         try:
             async with httpx.AsyncClient(timeout=NUBEFACT_TIMEOUT_SECONDS) as client:
                 response = await client.post(
-                    config.nubefact_url,
+                    nubefact_url,
                     json=payload,
                     headers={
                         "Content-Type": "application/json",

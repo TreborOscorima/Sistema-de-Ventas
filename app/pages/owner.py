@@ -1635,6 +1635,87 @@ def _owner_header() -> rx.Component:
     )
 
 
+def _platform_billing_section() -> rx.Component:
+    """Sección de Configuración Global de Billing para el Owner panel."""
+    _label = "text-xs font-medium text-slate-600 mb-1"
+    _help = "text-xs text-slate-400 mt-1"
+    _input = INPUT_STYLES["default"] + " text-sm"
+
+    return rx.el.div(
+        # Header
+        rx.el.div(
+            rx.el.div(
+                rx.icon("globe", class_name="w-5 h-5 text-indigo-600"),
+                rx.el.h2(
+                    "Configuración Global de Billing — Perú (Nubefact Integrador)",
+                    class_name="text-base font-semibold text-slate-700",
+                ),
+                class_name="flex items-center gap-2",
+            ),
+            # Badge de estado
+            rx.cond(
+                State.platform_billing_configured,
+                rx.el.span(
+                    "✓ Credenciales maestras configuradas",
+                    class_name="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full",
+                ),
+                rx.el.span(
+                    "⚠ Sin configurar — las empresas PE no pueden facturar",
+                    class_name="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full",
+                ),
+            ),
+            class_name="flex items-center justify-between flex-wrap gap-2",
+        ),
+        # Descripción
+        rx.el.p(
+            "Cuenta integradora de Nubefact compartida por todas las empresas peruanas del SaaS. "
+            "Configurá una sola vez y todas las empresas PE pueden emitir comprobantes automáticamente.",
+            class_name="text-xs text-slate-500",
+        ),
+        # Campos
+        rx.el.div(
+            # URL Nubefact Master
+            rx.el.div(
+                rx.el.label("URL Nubefact Integrador", class_name=_label),
+                rx.el.input(
+                    default_value=State.platform_nubefact_url,
+                    on_change=State.platform_set_nubefact_url,
+                    on_blur=State.save_platform_nubefact_url,
+                    placeholder="https://api.nubefact.com/api/v1/...",
+                    class_name=_input,
+                ),
+                rx.el.p(
+                    "URL del endpoint integrador. Se guarda al salir del campo.",
+                    class_name=_help,
+                ),
+                class_name="flex flex-col",
+            ),
+            # Token Nubefact Master
+            rx.el.div(
+                rx.el.label("Token Nubefact Integrador", class_name=_label),
+                rx.el.input(
+                    default_value=State.platform_nubefact_token_display,
+                    on_blur=State.save_platform_nubefact_token,
+                    placeholder=rx.cond(
+                        State.platform_nubefact_token_display != "",
+                        "****configurado**** (pegá nuevo para reemplazar)",
+                        "Pegá el token API y salí del campo",
+                    ),
+                    type="password",
+                    class_name=_input,
+                ),
+                rx.el.p(
+                    "Se guarda encriptado (Fernet) al salir del campo. Nunca se muestra en texto plano.",
+                    class_name=_help,
+                ),
+                class_name="flex flex-col",
+            ),
+            class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
+        ),
+        class_name=CARD_STYLES["default"] + " space-y-4 mb-6",
+    )
+
+
 def _billing_modal() -> rx.Component:
     """Modal de gestión de billing técnico para una empresa."""
     _input = INPUT_STYLES["default"]
@@ -1732,43 +1813,23 @@ def _billing_modal() -> rx.Component:
                             ),
                             class_name="flex flex-col gap-1",
                         ),
-                        # Nubefact URL (PE)
+                        # Nubefact (PE) — credenciales maestras de plataforma
                         rx.cond(
                             State.owner_billing_country == "PE",
                             rx.el.div(
-                                rx.el.div(
-                                    rx.el.label("URL Nubefact", class_name=_label),
-                                    rx.el.input(
-                                        value=State.owner_billing_nubefact_url,
-                                        on_change=State.owner_set_billing_nubefact_url,
-                                        placeholder="https://api.nubefact.com/api/v1/...",
-                                        class_name=_input,
+                                rx.icon("info", class_name="w-4 h-4 text-indigo-500 shrink-0"),
+                                rx.el.span(
+                                    rx.el.span("Credenciales Nubefact: ", class_name="font-medium"),
+                                    "Esta empresa usa las credenciales maestras del integrador configuradas en ",
+                                    rx.el.span("Configuración Global de Billing", class_name="font-medium text-indigo-600"),
+                                    ". Estado: ",
+                                    rx.cond(
+                                        State.platform_billing_configured,
+                                        rx.el.span("✓ Configuradas", class_name="text-emerald-600 font-medium"),
+                                        rx.el.span("⚠ Sin configurar", class_name="text-amber-600 font-medium"),
                                     ),
-                                    rx.el.p(
-                                        "URL completa del endpoint Nubefact de esta empresa.",
-                                        class_name=_help,
-                                    ),
-                                    class_name="flex flex-col gap-1",
                                 ),
-                                rx.el.div(
-                                    rx.el.label("Token Nubefact", class_name=_label),
-                                    rx.el.input(
-                                        type="password",
-                                        placeholder=rx.cond(
-                                            State.owner_billing_nubefact_token_display != "",
-                                            State.owner_billing_nubefact_token_display,
-                                            "Ingrese el token de API...",
-                                        ),
-                                        on_blur=State.owner_save_billing_nubefact_token,
-                                        class_name=_input,
-                                    ),
-                                    rx.el.p(
-                                        "Se guarda encriptado al salir del campo.",
-                                        class_name=_help,
-                                    ),
-                                    class_name="flex flex-col gap-1",
-                                ),
-                                class_name="grid grid-cols-1 md:grid-cols-2 gap-3",
+                                class_name="flex items-start gap-2 text-xs text-slate-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2",
                             ),
                             rx.fragment(),
                         ),
@@ -1995,6 +2056,7 @@ def _owner_content() -> rx.Component:
             ),
             class_name="mb-5 sm:mb-6",
         ),
+        _platform_billing_section(),
         _search_bar(),
         rx.cond(
             State.owner_loading,
