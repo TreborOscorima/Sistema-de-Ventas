@@ -180,3 +180,37 @@ def validate_tax_id(tax_id: str, country: str) -> tuple[bool, str]:
         return validate_cuit(tax_id)
 
     return False, f"País '{country}' no soportado. Países válidos: PE, AR."
+
+
+def validate_private_key_pem(key_pem: str) -> tuple[bool, str]:
+    """Valida que un string sea una clave privada RSA PEM bien formada.
+
+    Verifica:
+        - Contiene encabezado PEM BEGIN/END
+        - Es parseable como clave privada RSA (mínimo 2048 bits)
+
+    Returns:
+        (True, "") si válida; (False, mensaje_error) si inválida.
+    """
+    if not key_pem or not key_pem.strip():
+        return False, "La clave privada no puede estar vacía."
+
+    pem = key_pem.strip()
+
+    # Verificar encabezado PEM
+    if "-----BEGIN" not in pem or "PRIVATE KEY" not in pem:
+        return False, "Formato inválido. Debe ser un archivo PEM (-----BEGIN ... PRIVATE KEY-----)."
+
+    # Intentar parsear la clave con cryptography
+    try:
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key
+        from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+
+        key = load_pem_private_key(pem.encode("utf-8"), password=None)
+        if isinstance(key, RSAPrivateKey):
+            key_size = key.key_size
+            if key_size < 2048:
+                return False, f"La clave RSA debe ser de al menos 2048 bits (actual: {key_size} bits)."
+        return True, ""
+    except Exception as exc:
+        return False, f"Clave privada inválida: {exc}"

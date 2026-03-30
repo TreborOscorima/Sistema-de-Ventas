@@ -15,6 +15,7 @@ from app.components.ui import (
     SPACING,
     TABLE_STYLES,
     TYPOGRAPHY,
+    empty_state,
     page_title,
     permission_guard,
 )
@@ -378,17 +379,10 @@ def _fiscal_docs_table() -> rx.Component:
                     class_name="flex flex-col gap-2",
                 ),
                 # Estado vacío
-                rx.el.div(
-                    rx.icon("file-x", class_name="h-12 w-12 text-slate-300 mx-auto mb-3"),
-                    rx.el.p(
-                        "Sin documentos fiscales",
-                        class_name="text-slate-600 font-medium text-center",
-                    ),
-                    rx.el.p(
-                        "No se encontraron comprobantes con los filtros seleccionados.",
-                        class_name="text-sm text-slate-400 text-center",
-                    ),
-                    class_name="flex flex-col items-center justify-center py-16",
+                empty_state(
+                    message="Cambiá los filtros o el rango de fechas para ver resultados.",
+                    title="Sin documentos fiscales",
+                    icon="file-x",
                 ),
             ),
         ),
@@ -456,7 +450,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                 rx.el.span("Reintentos", class_name="text-xs text-slate-500 uppercase tracking-wide block mb-1"),
                                 rx.el.span(doc.get("retry_count", "0"), class_name="text-sm font-semibold text-slate-800"),
                             ),
-                            class_name="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg",
+                            class_name="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg",
                         ),
 
                         # Receptor
@@ -473,7 +467,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                     rx.el.span(doc.get("buyer_doc_number", "—"), class_name="text-sm text-slate-800 font-mono"),
                                     class_name="flex flex-col gap-0.5",
                                 ),
-                                class_name="grid grid-cols-2 gap-3",
+                                class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
                             ),
                             class_name="border-t border-slate-200 pt-3",
                         ),
@@ -506,7 +500,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                     ),
                                     class_name="flex flex-col gap-0.5",
                                 ),
-                                class_name="grid grid-cols-3 gap-3",
+                                class_name="grid grid-cols-1 sm:grid-cols-3 gap-3",
                             ),
                             class_name="border-t border-slate-200 pt-3",
                         ),
@@ -530,7 +524,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                     rx.el.span(doc.get("authorized_at", "—"), class_name="text-sm text-slate-700"),
                                     class_name="flex flex-col gap-0.5",
                                 ),
-                                class_name="grid grid-cols-3 gap-3",
+                                class_name="grid grid-cols-1 sm:grid-cols-3 gap-3",
                             ),
                             class_name="border-t border-slate-200 pt-3",
                         ),
@@ -568,7 +562,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                             ),
                         ),
 
-                        class_name="flex flex-col gap-4 py-4 max-h-[55vh] overflow-y-auto pr-1",
+                        class_name="flex flex-col gap-4 py-4 max-h-[60vh] sm:max-h-[65vh] overflow-y-auto pr-1",
                     ),
 
                     # ── Footer / Acciones ────────────────────────────

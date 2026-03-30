@@ -487,12 +487,71 @@ def billing_config_section() -> rx.Component:
             ),
             class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
           ),
-          # ── Certificados AFIP ──
+          # ── Wizard de certificados AFIP ──────────────────────────
           rx.el.div(
-            rx.el.h4(
-              "Certificados AFIP",
-              class_name="text-sm font-semibold text-slate-500 mt-2",
+            rx.el.h4("Certificados AFIP", class_name="text-sm font-semibold text-slate-600 border-b border-slate-100 pb-1"),
+            # ── Guía de 3 pasos ──
+            rx.el.div(
+              # Paso 1
+              rx.el.div(
+                rx.el.div(
+                  rx.el.span("1", class_name="text-xs font-bold text-white"),
+                  class_name="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0",
+                ),
+                rx.el.div(
+                  rx.el.p("Generá tu clave privada RSA", class_name="text-xs font-semibold text-slate-700"),
+                  rx.el.p("En tu terminal ejecutá:", class_name="text-xs text-slate-500 mt-0.5"),
+                  rx.el.code(
+                    "openssl genrsa -out mi_clave.key 2048",
+                    class_name="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-mono block mt-1",
+                  ),
+                  class_name="flex flex-col",
+                ),
+                class_name="flex items-start gap-2",
+              ),
+              # Paso 2
+              rx.el.div(
+                rx.el.div(
+                  rx.el.span("2", class_name="text-xs font-bold text-white"),
+                  class_name="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0",
+                ),
+                rx.el.div(
+                  rx.el.p("Solicitá el certificado en AFIP", class_name="text-xs font-semibold text-slate-700"),
+                  rx.el.p(
+                    "Ingresá al portal AFIP con tu CUIT → Administración de Certificados Digitales → Nuevo Certificado → subí tu clave pública (.csr).",
+                    class_name="text-xs text-slate-500 mt-0.5",
+                  ),
+                  rx.el.a(
+                    "→ Portal AFIP (wsass.afip.gov.ar)",
+                    href="https://wsass.afip.gov.ar/wsass/portal/main.aspx",
+                    target="_blank",
+                    rel="noopener noreferrer",
+                    class_name="text-xs text-indigo-600 hover:underline mt-0.5 inline-block",
+                  ),
+                  class_name="flex flex-col",
+                ),
+                class_name="flex items-start gap-2",
+              ),
+              # Paso 3
+              rx.el.div(
+                rx.el.div(
+                  rx.el.span("3", class_name="text-xs font-bold text-white"),
+                  class_name=rx.cond(
+                    (State.billing_cert_status == "configurado") & (State.billing_key_status == "configurado"),
+                    "w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0",
+                    "w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0",
+                  ),
+                ),
+                rx.el.div(
+                  rx.el.p("Pegá los archivos descargados abajo", class_name="text-xs font-semibold text-slate-700"),
+                  rx.el.p("Pegá el contenido completo del .pem y .key en los campos de abajo y salí de cada campo para guardar.", class_name="text-xs text-slate-500 mt-0.5"),
+                  class_name="flex flex-col",
+                ),
+                class_name="flex items-start gap-2",
+              ),
+              class_name="flex flex-col gap-3 bg-slate-50 border border-slate-100 rounded-lg p-3 text-xs",
             ),
+            # ── Campos de carga ──
             rx.el.div(
               # Certificado X.509
               rx.el.div(
@@ -500,26 +559,46 @@ def billing_config_section() -> rx.Component:
                 rx.cond(
                   State.billing_cert_status == "configurado",
                   rx.el.div(
-                    rx.icon("circle-check", class_name="h-4 w-4 text-emerald-500 inline mr-1"),
-                    rx.el.span("Certificado configurado", class_name="text-sm text-emerald-600"),
-                    # Alerta de expiración
-                    rx.cond(
-                      State.billing_cert_days_remaining >= 0,
+                    rx.el.div(
+                      rx.icon("circle-check", class_name="h-4 w-4 text-emerald-500 shrink-0"),
+                      rx.el.span("Certificado configurado", class_name="text-sm font-medium text-emerald-700"),
                       rx.cond(
-                        State.billing_cert_days_remaining <= 30,
-                        rx.el.span(
-                          rx.icon("triangle-alert", class_name="h-3.5 w-3.5 inline mr-0.5"),
-                          rx.text(f"Expira en {State.billing_cert_days_remaining} días ({State.billing_cert_not_after})"),
-                          class_name="text-xs text-amber-600 ml-2",
+                        State.billing_cert_days_remaining >= 0,
+                        rx.cond(
+                          State.billing_cert_days_remaining <= 30,
+                          rx.el.span(
+                            rx.icon("triangle-alert", class_name="h-3 w-3 inline mr-0.5"),
+                            f"Expira en {State.billing_cert_days_remaining} días",
+                            class_name="text-xs text-amber-600 font-medium ml-2",
+                          ),
+                          rx.el.span(
+                            f"Válido hasta {State.billing_cert_not_after}",
+                            class_name="text-xs text-slate-400 ml-2",
+                          ),
                         ),
-                        rx.el.span(
-                          f"Válido hasta {State.billing_cert_not_after}",
-                          class_name="text-xs text-slate-400 ml-2",
-                        ),
+                        rx.fragment(),
+                      ),
+                      class_name="flex items-center gap-1 flex-wrap",
+                    ),
+                    rx.cond(
+                      State.billing_cert_subject != "",
+                      rx.el.p(
+                        rx.el.span("CN: ", class_name="font-medium"),
+                        State.billing_cert_subject,
+                        class_name="text-xs text-slate-500 font-mono mt-0.5",
                       ),
                       rx.fragment(),
                     ),
-                    class_name="flex items-center gap-1 mb-1 flex-wrap",
+                    rx.cond(
+                      State.billing_cert_issuer != "",
+                      rx.el.p(
+                        rx.el.span("Emisor: ", class_name="font-medium"),
+                        State.billing_cert_issuer,
+                        class_name="text-xs text-slate-400 font-mono",
+                      ),
+                      rx.fragment(),
+                    ),
+                    class_name="flex flex-col gap-0.5 mb-1",
                   ),
                   rx.fragment(),
                 ),
@@ -531,19 +610,19 @@ def billing_config_section() -> rx.Component:
                   class_name=_input + " font-mono text-xs resize-none",
                 ),
                 rx.el.p(
-                  "Pegue el contenido completo del archivo .crt o .pem",
+                  "Pegá el contenido completo del archivo .crt o .pem descargado de AFIP.",
                   class_name=_help,
                 ),
                 class_name="flex flex-col gap-1",
               ),
-              # Clave privada RSA
+              # Clave Privada RSA
               rx.el.div(
                 rx.el.label("Clave Privada RSA (.key)", class_name=_label),
                 rx.cond(
                   State.billing_key_status == "configurado",
                   rx.el.div(
-                    rx.icon("circle-check", class_name="h-4 w-4 text-emerald-500 inline mr-1"),
-                    rx.el.span("Clave privada configurada", class_name="text-sm text-emerald-600"),
+                    rx.icon("circle-check", class_name="h-4 w-4 text-emerald-500 shrink-0"),
+                    rx.el.span("Clave privada configurada (RSA)", class_name="text-sm font-medium text-emerald-700"),
                     class_name="flex items-center gap-1 mb-1",
                   ),
                   rx.fragment(),
@@ -556,14 +635,14 @@ def billing_config_section() -> rx.Component:
                   class_name=_input + " font-mono text-xs resize-none",
                 ),
                 rx.el.p(
-                  "Pegue el contenido completo del archivo .key (nunca se muestra en pantalla)",
+                  "Nunca se muestra en pantalla. Se guarda encriptado (Fernet) al salir del campo.",
                   class_name=_help,
                 ),
                 class_name="flex flex-col gap-1",
               ),
               class_name="grid grid-cols-1 gap-4",
             ),
-            class_name="space-y-2",
+            class_name="space-y-3",
           ),
           class_name="space-y-3",
         ),

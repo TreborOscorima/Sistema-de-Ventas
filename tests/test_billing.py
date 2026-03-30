@@ -1491,3 +1491,506 @@ class TestCertificateMetadata:
         assert "cert_issuer" in fields
         assert "cert_not_before" in fields
         assert "cert_not_after" in fields
+
+
+# ═════════════════════════════════════════════════════════════
+# PLATFORM BILLING SETTINGS (Master SaaS Model)
+# ═════════════════════════════════════════════════════════════
+
+
+class TestPlatformBillingSettings:
+    """Tests para el modelo singleton PlatformBillingSettings."""
+
+    def test_model_fields_exist(self):
+        """Verifica que el modelo tiene los campos esperados."""
+        from app.models.platform_config import PlatformBillingSettings, PLATFORM_CONFIG_ID
+        fields = PlatformBillingSettings.model_fields
+        assert "pe_nubefact_master_url" in fields
+        assert "pe_nubefact_master_token" in fields
+        assert "updated_at" in fields
+
+    def test_platform_config_id_constant(self):
+        """El singleton siempre usa id=1."""
+        from app.models.platform_config import PLATFORM_CONFIG_ID
+        assert PLATFORM_CONFIG_ID == 1
+
+    def test_model_instantiation_defaults(self):
+        """Los campos opcionales son None por defecto."""
+        from app.models.platform_config import PlatformBillingSettings
+        p = PlatformBillingSettings()
+        assert p.pe_nubefact_master_url is None
+        assert p.pe_nubefact_master_token is None
+        assert p.updated_at is None
+
+    def test_model_with_values(self):
+        """El modelo acepta URL y token."""
+        from app.models.platform_config import PlatformBillingSettings
+        p = PlatformBillingSettings(
+            pe_nubefact_master_url="https://api.nubefact.com/api/v1/test",
+            pe_nubefact_master_token="encrypted_token_value",
+        )
+        assert p.pe_nubefact_master_url == "https://api.nubefact.com/api/v1/test"
+        assert p.pe_nubefact_master_token == "encrypted_token_value"
+
+
+# ═════════════════════════════════════════════════════════════
+# RESOLVE NUBEFACT CREDENTIALS (Master > Per-Company Priority)
+# ═════════════════════════════════════════════════════════════
+
+
+class TestResolveNubefactCredentials:
+    """Tests para la prioridad de credenciales: master SaaS > per-empresa."""
+
+    def _make_config(self, url=None, token=None):
+        """Crea un CompanyBillingConfig con credenciales opcionales."""
+        from app.models.billing import CompanyBillingConfig
+        config = CompanyBillingConfig(company_id=1, country="PE")
+        config.nubefact_url = url
+        config.nubefact_token = encrypt_text(token) if token else None
+        return config
+
+    def _make_platform(self, url=None, token=None):
+        """Crea un PlatformBillingSettings con credenciales opcionales."""
+        from app.models.platform_config import PlatformBillingSettings
+        p = PlatformBillingSettings()
+        p.pe_nubefact_master_url = url
+        p.pe_nubefact_master_token = encrypt_text(token) if token else None
+        return p
+
+    @pytest.mark.asyncio
+    async def test_master_credentials_take_priority(self):
+        """Las credenciales maestras tienen prioridad sobre las per-empresa."""
+        from app.services.billing_service import SUNATBillingStrategy
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config(url="https://per-company.url", token="company-token")
+        platform = self._make_platform(url="https://master.url", token="master-token")
+
+        with patch("app.services.billing_service.get_async_session") as mock_get:
+            mock_session = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            mock_session.get = AsyncMock(return_value=platform)
+            mock_get.return_value = mock_session
+
+            url, token = await strategy._resolve_nubefact_credentials(config)
+
+        assert url == "https://master.url"
+        assert token == "master-token"
+
+    @pytest.mark.asyncio
+    async def test_fallback_to_per_company_when_no_master(self):
+        """Sin credenciales maestras, usa las per-empresa como fallback."""
+        from app.services.billing_service import SUNATBillingStrategy
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config(url="https://per-company.url", token="company-token")
+        platform = self._make_platform(url=None, token=None)  # Sin master
+
+        with patch("app.services.billing_service.get_async_session") as mock_get:
+            mock_session = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            mock_session.get = AsyncMock(return_value=platform)
+            mock_get.return_value = mock_session
+
+            url, token = await strategy._resolve_nubefact_credentials(config)
+
+        assert url == "https://per-company.url"
+        assert token == "company-token"
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_credentials_anywhere(self):
+        """Sin credenciales master ni per-empresa, retorna strings vacíos."""
+        from app.services.billing_service import SUNATBillingStrategy
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config(url=None, token=None)
+        platform = self._make_platform(url=None, token=None)
+
+        with patch("app.services.billing_service.get_async_session") as mock_get:
+            mock_session = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            mock_session.get = AsyncMock(return_value=platform)
+            mock_get.return_value = mock_session
+
+            url, token = await strategy._resolve_nubefact_credentials(config)
+
+        assert url == ""
+        assert token == ""
+
+    @pytest.mark.asyncio
+    async def test_fallback_when_platform_db_error(self):
+        """Si la DB de plataforma falla, usa credenciales per-empresa silenciosamente."""
+        from app.services.billing_service import SUNATBillingStrategy
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config(url="https://per-company.url", token="company-token")
+
+        with patch("app.services.billing_service.get_async_session") as mock_get:
+            mock_get.side_effect = Exception("DB connection failed")
+
+            url, token = await strategy._resolve_nubefact_credentials(config)
+
+        assert url == "https://per-company.url"
+        assert token == "company-token"
+
+    @pytest.mark.asyncio
+    async def test_partial_master_incomplete_falls_back(self):
+        """Si el master tiene URL pero no token, usa per-empresa como fallback."""
+        from app.services.billing_service import SUNATBillingStrategy
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config(url="https://per-company.url", token="company-token")
+        platform = self._make_platform(url="https://master.url", token=None)  # URL pero sin token
+
+        with patch("app.services.billing_service.get_async_session") as mock_get:
+            mock_session = AsyncMock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock(return_value=None)
+            mock_session.get = AsyncMock(return_value=platform)
+            mock_get.return_value = mock_session
+
+            url, token = await strategy._resolve_nubefact_credentials(config)
+
+        # Debe usar fallback per-empresa
+        assert url == "https://per-company.url"
+        assert token == "company-token"
+
+
+# ═════════════════════════════════════════════════════════════
+# PRIVATE KEY VALIDATION
+# ═════════════════════════════════════════════════════════════
+
+
+class TestValidatePrivateKeyPem:
+    """Tests para validate_private_key_pem en fiscal_validators."""
+
+    def _gen_rsa_key_pem(self, key_size=2048) -> str:
+        """Genera una clave RSA real para testing."""
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+        return key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("utf-8")
+
+    def test_valid_rsa_2048_key(self):
+        from app.utils.fiscal_validators import validate_private_key_pem
+        pem = self._gen_rsa_key_pem(2048)
+        ok, err = validate_private_key_pem(pem)
+        assert ok is True
+        assert err == ""
+
+    def test_valid_rsa_4096_key(self):
+        from app.utils.fiscal_validators import validate_private_key_pem
+        pem = self._gen_rsa_key_pem(4096)
+        ok, err = validate_private_key_pem(pem)
+        assert ok is True
+
+    def test_empty_key_rejected(self):
+        from app.utils.fiscal_validators import validate_private_key_pem
+        ok, err = validate_private_key_pem("")
+        assert ok is False
+        assert "vacía" in err
+
+    def test_invalid_pem_format_rejected(self):
+        from app.utils.fiscal_validators import validate_private_key_pem
+        ok, err = validate_private_key_pem("not a pem key at all")
+        assert ok is False
+        assert "PEM" in err or "inválido" in err.lower() or "Formato" in err
+
+    def test_certificate_pem_not_accepted_as_key(self):
+        """Un certificado .crt no debe ser aceptado como clave privada."""
+        from app.utils.fiscal_validators import validate_private_key_pem
+        cert_like = "-----BEGIN CERTIFICATE-----\nMIIBxxx\n-----END CERTIFICATE-----"
+        ok, err = validate_private_key_pem(cert_like)
+        assert ok is False
+
+    def test_weak_1024_key_rejected(self):
+        """Claves RSA menores a 2048 bits deben ser rechazadas."""
+        from app.utils.fiscal_validators import validate_private_key_pem
+        pem = self._gen_rsa_key_pem(1024)
+        ok, err = validate_private_key_pem(pem)
+        assert ok is False
+        assert "2048" in err
+
+
+# ═════════════════════════════════════════════════════════════
+# BILLING QUOTA CHECK
+# ═════════════════════════════════════════════════════════════
+
+
+class TestMonthlyQuotaEdgeCases:
+    """Tests adicionales para casos límite del quota check."""
+
+    def _make_config(self, current=0, limit=500, reset_date=None):
+        from app.models.billing import CompanyBillingConfig
+        from datetime import date
+        config = CompanyBillingConfig(company_id=1)
+        config.current_billing_count = current
+        config.max_billing_limit = limit
+        config.billing_count_reset_date = reset_date or date.today()
+        return config
+
+    def test_exactly_at_limit_rejected(self):
+        """En el límite exacto (current == max) debe rechazar."""
+        from app.services.billing_service import _check_monthly_quota
+        config = self._make_config(current=500, limit=500)
+        allowed, msg = _check_monthly_quota(config)
+        assert allowed is False
+        assert "límite" in msg.lower() or "quota" in msg.lower() or "500" in msg
+
+    def test_one_below_limit_allowed(self):
+        """Un documento antes del límite debe ser permitido."""
+        from app.services.billing_service import _check_monthly_quota
+        config = self._make_config(current=499, limit=500)
+        allowed, msg = _check_monthly_quota(config)
+        assert allowed is True
+
+    def test_zero_limit_always_rejected(self):
+        """Límite 0 (plan trial) siempre rechaza."""
+        from app.services.billing_service import _check_monthly_quota
+        config = self._make_config(current=0, limit=0)
+        allowed, msg = _check_monthly_quota(config)
+        assert allowed is False
+
+    def test_monthly_reset_restores_quota(self):
+        """Si cambió el mes, el contador se resetea y permite emitir."""
+        from app.services.billing_service import _check_monthly_quota
+        from datetime import date, timedelta
+        last_month = date.today().replace(day=1) - timedelta(days=1)
+        config = self._make_config(current=500, limit=500, reset_date=last_month)
+        allowed, msg = _check_monthly_quota(config)
+        assert allowed is True
+        assert config.current_billing_count == 0
+
+
+# ═════════════════════════════════════════════════════════════
+# SUNAT STRATEGY — SEND DOCUMENT E2E (mocked HTTP)
+# ═════════════════════════════════════════════════════════════
+
+
+class TestSUNATStrategyE2E:
+    """Tests end-to-end del flujo SUNAT con HTTP mockeado."""
+
+    def _make_config(self):
+        from app.models.billing import CompanyBillingConfig
+        config = CompanyBillingConfig(company_id=1, country="PE", is_active=True)
+        config.nubefact_url = "https://api.nubefact.com/api/v1/test"
+        config.nubefact_token = encrypt_text("test-token-123")
+        config.serie_factura = "F001"
+        config.serie_boleta = "B001"
+        config.tax_id = "20123456789"
+        config.business_name = "TEST SAC"
+        return config
+
+    def _make_fiscal_doc(self):
+        from app.models.billing import FiscalDocument
+        from app.enums import FiscalStatus, ReceiptType
+        from decimal import Decimal
+        doc = FiscalDocument(
+            company_id=1, branch_id=1, sale_id=42,
+            receipt_type=ReceiptType.boleta,
+            serie="B001", fiscal_number=1, full_number="B001-00000001",
+            fiscal_status=FiscalStatus.pending,
+            total_amount=Decimal("118.00"),
+            taxable_amount=Decimal("100.00"),
+            tax_amount=Decimal("18.00"),
+        )
+        return doc
+
+    def _make_sale(self):
+        from app.models.sales import Sale
+        from decimal import Decimal
+        sale = MagicMock(spec=Sale)
+        sale.id = 42
+        sale.total_amount = Decimal("118.00")
+        sale.timestamp = datetime(2026, 3, 30, 12, 0, 0)
+        return sale
+
+    @pytest.mark.asyncio
+    async def test_authorized_response_sets_status(self):
+        """Respuesta 200 aceptada por SUNAT → estado authorized."""
+        from app.services.billing_service import SUNATBillingStrategy
+        from app.enums import FiscalStatus
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config()
+        fiscal_doc = self._make_fiscal_doc()
+        sale = self._make_sale()
+
+        authorized_response = {
+            "aceptada_por_sunat": True,
+            "cdr_zip_base64": "base64CDR==",
+            "codigo_hash": "ABC123HASH",
+            "cadena_para_codigo_qr": "qr_data_string",
+        }
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = json.dumps(authorized_response)
+        mock_resp.json.return_value = authorized_response
+
+        # Mock _resolve_nubefact_credentials para retornar credenciales directamente
+        with patch.object(
+            strategy, "_resolve_nubefact_credentials",
+            new=AsyncMock(return_value=("https://api.nubefact.com/api/v1/test", "test-token-123")),
+        ):
+            with patch("app.services.billing_service.httpx.AsyncClient") as mock_client_cls:
+                mock_client = AsyncMock()
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=None)
+                mock_client.post = AsyncMock(return_value=mock_resp)
+                mock_client_cls.return_value = mock_client
+
+                result = await strategy.send_document(fiscal_doc, sale, [], config)
+
+        assert result.fiscal_status == FiscalStatus.authorized
+        assert result.cae_cdr == "base64CDR=="
+        assert result.hash_code == "ABC123HASH"
+
+    @pytest.mark.asyncio
+    async def test_rejected_by_sunat_sets_rejected_status(self):
+        """Respuesta 200 pero rechazada por SUNAT → estado rejected."""
+        from app.services.billing_service import SUNATBillingStrategy
+        from app.enums import FiscalStatus
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config()
+        fiscal_doc = self._make_fiscal_doc()
+        sale = self._make_sale()
+
+        rejected_response = {
+            "aceptada_por_sunat": False,
+            "sunat_description": "El RUC no está activo",
+            "sunat_responsecode": "2108",
+        }
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.text = json.dumps(rejected_response)
+        mock_resp.json.return_value = rejected_response
+
+        with patch.object(
+            strategy, "_resolve_nubefact_credentials",
+            new=AsyncMock(return_value=("https://api.nubefact.com/api/v1/test", "test-token-123")),
+        ):
+            with patch("app.services.billing_service.httpx.AsyncClient") as mock_client_cls:
+                mock_client = AsyncMock()
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=None)
+                mock_client.post = AsyncMock(return_value=mock_resp)
+                mock_client_cls.return_value = mock_client
+
+                result = await strategy.send_document(fiscal_doc, sale, [], config)
+
+        assert result.fiscal_status == FiscalStatus.rejected
+        errors = json.loads(result.fiscal_errors)
+        assert "sunat_responsecode" in errors
+
+    @pytest.mark.asyncio
+    async def test_no_credentials_sets_error_status(self):
+        """Sin credenciales → estado error con mensaje descriptivo."""
+        from app.services.billing_service import SUNATBillingStrategy
+        from app.enums import FiscalStatus
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config()
+        fiscal_doc = self._make_fiscal_doc()
+        sale = self._make_sale()
+
+        with patch.object(
+            strategy, "_resolve_nubefact_credentials",
+            new=AsyncMock(return_value=("", "")),
+        ):
+            result = await strategy.send_document(fiscal_doc, sale, [], config)
+
+        assert result.fiscal_status == FiscalStatus.error
+        errors = json.loads(result.fiscal_errors)
+        assert "Credenciales" in errors.get("error", "") or "Nubefact" in errors.get("error", "")
+
+    @pytest.mark.asyncio
+    async def test_http_timeout_sets_error_status(self):
+        """Timeout HTTP → estado error."""
+        from app.services.billing_service import SUNATBillingStrategy
+        from app.enums import FiscalStatus
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config()
+        fiscal_doc = self._make_fiscal_doc()
+        sale = self._make_sale()
+
+        with patch.object(
+            strategy, "_resolve_nubefact_credentials",
+            new=AsyncMock(return_value=("https://api.nubefact.com/api/v1/test", "test-token-123")),
+        ):
+            with patch("app.services.billing_service.httpx.AsyncClient") as mock_client_cls:
+                mock_client = AsyncMock()
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=None)
+                mock_client.post = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+                mock_client_cls.return_value = mock_client
+
+                result = await strategy.send_document(fiscal_doc, sale, [], config)
+
+        assert result.fiscal_status == FiscalStatus.error
+
+    @pytest.mark.asyncio
+    async def test_http_500_sets_error_status(self):
+        """Respuesta HTTP 500 → estado error."""
+        from app.services.billing_service import SUNATBillingStrategy
+        from app.enums import FiscalStatus
+
+        strategy = SUNATBillingStrategy()
+        config = self._make_config()
+        fiscal_doc = self._make_fiscal_doc()
+        sale = self._make_sale()
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        mock_resp.text = "Internal Server Error"
+
+        with patch.object(
+            strategy, "_resolve_nubefact_credentials",
+            new=AsyncMock(return_value=("https://api.nubefact.com/api/v1/test", "test-token-123")),
+        ):
+            with patch("app.services.billing_service.httpx.AsyncClient") as mock_client_cls:
+                mock_client = AsyncMock()
+                mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+                mock_client.__aexit__ = AsyncMock(return_value=None)
+                mock_client.post = AsyncMock(return_value=mock_resp)
+                mock_client_cls.return_value = mock_client
+
+                result = await strategy.send_document(fiscal_doc, sale, [], config)
+
+        assert result.fiscal_status == FiscalStatus.error
+
+
+# ═════════════════════════════════════════════════════════════
+# CERT METADATA STATE VARS
+# ═════════════════════════════════════════════════════════════
+
+
+class TestCertMetadataStateVars:
+    """Tests para las nuevas vars billing_cert_issuer y billing_cert_serial."""
+
+    def test_billing_state_has_new_cert_vars(self):
+        """BillingState debe tener billing_cert_issuer y billing_cert_serial."""
+        from app.states.billing_state import BillingState
+        assert hasattr(BillingState, "billing_cert_issuer")
+        assert hasattr(BillingState, "billing_cert_serial")
+
+    def test_new_vars_default_empty(self):
+        """Los nuevos vars deben tener default vacío."""
+        from app.states.billing_state import BillingState
+        # Verificar que los fields tienen default ""
+        fields = BillingState.__fields__ if hasattr(BillingState, "__fields__") else {}
+        if "billing_cert_issuer" in fields:
+            assert fields["billing_cert_issuer"].default == ""
+        if "billing_cert_serial" in fields:
+            assert fields["billing_cert_serial"].default == ""

@@ -53,6 +53,8 @@ class BillingState(MixinState):
     billing_cert_subject: str = ""
     billing_cert_not_after: str = ""  # ISO date for display
     billing_cert_days_remaining: int = -1  # -1 = no cert
+    billing_cert_issuer: str = ""
+    billing_cert_serial: str = ""
 
     # ── Read-only display ─────────────────────────────────────
     billing_current_count: int = 0
@@ -144,10 +146,14 @@ class BillingState(MixinState):
                     tzinfo=_tz.utc
                 ) - _dt.now(_tz.utc)
                 self.billing_cert_days_remaining = delta.days
+                self.billing_cert_issuer = (config.cert_issuer or "")[:100]
+                self.billing_cert_serial = (config.cert_subject or "")[:20]  # primeros chars del subject como ref
             else:
                 self.billing_cert_subject = ""
                 self.billing_cert_not_after = ""
                 self.billing_cert_days_remaining = -1
+                self.billing_cert_issuer = ""
+                self.billing_cert_serial = ""
             self.billing_form_key += 1
 
     @rx.event
@@ -326,6 +332,8 @@ class BillingState(MixinState):
                     cert_meta.not_after.strftime("%Y-%m-%d")
                 )
                 self.billing_cert_days_remaining = cert_meta.days_remaining
+                self.billing_cert_issuer = cert_meta.issuer[:100]
+                self.billing_cert_serial = cert_meta.serial_number[:20]
             config.updated_at = utc_now_naive()
             session.add(config)
             session.commit()
@@ -342,8 +350,10 @@ class BillingState(MixinState):
         if not key_pem:
             self.add_notification(MSG.FISCAL_KEY_EMPTY, "warning")
             return
-        if "-----BEGIN" not in key_pem or "PRIVATE KEY" not in key_pem:
-            self.add_notification(MSG.FISCAL_KEY_INVALID_PEM, "warning")
+        from app.utils.fiscal_validators import validate_private_key_pem
+        key_ok, key_err = validate_private_key_pem(key_pem)
+        if not key_ok:
+            self.add_notification(key_err, "warning")
             return
         company_id = self._company_id()
         if not company_id:
