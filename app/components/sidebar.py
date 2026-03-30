@@ -1,28 +1,7 @@
 import reflex as rx
 from app.state import State
 from app.components.ui import RADIUS, SHADOWS, TRANSITIONS
-
-CONFIG_SUBSECTIONS = [
-    {"key": "empresa", "label": "Datos de Empresa", "icon": "building"},
-    {"key": "sucursales", "label": "Sucursales", "icon": "map-pin"},
-    {"key": "usuarios", "label": "Gestion de Usuarios", "icon": "users"},
-    {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
-    {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
-    {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
-    {"key": "facturacion", "label": "Facturacion Electronica", "icon": "file-text"},
-    {"key": "suscripcion", "label": "Suscripcion", "icon": "sparkles"},
-]
-
-SERVICES_SUBSECTIONS = [
-    {"key": "campo", "label": "Alquiler de Campo", "icon": "trophy"},
-    {"key": "precios_campo", "label": "Precios de Campo", "icon": "tags"},
-    # {"key": "piscina", "label": "Alquiler de Piscina", "icon": "waves"},
-]
-
-CASH_SUBSECTIONS = [
-    {"key": "resumen", "label": "Resumen de Caja", "icon": "layout-dashboard"},
-    {"key": "movimientos", "label": "Movimientos de Caja Chica", "icon": "arrow-left-right"},
-]
+from app.constants import CONFIG_SUBSECTIONS, CASH_SUBSECTIONS, SERVICES_SUBSECTIONS
 
 
 def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:

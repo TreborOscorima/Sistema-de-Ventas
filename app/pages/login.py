@@ -102,9 +102,22 @@ def login_page() -> rx.Component:
                 ),
                 # Botón de envío
                 rx.el.button(
-                    "Iniciar Sesión",
+                    rx.cond(
+                        State.is_login_loading,
+                        rx.el.div(
+                            rx.icon("loader-circle", class_name="h-4 w-4 animate-spin"),
+                            rx.el.span("Iniciando sesión..."),
+                            class_name="flex items-center gap-2",
+                        ),
+                        rx.el.span("Iniciar Sesión"),
+                    ),
                     type="submit",
-                    class_name=BUTTON_STYLES["primary"] + " w-full min-h-[44px]",
+                    disabled=State.is_login_loading,
+                    class_name=rx.cond(
+                        State.is_login_loading,
+                        BUTTON_STYLES["disabled"] + " w-full min-h-[44px]",
+                        BUTTON_STYLES["primary"] + " w-full min-h-[44px]",
+                    ),
                 ),
                 on_submit=State.login,
                 class_name="space-y-5",

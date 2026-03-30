@@ -161,13 +161,6 @@ def _receipt_type_selector() -> rx.Component:
     Solo visible si la empresa tiene billing activo.
     Detecta automáticamente factura cuando el cliente tiene RUC/CUIT.
     """
-    _btn_base = (
-        "flex-1 text-center text-xs font-medium py-1.5 px-2 rounded-md "
-        "border transition-colors cursor-pointer"
-    )
-    _btn_active = _btn_base + " bg-indigo-100 border-indigo-300 text-indigo-700"
-    _btn_inactive = _btn_base + " bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-
     return rx.cond(
         State.billing_is_active,
         rx.el.div(
@@ -178,8 +171,8 @@ def _receipt_type_selector() -> rx.Component:
                     on_click=State.set_sale_receipt_type("nota_venta"),
                     class_name=rx.cond(
                         State.sale_receipt_type_selection == "nota_venta",
-                        _btn_active,
-                        _btn_inactive,
+                        BUTTON_STYLES["tab_active"],
+                        BUTTON_STYLES["tab_inactive"],
                     ),
                 ),
                 rx.el.button(
@@ -187,8 +180,8 @@ def _receipt_type_selector() -> rx.Component:
                     on_click=State.set_sale_receipt_type("boleta"),
                     class_name=rx.cond(
                         State.sale_receipt_type_selection == "boleta",
-                        _btn_active,
-                        _btn_inactive,
+                        BUTTON_STYLES["tab_active"],
+                        BUTTON_STYLES["tab_inactive"],
                     ),
                 ),
                 rx.el.button(
@@ -196,8 +189,8 @@ def _receipt_type_selector() -> rx.Component:
                     on_click=State.set_sale_receipt_type("factura"),
                     class_name=rx.cond(
                         State.sale_receipt_type_selection == "factura",
-                        _btn_active,
-                        _btn_inactive,
+                        BUTTON_STYLES["tab_active"],
+                        BUTTON_STYLES["tab_inactive"],
                     ),
                 ),
                 class_name="flex gap-1",
@@ -423,7 +416,7 @@ def recent_moves_modal() -> rx.Component:
 
 def sale_receipt_modal() -> rx.Component:
     """Modal del recibo/boleta de venta."""
-    footer = rx.hstack(
+    footer = rx.el.div(
         rx.el.button(
             rx.icon("download", class_name="h-4 w-4"),
             "Descargar PDF",
@@ -436,8 +429,7 @@ def sale_receipt_modal() -> rx.Component:
             on_click=State.print_receipt,
             class_name=f"{BUTTON_STYLES['success']} flex-1",
         ),
-        spacing="2",
-        class_name="w-full",
+        class_name="flex items-center gap-2 w-full",
     )
 
     body = rx.el.div(
@@ -1172,7 +1164,7 @@ def _payment_form_body(variant: str) -> rx.Component:
 
     # ── Credit section header ───────────────────────────────────────────────
     if is_desktop:
-        credit_header = rx.hstack(
+        credit_header = rx.el.div(
             rx.el.div(
                 rx.el.span("VENTA A CREDITO / FIADO", class_name="text-xs font-medium text-slate-600"),
                 rx.el.span("Configurar cuotas y pago inicial", class_name="text-xs text-slate-400"),
@@ -1185,7 +1177,7 @@ def _payment_form_body(variant: str) -> rx.Component:
             class_name="flex items-center justify-between",
         )
     else:
-        credit_header = rx.hstack(
+        credit_header = rx.el.div(
             rx.el.span("Venta a Credito / Fiado", class_name="text-sm font-semibold text-slate-800"),
             toggle_switch(
                 checked=State.is_credit_mode,
@@ -1569,15 +1561,15 @@ def _payment_form_body(variant: str) -> rx.Component:
                 rx.el.button(
                     rx.cond(
                         State.is_loading,
-                        rx.hstack(
+                        rx.el.div(
                             rx.spinner(size="2"),
-                            rx.text("Procesando..."),
-                            spacing="2",
+                            rx.el.span("Procesando..."),
+                            class_name="flex items-center gap-2",
                         ),
-                        rx.hstack(
+                        rx.el.div(
                             rx.icon("circle-check", class_name="h-5 w-5"),
-                            rx.text("Confirmar Venta"),
-                            spacing="2",
+                            rx.el.span("Confirmar Venta"),
+                            class_name="flex items-center gap-2",
                         ),
                     ),
                     on_click=State.confirm_sale,
@@ -1614,15 +1606,15 @@ def _payment_form_body(variant: str) -> rx.Component:
                 rx.el.button(
                     rx.cond(
                         State.is_loading,
-                        rx.hstack(
+                        rx.el.div(
                             rx.spinner(size="2"),
-                            rx.text("Procesando..."),
-                            spacing="2",
+                            rx.el.span("Procesando..."),
+                            class_name="flex items-center gap-2",
                         ),
-                        rx.hstack(
+                        rx.el.div(
                             rx.icon("circle-check", class_name="h-5 w-5"),
-                            rx.text("Confirmar Venta"),
-                            spacing="2",
+                            rx.el.span("Confirmar Venta"),
+                            class_name="flex items-center gap-2",
                         ),
                     ),
                     on_click=State.confirm_sale,

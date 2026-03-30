@@ -15,7 +15,7 @@ Design System v3.0 - Estandarización UI/UX Professional Premium:
 import reflex as rx
 from typing import Callable
 
-from app.constants import WHATSAPP_NUMBER
+from app.constants import WHATSAPP_NUMBER, PRICING_PLANS
 
 
 # =============================================================================
@@ -161,6 +161,9 @@ BUTTON_STYLES = {
     "icon_danger": f"p-2 text-red-500 hover:bg-red-100 active:bg-red-200 {RADIUS['full']} {TRANSITIONS['fast']}",
     "icon_primary": f"p-2 text-indigo-500 hover:bg-indigo-100 active:bg-indigo-200 {RADIUS['full']} {TRANSITIONS['fast']}",
     "icon_ghost": f"p-2 text-slate-500 hover:bg-slate-100 active:bg-slate-200 {RADIUS['full']} {TRANSITIONS['fast']}",
+    # Tabs de selección compactos (ej: selector de comprobante fiscal)
+    "tab_active": f"flex-1 text-center text-xs font-medium py-1.5 px-2 {RADIUS['md']} border {TRANSITIONS['fast']} cursor-pointer bg-indigo-100 border-indigo-300 text-indigo-700",
+    "tab_inactive": f"flex-1 text-center text-xs font-medium py-1.5 px-2 {RADIUS['md']} border {TRANSITIONS['fast']} cursor-pointer bg-white border-slate-200 text-slate-500 hover:bg-slate-50",
 }
 
 # =============================================================================
@@ -744,67 +747,20 @@ def pricing_modal(
             ),
         )
 
-    standard_link = (
-        f"https://wa.me/{WHATSAPP_NUMBER}?text="
-        "Hola,%20quiero%20el%20Plan%20Standard%20(USD%2045/mes)%20de%20TUWAYKIAPP."
-    )
-    professional_link = (
-        f"https://wa.me/{WHATSAPP_NUMBER}?text="
-        "Hola,%20quiero%20el%20Plan%20Professional%20(USD%2075/mes)%20de%20TUWAYKIAPP."
-    )
-    enterprise_link = (
-        f"https://wa.me/{WHATSAPP_NUMBER}?text="
-        "Hola,%20quiero%20el%20Plan%20Enterprise%20(USD%20175/mes)%20de%20TUWAYKIAPP."
-    )
-
     content = rx.el.div(
-        _plan_card(
-            title="PLAN STANDARD",
-            icon="sparkles",
-            limits=["Hasta 5 sucursales", "10 usuarios"],
-            modules=[
-                "Múltiples usuarios y roles",
-                "Ventas rápidas con lector de código o teclado",
-                "Productos por unidad, peso y litros",
-                "Gestión de stock y reposición",
-                "Reportes diarios de ventas e ingresos",
-                "Clientes y cuentas corrientes",
-            ],
-            action_label="Elegir Standard",
-            action_href=standard_link,
-        ),
-        _plan_card(
-            title="PLAN PROFESSIONAL",
-            icon="crown",
-            limits=["Hasta 10 sucursales", "Usuarios ilimitados"],
-            modules=[
-                "Todo lo del Standard",
-                "Multi-sucursal con control centralizado",
-                "Reportes avanzados y comparativos",
-                "Soporte prioritario",
-                "Automatizaciones y aprobaciones",
-                "Integraciones personalizadas",
-            ],
-            action_label="Elegir Professional",
-            action_href=professional_link,
-            highlight=True,
-            badge_text="Más popular",
-        ),
-        _plan_card(
-            title="PLAN ENTERPRISE",
-            icon="rocket",
-            limits=["Sucursales a medida", "Usuarios ilimitados"],
-            modules=[
-                "Facturación electrónica",
-                "API Access y webhooks",
-                "Gerente de cuenta dedicado",
-                "SLA y soporte 24/7",
-                "Implementación a medida",
-                "Onboarding y capacitación",
-            ],
-            action_label="Contactar",
-            action_href=enterprise_link,
-        ),
+        *[
+            _plan_card(
+                title=plan["title"],
+                icon=plan["icon"],
+                limits=plan["limits"],
+                modules=plan["modules"],
+                action_label=plan["action_label"],
+                action_href=f"https://wa.me/{WHATSAPP_NUMBER}?text={plan['wa_text']}",
+                highlight=plan["highlight"],
+                badge_text=plan["badge_text"],
+            )
+            for plan in PRICING_PLANS
+        ],
         class_name="grid grid-cols-1 md:grid-cols-3 gap-5",
     )
 

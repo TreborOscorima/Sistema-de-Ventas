@@ -188,6 +188,7 @@ class AuthState(MixinState):
     role_privileges: Dict[str, Privileges] = DEFAULT_ROLE_TEMPLATES.copy()
 
     error_message: str = ""
+    is_login_loading: bool = False
     password_change_error: str = ""
     show_login_password: bool = False
     show_change_password: bool = False
@@ -1657,6 +1658,8 @@ class AuthState(MixinState):
 
     @rx.event
     def login(self, form_data: dict):
+        self.is_login_loading = True
+        self.error_message = ""
         identifier = (
             form_data.get("email")
             or form_data.get("identifier")
@@ -1690,6 +1693,7 @@ class AuthState(MixinState):
             self.error_message = (
                 f"Demasiados intentos fallidos. Espere {remaining} minuto(s)."
             )
+            self.is_login_loading = False
             logger.warning(
                 "Login bloqueado por rate limit para usuario: %s",
                 identifier[:20],  # No logear identificador completo por seguridad
@@ -1808,6 +1812,7 @@ class AuthState(MixinState):
                         self.error_message = (
                             "Hay mas de un usuario con ese nombre. Inicie sesion con su correo."
                         )
+                        self.is_login_loading = False
                         return
                     if len(matches) == 1:
                         user = matches[0]
@@ -1816,6 +1821,7 @@ class AuthState(MixinState):
             if user and password_ok:
                 if not user.is_active:
                     self.error_message = "Usuario inactivo. Contacte al administrador."
+                    self.is_login_loading = False
                     return
 
                 # Verificar que la empresa esté activa y la suscripción vigente
@@ -1928,6 +1934,7 @@ class AuthState(MixinState):
         # Login fallido: registrar intento
         _record_failed_attempt(identifier, ip_address=client_ip)
         self.error_message = "Usuario o contraseña incorrectos."
+        self.is_login_loading = False
 
     @rx.event
     def change_password(self, form_data: dict):

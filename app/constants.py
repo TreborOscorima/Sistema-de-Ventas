@@ -197,3 +197,94 @@ REPORT_CASHBOX_ACTIONS: set[str] = {
     "Amortizacion",
     "Pago Credito",
 }
+
+
+# =============================================================================
+# SIDEBAR NAVIGATION — Subsecciones por módulo
+# (Datos de dominio centralizados aquí; la UI los importa desde constants)
+# =============================================================================
+
+CONFIG_SUBSECTIONS: list[dict] = [
+    {"key": "empresa", "label": "Datos de Empresa", "icon": "building"},
+    {"key": "sucursales", "label": "Sucursales", "icon": "map-pin"},
+    {"key": "usuarios", "label": "Gestion de Usuarios", "icon": "users"},
+    {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
+    {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
+    {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
+    {"key": "facturacion", "label": "Facturacion Electronica", "icon": "file-text"},
+    {"key": "suscripcion", "label": "Suscripcion", "icon": "sparkles"},
+]
+
+CASH_SUBSECTIONS: list[dict] = [
+    {"key": "resumen", "label": "Resumen de Caja", "icon": "layout-dashboard"},
+    {"key": "movimientos", "label": "Movimientos de Caja Chica", "icon": "arrow-left-right"},
+]
+
+SERVICES_SUBSECTIONS: list[dict] = [
+    {"key": "campo", "label": "Alquiler de Campo", "icon": "trophy"},
+    {"key": "precios_campo", "label": "Precios de Campo", "icon": "tags"},
+]
+
+
+# =============================================================================
+# PRICING PLANS — Datos centralizados para el modal de planes
+# =============================================================================
+
+# URLs de WhatsApp pre-formadas por plan (se construyen en runtime con WHATSAPP_NUMBER)
+def _make_wa_url(text: str) -> str:
+    return f"https://wa.me/{WHATSAPP_NUMBER}?text={text}"
+
+
+PRICING_PLANS: list[dict] = [
+    {
+        "title": "PLAN STANDARD",
+        "icon": "sparkles",
+        "limits": ["Hasta 5 sucursales", "10 usuarios"],
+        "modules": [
+            "Múltiples usuarios y roles",
+            "Ventas rápidas con lector de código o teclado",
+            "Productos por unidad, peso y litros",
+            "Gestión de stock y reposición",
+            "Reportes diarios de ventas e ingresos",
+            "Clientes y cuentas corrientes",
+        ],
+        "action_label": "Elegir Standard",
+        "wa_text": "Hola,%20quiero%20el%20Plan%20Standard%20(USD%2045/mes)%20de%20TUWAYKIAPP.",
+        "highlight": False,
+        "badge_text": None,
+    },
+    {
+        "title": "PLAN PROFESSIONAL",
+        "icon": "crown",
+        "limits": ["Hasta 10 sucursales", "Usuarios ilimitados"],
+        "modules": [
+            "Todo lo del Standard",
+            "Multi-sucursal con control centralizado",
+            "Reportes avanzados y comparativos",
+            "Soporte prioritario",
+            "Automatizaciones y aprobaciones",
+            "Integraciones personalizadas",
+        ],
+        "action_label": "Elegir Professional",
+        "wa_text": "Hola,%20quiero%20el%20Plan%20Professional%20(USD%2075/mes)%20de%20TUWAYKIAPP.",
+        "highlight": True,
+        "badge_text": "Más popular",
+    },
+    {
+        "title": "PLAN ENTERPRISE",
+        "icon": "rocket",
+        "limits": ["Sucursales a medida", "Usuarios ilimitados"],
+        "modules": [
+            "Facturación electrónica",
+            "API Access y webhooks",
+            "Gerente de cuenta dedicado",
+            "SLA y soporte 24/7",
+            "Implementación a medida",
+            "Onboarding y capacitación",
+        ],
+        "action_label": "Contactar",
+        "wa_text": "Hola,%20quiero%20el%20Plan%20Enterprise%20(USD%20175/mes)%20de%20TUWAYKIAPP.",
+        "highlight": False,
+        "badge_text": None,
+    },
+]
