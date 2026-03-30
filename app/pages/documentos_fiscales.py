@@ -529,6 +529,37 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                             class_name="border-t border-slate-200 pt-3",
                         ),
 
+                        # CAE AFIP (Argentina)
+                        rx.cond(
+                            doc.get("cae_cdr", "") != "",
+                            rx.el.div(
+                                rx.el.div(
+                                    rx.el.div(
+                                        rx.el.span("CAE (AFIP)", class_name="text-xs text-slate-500 block mb-1"),
+                                        rx.el.code(
+                                            doc.get("cae_cdr", ""),
+                                            class_name="text-xs font-mono bg-emerald-50 px-2 py-1 rounded text-emerald-800 break-all block",
+                                        ),
+                                        class_name="flex flex-col gap-0.5",
+                                    ),
+                                    rx.cond(
+                                        doc.get("cae_vencimiento", "") != "",
+                                        rx.el.div(
+                                            rx.el.span("Vencimiento CAE", class_name="text-xs text-slate-500 block mb-1"),
+                                            rx.el.span(
+                                                doc.get("cae_vencimiento", ""),
+                                                class_name="text-xs font-mono bg-amber-50 px-2 py-1 rounded text-amber-800 block",
+                                            ),
+                                            class_name="flex flex-col gap-0.5",
+                                        ),
+                                        rx.fragment(),
+                                    ),
+                                    class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
+                                ),
+                                class_name="border-t border-slate-200 pt-3",
+                            ),
+                        ),
+
                         # Hash SUNAT
                         rx.cond(
                             doc.get("hash_code", "") != "",

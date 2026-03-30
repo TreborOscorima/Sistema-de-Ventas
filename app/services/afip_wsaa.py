@@ -22,6 +22,7 @@ Endpoints AFIP:
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
@@ -76,6 +77,16 @@ class WSAACredentials:
 # ── Cache en memoria (por company_id + service) ─────────────
 
 _credentials_cache: dict[str, WSAACredentials] = {}
+_cache_locks: dict[str, asyncio.Lock] = {}
+_cache_locks_mutex: asyncio.Lock = asyncio.Lock()
+
+
+async def _get_company_lock(key: str) -> asyncio.Lock:
+    """Retorna (o crea) el Lock async para una clave de empresa."""
+    async with _cache_locks_mutex:
+        if key not in _cache_locks:
+            _cache_locks[key] = asyncio.Lock()
+        return _cache_locks[key]
 
 
 def _cache_key(company_id: int, service: str) -> str:
@@ -338,7 +349,9 @@ async def authenticate(
         ValueError: Si los certificados son inválidos o WSAA rechaza.
         ConnectionError: Si no se puede contactar a WSAA.
     """
-    # 1. Verificar cache
+    key = _cache_key(company_id, service)
+
+    # 1. Fast path: verificar cache sin lock
     cached = get_cached_credentials(company_id, service)
     if cached:
         logger.debug(
@@ -347,65 +360,77 @@ async def authenticate(
         )
         return cached
 
-    logger.info(
-        "WSAA: autenticando company_id=%s environment=%s service=%s",
-        company_id, environment, service,
-    )
-
-    # 2. Desencriptar certificados
-    try:
-        cert_pem = decrypt_credential(certificate_encrypted)
-        key_pem = decrypt_credential(private_key_encrypted)
-    except (ValueError, RuntimeError) as exc:
-        raise ValueError(
-            f"Error desencriptando certificados AFIP: {exc}"
-        ) from exc
-
-    # 3. Generar y firmar TRA
-    tra_xml = build_tra_xml(service)
-    cms_base64 = sign_tra(tra_xml, cert_pem, key_pem)
-
-    # 4. Enviar SOAP a WSAA
-    wsaa_url = WSAA_URLS.get(environment, WSAA_URLS["sandbox"])
-    soap_envelope = _build_login_cms_soap(cms_base64)
-
-    try:
-        async with httpx.AsyncClient(timeout=_WSAA_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                wsaa_url,
-                content=soap_envelope.encode("utf-8"),
-                headers={
-                    "Content-Type": "text/xml; charset=utf-8",
-                    "SOAPAction": '""',
-                },
+    # Slow path: adquirir lock por empresa antes de autenticar
+    company_lock = await _get_company_lock(key)
+    async with company_lock:
+        # Double-check después de adquirir el lock (otro worker puede haber completado)
+        cached = get_cached_credentials(company_id, service)
+        if cached:
+            logger.debug(
+                "WSAA: token cacheado post-lock company_id=%s service=%s",
+                company_id, service,
             )
-    except httpx.TimeoutException:
-        raise ConnectionError(
-            f"Timeout conectando a WSAA ({wsaa_url}). "
-            "AFIP puede estar experimentando demoras."
-        )
-    except httpx.ConnectError as exc:
-        raise ConnectionError(
-            f"No se pudo conectar a WSAA ({wsaa_url}): {exc}"
-        ) from exc
+            return cached
 
-    if response.status_code != 200:
-        raise ValueError(
-            f"WSAA retornó HTTP {response.status_code}: "
-            f"{response.text[:500]}"
+        logger.info(
+            "WSAA: autenticando company_id=%s environment=%s service=%s",
+            company_id, environment, service,
         )
 
-    # 5. Parsear respuesta y cachear
-    credentials = _parse_login_response(response.text)
-    credentials.service = service
-    cache_credentials(company_id, credentials)
+        # 2. Desencriptar certificados
+        try:
+            cert_pem = decrypt_credential(certificate_encrypted)
+            key_pem = decrypt_credential(private_key_encrypted)
+        except (ValueError, RuntimeError) as exc:
+            raise ValueError(
+                f"Error desencriptando certificados AFIP: {exc}"
+            ) from exc
 
-    logger.info(
-        "WSAA: autenticación exitosa company_id=%s, "
-        "token válido hasta %s",
-        company_id,
-        datetime.fromtimestamp(credentials.expiration, tz=timezone.utc)
-        .strftime("%Y-%m-%d %H:%M:%S UTC"),
-    )
+        # 3. Generar y firmar TRA
+        tra_xml = build_tra_xml(service)
+        cms_base64 = sign_tra(tra_xml, cert_pem, key_pem)
 
-    return credentials
+        # 4. Enviar SOAP a WSAA
+        wsaa_url = WSAA_URLS.get(environment, WSAA_URLS["sandbox"])
+        soap_envelope = _build_login_cms_soap(cms_base64)
+
+        try:
+            async with httpx.AsyncClient(timeout=_WSAA_TIMEOUT_SECONDS) as client:
+                response = await client.post(
+                    wsaa_url,
+                    content=soap_envelope.encode("utf-8"),
+                    headers={
+                        "Content-Type": "text/xml; charset=utf-8",
+                        "SOAPAction": '""',
+                    },
+                )
+        except httpx.TimeoutException:
+            raise ConnectionError(
+                f"Timeout conectando a WSAA ({wsaa_url}). "
+                "AFIP puede estar experimentando demoras."
+            )
+        except httpx.ConnectError as exc:
+            raise ConnectionError(
+                f"No se pudo conectar a WSAA ({wsaa_url}): {exc}"
+            ) from exc
+
+        if response.status_code != 200:
+            raise ValueError(
+                f"WSAA retornó HTTP {response.status_code}: "
+                f"{response.text[:500]}"
+            )
+
+        # 5. Parsear respuesta y cachear (dentro del lock)
+        credentials = _parse_login_response(response.text)
+        credentials.service = service
+        _credentials_cache[key] = credentials
+
+        logger.info(
+            "WSAA: autenticación exitosa company_id=%s, "
+            "token válido hasta %s",
+            company_id,
+            datetime.fromtimestamp(credentials.expiration, tz=timezone.utc)
+            .strftime("%Y-%m-%d %H:%M:%S UTC"),
+        )
+
+        return credentials

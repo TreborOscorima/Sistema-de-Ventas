@@ -620,6 +620,8 @@ class BillingState(MixinState):
                         "taxable_amount": str(doc.taxable_amount or "0.00"),
                         "tax_amount": str(doc.tax_amount or "0.00"),
                         "hash_code": doc.hash_code or "",
+                        "cae_cdr": (doc.cae_cdr or "")[:30],  # CAE AFIP (14 dígitos) o inicio CDR SUNAT
+                        "cae_vencimiento": str(doc.cae_vencimiento or ""),
                         "qr_data": (doc.qr_data or "")[:200],
                         "created_at": (
                             doc.created_at.strftime("%d/%m/%Y %H:%M")

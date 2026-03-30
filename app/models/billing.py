@@ -364,6 +364,14 @@ class FiscalDocument(rx.Model, table=True):
         max_length=100,
         description="Hash/digest de SUNAT para verificación.",
     )
+    cae_vencimiento: Optional[str] = Field(
+        default=None,
+        max_length=10,
+        description=(
+            "Vencimiento del CAE en formato YYYYMMDD (solo AFIP/Argentina). "
+            "AFIP invalida el comprobante si se presenta después de esta fecha."
+        ),
+    )
 
     # ── Auditoría XML ────────────────────────────────────────
     xml_request: Optional[str] = Field(

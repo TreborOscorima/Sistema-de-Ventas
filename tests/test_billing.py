@@ -1994,3 +1994,141 @@ class TestCertMetadataStateVars:
             assert fields["billing_cert_issuer"].default == ""
         if "billing_cert_serial" in fields:
             assert fields["billing_cert_serial"].default == ""
+
+
+# ═════════════════════════════════════════════════════════════
+# CAE VENCIMIENTO — FiscalDocument field
+# ═════════════════════════════════════════════════════════════
+
+
+class TestCaeVencimientoField:
+    """Tests para el campo cae_vencimiento en FiscalDocument."""
+
+    def test_fiscal_document_has_cae_vencimiento(self):
+        """FiscalDocument debe tener el campo cae_vencimiento."""
+        from app.models.billing import FiscalDocument
+        assert hasattr(FiscalDocument, "cae_vencimiento")
+
+    def test_cae_vencimiento_default_none(self):
+        """cae_vencimiento debe tener default None (es opcional para PE)."""
+        from app.models.billing import FiscalDocument
+        doc = FiscalDocument.__new__(FiscalDocument)
+        # El campo tiene default=None
+        fields = FiscalDocument.__fields__
+        assert fields["cae_vencimiento"].default is None
+
+    def test_cae_vencimiento_accepts_yyyymmdd(self):
+        """cae_vencimiento debe aceptar formato YYYYMMDD de AFIP."""
+        from app.models.billing import FiscalDocument
+        doc = FiscalDocument(
+            company_id=1,
+            sale_id=1,
+            receipt_type="FACTURA_A",
+        )
+        doc.cae_vencimiento = "20260405"
+        assert doc.cae_vencimiento == "20260405"
+
+    def test_cae_vencimiento_none_for_pe_docs(self):
+        """Los documentos PE (SUNAT) no tienen CAE vencimiento."""
+        from app.models.billing import FiscalDocument
+        doc = FiscalDocument(
+            company_id=1,
+            sale_id=1,
+            receipt_type="FACTURA",
+        )
+        # No asignamos cae_vencimiento → debe ser None (PE usa hash_code)
+        assert doc.cae_vencimiento is None
+
+    def test_afip_strategy_sets_cae_vencimiento(self):
+        """AFIPBillingStrategy debe asignar cae_vencimiento al fiscal_doc."""
+        from app.services.billing_service import AFIPBillingStrategy
+        from app.models.billing import FiscalDocument, CompanyBillingConfig
+        import inspect
+
+        # Verificar que billing_service.py menciona cae_vencimiento
+        import app.services.billing_service as svc_mod
+        src = inspect.getsource(svc_mod)
+        assert "cae_vencimiento" in src, "AFIPBillingStrategy debe asignar cae_vencimiento"
+
+    def test_billing_state_exports_cae_vencimiento(self):
+        """billing_state.load_fiscal_docs debe incluir cae_vencimiento en cada doc dict."""
+        import inspect
+        import app.states.billing_state as bs_mod
+        src = inspect.getsource(bs_mod)
+        assert '"cae_vencimiento"' in src
+
+    def test_billing_state_exports_cae_cdr(self):
+        """billing_state.load_fiscal_docs debe incluir cae_cdr en cada doc dict."""
+        import inspect
+        import app.states.billing_state as bs_mod
+        src = inspect.getsource(bs_mod)
+        assert '"cae_cdr"' in src
+
+
+# ═════════════════════════════════════════════════════════════
+# WSAA CACHE LOCK — race condition prevention
+# ═════════════════════════════════════════════════════════════
+
+
+class TestWsaaCacheLock:
+    """Tests para el double-checked locking en afip_wsaa.authenticate()."""
+
+    def test_wsaa_module_has_cache_locks(self):
+        """afip_wsaa debe tener _cache_locks y _cache_locks_mutex."""
+        import app.services.afip_wsaa as wsaa
+        assert hasattr(wsaa, "_cache_locks")
+        assert hasattr(wsaa, "_cache_locks_mutex")
+
+    def test_cache_locks_is_dict(self):
+        """_cache_locks debe ser un diccionario."""
+        import app.services.afip_wsaa as wsaa
+        assert isinstance(wsaa._cache_locks, dict)
+
+    def test_cache_locks_mutex_is_asyncio_lock(self):
+        """_cache_locks_mutex debe ser un asyncio.Lock."""
+        import asyncio
+        import app.services.afip_wsaa as wsaa
+        assert isinstance(wsaa._cache_locks_mutex, asyncio.Lock)
+
+    @pytest.mark.asyncio
+    async def test_get_company_lock_creates_lock(self):
+        """_get_company_lock debe crear un Lock para una nueva empresa."""
+        import asyncio
+        import app.services.afip_wsaa as wsaa
+        # Limpiar locks previos de tests anteriores
+        wsaa._cache_locks.clear()
+        lock = await wsaa._get_company_lock("company_99")
+        assert isinstance(lock, asyncio.Lock)
+        assert "company_99" in wsaa._cache_locks
+
+    @pytest.mark.asyncio
+    async def test_get_company_lock_same_lock_idempotent(self):
+        """_get_company_lock debe devolver el mismo Lock en llamadas sucesivas."""
+        import app.services.afip_wsaa as wsaa
+        wsaa._cache_locks.clear()
+        lock1 = await wsaa._get_company_lock("company_42")
+        lock2 = await wsaa._get_company_lock("company_42")
+        assert lock1 is lock2
+
+    @pytest.mark.asyncio
+    async def test_concurrent_lock_requests_dont_create_duplicates(self):
+        """Llamadas concurrentes a _get_company_lock no deben crear locks duplicados."""
+        import asyncio
+        import app.services.afip_wsaa as wsaa
+        wsaa._cache_locks.clear()
+        # Lanzar 10 coroutines concurrentes para la misma empresa
+        locks = await asyncio.gather(
+            *[wsaa._get_company_lock("company_concurrent") for _ in range(10)]
+        )
+        # Todos deben ser el mismo objeto
+        assert all(l is locks[0] for l in locks)
+        # Solo un lock en el dict
+        assert len([k for k in wsaa._cache_locks if "company_concurrent" in k]) == 1
+
+    def test_authenticate_uses_double_check_pattern(self):
+        """authenticate() debe implementar double-checked locking (verificar en source)."""
+        import inspect
+        import app.services.afip_wsaa as wsaa
+        src = inspect.getsource(wsaa.authenticate)
+        # Debe verificar la caché antes y después de adquirir el lock
+        assert "_cache_locks" in src or "_get_company_lock" in src

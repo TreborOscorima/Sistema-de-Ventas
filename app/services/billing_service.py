@@ -778,7 +778,7 @@ class AFIPBillingStrategy(BillingStrategy):
             # ── AUTORIZADO ──
             fiscal_doc.fiscal_status = FiscalStatus.authorized
             fiscal_doc.cae_cdr = cae_result.cae
-            fiscal_doc.hash_code = cae_result.cae_fch_vto  # Vencimiento del CAE
+            fiscal_doc.cae_vencimiento = cae_result.cae_fch_vto  # Vencimiento CAE AFIP (YYYYMMDD)
             fiscal_doc.authorized_at = utc_now_naive()
             logger.info(
                 "AFIP: comprobante autorizado | sale_id=%s | CAE=%s | "
