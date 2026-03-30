@@ -1991,14 +1991,14 @@ def _billing_modal() -> rx.Component:
                                 rx.cond(
                                     State.owner_billing_ar_sync_result == "ok",
                                     rx.el.span(
-                                        rx.icon("check-circle", class_name="w-3.5 h-3.5 inline mr-1"),
+                                        rx.icon("circle-check", class_name="w-3.5 h-3.5 inline mr-1"),
                                         "Sincronizado",
                                         class_name="text-xs text-emerald-600 font-medium",
                                     ),
                                     rx.cond(
                                         State.owner_billing_ar_sync_result == "error",
                                         rx.el.span(
-                                            rx.icon("alert-circle", class_name="w-3.5 h-3.5 inline mr-1"),
+                                            rx.icon("circle-alert", class_name="w-3.5 h-3.5 inline mr-1"),
                                             "Error al sincronizar",
                                             class_name="text-xs text-red-600 font-medium",
                                         ),
