@@ -56,8 +56,8 @@ def upgrade() -> None:
             # Argentina-specific
             sa.Column("iva_condition", sa.String(50), server_default="", nullable=False),
             sa.Column("iva_condition_code", sa.Integer(), server_default="0", nullable=False),
-            # Raw response
-            sa.Column("raw_json", sa.Text(), server_default="{}", nullable=False),
+            # Raw response — TEXT no admite DEFAULT en MySQL; nullable=True ok (es cache)
+            sa.Column("raw_json", sa.Text(), nullable=True),
             # Metadata
             sa.Column("fetched_at", sa.DateTime(timezone=False), server_default=sa.func.now(), nullable=False),
             sa.Column("not_found", sa.Boolean(), server_default="0", nullable=False),

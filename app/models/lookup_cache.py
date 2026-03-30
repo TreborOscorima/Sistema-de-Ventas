@@ -84,9 +84,10 @@ class DocumentLookupCache(rx.Model, table=True):
     )
 
     # ── Respuesta cruda ───────────────────────────────────────
-    raw_json: str = Field(
+    # TEXT no admite DEFAULT en MySQL → nullable=True; el default Python "{}" aplica en app layer.
+    raw_json: Optional[str] = Field(
         default="{}",
-        sa_column=sqlalchemy.Column(Text, nullable=False),
+        sa_column=sqlalchemy.Column(Text, nullable=True),
         description="Respuesta completa de la API fiscal serializada como JSON.",
     )
 
