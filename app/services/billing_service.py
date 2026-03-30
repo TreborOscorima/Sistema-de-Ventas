@@ -101,6 +101,127 @@ _AFIP_CBTE_TIPO: dict[str, dict[str, int]] = {
 
 
 # ═════════════════════════════════════════════════════════════
+# AFIP SEQUENCE SYNC — standalone helper
+# ═════════════════════════════════════════════════════════════
+
+
+async def sync_afip_last_authorized(config: "CompanyBillingConfig") -> dict:
+    """Sincroniza los contadores de secuencia con el último comprobante autorizado en AFIP.
+
+    Llama a FECompUltimoAutorizado para los tipos principales (1=A, 6=B, 11=C)
+    y actualiza current_sequence_factura y current_sequence_boleta en el objeto config
+    si los valores de AFIP son mayores.
+
+    IMPORTANT: No hace commit. El caller es responsable de persistir.
+
+    Returns dict with keys:
+        synced: bool  — True si al menos un contador fue actualizado
+        factura_afip: int — último nro en AFIP para tipos A/B (max de cbte_tipo 1 y 6)
+        boleta_afip: int — último nro en AFIP para tipo C (cbte_tipo 11)
+        factura_prev: int — valor previo de current_sequence_factura
+        boleta_prev: int — valor previo de current_sequence_boleta
+        errors: list[str] — errores parciales (no fatales)
+        fatal: str — error fatal si no se pudo autenticar
+    """
+    from app.services.afip_wsaa import authenticate
+    from app.services.afip_wsfe import fe_comp_ultimo_autorizado
+
+    factura_prev = config.current_sequence_factura or 0
+    boleta_prev = config.current_sequence_boleta or 0
+
+    # Autenticar con WSAA
+    try:
+        creds = await authenticate(
+            company_id=config.company_id,
+            certificate_encrypted=config.encrypted_certificate,
+            private_key_encrypted=config.encrypted_private_key,
+            environment=config.environment or "sandbox",
+            service="wsfe",
+        )
+    except Exception as exc:
+        logger.error(
+            "sync_afip_last_authorized: WSAA auth failed company_id=%s: %s",
+            config.company_id, exc,
+        )
+        return {
+            "synced": False,
+            "fatal": str(exc),
+            "errors": [],
+            "factura_afip": 0,
+            "boleta_afip": 0,
+            "factura_prev": factura_prev,
+            "boleta_prev": boleta_prev,
+        }
+
+    # Parsear CUIT como int (eliminar guiones / espacios)
+    raw_cuit = "".join(ch for ch in (config.afip_tax_id or "") if ch.isdigit())
+    try:
+        cuit_int = int(raw_cuit)
+    except ValueError:
+        cuit_int = 0
+
+    punto_venta = config.afip_punto_venta or 1
+    environment = config.environment or "sandbox"
+
+    errors: list[str] = []
+    nro_tipo_1 = 0
+    nro_tipo_6 = 0
+    nro_tipo_11 = 0
+
+    for cbte_tipo, label in ((1, "Factura A"), (6, "Factura B"), (11, "Factura C")):
+        try:
+            result = await fe_comp_ultimo_autorizado(
+                token=creds.token,
+                sign=creds.sign,
+                cuit=cuit_int,
+                punto_venta=punto_venta,
+                cbte_tipo=cbte_tipo,
+                environment=environment,
+            )
+            if result.success:
+                if cbte_tipo == 1:
+                    nro_tipo_1 = result.cbte_nro or 0
+                elif cbte_tipo == 6:
+                    nro_tipo_6 = result.cbte_nro or 0
+                else:
+                    nro_tipo_11 = result.cbte_nro or 0
+            else:
+                err_msg = f"{label}: {', '.join(result.errors or ['sin detalles'])}"
+                logger.warning("sync_afip_last_authorized partial error: %s", err_msg)
+                errors.append(err_msg)
+        except Exception as exc:
+            err_msg = f"{label}: {exc}"
+            logger.warning("sync_afip_last_authorized exception cbte_tipo=%s: %s", cbte_tipo, exc)
+            errors.append(err_msg)
+
+    factura_afip = max(nro_tipo_1, nro_tipo_6)
+    boleta_afip = nro_tipo_11
+
+    synced = False
+    if factura_afip > factura_prev:
+        config.current_sequence_factura = factura_afip
+        synced = True
+    if boleta_afip > boleta_prev:
+        config.current_sequence_boleta = boleta_afip
+        synced = True
+
+    logger.info(
+        "sync_afip_last_authorized company_id=%s factura %s→%s boleta %s→%s synced=%s",
+        config.company_id, factura_prev, factura_afip, boleta_prev, boleta_afip, synced,
+    )
+
+    return {
+        "synced": synced,
+        "fatal": "",
+        "errors": errors,
+        "factura_afip": factura_afip,
+        "boleta_afip": boleta_afip,
+        "factura_prev": factura_prev,
+        "boleta_prev": boleta_prev,
+    }
+
+
+# ═════════════════════════════════════════════════════════════
 # ABSTRACT BASE CLASS
 # ═════════════════════════════════════════════════════════════
 

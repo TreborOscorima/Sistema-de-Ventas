@@ -2132,3 +2132,161 @@ class TestWsaaCacheLock:
         src = inspect.getsource(wsaa.authenticate)
         # Debe verificar la caché antes y después de adquirir el lock
         assert "_cache_locks" in src or "_get_company_lock" in src
+
+
+# ═════════════════════════════════════════════════════════════
+# SYNC AFIP LAST AUTHORIZED — nro_cbte initial sync
+# ═════════════════════════════════════════════════════════════
+
+
+class TestSyncAfipLastAuthorized:
+    """Tests para sync_afip_last_authorized() en billing_service."""
+
+    def _make_config(self, seq_factura=0, seq_boleta=0):
+        """Crea un CompanyBillingConfig mock con campos AFIP mínimos."""
+        from app.models.billing import CompanyBillingConfig
+        config = MagicMock(spec=CompanyBillingConfig)
+        config.company_id = 1
+        config.current_sequence_factura = seq_factura
+        config.current_sequence_boleta = seq_boleta
+        config.encrypted_certificate = "cert-enc"
+        config.encrypted_private_key = "key-enc"
+        config.afip_tax_id = "20-12345678-9"
+        config.afip_punto_venta = 1
+        config.environment = "sandbox"
+        return config
+
+    @pytest.mark.asyncio
+    async def test_fatal_on_wsaa_auth_failure(self):
+        """Si WSAA falla, retorna fatal y no modifica config."""
+        from app.services.billing_service import sync_afip_last_authorized
+        config = self._make_config()
+
+        with patch("app.services.afip_wsaa.authenticate", new=AsyncMock(side_effect=ValueError("cert inválido"))):
+            result = await sync_afip_last_authorized(config)
+
+        assert result["synced"] is False
+        assert result["fatal"] != ""
+        assert "cert inválido" in result["fatal"]
+        assert config.current_sequence_factura == 0
+        assert config.current_sequence_boleta == 0
+
+    @pytest.mark.asyncio
+    async def test_syncs_factura_when_afip_higher(self):
+        """Actualiza current_sequence_factura cuando AFIP tiene valor mayor."""
+        from app.services.billing_service import sync_afip_last_authorized
+        from app.services.afip_wsfe import UltimoAutorizadoResult
+        config = self._make_config(seq_factura=0, seq_boleta=0)
+
+        mock_creds = MagicMock()
+        mock_creds.token = "tok"
+        mock_creds.sign = "sig"
+
+        def _ultimo_side_effect(**kwargs):
+            cbte_tipo = kwargs.get("cbte_tipo", 0)
+            if cbte_tipo == 1:
+                return UltimoAutorizadoResult(success=True, cbte_nro=50)
+            elif cbte_tipo == 6:
+                return UltimoAutorizadoResult(success=True, cbte_nro=30)
+            else:  # 11
+                return UltimoAutorizadoResult(success=True, cbte_nro=10)
+
+        with patch("app.services.afip_wsaa.authenticate", new=AsyncMock(return_value=mock_creds)):
+            with patch("app.services.afip_wsfe.fe_comp_ultimo_autorizado", new=AsyncMock(side_effect=_ultimo_side_effect)):
+                result = await sync_afip_last_authorized(config)
+
+        assert result["synced"] is True
+        assert result["factura_afip"] == 50  # max(50, 30)
+        assert result["boleta_afip"] == 10
+        assert config.current_sequence_factura == 50
+        assert config.current_sequence_boleta == 10
+
+    @pytest.mark.asyncio
+    async def test_does_not_decrease_sequence(self):
+        """No debe decrementar secuencias si AFIP tiene valores menores."""
+        from app.services.billing_service import sync_afip_last_authorized
+        from app.services.afip_wsfe import UltimoAutorizadoResult
+        config = self._make_config(seq_factura=100, seq_boleta=50)
+
+        mock_creds = MagicMock()
+        mock_creds.token = "tok"
+        mock_creds.sign = "sig"
+
+        with patch("app.services.afip_wsaa.authenticate", new=AsyncMock(return_value=mock_creds)):
+            with patch("app.services.afip_wsfe.fe_comp_ultimo_autorizado", new=AsyncMock(
+                return_value=UltimoAutorizadoResult(success=True, cbte_nro=5)
+            )):
+                result = await sync_afip_last_authorized(config)
+
+        assert result["synced"] is False
+        assert config.current_sequence_factura == 100  # sin cambio
+        assert config.current_sequence_boleta == 50   # sin cambio
+
+    @pytest.mark.asyncio
+    async def test_partial_errors_are_non_fatal(self):
+        """Errores en consultas individuales de cbte_tipo no abortan la sync."""
+        from app.services.billing_service import sync_afip_last_authorized
+        from app.services.afip_wsfe import UltimoAutorizadoResult
+        config = self._make_config()
+
+        mock_creds = MagicMock()
+        mock_creds.token = "tok"
+        mock_creds.sign = "sig"
+
+        call_count = 0
+
+        async def _flaky_ultimo(**kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ConnectionError("timeout")
+            return UltimoAutorizadoResult(success=True, cbte_nro=20)
+
+        with patch("app.services.afip_wsaa.authenticate", new=AsyncMock(return_value=mock_creds)):
+            with patch("app.services.afip_wsfe.fe_comp_ultimo_autorizado", new=AsyncMock(side_effect=_flaky_ultimo)):
+                result = await sync_afip_last_authorized(config)
+
+        assert result["fatal"] == ""
+        assert len(result["errors"]) == 1
+        assert "timeout" in result["errors"][0]
+
+    @pytest.mark.asyncio
+    async def test_cuit_parsed_correctly_with_dashes(self):
+        """CUIT con guiones (20-12345678-9) debe parsearse a int correctamente."""
+        from app.services.billing_service import sync_afip_last_authorized
+        from app.services.afip_wsfe import UltimoAutorizadoResult
+        config = self._make_config()
+        config.afip_tax_id = "20-12345678-9"
+
+        mock_creds = MagicMock()
+        mock_creds.token = "tok"
+        mock_creds.sign = "sig"
+
+        captured_cuit = []
+
+        async def _capture_cuit(**kwargs):
+            captured_cuit.append(kwargs.get("cuit"))
+            return UltimoAutorizadoResult(success=True, cbte_nro=0)
+
+        with patch("app.services.afip_wsaa.authenticate", new=AsyncMock(return_value=mock_creds)):
+            with patch("app.services.afip_wsfe.fe_comp_ultimo_autorizado", new=AsyncMock(side_effect=_capture_cuit)):
+                await sync_afip_last_authorized(config)
+
+        assert captured_cuit[0] == 20123456789
+
+    def test_function_exported_from_billing_service(self):
+        """sync_afip_last_authorized debe ser importable desde billing_service."""
+        from app.services.billing_service import sync_afip_last_authorized
+        import asyncio
+        assert asyncio.iscoroutinefunction(sync_afip_last_authorized)
+
+    def test_owner_state_has_sync_vars(self):
+        """OwnerState debe tener owner_billing_ar_sync_loading y ar_sync_result."""
+        from app.states.owner_state import OwnerState
+        assert hasattr(OwnerState, "owner_billing_ar_sync_loading")
+        assert hasattr(OwnerState, "owner_billing_ar_sync_result")
+
+    def test_owner_state_has_sync_event(self):
+        """OwnerState debe tener el event sync_ar_billing_sequence."""
+        from app.states.owner_state import OwnerState
+        assert hasattr(OwnerState, "sync_ar_billing_sequence")

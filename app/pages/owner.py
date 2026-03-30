@@ -1956,6 +1956,59 @@ def _billing_modal() -> rx.Component:
                             ),
                             rx.fragment(),
                         ),
+                        # Sincronizar Secuencia AFIP (AR)
+                        rx.cond(
+                            State.owner_billing_country == "AR",
+                            rx.el.div(
+                                rx.el.div(
+                                    rx.el.span(
+                                        "Sincronizar Secuencia AFIP",
+                                        class_name="text-sm font-semibold text-slate-700",
+                                    ),
+                                    rx.el.p(
+                                        "Consulta FECompUltimoAutorizado y actualiza los contadores de factura/boleta "
+                                        "para evitar rechazos por numeración incorrecta. Usar al migrar desde otro sistema.",
+                                        class_name="text-xs text-slate-500 mt-0.5",
+                                    ),
+                                    class_name="flex-1",
+                                ),
+                                rx.el.button(
+                                    rx.cond(
+                                        State.owner_billing_ar_sync_loading,
+                                        rx.fragment(
+                                            rx.icon("loader-circle", class_name="w-4 h-4 animate-spin"),
+                                            rx.el.span("Sincronizando..."),
+                                        ),
+                                        rx.fragment(
+                                            rx.icon("refresh-cw", class_name="w-4 h-4"),
+                                            rx.el.span("Sincronizar con AFIP"),
+                                        ),
+                                    ),
+                                    on_click=State.sync_ar_billing_sequence,
+                                    disabled=State.owner_billing_ar_sync_loading,
+                                    class_name="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0",
+                                ),
+                                rx.cond(
+                                    State.owner_billing_ar_sync_result == "ok",
+                                    rx.el.span(
+                                        rx.icon("check-circle", class_name="w-3.5 h-3.5 inline mr-1"),
+                                        "Sincronizado",
+                                        class_name="text-xs text-emerald-600 font-medium",
+                                    ),
+                                    rx.cond(
+                                        State.owner_billing_ar_sync_result == "error",
+                                        rx.el.span(
+                                            rx.icon("alert-circle", class_name="w-3.5 h-3.5 inline mr-1"),
+                                            "Error al sincronizar",
+                                            class_name="text-xs text-red-600 font-medium",
+                                        ),
+                                        rx.fragment(),
+                                    ),
+                                ),
+                                class_name="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-3 bg-indigo-50 border border-indigo-100 rounded-lg",
+                            ),
+                            rx.fragment(),
+                        ),
                         # Series / Numeración
                         rx.el.div(
                             rx.el.h4("Series y Numeración", class_name="text-sm font-semibold text-slate-600"),

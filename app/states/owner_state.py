@@ -930,6 +930,8 @@ class OwnerState:
     owner_billing_tax_id: str = ""
     owner_billing_business_name: str = ""
     owner_billing_config_exists: bool = False
+    owner_billing_ar_sync_loading: bool = False
+    owner_billing_ar_sync_result: str = ""  # "" | "ok" | "error"
 
     @rx.event
     async def load_platform_billing_config(self):
@@ -1259,6 +1261,24 @@ class OwnerState:
                     session.add(config)
                     await session.commit()
 
+                    # Auto-sync secuencia con AFIP al guardar por primera vez en AR
+                    if (
+                        config.country == "AR"
+                        and config.is_active
+                        and (config.current_sequence_factura or 0) == 0
+                        and (config.current_sequence_boleta or 0) == 0
+                    ):
+                        try:
+                            from app.services.billing_service import sync_afip_last_authorized
+                            await sync_afip_last_authorized(config)
+                            session.add(config)
+                            await session.commit()
+                        except Exception as _sync_exc:
+                            logger.warning(
+                                "Auto-sync AFIP on save failed company_id=%s (non-fatal): %s",
+                                company_id, _sync_exc,
+                            )
+
             _record_owner_action(actor_email)
             self.owner_billing_config_exists = True
             logger.info(
@@ -1442,3 +1462,84 @@ class OwnerState:
         except Exception as e:
             logger.exception("Error guardando clave privada AFIP")
             yield rx.toast("Error al guardar clave privada.", duration=5000)
+
+    # ── Sincronización de secuencia AR con AFIP ──────────────────
+
+    @rx.event
+    async def sync_ar_billing_sequence(self):
+        """Sincroniza la secuencia de comprobantes AR con AFIP (FECompUltimoAutorizado)."""
+        if not self.is_owner_authenticated:
+            return
+        if not self.owner_billing_company_id:
+            return
+        if self.owner_billing_country != "AR":
+            return
+
+        self.owner_billing_ar_sync_loading = True
+        yield
+
+        company_id = self.owner_billing_company_id
+        try:
+            from app.services.billing_service import sync_afip_last_authorized
+
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    from sqlmodel import select as sel_
+                    config = (await session.execute(
+                        sel_(CompanyBillingConfig).where(
+                            CompanyBillingConfig.company_id == company_id
+                        )
+                    )).scalars().first()
+
+                    if config is None:
+                        yield rx.toast(
+                            "No existe configuración de billing para esta empresa.",
+                            duration=4000,
+                        )
+                        self.owner_billing_ar_sync_result = "error"
+                        return
+
+                    if not config.encrypted_certificate or not config.encrypted_private_key:
+                        yield rx.toast(
+                            "Configure primero el certificado AFIP",
+                            duration=4000,
+                        )
+                        self.owner_billing_ar_sync_result = "error"
+                        return
+
+                    result = await sync_afip_last_authorized(config)
+
+                    if result["fatal"]:
+                        logger.error(
+                            "sync_ar_billing_sequence fatal company_id=%s: %s",
+                            company_id, result["fatal"],
+                        )
+                        yield rx.toast(
+                            f"Error AFIP: {result['fatal']}", duration=6000
+                        )
+                        self.owner_billing_ar_sync_result = "error"
+                        return
+
+                    session.add(config)
+                    await session.commit()
+
+            factura_prev = result["factura_prev"]
+            factura_afip = result["factura_afip"]
+            boleta_prev = result["boleta_prev"]
+            boleta_afip = result["boleta_afip"]
+            msg = (
+                f"Sincronizado: Factura {factura_prev}→{factura_afip} | "
+                f"Boleta {boleta_prev}→{boleta_afip}"
+            )
+            yield rx.toast(msg, duration=5000)
+            self.owner_billing_ar_sync_result = "ok"
+            logger.info(
+                "sync_ar_billing_sequence ok company_id=%s %s",
+                company_id, msg,
+            )
+        except Exception as e:
+            logger.exception("Error en sync_ar_billing_sequence company_id=%s", company_id)
+            yield rx.toast("Error al sincronizar secuencia AFIP.", duration=5000)
+            self.owner_billing_ar_sync_result = "error"
+        finally:
+            self.owner_billing_ar_sync_loading = False
