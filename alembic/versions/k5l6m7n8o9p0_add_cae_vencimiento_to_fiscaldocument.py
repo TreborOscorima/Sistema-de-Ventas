@@ -20,6 +20,11 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _table_exists(conn, name: str) -> bool:
+    insp = sa_inspect(conn)
+    return name in insp.get_table_names()
+
+
 def _column_exists(conn, table: str, column: str) -> bool:
     insp = sa_inspect(conn)
     if table not in insp.get_table_names():
@@ -29,14 +34,18 @@ def _column_exists(conn, table: str, column: str) -> bool:
 
 def upgrade() -> None:
     conn = op.get_bind()
-    if not _column_exists(conn, "fiscal_document", "cae_vencimiento"):
+    # La tabla se llama "fiscaldocument" (sin guión bajo) según __tablename__ del modelo.
+    # También intentamos "fiscal_document" por si algún entorno usa snake_case.
+    table_name = "fiscaldocument" if _table_exists(conn, "fiscaldocument") else "fiscal_document"
+    if not _column_exists(conn, table_name, "cae_vencimiento"):
         op.add_column(
-            "fiscal_document",
+            table_name,
             sa.Column("cae_vencimiento", sa.String(10), nullable=True),
         )
 
 
 def downgrade() -> None:
     conn = op.get_bind()
-    if _column_exists(conn, "fiscal_document", "cae_vencimiento"):
-        op.drop_column("fiscal_document", "cae_vencimiento")
+    table_name = "fiscaldocument" if _table_exists(conn, "fiscaldocument") else "fiscal_document"
+    if _column_exists(conn, table_name, "cae_vencimiento"):
+        op.drop_column(table_name, "cae_vencimiento")
