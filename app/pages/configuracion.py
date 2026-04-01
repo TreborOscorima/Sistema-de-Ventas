@@ -883,6 +883,30 @@ def company_settings_section() -> rx.Component:
           ),
           class_name="flex flex-col gap-1",
         ),
+        # Rubro del negocio
+        rx.el.div(
+          rx.el.label(
+            "Rubro del Negocio", class_name=TYPOGRAPHY["label"]
+          ),
+          rx.el.select(
+            rx.el.option("General (Multi-rubro)", value="general"),
+            rx.el.option("Bodega / Kiosko", value="bodega"),
+            rx.el.option("Ferreteria", value="ferreteria"),
+            rx.el.option("Farmacia", value="farmacia"),
+            rx.el.option("Tienda de Ropa", value="ropa"),
+            rx.el.option("Jugueteria", value="jugueteria"),
+            rx.el.option("Restaurante / Cafe", value="restaurante"),
+            rx.el.option("Supermercado", value="supermercado"),
+            value=State.selected_business_vertical,
+            on_change=State.set_business_vertical,
+            class_name=SELECT_STYLES["default"],
+          ),
+          rx.el.p(
+            "Define el tipo de negocio para adaptar la interfaz del punto de venta.",
+            class_name=TYPOGRAPHY["caption"],
+          ),
+          class_name="flex flex-col gap-1",
+        ),
         rx.el.div(
           rx.el.label(
             "Mensaje en Recibo/Ticket", class_name=TYPOGRAPHY["label"]

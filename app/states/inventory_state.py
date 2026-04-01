@@ -63,7 +63,9 @@ from app.utils.exports import (
 )
 
 
-LOW_STOCK_THRESHOLD = 5
+DEFAULT_LOW_STOCK_THRESHOLD = 5
+# Alias para compatibilidad con dashboard_state y otros consumidores
+LOW_STOCK_THRESHOLD = DEFAULT_LOW_STOCK_THRESHOLD
 
 
 class InventoryState(MixinState):
@@ -190,6 +192,7 @@ class InventoryState(MixinState):
         stock_value = float(product.stock or 0)
         purchase_value = float(product.purchase_price or 0)
         stock_total = self._round_currency(stock_value * purchase_value)
+        min_alert = float(getattr(product, 'min_stock_alert', None) or DEFAULT_LOW_STOCK_THRESHOLD)
         return {
             "id": product.id,
             "variant_id": None,
@@ -198,8 +201,8 @@ class InventoryState(MixinState):
             "description": product.description,
             "category": product.category,
             "stock": product.stock,
-            "stock_is_low": stock_value <= 5,
-            "stock_is_medium": 5 < stock_value <= 10,
+            "stock_is_low": stock_value <= min_alert,
+            "stock_is_medium": min_alert < stock_value <= min_alert * 2,
             "unit": product.unit,
             "purchase_price": product.purchase_price,
             "sale_price": product.sale_price,
@@ -216,6 +219,7 @@ class InventoryState(MixinState):
         stock_value = float(variant.stock or 0)
         purchase_value = float(product.purchase_price or 0)
         stock_total = self._round_currency(stock_value * purchase_value)
+        min_alert = float(getattr(product, 'min_stock_alert', None) or DEFAULT_LOW_STOCK_THRESHOLD)
         return {
             "id": product.id,
             "variant_id": variant.id,
@@ -224,8 +228,8 @@ class InventoryState(MixinState):
             "description": description,
             "category": product.category,
             "stock": variant.stock,
-            "stock_is_low": stock_value <= 5,
-            "stock_is_medium": 5 < stock_value <= 10,
+            "stock_is_low": stock_value <= min_alert,
+            "stock_is_medium": min_alert < stock_value <= min_alert * 2,
             "unit": product.unit,
             "purchase_price": product.purchase_price,
             "sale_price": product.sale_price,
@@ -468,11 +472,11 @@ class InventoryState(MixinState):
                 select(
                     func.count(Product.id),
                     func.sum(case(
-                        (Product.stock > LOW_STOCK_THRESHOLD, 1),
+                        (Product.stock > DEFAULT_LOW_STOCK_THRESHOLD, 1),
                         else_=0,
                     )),
                     func.sum(case(
-                        (and_(Product.stock > 0, Product.stock <= LOW_STOCK_THRESHOLD), 1),
+                        (and_(Product.stock > 0, Product.stock <= DEFAULT_LOW_STOCK_THRESHOLD), 1),
                         else_=0,
                     )),
                     func.sum(case(

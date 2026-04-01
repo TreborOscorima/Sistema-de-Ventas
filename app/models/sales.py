@@ -492,3 +492,8 @@ class CompanySettings(rx.Model, table=True):
     default_currency_code: str = Field(default="PEN", max_length=10, nullable=False)
     country_code: str = Field(default="PE", max_length=5, nullable=False)
     timezone: Optional[str] = Field(default=None, max_length=64)
+    business_vertical: str = Field(
+        default="general",
+        max_length=30,
+        description="Rubro del negocio: general, bodega, ferreteria, farmacia, ropa, jugueteria, restaurante",
+    )

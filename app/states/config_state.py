@@ -60,6 +60,9 @@ class ConfigState(MixinState):
     # País de operación
     selected_country_code: str = "PE"
 
+    # Rubro del negocio
+    selected_business_vertical: str = "general"
+
     # Monedas
     selected_currency_code: str = "PEN"
     new_currency_name: str = ""
@@ -248,6 +251,9 @@ class ConfigState(MixinState):
                 # Cargar el país de operación
                 if hasattr(settings, 'country_code') and settings.country_code:
                     self.selected_country_code = settings.country_code
+                # Cargar el rubro del negocio
+                if hasattr(settings, 'business_vertical') and settings.business_vertical:
+                    self.selected_business_vertical = settings.business_vertical
                 # Cargar la zona horaria (si existe)
                 if hasattr(settings, "timezone") and settings.timezone:
                     self.timezone = settings.timezone
@@ -422,6 +428,10 @@ class ConfigState(MixinState):
         self.timezone = value or ""
 
     @rx.event
+    def set_business_vertical(self, value: str):
+        self.selected_business_vertical = value or "general"
+
+    @rx.event
     def save_settings(self):
         toast = self._require_manage_config()
         if toast:
@@ -476,6 +486,8 @@ class ConfigState(MixinState):
                     settings.footer_message = footer_message or None
                     settings.receipt_paper = receipt_paper
                     settings.receipt_width = receipt_width_value
+                    if hasattr(settings, 'business_vertical'):
+                        settings.business_vertical = self.selected_business_vertical or "general"
                     if branch_id:
                         if settings.branch_id == branch_id:
                             settings.timezone = timezone_db_value
@@ -498,6 +510,7 @@ class ConfigState(MixinState):
                             timezone=timezone_db_value,
                             country_code=self.selected_country_code or "PE",
                             default_currency_code=self.selected_currency_code or "PEN",
+                            business_vertical=self.selected_business_vertical or "general",
                         )
                     )
             else:

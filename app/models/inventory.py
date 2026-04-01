@@ -71,6 +71,10 @@ class Product(rx.Model, table=True):
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
     location: Optional[str] = Field(default=None)
+    min_stock_alert: Decimal = Field(
+        default=Decimal("5.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4), nullable=False, server_default="5.0000"),
+    )
 
     # ── Campos fiscales (para facturación electrónica SUNAT/AFIP) ──
     # tax_included=True → precio incluye impuesto (IGV/IVA)
@@ -95,6 +99,7 @@ class Product(rx.Model, table=True):
         back_populates="component_product",
         sa_relationship_kwargs={"foreign_keys": "[ProductKit.component_product_id]"},
     )
+    attributes: List["ProductAttribute"] = Relationship(back_populates="product")
 
 
 class ProductVariant(rx.Model, table=True):
@@ -282,6 +287,47 @@ class PriceTier(rx.Model, table=True):
     )
 
 
+class ProductAttribute(rx.Model, table=True):
+    """Atributos dinámicos por producto/variante (EAV ligero).
+
+    Permite atributos específicos por rubro sin modificar el schema:
+    - Ferretería: material=acero, calibre=1/2", rosca=fina
+    - Farmacia: principio_activo=ibuprofeno, laboratorio=Bayer, dosaje=400mg
+    - Ropa: temporada=verano, marca=Nike (talla/color ya están en ProductVariant)
+    - Juguetería: edad_minima=3, marca=Hasbro
+    """
+
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "branch_id",
+            "product_id",
+            "attribute_name",
+            name="uq_productattribute_product_attr",
+        ),
+        sqlalchemy.Index(
+            "ix_productattribute_tenant_product",
+            "company_id",
+            "branch_id",
+            "product_id",
+        ),
+        sqlalchemy.Index(
+            "ix_productattribute_name_value",
+            "company_id",
+            "attribute_name",
+            "attribute_value",
+        ),
+    )
+
+    product_id: int = Field(foreign_key="product.id", index=True, nullable=False)
+    attribute_name: str = Field(max_length=100, index=True, nullable=False)
+    attribute_value: str = Field(max_length=500, nullable=False, default="")
+    company_id: int = Field(foreign_key="company.id", index=True, nullable=False)
+    branch_id: int = Field(foreign_key="branch.id", index=True, nullable=False)
+
+    product: Optional["Product"] = Relationship(back_populates="attributes")
+
+
 class Category(rx.Model, table=True):
     """Categorias de productos."""
 
@@ -295,6 +341,7 @@ class Category(rx.Model, table=True):
     )
 
     name: str = Field(index=True, nullable=False)
+    requires_batch: bool = Field(default=False)
     company_id: int = Field(
         foreign_key="company.id",
         index=True,
