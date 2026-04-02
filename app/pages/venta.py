@@ -815,6 +815,19 @@ def sale_products_card() -> rx.Component:
     """Tarjeta principal con los productos de la venta."""
     return rx.el.div(
         quick_add_bar(),
+        # Pharmacy mode: batch required reminder
+        rx.cond(
+            State.selected_business_vertical == "farmacia",
+            rx.el.div(
+                rx.icon("shield-alert", class_name="w-4 h-4 text-emerald-600 shrink-0"),
+                rx.el.span(
+                    "Modo Farmacia activo — los productos de categorías con lote obligatorio requieren número de lote al ingresar stock.",
+                    class_name="text-xs text-emerald-700",
+                ),
+                class_name="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border-b border-emerald-100",
+            ),
+            rx.fragment(),
+        ),
         products_table(embedded=True),
         class_name="flex flex-col bg-white rounded-xl border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
     )
@@ -1804,9 +1817,50 @@ def venta_page() -> rx.Component:
                             "PUNTO DE VENTA",
                             class_name="text-2xl font-bold text-slate-900 tracking-tight",
                         ),
-                        rx.el.p(
-                            "Realiza ventas directas, selecciona productos y gestiona el cobro.",
-                            class_name="text-sm text-slate-500",
+                        rx.el.div(
+                            rx.match(
+                                State.selected_business_vertical,
+                                ("bodega", rx.el.span(
+                                    rx.icon("zap", class_name="w-3.5 h-3.5 inline mr-1"),
+                                    "Modo Bodega / Kiosko",
+                                    class_name="inline-flex items-center text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5",
+                                )),
+                                ("ferreteria", rx.el.span(
+                                    rx.icon("wrench", class_name="w-3.5 h-3.5 inline mr-1"),
+                                    "Modo Ferretería",
+                                    class_name="inline-flex items-center text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-full px-2.5 py-0.5",
+                                )),
+                                ("farmacia", rx.el.span(
+                                    rx.icon("pill", class_name="w-3.5 h-3.5 inline mr-1"),
+                                    "Modo Farmacia",
+                                    class_name="inline-flex items-center text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5",
+                                )),
+                                ("ropa", rx.el.span(
+                                    rx.icon("shirt", class_name="w-3.5 h-3.5 inline mr-1"),
+                                    "Modo Ropa",
+                                    class_name="inline-flex items-center text-xs font-medium text-violet-700 bg-violet-50 border border-violet-200 rounded-full px-2.5 py-0.5",
+                                )),
+                                ("jugueteria", rx.el.span(
+                                    rx.icon("blocks", class_name="w-3.5 h-3.5 inline mr-1"),
+                                    "Modo Juguetería",
+                                    class_name="inline-flex items-center text-xs font-medium text-pink-700 bg-pink-50 border border-pink-200 rounded-full px-2.5 py-0.5",
+                                )),
+                                ("restaurante", rx.el.span(
+                                    rx.icon("utensils", class_name="w-3.5 h-3.5 inline mr-1"),
+                                    "Modo Restaurante",
+                                    class_name="inline-flex items-center text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-2.5 py-0.5",
+                                )),
+                                ("supermercado", rx.el.span(
+                                    rx.icon("shopping-basket", class_name="w-3.5 h-3.5 inline mr-1"),
+                                    "Modo Supermercado",
+                                    class_name="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5",
+                                )),
+                                rx.el.span(
+                                    "Realiza ventas directas, selecciona productos y gestiona el cobro.",
+                                    class_name="text-sm text-slate-500",
+                                ),
+                            ),
+                            class_name="flex items-center gap-2",
                         ),
                         class_name="flex flex-col gap-1",
                     ),

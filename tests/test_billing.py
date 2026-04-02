@@ -232,7 +232,7 @@ class TestMonthlyQuota:
         config = MagicMock()
         config.current_billing_count = 500
         config.max_billing_limit = 500
-        config.billing_count_reset_date = datetime(2026, 3, 1)
+        config.billing_count_reset_date = datetime(2026, 4, 1)
         allowed, msg = _check_monthly_quota(config)
         assert allowed is False
         assert "Límite mensual" in msg
@@ -603,7 +603,12 @@ class TestEmitFiscalDocument:
         config.company_id = 1
         config.current_billing_count = 500
         config.max_billing_limit = 500
-        config.billing_count_reset_date = datetime(2026, 3, 1)
+        config.billing_count_reset_date = datetime(2026, 4, 1)
+        config.serie_factura = "F001"
+        config.serie_boleta = "B001"
+        config.current_sequence_factura = 0
+        config.current_sequence_boleta = 0
+        config.updated_at = None
         at_limit = MagicMock()
         at_limit.first.return_value = config
         mock_session.exec.side_effect = [no_doc, at_limit]
@@ -1002,7 +1007,7 @@ class TestEndToEndBillingFlow:
         config.current_sequence_boleta = 100
         config.current_billing_count = 10
         config.max_billing_limit = 500
-        config.billing_count_reset_date = datetime(2026, 3, 1)
+        config.billing_count_reset_date = datetime(2026, 4, 1)
         config.tax_id = "20123456789"
         config.afip_punto_venta = None
         config.updated_at = None
