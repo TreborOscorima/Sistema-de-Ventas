@@ -403,6 +403,7 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 placeholder="Ej: 40",
+                key=State.entry_form_key.to_string() + "_size",
                 on_blur=State.set_variant_size,
                 default_value=State.variant_size,
                 class_name=INPUT_STYLES["default"],
@@ -416,6 +417,7 @@ def ingreso_page() -> rx.Component:
             ),
             rx.el.input(
                 placeholder="Ej: Negro",
+                key=State.entry_form_key.to_string() + "_color",
                 on_blur=State.set_variant_color,
                 default_value=State.variant_color,
                 class_name=INPUT_STYLES["default"],
@@ -489,6 +491,7 @@ def ingreso_page() -> rx.Component:
                 rx.el.option("Estándar", value="standard"),
                 rx.el.option("Variantes", value="variant"),
                 rx.el.option("Lotes", value="batch"),
+                key=State.entry_form_key.to_string() + "_mode",
                 default_value=State.entry_mode,
                 on_change=State.set_entry_mode,
                 class_name=SELECT_STYLES["default"],

@@ -338,10 +338,10 @@ class IngresoState(MixinState):
         if variant.color:
             parts.append(str(variant.color).strip())
         label = " ".join([p for p in parts if p])
+        if label:
+            return label
         sku = (variant.sku or "").strip()
-        if label and sku:
-            return f"{label} ({sku})"
-        return label or sku or "Variante"
+        return sku or "Variante"
 
     def _load_variants_for_product(self, product_id: int | None):
         self.variants_list = []
@@ -896,10 +896,7 @@ class IngresoState(MixinState):
 
                     if not product:
                         has_variants = bool(item.get("has_variants"))
-                        if has_variants:
-                            product_barcode = str(uuid.uuid4())
-                        else:
-                            product_barcode = barcode or str(uuid.uuid4())
+                        product_barcode = barcode or str(uuid.uuid4())
                         new_product = Product(
                             barcode=product_barcode,
                             description=description,
