@@ -887,7 +887,7 @@ def visual_product_grid() -> rx.Component:
                                     p["stock"].to_string(),
                                     " disp.",
                                     class_name=rx.cond(
-                                        p["stock"] <= 0,
+                                        p["sin_stock"],
                                         "text-xs text-red-500",
                                         "text-xs text-slate-400",
                                     ),
@@ -901,7 +901,7 @@ def visual_product_grid() -> rx.Component:
                             rx.icon("plus", class_name="h-3.5 w-3.5"),
                             "Agregar",
                             on_click=State.add_product_to_sale_by_id(p["product_id"]),
-                            disabled=p["stock"] <= 0,
+                            disabled=p["sin_stock"],
                             class_name=(
                                 "w-full py-1.5 text-xs font-medium bg-indigo-600 text-white "
                                 "rounded-b-lg hover:bg-indigo-700 disabled:opacity-40 "

@@ -836,6 +836,7 @@ class CartMixin:
                         "description": p.description or "",
                         "sale_price": float(p.sale_price or 0),
                         "stock": float(p.stock or 0),
+                        "sin_stock": float(p.stock or 0) <= 0,
                         "category": p.category or "General",
                     }
                     for p in products
