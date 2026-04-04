@@ -25,6 +25,7 @@ async def test_process_sale_cash_happy_path(
     session_mock.exec.side_effect = [
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[]),  # Category requires_batch
         exec_result(all_items=[product_sample]),
         exec_result(all_items=[]),
         exec_result(first_item=None),
@@ -56,6 +57,7 @@ async def test_process_sale_cashbox_log_records_sale_id(
     session_mock.exec.side_effect = [
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[]),  # Category requires_batch
         exec_result(all_items=[product_sample]),
         exec_result(all_items=[]),
         exec_result(first_item=None),
@@ -102,6 +104,7 @@ async def test_process_sale_stock_insufficient(
     session_mock.exec.side_effect = [
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[]),  # Category requires_batch
         exec_result(all_items=[product_sample]),
         exec_result(all_items=[]),
         exec_result(first_item=None),
@@ -142,6 +145,7 @@ async def test_process_sale_decimal_math(
     session_mock.exec.side_effect = [
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[]),  # Category requires_batch
         exec_result(all_items=[product_sample]),
         exec_result(all_items=[]),
         exec_result(first_item=None),
@@ -189,6 +193,7 @@ async def test_process_sale_mixed_payment(
     session_mock.exec.side_effect = [
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[]),  # Category requires_batch
         exec_result(all_items=[product_sample]),
         exec_result(all_items=[]),
         exec_result(first_item=None),
@@ -251,6 +256,7 @@ async def test_process_sale_prefers_barcode_match(
     session_mock.exec.side_effect = [
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[]),  # Category requires_batch
         exec_result(all_items=[product_a, product_b]),
         exec_result(all_items=[]),
         exec_result(first_item=None),
@@ -309,6 +315,7 @@ async def test_process_sale_ambiguous_description_requires_barcode(
     session_mock.exec.side_effect = [
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[]),  # Category requires_batch
         exec_result(all_items=[product_a, product_b]),
     ]
 
@@ -359,6 +366,7 @@ async def test_process_sale_credit_cashbox_uses_initial_payment(
     session_mock.exec.side_effect = [
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
+        exec_result(all_items=[]),  # Category requires_batch
         exec_result(all_items=[product_sample]),
         exec_result(all_items=[]),
         exec_result(first_item=None),

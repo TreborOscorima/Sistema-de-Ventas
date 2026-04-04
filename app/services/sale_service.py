@@ -49,11 +49,13 @@ from app.enums import PaymentMethodType, ReservationStatus, SaleStatus
 from app.i18n import MSG
 from app.models import (
     CashboxLog,
+    Category,
     Client,
     FieldReservation,
     PaymentMethod,
     PriceTier,
     Product,
+    ProductAttribute,
     ProductBatch,
     ProductVariant,
     Sale,
@@ -429,13 +431,47 @@ async def search_products(
             await current_session.exec(variant_query.limit(limit))
         ).all()
 
-        results: list[dict[str, Any]] = [
-            _adapt_product_payload(product) for product in products
-        ]
+        # Búsqueda por atributos dinámicos (ferretería: calibre, material;
+        # farmacia: principio activo, laboratorio)
+        attr_query = (
+            select(Product)
+            .join(ProductAttribute, ProductAttribute.product_id == Product.id)
+            .where(
+                or_(
+                    ProductAttribute.attribute_value.ilike(like_search),
+                    ProductAttribute.attribute_name.ilike(like_search),
+                )
+            )
+        )
+        attr_query = _apply_tenant_filters(
+            attr_query, ProductAttribute, company_id, branch_id
+        )
+        attr_query = _apply_tenant_filters(
+            attr_query, Product, company_id, branch_id
+        )
+        attr_products = (
+            await current_session.exec(attr_query.limit(limit))
+        ).all()
+
+        # Merge deduplicado
+        seen_ids: set[int] = set()
+        results: list[dict[str, Any]] = []
+        for product in products:
+            if product.id and product.id not in seen_ids:
+                seen_ids.add(product.id)
+                results.append(_adapt_product_payload(product))
         for variant, parent in variant_rows:
             if parent:
-                results.append(_adapt_variant_payload(variant, parent))
-        return results
+                key = ("v", variant.id)
+                vid = variant.id or 0
+                if vid not in seen_ids:
+                    seen_ids.add(vid)
+                    results.append(_adapt_variant_payload(variant, parent))
+        for product in attr_products:
+            if product.id and product.id not in seen_ids:
+                seen_ids.add(product.id)
+                results.append(_adapt_product_payload(product))
+        return results[:limit]
 
     if session is not None:
         return await _run(session)
@@ -1140,6 +1176,19 @@ class SaleService:
             u.name.strip().lower(): u.allows_decimal for u in units
         }
 
+        # Categorías con lote obligatorio (farmacia, alimentos perecederos)
+        _batch_cat_rows = (
+            await session.exec(
+                _apply_tenant_filters(
+                    select(Category).where(Category.requires_batch == True),
+                    Category, company_id, branch_id,
+                )
+            )
+        ).all()
+        categories_requiring_batch: set[str] = {
+            (c.name or "").strip().lower() for c in _batch_cat_rows
+        }
+
         product_snapshot: list[Dict[str, Any]] = []
         decimal_snapshot: list[Dict[str, Any]] = []
         pending_items: list[Dict[str, Any]] = []
@@ -1166,6 +1215,8 @@ class SaleService:
                     "barcode": item.barcode or "",
                     "product_id": item.product_id,
                     "variant_id": getattr(item, "variant_id", None),
+                    "batch_id": getattr(item, "batch_id", None),
+                    "category": getattr(item, "category", None) or "",
                     "allows_decimal": allows_decimal,
                 }
             )
@@ -1451,6 +1502,26 @@ class SaleService:
                 raise StockError(
                     MSG.SALE_VAL_INSUFFICIENT_STOCK.format(description=item["description"])
                 )
+
+            # Validar lote obligatorio (farmacia, alimentos perecederos)
+            item_category = (
+                item.get("category") or (product.category if product else "")
+            ).strip().lower()
+            if item_category in categories_requiring_batch and not batches:
+                raise StockError(
+                    f"El producto '{item['description']}' pertenece a una categoría "
+                    f"con lote obligatorio, pero no tiene lotes registrados. "
+                    f"Ingrese stock mediante lotes antes de vender."
+                )
+
+            # Soporte de lote explícito (selección manual del cajero)
+            explicit_batch_id = item.get("batch_id")
+            if explicit_batch_id and batches:
+                explicit_batch = next(
+                    (b for b in batches if b.id == explicit_batch_id), None
+                )
+                if explicit_batch:
+                    decimal_item["product_batch_id"] = explicit_batch.id
 
             resolved_items.append(
                 {

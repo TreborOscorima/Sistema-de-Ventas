@@ -209,8 +209,25 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
             class_name="py-2 px-3 text-xs text-slate-500 font-mono hidden md:table-cell",
         ),
         rx.el.td(
-            item["description"],
-            class_name="py-2 px-3 text-sm font-medium text-slate-800",
+            rx.el.div(
+                rx.el.span(
+                    item["description"],
+                    class_name="font-medium text-slate-800",
+                ),
+                # Número de lote visible si el ítem lo requiere (farmacia/alimentos)
+                rx.cond(
+                    item["batch_number"] != "",
+                    rx.el.span(
+                        rx.icon("flask-round", class_name="h-3 w-3 inline mr-0.5"),
+                        "Lote: ",
+                        item["batch_number"],
+                        class_name="text-xs font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5",
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="flex flex-col gap-0.5",
+            ),
+            class_name="py-2 px-3 text-sm",
         ),
         rx.el.td(
             item["quantity"].to_string(),
@@ -249,7 +266,17 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
             rx.el.div(
                 rx.el.span(item["description"], class_name="font-medium text-slate-800"),
                 rx.el.span(item["barcode"], class_name="text-xs text-slate-400 font-mono"),
-                class_name="flex flex-col",
+                rx.cond(
+                    item["batch_number"] != "",
+                    rx.el.span(
+                        rx.icon("flask-round", class_name="h-3 w-3 inline mr-0.5"),
+                        "Lote: ",
+                        item["batch_number"],
+                        class_name="text-xs font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 w-fit",
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="flex flex-col gap-0.5",
             ),
             rx.el.button(
                 rx.icon("x", class_name="h-4 w-4"),
@@ -811,8 +838,112 @@ def products_table(embedded: bool = False) -> rx.Component:
     )
 
 
+def visual_product_grid() -> rx.Component:
+    """Grid de tarjetas de producto para ropa/juguetería.
+
+    Muestra productos como tarjetas visuales con categoría, precio y stock.
+    Incluye barra de búsqueda propia para filtrar dentro del grid.
+    """
+    return rx.el.div(
+        # Barra de búsqueda del grid
+        rx.el.div(
+            rx.el.input(
+                placeholder="Buscar producto en catálogo...",
+                value=State.product_grid_search,
+                on_change=State.search_product_grid,
+                class_name=(
+                    "w-full text-sm px-3 py-2 border border-slate-200 "
+                    "rounded-lg focus:outline-none focus:ring-1 "
+                    "focus:ring-indigo-400 focus:border-indigo-400"
+                ),
+            ),
+            class_name="px-3 pt-3 pb-1",
+        ),
+        # Grid de productos
+        rx.cond(
+            State.product_grid_items.length() > 0,
+            rx.el.div(
+                rx.foreach(
+                    State.product_grid_items,
+                    lambda p: rx.el.div(
+                        # Placeholder de imagen / icono
+                        rx.el.div(
+                            rx.icon("package", class_name="h-8 w-8 text-slate-300"),
+                            class_name="w-full h-24 bg-gradient-to-br from-slate-50 to-slate-100 rounded-t-lg flex items-center justify-center",
+                        ),
+                        # Info
+                        rx.el.div(
+                            rx.el.span(
+                                p["description"],
+                                class_name="text-xs font-medium text-slate-800 line-clamp-2 leading-tight",
+                            ),
+                            rx.el.div(
+                                rx.el.span(
+                                    State.currency_symbol,
+                                    p["sale_price"].to_string(),
+                                    class_name="text-sm font-bold text-indigo-600",
+                                ),
+                                rx.el.span(
+                                    p["stock"].to_string(),
+                                    " disp.",
+                                    class_name=rx.cond(
+                                        p["stock"] <= 0,
+                                        "text-xs text-red-500",
+                                        "text-xs text-slate-400",
+                                    ),
+                                ),
+                                class_name="flex items-baseline justify-between gap-1 mt-1",
+                            ),
+                            class_name="flex flex-col gap-0.5 p-2",
+                        ),
+                        # Botón agregar
+                        rx.el.button(
+                            rx.icon("plus", class_name="h-3.5 w-3.5"),
+                            "Agregar",
+                            on_click=State.add_product_to_sale_by_id(p["product_id"]),
+                            disabled=p["stock"] <= 0,
+                            class_name=(
+                                "w-full py-1.5 text-xs font-medium bg-indigo-600 text-white "
+                                "rounded-b-lg hover:bg-indigo-700 disabled:opacity-40 "
+                                "disabled:cursor-not-allowed transition-colors "
+                                "flex items-center justify-center gap-1"
+                            ),
+                        ),
+                        class_name="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-white",
+                    ),
+                ),
+                class_name="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 p-3 overflow-y-auto max-h-[400px]",
+            ),
+            rx.el.div(
+                rx.icon("package-search", class_name="h-8 w-8 text-slate-300"),
+                rx.el.span(
+                    "Cargue el catálogo o busque un producto.",
+                    class_name="text-sm text-slate-400",
+                ),
+                rx.el.button(
+                    rx.icon("refresh-cw", class_name="h-3.5 w-3.5"),
+                    "Cargar catálogo",
+                    on_click=State.load_product_grid(""),
+                    class_name=(
+                        "mt-2 px-4 py-1.5 text-xs font-medium bg-indigo-100 text-indigo-700 "
+                        "rounded-lg hover:bg-indigo-200 transition-colors flex items-center gap-1"
+                    ),
+                ),
+                class_name="flex flex-col items-center justify-center gap-2 py-12",
+            ),
+        ),
+        class_name="flex flex-col",
+    )
+
+
 def sale_products_card() -> rx.Component:
-    """Tarjeta principal con los productos de la venta."""
+    """Tarjeta principal con los productos de la venta.
+
+    Layout adaptativo por vertical de negocio:
+    - ropa/juguetería: grid visual de productos + tabla de items del carrito
+    - farmacia: tabla con banner de lote obligatorio
+    - resto: tabla estándar (bodega, ferretería, general)
+    """
     return rx.el.div(
         quick_add_bar(),
         # Pharmacy mode: batch required reminder
@@ -821,14 +952,42 @@ def sale_products_card() -> rx.Component:
             rx.el.div(
                 rx.icon("shield-alert", class_name="w-4 h-4 text-emerald-600 shrink-0"),
                 rx.el.span(
-                    "Modo Farmacia activo — los productos de categorías con lote obligatorio requieren número de lote al ingresar stock.",
+                    "Modo Farmacia — lotes FEFO auto-asignados. El número de lote aparece en cada ítem.",
                     class_name="text-xs text-emerald-700",
                 ),
                 class_name="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border-b border-emerald-100",
             ),
             rx.fragment(),
         ),
-        products_table(embedded=True),
+        # Grid visual para ropa / juguetería
+        rx.cond(
+            (State.selected_business_vertical == "ropa")
+            | (State.selected_business_vertical == "jugueteria"),
+            rx.el.div(
+                visual_product_grid(),
+                # Tabla de carrito debajo del grid
+                rx.cond(
+                    State.new_sale_items.length() > 0,
+                    rx.el.div(
+                        rx.el.div(
+                            rx.icon("shopping-cart", class_name="h-4 w-4 text-indigo-600"),
+                            rx.el.span(
+                                "Carrito (",
+                                State.new_sale_items.length().to_string(),
+                                ")",
+                                class_name="text-sm font-semibold text-slate-700",
+                            ),
+                            class_name="flex items-center gap-1.5 px-3 py-2 border-t border-slate-200 bg-slate-50",
+                        ),
+                        products_table(embedded=True),
+                    ),
+                    rx.fragment(),
+                ),
+                class_name="flex flex-col",
+            ),
+            # Tabla estándar para todos los demás rubros
+            products_table(embedded=True),
+        ),
         class_name="flex flex-col bg-white rounded-xl border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
     )
 

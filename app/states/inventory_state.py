@@ -466,17 +466,19 @@ class InventoryState(MixinState):
                     for product in session.exec(query).all()
                 ]
 
-            # Single query con CASE para obtener los 4 contadores en 1 round-trip
-            # (antes eran 4 queries separadas).
+            # Single query con CASE para obtener los 4 contadores en 1 round-trip.
+            # Usa Product.min_stock_alert (configurable por producto) en vez de
+            # un umbral hardcodeado, para que cada producto tenga su propio nivel
+            # de alerta de stock bajo.
             stock_stats = session.exec(
                 select(
                     func.count(Product.id),
                     func.sum(case(
-                        (Product.stock > DEFAULT_LOW_STOCK_THRESHOLD, 1),
+                        (Product.stock > Product.min_stock_alert, 1),
                         else_=0,
                     )),
                     func.sum(case(
-                        (and_(Product.stock > 0, Product.stock <= DEFAULT_LOW_STOCK_THRESHOLD), 1),
+                        (and_(Product.stock > 0, Product.stock <= Product.min_stock_alert), 1),
                         else_=0,
                     )),
                     func.sum(case(

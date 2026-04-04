@@ -29,6 +29,7 @@ class SaleItemDTO(BaseSchema):
     category: str | None = None
     product_id: int | None = None
     variant_id: int | None = None
+    batch_id: int | None = None
 
 
 class PaymentBreakdownItemDTO(BaseSchema):

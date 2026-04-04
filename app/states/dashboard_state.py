@@ -400,7 +400,7 @@ class DashboardState(MixinState):
                         Product.company_id == company_id,
                         Product.branch_id == branch_id,
                         Product.stock > 0,
-                        Product.stock <= LOW_STOCK_THRESHOLD,
+                        Product.stock <= Product.min_stock_alert,
                     )
                 )
             ).one() or 0

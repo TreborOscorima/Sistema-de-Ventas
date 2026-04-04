@@ -6,9 +6,13 @@ from typing import Any, Dict, List, Union
 import reflex as rx
 from decimal import Decimal
 
+from sqlmodel import select as sql_select
+
 from app.constants import PRODUCT_SUGGESTIONS_LIMIT
+from app.models.inventory import Category, ProductBatch
 from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
+from app.utils.db import get_async_session
 from ..types import TransactionItem
 
 
@@ -31,6 +35,9 @@ class CartMixin:
         "subtotal": 0,
         "product_id": None,
         "variant_id": None,
+        "batch_id": None,
+        "batch_number": "",
+        "requires_batch": False,
     }
     new_sale_items: List[Dict[str, Any]] = []
     autocomplete_suggestions: List[str] = []
@@ -38,6 +45,8 @@ class CartMixin:
     autocomplete_selected_index: int = -1
     selected_product: Dict[str, Any] | None = None
     last_scanned_label: str = ""
+    product_grid_items: List[Dict[str, Any]] = []
+    product_grid_search: str = ""
     wholesale_price_applied: bool = False
     _autocomplete_debounce_seq: int = rx.field(default=0, is_var=False)
 
@@ -246,6 +255,66 @@ class CartMixin:
             description,
         )
 
+    async def _resolve_batch_info(self, product: Any, company_id: Any, branch_id: Any):
+        """Resuelve información de lote FEFO para el ítem actual.
+
+        Si la categoría del producto requiere lote obligatorio, busca
+        el lote más próximo a vencer (FEFO) y lo asigna al ítem.
+        """
+        if not product or not company_id or not branch_id:
+            return
+        category = self._product_value(product, "category", "General")
+        product_id = self._product_value(
+            product, "product_id", self._product_value(product, "id", None)
+        )
+        variant_id = self._product_value(product, "variant_id", None)
+        if not product_id:
+            return
+
+        try:
+            async with get_async_session() as session:
+                # Verificar si la categoría requiere lote
+                cat_row = (
+                    await session.exec(
+                        sql_select(Category)
+                        .where(Category.company_id == int(company_id))
+                        .where(Category.branch_id == int(branch_id))
+                        .where(Category.name == category)
+                    )
+                ).first()
+                requires = bool(cat_row and cat_row.requires_batch)
+                self.new_sale_item["requires_batch"] = requires
+
+                if not requires:
+                    return
+
+                # Buscar lote FEFO (primero por variante, luego por producto)
+                if variant_id:
+                    batch_q = sql_select(ProductBatch).where(
+                        ProductBatch.product_variant_id == int(variant_id),
+                        ProductBatch.stock > 0,
+                        ProductBatch.company_id == int(company_id),
+                        ProductBatch.branch_id == int(branch_id),
+                    )
+                else:
+                    batch_q = sql_select(ProductBatch).where(
+                        ProductBatch.product_id == int(product_id),
+                        ProductBatch.stock > 0,
+                        ProductBatch.company_id == int(company_id),
+                        ProductBatch.branch_id == int(branch_id),
+                    )
+                batch_q = batch_q.order_by(
+                    ProductBatch.expiration_date.is_(None),
+                    ProductBatch.expiration_date.asc(),
+                    ProductBatch.id.asc(),
+                ).limit(1)
+                batch = (await session.exec(batch_q)).first()
+                if batch:
+                    self.new_sale_item["batch_id"] = batch.id
+                    self.new_sale_item["batch_number"] = batch.batch_number or ""
+        except Exception:
+            logging.exception("Error resolviendo lote FEFO para item")
+
     def _reset_sale_form(self):
         self.sale_form_key += 1
         self.new_sale_item = {
@@ -260,6 +329,9 @@ class CartMixin:
             "subtotal": 0,
             "product_id": None,
             "variant_id": None,
+            "batch_id": None,
+            "batch_number": "",
+            "requires_batch": False,
         }
         self.autocomplete_suggestions = []
         self.autocomplete_results = []
@@ -662,6 +734,9 @@ class CartMixin:
                 duration=3000,
             )
 
+        # Verificar si la categoría requiere lote y autoasignar lote FEFO
+        await self._resolve_batch_info(product, company_id, branch_id)
+
         if existing_item is not None:
             updated_item = existing_item.copy()
             unit = updated_item.get("unit", "")
@@ -674,6 +749,10 @@ class CartMixin:
             updated_item["subtotal"] = self._round_currency(
                 updated_item["quantity"] * updated_item["price"]
             )
+            # Preservar info de lote del ítem original
+            for k in ("batch_id", "batch_number", "requires_batch"):
+                if k not in updated_item:
+                    updated_item[k] = self.new_sale_item.get(k)
             items = list(self.new_sale_items)
             items[existing_index] = updated_item
             self.new_sale_items = items
@@ -720,3 +799,96 @@ class CartMixin:
         self._reset_sale_form()
         self.sale_receipt_ready = False
         self._refresh_payment_feedback()
+
+    @rx.event
+    async def load_product_grid(self, search: str = ""):
+        """Carga productos para el grid visual (ropa/juguetería)."""
+        company_id = None
+        branch_id = None
+        if hasattr(self, "current_user"):
+            company_id = self.current_user.get("company_id")
+        if hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.product_grid_items = []
+            return
+        self.product_grid_search = search or ""
+        try:
+            from app.models import Product as ProductModel
+            from app.utils.sanitization import escape_like as _esc
+            async with get_async_session() as session:
+                q = sql_select(ProductModel).where(
+                    ProductModel.company_id == int(company_id),
+                    ProductModel.branch_id == int(branch_id),
+                ).order_by(ProductModel.description).limit(60)
+                if search and search.strip():
+                    like = f"%{_esc(search.strip())}%"
+                    q = q.where(
+                        ProductModel.description.ilike(like)
+                        | ProductModel.barcode.ilike(like)
+                        | ProductModel.category.ilike(like)
+                    )
+                products = (await session.exec(q)).all()
+                self.product_grid_items = [
+                    {
+                        "product_id": p.id,
+                        "barcode": p.barcode or "",
+                        "description": p.description or "",
+                        "sale_price": float(p.sale_price or 0),
+                        "stock": float(p.stock or 0),
+                        "category": p.category or "General",
+                    }
+                    for p in products
+                ]
+        except Exception:
+            logging.exception("Error cargando grid de productos")
+            self.product_grid_items = []
+
+    @rx.event
+    async def add_product_to_sale_by_id(self, product_id: int):
+        """Agrega un producto al carrito desde el grid visual."""
+        company_id = None
+        branch_id = None
+        if hasattr(self, "current_user"):
+            company_id = self.current_user.get("company_id")
+        if hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa o sucursal no definida.", duration=3000)
+        try:
+            from app.models import Product as ProductModel
+            async with get_async_session() as session:
+                p = (
+                    await session.exec(
+                        sql_select(ProductModel).where(
+                            ProductModel.id == int(product_id),
+                            ProductModel.company_id == int(company_id),
+                            ProductModel.branch_id == int(branch_id),
+                        )
+                    )
+                ).first()
+                if not p:
+                    return rx.toast("Producto no encontrado.", duration=3000)
+                payload = {
+                    "id": p.id,
+                    "product_id": p.id,
+                    "variant_id": None,
+                    "is_variant": False,
+                    "barcode": p.barcode,
+                    "description": p.description,
+                    "category": p.category,
+                    "unit": p.unit,
+                    "sale_price": p.sale_price,
+                    "purchase_price": p.purchase_price,
+                    "stock": p.stock,
+                }
+                self.new_sale_item["quantity"] = 1
+                return await self.add_item_to_sale(product_override=payload)
+        except Exception:
+            logging.exception("Error agregando producto desde grid")
+            return rx.toast("Error al agregar producto.", duration=3000)
+
+    @rx.event
+    async def search_product_grid(self, value: str):
+        """Búsqueda dentro del grid visual."""
+        return await self.load_product_grid(search=value)
