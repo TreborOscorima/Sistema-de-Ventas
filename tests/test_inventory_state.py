@@ -112,3 +112,155 @@ def test_inventory_list_denies_without_permission():
     state.current_user = {"privileges": {"view_inventario": False}}
 
     assert state.inventory_list == []
+
+
+# ═════════════════════════════════════════════════════════════
+# BATCHES (lotes con vencimiento) — Farmacia / Supermercado
+# ═════════════════════════════════════════════════════════════
+
+
+def test_set_show_batches_initializes_row():
+    state = InventoryState()
+    state.batches = []
+
+    state.set_show_batches(True)
+
+    assert state.show_batches is True
+    assert len(state.batches) == 1
+    assert state.batches[0]["batch_number"] == ""
+    assert state.batches[0]["expiration_date"] == ""
+
+
+def test_set_show_batches_accepts_string_truthy():
+    state = InventoryState()
+    state.batches = [{"id": None, "batch_number": "L1", "expiration_date": "", "stock": 0}]
+
+    state.set_show_batches("true")
+    assert state.show_batches is True
+    assert len(state.batches) == 1  # no se duplica si ya hay filas
+
+    state.set_show_batches("0")
+    assert state.show_batches is False
+
+
+def test_add_and_remove_batch_row():
+    state = InventoryState()
+    state.batches = []
+    state.add_batch_row()
+    state.add_batch_row()
+    assert len(state.batches) == 2
+
+    state.remove_batch_row(0)
+    assert len(state.batches) == 1
+
+    # índice fuera de rango no rompe
+    state.remove_batch_row(99)
+    assert len(state.batches) == 1
+
+
+def test_update_batch_field_text_and_numeric():
+    state = InventoryState()
+    state.batches = [{"id": None, "batch_number": "", "expiration_date": "", "stock": 0}]
+
+    state.update_batch_field(0, "batch_number", "LOT-2026-001")
+    assert state.batches[0]["batch_number"] == "LOT-2026-001"
+
+    state.update_batch_field(0, "expiration_date", "2026-12-31")
+    assert state.batches[0]["expiration_date"] == "2026-12-31"
+
+    state.update_batch_field(0, "stock", "150.5")
+    assert state.batches[0]["stock"] == 150.5
+
+    # invalid numeric → no rompe
+    state.update_batch_field(0, "stock", "abc")
+    assert state.batches[0]["stock"] == 150.5
+
+    # índice fuera de rango → no rompe
+    state.update_batch_field(99, "batch_number", "X")
+    assert len(state.batches) == 1
+
+
+def test_batches_stock_total_sum():
+    state = InventoryState()
+    state.batches = [
+        {"id": None, "batch_number": "L1", "expiration_date": "", "stock": 10},
+        {"id": None, "batch_number": "L2", "expiration_date": "", "stock": 25.5},
+        {"id": None, "batch_number": "L3", "expiration_date": "", "stock": "invalid"},
+    ]
+    # invalid stock se ignora
+    assert state.batches_stock_total == 35.5
+
+
+# ═════════════════════════════════════════════════════════════
+# ATTRIBUTES (EAV dinámicos) — Ferretería / Farmacia
+# ═════════════════════════════════════════════════════════════
+
+
+def test_set_show_attributes_initializes_row():
+    state = InventoryState()
+    state.attributes = []
+
+    state.set_show_attributes(True)
+
+    assert state.show_attributes is True
+    assert len(state.attributes) == 1
+    assert state.attributes[0]["name"] == ""
+    assert state.attributes[0]["value"] == ""
+
+
+def test_set_show_attributes_no_double_init():
+    state = InventoryState()
+    state.attributes = [{"id": None, "name": "material", "value": "acero"}]
+
+    state.set_show_attributes(True)
+    assert len(state.attributes) == 1
+
+
+def test_add_and_remove_attribute_row():
+    state = InventoryState()
+    state.attributes = []
+    state.add_attribute_row()
+    state.add_attribute_row()
+    state.add_attribute_row()
+    assert len(state.attributes) == 3
+
+    state.remove_attribute_row(1)
+    assert len(state.attributes) == 2
+
+    state.remove_attribute_row(-5)
+    assert len(state.attributes) == 2
+
+
+def test_update_attribute_field():
+    state = InventoryState()
+    state.attributes = [{"id": None, "name": "", "value": ""}]
+
+    state.update_attribute_field(0, "name", "principio_activo")
+    assert state.attributes[0]["name"] == "principio_activo"
+
+    state.update_attribute_field(0, "value", "ibuprofeno 400mg")
+    assert state.attributes[0]["value"] == "ibuprofeno 400mg"
+
+
+def test_batch_rows_includes_index():
+    state = InventoryState()
+    state.batches = [
+        {"id": None, "batch_number": "A", "expiration_date": "", "stock": 0},
+        {"id": None, "batch_number": "B", "expiration_date": "", "stock": 0},
+    ]
+    rows = state.batch_rows
+    assert rows[0]["index"] == 0
+    assert rows[1]["index"] == 1
+    assert rows[0]["batch_number"] == "A"
+
+
+def test_attribute_rows_includes_index():
+    state = InventoryState()
+    state.attributes = [
+        {"id": None, "name": "calibre", "value": '1/2"'},
+        {"id": None, "name": "rosca", "value": "fina"},
+    ]
+    rows = state.attribute_rows
+    assert rows[0]["index"] == 0
+    assert rows[1]["index"] == 1
+    assert rows[1]["name"] == "rosca"

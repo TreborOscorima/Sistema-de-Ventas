@@ -32,6 +32,7 @@ from app.constants import DEFAULT_ITEMS_PER_PAGE, INVENTORY_RECENT_LIMIT
 logger = logging.getLogger(__name__)
 from app.models import (
     Product,
+    ProductAttribute,
     ProductBatch,
     ProductVariant,
     PriceTier,
@@ -105,9 +106,13 @@ class InventoryState(MixinState):
     is_editing_product: bool = False
     show_variants: bool = False
     show_wholesale: bool = False
+    show_batches: bool = False
+    show_attributes: bool = False
     confirm_disable_wholesale: bool = False
     variants: List[Dict[str, Any]] = []
     price_tiers: List[Dict[str, Any]] = []
+    batches: List[Dict[str, Any]] = []
+    attributes: List[Dict[str, Any]] = []
     stock_details_open: bool = False
     stock_details_title: str = ""
     stock_details_mode: str = "simple"
@@ -466,19 +471,17 @@ class InventoryState(MixinState):
                     for product in session.exec(query).all()
                 ]
 
-            # Single query con CASE para obtener los 4 contadores en 1 round-trip.
-            # Usa Product.min_stock_alert (configurable por producto) en vez de
-            # un umbral hardcodeado, para que cada producto tenga su propio nivel
-            # de alerta de stock bajo.
+            # Single query con CASE para obtener los 4 contadores en 1 round-trip
+            # (antes eran 4 queries separadas).
             stock_stats = session.exec(
                 select(
                     func.count(Product.id),
                     func.sum(case(
-                        (Product.stock > Product.min_stock_alert, 1),
+                        (Product.stock > DEFAULT_LOW_STOCK_THRESHOLD, 1),
                         else_=0,
                     )),
                     func.sum(case(
-                        (and_(Product.stock > 0, Product.stock <= Product.min_stock_alert), 1),
+                        (and_(Product.stock > 0, Product.stock <= DEFAULT_LOW_STOCK_THRESHOLD), 1),
                         else_=0,
                     )),
                     func.sum(case(
@@ -662,8 +665,12 @@ class InventoryState(MixinState):
             }
             self.show_variants = False
             self.show_wholesale = False
+            self.show_batches = False
+            self.show_attributes = False
             self.variants = []
             self.price_tiers = []
+            self.batches = []
+            self.attributes = []
             self.is_editing_product = True
             return
 
@@ -688,8 +695,12 @@ class InventoryState(MixinState):
 
         self.show_variants = False
         self.show_wholesale = False
+        self.show_batches = False
+        self.show_attributes = False
         self.variants = []
         self.price_tiers = []
+        self.batches = []
+        self.attributes = []
 
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -735,6 +746,50 @@ class InventoryState(MixinState):
                     ]
                     self.show_wholesale = True
 
+                # Cargar lotes (batches) — sin variant_id, scoped al producto
+                product_batches = session.exec(
+                    select(ProductBatch)
+                    .where(ProductBatch.product_id == product_id)
+                    .where(ProductBatch.product_variant_id.is_(None))
+                    .where(ProductBatch.company_id == company_id)
+                    .where(ProductBatch.branch_id == branch_id)
+                    .order_by(ProductBatch.expiration_date)
+                ).all()
+                if product_batches:
+                    self.batches = [
+                        {
+                            "id": batch.id,
+                            "batch_number": batch.batch_number,
+                            "expiration_date": (
+                                batch.expiration_date.strftime("%Y-%m-%d")
+                                if batch.expiration_date
+                                else ""
+                            ),
+                            "stock": float(batch.stock or 0),
+                        }
+                        for batch in product_batches
+                    ]
+                    self.show_batches = True
+
+                # Cargar atributos dinámicos (EAV)
+                product_attrs = session.exec(
+                    select(ProductAttribute)
+                    .where(ProductAttribute.product_id == product_id)
+                    .where(ProductAttribute.company_id == company_id)
+                    .where(ProductAttribute.branch_id == branch_id)
+                    .order_by(ProductAttribute.attribute_name)
+                ).all()
+                if product_attrs:
+                    self.attributes = [
+                        {
+                            "id": attr.id,
+                            "name": attr.attribute_name,
+                            "value": attr.attribute_value,
+                        }
+                        for attr in product_attrs
+                    ]
+                    self.show_attributes = True
+
         self.is_editing_product = True
 
     @rx.event
@@ -753,9 +808,13 @@ class InventoryState(MixinState):
         }
         self.show_variants = False
         self.show_wholesale = False
+        self.show_batches = False
+        self.show_attributes = False
         self.confirm_disable_wholesale = False
         self.variants = []
         self.price_tiers = []
+        self.batches = []
+        self.attributes = []
         self.is_editing_product = True
 
     @rx.event
@@ -847,9 +906,13 @@ class InventoryState(MixinState):
         }
         self.show_variants = False
         self.show_wholesale = False
+        self.show_batches = False
+        self.show_attributes = False
         self.confirm_disable_wholesale = False
         self.variants = []
         self.price_tiers = []
+        self.batches = []
+        self.attributes = []
 
     @rx.event
     def handle_edit_product_change(self, field: str, value: str):
@@ -996,6 +1059,113 @@ class InventoryState(MixinState):
         tiers[index] = row
         self.price_tiers = tiers
 
+    # ─── Batches (lotes con vencimiento) — Farmacia / Supermercado ───
+    @rx.event
+    def set_show_batches(self, value: bool | str):
+        if isinstance(value, str):
+            value = value.lower() in ["true", "1", "on", "yes"]
+        self.show_batches = bool(value)
+        if self.show_batches and not self.batches:
+            self.add_batch_row()
+
+    @rx.event
+    def add_batch_row(self):
+        self.batches = [
+            *self.batches,
+            {
+                "id": None,
+                "batch_number": "",
+                "expiration_date": "",
+                "stock": 0.0,
+            },
+        ]
+
+    @rx.event
+    def remove_batch_row(self, index: int):
+        if index < 0 or index >= len(self.batches):
+            return
+        self.batches = [
+            row for idx, row in enumerate(self.batches) if idx != index
+        ]
+
+    @rx.event
+    def update_batch_field(self, index: int, field: str, value: Any):
+        if index < 0 or index >= len(self.batches):
+            return
+        batches = list(self.batches)
+        row = dict(batches[index])
+        if field == "stock":
+            try:
+                row[field] = float(value) if value not in ("", None) else 0.0
+            except (TypeError, ValueError):
+                return
+        else:
+            row[field] = value
+        batches[index] = row
+        self.batches = batches
+
+    # ─── Attributes (EAV dinámicos) — Ferretería / Farmacia ───
+    @rx.event
+    def set_show_attributes(self, value: bool | str):
+        if isinstance(value, str):
+            value = value.lower() in ["true", "1", "on", "yes"]
+        self.show_attributes = bool(value)
+        if self.show_attributes and not self.attributes:
+            self.add_attribute_row()
+
+    @rx.event
+    def add_attribute_row(self):
+        self.attributes = [
+            *self.attributes,
+            {"id": None, "name": "", "value": ""},
+        ]
+
+    @rx.event
+    def remove_attribute_row(self, index: int):
+        if index < 0 or index >= len(self.attributes):
+            return
+        self.attributes = [
+            row for idx, row in enumerate(self.attributes) if idx != index
+        ]
+
+    @rx.event
+    def update_attribute_field(self, index: int, field: str, value: Any):
+        if index < 0 or index >= len(self.attributes):
+            return
+        attrs = list(self.attributes)
+        row = dict(attrs[index])
+        row[field] = value
+        attrs[index] = row
+        self.attributes = attrs
+
+    @rx.var(cache=True)
+    def batch_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for index, batch in enumerate(self.batches):
+            row = dict(batch)
+            row["index"] = index
+            rows.append(row)
+        return rows
+
+    @rx.var(cache=True)
+    def attribute_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for index, attr in enumerate(self.attributes):
+            row = dict(attr)
+            row["index"] = index
+            rows.append(row)
+        return rows
+
+    @rx.var(cache=True)
+    def batches_stock_total(self) -> float:
+        total = 0.0
+        for batch in self.batches:
+            try:
+                total += float(batch.get("stock", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+        return total
+
     @rx.event
     def save_edited_product(self):
         if not self.current_user["privileges"]["edit_inventario"]:
@@ -1053,6 +1223,46 @@ class InventoryState(MixinState):
             if len(skus) != len(set(skus)):
                 return self.add_notification(
                     "Hay SKUs de variantes duplicados.", "error"
+                )
+
+        if self.show_batches:
+            batch_numbers = [
+                (b.get("batch_number") or "").strip()
+                for b in self.batches
+                if (b.get("batch_number") or "").strip()
+            ]
+            if not batch_numbers:
+                return self.add_notification(
+                    "Agregue al menos un lote con número válido.", "error"
+                )
+            if len(batch_numbers) != len(set(batch_numbers)):
+                return self.add_notification(
+                    "Hay números de lote duplicados.", "error"
+                )
+            for b in self.batches:
+                exp = (b.get("expiration_date") or "").strip()
+                if exp:
+                    try:
+                        datetime.datetime.strptime(exp, "%Y-%m-%d")
+                    except ValueError:
+                        return self.add_notification(
+                            f"Fecha de vencimiento inválida: '{exp}' (use YYYY-MM-DD).",
+                            "error",
+                        )
+
+        if self.show_attributes:
+            names = [
+                (a.get("name") or "").strip().lower()
+                for a in self.attributes
+                if (a.get("name") or "").strip()
+            ]
+            if not names:
+                return self.add_notification(
+                    "Agregue al menos un atributo con nombre válido.", "error"
+                )
+            if len(names) != len(set(names)):
+                return self.add_notification(
+                    "Hay nombres de atributo duplicados.", "error"
                 )
 
         self.is_loading = True
@@ -1237,6 +1447,94 @@ class InventoryState(MixinState):
                         for tier in existing_tiers:
                             session.delete(tier)
 
+                    # ─── Persistir lotes (batches) ───
+                    if self.show_batches:
+                        existing_batches = session.exec(
+                            select(ProductBatch)
+                            .where(ProductBatch.product_id == product_id)
+                            .where(ProductBatch.product_variant_id.is_(None))
+                            .where(ProductBatch.company_id == company_id)
+                            .where(ProductBatch.branch_id == branch_id)
+                        ).all()
+                        for batch in existing_batches:
+                            session.delete(batch)
+                        session.flush()
+
+                        for batch in self.batches:
+                            batch_number = (batch.get("batch_number") or "").strip()
+                            if not batch_number:
+                                continue
+                            stock_value = batch.get("stock", 0) or 0
+                            try:
+                                stock_value = Decimal(str(stock_value))
+                            except (TypeError, InvalidOperation):
+                                stock_value = Decimal("0")
+                            expiration_raw = (batch.get("expiration_date") or "").strip()
+                            expiration_dt = None
+                            if expiration_raw:
+                                try:
+                                    expiration_dt = datetime.datetime.strptime(
+                                        expiration_raw, "%Y-%m-%d"
+                                    )
+                                except ValueError:
+                                    expiration_dt = None
+                            session.add(
+                                ProductBatch(
+                                    product_id=product_id,
+                                    batch_number=batch_number,
+                                    expiration_date=expiration_dt,
+                                    stock=stock_value,
+                                    company_id=company_id,
+                                    branch_id=branch_id,
+                                )
+                            )
+                    else:
+                        existing_batches = session.exec(
+                            select(ProductBatch)
+                            .where(ProductBatch.product_id == product_id)
+                            .where(ProductBatch.product_variant_id.is_(None))
+                            .where(ProductBatch.company_id == company_id)
+                            .where(ProductBatch.branch_id == branch_id)
+                        ).all()
+                        for batch in existing_batches:
+                            session.delete(batch)
+
+                    # ─── Persistir atributos dinámicos (EAV) ───
+                    if self.show_attributes:
+                        existing_attrs = session.exec(
+                            select(ProductAttribute)
+                            .where(ProductAttribute.product_id == product_id)
+                            .where(ProductAttribute.company_id == company_id)
+                            .where(ProductAttribute.branch_id == branch_id)
+                        ).all()
+                        for attr in existing_attrs:
+                            session.delete(attr)
+                        session.flush()
+
+                        for attr in self.attributes:
+                            name = (attr.get("name") or "").strip()
+                            value = (attr.get("value") or "").strip()
+                            if not name:
+                                continue
+                            session.add(
+                                ProductAttribute(
+                                    product_id=product_id,
+                                    attribute_name=name,
+                                    attribute_value=value,
+                                    company_id=company_id,
+                                    branch_id=branch_id,
+                                )
+                            )
+                    else:
+                        existing_attrs = session.exec(
+                            select(ProductAttribute)
+                            .where(ProductAttribute.product_id == product_id)
+                            .where(ProductAttribute.company_id == company_id)
+                            .where(ProductAttribute.branch_id == branch_id)
+                        ).all()
+                        for attr in existing_attrs:
+                            session.delete(attr)
+
                 session.commit()
         except Exception:
             logger.exception(
@@ -1255,8 +1553,12 @@ class InventoryState(MixinState):
         self.is_editing_product = False
         self.show_variants = False
         self.show_wholesale = False
+        self.show_batches = False
+        self.show_attributes = False
         self.variants = []
         self.price_tiers = []
+        self.batches = []
+        self.attributes = []
         return self.add_notification(msg, "success")
 
     @rx.event

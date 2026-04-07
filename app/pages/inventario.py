@@ -177,6 +177,42 @@ def edit_product_modal() -> rx.Component:
             ),
             class_name="flex flex-col gap-2",
           ),
+          rx.el.div(
+            rx.el.label(
+              "Lotes con Vencimiento",
+              class_name=TYPOGRAPHY["label"],
+            ),
+            rx.el.div(
+              toggle_switch(
+                checked=State.show_batches,
+                on_change=State.set_show_batches,
+              ),
+              rx.el.span(
+                "Farmacia / Alimentos (FEFO)",
+                class_name=TYPOGRAPHY["caption"],
+              ),
+              class_name="flex items-center gap-2",
+            ),
+            class_name="flex flex-col gap-2",
+          ),
+          rx.el.div(
+            rx.el.label(
+              "Atributos Dinámicos",
+              class_name=TYPOGRAPHY["label"],
+            ),
+            rx.el.div(
+              toggle_switch(
+                checked=State.show_attributes,
+                on_change=State.set_show_attributes,
+              ),
+              rx.el.span(
+                "Material, calibre, principio activo, etc.",
+                class_name=TYPOGRAPHY["caption"],
+              ),
+              class_name="flex items-center gap-2",
+            ),
+            class_name="flex flex-col gap-2",
+          ),
           class_name="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4",
         ),
         # Modal de confirmación para desactivar mayoreo
@@ -361,6 +397,154 @@ def edit_product_modal() -> rx.Component:
                 ),
               ),
               class_name="flex flex-col gap-3",
+            ),
+            class_name="mt-4 space-y-3",
+          ),
+          rx.fragment(),
+        ),
+        # ─── Sección de lotes (batches) ───
+        rx.cond(
+          State.show_batches,
+          rx.el.div(
+            rx.el.div(
+              rx.el.h4(
+                "Lotes con vencimiento",
+                class_name=TYPOGRAPHY["label"],
+              ),
+              rx.el.button(
+                rx.icon("plus", class_name="h-4 w-4"),
+                "Agregar lote",
+                on_click=State.add_batch_row,
+                class_name=BUTTON_STYLES["primary_sm"],
+              ),
+              class_name="flex items-center justify-between",
+            ),
+            rx.el.div(
+              rx.el.div(
+                rx.el.span(
+                  "N° Lote", class_name=f"{TYPOGRAPHY['caption']} uppercase sm:col-span-2"
+                ),
+                rx.el.span(
+                  "Vencimiento", class_name=f"{TYPOGRAPHY['caption']} uppercase sm:col-span-2"
+                ),
+                rx.el.span("Stock", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                rx.el.span("Acción", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                class_name="hidden sm:grid sm:grid-cols-6 gap-2",
+              ),
+              rx.foreach(
+                State.batch_rows,
+                lambda row: rx.el.div(
+                  rx.el.input(
+                    placeholder="LOT-2026-001",
+                    default_value=row["batch_number"],
+                    on_blur=lambda v, index=row["index"]: State.update_batch_field(
+                      index, "batch_number", v
+                    ),
+                    class_name=f"{INPUT_STYLES['default']} sm:col-span-2",
+                  ),
+                  rx.el.input(
+                    type="date",
+                    default_value=row["expiration_date"],
+                    on_blur=lambda v, index=row["index"]: State.update_batch_field(
+                      index, "expiration_date", v
+                    ),
+                    class_name=f"{INPUT_STYLES['default']} sm:col-span-2",
+                  ),
+                  rx.el.input(
+                    type="number",
+                    placeholder="0",
+                    default_value=row["stock"].to_string(),
+                    on_blur=lambda v, index=row["index"]: State.update_batch_field(
+                      index, "stock", v
+                    ),
+                    class_name=INPUT_STYLES["default"],
+                  ),
+                  rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda _, index=row["index"]: State.remove_batch_row(
+                      index
+                    ),
+                    title="Eliminar lote",
+                    aria_label="Eliminar lote",
+                    class_name=BUTTON_STYLES["icon_danger"],
+                  ),
+                  class_name="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center",
+                ),
+              ),
+              class_name="flex flex-col gap-3",
+            ),
+            rx.el.p(
+              "El sistema consume lotes con FEFO (First Expire First Out) automáticamente.",
+              class_name=f"{TYPOGRAPHY['caption']} mt-2",
+            ),
+            class_name="mt-4 space-y-3",
+          ),
+          rx.fragment(),
+        ),
+        # ─── Sección de atributos dinámicos (EAV) ───
+        rx.cond(
+          State.show_attributes,
+          rx.el.div(
+            rx.el.div(
+              rx.el.h4(
+                "Atributos dinámicos",
+                class_name=TYPOGRAPHY["label"],
+              ),
+              rx.el.button(
+                rx.icon("plus", class_name="h-4 w-4"),
+                "Agregar atributo",
+                on_click=State.add_attribute_row,
+                class_name=BUTTON_STYLES["primary_sm"],
+              ),
+              class_name="flex items-center justify-between",
+            ),
+            rx.el.div(
+              rx.el.div(
+                rx.el.span(
+                  "Nombre", class_name=f"{TYPOGRAPHY['caption']} uppercase sm:col-span-2"
+                ),
+                rx.el.span(
+                  "Valor", class_name=f"{TYPOGRAPHY['caption']} uppercase sm:col-span-3"
+                ),
+                rx.el.span("Acción", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                class_name="hidden sm:grid sm:grid-cols-6 gap-2",
+              ),
+              rx.foreach(
+                State.attribute_rows,
+                lambda row: rx.el.div(
+                  rx.el.input(
+                    placeholder="material",
+                    default_value=row["name"],
+                    on_blur=lambda v, index=row["index"]: State.update_attribute_field(
+                      index, "name", v
+                    ),
+                    class_name=f"{INPUT_STYLES['default']} sm:col-span-2",
+                  ),
+                  rx.el.input(
+                    placeholder="acero inoxidable",
+                    default_value=row["value"],
+                    on_blur=lambda v, index=row["index"]: State.update_attribute_field(
+                      index, "value", v
+                    ),
+                    class_name=f"{INPUT_STYLES['default']} sm:col-span-3",
+                  ),
+                  rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda _, index=row["index"]: State.remove_attribute_row(
+                      index
+                    ),
+                    title="Eliminar atributo",
+                    aria_label="Eliminar atributo",
+                    class_name=BUTTON_STYLES["icon_danger"],
+                  ),
+                  class_name="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center",
+                ),
+              ),
+              class_name="flex flex-col gap-3",
+            ),
+            rx.el.p(
+              "Ej: ferretería (material, calibre), farmacia (principio_activo, dosaje), juguetería (edad_minima).",
+              class_name=f"{TYPOGRAPHY['caption']} mt-2",
             ),
             class_name="mt-4 space-y-3",
           ),
