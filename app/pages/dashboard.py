@@ -397,6 +397,131 @@ def _category_chart() -> rx.Component:
   )
 
 
+def _expiring_batch_row(batch: dict) -> rx.Component:
+  """Fila individual de un lote por vencer."""
+  return rx.el.div(
+    rx.el.div(
+      rx.cond(
+        batch["is_expired"],
+        rx.icon(
+          "circle-alert",
+          class_name="w-4 h-4 text-red-600 flex-shrink-0",
+        ),
+        rx.icon(
+          "clock-3",
+          class_name="w-4 h-4 text-amber-500 flex-shrink-0",
+        ),
+      ),
+      rx.el.div(
+        rx.el.p(
+          batch["description"],
+          class_name="font-medium text-slate-900 text-sm truncate",
+        ),
+        rx.el.p(
+          rx.el.span("Lote ", class_name="text-slate-400"),
+          rx.el.span(
+            batch["batch_number"],
+            class_name="font-mono text-slate-600",
+          ),
+          rx.el.span(" · ", class_name="text-slate-300 mx-1"),
+          rx.el.span(
+            "Stock ",
+            batch["stock"],
+            class_name="text-slate-500 tabular-nums",
+          ),
+          class_name="text-xs",
+        ),
+        class_name="ml-2 flex-1 min-w-0",
+      ),
+      class_name="flex items-center min-w-0",
+    ),
+    rx.el.div(
+      rx.el.p(
+        batch["expiration_date"],
+        class_name="text-xs text-slate-500 tabular-nums whitespace-nowrap",
+      ),
+      rx.cond(
+        batch["is_expired"],
+        rx.el.p(
+          "VENCIDO",
+          class_name="text-[10px] font-semibold text-red-700 tracking-wide",
+        ),
+        rx.el.p(
+          rx.text(f"{batch['days_left']} días"),
+          class_name="text-[10px] font-semibold text-amber-700 tracking-wide",
+        ),
+      ),
+      class_name="text-right ml-3 flex-shrink-0",
+    ),
+    class_name=(
+      f"flex items-center justify-between py-2 px-2 {RADIUS['md']} "
+      f"border border-transparent {TRANSITIONS['fast']} hover:bg-slate-50"
+    ),
+  )
+
+
+def _expiring_batches_panel() -> rx.Component:
+  """Panel de lotes próximos a vencer / ya vencidos.
+
+  Visible para verticales con productos perecederos (Farmacia, Supermercado).
+  La consulta corre en todos los rubros pero el panel solo aparece cuando
+  hay datos para mostrar — evita ocupar espacio en negocios sin lotes.
+  """
+  return rx.cond(
+    (State.expiring_batches_count + State.expired_batches_count) > 0,
+    rx.el.div(
+      rx.el.div(
+        rx.icon("clock-3", class_name="w-5 h-5 text-amber-500"),
+        rx.el.h3(
+          "LOTES POR VENCER",
+          class_name=f"{TYPOGRAPHY['section_title']} ml-2",
+        ),
+        rx.cond(
+          State.expired_batches_count > 0,
+          rx.el.span(
+            rx.text(f"{State.expired_batches_count} vencido(s)"),
+            class_name=(
+              f"ml-auto px-2 py-0.5 text-xs font-semibold "
+              f"bg-red-100 text-red-800 {RADIUS['full']}"
+            ),
+          ),
+          rx.fragment(),
+        ),
+        rx.cond(
+          State.expiring_batches_count > 0,
+          rx.el.span(
+            rx.text(f"{State.expiring_batches_count} por vencer"),
+            class_name=(
+              f"ml-2 px-2 py-0.5 text-xs font-semibold "
+              f"bg-amber-100 text-amber-800 {RADIUS['full']}"
+            ),
+          ),
+          rx.fragment(),
+        ),
+        class_name="flex items-center mb-3",
+      ),
+      rx.el.div(
+        rx.foreach(State.dash_expiring_batches, _expiring_batch_row),
+        class_name="space-y-1 max-h-72 overflow-y-auto",
+      ),
+      rx.el.div(
+        rx.link(
+          "Ver inventario completo",
+          rx.icon("arrow-right", class_name="w-3 h-3 ml-1 inline"),
+          href="/inventario",
+          class_name=(
+            "text-xs font-medium text-indigo-600 hover:text-indigo-700 "
+            "inline-flex items-center"
+          ),
+        ),
+        class_name="mt-3 pt-3 border-t border-slate-100",
+      ),
+      class_name=CARD_STYLES["bordered"],
+    ),
+    rx.fragment(),
+  )
+
+
 def _alerts_panel() -> rx.Component:
   """Panel de alertas del sistema."""
   return rx.el.div(
@@ -620,6 +745,12 @@ def dashboard_page() -> rx.Component:
       rx.el.div(_top_products_list(), class_name="h-full"),
       rx.el.div(_category_chart(), class_name="h-full"),
       class_name="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6 items-stretch",
+    ),
+
+    # Lotes por vencer (solo se renderiza si hay datos relevantes)
+    rx.el.div(
+      _expiring_batches_panel(),
+      class_name="mt-6",
     ),
 
     on_mount=State.load_dashboard_background,

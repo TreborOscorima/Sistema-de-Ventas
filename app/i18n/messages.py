@@ -235,6 +235,8 @@ class _Messages:
     ALERT_NO_STOCK = "Sin Stock"
     ALERT_OVERDUE_INSTALLMENTS = "Cuotas Vencidas"
     ALERT_OPEN_CASHBOX = "Caja Abierta"
+    ALERT_BATCH_EXPIRING = "Lotes por Vencer"
+    ALERT_BATCH_EXPIRED = "Lotes Vencidos"
 
     # ── Reportes — hojas adicionales ──────────────────────────
     REPORT_BY_SELLER_SHEET = "Por Vendedor"

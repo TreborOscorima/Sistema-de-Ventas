@@ -21,16 +21,23 @@ from app.models import (
     Sale,
     SaleItem,
     Product,
+    ProductVariant,
+    ProductBatch,
     Client,
     SaleInstallment,
     CashboxLog,
     FieldReservation,
 )
+from app.utils.timezone import utc_now_naive
 from .inventory_state import LOW_STOCK_THRESHOLD
 from app.enums import SaleStatus, ReservationStatus
 from app.i18n import MSG
-from app.services.alert_service import get_alert_summary
+from app.services.alert_service import get_alert_summary, BATCH_EXPIRING_DAYS
 from .mixin_state import MixinState
+
+
+# Cantidad máxima de lotes que muestra el panel del dashboard.
+EXPIRING_BATCHES_DISPLAY_LIMIT = 10
 
 
 class DashboardState(MixinState):
@@ -72,6 +79,11 @@ class DashboardState(MixinState):
     dash_top_products: list[dict] = []       # Top 5 productos
     dash_payment_breakdown: list[dict] = []
 
+    # Lotes por vencer (Farmacia / Supermercado)
+    dash_expiring_batches: list[dict] = []
+    expiring_batches_count: int = 0
+    expired_batches_count: int = 0
+
     # Estado de carga
     dashboard_loading: bool = False
     last_refresh: str = ""
@@ -91,6 +103,7 @@ class DashboardState(MixinState):
         self._load_top_products()
         self._load_sales_by_category()
         self._load_payment_breakdown()
+        self._load_expiring_batches()
         self.last_refresh = self._display_now().strftime("%H:%M:%S")
 
     def _local_period_dates(self) -> tuple[datetime, datetime, datetime, datetime]:
@@ -391,8 +404,11 @@ class DashboardState(MixinState):
             ).one()
             self.pending_debt = float(pending or 0)
 
-            # Productos con stock bajo (alineado con Inventario)
-            self.low_stock_count = session.exec(
+            # Productos con stock bajo (alineado con Inventario).
+            # Cuenta productos raíz Y variantes con stock bajo:
+            #   - Producto: stock > 0 AND stock <= min_stock_alert
+            #   - Variante: stock > 0 AND stock <= COALESCE(variant.min_stock_alert, product.min_stock_alert)
+            product_low = session.exec(
                 select(func.count())
                 .select_from(Product)
                 .where(
@@ -404,6 +420,23 @@ class DashboardState(MixinState):
                     )
                 )
             ).one() or 0
+            variant_low = session.exec(
+                select(func.count())
+                .select_from(ProductVariant)
+                .join(Product, ProductVariant.product_id == Product.id)
+                .where(
+                    and_(
+                        ProductVariant.company_id == company_id,
+                        ProductVariant.branch_id == branch_id,
+                        ProductVariant.stock > 0,
+                        ProductVariant.stock <= func.coalesce(
+                            ProductVariant.min_stock_alert,
+                            Product.min_stock_alert,
+                        ),
+                    )
+                )
+            ).one() or 0
+            self.low_stock_count = int(product_low) + int(variant_low)
 
     def _load_alerts(self):
         """Carga alertas del sistema."""
@@ -530,6 +563,129 @@ class DashboardState(MixinState):
                 }
                 for r in results
             ]
+
+    def _load_expiring_batches(self):
+        """Carga lotes vencidos y próximos a vencer (con stock > 0).
+
+        Devuelve hasta EXPIRING_BATCHES_DISPLAY_LIMIT entradas combinando
+        lotes ya vencidos primero y luego los que vencen en los próximos
+        BATCH_EXPIRING_DAYS días, ordenados por fecha de vencimiento.
+        Solo cuenta lotes con stock > 0 (los demás son irrelevantes).
+
+        Aplica a verticales con productos perecederos (Farmacia, Supermercado).
+        """
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.dash_expiring_batches = []
+            self.expiring_batches_count = 0
+            self.expired_batches_count = 0
+            return
+
+        now = utc_now_naive()
+        threshold = now + timedelta(days=BATCH_EXPIRING_DAYS)
+
+        with rx.session() as session:
+            # Lote + producto + variante (LEFT JOIN sobre variante porque
+            # un lote puede pertenecer al producto raíz o a una variante).
+            base_filters = and_(
+                ProductBatch.company_id == company_id,
+                ProductBatch.branch_id == branch_id,
+                ProductBatch.expiration_date != None,
+                ProductBatch.expiration_date <= threshold,
+                ProductBatch.stock > 0,
+            )
+
+            rows = session.exec(
+                select(
+                    ProductBatch.id,
+                    ProductBatch.batch_number,
+                    ProductBatch.expiration_date,
+                    ProductBatch.stock,
+                    ProductBatch.product_id,
+                    ProductBatch.product_variant_id,
+                    Product.description,
+                    ProductVariant.size,
+                    ProductVariant.color,
+                    ProductVariant.sku,
+                )
+                .select_from(ProductBatch)
+                .outerjoin(Product, Product.id == ProductBatch.product_id)
+                .outerjoin(
+                    ProductVariant,
+                    ProductVariant.id == ProductBatch.product_variant_id,
+                )
+                .where(base_filters)
+                .order_by(ProductBatch.expiration_date.asc())
+                .limit(EXPIRING_BATCHES_DISPLAY_LIMIT)
+            ).all()
+
+            expired = 0
+            soon = 0
+            display: list[dict] = []
+            for r in rows:
+                exp_dt = r[2]
+                if exp_dt is None:
+                    continue
+                is_expired = exp_dt < now
+                if is_expired:
+                    expired += 1
+                else:
+                    soon += 1
+                days_left = (exp_dt.date() - now.date()).days
+                description = r[6] or "(Sin descripción)"
+                variant_size = r[7]
+                variant_color = r[8]
+                if variant_size or variant_color:
+                    label_parts = [p for p in (variant_size, variant_color) if p]
+                    description = f"{description} ({' / '.join(label_parts)})"
+                display.append(
+                    {
+                        "id": int(r[0]),
+                        "batch_number": r[1] or "",
+                        "expiration_date": exp_dt.strftime("%Y-%m-%d"),
+                        "stock": float(r[3] or 0),
+                        "product_id": int(r[4]) if r[4] is not None else None,
+                        "product_variant_id": (
+                            int(r[5]) if r[5] is not None else None
+                        ),
+                        "description": description,
+                        "is_expired": is_expired,
+                        "days_left": int(days_left),
+                    }
+                )
+
+            # Conteos exactos (no truncados por limit) — para badges
+            expired_total_query = (
+                select(func.count())
+                .select_from(ProductBatch)
+                .where(
+                    and_(
+                        ProductBatch.company_id == company_id,
+                        ProductBatch.branch_id == branch_id,
+                        ProductBatch.expiration_date != None,
+                        ProductBatch.expiration_date < now,
+                        ProductBatch.stock > 0,
+                    )
+                )
+            )
+            soon_total_query = (
+                select(func.count())
+                .select_from(ProductBatch)
+                .where(
+                    and_(
+                        ProductBatch.company_id == company_id,
+                        ProductBatch.branch_id == branch_id,
+                        ProductBatch.expiration_date != None,
+                        ProductBatch.expiration_date >= now,
+                        ProductBatch.expiration_date <= threshold,
+                        ProductBatch.stock > 0,
+                    )
+                )
+            )
+            self.expired_batches_count = int(session.exec(expired_total_query).one() or 0)
+            self.expiring_batches_count = int(session.exec(soon_total_query).one() or 0)
+            self.dash_expiring_batches = display
 
     def _load_sales_by_category(self):
         """Carga ventas por categoría del período seleccionado."""

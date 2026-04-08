@@ -19,7 +19,13 @@ import reflex as rx
 from sqlmodel import select, func
 from sqlalchemy import and_, or_
 
-from app.models import Product, SaleInstallment, Sale, CashboxSession
+from app.models import (
+    Product,
+    ProductBatch,
+    SaleInstallment,
+    Sale,
+    CashboxSession,
+)
 from app.enums import SaleStatus
 from app.i18n import MSG
 from app.utils.formatting import format_currency
@@ -33,6 +39,8 @@ class AlertType(str, Enum):
     INSTALLMENT_DUE = "installment_due"
     INSTALLMENT_OVERDUE = "installment_overdue"
     CASHBOX_OPEN_LONG = "cashbox_open_long"
+    BATCH_EXPIRING_SOON = "batch_expiring_soon"
+    BATCH_EXPIRED = "batch_expired"
 
 
 class AlertSeverity(str, Enum):
@@ -75,6 +83,7 @@ STOCK_LOW_THRESHOLD = 10       # Unidades para alerta amarilla
 STOCK_CRITICAL_THRESHOLD = 3  # Unidades para alerta roja
 INSTALLMENT_DUE_DAYS = 3      # Días antes del vencimiento para alertar
 CASHBOX_OPEN_HOURS = 12       # Horas para alertar caja abierta
+BATCH_EXPIRING_DAYS = 30      # Ventana de "lotes por vencer" (Farmacia/Supermercado)
 
 
 def _require_tenant(company_id: int | None, branch_id: int | None) -> None:
@@ -104,7 +113,6 @@ def get_low_stock_alerts(
             and_(
                 Product.stock <= STOCK_CRITICAL_THRESHOLD,
                 Product.stock > 0,
-                Product.is_active == True,
             )
         )
         if company_id:
@@ -133,7 +141,6 @@ def get_low_stock_alerts(
             and_(
                 Product.stock > STOCK_CRITICAL_THRESHOLD,
                 Product.stock <= STOCK_LOW_THRESHOLD,
-                Product.is_active == True,
             )
         )
         if company_id:
@@ -161,12 +168,7 @@ def get_low_stock_alerts(
         out_of_stock_query = (
             select(func.count())
             .select_from(Product)
-            .where(
-                and_(
-                    Product.stock <= 0,
-                    Product.is_active == True,
-                )
-            )
+            .where(Product.stock <= 0)
         )
         if company_id:
             out_of_stock_query = out_of_stock_query.where(
@@ -395,6 +397,156 @@ def get_cashbox_alerts(
     return alerts
 
 
+def get_expiring_batches_alerts(
+    company_id: int | None = None,
+    branch_id: int | None = None,
+    days_threshold: int = BATCH_EXPIRING_DAYS,
+) -> List[Alert]:
+    """
+    Obtiene alertas de lotes próximos a vencer y lotes ya vencidos con stock.
+
+    Aplica a verticales Farmacia / Supermercado donde los productos tienen
+    fecha de vencimiento. Solo cuenta lotes con stock > 0 (no tiene sentido
+    alertar sobre lotes ya consumidos).
+
+    Args:
+        days_threshold: Ventana en días para considerar "por vencer".
+
+    Returns:
+        Lista con (a lo sumo) dos alertas: una de lotes vencidos (ERROR)
+        y una de lotes por vencer (WARNING).
+    """
+    _require_tenant(company_id, branch_id)
+    set_tenant_context(company_id, branch_id)
+    alerts: List[Alert] = []
+    now = utc_now_naive()
+    threshold = now + timedelta(days=days_threshold)
+
+    with rx.session() as session:
+        # 1) Lotes ya vencidos con stock > 0
+        expired_query = select(ProductBatch).where(
+            and_(
+                ProductBatch.expiration_date != None,
+                ProductBatch.expiration_date < now,
+                ProductBatch.stock > 0,
+            )
+        )
+        if company_id:
+            expired_query = expired_query.where(
+                ProductBatch.company_id == company_id
+            )
+        if branch_id:
+            expired_query = expired_query.where(
+                ProductBatch.branch_id == branch_id
+            )
+        expired_batches = session.exec(
+            expired_query.order_by(ProductBatch.expiration_date.asc()).limit(10)
+        ).all()
+        expired_count_query = select(func.count()).select_from(ProductBatch).where(
+            and_(
+                ProductBatch.expiration_date != None,
+                ProductBatch.expiration_date < now,
+                ProductBatch.stock > 0,
+            )
+        )
+        if company_id:
+            expired_count_query = expired_count_query.where(
+                ProductBatch.company_id == company_id
+            )
+        if branch_id:
+            expired_count_query = expired_count_query.where(
+                ProductBatch.branch_id == branch_id
+            )
+        expired_count = int(session.exec(expired_count_query).one() or 0)
+
+        if expired_count > 0:
+            alerts.append(
+                Alert(
+                    type=AlertType.BATCH_EXPIRED,
+                    severity=AlertSeverity.ERROR,
+                    title=MSG.ALERT_BATCH_EXPIRED,
+                    message=f"{expired_count} lote(s) vencido(s) con stock disponible",
+                    count=expired_count,
+                    details={
+                        "batches": [
+                            {
+                                "id": b.id,
+                                "batch_number": b.batch_number,
+                                "expiration_date": b.expiration_date.isoformat(),
+                                "stock": float(b.stock or 0),
+                                "product_id": b.product_id,
+                                "product_variant_id": b.product_variant_id,
+                            }
+                            for b in expired_batches
+                        ]
+                    },
+                )
+            )
+
+        # 2) Lotes por vencer (entre hoy y threshold) con stock > 0
+        soon_query = select(ProductBatch).where(
+            and_(
+                ProductBatch.expiration_date != None,
+                ProductBatch.expiration_date >= now,
+                ProductBatch.expiration_date <= threshold,
+                ProductBatch.stock > 0,
+            )
+        )
+        if company_id:
+            soon_query = soon_query.where(ProductBatch.company_id == company_id)
+        if branch_id:
+            soon_query = soon_query.where(ProductBatch.branch_id == branch_id)
+        soon_batches = session.exec(
+            soon_query.order_by(ProductBatch.expiration_date.asc()).limit(10)
+        ).all()
+        soon_count_query = select(func.count()).select_from(ProductBatch).where(
+            and_(
+                ProductBatch.expiration_date != None,
+                ProductBatch.expiration_date >= now,
+                ProductBatch.expiration_date <= threshold,
+                ProductBatch.stock > 0,
+            )
+        )
+        if company_id:
+            soon_count_query = soon_count_query.where(
+                ProductBatch.company_id == company_id
+            )
+        if branch_id:
+            soon_count_query = soon_count_query.where(
+                ProductBatch.branch_id == branch_id
+            )
+        soon_count = int(session.exec(soon_count_query).one() or 0)
+
+        if soon_count > 0:
+            alerts.append(
+                Alert(
+                    type=AlertType.BATCH_EXPIRING_SOON,
+                    severity=AlertSeverity.WARNING,
+                    title=MSG.ALERT_BATCH_EXPIRING,
+                    message=(
+                        f"{soon_count} lote(s) vence(n) en los próximos "
+                        f"{days_threshold} días"
+                    ),
+                    count=soon_count,
+                    details={
+                        "batches": [
+                            {
+                                "id": b.id,
+                                "batch_number": b.batch_number,
+                                "expiration_date": b.expiration_date.isoformat(),
+                                "stock": float(b.stock or 0),
+                                "product_id": b.product_id,
+                                "product_variant_id": b.product_variant_id,
+                            }
+                            for b in soon_batches
+                        ]
+                    },
+                )
+            )
+
+    return alerts
+
+
 async def get_overdue_count(
     session,
     company_id: int | None = None,
@@ -450,7 +602,12 @@ def get_all_alerts(
         alerts.extend(get_low_stock_alerts(company_id, branch_id))
     except Exception:
         pass  # No interrumpir si falla una categoría
-    
+
+    try:
+        alerts.extend(get_expiring_batches_alerts(company_id, branch_id))
+    except Exception:
+        pass
+
     try:
         alerts.extend(
             get_installment_alerts(
