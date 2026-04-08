@@ -9,7 +9,7 @@ from decimal import Decimal
 from sqlmodel import select as sql_select
 
 from app.constants import PRODUCT_SUGGESTIONS_LIMIT
-from app.models.inventory import Category, ProductBatch
+from app.models.inventory import Category, ProductBatch, ProductVariant
 from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.db import get_async_session
@@ -48,6 +48,26 @@ class CartMixin:
     product_grid_items: List[Dict[str, Any]] = []
     product_grid_search: str = ""
     wholesale_price_applied: bool = False
+
+    # ── Selector manual de lote (POS) ───────────────────────────
+    # Permite al cajero cambiar el lote auto-asignado por FEFO desde
+    # el carrito (útil cuando el cliente pide un lote específico).
+    batch_picker_open: bool = False
+    batch_picker_temp_id: str = ""
+    batch_picker_description: str = ""
+    batch_picker_options: List[Dict[str, Any]] = []
+    batch_picker_loading: bool = False
+
+    # ── Selector visual de variante (POS) ───────────────────────
+    # Grilla talla × color para productos con variantes (ropa/juguetería).
+    # Se abre automáticamente al elegir un producto padre con variantes.
+    variant_picker_open: bool = False
+    variant_picker_product_id: int | None = None
+    variant_picker_description: str = ""
+    variant_picker_loading: bool = False
+    variant_picker_colors: List[str] = []
+    variant_picker_rows: List[Dict[str, Any]] = []
+
     _autocomplete_debounce_seq: int = rx.field(default=0, is_var=False)
 
     async def _process_barcode(self, barcode: str):
@@ -314,6 +334,309 @@ class CartMixin:
                     self.new_sale_item["batch_number"] = batch.batch_number or ""
         except Exception:
             logging.exception("Error resolviendo lote FEFO para item")
+
+    @rx.event
+    async def open_batch_picker(self, temp_id: str):
+        """Abre el modal de selección manual de lote para un ítem del carrito.
+
+        Carga todos los lotes disponibles (stock > 0) del producto/variante,
+        ordenados FEFO (vencimiento ascendente). El cajero puede elegir uno
+        distinto al que asignó FEFO automáticamente.
+        """
+        item = next(
+            (it for it in self.new_sale_items if it.get("temp_id") == temp_id),
+            None,
+        )
+        if not item:
+            return rx.toast("Producto no encontrado en el carrito.", duration=3000)
+
+        product_id = item.get("product_id")
+        variant_id = item.get("variant_id")
+        if not product_id and not variant_id:
+            return rx.toast(
+                "El producto no tiene identificador de stock.", duration=3000
+            )
+
+        company_id = None
+        branch_id = None
+        if hasattr(self, "current_user"):
+            company_id = self.current_user.get("company_id")
+        if hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa o sucursal no definida.", duration=3000)
+
+        self.batch_picker_temp_id = temp_id
+        self.batch_picker_description = str(item.get("description", "") or "")
+        self.batch_picker_options = []
+        self.batch_picker_loading = True
+        self.batch_picker_open = True
+        try:
+            async with get_async_session() as session:
+                if variant_id:
+                    batch_q = sql_select(ProductBatch).where(
+                        ProductBatch.product_variant_id == int(variant_id),
+                        ProductBatch.stock > 0,
+                        ProductBatch.company_id == int(company_id),
+                        ProductBatch.branch_id == int(branch_id),
+                    )
+                else:
+                    batch_q = sql_select(ProductBatch).where(
+                        ProductBatch.product_id == int(product_id),
+                        ProductBatch.product_variant_id.is_(None),
+                        ProductBatch.stock > 0,
+                        ProductBatch.company_id == int(company_id),
+                        ProductBatch.branch_id == int(branch_id),
+                    )
+                batch_q = batch_q.order_by(
+                    ProductBatch.expiration_date.is_(None),
+                    ProductBatch.expiration_date.asc(),
+                    ProductBatch.id.asc(),
+                )
+                batches = (await session.exec(batch_q)).all()
+                current_batch_id = item.get("batch_id")
+                self.batch_picker_options = [
+                    {
+                        "id": b.id,
+                        "batch_number": b.batch_number or "",
+                        "expiration_date": (
+                            b.expiration_date.strftime("%Y-%m-%d")
+                            if b.expiration_date
+                            else ""
+                        ),
+                        "stock": float(b.stock or 0),
+                        "is_current": b.id == current_batch_id,
+                    }
+                    for b in batches
+                ]
+        except Exception:
+            logging.exception("Error cargando lotes disponibles para el selector")
+            self.batch_picker_options = []
+        finally:
+            self.batch_picker_loading = False
+
+    @rx.event
+    def close_batch_picker(self):
+        """Cierra el modal selector de lote y limpia el estado."""
+        self.batch_picker_open = False
+        self.batch_picker_temp_id = ""
+        self.batch_picker_description = ""
+        self.batch_picker_options = []
+        self.batch_picker_loading = False
+
+    @rx.event
+    def select_batch_for_item(self, batch_id: int):
+        """Aplica el lote seleccionado al ítem activo del carrito."""
+        temp_id = self.batch_picker_temp_id
+        if not temp_id:
+            self.close_batch_picker()
+            return
+        try:
+            target_id = int(batch_id)
+        except (TypeError, ValueError):
+            return rx.toast("Lote inválido.", duration=3000)
+
+        chosen = next(
+            (
+                opt
+                for opt in self.batch_picker_options
+                if int(opt.get("id", 0)) == target_id
+            ),
+            None,
+        )
+        if not chosen:
+            return rx.toast("Lote no disponible.", duration=3000)
+
+        items = list(self.new_sale_items)
+        updated = False
+        for idx, item in enumerate(items):
+            if item.get("temp_id") == temp_id:
+                new_item = item.copy()
+                new_item["batch_id"] = target_id
+                new_item["batch_number"] = chosen.get("batch_number", "") or ""
+                new_item["requires_batch"] = True
+                items[idx] = new_item
+                updated = True
+                break
+        if not updated:
+            self.close_batch_picker()
+            return rx.toast(
+                "El producto ya no está en el carrito.", duration=3000
+            )
+        self.new_sale_items = items
+        self.close_batch_picker()
+        return rx.toast(
+            f"Lote {chosen.get('batch_number', '')} asignado",
+            duration=2000,
+        )
+
+    @rx.event
+    async def open_variant_picker(self, product_id: int):
+        """Abre el modal grilla talla×color para un producto con variantes.
+
+        Carga todas las variantes del producto y las organiza en una matriz
+        donde las filas son las tallas y las columnas son los colores.
+        """
+        try:
+            pid = int(product_id)
+        except (TypeError, ValueError):
+            return rx.toast("Producto inválido.", duration=3000)
+
+        company_id = None
+        branch_id = None
+        if hasattr(self, "current_user"):
+            company_id = self.current_user.get("company_id")
+        if hasattr(self, "_branch_id"):
+            branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa o sucursal no definida.", duration=3000)
+
+        self.variant_picker_open = True
+        self.variant_picker_loading = True
+        self.variant_picker_product_id = pid
+        self.variant_picker_description = ""
+        self.variant_picker_colors = []
+        self.variant_picker_rows = []
+
+        try:
+            from app.models import Product as ProductModel
+            async with get_async_session() as session:
+                product = (
+                    await session.exec(
+                        sql_select(ProductModel).where(
+                            ProductModel.id == pid,
+                            ProductModel.company_id == int(company_id),
+                            ProductModel.branch_id == int(branch_id),
+                        )
+                    )
+                ).first()
+                if not product:
+                    self.close_variant_picker()
+                    return rx.toast("Producto no encontrado.", duration=3000)
+                self.variant_picker_description = product.description or ""
+
+                variants = (
+                    await session.exec(
+                        sql_select(ProductVariant)
+                        .where(
+                            ProductVariant.product_id == pid,
+                            ProductVariant.company_id == int(company_id),
+                            ProductVariant.branch_id == int(branch_id),
+                        )
+                        .order_by(
+                            ProductVariant.size,
+                            ProductVariant.color,
+                            ProductVariant.id,
+                        )
+                    )
+                ).all()
+                if not variants:
+                    self.close_variant_picker()
+                    return rx.toast(
+                        "Este producto no tiene variantes registradas.",
+                        duration=3000,
+                    )
+
+                # Construir matriz: detectar tallas y colores únicos
+                # preservando el orden del query (ordenado por size, color).
+                sizes_order: List[str] = []
+                colors_order: List[str] = []
+                cell_lookup: Dict[tuple, ProductVariant] = {}
+                for v in variants:
+                    size = (v.size or "").strip() or "—"
+                    color = (v.color or "").strip() or "—"
+                    if size not in sizes_order:
+                        sizes_order.append(size)
+                    if color not in colors_order:
+                        colors_order.append(color)
+                    cell_lookup[(size, color)] = v
+
+                rows: List[Dict[str, Any]] = []
+                for size in sizes_order:
+                    row_cells: List[Dict[str, Any]] = []
+                    for color in colors_order:
+                        v = cell_lookup.get((size, color))
+                        if v:
+                            stock = float(v.stock or 0)
+                            row_cells.append(
+                                {
+                                    "color": color,
+                                    "variant_id": v.id,
+                                    "sku": v.sku or "",
+                                    "stock": stock,
+                                    "available": stock > 0,
+                                    "is_placeholder": False,
+                                }
+                            )
+                        else:
+                            row_cells.append(
+                                {
+                                    "color": color,
+                                    "variant_id": 0,
+                                    "sku": "",
+                                    "stock": 0.0,
+                                    "available": False,
+                                    "is_placeholder": True,
+                                }
+                            )
+                    rows.append({"size": size, "cells": row_cells})
+
+                self.variant_picker_colors = colors_order
+                self.variant_picker_rows = rows
+        except Exception:
+            logging.exception("Error cargando variantes para el selector visual")
+            self.variant_picker_rows = []
+            self.variant_picker_colors = []
+        finally:
+            self.variant_picker_loading = False
+
+    @rx.event
+    def close_variant_picker(self):
+        """Cierra el modal selector visual de variante y limpia el state."""
+        self.variant_picker_open = False
+        self.variant_picker_product_id = None
+        self.variant_picker_description = ""
+        self.variant_picker_colors = []
+        self.variant_picker_rows = []
+        self.variant_picker_loading = False
+
+    @rx.event
+    async def select_variant_for_sale(self, variant_id: int):
+        """Agrega la variante elegida al carrito desde el modal grilla.
+
+        Busca el SKU en las celdas cargadas y delega en el flujo estándar
+        de procesamiento por código de barras (que maneja stock, lotes,
+        precio mayorista, etc.).
+        """
+        try:
+            target_id = int(variant_id)
+        except (TypeError, ValueError):
+            return rx.toast("Variante inválida.", duration=3000)
+        if target_id <= 0:
+            return rx.toast("Variante no disponible.", duration=3000)
+
+        sku = ""
+        for row in self.variant_picker_rows:
+            for cell in row.get("cells", []):
+                if int(cell.get("variant_id", 0) or 0) == target_id:
+                    if cell.get("is_placeholder"):
+                        return rx.toast(
+                            "Esa combinación no existe.", duration=3000
+                        )
+                    if not cell.get("available"):
+                        return rx.toast(
+                            "Sin stock para esa variante.", duration=3000
+                        )
+                    sku = str(cell.get("sku", "") or "")
+                    break
+            if sku:
+                break
+
+        if not sku:
+            return rx.toast("SKU no encontrado.", duration=3000)
+
+        self.close_variant_picker()
+        return await self._process_barcode(sku)
 
     def _reset_sale_form(self):
         self.sale_form_key += 1
@@ -847,7 +1170,11 @@ class CartMixin:
 
     @rx.event
     async def add_product_to_sale_by_id(self, product_id: int):
-        """Agrega un producto al carrito desde el grid visual."""
+        """Agrega un producto al carrito desde el grid visual.
+
+        Si el producto tiene variantes (talla/color), abre el selector
+        visual en lugar de agregar el producto raíz directamente.
+        """
         company_id = None
         branch_id = None
         if hasattr(self, "current_user"):
@@ -870,6 +1197,23 @@ class CartMixin:
                 ).first()
                 if not p:
                     return rx.toast("Producto no encontrado.", duration=3000)
+
+                # Detectar variantes: si existen, abrir el selector visual
+                # en lugar de agregar el producto raíz al carrito.
+                variant_exists = (
+                    await session.exec(
+                        sql_select(ProductVariant.id)
+                        .where(
+                            ProductVariant.product_id == int(product_id),
+                            ProductVariant.company_id == int(company_id),
+                            ProductVariant.branch_id == int(branch_id),
+                        )
+                        .limit(1)
+                    )
+                ).first()
+                if variant_exists:
+                    return await self.open_variant_picker(int(product_id))
+
                 payload = {
                     "id": p.id,
                     "product_id": p.id,
