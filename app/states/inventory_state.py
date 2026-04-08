@@ -224,7 +224,15 @@ class InventoryState(MixinState):
         stock_value = float(variant.stock or 0)
         purchase_value = float(product.purchase_price or 0)
         stock_total = self._round_currency(stock_value * purchase_value)
-        min_alert = float(getattr(product, 'min_stock_alert', None) or DEFAULT_LOW_STOCK_THRESHOLD)
+        # Umbral por variante con fallback al Product padre.
+        # variant.min_stock_alert == None significa "heredar del producto raíz".
+        variant_alert = getattr(variant, 'min_stock_alert', None)
+        if variant_alert is not None:
+            min_alert = float(variant_alert)
+        else:
+            min_alert = float(
+                getattr(product, 'min_stock_alert', None) or DEFAULT_LOW_STOCK_THRESHOLD
+            )
         return {
             "id": product.id,
             "variant_id": variant.id,

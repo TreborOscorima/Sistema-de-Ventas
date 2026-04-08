@@ -128,6 +128,13 @@ class ProductVariant(rx.Model, table=True):
         default=Decimal("0.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
     )
+    # Umbral de alerta de stock bajo por variante.
+    # NULL = heredar del Product padre (Product.min_stock_alert).
+    # Permite que una talla XL escasa dispare alerta aunque el producto raíz tenga stock.
+    min_stock_alert: Optional[Decimal] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(Numeric(10, 4), nullable=True),
+    )
     company_id: int = Field(
         foreign_key="company.id",
         index=True,
