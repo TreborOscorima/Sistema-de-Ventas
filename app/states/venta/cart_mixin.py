@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, TypedDict, Union
 
 import reflex as rx
 from decimal import Decimal, ROUND_HALF_UP
@@ -14,6 +14,20 @@ from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.db import get_async_session
 from ..types import TransactionItem
+
+
+class _VariantPickerCell(TypedDict):
+    variant_id: int | None
+    color: str
+    stock: float
+    sku: str
+    is_placeholder: bool
+    available: bool
+
+
+class _VariantPickerRow(TypedDict):
+    size: str
+    cells: List[_VariantPickerCell]
 
 
 class CartMixin:
@@ -68,7 +82,7 @@ class CartMixin:
     variant_picker_description: str = ""
     variant_picker_loading: bool = False
     variant_picker_colors: List[str] = []
-    variant_picker_rows: List[Dict[str, Any]] = []
+    variant_picker_rows: List[_VariantPickerRow] = []
 
     _autocomplete_debounce_seq: int = rx.field(default=0, is_var=False)
 

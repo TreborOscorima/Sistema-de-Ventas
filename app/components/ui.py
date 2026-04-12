@@ -567,9 +567,23 @@ def modal_container(
         footer: Contenido del footer (normalmente botones)
         max_width: Clase Tailwind de max-width
     """
+    # description puede ser un str estático o un Reflex Var (cuando viene del state).
+    # En el segundo caso `if description` lanza VarTypeError → usar rx.cond.
+    if isinstance(description, rx.Var):
+        desc_component = rx.cond(
+            description != "",
+            rx.el.p(description, class_name="text-sm text-slate-600"),
+            rx.fragment(),
+        )
+    else:
+        desc_component = (
+            rx.el.p(description, class_name="text-sm text-slate-600")
+            if description
+            else rx.fragment()
+        )
     header = rx.el.div(
         rx.el.h3(title, class_name="text-base sm:text-lg font-semibold text-slate-800"),
-        rx.el.p(description, class_name="text-sm text-slate-600") if description else rx.fragment(),
+        desc_component,
         class_name="space-y-1",
     )
     body = (
