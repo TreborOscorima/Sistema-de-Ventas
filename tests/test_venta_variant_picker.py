@@ -425,7 +425,7 @@ class TestAddProductAutoDetectVariants:
 
     @pytest.mark.asyncio
     async def test_producto_sin_variantes_se_agrega_directo(self):
-        """Sin variantes, se conserva el flujo original (add_item_to_sale)."""
+        """Sin variantes y sin kit, se conserva el flujo original (add_item_to_sale)."""
         state = _make_state()
         state.open_variant_picker = AsyncMock()
         state.add_item_to_sale = AsyncMock(return_value="added")
@@ -433,7 +433,7 @@ class TestAddProductAutoDetectVariants:
         product = _make_product(id_=20)
 
         with _patch_async_session(
-            exec_results=[_exec_first(product), _exec_first(None)]
+            exec_results=[_exec_first(product), _exec_first(None), _exec_first(None)]
         ):
             result = await state.add_product_to_sale_by_id(20)
 

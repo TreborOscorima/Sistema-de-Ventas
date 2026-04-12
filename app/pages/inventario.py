@@ -213,6 +213,24 @@ def edit_product_modal() -> rx.Component:
             ),
             class_name="flex flex-col gap-2",
           ),
+          rx.el.div(
+            rx.el.label(
+              "Kit / Combo",
+              class_name=TYPOGRAPHY["label"],
+            ),
+            rx.el.div(
+              toggle_switch(
+                checked=State.show_kit_components,
+                on_change=State.set_show_kit_components,
+              ),
+              rx.el.span(
+                "Producto compuesto por otros productos",
+                class_name=TYPOGRAPHY["caption"],
+              ),
+              class_name="flex items-center gap-2",
+            ),
+            class_name="flex flex-col gap-2",
+          ),
           class_name="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4",
         ),
         # Modal de confirmación para desactivar mayoreo
@@ -544,6 +562,89 @@ def edit_product_modal() -> rx.Component:
             ),
             rx.el.p(
               "Ej: ferretería (material, calibre), farmacia (principio_activo, dosaje), juguetería (edad_minima).",
+              class_name=f"{TYPOGRAPHY['caption']} mt-2",
+            ),
+            class_name="mt-4 space-y-3",
+          ),
+          rx.fragment(),
+        ),
+        # ─── Sección de componentes de kit ───
+        rx.cond(
+          State.show_kit_components,
+          rx.el.div(
+            rx.el.div(
+              rx.el.h4(
+                "Componentes del kit",
+                class_name=TYPOGRAPHY["label"],
+              ),
+              rx.el.button(
+                rx.icon("plus", class_name="h-4 w-4"),
+                "Agregar componente",
+                on_click=State.add_kit_component_row,
+                class_name=BUTTON_STYLES["primary_sm"],
+              ),
+              class_name="flex items-center justify-between",
+            ),
+            rx.el.div(
+              rx.el.div(
+                rx.el.span(
+                  "Código", class_name=f"{TYPOGRAPHY['caption']} uppercase sm:col-span-2"
+                ),
+                rx.el.span(
+                  "Producto", class_name=f"{TYPOGRAPHY['caption']} uppercase sm:col-span-2"
+                ),
+                rx.el.span(
+                  "Cantidad", class_name=f"{TYPOGRAPHY['caption']} uppercase"
+                ),
+                rx.el.span("Acción", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                class_name="hidden sm:grid sm:grid-cols-6 gap-2",
+              ),
+              rx.foreach(
+                State.kit_component_rows,
+                lambda row: rx.el.div(
+                  rx.el.input(
+                    placeholder="Código de barras",
+                    default_value=row["component_barcode"],
+                    on_blur=lambda v, index=row["index"]: State.resolve_kit_component(
+                      index, v
+                    ),
+                    class_name=f"{INPUT_STYLES['default']} sm:col-span-2",
+                  ),
+                  rx.el.span(
+                    rx.cond(
+                      row["component_name"] != "",
+                      row["component_name"],
+                      "Sin asignar",
+                    ),
+                    class_name="text-sm text-slate-600 sm:col-span-2 truncate py-2",
+                  ),
+                  rx.el.input(
+                    type="number",
+                    placeholder="1",
+                    min="0.0001",
+                    step="1",
+                    default_value=row["quantity"].to_string(),
+                    on_blur=lambda v, index=row["index"]: State.update_kit_component_field(
+                      index, "quantity", v
+                    ),
+                    class_name=INPUT_STYLES["default"],
+                  ),
+                  rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=lambda _, index=row["index"]: State.remove_kit_component_row(
+                      index
+                    ),
+                    title="Eliminar componente",
+                    aria_label="Eliminar componente",
+                    class_name=BUTTON_STYLES["icon_danger"],
+                  ),
+                  class_name="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center",
+                ),
+              ),
+              class_name="flex flex-col gap-3",
+            ),
+            rx.el.p(
+              "Al vender este kit, se descuenta stock de cada componente individual.",
               class_name=f"{TYPOGRAPHY['caption']} mt-2",
             ),
             class_name="mt-4 space-y-3",

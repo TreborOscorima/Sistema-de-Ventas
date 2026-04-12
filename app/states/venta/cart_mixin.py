@@ -4,12 +4,12 @@ import uuid
 from typing import Any, Dict, List, Union
 
 import reflex as rx
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlmodel import select as sql_select
 
 from app.constants import PRODUCT_SUGGESTIONS_LIMIT
-from app.models.inventory import Category, ProductBatch, ProductVariant
+from app.models.inventory import Category, ProductBatch, ProductKit, ProductVariant
 from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.db import get_async_session
@@ -38,6 +38,8 @@ class CartMixin:
         "batch_id": None,
         "batch_number": "",
         "requires_batch": False,
+        "kit_product_id": None,
+        "kit_name": "",
     }
     new_sale_items: List[Dict[str, Any]] = []
     autocomplete_suggestions: List[str] = []
@@ -89,6 +91,25 @@ class CartMixin:
             int(branch_id),
         )
         if product:
+            # Detectar kit: si tiene componentes, expandir en carrito
+            prod_id = product.get("product_id") or product.get("id")
+            if prod_id and not product.get("is_variant"):
+                async with get_async_session() as session:
+                    kit_exists = (
+                        await session.exec(
+                            sql_select(ProductKit.id)
+                            .where(
+                                ProductKit.kit_product_id == int(prod_id),
+                                ProductKit.company_id == int(company_id),
+                                ProductKit.branch_id == int(branch_id),
+                            )
+                            .limit(1)
+                        )
+                    ).first()
+                if kit_exists:
+                    return await self._add_kit_to_cart(
+                        product, company_id, branch_id
+                    )
             if self.new_sale_item.get("quantity", 0) <= 0:
                 self.new_sale_item["quantity"] = 1
             self._set_last_scanned_label(product)
@@ -334,6 +355,134 @@ class CartMixin:
                     self.new_sale_item["batch_number"] = batch.batch_number or ""
         except Exception:
             logging.exception("Error resolviendo lote FEFO para item")
+
+    async def _add_kit_to_cart(self, kit_product, company_id, branch_id):
+        """Expande un kit en sus componentes y los agrega al carrito.
+
+        Cada componente se agrega como ítem separado para trazabilidad
+        individual en SaleItem y descuento de stock uno a uno.
+        El precio del kit (Product.sale_price) se distribuye proporcionalmente
+        según el peso (sale_price × qty) de cada componente.
+        """
+        from app.models import Product as ProductModel
+
+        kit_id = self._product_value(kit_product, "product_id", None) or self._product_value(kit_product, "id", None)
+        kit_name = self._product_value(kit_product, "description", "Kit")
+        kit_price = Decimal(str(self._product_value(kit_product, "sale_price", 0) or 0))
+
+        async with get_async_session() as session:
+            components = (
+                await session.exec(
+                    sql_select(ProductKit).where(
+                        ProductKit.kit_product_id == int(kit_id),
+                        ProductKit.company_id == int(company_id),
+                        ProductKit.branch_id == int(branch_id),
+                    )
+                )
+            ).all()
+            if not components:
+                return rx.toast("Kit sin componentes configurados.", duration=3000)
+
+            component_ids = [c.component_product_id for c in components]
+            products = (
+                await session.exec(
+                    sql_select(ProductModel).where(
+                        ProductModel.id.in_(component_ids),
+                        ProductModel.company_id == int(company_id),
+                        ProductModel.branch_id == int(branch_id),
+                    )
+                )
+            ).all()
+            product_map = {p.id: p for p in products}
+
+            for comp in components:
+                if comp.component_product_id not in product_map:
+                    return rx.toast(
+                        f"Componente del kit no encontrado (ID: {comp.component_product_id}).",
+                        duration=3000,
+                    )
+
+            # Validar stock de cada componente (considerando lo ya en carrito)
+            for comp in components:
+                p = product_map[comp.component_product_id]
+                available = await SaleService.get_available_stock(
+                    int(p.id), None, int(company_id), int(branch_id),
+                )
+                needed = float(comp.quantity)
+                in_cart = sum(
+                    float(item.get("quantity", 0))
+                    for item in self.new_sale_items
+                    if item.get("product_id") == p.id and not item.get("variant_id")
+                )
+                if float(available or 0) < needed + in_cart:
+                    return rx.toast(
+                        f"Stock insuficiente de '{p.description}' para armar el kit.",
+                        duration=3000,
+                    )
+
+            # Calcular peso proporcional para distribuir precio del kit
+            total_weight = sum(
+                float(product_map[c.component_product_id].sale_price or 0) * float(c.quantity)
+                for c in components
+            )
+
+            items_added = []
+            remaining_price = kit_price
+
+            for i, comp in enumerate(components):
+                p = product_map[comp.component_product_id]
+                qty = float(comp.quantity)
+
+                if i == len(components) - 1:
+                    component_subtotal = remaining_price
+                elif total_weight > 0:
+                    weight = Decimal(str(float(p.sale_price or 0) * qty))
+                    component_subtotal = (kit_price * weight / Decimal(str(total_weight))).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+                    remaining_price -= component_subtotal
+                else:
+                    component_subtotal = (kit_price / len(components)).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
+                    remaining_price -= component_subtotal
+
+                unit_price = (component_subtotal / Decimal(str(qty))).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                item = {
+                    "temp_id": str(uuid.uuid4()),
+                    "barcode": p.barcode or "",
+                    "description": p.description or "",
+                    "category": p.category or "General",
+                    "quantity": self._normalize_quantity_value(qty, p.unit or "Unidad"),
+                    "unit": p.unit or "Unidad",
+                    "price": float(unit_price),
+                    "sale_price": float(unit_price),
+                    "subtotal": float(component_subtotal),
+                    "product_id": p.id,
+                    "variant_id": None,
+                    "batch_id": None,
+                    "batch_number": "",
+                    "requires_batch": False,
+                    "kit_product_id": int(kit_id),
+                    "kit_name": str(kit_name),
+                }
+                self._apply_item_rounding(item)
+                items_added.append(item)
+
+        self.new_sale_items = [*self.new_sale_items, *items_added]
+        self._reset_sale_form()
+        self._refresh_payment_feedback()
+        return [
+            rx.toast(
+                f"Kit '{kit_name}' agregado ({len(items_added)} componentes)",
+                duration=2000,
+            ),
+            rx.call_script(
+                "setTimeout(() => { const el = document.getElementById('venta_barcode_input'); if (el) { el.focus(); el.select(); } }, 0);"
+            ),
+        ]
 
     @rx.event
     async def open_batch_picker(self, temp_id: str):
@@ -1213,6 +1362,29 @@ class CartMixin:
                 ).first()
                 if variant_exists:
                     return await self.open_variant_picker(int(product_id))
+
+                # Detectar kit: si tiene componentes, expandir en carrito
+                kit_exists = (
+                    await session.exec(
+                        sql_select(ProductKit.id)
+                        .where(
+                            ProductKit.kit_product_id == int(product_id),
+                            ProductKit.company_id == int(company_id),
+                            ProductKit.branch_id == int(branch_id),
+                        )
+                        .limit(1)
+                    )
+                ).first()
+                if kit_exists:
+                    kit_payload = {
+                        "id": p.id,
+                        "product_id": p.id,
+                        "description": p.description,
+                        "sale_price": p.sale_price,
+                    }
+                    return await self._add_kit_to_cart(
+                        kit_payload, company_id, branch_id
+                    )
 
                 payload = {
                     "id": p.id,

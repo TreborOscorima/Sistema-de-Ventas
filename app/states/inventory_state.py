@@ -34,6 +34,7 @@ from app.models import (
     Product,
     ProductAttribute,
     ProductBatch,
+    ProductKit,
     ProductVariant,
     PriceTier,
     StockMovement,
@@ -108,11 +109,13 @@ class InventoryState(MixinState):
     show_wholesale: bool = False
     show_batches: bool = False
     show_attributes: bool = False
+    show_kit_components: bool = False
     confirm_disable_wholesale: bool = False
     variants: List[Dict[str, Any]] = []
     price_tiers: List[Dict[str, Any]] = []
     batches: List[Dict[str, Any]] = []
     attributes: List[Dict[str, Any]] = []
+    kit_components: List[Dict[str, Any]] = []
     stock_details_open: bool = False
     stock_details_title: str = ""
     stock_details_mode: str = "simple"
@@ -675,10 +678,12 @@ class InventoryState(MixinState):
             self.show_wholesale = False
             self.show_batches = False
             self.show_attributes = False
+            self.show_kit_components = False
             self.variants = []
             self.price_tiers = []
             self.batches = []
             self.attributes = []
+            self.kit_components = []
             self.is_editing_product = True
             return
 
@@ -705,10 +710,12 @@ class InventoryState(MixinState):
         self.show_wholesale = False
         self.show_batches = False
         self.show_attributes = False
+        self.show_kit_components = False
         self.variants = []
         self.price_tiers = []
         self.batches = []
         self.attributes = []
+        self.kit_components = []
 
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -798,6 +805,31 @@ class InventoryState(MixinState):
                     ]
                     self.show_attributes = True
 
+                # Cargar componentes de kit
+                kit_comps = session.exec(
+                    select(ProductKit)
+                    .where(ProductKit.kit_product_id == product_id)
+                    .where(ProductKit.company_id == company_id)
+                    .where(ProductKit.branch_id == branch_id)
+                ).all()
+                if kit_comps:
+                    comp_ids = [c.component_product_id for c in kit_comps]
+                    comp_products = session.exec(
+                        select(Product).where(Product.id.in_(comp_ids))
+                    ).all()
+                    comp_map = {p.id: p for p in comp_products}
+                    self.kit_components = [
+                        {
+                            "id": c.id,
+                            "component_barcode": (comp_map[c.component_product_id].barcode or "") if c.component_product_id in comp_map else "",
+                            "component_name": (comp_map[c.component_product_id].description or "") if c.component_product_id in comp_map else "",
+                            "component_product_id": c.component_product_id,
+                            "quantity": float(c.quantity or 1),
+                        }
+                        for c in kit_comps
+                    ]
+                    self.show_kit_components = True
+
         self.is_editing_product = True
 
     @rx.event
@@ -818,11 +850,13 @@ class InventoryState(MixinState):
         self.show_wholesale = False
         self.show_batches = False
         self.show_attributes = False
+        self.show_kit_components = False
         self.confirm_disable_wholesale = False
         self.variants = []
         self.price_tiers = []
         self.batches = []
         self.attributes = []
+        self.kit_components = []
         self.is_editing_product = True
 
     @rx.event
@@ -916,11 +950,13 @@ class InventoryState(MixinState):
         self.show_wholesale = False
         self.show_batches = False
         self.show_attributes = False
+        self.show_kit_components = False
         self.confirm_disable_wholesale = False
         self.variants = []
         self.price_tiers = []
         self.batches = []
         self.attributes = []
+        self.kit_components = []
 
     @rx.event
     def handle_edit_product_change(self, field: str, value: str):
@@ -1146,6 +1182,84 @@ class InventoryState(MixinState):
         attrs[index] = row
         self.attributes = attrs
 
+    # ─── Kit Components (composición de kits/combos) ───
+    @rx.event
+    def set_show_kit_components(self, value: bool | str):
+        if isinstance(value, str):
+            value = value.lower() in ["true", "1", "on", "yes"]
+        self.show_kit_components = bool(value)
+        if self.show_kit_components and not self.kit_components:
+            self.add_kit_component_row()
+
+    @rx.event
+    def add_kit_component_row(self):
+        self.kit_components = [
+            *self.kit_components,
+            {"id": None, "component_barcode": "", "component_name": "", "component_product_id": None, "quantity": 1.0},
+        ]
+
+    @rx.event
+    def remove_kit_component_row(self, index: int):
+        if index < 0 or index >= len(self.kit_components):
+            return
+        self.kit_components = [
+            row for idx, row in enumerate(self.kit_components) if idx != index
+        ]
+
+    @rx.event
+    def update_kit_component_field(self, index: int, field: str, value: Any):
+        if index < 0 or index >= len(self.kit_components):
+            return
+        comps = list(self.kit_components)
+        row = dict(comps[index])
+        if field == "quantity":
+            try:
+                row[field] = float(value) if value not in ("", None) else 1.0
+            except (TypeError, ValueError):
+                return
+        else:
+            row[field] = value
+        comps[index] = row
+        self.kit_components = comps
+
+    @rx.event
+    def resolve_kit_component(self, index: int, barcode: str):
+        """Busca un producto por código de barras y lo asigna como componente del kit."""
+        if index < 0 or index >= len(self.kit_components):
+            return
+        code = (barcode or "").strip()
+        if not code:
+            return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
+        with rx.session() as session:
+            p = session.exec(
+                select(Product)
+                .where(Product.barcode == code)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).first()
+            if not p:
+                return rx.toast(f"Producto con código '{code}' no encontrado.", duration=3000)
+            comps = list(self.kit_components)
+            row = dict(comps[index])
+            row["component_barcode"] = p.barcode or ""
+            row["component_name"] = p.description or ""
+            row["component_product_id"] = p.id
+            comps[index] = row
+            self.kit_components = comps
+
+    @rx.var(cache=True)
+    def kit_component_rows(self) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for index, comp in enumerate(self.kit_components):
+            row = dict(comp)
+            row["index"] = index
+            rows.append(row)
+        return rows
+
     @rx.var(cache=True)
     def batch_rows(self) -> List[Dict[str, Any]]:
         rows: List[Dict[str, Any]] = []
@@ -1271,6 +1385,21 @@ class InventoryState(MixinState):
             if len(names) != len(set(names)):
                 return self.add_notification(
                     "Hay nombres de atributo duplicados.", "error"
+                )
+
+        if self.show_kit_components:
+            comp_ids = [
+                c.get("component_product_id")
+                for c in self.kit_components
+                if c.get("component_product_id")
+            ]
+            if not comp_ids:
+                return self.add_notification(
+                    "Agregue al menos un componente válido al kit.", "error"
+                )
+            if len(comp_ids) != len(set(comp_ids)):
+                return self.add_notification(
+                    "Hay componentes duplicados en el kit.", "error"
                 )
 
         self.is_loading = True
@@ -1543,6 +1672,46 @@ class InventoryState(MixinState):
                         for attr in existing_attrs:
                             session.delete(attr)
 
+                    # ─── Persistir componentes de kit ───
+                    if self.show_kit_components:
+                        existing_kit = session.exec(
+                            select(ProductKit)
+                            .where(ProductKit.kit_product_id == product_id)
+                            .where(ProductKit.company_id == company_id)
+                            .where(ProductKit.branch_id == branch_id)
+                        ).all()
+                        for k in existing_kit:
+                            session.delete(k)
+                        session.flush()
+
+                        for comp in self.kit_components:
+                            comp_pid = comp.get("component_product_id")
+                            if not comp_pid:
+                                continue
+                            qty_value = comp.get("quantity", 1) or 1
+                            try:
+                                qty_value = Decimal(str(qty_value))
+                            except (TypeError, InvalidOperation):
+                                qty_value = Decimal("1")
+                            session.add(
+                                ProductKit(
+                                    kit_product_id=product_id,
+                                    component_product_id=int(comp_pid),
+                                    quantity=qty_value,
+                                    company_id=company_id,
+                                    branch_id=branch_id,
+                                )
+                            )
+                    else:
+                        existing_kit = session.exec(
+                            select(ProductKit)
+                            .where(ProductKit.kit_product_id == product_id)
+                            .where(ProductKit.company_id == company_id)
+                            .where(ProductKit.branch_id == branch_id)
+                        ).all()
+                        for k in existing_kit:
+                            session.delete(k)
+
                 session.commit()
         except Exception:
             logger.exception(
@@ -1563,10 +1732,12 @@ class InventoryState(MixinState):
         self.show_wholesale = False
         self.show_batches = False
         self.show_attributes = False
+        self.show_kit_components = False
         self.variants = []
         self.price_tiers = []
         self.batches = []
         self.attributes = []
+        self.kit_components = []
         return self.add_notification(msg, "success")
 
     @rx.event

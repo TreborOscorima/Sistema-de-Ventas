@@ -231,6 +231,16 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
+                rx.cond(
+                    item["kit_name"] != "",
+                    rx.el.span(
+                        rx.icon("package", class_name="h-3 w-3 inline mr-0.5"),
+                        "KIT: ",
+                        item["kit_name"],
+                        class_name="text-xs font-mono text-violet-700 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 w-fit",
+                    ),
+                    rx.fragment(),
+                ),
                 class_name="flex flex-col gap-0.5",
             ),
             class_name="py-2 px-3 text-sm",
@@ -284,6 +294,16 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
                         aria_label="Cambiar lote",
                         type="button",
                         class_name="text-xs font-mono text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 w-fit transition-colors",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.cond(
+                    item["kit_name"] != "",
+                    rx.el.span(
+                        rx.icon("package", class_name="h-3 w-3 inline mr-0.5"),
+                        "KIT: ",
+                        item["kit_name"],
+                        class_name="text-xs font-mono text-violet-700 bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 w-fit",
                     ),
                     rx.fragment(),
                 ),
