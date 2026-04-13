@@ -202,6 +202,20 @@ SUPPORTED_COUNTRIES = {
         "phone_digits": [9, 11],  # 9 dígitos o 11 con código país (51)
         "personal_id_length": (8, 8),  # Exactamente 8 dígitos
         "tax_id_length": (11, 11),  # Exactamente 11 dígitos
+        # Denominaciones para arqueo de caja (mayor a menor)
+        "denominations": [
+            {"value": 200, "label": "S/200", "type": "bill"},
+            {"value": 100, "label": "S/100", "type": "bill"},
+            {"value": 50, "label": "S/50", "type": "bill"},
+            {"value": 20, "label": "S/20", "type": "bill"},
+            {"value": 10, "label": "S/10", "type": "bill"},
+            {"value": 5, "label": "S/5", "type": "coin"},
+            {"value": 2, "label": "S/2", "type": "coin"},
+            {"value": 1, "label": "S/1", "type": "coin"},
+            {"value": 0.50, "label": "S/0.50", "type": "coin"},
+            {"value": 0.20, "label": "S/0.20", "type": "coin"},
+            {"value": 0.10, "label": "S/0.10", "type": "coin"},
+        ],
     },
     "AR": {
         "name": "Argentina",
@@ -218,6 +232,21 @@ SUPPORTED_COUNTRIES = {
         "phone_digits": [10, 13],  # 10 dígitos o 13 con código país (54)
         "personal_id_length": (7, 8),  # 7-8 dígitos
         "tax_id_length": (11, 11),  # 11 dígitos sin guiones
+        "denominations": [
+            {"value": 20000, "label": "$20.000", "type": "bill"},
+            {"value": 10000, "label": "$10.000", "type": "bill"},
+            {"value": 2000, "label": "$2.000", "type": "bill"},
+            {"value": 1000, "label": "$1.000", "type": "bill"},
+            {"value": 500, "label": "$500", "type": "bill"},
+            {"value": 200, "label": "$200", "type": "bill"},
+            {"value": 100, "label": "$100", "type": "coin"},
+            {"value": 50, "label": "$50", "type": "coin"},
+            {"value": 20, "label": "$20", "type": "coin"},
+            {"value": 10, "label": "$10", "type": "coin"},
+            {"value": 5, "label": "$5", "type": "coin"},
+            {"value": 2, "label": "$2", "type": "coin"},
+            {"value": 1, "label": "$1", "type": "coin"},
+        ],
     },
     "EC": {
         "name": "Ecuador",
@@ -234,6 +263,19 @@ SUPPORTED_COUNTRIES = {
         "phone_digits": [9, 12],  # 9 dígitos o 12 con código país (593)
         "personal_id_length": (10, 10),  # 10 dígitos
         "tax_id_length": (13, 13),  # 13 dígitos
+        "denominations": [
+            {"value": 100, "label": "$100", "type": "bill"},
+            {"value": 50, "label": "$50", "type": "bill"},
+            {"value": 20, "label": "$20", "type": "bill"},
+            {"value": 10, "label": "$10", "type": "bill"},
+            {"value": 5, "label": "$5", "type": "bill"},
+            {"value": 1, "label": "$1", "type": "bill"},
+            {"value": 0.50, "label": "$0.50", "type": "coin"},
+            {"value": 0.25, "label": "$0.25", "type": "coin"},
+            {"value": 0.10, "label": "$0.10", "type": "coin"},
+            {"value": 0.05, "label": "$0.05", "type": "coin"},
+            {"value": 0.01, "label": "$0.01", "type": "coin"},
+        ],
     },
     "CO": {
         "name": "Colombia",
@@ -250,6 +292,19 @@ SUPPORTED_COUNTRIES = {
         "phone_digits": [10, 12],  # 10 dígitos o 12 con código país (57)
         "personal_id_length": (6, 10),  # 6-10 dígitos
         "tax_id_length": (9, 10),  # 9-10 dígitos sin dígito verificador
+        "denominations": [
+            {"value": 100000, "label": "$100.000", "type": "bill"},
+            {"value": 50000, "label": "$50.000", "type": "bill"},
+            {"value": 20000, "label": "$20.000", "type": "bill"},
+            {"value": 10000, "label": "$10.000", "type": "bill"},
+            {"value": 5000, "label": "$5.000", "type": "bill"},
+            {"value": 2000, "label": "$2.000", "type": "bill"},
+            {"value": 1000, "label": "$1.000", "type": "coin"},
+            {"value": 500, "label": "$500", "type": "coin"},
+            {"value": 200, "label": "$200", "type": "coin"},
+            {"value": 100, "label": "$100", "type": "coin"},
+            {"value": 50, "label": "$50", "type": "coin"},
+        ],
     },
     "CL": {
         "name": "Chile",
@@ -266,6 +321,17 @@ SUPPORTED_COUNTRIES = {
         "phone_digits": [9, 11],  # 9 dígitos o 11 con código país (56)
         "personal_id_length": (8, 9),  # 8-9 caracteres (incluye dígito verificador)
         "tax_id_length": (8, 9),  # Mismo formato que RUN
+        "denominations": [
+            {"value": 20000, "label": "$20.000", "type": "bill"},
+            {"value": 10000, "label": "$10.000", "type": "bill"},
+            {"value": 5000, "label": "$5.000", "type": "bill"},
+            {"value": 2000, "label": "$2.000", "type": "bill"},
+            {"value": 1000, "label": "$1.000", "type": "bill"},
+            {"value": 500, "label": "$500", "type": "coin"},
+            {"value": 100, "label": "$100", "type": "coin"},
+            {"value": 50, "label": "$50", "type": "coin"},
+            {"value": 10, "label": "$10", "type": "coin"},
+        ],
     },
     "MX": {
         "name": "México",
@@ -282,6 +348,19 @@ SUPPORTED_COUNTRIES = {
         "phone_digits": [10, 12],  # 10 dígitos o 12 con código país (52)
         "personal_id_length": (18, 18),  # CURP tiene 18 caracteres
         "tax_id_length": (12, 13),  # RFC 12-13 caracteres
+        "denominations": [
+            {"value": 1000, "label": "$1,000", "type": "bill"},
+            {"value": 500, "label": "$500", "type": "bill"},
+            {"value": 200, "label": "$200", "type": "bill"},
+            {"value": 100, "label": "$100", "type": "bill"},
+            {"value": 50, "label": "$50", "type": "bill"},
+            {"value": 20, "label": "$20", "type": "bill"},
+            {"value": 10, "label": "$10", "type": "coin"},
+            {"value": 5, "label": "$5", "type": "coin"},
+            {"value": 2, "label": "$2", "type": "coin"},
+            {"value": 1, "label": "$1", "type": "coin"},
+            {"value": 0.50, "label": "$0.50", "type": "coin"},
+        ],
     },
 }
 

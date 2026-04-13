@@ -262,6 +262,14 @@ class CashboxSession(rx.Model, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
+    counted_amount: Optional[Decimal] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(Numeric(10, 2), nullable=True),
+    )
+    denomination_detail: Optional[str] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.Text, nullable=True),
+    )
     is_open: bool = Field(default=True)
 
     company_id: int = Field(

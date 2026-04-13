@@ -114,6 +114,9 @@ class CashState(MixinState):
     cashbox_close_income_total: float = 0.0
     cashbox_close_expense_total: float = 0.0
     cashbox_close_expected_total: float = 0.0
+    # Arqueo por denominación
+    denomination_counts: dict[str, int] = {}
+    cashbox_close_counted_total: float = 0.0
     cashbox_sessions: Dict[str, CashboxSession] = {}
     cashbox_open_amount_input: str = "0"
     cashbox_logs: List[CashboxLogEntry] = []
@@ -1509,6 +1512,84 @@ class CashState(MixinState):
         return self._format_currency(self.cashbox_close_expected_total)
 
     @rx.var(cache=True)
+    def cashbox_close_counted_total_display(self) -> str:
+        return self._format_currency(self.cashbox_close_counted_total)
+
+    @rx.var(cache=True)
+    def cashbox_close_discrepancy(self) -> float:
+        return self._round_currency(
+            self.cashbox_close_counted_total - self.cashbox_close_expected_total
+        )
+
+    @rx.var(cache=True)
+    def cashbox_close_discrepancy_display(self) -> str:
+        diff = self.cashbox_close_discrepancy
+        sign = "+" if diff > 0 else ""
+        return f"{sign}{self._format_currency(diff)}"
+
+    @rx.var(cache=True)
+    def cashbox_close_discrepancy_color(self) -> str:
+        diff = self.cashbox_close_discrepancy
+        if diff == 0:
+            return "text-green-600"
+        return "text-red-600"
+
+    @rx.var(cache=True)
+    def cashbox_close_has_counted(self) -> bool:
+        """True si el cajero ingresó al menos una denominación."""
+        return any(v > 0 for v in self.denomination_counts.values())
+
+    @rx.var(cache=True)
+    def cashbox_denominations_config(self) -> list[dict]:
+        """Denominaciones del país actual para la UI."""
+        from app.utils.db_seeds import get_country_config
+        country = getattr(self, "selected_country_code", "PE")
+        config = get_country_config(country)
+        return config.get("denominations", [])
+
+    @rx.var(cache=True)
+    def denomination_rows(self) -> list[dict]:
+        """Filas de denominación con cantidad y subtotal para la UI."""
+        rows = []
+        for denom in self.cashbox_denominations_config:
+            key = str(denom["value"])
+            count = self.denomination_counts.get(key, 0)
+            subtotal = self._round_currency(denom["value"] * count)
+            rows.append({
+                "value": denom["value"],
+                "label": denom["label"],
+                "type": denom["type"],
+                "key": key,
+                "count": count,
+                "subtotal": self._format_currency(subtotal),
+            })
+        return rows
+
+    @rx.event
+    def set_denomination_count(self, key: str, value: str):
+        """Actualiza la cantidad de una denominación y recalcula el total."""
+        try:
+            count = int(value) if value else 0
+            if count < 0:
+                count = 0
+        except (ValueError, TypeError):
+            count = 0
+        self.denomination_counts[key] = count
+        # Recalcular total contado
+        total = 0.0
+        for denom in self.cashbox_denominations_config:
+            k = str(denom["value"])
+            c = self.denomination_counts.get(k, 0)
+            total += denom["value"] * c
+        self.cashbox_close_counted_total = self._round_currency(total)
+
+    @rx.event
+    def clear_denomination_counts(self):
+        """Limpia todos los conteos de denominación."""
+        self.denomination_counts = {}
+        self.cashbox_close_counted_total = 0.0
+
+    @rx.var(cache=True)
     def cashbox_close_sales(self) -> list[CashboxSale]:
         if not self.current_user["privileges"]["view_cashbox"]:
             return []
@@ -1791,6 +1872,11 @@ class CashState(MixinState):
         info_dict["Ingresos reales"] = self._format_currency(breakdown["income_total"])
         info_dict["Egresos caja chica"] = self._format_currency(breakdown["expense_total"])
         info_dict["Saldo esperado"] = self._format_currency(breakdown["expected_total"])
+        if self.cashbox_close_has_counted:
+            info_dict["Total contado"] = self._format_currency(self.cashbox_close_counted_total)
+            diff = self.cashbox_close_discrepancy
+            sign = "+" if diff > 0 else ""
+            info_dict["Diferencia"] = f"{sign}{self._format_currency(diff)}"
 
         def _format_time(timestamp: str) -> str:
             if not timestamp:
@@ -2993,6 +3079,29 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         expense_total = breakdown["expense_total"]
         closing_total = breakdown["expected_total"]
 
+        # Arqueo por denominación
+        counted_amount = None
+        denomination_json = None
+        discrepancy = 0.0
+        has_counted = self.cashbox_close_has_counted
+        if has_counted:
+            counted_amount = Decimal(str(self.cashbox_close_counted_total))
+            discrepancy = self._round_currency(
+                self.cashbox_close_counted_total - closing_total
+            )
+            denom_detail = []
+            for denom in self.cashbox_denominations_config:
+                key = str(denom["value"])
+                count = self.denomination_counts.get(key, 0)
+                if count > 0:
+                    denom_detail.append({
+                        "label": denom["label"],
+                        "value": denom["value"],
+                        "count": count,
+                        "subtotal": self._round_currency(denom["value"] * count),
+                    })
+            denomination_json = json.dumps(denom_detail, ensure_ascii=False)
+
         user_id = self.current_user.get("id")
         if user_id:
             with rx.session() as session:
@@ -3010,16 +3119,25 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         cashbox_session.is_open = False
                         cashbox_session.closing_time = self._event_timestamp()
                         cashbox_session.closing_amount = closing_total
+                        if has_counted:
+                            cashbox_session.counted_amount = counted_amount
+                            cashbox_session.denomination_detail = denomination_json
                         session.add(cashbox_session)
 
                     # Crear log
+                    close_notes = f"Cierre de caja {date}"
+                    if has_counted:
+                        close_notes += f" | Contado: {self._format_currency(self.cashbox_close_counted_total)}"
+                        if discrepancy != 0:
+                            sign = "+" if discrepancy > 0 else ""
+                            close_notes += f" | Diferencia: {sign}{self._format_currency(discrepancy)}"
                     log = CashboxLogModel(
                         company_id=company_id,
                         branch_id=branch_id,
                         user_id=user_id,
                         action="cierre",
                         amount=closing_total,
-                        notes=f"Cierre de caja {date}",
+                        notes=close_notes,
                         timestamp=self._event_timestamp()
                     )
                     session.add(log)
@@ -3112,6 +3230,34 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             row("TOTAL CIERRE:", self._format_currency(closing_total))
         )
         receipt_lines.append("")
+
+        # Sección de arqueo por denominación
+        if has_counted:
+            receipt_lines.append(line())
+            receipt_lines.append("")
+            receipt_lines.append("ARQUEO DE EFECTIVO")
+            receipt_lines.append("")
+            denom_detail = json.loads(denomination_json) if denomination_json else []
+            for d in denom_detail:
+                label = d["label"]
+                count = d["count"]
+                subtotal = d["subtotal"]
+                receipt_lines.append(
+                    row(f"{label} x{count}:", self._format_currency(subtotal))
+                )
+            receipt_lines.append("")
+            receipt_lines.append(
+                row("Total contado:", self._format_currency(self.cashbox_close_counted_total))
+            )
+            receipt_lines.append(
+                row("Saldo esperado:", self._format_currency(closing_total))
+            )
+            sign = "+" if discrepancy > 0 else ""
+            receipt_lines.append(
+                row("Diferencia:", f"{sign}{self._format_currency(discrepancy)}")
+            )
+            receipt_lines.append("")
+
         receipt_lines.append(line())
         receipt_lines.append("")
         receipt_lines.append("DETALLE DE INGRESOS")
@@ -3312,6 +3458,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         self.cashbox_close_income_total = 0.0
         self.cashbox_close_expense_total = 0.0
         self.cashbox_close_expected_total = 0.0
+        self.denomination_counts = {}
+        self.cashbox_close_counted_total = 0.0
 
     def _sale_date(self, sale: CashboxSale):
         try:

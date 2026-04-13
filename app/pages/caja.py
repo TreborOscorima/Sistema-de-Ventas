@@ -911,6 +911,113 @@ def close_cashbox_modal() -> rx.Component:
           ),
           class_name="max-h-64 overflow-y-auto overflow-x-auto border rounded-lg",
         ),
+        class_name="mb-6",
+      ),
+      # Sección de arqueo por denominación
+      rx.el.div(
+        rx.el.div(
+          rx.el.h4(
+            "Arqueo de efectivo",
+            class_name=f"{TYPOGRAPHY['card_title']}",
+          ),
+          rx.el.p(
+            "Conteo de billetes y monedas en caja",
+            class_name="text-xs text-slate-500",
+          ),
+          rx.el.button(
+            rx.icon("eraser", class_name="h-3.5 w-3.5"),
+            "Limpiar",
+            on_click=State.clear_denomination_counts,
+            class_name="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 ml-auto",
+          ),
+          class_name="flex items-center gap-3 mb-3",
+        ),
+        rx.el.div(
+          rx.el.table(
+            rx.el.thead(
+              rx.el.tr(
+                rx.el.th("Denominación", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Cantidad", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center w-24"),
+                rx.el.th("Subtotal", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+                class_name=TABLE_STYLES["header"],
+              )
+            ),
+            rx.el.tbody(
+              rx.foreach(
+                State.denomination_rows,
+                lambda row: rx.el.tr(
+                  rx.el.td(
+                    rx.cond(
+                      row["type"] == "bill",
+                      rx.icon("banknote", class_name="h-4 w-4 text-green-600 inline mr-1.5"),
+                      rx.icon("circle", class_name="h-4 w-4 text-amber-500 inline mr-1.5"),
+                    ),
+                    row["label"],
+                    class_name="py-1.5 px-3 text-sm flex items-center",
+                  ),
+                  rx.el.td(
+                    rx.el.input(
+                      type="number",
+                      min="0",
+                      value=row["count"].to_string(),
+                      on_change=lambda val, k=row["key"]: State.set_denomination_count(k, val),
+                      class_name="w-20 text-center text-sm border rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                    ),
+                    class_name="py-1.5 px-3 text-center",
+                  ),
+                  rx.el.td(
+                    row["subtotal"],
+                    class_name="py-1.5 px-3 text-right text-sm font-mono",
+                  ),
+                  class_name="border-b",
+                ),
+              ),
+            ),
+            class_name="min-w-full text-sm",
+          ),
+          class_name="max-h-56 overflow-y-auto border rounded-lg",
+        ),
+        # Resultado del arqueo
+        rx.el.div(
+          rx.el.table(
+            rx.el.tbody(
+              rx.el.tr(
+                rx.el.td("Total contado", class_name="py-2 px-3 text-left text-sm font-semibold"),
+                rx.el.td(
+                  State.cashbox_close_counted_total_display,
+                  class_name="py-2 px-3 text-right text-sm font-bold",
+                ),
+                class_name="border-b bg-slate-50",
+              ),
+              rx.el.tr(
+                rx.el.td("Saldo esperado", class_name="py-2 px-3 text-left text-sm"),
+                rx.el.td(
+                  State.cashbox_close_expected_total_display,
+                  class_name="py-2 px-3 text-right text-sm font-semibold",
+                ),
+                class_name="border-b",
+              ),
+              rx.el.tr(
+                rx.el.td(
+                  rx.el.span("Diferencia", class_name="font-semibold"),
+                  class_name="py-2 px-3 text-left text-sm",
+                ),
+                rx.el.td(
+                  State.cashbox_close_discrepancy_display,
+                  class_name=rx.cond(
+                    State.cashbox_close_discrepancy == 0,
+                    "py-2 px-3 text-right text-sm font-bold text-green-600",
+                    "py-2 px-3 text-right text-sm font-bold text-red-600",
+                  ),
+                ),
+                class_name="border-t-2 border-slate-300",
+              ),
+            ),
+            class_name="w-full text-sm border rounded-lg",
+          ),
+          class_name="mt-3",
+        ),
+        class_name="mb-6",
       ),
     ],
     footer=rx.el.div(
