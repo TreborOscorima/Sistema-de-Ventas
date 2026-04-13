@@ -818,6 +818,8 @@ class CartMixin:
             "batch_id": None,
             "batch_number": "",
             "requires_batch": False,
+            "kit_product_id": None,
+            "kit_name": "",
         }
         self.autocomplete_suggestions = []
         self.autocomplete_results = []
