@@ -149,6 +149,14 @@ class InventoryState(MixinState):
     inventory_low_stock_count: int = 0
     inventory_out_of_stock_count: int = 0
 
+    # ── Importación masiva ──
+    import_modal_open: bool = False
+    import_preview_rows: list[dict] = []
+    import_errors: list[str] = []
+    import_stats: dict = {"new": 0, "updated": 0, "errors": 0, "total": 0}
+    import_processing: bool = False
+    import_file_name: str = ""
+
     def _company_id(self) -> int | None:
         company_id, branch_id = self._tenant_ids()
         set_tenant_context(company_id, branch_id)
@@ -2749,3 +2757,309 @@ class InventoryState(MixinState):
         output.seek(0)
 
         return rx.download(data=output.getvalue(), filename="inventario_valorizado.xlsx")
+
+    # ══════════════════════════════════════════════════════════
+    # IMPORTACIÓN MASIVA CSV / EXCEL
+    # ══════════════════════════════════════════════════════════
+
+    @rx.event
+    def open_import_modal(self):
+        if not self.current_user["privileges"].get("edit_inventario", False):
+            return rx.toast("No tiene permisos para importar inventario.", duration=3000)
+        self.import_modal_open = True
+        self.import_preview_rows = []
+        self.import_errors = []
+        self.import_stats = {"new": 0, "updated": 0, "errors": 0, "total": 0}
+        self.import_processing = False
+        self.import_file_name = ""
+
+    @rx.event
+    def close_import_modal(self):
+        self.import_modal_open = False
+        self.import_preview_rows = []
+        self.import_errors = []
+        self.import_file_name = ""
+
+    @rx.event
+    async def handle_import_upload(self, files: list[rx.UploadFile]):
+        """Procesa el archivo subido y genera preview."""
+        if not files:
+            return
+        file = files[0]
+        self.import_file_name = file.filename or "archivo"
+        file_bytes = await file.read()
+
+        try:
+            rows = self._parse_import_file(file.filename or "", file_bytes)
+        except Exception as e:
+            self.import_errors = [f"Error al leer archivo: {str(e)}"]
+            self.import_preview_rows = []
+            return
+
+        if not rows:
+            self.import_errors = ["El archivo está vacío o no tiene filas de datos."]
+            return
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.import_errors = ["Empresa no configurada."]
+            return
+
+        # Cargar barcodes existentes para detectar nuevos vs actualizados
+        existing_barcodes: set[str] = set()
+        with rx.session() as session:
+            products = session.exec(
+                select(Product.barcode)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).all()
+            existing_barcodes = {str(b) for b in products}
+
+        preview = []
+        errors = []
+        new_count = 0
+        update_count = 0
+        error_count = 0
+
+        for idx, row in enumerate(rows, start=2):
+            barcode = str(row.get("barcode", "") or "").strip()
+            description = str(row.get("description", "") or "").strip()
+
+            if not barcode:
+                errors.append(f"Fila {idx}: código de barras vacío.")
+                error_count += 1
+                continue
+            if not description:
+                errors.append(f"Fila {idx} ({barcode}): descripción vacía.")
+                error_count += 1
+                continue
+
+            try:
+                stock = float(row.get("stock", 0) or 0)
+                purchase_price = float(row.get("purchase_price", 0) or 0)
+                sale_price = float(row.get("sale_price", 0) or 0)
+            except (ValueError, TypeError):
+                errors.append(f"Fila {idx} ({barcode}): valores numéricos inválidos.")
+                error_count += 1
+                continue
+
+            is_new = barcode not in existing_barcodes
+            if is_new:
+                new_count += 1
+            else:
+                update_count += 1
+
+            preview.append({
+                "row_num": idx,
+                "barcode": barcode,
+                "description": description,
+                "category": str(row.get("category", "General") or "General").strip(),
+                "stock": stock,
+                "unit": str(row.get("unit", "Unidad") or "Unidad").strip(),
+                "purchase_price": purchase_price,
+                "sale_price": sale_price,
+                "status": "Nuevo" if is_new else "Actualizar",
+            })
+
+        self.import_preview_rows = preview[:200]  # Limitar preview a 200 filas
+        self.import_errors = errors[:50]  # Limitar errores visibles
+        self.import_stats = {
+            "new": new_count,
+            "updated": update_count,
+            "errors": error_count,
+            "total": len(rows),
+        }
+
+    def _parse_import_file(self, filename: str, data: bytes) -> list[dict]:
+        """Parsea CSV o Excel y retorna lista de dicts normalizados."""
+        COLUMN_MAP = {
+            "codigo": "barcode", "código": "barcode", "barcode": "barcode",
+            "sku": "barcode", "cod": "barcode", "codigo/sku": "barcode",
+            "código/sku": "barcode",
+            "descripcion": "description", "descripción": "description",
+            "description": "description", "producto": "description",
+            "nombre": "description", "descripción del producto": "description",
+            "categoria": "category", "categoría": "category",
+            "category": "category",
+            "stock": "stock", "stock actual": "stock", "cantidad": "stock",
+            "unidad": "unit", "unit": "unit",
+            "costo": "purchase_price", "costo unitario": "purchase_price",
+            "purchase_price": "purchase_price", "precio compra": "purchase_price",
+            "precio": "sale_price", "precio venta": "sale_price",
+            "sale_price": "sale_price", "precio de venta": "sale_price",
+            "pvp": "sale_price",
+        }
+
+        ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+
+        if ext in ("xlsx", "xls"):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+            ws = wb.active
+            rows_iter = ws.iter_rows(values_only=True)
+            header_raw = next(rows_iter, None)
+            if not header_raw:
+                return []
+            headers = []
+            for h in header_raw:
+                h_clean = str(h or "").strip().lower()
+                headers.append(COLUMN_MAP.get(h_clean, h_clean))
+            result = []
+            for row_values in rows_iter:
+                if all(v is None for v in row_values):
+                    continue
+                row_dict = {}
+                for i, val in enumerate(row_values):
+                    if i < len(headers):
+                        row_dict[headers[i]] = val
+                result.append(row_dict)
+            wb.close()
+            return result
+        else:
+            # CSV
+            import csv
+            text = data.decode("utf-8-sig")
+            # Detectar delimitador
+            sniffer = csv.Sniffer()
+            try:
+                dialect = sniffer.sniff(text[:2048])
+            except csv.Error:
+                dialect = csv.excel
+            reader = csv.DictReader(text.splitlines(), dialect=dialect)
+            result = []
+            for row in reader:
+                normalized = {}
+                for key, val in row.items():
+                    k_clean = str(key or "").strip().lower()
+                    mapped = COLUMN_MAP.get(k_clean, k_clean)
+                    normalized[mapped] = val
+                result.append(normalized)
+            return result
+
+    @rx.event
+    def confirm_import(self):
+        """Ejecuta la importación confirmada a la base de datos."""
+        if not self.current_user["privileges"].get("edit_inventario", False):
+            return rx.toast("No tiene permisos.", duration=3000)
+        if not self.import_preview_rows:
+            return rx.toast("No hay datos para importar.", duration=3000)
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        user_id = self.current_user.get("id")
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no configurada.", duration=3000)
+
+        self.import_processing = True
+        yield
+
+        imported = 0
+        updated = 0
+        errors = []
+
+        with rx.session() as session:
+            # Pre-cargar productos existentes por barcode
+            existing = session.exec(
+                select(Product)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).all()
+            products_by_barcode: dict[str, Product] = {
+                p.barcode: p for p in existing
+            }
+
+            # Pre-cargar categorías
+            cats = session.exec(
+                select(Category)
+                .where(Category.company_id == company_id)
+                .where(Category.branch_id == branch_id)
+            ).all()
+            existing_categories: dict[str, Category] = {
+                c.name: c for c in cats
+            }
+
+            try:
+                for row in self.import_preview_rows:
+                    barcode = row["barcode"]
+                    description = row["description"]
+                    category_name = row.get("category", "General") or "General"
+                    stock = Decimal(str(row.get("stock", 0) or 0))
+                    unit = row.get("unit", "Unidad") or "Unidad"
+                    purchase_price = Decimal(str(row.get("purchase_price", 0) or 0))
+                    sale_price = Decimal(str(row.get("sale_price", 0) or 0))
+
+                    # Auto-crear categoría si no existe
+                    if category_name not in existing_categories:
+                        new_cat = Category(
+                            name=category_name,
+                            company_id=company_id,
+                            branch_id=branch_id,
+                        )
+                        session.add(new_cat)
+                        session.flush()
+                        existing_categories[category_name] = new_cat
+
+                    product = products_by_barcode.get(barcode)
+                    if product:
+                        # Actualizar
+                        product.description = description
+                        product.category = category_name
+                        product.stock = stock
+                        product.unit = unit
+                        product.purchase_price = purchase_price
+                        product.sale_price = sale_price
+                        session.add(product)
+                        updated += 1
+                    else:
+                        # Crear
+                        product = Product(
+                            barcode=barcode,
+                            description=description,
+                            category=category_name,
+                            stock=stock,
+                            unit=unit,
+                            purchase_price=purchase_price,
+                            sale_price=sale_price,
+                            company_id=company_id,
+                            branch_id=branch_id,
+                        )
+                        session.add(product)
+                        session.flush()
+                        products_by_barcode[barcode] = product
+
+                        # Registrar movimiento de stock
+                        if stock > 0:
+                            movement = StockMovement(
+                                product_id=product.id,
+                                user_id=user_id,
+                                type="Importacion",
+                                quantity=stock,
+                                description=f"Importación masiva: {description}",
+                                timestamp=self._event_timestamp(),
+                                company_id=company_id,
+                                branch_id=branch_id,
+                            )
+                            session.add(movement)
+                        imported += 1
+
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                logger.exception("Error en importación masiva")
+                self.import_processing = False
+                errors.append(f"Error de base de datos: {str(e)}")
+                self.import_errors = errors
+                return rx.toast(
+                    "Error al importar. Verifique los datos e intente nuevamente.",
+                    duration=5000,
+                )
+
+        self.import_processing = False
+        self.close_import_modal()
+        self._inventory_update_trigger += 1
+        self.load_categories()
+        return rx.toast(
+            f"Importación exitosa: {imported} nuevos, {updated} actualizados.",
+            duration=5000,
+        )

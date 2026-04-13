@@ -22,6 +22,187 @@ from app.components.ui import (
 )
 
 
+def import_modal() -> rx.Component:
+  """Modal de importación masiva de productos desde CSV/Excel."""
+  return modal_container(
+    is_open=State.import_modal_open,
+    on_close=State.close_import_modal,
+    title="Importar productos",
+    description="Suba un archivo CSV o Excel (.xlsx) con los productos a importar.",
+    max_width="max-w-3xl",
+    children=[
+      # Zona de upload
+      rx.cond(
+        State.import_file_name == "",
+        rx.upload(
+          rx.el.div(
+            rx.icon("upload-cloud", class_name="h-10 w-10 text-slate-400 mx-auto mb-2"),
+            rx.el.p(
+              "Arrastre un archivo aquí o haga clic para seleccionar",
+              class_name="text-sm text-slate-500 text-center",
+            ),
+            rx.el.p(
+              "Formatos: .csv, .xlsx",
+              class_name="text-xs text-slate-400 text-center mt-1",
+            ),
+            class_name="flex flex-col items-center justify-center py-8",
+          ),
+          id="import_upload",
+          accept={".csv": ["text/csv"], ".xlsx": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]},
+          max_files=1,
+          border="2px dashed #cbd5e1",
+          border_radius="0.75rem",
+          class_name="cursor-pointer hover:border-indigo-400 transition-colors",
+          on_drop=State.handle_import_upload(rx.upload_files(upload_id="import_upload")),  # type: ignore
+        ),
+        # Archivo seleccionado - mostrar nombre
+        rx.el.div(
+          rx.el.div(
+            rx.icon("file-spreadsheet", class_name="h-5 w-5 text-emerald-600"),
+            rx.el.span(State.import_file_name, class_name="text-sm font-medium text-slate-700"),
+            rx.el.button(
+              rx.icon("x", class_name="h-4 w-4"),
+              on_click=State.close_import_modal.then(State.open_import_modal),  # type: ignore
+              class_name="ml-auto text-slate-400 hover:text-red-500",
+              title="Cambiar archivo",
+            ),
+            class_name="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg",
+          ),
+        ),
+      ),
+      # Errores
+      rx.cond(
+        State.import_errors.length() > 0,
+        rx.el.div(
+          rx.el.div(
+            rx.icon("alert-triangle", class_name="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5"),
+            rx.el.div(
+              rx.foreach(
+                State.import_errors,
+                lambda err: rx.el.p(err, class_name="text-xs text-amber-700"),
+              ),
+            ),
+            class_name="flex gap-2",
+          ),
+          class_name="bg-amber-50 border border-amber-200 rounded-lg p-3 max-h-24 overflow-y-auto",
+        ),
+        rx.fragment(),
+      ),
+      # Estadísticas de preview
+      rx.cond(
+        State.import_preview_rows.length() > 0,
+        rx.el.div(
+          rx.el.div(
+            rx.el.div(
+              rx.el.span(State.import_stats["total"].to_string(), class_name="text-lg font-bold text-slate-800"),
+              rx.el.span("Total filas", class_name="text-xs text-slate-500"),
+              class_name="flex flex-col items-center",
+            ),
+            rx.el.div(
+              rx.el.span(State.import_stats["new"].to_string(), class_name="text-lg font-bold text-emerald-600"),
+              rx.el.span("Nuevos", class_name="text-xs text-slate-500"),
+              class_name="flex flex-col items-center",
+            ),
+            rx.el.div(
+              rx.el.span(State.import_stats["updated"].to_string(), class_name="text-lg font-bold text-blue-600"),
+              rx.el.span("Actualizar", class_name="text-xs text-slate-500"),
+              class_name="flex flex-col items-center",
+            ),
+            rx.el.div(
+              rx.el.span(State.import_stats["errors"].to_string(), class_name="text-lg font-bold text-red-600"),
+              rx.el.span("Errores", class_name="text-xs text-slate-500"),
+              class_name="flex flex-col items-center",
+            ),
+            class_name="grid grid-cols-4 gap-4 text-center",
+          ),
+          class_name="bg-slate-50 border border-slate-200 rounded-lg p-3",
+        ),
+        rx.fragment(),
+      ),
+      # Tabla preview
+      rx.cond(
+        State.import_preview_rows.length() > 0,
+        rx.el.div(
+          rx.el.h4("Vista previa", class_name=TYPOGRAPHY["card_title"] + " mb-2"),
+          rx.el.div(
+            rx.el.table(
+              rx.el.thead(
+                rx.el.tr(
+                  rx.el.th("Estado", scope="col", class_name=TABLE_STYLES["header_cell"] + " w-20"),
+                  rx.el.th("Código", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Descripción", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Cat.", scope="col", class_name=TABLE_STYLES["header_cell"] + " hidden sm:table-cell"),
+                  rx.el.th("Stock", scope="col", class_name=TABLE_STYLES["header_cell"] + " text-right"),
+                  rx.el.th("P.Venta", scope="col", class_name=TABLE_STYLES["header_cell"] + " text-right"),
+                  class_name=TABLE_STYLES["header"],
+                ),
+              ),
+              rx.el.tbody(
+                rx.foreach(
+                  State.import_preview_rows,
+                  lambda row: rx.el.tr(
+                    rx.el.td(
+                      rx.el.span(
+                        row["status"],
+                        class_name=rx.cond(
+                          row["status"] == "Nuevo",
+                          "text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium",
+                          "text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium",
+                        ),
+                      ),
+                      class_name="py-2 px-3",
+                    ),
+                    rx.el.td(row["barcode"], class_name="py-2 px-3 text-xs font-mono text-slate-600"),
+                    rx.el.td(row["description"], class_name="py-2 px-3 text-sm truncate max-w-[200px]"),
+                    rx.el.td(row["category"], class_name="py-2 px-3 text-xs text-slate-500 hidden sm:table-cell"),
+                    rx.el.td(row["stock"].to_string(), class_name="py-2 px-3 text-sm text-right"),
+                    rx.el.td(row["sale_price"].to_string(), class_name="py-2 px-3 text-sm text-right font-mono"),
+                    class_name="border-b border-slate-100",
+                  ),
+                ),
+              ),
+              class_name="min-w-full text-sm",
+            ),
+            class_name="max-h-52 overflow-y-auto border rounded-lg",
+          ),
+        ),
+        rx.fragment(),
+      ),
+      # Columnas requeridas info
+      rx.cond(
+        State.import_file_name == "",
+        rx.el.div(
+          rx.el.h4("Columnas esperadas", class_name="text-xs font-semibold text-slate-600 mb-1"),
+          rx.el.p(
+            "codigo/barcode, descripcion, categoria, stock, unidad, costo/precio compra, precio/precio venta",
+            class_name="text-xs text-slate-500",
+          ),
+          class_name="bg-slate-50 border border-slate-200 rounded-lg p-3",
+        ),
+        rx.fragment(),
+      ),
+    ],
+    footer=rx.el.div(
+      rx.el.button(
+        "Cancelar",
+        on_click=State.close_import_modal,
+        class_name=BUTTON_STYLES["ghost"],
+      ),
+      rx.el.button(
+        rx.cond(
+          State.import_processing,
+          rx.fragment(rx.icon("loader-2", class_name="h-4 w-4 animate-spin"), "Importando..."),
+          rx.fragment(rx.icon("check", class_name="h-4 w-4"), "Confirmar importación"),
+        ),
+        on_click=State.confirm_import,
+        disabled=rx.cond(State.import_preview_rows.length() == 0, True, State.import_processing),
+        class_name=BUTTON_STYLES["primary_sm"],
+      ),
+      class_name="flex items-center justify-end gap-3",
+    ),
+  )
+
+
 def edit_product_modal() -> rx.Component:
   """Modal de edición de producto."""
   return rx.cond(
@@ -1366,6 +1547,12 @@ def inventario_page() -> rx.Component:
             class_name=BUTTON_STYLES["primary_sm"],
           ),
           rx.el.button(
+            rx.icon("upload", class_name="h-4 w-4"),
+            "Importar",
+            on_click=State.open_import_modal,
+            class_name=BUTTON_STYLES["ghost"],
+          ),
+          rx.el.button(
             rx.icon("download", class_name="h-4 w-4"),
             "Exportar Inventario",
             on_click=State.export_inventory_to_excel,
@@ -1538,6 +1725,7 @@ def inventario_page() -> rx.Component:
     inventory_adjustment_modal(),
     edit_product_modal(),
     stock_details_modal(),
+    import_modal(),
     on_mount=State.refresh_inventory_cache,
     class_name=f"w-full flex flex-col {SPACING['page_gap']}",
   )
