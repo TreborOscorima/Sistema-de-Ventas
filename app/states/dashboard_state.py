@@ -34,6 +34,15 @@ from app.enums import SaleStatus, ReservationStatus
 from app.i18n import MSG
 from app.services.alert_service import get_alert_summary, BATCH_EXPIRING_DAYS
 from .mixin_state import MixinState
+from app.utils.exports import (
+    create_excel_workbook,
+    style_header_row,
+    auto_adjust_column_widths,
+    add_company_header,
+    add_totals_row_with_formulas,
+    add_notes_section,
+    THIN_BORDER,
+)
 
 
 # Cantidad máxima de lotes que muestra el panel del dashboard.
@@ -854,140 +863,80 @@ class DashboardState(MixinState):
     def export_categories_excel(self):
         """Exporta ventas por categoría a Excel con formato profesional."""
         import io
-        import os
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        from openpyxl.styles import Alignment
         from openpyxl.chart import PieChart, Reference
 
-        wb = Workbook()
-        ws = wb.active
-        ws.title = MSG.REPORT_CAT_SALES_SHEET
         export_categories = self._query_sales_by_category(limit=None)
-
-        # Estilos
-        header_font = Font(bold=True, color="FFFFFF", size=11)
-        header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
-        total_font = Font(bold=True, size=11)
-        total_fill = PatternFill(start_color="E5E7EB", end_color="E5E7EB", fill_type="solid")
-        currency_symbol = (self.currency_symbol or "$").strip()
-        currency_format = f'"{currency_symbol}"#,##0.00'
+        currency_format = self._currency_excel_format()
+        currency_label = self._currency_symbol_clean()
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
         percent_format = '0.0%'
-        thin_border = Border(
-            left=Side(style='thin'),
-            right=Side(style='thin'),
-            top=Side(style='thin'),
-            bottom=Side(style='thin')
+
+        wb, ws = create_excel_workbook(MSG.REPORT_CAT_SALES_SHEET)
+
+        row = add_company_header(
+            ws,
+            company_name,
+            "REPORTE DE VENTAS POR CATEGORÍA",
+            self.period_label,
+            columns=4,
+            generated_at=self._display_now(),
         )
 
-        # Título del reporte
-        ws.merge_cells('A1:D1')
-        ws['A1'] = f"Reporte de Ventas por Categoría - {self.period_label}"
-        ws['A1'].font = Font(bold=True, size=14)
-        ws['A1'].alignment = Alignment(horizontal='center')
+        headers = ["#", "Categoría", f"Total Ventas ({currency_label})", "Participación"]
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
 
-        ws.merge_cells('A2:D2')
-        ws['A2'] = f"Generado: {self._display_now().strftime('%d/%m/%Y %H:%M:%S')}"
-        ws['A2'].alignment = Alignment(horizontal='center')
-        ws['A2'].font = Font(italic=True, color="666666")
-
-        # Encabezados (fila 4)
-        headers = ["#", "Categoría", "Total Ventas", "Participación"]
-        for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=4, column=col, value=header)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal='center')
-            cell.border = thin_border
-
-        # Datos
         total = sum(cat.get("total", 0) for cat in export_categories)
         for idx, cat in enumerate(export_categories, 1):
-            row = idx + 4
             pct = cat["total"] / total if total > 0 else 0
 
-            ws.cell(row=row, column=1, value=idx).border = thin_border
-            ws.cell(row=row, column=2, value=cat["category"]).border = thin_border
+            ws.cell(row=row, column=1, value=idx).border = THIN_BORDER
+            ws.cell(row=row, column=2, value=cat["category"]).border = THIN_BORDER
 
             cell_total = ws.cell(row=row, column=3, value=cat["total"])
             cell_total.number_format = currency_format
-            cell_total.border = thin_border
+            cell_total.border = THIN_BORDER
             cell_total.alignment = Alignment(horizontal='right')
 
             cell_pct = ws.cell(row=row, column=4, value=pct)
             cell_pct.number_format = percent_format
-            cell_pct.border = thin_border
+            cell_pct.border = THIN_BORDER
             cell_pct.alignment = Alignment(horizontal='right')
 
-        # Fila de total
-        total_row = len(export_categories) + 5
-        ws.cell(row=total_row, column=1, value="").border = thin_border
-        ws.cell(row=total_row, column=2, value="TOTAL").font = total_font
-        ws.cell(row=total_row, column=2).fill = total_fill
-        ws.cell(row=total_row, column=2).border = thin_border
+            row += 1
 
-        cell_grand_total = ws.cell(row=total_row, column=3, value=total)
-        cell_grand_total.number_format = currency_format
-        cell_grand_total.font = total_font
-        cell_grand_total.fill = total_fill
-        cell_grand_total.border = thin_border
-        cell_grand_total.alignment = Alignment(horizontal='right')
+        add_totals_row_with_formulas(ws, row, data_start, [
+            {"type": "text", "value": ""},
+            {"type": "label", "value": "TOTAL"},
+            {"type": "sum", "col_letter": "C", "number_format": currency_format},
+            {"type": "text", "value": 1, "number_format": percent_format},
+        ])
+        totals_row = row
 
-        cell_100 = ws.cell(row=total_row, column=4, value=1)
-        cell_100.number_format = percent_format
-        cell_100.font = total_font
-        cell_100.fill = total_fill
-        cell_100.border = thin_border
-        cell_100.alignment = Alignment(horizontal='right')
-
-        # Ajustar anchos de columna
-        ws.column_dimensions['A'].width = 5
-        ws.column_dimensions['B'].width = 25
-        ws.column_dimensions['C'].width = 18
-        ws.column_dimensions['D'].width = 15
-
-        # Agregar gráfico de torta
+        # Gráfico de torta
         if len(export_categories) > 0:
             chart = PieChart()
             chart.title = "Distribución de Ventas"
-
-            data = Reference(ws, min_col=3, min_row=4, max_row=total_row-1)
-            labels = Reference(ws, min_col=2, min_row=5, max_row=total_row-1)
-
-            chart.add_data(data, titles_from_data=True)
+            data_ref = Reference(ws, min_col=3, min_row=data_start - 1, max_row=totals_row - 1)
+            labels = Reference(ws, min_col=2, min_row=data_start, max_row=totals_row - 1)
+            chart.add_data(data_ref, titles_from_data=True)
             chart.set_categories(labels)
             chart.width = 12
             chart.height = 8
-
             ws.add_chart(chart, "F4")
 
-        # Guardar a bytes y codificar en base64
-        import io
-        import base64
+        add_notes_section(ws, totals_row, [
+            "Total Ventas: Suma de ventas completadas en el período seleccionado.",
+            "Participación: Porcentaje respecto al total general de ventas.",
+        ], columns=4)
+
+        auto_adjust_column_widths(ws)
 
         output = io.BytesIO()
         wb.save(output)
-        excel_bytes = output.getvalue()
-        output.close()
+        output.seek(0)
 
-        # Crear data URL para descarga directa
-        b64_data = base64.b64encode(excel_bytes).decode('utf-8')
         filename = f"ventas_categoria_{self._display_now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-
-        # Usar JavaScript para descargar el archivo
-        js_code = f"""
-        (function() {{
-            var byteCharacters = atob('{b64_data}');
-            var byteNumbers = new Array(byteCharacters.length);
-            for (var i = 0; i < byteCharacters.length; i++) {{
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }}
-            var byteArray = new Uint8Array(byteNumbers);
-            var blob = new Blob([byteArray], {{type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}});
-            var link = document.createElement('a');
-            link.href = window.URL.createObjectURL(blob);
-            link.download = '{filename}';
-            link.click();
-        }})();
-        """
-
-        return rx.call_script(js_code)
+        return rx.download(data=output.getvalue(), filename=filename)
