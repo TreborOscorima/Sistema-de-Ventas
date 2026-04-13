@@ -21,10 +21,32 @@ class SaleStatus(str, Enum):
     pending = "pending"
     completed = "completed"
     cancelled = "cancelled"
+    returned = "returned"
 
     PENDING = pending
     COMPLETED = completed
     CANCELLED = cancelled
+    RETURNED = returned
+
+
+class ReturnReason(str, Enum):
+    """Motivos de devolución."""
+    defective = "defective"
+    wrong_item = "wrong_item"
+    change_mind = "change_mind"
+    not_as_described = "not_as_described"
+    other = "other"
+
+    @property
+    def display_label(self) -> str:
+        labels = {
+            "defective": "Producto defectuoso",
+            "wrong_item": "Producto equivocado",
+            "change_mind": "Cambio de opinión",
+            "not_as_described": "No es lo esperado",
+            "other": "Otro motivo",
+        }
+        return labels.get(self.value, self.value)
 
 class PaymentMethodType(str, Enum):
     """Tipos de método de pago soportados por el sistema."""

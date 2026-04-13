@@ -7,7 +7,7 @@ from sqlmodel import Field, Relationship
 import sqlalchemy
 from sqlalchemy import Numeric
 
-from app.enums import PaymentMethodType, ReservationStatus, SaleStatus, SportType
+from app.enums import PaymentMethodType, ReservationStatus, ReturnReason, SaleStatus, SportType
 from app.utils.timezone import utc_now_naive
 
 if TYPE_CHECKING:
@@ -505,3 +505,56 @@ class CompanySettings(rx.Model, table=True):
         max_length=30,
         description="Rubro del negocio: general, bodega, ferreteria, farmacia, ropa, jugueteria, restaurante",
     )
+
+
+class SaleReturn(rx.Model, table=True):
+    """Devolución total o parcial de una venta."""
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_salereturn_tenant_sale",
+            "company_id",
+            "branch_id",
+            "original_sale_id",
+        ),
+    )
+
+    timestamp: datetime = Field(
+        default_factory=utc_now_naive,
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+    original_sale_id: int = Field(foreign_key="sale.id", index=True, nullable=False)
+    reason: str = Field(default=ReturnReason.other, max_length=50, nullable=False)
+    notes: str = Field(default="")
+    refund_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    company_id: int = Field(foreign_key="company.id", index=True, nullable=False)
+    branch_id: int = Field(foreign_key="branch.id", index=True, nullable=False)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+
+    items: List["SaleReturnItem"] = Relationship(
+        back_populates="sale_return",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+
+class SaleReturnItem(rx.Model, table=True):
+    """Ítem individual devuelto, vinculado al SaleItem original."""
+
+    sale_return_id: int = Field(foreign_key="salereturn.id", index=True, nullable=False)
+    sale_item_id: int = Field(foreign_key="saleitem.id", nullable=False)
+    quantity: Decimal = Field(
+        default=Decimal("0.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
+    refund_subtotal: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    product_variant_id: Optional[int] = Field(default=None, foreign_key="productvariant.id")
+    product_batch_id: Optional[int] = Field(default=None, foreign_key="productbatch.id")
+
+    sale_return: Optional[SaleReturn] = Relationship(back_populates="items")

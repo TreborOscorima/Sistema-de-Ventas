@@ -6,6 +6,7 @@ from app.components.ui import (
   select_filter,
   date_range_filter,
   payment_method_badge,
+  modal_container,
   BUTTON_STYLES,
   CARD_STYLES,
   INPUT_STYLES,
@@ -314,6 +315,15 @@ def sale_detail_modal() -> rx.Component:
           on_click=State.close_sale_detail,
           class_name=BUTTON_STYLES["secondary"],
         ),
+        rx.el.button(
+          rx.icon("undo-2", class_name="h-4 w-4"),
+          "Devolver",
+          on_click=[
+            State.close_sale_detail,
+            State.open_return_modal(State.selected_sale_id),
+          ],
+          class_name=BUTTON_STYLES["danger"],
+        ),
         class_name="flex justify-end gap-3",
       ),
       class_name=(
@@ -329,6 +339,152 @@ def sale_detail_modal() -> rx.Component:
   open=State.sale_detail_modal_open,
   on_open_change=State.set_sale_detail_modal_open,
 )
+
+
+def return_modal() -> rx.Component:
+  """Modal de devolución parcial o total de una venta."""
+  return modal_container(
+    is_open=State.return_modal_open,
+    on_close=State.close_return_modal,
+    title="Devolver productos",
+    description=rx.fragment(
+      "Venta #",
+      State.return_sale_summary.get("id", 0).to_string(),
+      " — ",
+      State.return_sale_summary.get("date", ""),
+    ),
+    max_width="max-w-3xl",
+    children=[
+      # Motivo de devolución
+      rx.el.div(
+        rx.el.label(
+          "Motivo de devolución",
+          class_name="text-sm font-medium text-slate-700 mb-1 block",
+        ),
+        rx.el.select(
+          rx.foreach(
+            State.return_reason_options,
+            lambda opt: rx.el.option(opt[1], value=opt[0]),
+          ),
+          value=State.return_reason,
+          on_change=State.set_return_reason,
+          class_name=SELECT_STYLES["default"],
+        ),
+        class_name="mb-4",
+      ),
+      # Tabla de ítems
+      rx.el.div(
+        rx.el.div(
+          rx.el.h4(
+            "Seleccionar ítems a devolver",
+            class_name=f"{TYPOGRAPHY['card_title']}",
+          ),
+          rx.el.button(
+            "Seleccionar todo",
+            on_click=State.select_all_return_items,
+            class_name="text-xs text-indigo-600 hover:text-indigo-800 ml-auto",
+          ),
+          class_name="flex items-center gap-3 mb-2",
+        ),
+        rx.el.div(
+          rx.el.table(
+            rx.el.thead(
+              rx.el.tr(
+                rx.el.th("Producto", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Vendido", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+                rx.el.th("Disponible", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+                rx.el.th("Devolver", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center w-24"),
+                rx.el.th("Reembolso", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+                class_name=TABLE_STYLES["header"],
+              )
+            ),
+            rx.el.tbody(
+              rx.foreach(
+                State.return_items,
+                lambda item: rx.el.tr(
+                  rx.el.td(
+                    item["product_name"],
+                    class_name="py-2 px-3 text-sm",
+                  ),
+                  rx.el.td(
+                    item["original_qty"].to_string(),
+                    class_name="py-2 px-3 text-center text-sm",
+                  ),
+                  rx.el.td(
+                    item["available_qty"].to_string(),
+                    class_name="py-2 px-3 text-center text-sm font-semibold",
+                  ),
+                  rx.el.td(
+                    rx.el.input(
+                      type="number",
+                      min="0",
+                      max=item["available_qty"].to_string(),
+                      step="1",
+                      value=item["return_qty"].to_string(),
+                      on_change=lambda val, sid=item["sale_item_id"].to_string(): State.set_return_item_qty(sid, val),
+                      class_name="w-20 text-center text-sm border rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                    ),
+                    class_name="py-2 px-3 text-center",
+                  ),
+                  rx.el.td(
+                    State.currency_symbol,
+                    (item["return_qty"] * item["unit_price"]).to_string(),
+                    class_name="py-2 px-3 text-right text-sm font-mono",
+                  ),
+                  class_name="border-b",
+                ),
+              ),
+            ),
+            class_name="min-w-full text-sm",
+          ),
+          class_name="max-h-64 overflow-y-auto border rounded-lg",
+        ),
+        class_name="mb-4",
+      ),
+      # Notas
+      rx.el.div(
+        rx.el.label(
+          "Notas adicionales (opcional)",
+          class_name="text-sm font-medium text-slate-700 mb-1 block",
+        ),
+        rx.el.textarea(
+          value=State.return_notes,
+          on_change=State.set_return_notes,
+          placeholder="Detalle adicional sobre la devolución...",
+          rows=2,
+          class_name=INPUT_STYLES["default"] + " resize-none",
+        ),
+        class_name="mb-4",
+      ),
+      # Total a reembolsar
+      rx.el.div(
+        rx.el.div(
+          rx.el.span("Total a reembolsar:", class_name="text-sm font-semibold text-slate-700"),
+          rx.el.span(
+            State.return_refund_total,
+            class_name="text-lg font-bold text-red-600",
+          ),
+          class_name="flex items-center justify-between",
+        ),
+        class_name="bg-red-50 border border-red-200 rounded-lg p-3",
+      ),
+    ],
+    footer=rx.el.div(
+      rx.el.button(
+        "Cancelar",
+        on_click=State.close_return_modal,
+        class_name=BUTTON_STYLES["secondary"],
+      ),
+      rx.el.button(
+        rx.icon("undo-2", class_name="h-4 w-4"),
+        "Confirmar devolución",
+        on_click=State.confirm_return,
+        disabled=~State.return_has_selection,
+        class_name=f"{BUTTON_STYLES['danger']} min-h-[42px]",
+      ),
+      class_name="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 mt-4",
+    ),
+  )
 
 
 def credit_sales_card() -> rx.Component:
@@ -490,6 +646,7 @@ def historial_page() -> rx.Component:
       class_name="p-4 sm:p-6 w-full flex flex-col gap-6",
     ),
     sale_detail_modal(),
+    return_modal(),
     on_mount=State.reload_history_background,
   )
   return permission_guard(

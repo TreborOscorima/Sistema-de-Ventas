@@ -160,6 +160,7 @@ CASHBOX_INCOME_ACTIONS: set[str] = {
 # Acciones que representan egresos de caja
 CASHBOX_EXPENSE_ACTIONS: set[str] = {
     "gasto_caja_chica",
+    "Devolucion",
 }
 
 

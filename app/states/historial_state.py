@@ -8,7 +8,7 @@ from decimal import Decimal
 from sqlmodel import select
 import sqlalchemy as sa
 from sqlalchemy.orm import selectinload
-from app.enums import PaymentMethodType, SaleStatus
+from app.enums import PaymentMethodType, ReturnReason, SaleStatus
 from app.i18n import MSG
 from app.utils.payment import payment_method_label
 from app.utils.sanitization import escape_like
@@ -133,6 +133,14 @@ class HistorialState(MixinState):
     productos_mas_vendidos: list[dict] = []
     productos_stock_bajo: list[Dict] = []
     sales_by_day: list[dict] = []
+
+    # ── Devoluciones ──
+    return_modal_open: bool = False
+    return_sale_id: int = 0
+    return_sale_summary: dict = {}
+    return_items: list[dict] = []
+    return_reason: str = "other"
+    return_notes: str = ""
 
     def _history_date_range(self) -> tuple[datetime.datetime | None, datetime.datetime | None]:
         start_date = None
@@ -2096,3 +2104,214 @@ class HistorialState(MixinState):
     @rx.var(cache=True)
     def total_ventas_mixtas(self) -> float:
         return self.payment_stats["mixto"]
+
+    # ── Devoluciones: computed properties ──
+
+    @rx.var(cache=True)
+    def return_reason_options(self) -> list[list[str]]:
+        return [
+            [r.value, r.display_label]
+            for r in ReturnReason
+        ]
+
+    @rx.var(cache=True)
+    def return_refund_total(self) -> str:
+        total = sum(
+            (item.get("return_qty", 0) or 0) * (item.get("unit_price", 0) or 0)
+            for item in self.return_items
+        )
+        return self._format_currency(total)
+
+    @rx.var(cache=True)
+    def return_has_selection(self) -> bool:
+        return any(
+            (item.get("return_qty", 0) or 0) > 0
+            for item in self.return_items
+        )
+
+    # ── Devoluciones: event handlers ──
+
+    @rx.event
+    def open_return_modal(self, sale_id: str):
+        """Abre el modal de devolución cargando los ítems de la venta."""
+        if not self.current_user["privileges"].get("delete_sales", False):
+            return rx.toast("No tiene permisos para procesar devoluciones.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no configurada.", duration=3000)
+
+        try:
+            db_sale_id = int(sale_id)
+        except (ValueError, TypeError):
+            return rx.toast("ID de venta inválido.", duration=3000)
+
+        with rx.session() as session:
+            sale = session.exec(
+                select(Sale)
+                .options(selectinload(Sale.items))
+                .where(Sale.id == db_sale_id)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+            ).first()
+
+            if not sale:
+                return rx.toast("Venta no encontrada.", duration=3000)
+            if sale.status == SaleStatus.cancelled:
+                return rx.toast("La venta fue anulada, no se puede devolver.", duration=3000)
+            if sale.status == SaleStatus.returned:
+                return rx.toast("La venta ya fue devuelta completamente.", duration=3000)
+
+            # Cargar devoluciones previas
+            from app.models import SaleReturn, SaleReturnItem
+            existing_returns = session.exec(
+                select(SaleReturnItem)
+                .join(SaleReturn)
+                .where(SaleReturn.original_sale_id == db_sale_id)
+                .where(SaleReturn.company_id == company_id)
+            ).all()
+            already_returned: dict[int, Decimal] = {}
+            for er in existing_returns:
+                already_returned[er.sale_item_id] = (
+                    already_returned.get(er.sale_item_id, Decimal("0")) + er.quantity
+                )
+
+            self.return_sale_id = db_sale_id
+            self.return_sale_summary = {
+                "id": sale.id,
+                "total": float(sale.total_amount or 0),
+                "date": self._format_company_datetime(
+                    sale.timestamp, "%d/%m/%Y %H:%M"
+                ) if sale.timestamp else "",
+            }
+            items = []
+            for si in sale.items:
+                prev_returned = float(already_returned.get(si.id, Decimal("0")))
+                available = float(si.quantity or 0) - prev_returned
+                if available <= 0:
+                    continue
+                items.append({
+                    "sale_item_id": si.id,
+                    "product_name": si.product_name_snapshot or "Producto",
+                    "unit_price": float(si.unit_price or 0),
+                    "original_qty": float(si.quantity or 0),
+                    "already_returned": prev_returned,
+                    "available_qty": available,
+                    "return_qty": 0,
+                })
+            if not items:
+                return rx.toast("Todos los ítems ya fueron devueltos.", duration=3000)
+
+            self.return_items = items
+            self.return_reason = "other"
+            self.return_notes = ""
+            self.return_modal_open = True
+
+    @rx.event
+    def close_return_modal(self):
+        self.return_modal_open = False
+        self.return_sale_id = 0
+        self.return_sale_summary = {}
+        self.return_items = []
+        self.return_reason = "other"
+        self.return_notes = ""
+
+    @rx.event
+    def set_return_reason(self, value: str):
+        self.return_reason = value
+
+    @rx.event
+    def set_return_notes(self, value: str):
+        from app.utils.sanitization import sanitize_notes_preserve_spaces
+        self.return_notes = sanitize_notes_preserve_spaces(value)
+
+    @rx.event
+    def set_return_item_qty(self, sale_item_id: str, value: str):
+        """Actualiza la cantidad a devolver de un ítem."""
+        try:
+            qty = float(value) if value else 0
+            if qty < 0:
+                qty = 0
+        except (ValueError, TypeError):
+            qty = 0
+
+        item_id = int(sale_item_id)
+        updated = []
+        for item in self.return_items:
+            if item["sale_item_id"] == item_id:
+                available = item["available_qty"]
+                item = dict(item)
+                item["return_qty"] = min(qty, available)
+            updated.append(item)
+        self.return_items = updated
+
+    @rx.event
+    def select_all_return_items(self):
+        """Selecciona la cantidad máxima para todos los ítems."""
+        updated = []
+        for item in self.return_items:
+            item = dict(item)
+            item["return_qty"] = item["available_qty"]
+            updated.append(item)
+        self.return_items = updated
+
+    @rx.event
+    def confirm_return(self):
+        """Procesa la devolución."""
+        if not self.current_user["privileges"].get("delete_sales", False):
+            return rx.toast("No tiene permisos para procesar devoluciones.", duration=3000)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        user_id = self.current_user.get("id")
+        if not company_id or not branch_id or not user_id:
+            return rx.toast("Sesión inválida.", duration=3000)
+
+        if not self.return_sale_id:
+            return rx.toast("No hay venta seleccionada.", duration=3000)
+
+        from app.services.return_service import process_return, ReturnItemRequest
+
+        items_to_return = []
+        for item in self.return_items:
+            qty = item.get("return_qty", 0) or 0
+            if qty > 0:
+                items_to_return.append(ReturnItemRequest(
+                    sale_item_id=item["sale_item_id"],
+                    quantity=Decimal(str(qty)),
+                ))
+
+        if not items_to_return:
+            return rx.toast("Seleccione al menos un ítem para devolver.", duration=3000)
+
+        with rx.session() as session:
+            try:
+                result = process_return(
+                    session,
+                    sale_id=self.return_sale_id,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    user_id=user_id,
+                    reason=self.return_reason,
+                    notes=self.return_notes,
+                    items=items_to_return,
+                    timestamp=self._event_timestamp(),
+                )
+                if not result.success:
+                    return rx.toast(result.error, duration=4000)
+                session.commit()
+            except Exception:
+                session.rollback()
+                logger.exception("Error al procesar devolución venta #%s", self.return_sale_id)
+                return rx.toast(
+                    "Error al procesar la devolución. Intente nuevamente.",
+                    duration=4000,
+                )
+
+        self.close_return_modal()
+        self._history_update_trigger += 1
+        refund_display = self._format_currency(float(result.refund_amount))
+        return rx.toast(
+            f"Devolución procesada: {result.items_returned} ítem(s), "
+            f"reembolso {refund_display}",
+            duration=5000,
+        )

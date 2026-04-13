@@ -25,6 +25,8 @@ from .sales import (
     SaleItem,
     SalePayment,
     SaleInstallment,
+    SaleReturn,
+    SaleReturnItem,
 )
 from .client import Client
 # billing DESPUÉS de sales — FiscalDocument.sale necesita que Sale
@@ -66,6 +68,8 @@ __all__ = [
     "Currency",
     "CompanySettings",
     "OwnerAuditLog",
+    "SaleReturn",
+    "SaleReturnItem",
     "CompanyBillingConfig",
     "FiscalDocument",
     "DocumentLookupCache",
