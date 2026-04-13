@@ -36,7 +36,7 @@ def import_modal() -> rx.Component:
         State.import_file_name == "",
         rx.upload(
           rx.el.div(
-            rx.icon("upload-cloud", class_name="h-10 w-10 text-slate-400 mx-auto mb-2"),
+            rx.icon("cloud-upload", class_name="h-10 w-10 text-slate-400 mx-auto mb-2"),
             rx.el.p(
               "Arrastre un archivo aquí o haga clic para seleccionar",
               class_name="text-sm text-slate-500 text-center",
@@ -58,11 +58,11 @@ def import_modal() -> rx.Component:
         # Archivo seleccionado - mostrar nombre
         rx.el.div(
           rx.el.div(
-            rx.icon("file-spreadsheet", class_name="h-5 w-5 text-emerald-600"),
+            rx.icon("file-check", class_name="h-5 w-5 text-emerald-600"),
             rx.el.span(State.import_file_name, class_name="text-sm font-medium text-slate-700"),
             rx.el.button(
               rx.icon("x", class_name="h-4 w-4"),
-              on_click=State.close_import_modal.then(State.open_import_modal),  # type: ignore
+              on_click=[State.close_import_modal, State.open_import_modal],
               class_name="ml-auto text-slate-400 hover:text-red-500",
               title="Cambiar archivo",
             ),
@@ -75,7 +75,7 @@ def import_modal() -> rx.Component:
         State.import_errors.length() > 0,
         rx.el.div(
           rx.el.div(
-            rx.icon("alert-triangle", class_name="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5"),
+            rx.icon("triangle-alert", class_name="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5"),
             rx.el.div(
               rx.foreach(
                 State.import_errors,
@@ -191,7 +191,7 @@ def import_modal() -> rx.Component:
       rx.el.button(
         rx.cond(
           State.import_processing,
-          rx.fragment(rx.icon("loader-2", class_name="h-4 w-4 animate-spin"), "Importando..."),
+          rx.fragment(rx.icon("loader-circle", class_name="h-4 w-4 animate-spin"), "Importando..."),
           rx.fragment(rx.icon("check", class_name="h-4 w-4"), "Confirmar importación"),
         ),
         on_click=State.confirm_import,

@@ -428,7 +428,7 @@ def return_modal() -> rx.Component:
                   ),
                   rx.el.td(
                     State.currency_symbol,
-                    (item["return_qty"] * item["unit_price"]).to_string(),
+                    item["refund_line"].to_string(),
                     class_name="py-2 px-3 text-right text-sm font-mono",
                   ),
                   class_name="border-b",

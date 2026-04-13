@@ -2198,6 +2198,7 @@ class HistorialState(MixinState):
                     "already_returned": prev_returned,
                     "available_qty": available,
                     "return_qty": 0,
+                    "refund_line": 0.0,
                 })
             if not items:
                 return rx.toast("Todos los ítems ya fueron devueltos.", duration=3000)
@@ -2242,6 +2243,7 @@ class HistorialState(MixinState):
                 available = item["available_qty"]
                 item = dict(item)
                 item["return_qty"] = min(qty, available)
+                item["refund_line"] = round(item["return_qty"] * item["unit_price"], 2)
             updated.append(item)
         self.return_items = updated
 
@@ -2252,6 +2254,7 @@ class HistorialState(MixinState):
         for item in self.return_items:
             item = dict(item)
             item["return_qty"] = item["available_qty"]
+            item["refund_line"] = round(item["return_qty"] * item["unit_price"], 2)
             updated.append(item)
         self.return_items = updated
 
