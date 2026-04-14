@@ -646,6 +646,30 @@ def _kpis_grid() -> rx.Component:
 def _secondary_kpis() -> rx.Component:
   """KPIs secundarios con links a secciones."""
   return rx.el.div(
+    # Margen bruto - KPI más importante para el dueño
+    rx.el.div(
+      rx.el.div(
+        rx.el.div(
+          rx.icon("trending-up", class_name="w-5 h-5"),
+          class_name=f"p-2 {RADIUS['lg']} bg-emerald-50 text-emerald-600",
+        ),
+        rx.el.div(
+          rx.el.p("Margen Bruto", class_name=TYPOGRAPHY["body_secondary"]),
+          rx.el.p(
+            State.formatted_gross_margin,
+            class_name="text-2xl font-bold text-emerald-700 tabular-nums",
+          ),
+          rx.el.p(
+            State.formatted_margin_percent,
+            " de margen",
+            class_name="text-xs text-slate-400",
+          ),
+          class_name="ml-auto text-right",
+        ),
+        class_name="flex items-start justify-between",
+      ),
+      class_name=f"bg-white {RADIUS['xl']} border border-slate-200 p-4 {SHADOWS['sm']}",
+    ),
     _stat_card(
       "Clientes",
       State.total_clients,
@@ -653,14 +677,6 @@ def _secondary_kpis() -> rx.Component:
       "users",
       "blue",
       link="/clientes",
-    ),
-    _stat_card(
-      "Créditos Activos",
-      State.active_credits,
-      "Con cuotas pendientes",
-      "credit-card",
-      "purple",
-      link="/cuentas",
     ),
     _stat_card(
       "Deuda Pendiente",

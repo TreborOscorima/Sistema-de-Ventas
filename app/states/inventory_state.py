@@ -141,6 +141,7 @@ class InventoryState(MixinState):
     categories: List[str] = ["General"]
     _categories_loaded_once: bool = rx.field(default=False, is_var=False)
     categories_panel_expanded: bool = False
+    show_inactive_products: bool = False
     _inventory_update_trigger: int = 0
     inventory_list: list[dict] = []
     inventory_total_pages: int = 1
@@ -213,6 +214,7 @@ class InventoryState(MixinState):
             "id": product.id,
             "variant_id": None,
             "is_variant": False,
+            "is_active": getattr(product, 'is_active', True),
             "barcode": product.barcode,
             "description": product.description,
             "category": product.category,
@@ -248,6 +250,7 @@ class InventoryState(MixinState):
             "id": product.id,
             "variant_id": variant.id,
             "is_variant": True,
+            "is_active": getattr(product, 'is_active', True),
             "barcode": variant.sku or product.barcode,
             "description": description,
             "category": product.category,
@@ -269,6 +272,7 @@ class InventoryState(MixinState):
     ) -> int:
         """Count total matching rows for search using SQL COUNT (no row loading)."""
         term = f"%{escape_like(search)}%"
+        active_filter = [] if self.show_inactive_products else [Product.is_active == True]
         variant_count = int(
             session.exec(
                 select(func.count(ProductVariant.id))
@@ -277,6 +281,7 @@ class InventoryState(MixinState):
                 .where(ProductVariant.branch_id == branch_id)
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
+                .where(*active_filter)
                 .where(
                     or_(
                         ProductVariant.sku.ilike(term),
@@ -299,6 +304,7 @@ class InventoryState(MixinState):
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
                 .where(no_variant)
+                .where(*active_filter)
                 .where(
                     or_(
                         Product.description.ilike(term),
@@ -322,6 +328,7 @@ class InventoryState(MixinState):
     ) -> List[Dict[str, Any]]:
         """Fetch one page of search results via SQL UNION ALL + OFFSET/LIMIT."""
         term = f"%{escape_like(search)}%"
+        active_filter = [] if self.show_inactive_products else [Product.is_active == True]
 
         # Variant IDs matching search
         variant_ids_q = (
@@ -336,6 +343,7 @@ class InventoryState(MixinState):
             .where(ProductVariant.branch_id == branch_id)
             .where(Product.company_id == company_id)
             .where(Product.branch_id == branch_id)
+            .where(*active_filter)
             .where(
                 or_(
                     ProductVariant.sku.ilike(term),
@@ -362,6 +370,7 @@ class InventoryState(MixinState):
             .where(Product.company_id == company_id)
             .where(Product.branch_id == branch_id)
             .where(no_variant)
+            .where(*active_filter)
             .where(
                 or_(
                     Product.description.ilike(term),
@@ -462,11 +471,13 @@ class InventoryState(MixinState):
                     offset=offset, per_page=per_page,
                 )
             else:
+                active_filter = [] if self.show_inactive_products else [Product.is_active == True]
                 total_items = int(
                     session.exec(
                         select(func.count(Product.id))
                         .where(Product.company_id == company_id)
                         .where(Product.branch_id == branch_id)
+                        .where(*active_filter)
                     ).one()
                     or 0
                 )
@@ -481,6 +492,7 @@ class InventoryState(MixinState):
                     select(Product)
                     .where(Product.company_id == company_id)
                     .where(Product.branch_id == branch_id)
+                    .where(*active_filter)
                     .order_by(Product.description, Product.id)
                     .offset(offset)
                     .limit(per_page)
@@ -491,16 +503,16 @@ class InventoryState(MixinState):
                 ]
 
             # Single query con CASE para obtener los 4 contadores en 1 round-trip
-            # (antes eran 4 queries separadas).
+            # Solo cuenta productos activos para las estadísticas.
             stock_stats = session.exec(
                 select(
                     func.count(Product.id),
                     func.sum(case(
-                        (Product.stock > DEFAULT_LOW_STOCK_THRESHOLD, 1),
+                        (Product.stock > Product.min_stock_alert, 1),
                         else_=0,
                     )),
                     func.sum(case(
-                        (and_(Product.stock > 0, Product.stock <= DEFAULT_LOW_STOCK_THRESHOLD), 1),
+                        (and_(Product.stock > 0, Product.stock <= Product.min_stock_alert), 1),
                         else_=0,
                     )),
                     func.sum(case(
@@ -510,6 +522,7 @@ class InventoryState(MixinState):
                 )
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
+                .where(Product.is_active == True)
             ).one()
             total_products = int(stock_stats[0] or 0)
             in_stock_count = int(stock_stats[1] or 0)
@@ -527,6 +540,45 @@ class InventoryState(MixinState):
     def refresh_inventory_cache(self):
         self.load_categories()
         self._refresh_inventory_cache()
+
+    @rx.event
+    def toggle_show_inactive_products(self, value: bool):
+        """Muestra/oculta productos inactivos en el listado."""
+        self.show_inactive_products = value
+        self.inventory_current_page = 1
+        self._refresh_inventory_cache()
+
+    @rx.event
+    def toggle_product_active(self, product_id: int):
+        """Activa/desactiva un producto."""
+        if not self.current_user["privileges"]["edit_inventario"]:
+            return self.add_notification(
+                "No tiene permisos para editar productos.", "error"
+            )
+        block = self._require_active_subscription()
+        if block:
+            return block
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return self.add_notification("Empresa no definida.", "error")
+        with rx.session() as session:
+            product = session.exec(
+                select(Product)
+                .where(Product.id == product_id)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            ).first()
+            if not product:
+                return self.add_notification("Producto no encontrado.", "error")
+            product.is_active = not product.is_active
+            session.add(product)
+            session.commit()
+            status = "activado" if product.is_active else "desactivado"
+            self._refresh_inventory_cache()
+            return self.add_notification(
+                f"Producto '{product.description}' {status}.", "success"
+            )
 
     @rx.event
     def update_new_category_name(self, value: str):

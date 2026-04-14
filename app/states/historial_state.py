@@ -15,6 +15,8 @@ from app.utils.sanitization import escape_like
 from app.models import (
     Sale,
     SaleItem,
+    SaleReturn,
+    SaleReturnItem,
     Category,
     Product,
     CashboxLog,
@@ -141,6 +143,15 @@ class HistorialState(MixinState):
     return_items: list[dict] = []
     return_reason: str = "other"
     return_notes: str = ""
+
+    # ── Reporte de devoluciones ──
+    returns_report_rows: list[dict] = []
+    returns_report_total: float = 0.0
+    returns_report_count: int = 0
+    returns_report_page: int = 1
+    returns_report_per_page: int = 10
+    returns_report_filter_start: str = ""
+    returns_report_filter_end: str = ""
 
     def _history_date_range(self) -> tuple[datetime.datetime | None, datetime.datetime | None]:
         start_date = None
@@ -1293,7 +1304,7 @@ class HistorialState(MixinState):
         self._history_update_trigger += 1
         self._report_update_trigger += 1
         self._refresh_historial_cache()
-        # print("Reloading history...") # Depuracion
+        self._load_returns_report()
 
     @rx.event(background=True)
     async def reload_history_background(self):
@@ -2163,7 +2174,6 @@ class HistorialState(MixinState):
                 return rx.toast("La venta ya fue devuelta completamente.", duration=3000)
 
             # Cargar devoluciones previas
-            from app.models import SaleReturn, SaleReturnItem
             existing_returns = session.exec(
                 select(SaleReturnItem)
                 .join(SaleReturn)
@@ -2313,8 +2323,269 @@ class HistorialState(MixinState):
         self.close_return_modal()
         self._history_update_trigger += 1
         refund_display = self._format_currency(float(result.refund_amount))
+        self._load_returns_report()
         return rx.toast(
             f"Devolución procesada: {result.items_returned} ítem(s), "
             f"reembolso {refund_display}",
             duration=5000,
+        )
+
+    # ── Reporte de devoluciones: métodos ──
+
+    def _returns_date_range(self) -> tuple[datetime.datetime | None, datetime.datetime | None]:
+        start_date = None
+        end_date = None
+        if self.returns_report_filter_start:
+            try:
+                start_date, _ = self._company_day_bounds_utc_naive(
+                    self.returns_report_filter_start
+                )
+            except ValueError:
+                start_date = None
+        if self.returns_report_filter_end:
+            try:
+                _, end_date = self._company_day_bounds_utc_naive(
+                    self.returns_report_filter_end
+                )
+            except ValueError:
+                end_date = None
+        return start_date, end_date
+
+    def _load_returns_report(self) -> None:
+        """Carga el reporte de devoluciones desde la BD."""
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            self.returns_report_rows = []
+            self.returns_report_total = 0.0
+            self.returns_report_count = 0
+            return
+
+        start_dt, end_dt = self._returns_date_range()
+
+        with rx.session() as session:
+            query = (
+                select(SaleReturn)
+                .options(
+                    selectinload(SaleReturn.items),
+                )
+                .where(
+                    SaleReturn.company_id == company_id,
+                    SaleReturn.branch_id == branch_id,
+                )
+            )
+            if start_dt:
+                query = query.where(SaleReturn.timestamp >= start_dt)
+            if end_dt:
+                query = query.where(SaleReturn.timestamp <= end_dt)
+
+            query = query.order_by(SaleReturn.timestamp.desc())
+            returns = session.exec(query).all()
+
+            # Build user lookup for return users
+            user_ids = {
+                int(r.user_id)
+                for r in returns
+                if r.user_id is not None
+            }
+            user_lookup: dict[int, str] = {}
+            if user_ids:
+                with tenant_bypass():
+                    user_rows = session.exec(
+                        select(User.id, User.username)
+                        .where(User.id.in_(user_ids))
+                        .where(User.company_id == company_id)
+                        .execution_options(tenant_bypass=True)
+                    ).all()
+                for row in user_rows:
+                    try:
+                        uid, uname = row[0], row[1]
+                        user_lookup[int(uid)] = str(uname or "").strip()
+                    except (TypeError, ValueError):
+                        continue
+
+            # Build product lookup for item names
+            product_ids = set()
+            for ret in returns:
+                for item in (ret.items or []):
+                    if item.product_id:
+                        product_ids.add(item.product_id)
+            product_lookup: dict[int, str] = {}
+            if product_ids:
+                prod_rows = session.exec(
+                    select(Product.id, Product.name)
+                    .where(Product.id.in_(product_ids))
+                ).all()
+                for row in prod_rows:
+                    try:
+                        pid, pname = row[0], row[1]
+                        product_lookup[int(pid)] = str(pname or "Producto")
+                    except (TypeError, ValueError):
+                        continue
+
+            rows = []
+            total_refund = 0.0
+            for ret in returns:
+                # Build items summary
+                items_detail = []
+                for item in (ret.items or []):
+                    prod_name = product_lookup.get(item.product_id, "Producto") if item.product_id else "Producto"
+                    items_detail.append(
+                        f"{prod_name} x{float(item.quantity or 0):.0f}"
+                    )
+
+                reason_label = ret.reason or "other"
+                try:
+                    reason_label = ReturnReason(ret.reason).display_label
+                except (ValueError, KeyError):
+                    reason_label = ret.reason or "Otro"
+
+                refund_amt = float(ret.refund_amount or 0)
+                total_refund += refund_amt
+
+                rows.append({
+                    "id": ret.id,
+                    "timestamp": self._format_company_datetime(
+                        ret.timestamp, "%d/%m/%Y %H:%M"
+                    ) if ret.timestamp else "",
+                    "original_sale_id": ret.original_sale_id,
+                    "reason": reason_label,
+                    "notes": ret.notes or "",
+                    "items_summary": ", ".join(items_detail) if items_detail else "Sin ítems",
+                    "items_count": len(items_detail),
+                    "refund_amount": refund_amt,
+                    "user": user_lookup.get(int(ret.user_id), "Desconocido") if ret.user_id else "Desconocido",
+                })
+
+            self.returns_report_rows = rows
+            self.returns_report_total = round(total_refund, 2)
+            self.returns_report_count = len(rows)
+
+    @rx.var(cache=True)
+    def returns_report_total_pages(self) -> int:
+        if not self.returns_report_rows:
+            return 1
+        return max(1, -(-len(self.returns_report_rows) // self.returns_report_per_page))
+
+    @rx.var(cache=True)
+    def returns_report_paginated(self) -> list[dict]:
+        start = (self.returns_report_page - 1) * self.returns_report_per_page
+        end = start + self.returns_report_per_page
+        return self.returns_report_rows[start:end]
+
+    @rx.var(cache=True)
+    def formatted_returns_total(self) -> str:
+        return self._format_currency(self.returns_report_total)
+
+    @rx.event
+    def load_returns_report(self):
+        """Event handler público para cargar el reporte de devoluciones."""
+        self.returns_report_page = 1
+        self._load_returns_report()
+
+    @rx.event
+    def set_returns_filter_start(self, value: str):
+        self.returns_report_filter_start = value or ""
+
+    @rx.event
+    def set_returns_filter_end(self, value: str):
+        self.returns_report_filter_end = value or ""
+
+    @rx.event
+    def set_returns_report_page(self, page: int):
+        if 1 <= page <= self.returns_report_total_pages:
+            self.returns_report_page = page
+
+    @rx.event
+    def export_returns_excel(self):
+        """Exporta el reporte de devoluciones a Excel."""
+        if not self.current_user["privileges"].get("export_data", False):
+            return rx.toast(MSG.PERM_EXPORT, duration=3000)
+
+        company_id = self._company_id()
+        if not company_id:
+            return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
+
+        if not self.returns_report_rows:
+            return rx.toast("No hay devoluciones para exportar.", duration=3000)
+
+        currency_label = self._currency_symbol_clean()
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        start_dt, end_dt = self._returns_date_range()
+        period_start = (
+            self._format_company_datetime(start_dt, "%d/%m/%Y")
+            if start_dt
+            else "Inicio"
+        )
+        period_end = (
+            self._format_company_datetime(end_dt, "%d/%m/%Y")
+            if end_dt
+            else "Actual"
+        )
+        period_label = f"Período: {period_start} a {period_end}"
+
+        wb, ws = create_excel_workbook("Devoluciones")
+
+        row = add_company_header(
+            ws,
+            company_name,
+            "REPORTE DE DEVOLUCIONES",
+            period_label,
+            columns=7,
+            generated_at=self._display_now(),
+        )
+
+        headers = [
+            "Fecha y Hora",
+            "Venta Original #",
+            "Motivo",
+            "Productos Devueltos",
+            "Cantidad Ítems",
+            f"Reembolso ({currency_label})",
+            "Usuario",
+        ]
+        style_header_row(ws, row, headers)
+        row += 1
+
+        data_rows = []
+        for ret in self.returns_report_rows:
+            data_rows.append([
+                ret.get("timestamp", ""),
+                ret.get("original_sale_id", ""),
+                ret.get("reason", ""),
+                ret.get("items_summary", ""),
+                ret.get("items_count", 0),
+                ret.get("refund_amount", 0),
+                ret.get("user", ""),
+            ])
+
+        if data_rows:
+            add_data_rows(ws, row, data_rows)
+            data_end = row + len(data_rows) - 1
+
+            # Format currency column (F)
+            currency_format = self._currency_excel_format()
+            for r in range(row, data_end + 1):
+                cell = ws.cell(row=r, column=6)
+                cell.number_format = currency_format
+
+            # Totals row
+            totals_row = data_end + 1
+            ws.cell(row=totals_row, column=1, value="TOTAL")
+            ws.cell(row=totals_row, column=1).font = ws.cell(row=totals_row, column=1).font.copy(bold=True)
+            ws.cell(row=totals_row, column=5, value=self.returns_report_count)
+            ws.cell(row=totals_row, column=5).font = ws.cell(row=totals_row, column=5).font.copy(bold=True)
+            total_cell = ws.cell(row=totals_row, column=6, value=self.returns_report_total)
+            total_cell.number_format = currency_format
+            total_cell.font = total_cell.font.copy(bold=True)
+            total_cell.fill = NEGATIVE_FILL
+
+        auto_adjust_column_widths(ws)
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        return rx.download(
+            data=buffer.getvalue(),
+            filename=f"devoluciones_{company_name.replace(' ', '_')}.xlsx",
         )

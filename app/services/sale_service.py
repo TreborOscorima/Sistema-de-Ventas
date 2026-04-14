@@ -355,7 +355,10 @@ async def get_product_by_barcode(
             if parent:
                 return _adapt_variant_payload(variant, parent)
 
-        product_query = select(Product).where(Product.barcode == code)
+        product_query = select(Product).where(
+            Product.barcode == code,
+            Product.is_active == True,
+        )
         product = (
             await current_session.exec(
                 _apply_tenant_filters(
@@ -389,10 +392,11 @@ async def search_products(
 
     async def _run(current_session: AsyncSession) -> list[dict[str, Any]]:
         product_query = select(Product).where(
+            Product.is_active == True,
             or_(
                 Product.description.ilike(like_search),
                 Product.barcode.ilike(like_search),
-            )
+            ),
         )
         product_query = _apply_tenant_filters(
             product_query, Product, company_id, branch_id
@@ -405,6 +409,7 @@ async def search_products(
             select(ProductVariant, Product)
             .join(Product, Product.id == ProductVariant.product_id)
             .where(
+                Product.is_active == True,
                 or_(
                     ProductVariant.sku.ilike(like_search),
                     ProductVariant.size.ilike(like_search),
@@ -418,7 +423,7 @@ async def search_products(
                         func.coalesce(ProductVariant.color, ""),
                         ")",
                     ).ilike(like_search),
-                )
+                ),
             )
         )
         variant_query = _apply_tenant_filters(

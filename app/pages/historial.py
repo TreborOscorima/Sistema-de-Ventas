@@ -570,6 +570,197 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
   )
 
 
+def returns_report_row(ret: rx.Var[dict]) -> rx.Component:
+  """Fila de la tabla de devoluciones."""
+  return rx.el.tr(
+    rx.el.td(ret["timestamp"], class_name="py-3 px-4 text-sm text-slate-700 whitespace-nowrap"),
+    rx.el.td(
+      rx.el.span("#", ret["original_sale_id"].to_string(), class_name="font-mono"),
+      class_name="py-3 px-4 text-sm text-slate-700",
+    ),
+    rx.el.td(ret["reason"], class_name="py-3 px-4 text-sm text-slate-700"),
+    rx.el.td(
+      ret["items_summary"],
+      class_name="py-3 px-4 text-sm text-slate-500 max-w-[250px] truncate",
+      title=ret["items_summary"],
+    ),
+    rx.el.td(
+      State.currency_symbol,
+      " ",
+      ret["refund_amount"].to_string(),
+      class_name="py-3 px-4 text-right font-semibold tabular-nums text-red-600 whitespace-nowrap",
+    ),
+    rx.el.td(ret["user"], class_name="py-3 px-4 text-sm text-slate-500 hidden xl:table-cell"),
+    class_name="border-b border-slate-100 hover:bg-red-50/40 transition-colors duration-150",
+  )
+
+
+def _return_card(ret: rx.Var[dict]) -> rx.Component:
+  """Card de devolución para vista móvil."""
+  return rx.el.div(
+    rx.el.div(
+      rx.el.span(ret["timestamp"], class_name="font-mono font-medium text-slate-900 text-sm"),
+      rx.el.span(
+        State.currency_symbol, " ", ret["refund_amount"].to_string(),
+        class_name="text-base font-bold text-red-600 tabular-nums",
+      ),
+      class_name="flex items-center justify-between gap-2",
+    ),
+    rx.el.div(
+      rx.el.div(
+        rx.el.span("Venta", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(
+          "#", ret["original_sale_id"].to_string(),
+          class_name="text-sm font-medium text-slate-800 font-mono",
+        ),
+        class_name="flex flex-col gap-0.5",
+      ),
+      rx.el.div(
+        rx.el.span("Motivo", class_name=TYPOGRAPHY["caption"]),
+        rx.el.span(ret["reason"], class_name="text-sm font-medium text-slate-800"),
+        class_name="flex flex-col gap-0.5",
+      ),
+      class_name="grid grid-cols-2 gap-3 mt-2",
+    ),
+    rx.el.p(
+      ret["items_summary"],
+      class_name="text-xs text-slate-500 mt-1 truncate",
+      title=ret["items_summary"],
+    ),
+    class_name=(
+      "bg-white border border-slate-200 rounded-xl p-4 shadow-sm "
+      "transition-all duration-150"
+    ),
+  )
+
+
+def returns_report_section() -> rx.Component:
+  """Sección de reporte de devoluciones."""
+  return rx.el.div(
+    # Header
+    rx.el.div(
+      rx.el.div(
+        rx.icon("undo-2", class_name="h-5 w-5 text-red-600"),
+        rx.el.h3("Reporte de Devoluciones", class_name=TYPOGRAPHY["section_title"]),
+        class_name="flex items-center gap-2",
+      ),
+      class_name="flex items-center justify-between",
+    ),
+    # Summary cards
+    rx.el.div(
+      rx.card(
+        rx.el.div(
+          rx.el.div(
+            rx.icon("undo-2", class_name="h-6 w-6 text-red-600"),
+            class_name="p-3 rounded-lg bg-red-100",
+          ),
+          rx.el.div(
+            rx.el.p("Total Reembolsado", class_name=TYPOGRAPHY["body_secondary"]),
+            rx.el.p(
+              State.formatted_returns_total,
+              class_name="text-2xl font-bold text-red-700",
+            ),
+            class_name="flex-1",
+          ),
+          class_name="flex items-center gap-4",
+        ),
+        class_name=CARD_STYLES["compact"],
+      ),
+      rx.card(
+        rx.el.div(
+          rx.el.div(
+            rx.icon("hash", class_name="h-6 w-6 text-slate-600"),
+            class_name="p-3 rounded-lg bg-slate-100",
+          ),
+          rx.el.div(
+            rx.el.p("Devoluciones", class_name=TYPOGRAPHY["body_secondary"]),
+            rx.el.p(
+              State.returns_report_count.to_string(),
+              class_name="text-2xl font-bold text-slate-800",
+            ),
+            class_name="flex-1",
+          ),
+          class_name="flex items-center gap-4",
+        ),
+        class_name=CARD_STYLES["compact"],
+      ),
+      class_name="grid grid-cols-1 sm:grid-cols-2 gap-4",
+    ),
+    # Filters
+    rx.el.div(
+      rx.el.div(
+        *date_range_filter(
+          start_value=State.returns_report_filter_start,
+          end_value=State.returns_report_filter_end,
+          on_start_change=State.set_returns_filter_start,
+          on_end_change=State.set_returns_filter_end,
+        ),
+        class_name="flex flex-wrap gap-3 items-end flex-1",
+      ),
+      rx.el.div(
+        rx.el.button(
+          rx.icon("search", class_name="h-4 w-4"),
+          "Buscar",
+          on_click=State.load_returns_report,
+          class_name=BUTTON_STYLES["primary"],
+        ),
+        rx.el.button(
+          rx.icon("download", class_name="h-4 w-4"),
+          "Exportar",
+          on_click=State.export_returns_excel,
+          class_name=BUTTON_STYLES["success"],
+        ),
+        class_name="flex gap-2",
+      ),
+      class_name="flex flex-wrap gap-3 items-end justify-between",
+    ),
+    # Table (desktop)
+    rx.el.div(
+      rx.el.div(
+        rx.el.table(
+          rx.el.thead(
+            rx.el.tr(
+              rx.el.th("Fecha", scope="col", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Venta #", scope="col", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Motivo", scope="col", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Productos", scope="col", class_name=TABLE_STYLES["header_cell"]),
+              rx.el.th("Reembolso", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+              rx.el.th("Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} hidden xl:table-cell"),
+              class_name=TABLE_STYLES["header"],
+            )
+          ),
+          rx.el.tbody(rx.foreach(State.returns_report_paginated, returns_report_row)),
+          class_name="min-w-full",
+        ),
+        class_name="hidden md:block overflow-x-auto",
+      ),
+      # Mobile cards
+      rx.el.div(
+        rx.foreach(State.returns_report_paginated, _return_card),
+        class_name="flex flex-col gap-3 md:hidden",
+      ),
+      rx.cond(
+        State.returns_report_count == 0,
+        empty_state("No hay devoluciones registradas en el período seleccionado."),
+        rx.fragment(),
+      ),
+      class_name=f"{CARD_STYLES['default']} flex flex-col gap-4",
+    ),
+    # Pagination
+    rx.cond(
+      State.returns_report_count > 0,
+      pagination_controls(
+        current_page=State.returns_report_page,
+        total_pages=State.returns_report_total_pages,
+        on_prev=lambda: State.set_returns_report_page(State.returns_report_page - 1),
+        on_next=lambda: State.set_returns_report_page(State.returns_report_page + 1),
+      ),
+      rx.fragment(),
+    ),
+    class_name="flex flex-col gap-4",
+  )
+
+
 def historial_page() -> rx.Component:
   """Página principal del historial de ventas y movimientos."""
   content = rx.fragment(
@@ -624,6 +815,8 @@ def historial_page() -> rx.Component:
         on_prev=lambda: State.set_history_page(State.current_page_history - 1),
         on_next=lambda: State.set_history_page(State.current_page_history + 1),
       ),
+      # Sección de devoluciones
+      returns_report_section(),
       # Nota: Los reportes financieros ahora se generan desde el módulo Reportes
       # para mantener un único punto de verdad para datos contables
     rx.el.div(

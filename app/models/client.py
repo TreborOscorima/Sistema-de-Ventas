@@ -35,6 +35,7 @@ class Client(rx.Model, table=True):
         nullable=False,
     )
     phone: Optional[str] = Field(default=None)
+    email: Optional[str] = Field(default=None, max_length=255)
     address: Optional[str] = Field(default=None)
     credit_limit: Decimal = Field(
         default=Decimal("0.00"),

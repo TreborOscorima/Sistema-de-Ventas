@@ -79,8 +79,8 @@ class Alert:
 
 
 # Configuración de umbrales (pueden moverse a constants.py o BD)
-STOCK_LOW_THRESHOLD = 10       # Unidades para alerta amarilla
-STOCK_CRITICAL_THRESHOLD = 3  # Unidades para alerta roja
+STOCK_CRITICAL_FRACTION = 0.3  # Fracción de min_stock_alert para considerar crítico
+STOCK_CRITICAL_FLOOR = 3       # Mínimo absoluto para umbral crítico
 INSTALLMENT_DUE_DAYS = 3      # Días antes del vencimiento para alertar
 CASHBOX_OPEN_HOURS = 12       # Horas para alertar caja abierta
 BATCH_EXPIRING_DAYS = 30      # Ventana de "lotes por vencer" (Farmacia/Supermercado)
@@ -108,10 +108,17 @@ def get_low_stock_alerts(
     alerts = []
     
     with rx.session() as session:
-        # Productos con stock crítico (< 3)
+        # Umbral crítico dinámico por producto: max(min_stock_alert * 0.3, STOCK_CRITICAL_FLOOR)
+        critical_threshold_expr = func.greatest(
+            Product.min_stock_alert * STOCK_CRITICAL_FRACTION,
+            STOCK_CRITICAL_FLOOR,
+        )
+
+        # Productos con stock crítico (≤ umbral crítico dinámico)
         critical_query = select(Product).where(
             and_(
-                Product.stock <= STOCK_CRITICAL_THRESHOLD,
+                Product.is_active == True,
+                Product.stock <= critical_threshold_expr,
                 Product.stock > 0,
             )
         )
@@ -120,27 +127,28 @@ def get_low_stock_alerts(
         if branch_id:
             critical_query = critical_query.where(Product.branch_id == branch_id)
         critical_products = session.exec(critical_query).all()
-        
+
         if critical_products:
             alerts.append(Alert(
                 type=AlertType.STOCK_CRITICAL,
                 severity=AlertSeverity.CRITICAL,
                 title=MSG.ALERT_CRITICAL_STOCK,
-                message=f"{len(critical_products)} producto(s) con stock crítico (≤{STOCK_CRITICAL_THRESHOLD} unidades)",
+                message=f"{len(critical_products)} producto(s) con stock crítico",
                 count=len(critical_products),
                 details={
                     "products": [
                         {"id": p.id, "name": p.description, "stock": p.stock}
-                        for p in critical_products[:5]  # Limitar a 5
+                        for p in critical_products[:5]
                     ]
                 }
             ))
-        
-        # Productos con stock bajo (3-10)
+
+        # Productos con stock bajo (entre umbral crítico y min_stock_alert)
         low_stock_query = select(Product).where(
             and_(
-                Product.stock > STOCK_CRITICAL_THRESHOLD,
-                Product.stock <= STOCK_LOW_THRESHOLD,
+                Product.is_active == True,
+                Product.stock > critical_threshold_expr,
+                Product.stock <= Product.min_stock_alert,
             )
         )
         if company_id:
@@ -154,7 +162,7 @@ def get_low_stock_alerts(
                 type=AlertType.STOCK_LOW,
                 severity=AlertSeverity.WARNING,
                 title=MSG.ALERT_LOW_STOCK,
-                message=f"{len(low_stock_products)} producto(s) con stock bajo ({STOCK_CRITICAL_THRESHOLD + 1}-{STOCK_LOW_THRESHOLD} unidades)",
+                message=f"{len(low_stock_products)} producto(s) con stock bajo (debajo del mínimo configurado)",
                 count=len(low_stock_products),
                 details={
                     "products": [
@@ -164,11 +172,11 @@ def get_low_stock_alerts(
                 }
             ))
         
-        # Productos sin stock
+        # Productos sin stock (solo activos)
         out_of_stock_query = (
             select(func.count())
             .select_from(Product)
-            .where(Product.stock <= 0)
+            .where(and_(Product.is_active == True, Product.stock <= 0))
         )
         if company_id:
             out_of_stock_query = out_of_stock_query.where(

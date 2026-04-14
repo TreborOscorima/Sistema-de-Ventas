@@ -66,9 +66,24 @@ class Sale(rx.Model, table=True):
 
     client: Optional["Client"] = Relationship(back_populates="sales")
     user: Optional["User"] = Relationship(back_populates="sales")
-    items: List["SaleItem"] = Relationship(back_populates="sale")
-    payments: List["SalePayment"] = Relationship(back_populates="sale")
-    installments: List["SaleInstallment"] = Relationship(back_populates="sale")
+    items: List["SaleItem"] = Relationship(
+        back_populates="sale",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    payments: List["SalePayment"] = Relationship(
+        back_populates="sale",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    installments: List["SaleInstallment"] = Relationship(
+        back_populates="sale",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+    returns: List["SaleReturn"] = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[SaleReturn.original_sale_id]",
+            "cascade": "all, delete-orphan",
+        },
+    )
 
 
 class SalePayment(rx.Model, table=True):

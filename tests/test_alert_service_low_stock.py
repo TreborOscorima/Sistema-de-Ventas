@@ -105,7 +105,7 @@ class TestGetLowStockAlertsRegression:
         assert alerts == []
 
     def test_detecta_stock_critico(self, monkeypatch):
-        """Productos con stock <= 3 → alerta CRITICAL."""
+        """Productos con stock <= umbral crítico dinámico → alerta CRITICAL."""
         critical_products = [
             _product(id_=1, description="Café", stock=1.0),
             _product(id_=2, description="Té", stock=2.0),

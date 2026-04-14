@@ -1568,6 +1568,20 @@ def inventario_page() -> rx.Component:
         ),
         class_name="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-4 border-b border-slate-200",
       ),
+      # Toggle mostrar inactivos
+      rx.el.div(
+        rx.el.label(
+          rx.el.input(
+            type="checkbox",
+            checked=State.show_inactive_products,
+            on_change=State.toggle_show_inactive_products,
+            class_name="rounded border-slate-300 text-indigo-600 mr-2",
+          ),
+          rx.el.span("Mostrar productos inactivos", class_name="text-sm text-slate-600"),
+          class_name="flex items-center cursor-pointer",
+        ),
+        class_name="pb-2",
+      ),
       # Vista móvil: Cards (visible en < md)
       rx.el.div(
         rx.foreach(State.inventory_list, _product_card),
@@ -1611,8 +1625,23 @@ def inventario_page() -> rx.Component:
                   class_name="py-3 px-4 hidden lg:table-cell",
                 ),
                 rx.el.td(
-                  product["description"],
-                  class_name="py-3 px-4 font-medium",
+                  rx.el.div(
+                    product["description"],
+                    rx.cond(
+                      product["is_active"],
+                      rx.fragment(),
+                      rx.el.span(
+                        "Inactivo",
+                        class_name="ml-2 text-xs px-2 py-0.5 rounded-full bg-slate-200 text-slate-600",
+                      ),
+                    ),
+                    class_name="flex items-center gap-1",
+                  ),
+                  class_name=rx.cond(
+                    product["is_active"],
+                    "py-3 px-4 font-medium",
+                    "py-3 px-4 font-medium text-slate-400",
+                  ),
                 ),
                 rx.el.td(
                   product["category"],
@@ -1680,14 +1709,33 @@ def inventario_page() -> rx.Component:
                     rx.cond(
                       product["is_variant"],
                       rx.fragment(),
-                      rx.el.button(
-                        rx.icon("trash-2", class_name="h-4 w-4"),
-                        on_click=lambda: State.delete_product(product["id"]),
-                        disabled=State.is_loading,
-                        loading=State.is_loading,
-                        class_name=BUTTON_STYLES["icon_danger"],
-                        title="Eliminar",
-                        aria_label="Eliminar",
+                      rx.el.div(
+                        rx.el.button(
+                          rx.cond(
+                            product["is_active"],
+                            rx.icon("eye-off", class_name="h-4 w-4"),
+                            rx.icon("eye", class_name="h-4 w-4"),
+                          ),
+                          on_click=lambda: State.toggle_product_active(product["id"]),
+                          disabled=State.is_loading,
+                          class_name=rx.cond(
+                            product["is_active"],
+                            BUTTON_STYLES["icon_ghost"],
+                            "inline-flex items-center justify-center rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 transition-colors",
+                          ),
+                          title=rx.cond(product["is_active"], "Desactivar", "Activar"),
+                          aria_label=rx.cond(product["is_active"], "Desactivar", "Activar"),
+                        ),
+                        rx.el.button(
+                          rx.icon("trash-2", class_name="h-4 w-4"),
+                          on_click=lambda: State.delete_product(product["id"]),
+                          disabled=State.is_loading,
+                          loading=State.is_loading,
+                          class_name=BUTTON_STYLES["icon_danger"],
+                          title="Eliminar",
+                          aria_label="Eliminar",
+                        ),
+                        class_name="flex items-center gap-1",
                       ),
                     ),
                     class_name="flex items-center justify-center gap-2",

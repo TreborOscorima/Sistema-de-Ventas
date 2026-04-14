@@ -78,6 +78,11 @@ class DashboardState(MixinState):
     pending_debt: float = 0.0
     low_stock_count: int = 0
 
+    # Margen bruto del período
+    period_gross_margin: float = 0.0
+    period_total_cost: float = 0.0
+    period_margin_percent: float = 0.0
+
     # Alertas
     alerts: list[dict] = []
     alert_count: int = 0
@@ -348,6 +353,37 @@ class DashboardState(MixinState):
                 self.avg_ticket = self.period_sales / self.period_sales_count
             else:
                 self.avg_ticket = 0.0
+
+            # Margen bruto del período: ingresos - costo
+            margin_result = session.exec(
+                select(
+                    func.coalesce(
+                        func.sum(SaleItem.quantity * SaleItem.unit_price), 0
+                    ),
+                    func.coalesce(
+                        func.sum(SaleItem.quantity * Product.purchase_price), 0
+                    ),
+                )
+                .select_from(SaleItem)
+                .join(Sale, SaleItem.sale_id == Sale.id)
+                .join(Product, SaleItem.product_id == Product.id, isouter=True)
+                .where(
+                    and_(
+                        Sale.timestamp >= period_start,
+                        Sale.timestamp <= period_end,
+                        Sale.status != SaleStatus.cancelled,
+                        Sale.company_id == company_id,
+                        Sale.branch_id == branch_id,
+                    )
+                )
+            ).one()
+            revenue = float(margin_result[0] or 0)
+            cost = float(margin_result[1] or 0)
+            self.period_total_cost = cost
+            self.period_gross_margin = revenue - cost
+            self.period_margin_percent = (
+                ((revenue - cost) / revenue * 100) if revenue > 0 else 0.0
+            )
 
             # Período anterior para comparación
             prev_result = session.exec(
@@ -849,6 +885,14 @@ class DashboardState(MixinState):
     @rx.var(cache=True)
     def formatted_period_sales(self) -> str:
         return f"{self.currency_symbol}{self.period_sales:,.2f}"
+
+    @rx.var(cache=True)
+    def formatted_gross_margin(self) -> str:
+        return f"{self.currency_symbol}{self.period_gross_margin:,.2f}"
+
+    @rx.var(cache=True)
+    def formatted_margin_percent(self) -> str:
+        return f"{self.period_margin_percent:.1f}%"
 
     @rx.var(cache=True)
     def category_total_sales(self) -> float:

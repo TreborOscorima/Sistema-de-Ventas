@@ -70,6 +70,15 @@ class Product(rx.Model, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
+    is_active: bool = Field(
+        default=True,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Boolean,
+            nullable=False,
+            server_default=sqlalchemy.text("1"),
+            index=True,
+        ),
+    )
     location: Optional[str] = Field(default=None)
     min_stock_alert: Decimal = Field(
         default=Decimal("5.0000"),
