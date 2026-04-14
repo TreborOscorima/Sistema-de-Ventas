@@ -8,7 +8,7 @@ from decimal import Decimal
 from sqlmodel import select
 import sqlalchemy as sa
 from sqlalchemy.orm import selectinload
-from app.enums import PaymentMethodType, ReturnReason, SaleStatus
+from app.enums import PaymentMethodType, ReceiptType, FiscalStatus, ReturnReason, SaleStatus
 from app.i18n import MSG
 from app.utils.payment import payment_method_label
 from app.utils.sanitization import escape_like
@@ -23,6 +23,9 @@ from app.models import (
     PaymentMethod,
     SalePayment,
     User,
+    Company,
+    CompanyBillingConfig,
+    FiscalDocument,
 )
 from .mixin_state import MixinState
 from app.utils.exports import (
@@ -2269,18 +2272,21 @@ class HistorialState(MixinState):
         self.return_items = updated
 
     @rx.event
-    def confirm_return(self):
-        """Procesa la devolución."""
+    async def confirm_return(self):
+        """Procesa la devolución y emite nota de crédito si aplica."""
         if not self.current_user["privileges"].get("delete_sales", False):
-            return rx.toast("No tiene permisos para procesar devoluciones.", duration=3000)
+            yield rx.toast("No tiene permisos para procesar devoluciones.", duration=3000)
+            return
         company_id = self._company_id()
         branch_id = self._branch_id()
         user_id = self.current_user.get("id")
         if not company_id or not branch_id or not user_id:
-            return rx.toast("Sesión inválida.", duration=3000)
+            yield rx.toast("Sesión inválida.", duration=3000)
+            return
 
         if not self.return_sale_id:
-            return rx.toast("No hay venta seleccionada.", duration=3000)
+            yield rx.toast("No hay venta seleccionada.", duration=3000)
+            return
 
         from app.services.return_service import process_return, ReturnItemRequest
 
@@ -2294,41 +2300,163 @@ class HistorialState(MixinState):
                 ))
 
         if not items_to_return:
-            return rx.toast("Seleccione al menos un ítem para devolver.", duration=3000)
+            yield rx.toast("Seleccione al menos un ítem para devolver.", duration=3000)
+            return
+
+        # Capture values before close_return_modal clears state
+        sale_id = self.return_sale_id
+        reason = self.return_reason
 
         with rx.session() as session:
             try:
                 result = process_return(
                     session,
-                    sale_id=self.return_sale_id,
+                    sale_id=sale_id,
                     company_id=company_id,
                     branch_id=branch_id,
                     user_id=user_id,
-                    reason=self.return_reason,
+                    reason=reason,
                     notes=self.return_notes,
                     items=items_to_return,
                     timestamp=self._event_timestamp(),
                 )
                 if not result.success:
-                    return rx.toast(result.error, duration=4000)
+                    yield rx.toast(result.error, duration=4000)
+                    return
                 session.commit()
             except Exception:
                 session.rollback()
-                logger.exception("Error al procesar devolución venta #%s", self.return_sale_id)
-                return rx.toast(
+                logger.exception("Error al procesar devolución venta #%s", sale_id)
+                yield rx.toast(
                     "Error al procesar la devolución. Intente nuevamente.",
                     duration=4000,
                 )
+                return
 
         self.close_return_modal()
         self._history_update_trigger += 1
         refund_display = self._format_currency(float(result.refund_amount))
         self._load_returns_report()
-        return rx.toast(
+        yield rx.toast(
             f"Devolución procesada: {result.items_returned} ítem(s), "
             f"reembolso {refund_display}",
             duration=5000,
         )
+
+        # ── Nota de crédito automática ──────────────────────────
+        await self._try_emit_return_credit_note(
+            sale_id=sale_id,
+            company_id=company_id,
+            branch_id=branch_id,
+            reason=reason,
+        )
+
+    # ── Nota de crédito automática al devolver ──────────────
+
+    async def _try_emit_return_credit_note(
+        self,
+        *,
+        sale_id: int,
+        company_id: int,
+        branch_id: int,
+        reason: str,
+    ) -> None:
+        """Emite nota de crédito automática si la venta tiene comprobante fiscal autorizado.
+
+        Se ejecuta después de una devolución exitosa. No lanza excepción
+        si falla — solo loggea y muestra toast informativo.
+        """
+        try:
+            with rx.session() as session:
+                # 1. Verificar que la empresa tiene facturación electrónica activa
+                company = session.exec(
+                    select(Company).where(Company.id == company_id)
+                ).first()
+                if not company or not company.has_electronic_billing:
+                    return
+
+                billing_config = session.exec(
+                    select(CompanyBillingConfig).where(
+                        CompanyBillingConfig.company_id == company_id,
+                        CompanyBillingConfig.is_active == True,  # noqa: E712
+                    )
+                ).first()
+                if not billing_config:
+                    return
+
+                # 2. Buscar comprobante fiscal autorizado de la venta original
+                original_doc = session.exec(
+                    select(FiscalDocument).where(
+                        FiscalDocument.sale_id == sale_id,
+                        FiscalDocument.company_id == company_id,
+                        FiscalDocument.fiscal_status == FiscalStatus.authorized,
+                        FiscalDocument.receipt_type.in_([
+                            ReceiptType.boleta,
+                            ReceiptType.factura,
+                        ]),
+                    )
+                ).first()
+                if not original_doc:
+                    return
+
+                # 3. Verificar que no exista ya una nota de crédito
+                nc_exists = session.exec(
+                    select(FiscalDocument).where(
+                        FiscalDocument.sale_id == sale_id,
+                        FiscalDocument.company_id == company_id,
+                        FiscalDocument.receipt_type == ReceiptType.nota_credito,
+                    )
+                ).first()
+                if nc_exists:
+                    return
+
+                # Capturar datos del comprobante original
+                orig_doc_id = original_doc.id
+                buyer_doc_type = original_doc.buyer_doc_type
+                buyer_doc_number = original_doc.buyer_doc_number
+                buyer_name = original_doc.buyer_name
+
+            # 4. Emitir nota de crédito (fuera de la sesión de lectura)
+            from app.services.billing_service import emit_fiscal_document
+
+            try:
+                reason_label = ReturnReason(reason).display_label
+            except ValueError:
+                reason_label = reason
+            credit_note_reason = f"DEVOLUCIÓN: {reason_label}"
+
+            result = await emit_fiscal_document(
+                sale_id=sale_id,
+                company_id=company_id,
+                branch_id=branch_id,
+                receipt_type_override=ReceiptType.nota_credito,
+                buyer_doc_type=buyer_doc_type,
+                buyer_doc_number=buyer_doc_number,
+                buyer_name=buyer_name,
+                credit_note_reason=credit_note_reason,
+                original_fiscal_doc_id=orig_doc_id,
+            )
+
+            if result and result.fiscal_status == FiscalStatus.authorized:
+                logger.info(
+                    "Nota de crédito %s emitida automáticamente para venta #%s",
+                    result.full_number, sale_id,
+                )
+            elif result:
+                logger.warning(
+                    "Nota de crédito para venta #%s quedó en estado %s",
+                    sale_id, result.fiscal_status,
+                )
+            else:
+                logger.warning(
+                    "No se pudo emitir nota de crédito para venta #%s (billing inactivo o cuota agotada)",
+                    sale_id,
+                )
+
+        except Exception:
+            logger.exception(
+                "Error al emitir nota de crédito automática para venta #%s", sale_id,
+            )
 
     # ── Reporte de devoluciones: métodos ──
 

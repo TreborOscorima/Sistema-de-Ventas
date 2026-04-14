@@ -8,7 +8,7 @@ import jwt
 from dotenv import load_dotenv
 from jwt import ExpiredSignatureError, PyJWTError
 
-from app.constants import TOKEN_EXPIRY_HOURS
+from app.constants import TOKEN_EXPIRY_HOURS, REFRESH_TOKEN_EXPIRY_DAYS
 
 load_dotenv()
 
@@ -75,3 +75,66 @@ def verify_token(token: str) -> str | None:
     if not payload:
         return None
     return str(payload.get("sub"))
+
+
+# ── Refresh tokens ─────────────────────────────────────────
+
+def create_refresh_token(
+    subject: str | Any,
+    token_version: int | None = None,
+    company_id: int | None = None,
+) -> str:
+    """Crea un refresh token JWT con expiración extendida.
+
+    El claim ``typ`` = ``"refresh"`` permite distinguirlo de un access token
+    durante la validación.
+    """
+    expire = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(
+        days=REFRESH_TOKEN_EXPIRY_DAYS,
+    )
+    payload: dict[str, Any] = {
+        "sub": str(subject),
+        "exp": expire,
+        "typ": "refresh",
+    }
+    if token_version is not None:
+        payload["ver"] = int(token_version)
+    if company_id is not None:
+        payload["cid"] = int(company_id)
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_refresh_token(token: str) -> dict | None:
+    """Decodifica un refresh token. Retorna payload sólo si ``typ`` == ``"refresh"``."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("typ") != "refresh":
+            return None
+        if not payload.get("sub"):
+            return None
+        return payload
+    except ExpiredSignatureError:
+        return None
+    except PyJWTError:
+        return None
+
+
+def refresh_access_token(refresh_tok: str) -> tuple[str, str] | None:
+    """Valida un refresh token y emite un nuevo par (access, refresh).
+
+    Retorna ``(new_access_token, new_refresh_token)`` o ``None`` si el
+    refresh token es inválido o expirado.  Aplica *token rotation*: cada
+    uso del refresh token produce uno nuevo para limitar la ventana de
+    reutilización.
+    """
+    payload = decode_refresh_token(refresh_tok)
+    if not payload:
+        return None
+    subject = payload["sub"]
+    version = payload.get("ver")
+    company_id = payload.get("cid")
+    new_access = create_access_token(subject, token_version=version, company_id=company_id)
+    new_refresh = create_refresh_token(subject, token_version=version, company_id=company_id)
+    return new_access, new_refresh

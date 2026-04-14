@@ -126,6 +126,9 @@ DEFAULT_PAPER_WIDTH_MM: int = 80
 # Duración de token JWT (horas)
 TOKEN_EXPIRY_HOURS: int = 24
 
+# Duración de refresh token (días)
+REFRESH_TOKEN_EXPIRY_DAYS: int = 7
+
 
 # =============================================================================
 # CONFIGURACIÓN DE DECIMALES

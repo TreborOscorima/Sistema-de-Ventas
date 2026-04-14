@@ -44,7 +44,12 @@ from app.models import (
     UserBranch,
 )
 from app.models.company import SubscriptionStatus
-from app.utils.auth import create_access_token, decode_token
+from app.utils.auth import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    refresh_access_token as _refresh_access_token,
+)
 from app.utils.logger import get_logger
 from app.utils.tenant import set_tenant_context, tenant_bypass
 from app.utils.timezone import country_today_date, utc_now_naive
@@ -182,6 +187,7 @@ class AuthState(MixinState):
         delete_user(username): Elimina usuario
     """
     token: str = rx.LocalStorage("")
+    refresh_token: str = rx.LocalStorage("")
     selected_branch_id: str = rx.LocalStorage("")
     # users: Dict[str, User] = {} # Eliminado a favor de la BD
     roles: List[str] = ["Superadmin", "Administrador", "Usuario", "Cajero"]
@@ -295,10 +301,17 @@ class AuthState(MixinState):
         # Cache inválido, recargar
         payload = decode_token(self.token)
         if not payload:
-            self._cached_user = self._guest_user()
-            self._cached_user_token = self.token
-            self._cached_user_time = now
-            return self._cached_user
+            # Access token expirado/inválido — intentar refresh
+            new_tokens = _refresh_access_token(self.refresh_token) if self.refresh_token else None
+            if new_tokens:
+                self.token, self.refresh_token = new_tokens
+                payload = decode_token(self.token)
+            if not payload:
+                self.refresh_token = ""
+                self._cached_user = self._guest_user()
+                self._cached_user_token = self.token
+                self._cached_user_time = now
+                return self._cached_user
 
         subject = payload.get("sub")
         if subject is None:
@@ -1762,10 +1775,13 @@ class AuthState(MixinState):
                     session.commit()
 
                     _clear_login_attempts(identifier, ip_address=client_ip)
+                    _tv = getattr(admin_user, "token_version", 0)
+                    _cid = getattr(admin_user, "company_id", None)
                     self.token = create_access_token(
-                        admin_user.id,
-                        token_version=getattr(admin_user, "token_version", 0),
-                        company_id=getattr(admin_user, "company_id", None),
+                        admin_user.id, token_version=_tv, company_id=_cid,
+                    )
+                    self.refresh_token = create_refresh_token(
+                        admin_user.id, token_version=_tv, company_id=_cid,
                     )
                     self.selected_branch_id = str(branch.id)
                     self.refresh_auth_runtime_cache()
@@ -1894,10 +1910,13 @@ class AuthState(MixinState):
 
                 # Login exitoso: limpiar intentos fallidos
                 _clear_login_attempts(identifier, ip_address=client_ip)
+                _tv = getattr(user, "token_version", 0)
+                _cid = getattr(user, "company_id", None)
                 self.token = create_access_token(
-                    user.id,
-                    token_version=getattr(user, "token_version", 0),
-                    company_id=getattr(user, "company_id", None),
+                    user.id, token_version=_tv, company_id=_cid,
+                )
+                self.refresh_token = create_refresh_token(
+                    user.id, token_version=_tv, company_id=_cid,
                 )
                 branch_ids, branch_access_changed = self._ensure_user_branch_access(session, user)
                 if branch_access_changed:
@@ -1994,6 +2013,7 @@ class AuthState(MixinState):
     @rx.event
     def logout(self):
         self.token = ""
+        self.refresh_token = ""
         self.password_change_error = ""
         self.invalidate_user_cache()
         if hasattr(self, "cashbox_is_open_cached"):
