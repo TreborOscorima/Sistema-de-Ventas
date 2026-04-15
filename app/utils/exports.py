@@ -387,6 +387,7 @@ def create_pdf_report(
             )
             elements.append(header_table)
         except Exception:
+            logging.getLogger(__name__).warning("PDF header table failed, using plain text", exc_info=True)
             elements.append(Paragraph(title, title_style))
     else:
         elements.append(Paragraph(title, title_style))

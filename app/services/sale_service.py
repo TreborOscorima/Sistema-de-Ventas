@@ -627,8 +627,8 @@ async def get_available_stock(
             try:
                 if Decimal(str(variant_total)) > 0:
                     return _round_quantity(variant_total, allows_decimal)
-            except Exception:
-                pass
+            except (TypeError, ValueError, ArithmeticError):
+                logger.debug("Variant stock conversion failed for product %s, using product.stock", product.id)
             return _round_quantity(product.stock, allows_decimal)
         return Decimal("0")
 
@@ -1878,6 +1878,8 @@ class SaleService:
                     product_name_snapshot=name_snapshot,
                     product_barcode_snapshot=barcode_snapshot,
                     product_category_snapshot=product.category or "General",
+                    kit_product_id=item.get("kit_product_id") or None,
+                    kit_product_name=item.get("kit_name") or "",
                 )
                 session.add(sale_item)
 

@@ -374,7 +374,10 @@ class SUNATBillingStrategy(BillingStrategy):
             try:
                 return config.nubefact_url, decrypt_text(config.nubefact_token)
             except Exception:
-                pass
+                logger.warning(
+                    "Error desencriptando token Nubefact per-empresa company_id=%s",
+                    config.company_id, exc_info=True,
+                )
         return "", ""
 
     async def send_document(

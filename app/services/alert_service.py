@@ -8,11 +8,14 @@ Proporciona funcionalidades para detectar y notificar:
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import Enum
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 from app.utils.timezone import local_day_bounds_utc_naive, utc_now_naive
 
 import reflex as rx
@@ -609,12 +612,12 @@ def get_all_alerts(
     try:
         alerts.extend(get_low_stock_alerts(company_id, branch_id))
     except Exception:
-        pass  # No interrumpir si falla una categoría
+        logger.warning("Error obteniendo alertas de stock bajo", exc_info=True)
 
     try:
         alerts.extend(get_expiring_batches_alerts(company_id, branch_id))
     except Exception:
-        pass
+        logger.warning("Error obteniendo alertas de lotes por vencer", exc_info=True)
 
     try:
         alerts.extend(
@@ -627,12 +630,12 @@ def get_all_alerts(
             )
         )
     except Exception:
-        pass
-    
+        logger.warning("Error obteniendo alertas de cuotas", exc_info=True)
+
     try:
         alerts.extend(get_cashbox_alerts(company_id, branch_id))
     except Exception:
-        pass
+        logger.warning("Error obteniendo alertas de caja", exc_info=True)
     
     # Ordenar por severidad (crítico primero)
     severity_order = {

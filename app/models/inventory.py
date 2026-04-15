@@ -96,7 +96,10 @@ class Product(rx.Model, table=True):
     )
     tax_category: str = Field(default="gravado", max_length=20)
 
-    sale_items: List["SaleItem"] = Relationship(back_populates="product")
+    sale_items: List["SaleItem"] = Relationship(
+        back_populates="product",
+        sa_relationship_kwargs={"foreign_keys": "[SaleItem.product_id]"},
+    )
     variants: List["ProductVariant"] = Relationship(back_populates="product")
     batches: List["ProductBatch"] = Relationship(back_populates="product")
     price_tiers: List["PriceTier"] = Relationship(back_populates="product")

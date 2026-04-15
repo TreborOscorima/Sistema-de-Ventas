@@ -365,7 +365,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                             session.add(cache_entry)
                         session.commit()
                 except Exception:
-                    pass  # Cache save failure is not critical
+                    logger.debug("Cache save failed for fiscal lookup %s", doc_number, exc_info=True)
             else:
                 self.fiscal_lookup_result = {}
                 self.fiscal_lookup_error = MSG.LOOKUP_NOT_FOUND.format(doc_number=doc_number)
@@ -393,7 +393,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                             session.add(cache_entry)
                         session.commit()
                 except Exception:
-                    pass
+                    logger.debug("Negative cache save failed for fiscal lookup %s", doc_number, exc_info=True)
         except Exception as exc:
             logger.exception("lookup_fiscal_document error: %s", exc)
             self.fiscal_lookup_error = MSG.LOOKUP_ERROR

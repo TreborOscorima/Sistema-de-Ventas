@@ -64,6 +64,7 @@ class ClientesState(MixinState):
         "dni": "",
         "phone": "",
         "address": "",
+        "email": "",
         "credit_limit": "0.00",
         "current_debt": "0.00",
     }
@@ -75,6 +76,7 @@ class ClientesState(MixinState):
             "dni": "",
             "phone": "",
             "address": "",
+            "email": "",
             "credit_limit": "0.00",
             "current_debt": "0.00",
         }
@@ -165,6 +167,7 @@ class ClientesState(MixinState):
                     "dni": client.dni,
                     "phone": client.phone,
                     "address": client.address,
+                    "email": client.email or "",
                     "credit_limit": client.credit_limit,
                     "current_debt": client.current_debt,
                 }
@@ -186,6 +189,7 @@ class ClientesState(MixinState):
                 "dni": client.get("dni", "") or "",
                 "phone": client.get("phone", "") or "",
                 "address": client.get("address", "") or "",
+                "email": client.get("email", "") or "",
                 "credit_limit": str(client.get("credit_limit", "0.00")),
                 "current_debt": str(client.get("current_debt", "0.00")),
             }
@@ -229,6 +233,7 @@ class ClientesState(MixinState):
 
         phone = sanitize_phone((self.current_client.get("phone") or ""))
         address = sanitize_text((self.current_client.get("address") or ""))
+        email = sanitize_text((self.current_client.get("email") or ""), max_length=255).strip() or None
         credit_limit = self._parse_decimal(
             self.current_client.get("credit_limit", "0.00")
         )
@@ -275,6 +280,7 @@ class ClientesState(MixinState):
                     client.dni = dni
                     client.phone = phone or None
                     client.address = address or None
+                    client.email = email
                     client.credit_limit = credit_limit
                     client.current_debt = current_debt
                     session.add(client)
@@ -287,6 +293,7 @@ class ClientesState(MixinState):
                         dni=dni,
                         phone=phone or None,
                         address=address or None,
+                        email=email,
                         credit_limit=credit_limit,
                         current_debt=current_debt,
                         company_id=company_id,

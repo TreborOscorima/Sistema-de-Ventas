@@ -161,6 +161,10 @@ class SaleItem(rx.Model, table=True):
     product_barcode_snapshot: str = Field(default="")
     product_category_snapshot: str = Field(default="")
 
+    # Kit traceability: si este ítem fue parte de un kit explosionado
+    kit_product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    kit_product_name: str = Field(default="")
+
     sale_id: int = Field(foreign_key="sale.id")
     product_id: Optional[int] = Field(default=None, foreign_key="product.id")
     product_variant_id: Optional[int] = Field(
@@ -183,7 +187,10 @@ class SaleItem(rx.Model, table=True):
     )
 
     sale: Optional["Sale"] = Relationship(back_populates="items")
-    product: Optional["Product"] = Relationship(back_populates="sale_items")
+    product: Optional["Product"] = Relationship(
+        back_populates="sale_items",
+        sa_relationship_kwargs={"foreign_keys": "[SaleItem.product_id]"},
+    )
     product_variant: Optional["ProductVariant"] = Relationship(
         back_populates="sale_items"
     )

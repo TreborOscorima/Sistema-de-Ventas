@@ -194,6 +194,17 @@ def client_form_modal() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
+          rx.el.label("Email", class_name=TYPOGRAPHY["label"]),
+          rx.el.input(
+            type="email",
+            default_value=State.current_client["email"],
+            on_blur=lambda v: State.update_current_client("email", v),
+            placeholder="correo@ejemplo.com",
+            class_name=INPUT_STYLES["default"],
+          ),
+          class_name="flex flex-col gap-1",
+        ),
+        rx.el.div(
           rx.el.label(
             "Limite de credito", class_name=TYPOGRAPHY["label"]
           ),

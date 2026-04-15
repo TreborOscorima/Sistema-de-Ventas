@@ -258,13 +258,16 @@ def process_return(
                     product.stock = (product.stock or 0) + qty
                     session.add(product)
 
-        # Movimiento de stock
+        # Movimiento de stock (incluir contexto de kit si aplica)
+        desc = f"Devolución venta #{sale_id}: {si.product_name_snapshot}"
+        if getattr(si, "kit_product_name", None):
+            desc += f" (componente de kit: {si.kit_product_name})"
         movement = StockMovement(
             product_id=si.product_id,
             user_id=user_id,
             type="Devolucion",
             quantity=qty,
-            description=f"Devolución venta #{sale_id}: {si.product_name_snapshot}",
+            description=desc,
             timestamp=ts,
             company_id=company_id,
             branch_id=branch_id,

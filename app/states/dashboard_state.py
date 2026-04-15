@@ -29,7 +29,7 @@ from app.models import (
     FieldReservation,
 )
 from app.utils.timezone import utc_now_naive
-from .inventory_state import LOW_STOCK_THRESHOLD
+from .inventory import LOW_STOCK_THRESHOLD
 from app.enums import SaleStatus, ReservationStatus
 from app.i18n import MSG
 from app.services.alert_service import get_alert_summary, BATCH_EXPIRING_DAYS

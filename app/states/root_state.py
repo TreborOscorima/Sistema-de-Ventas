@@ -20,12 +20,12 @@ from .billing_state import BillingState
 from .ui_state import UIState
 from .config_state import ConfigState
 from .branches_state import BranchesState
-from .inventory_state import InventoryState
+from .inventory import InventoryState
 from .ingreso_state import IngresoState
 from .purchases_state import PurchasesState
 from .suppliers_state import SuppliersState
 from .venta_state import VentaState
-from .cash_state import CashState
+from .cash import CashState
 from .historial_state import HistorialState
 from .services_state import ServicesState
 from .cuentas_state import CuentasState
