@@ -3,7 +3,7 @@ from unittest.mock import Mock
 import reflex as rx
 
 from app.models import Category
-from app.states.inventory_state import InventoryState
+from app.states.inventory import InventoryState
 
 
 class ExecResult:

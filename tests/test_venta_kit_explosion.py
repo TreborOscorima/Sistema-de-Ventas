@@ -379,7 +379,7 @@ class TestKitCRUDInventoryState:
 
     def _make_inv_state(self):
         """Crea un estado mockeado con los métodos del InventoryState enlazados."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
 
         state = MagicMock()
         state.show_kit_components = False
@@ -426,15 +426,23 @@ class TestKitCRUDInventoryState:
 
     def test_kit_component_rows_computed(self):
         """kit_component_rows agrega index a cada fila."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
 
         state = MagicMock()
         state.kit_components = [
             {"id": None, "component_barcode": "A", "component_name": "Prod A", "component_product_id": 10, "quantity": 2.0},
         ]
 
-        # Acceder al fget directamente (ComputedVar de Reflex)
-        fn = InventoryState.__dict__["kit_component_rows"]._fget
+        # Acceder al fget directamente (ComputedVar de Reflex).
+        # El atributo puede estar en un mixin padre tras el refactor a paquetes,
+        # así que buscamos a través de MRO.
+        computed_var = None
+        for klass in InventoryState.__mro__:
+            if "kit_component_rows" in klass.__dict__:
+                computed_var = klass.__dict__["kit_component_rows"]
+                break
+        assert computed_var is not None, "kit_component_rows no encontrado en MRO"
+        fn = computed_var._fget
         rows = fn(state)
         assert rows[0]["index"] == 0
         assert rows[0]["component_name"] == "Prod A"

@@ -84,6 +84,13 @@ class Product(rx.Model, table=True):
         default=Decimal("5.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4), nullable=False, server_default="5.0000"),
     )
+    # Proveedor preferido para reposición automática (nullable: no todos los
+    # productos tienen proveedor fijo).
+    default_supplier_id: Optional[int] = Field(
+        default=None,
+        foreign_key="supplier.id",
+        index=True,
+    )
 
     # ── Campos fiscales (para facturación electrónica SUNAT/AFIP) ──
     # tax_included=True → precio incluye impuesto (IGV/IVA)

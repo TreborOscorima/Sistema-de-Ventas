@@ -23,6 +23,7 @@ from .branches_state import BranchesState
 from .inventory import InventoryState
 from .ingreso_state import IngresoState
 from .purchases_state import PurchasesState
+from .reorder_state import ReorderState
 from .suppliers_state import SuppliersState
 from .venta_state import VentaState
 from .cash import CashState
@@ -45,6 +46,7 @@ _mixins = [
     ClientesState,
     SuppliersState,
     PurchasesState,
+    ReorderState,
     HistorialState,
     CashState,
     VentaState,
@@ -117,6 +119,22 @@ _class_dict = {
     "__annotations__": {},
 }
 
+def _collect_mixin_chain(top_cls):
+    """Walk the MRO from most ancestral to most specific, collecting non-dunder
+    attributes and annotations. More-specific classes override ancestors.
+
+    Skips ``object`` and ``rx.State``/``BaseState`` to avoid polluting the root.
+    """
+    chain = []
+    for klass in reversed(top_cls.__mro__):
+        if klass is object:
+            continue
+        if klass.__name__ in {"BaseState", "State"}:
+            continue
+        chain.append(klass)
+    return chain
+
+
 for _mixin in _mixins:
     if _mixin is VentaState:
         for _venta_mixin in (CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin):
@@ -127,14 +145,15 @@ for _mixin in _mixins:
                     continue
                 _class_dict[_name] = _value
 
-    # Unir anotaciones
-    if hasattr(_mixin, "__annotations__"):
-        _class_dict["__annotations__"].update(_mixin.__annotations__)
-
-    # Unir atributos y metodos
-    for _name, _value in _mixin.__dict__.items():
-        if _name.startswith("__"): continue
-        _class_dict[_name] = _value
+    # Recorrer MRO completo para capturar métodos de clases mixin internas
+    # (p.ej. CashState -> SessionMixin, InventoryState -> ProductMixin).
+    for _ancestor in _collect_mixin_chain(_mixin):
+        if hasattr(_ancestor, "__annotations__"):
+            _class_dict["__annotations__"].update(_ancestor.__annotations__)
+        for _name, _value in _ancestor.__dict__.items():
+            if _name.startswith("__"):
+                continue
+            _class_dict[_name] = _value
 
 _class_dict["__annotations__"]["overdue_alerts_count"] = int
 _class_dict["overdue_alerts_count"] = 0

@@ -171,7 +171,7 @@ class TestInventarioConsultaStock:
 
     def test_producto_con_stock_normal_no_es_bajo(self):
         """Bodega: 50 unidades, umbral 5 → no es stock bajo."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
         p = self._producto(stock="50", umbral="5", name="Arroz 1kg", category="Bodega")
         row = state._inventory_row_from_product(p)
@@ -179,7 +179,7 @@ class TestInventarioConsultaStock:
 
     def test_producto_bajo_umbral_personalizado_alerta(self):
         """Ferretería: tornillos con 80 unidades, umbral 100 → stock bajo."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
         p = self._producto(
             stock="80", umbral="100",
@@ -201,7 +201,7 @@ class TestInventarioConsultaStock:
 
     def test_farmacia_stock_critico_cero(self):
         """Farmacia: ibuprofeno con 0 unidades → stock bajo (umbral default 5)."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
         p = self._producto(
             stock="0", umbral="5",
@@ -212,7 +212,7 @@ class TestInventarioConsultaStock:
 
     def test_ropa_talla_s_stock_exactamente_en_umbral(self):
         """Ropa: 10 unidades, umbral 10 → ES stock bajo (<=, no <)."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
         p = self._producto(
             stock="10", umbral="10",
@@ -223,7 +223,7 @@ class TestInventarioConsultaStock:
 
     def test_ropa_talla_s_stock_sobre_umbral(self):
         """Ropa: 11 unidades, umbral 10 → NO es stock bajo."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
         p = self._producto(
             stock="11", umbral="10",
@@ -234,7 +234,7 @@ class TestInventarioConsultaStock:
 
     def test_bodega_producto_fraccionado_kg_umbral_decimal(self):
         """Bodega: queso fresco 0.3 kg restante, umbral 0.5 kg → stock bajo."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
         p = self._producto(
             stock="0.3000", umbral="0.5000",
@@ -249,7 +249,7 @@ class TestInventarioConsultaStock:
 
         Escenario: producto creado antes de la feature multi-vertical.
         """
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
         p = self._producto(stock="3", umbral="0")  # None simulado → tratado como default
         p.min_stock_alert = None

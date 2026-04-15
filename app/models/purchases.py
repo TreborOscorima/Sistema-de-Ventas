@@ -156,3 +156,144 @@ class PurchaseItem(rx.Model, table=True):
 
     purchase: "Purchase" = Relationship(back_populates="items")
     product: Optional["Product"] = Relationship()
+
+
+class PurchaseOrderStatus:
+    """Estados posibles de una orden de compra sugerida/emitida.
+
+    draft: generada automáticamente desde alertas de stock bajo, editable.
+    sent: enviada al proveedor (no modificable en cantidades).
+    received: recibida y convertida en Purchase real.
+    cancelled: descartada manualmente.
+    """
+    DRAFT = "draft"
+    SENT = "sent"
+    RECEIVED = "received"
+    CANCELLED = "cancelled"
+
+    ALL = (DRAFT, SENT, RECEIVED, CANCELLED)
+
+
+class PurchaseOrder(rx.Model, table=True):
+    """Orden de compra sugerida o enviada al proveedor.
+
+    Distinta de Purchase (que representa el documento fiscal ya recibido).
+    Una PurchaseOrder en estado 'received' se convierte en Purchase real.
+    """
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_purchaseorder_tenant_status",
+            "company_id",
+            "branch_id",
+            "status",
+        ),
+        sqlalchemy.Index(
+            "ix_purchaseorder_supplier",
+            "supplier_id",
+        ),
+    )
+
+    company_id: int = Field(
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
+    supplier_id: int = Field(foreign_key="supplier.id", index=True, nullable=False)
+    status: str = Field(
+        default=PurchaseOrderStatus.DRAFT,
+        max_length=20,
+        nullable=False,
+        index=True,
+    )
+    total_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    notes: Optional[str] = Field(default=None, nullable=True)
+    auto_generated: bool = Field(default=False, nullable=False)
+    # Si es 'received', referencia a la Purchase que la materializó.
+    converted_purchase_id: Optional[int] = Field(
+        default=None,
+        foreign_key="purchase.id",
+        index=True,
+    )
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    created_at: datetime = Field(
+        default_factory=utc_now_naive,
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now_naive,
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+
+    supplier: "Supplier" = Relationship()
+    items: List["PurchaseOrderItem"] = Relationship(
+        back_populates="purchase_order",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
+
+
+class PurchaseOrderItem(rx.Model, table=True):
+    """Ítem individual sugerido dentro de una PurchaseOrder."""
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_poitem_order",
+            "purchase_order_id",
+        ),
+    )
+
+    purchase_order_id: int = Field(
+        foreign_key="purchaseorder.id",
+        index=True,
+        nullable=False,
+    )
+    product_id: Optional[int] = Field(
+        default=None,
+        foreign_key="product.id",
+        index=True,
+    )
+    company_id: int = Field(
+        foreign_key="company.id",
+        index=True,
+        nullable=False,
+    )
+    branch_id: int = Field(
+        foreign_key="branch.id",
+        index=True,
+        nullable=False,
+    )
+
+    description_snapshot: str = Field(default="")
+    barcode_snapshot: str = Field(default="")
+    current_stock: Decimal = Field(
+        default=Decimal("0.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
+    min_stock_alert: Decimal = Field(
+        default=Decimal("0.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
+    suggested_quantity: Decimal = Field(
+        default=Decimal("0.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
+    unit: str = Field(default="Unidad")
+    unit_cost: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+    subtotal: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    )
+
+    purchase_order: "PurchaseOrder" = Relationship(back_populates="items")
+    product: Optional["Product"] = Relationship()

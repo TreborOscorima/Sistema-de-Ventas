@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import reflex as rx
 
-from app.states.cash_state import CashState
+from app.states.cash import CashState
 
 
 class ExecResult:

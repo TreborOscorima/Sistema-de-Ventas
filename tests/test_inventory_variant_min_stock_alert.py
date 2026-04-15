@@ -17,7 +17,7 @@ os.environ.setdefault("AUTH_SECRET_KEY", "test-secret-key-variant-min-stock-32ch
 os.environ.setdefault("TENANT_STRICT", "0")
 
 from app.models import Product, ProductVariant
-from app.states.inventory_state import (
+from app.states.inventory import (
     DEFAULT_LOW_STOCK_THRESHOLD,
     InventoryState,
 )

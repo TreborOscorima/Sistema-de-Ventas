@@ -1,6 +1,6 @@
 """Add SaleItem.kit_product_id and kit_product_name for kit traceability
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: b2c3d4e5f6a7
 Revises: 9fa5710a7a62
 Create Date: 2026-04-14
 """
@@ -9,7 +9,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = 'a1b2c3d4e5f6'
+revision: str = 'b2c3d4e5f6a7'
 down_revision: Union[str, Sequence[str], None] = '9fa5710a7a62'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

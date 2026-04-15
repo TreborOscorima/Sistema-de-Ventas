@@ -579,8 +579,9 @@ class SessionMixin:
         self.cashbox_open_amount_input = str(value or "").strip()
 
     @rx.event
-    def handle_cashbox_form_submit(self, form_data: dict):
+    def handle_cashbox_form_submit(self, form_data: dict = None):
         """Procesa el formulario de apertura de caja (evita corte de digitos)."""
+        form_data = form_data or {}
         amount_str = str(form_data.get("amount", "0") or "0").strip()
         self.cashbox_open_amount_input = amount_str
         return self.open_cashbox_session()

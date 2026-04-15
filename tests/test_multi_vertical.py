@@ -224,16 +224,16 @@ class TestStockAlertInventoryState:
 
     def test_low_stock_threshold_alias_exists(self):
         """LOW_STOCK_THRESHOLD debe existir como alias de compatibilidad."""
-        from app.states.inventory_state import LOW_STOCK_THRESHOLD
+        from app.states.inventory import LOW_STOCK_THRESHOLD
         assert LOW_STOCK_THRESHOLD == 5
 
     def test_default_low_stock_threshold(self):
-        from app.states.inventory_state import DEFAULT_LOW_STOCK_THRESHOLD
+        from app.states.inventory import DEFAULT_LOW_STOCK_THRESHOLD
         assert DEFAULT_LOW_STOCK_THRESHOLD == 5
 
     def test_row_uses_min_stock_alert(self):
         """_inventory_row_from_product debe respetar min_stock_alert."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
 
         product = MagicMock()
@@ -253,7 +253,7 @@ class TestStockAlertInventoryState:
 
     def test_row_not_low_when_above_threshold(self):
         """Producto con stock sobre su umbral personalizado no es stock bajo."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
 
         product = MagicMock()
@@ -273,7 +273,7 @@ class TestStockAlertInventoryState:
 
     def test_row_uses_default_when_no_min_stock_alert(self):
         """Si min_stock_alert es None/0, usa DEFAULT_LOW_STOCK_THRESHOLD (5)."""
-        from app.states.inventory_state import InventoryState
+        from app.states.inventory import InventoryState
         state = InventoryState.__new__(InventoryState)
 
         product = MagicMock()

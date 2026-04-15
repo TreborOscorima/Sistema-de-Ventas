@@ -6,7 +6,7 @@ import reflex as rx
 
 from app.enums import SaleStatus
 from app.models import CashboxLog, Product, Sale, SaleItem, StockMovement
-from app.states.cash_state import CashState
+from app.states.cash import CashState
 
 
 class ExecResult:

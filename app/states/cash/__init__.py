@@ -33,6 +33,17 @@ class CashState(
     """
 
     # ── State variables (shared across mixins) ───────────────────
+    current_cashbox_session: CashboxSession = {
+        "opening_amount": 0.0,
+        "opening_time": "",
+        "closing_time": "",
+        "is_open": False,
+        "opened_by": "guest",
+    }
+    cashbox_is_open_cached: bool = False
+    cashbox_opening_amount: float = 0.0
+    cashbox_open_amount_input: str = "0"
+    _cashbox_update_trigger: int = 0
     cashbox_filter_start_date: str = ""
     cashbox_filter_end_date: str = ""
     cashbox_staged_start_date: str = ""

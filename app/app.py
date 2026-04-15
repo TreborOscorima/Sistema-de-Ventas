@@ -10,6 +10,7 @@ from app.state import State
 from app.components.sidebar import sidebar
 from app.pages.ingreso import ingreso_page
 from app.pages.compras import compras_page
+from app.pages.reposicion import reposicion_page
 from app.pages.venta import venta_page
 from app.pages.inventario import inventario_page
 from app.pages.caja import cashbox_page
@@ -614,6 +615,10 @@ def page_compras() -> rx.Component:
     return authenticated_layout(compras_page())
 
 
+def page_reposicion() -> rx.Component:
+    return authenticated_layout(reposicion_page())
+
+
 def page_venta() -> rx.Component:
     return authenticated_layout(venta_page())
 
@@ -908,6 +913,11 @@ def _register_app_routes():
         route="/compras",
         title="Compras - TUWAYKIAPP",
         on_load=State.page_init_compras,
+    )
+    _add_private_page(
+        page_reposicion,
+        route="/reposicion",
+        title="Reposición Automática - TUWAYKIAPP",
     )
     _add_private_page(
         page_venta,

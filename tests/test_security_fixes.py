@@ -28,14 +28,14 @@ BASE = "app/states"
 class TestTenantIsolationFix38:
     def test_delete_product_saleitem_has_company_id(self):
         """FIX 38a: SaleItem query must include company_id filter."""
-        source = _read_source(f"{BASE}/inventory_state.py")
+        source = _read_source(f"{BASE}/inventory/_product_mixin.py")
         # Find the SaleItem query block
         match = re.search(
             r"select\(SaleItem\).*?\.first\(\)",
             source,
             re.DOTALL,
         )
-        assert match, "SaleItem query not found in inventory_state.py"
+        assert match, "SaleItem query not found in inventory/_product_mixin.py"
         query_block = match.group()
         assert "company_id" in query_block, (
             "SaleItem query in delete_product is missing company_id filter"
@@ -107,7 +107,7 @@ class TestConcurrencyFix39:
 
     def test_product_edit_uses_for_update(self):
         """FIX 39b: Product update must lock row before modifying stock/price."""
-        source = _read_source(f"{BASE}/inventory_state.py")
+        source = _read_source(f"{BASE}/inventory/_product_mixin.py")
         # Find save_edited_product's product SELECT
         match = re.search(
             r"def save_edited_product.*?msg = .Producto actualizado",
@@ -190,7 +190,7 @@ class TestLoggingCoverage:
         "file,marker",
         [
             ("ingreso_state.py", "confirm_entry failed"),
-            ("inventory_state.py", "save_edited_product failed"),
+            ("inventory/_product_mixin.py", "save_edited_product failed"),
             ("purchases_state.py", "save_purchase_edit failed"),
             ("purchases_state.py", "delete_purchase failed"),
             ("dashboard_state.py", "load_dashboard failed"),
