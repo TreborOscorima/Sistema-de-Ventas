@@ -2,6 +2,7 @@ import reflex as rx
 import uuid
 from typing import List, Dict, Any, Set
 from decimal import Decimal, ROUND_HALF_UP
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlmodel import select
 from app.models import Unit, PaymentMethod, Currency, CompanySettings
 from app.utils.db_seeds import (
@@ -636,7 +637,13 @@ class ConfigState(MixinState):
                 ]
 
     def ensure_default_data(self):
-        """Inicializa datos por defecto basados en el país configurado."""
+        """Inicializa datos por defecto basados en el país configurado.
+
+        Usa INSERT ... ON DUPLICATE KEY UPDATE (MySQL) para que el seed sea
+        idempotente a nivel motor y seguro bajo concurrencia — dos instancias
+        de State inicializando la misma branch en paralelo no chocan contra
+        UNIQUE(company_id, branch_id, ...).
+        """
         config = get_country_config(self.selected_country_code)
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -644,118 +651,67 @@ class ConfigState(MixinState):
             return
 
         with rx.session() as session:
-            # no_autoflush en TODO el bloque: este método intercala SELECTs
-            # con session.add(). Sin no_autoflush, SQLAlchemy hace flush
-            # prematuro al ejecutar un SELECT, intentando insertar objetos
-            # pendientes y causando IntegrityError por duplicados.
-            with session.no_autoflush:
-                # ── Unidades (universales) — inserción idempotente ──
-                existing_unit_names = {
-                    u.name
-                    for u in session.exec(
-                        select(Unit)
-                        .where(Unit.company_id == company_id)
-                        .where(Unit.branch_id == branch_id)
-                    ).all()
+            # ── Unidades (universales) ──
+            unit_defaults = ["unidad", "pieza", "kg", "g", "l", "ml", "m", "cm", "paquete", "caja", "docena", "bolsa", "botella", "lata"]
+            decimals = {"kg", "g", "l", "ml", "m", "cm"}
+            unit_rows = [
+                {
+                    "name": name,
+                    "allows_decimal": name in decimals,
+                    "company_id": company_id,
+                    "branch_id": branch_id,
                 }
-                defaults = ["unidad", "pieza", "kg", "g", "l", "ml", "m", "cm", "paquete", "caja", "docena", "bolsa", "botella", "lata"]
-                decimals = {"kg", "g", "l", "ml", "m", "cm"}
-                for name in defaults:
-                    if name not in existing_unit_names:
-                        session.add(
-                            Unit(
-                                name=name,
-                                allows_decimal=name in decimals,
-                                company_id=company_id,
-                                branch_id=branch_id,
-                            )
-                        )
+                for name in unit_defaults
+            ]
+            if unit_rows:
+                stmt = mysql_insert(Unit).values(unit_rows)
+                # no-op update: conserva la fila existente, ignora duplicados.
+                session.execute(stmt.on_duplicate_key_update(name=stmt.inserted.name))
 
-                # Currencies - basadas en el país configurado
-                if not session.exec(select(Currency)).first():
-                    # Agregar moneda del país actual
-                    session.add(Currency(
-                        code=config["currency"],
-                        name=f"{config['currency_name']} ({config['currency']})",
-                        symbol=config["currency_symbol"]
-                    ))
-                    # Agregar USD como moneda universal si no es la del país
-                    if config["currency"] != "USD":
-                        session.add(Currency(code="USD", name="Dólar estadounidense (USD)", symbol="US$"))
+            # ── Currencies (global, UNIQUE por code) ──
+            currency_rows = [
+                {
+                    "code": config["currency"],
+                    "name": f"{config['currency_name']} ({config['currency']})",
+                    "symbol": config["currency_symbol"],
+                },
+            ]
+            if config["currency"] != "USD":
+                currency_rows.append(
+                    {"code": "USD", "name": "Dólar estadounidense (USD)", "symbol": "US$"}
+                )
+            stmt = mysql_insert(Currency).values(currency_rows)
+            session.execute(stmt.on_duplicate_key_update(code=stmt.inserted.code))
 
-                # Metodos de pago
-                existing_methods = {
-                    method.method_id: method
-                    for method in session.exec(
-                        select(PaymentMethod)
-                        .where(PaymentMethod.company_id == company_id)
-                        .where(PaymentMethod.branch_id == branch_id)
-                    ).all()
-                    if method.method_id
+            # ── Métodos de pago ──
+            pm_defaults = [
+                {"method_id": "cash", "name": MSG.DEFAULT_PM_CASH, "description": MSG.DEFAULT_PM_CASH_DESC, "kind": "cash"},
+                {"method_id": "debit_card", "name": MSG.DEFAULT_PM_DEBIT, "description": MSG.DEFAULT_PM_DEBIT_DESC, "kind": "debit"},
+                {"method_id": "credit_card", "name": MSG.DEFAULT_PM_CREDIT, "description": MSG.DEFAULT_PM_CREDIT_DESC, "kind": "credit"},
+                {"method_id": "yape", "name": MSG.DEFAULT_PM_YAPE, "description": MSG.DEFAULT_PM_YAPE_DESC, "kind": "yape"},
+                {"method_id": "plin", "name": MSG.DEFAULT_PM_PLIN, "description": MSG.DEFAULT_PM_PLIN_DESC, "kind": "plin"},
+                {"method_id": "transfer", "name": MSG.DEFAULT_PM_TRANSFER, "description": MSG.DEFAULT_PM_TRANSFER, "kind": "transfer"},
+                {"method_id": "mixed", "name": MSG.DEFAULT_PM_MIXED, "description": MSG.DEFAULT_PM_MIXED_DESC, "kind": "mixed"},
+            ]
+            pm_rows = [
+                {
+                    "method_id": m["method_id"],
+                    "code": m["method_id"],
+                    "name": m["name"],
+                    "description": m["description"],
+                    "kind": m["kind"],
+                    "enabled": True,
+                    "is_active": True,
+                    "allows_change": m["method_id"] == "cash",
+                    "company_id": company_id,
+                    "branch_id": branch_id,
                 }
-                defaults = [
-                    {
-                        "method_id": "cash",
-                        "name": MSG.DEFAULT_PM_CASH,
-                        "description": MSG.DEFAULT_PM_CASH_DESC,
-                        "kind": "cash",
-                    },
-                    {
-                        "method_id": "debit_card",
-                        "name": MSG.DEFAULT_PM_DEBIT,
-                        "description": MSG.DEFAULT_PM_DEBIT_DESC,
-                        "kind": "debit",
-                    },
-                    {
-                        "method_id": "credit_card",
-                        "name": MSG.DEFAULT_PM_CREDIT,
-                        "description": MSG.DEFAULT_PM_CREDIT_DESC,
-                        "kind": "credit",
-                    },
-                    {
-                        "method_id": "yape",
-                        "name": MSG.DEFAULT_PM_YAPE,
-                        "description": MSG.DEFAULT_PM_YAPE_DESC,
-                        "kind": "yape",
-                    },
-                    {
-                        "method_id": "plin",
-                        "name": MSG.DEFAULT_PM_PLIN,
-                        "description": MSG.DEFAULT_PM_PLIN_DESC,
-                        "kind": "plin",
-                    },
-                    {
-                        "method_id": "transfer",
-                        "name": MSG.DEFAULT_PM_TRANSFER,
-                        "description": MSG.DEFAULT_PM_TRANSFER,
-                        "kind": "transfer",
-                    },
-                    {
-                        "method_id": "mixed",
-                        "name": MSG.DEFAULT_PM_MIXED,
-                        "description": MSG.DEFAULT_PM_MIXED_DESC,
-                        "kind": "mixed",
-                    },
-                ]
-                for method in defaults:
-                    if method["method_id"] in existing_methods:
-                        continue
-                    session.add(
-                        PaymentMethod(
-                            method_id=method["method_id"],
-                            code=method["method_id"],
-                            name=method["name"],
-                            description=method["description"],
-                            kind=method["kind"],
-                            enabled=True,
-                            is_active=True,
-                            allows_change=method["method_id"] == "cash",
-                            company_id=company_id,
-                            branch_id=branch_id,
-                        )
-                    )
+                for m in pm_defaults
+            ]
+            if pm_rows:
+                stmt = mysql_insert(PaymentMethod).values(pm_rows)
+                session.execute(stmt.on_duplicate_key_update(method_id=stmt.inserted.method_id))
 
-            # Commit fuera de no_autoflush — ahora sí flush + commit
             session.commit()
         self.load_config_data()
 

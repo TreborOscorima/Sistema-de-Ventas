@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import Session, select
 
@@ -436,81 +437,64 @@ def seed_new_branch_data(
     company_id: int,
     branch_id: int,
 ) -> None:
-    """Carga datos base para una nueva sucursal."""
+    """Carga datos base para una nueva sucursal.
+
+    Idempotente a nivel motor vía INSERT ... ON DUPLICATE KEY UPDATE — seguro
+    bajo concurrencia (dos llamadas simultáneas para la misma branch no chocan
+    contra UNIQUE).
+    """
     if not company_id or not branch_id:
         return
     company_id = int(company_id)
     branch_id = int(branch_id)
     set_tenant_context(company_id, branch_id)
 
-    # no_autoflush en todo el bloque: intercalamos SELECTs con session.add().
-    # Sin esto, SQLAlchemy hace flush prematuro al ejecutar un SELECT,
-    # intentando insertar objetos pendientes → IntegrityError por duplicados.
-    with session.no_autoflush:
-        has_categories = session.exec(
-            select(Category.id)
-            .where(Category.company_id == company_id)
-            .where(Category.branch_id == branch_id)
-            .limit(1)
-        ).first()
-        if not has_categories:
-            session.add_all(
-                [
-                    Category(name="General", company_id=company_id, branch_id=branch_id),
-                ]
-            )
+    # Categorías
+    category_rows = [
+        {"name": "General", "company_id": company_id, "branch_id": branch_id},
+    ]
+    stmt = mysql_insert(Category).values(category_rows)
+    session.execute(stmt.on_duplicate_key_update(name=stmt.inserted.name))
 
-        # Unidades — inserción idempotente (evita IntegrityError por duplicados)
-        existing_unit_names = {
-            u.name
-            for u in session.exec(
-                select(Unit)
-                .where(Unit.company_id == company_id)
-                .where(Unit.branch_id == branch_id)
-            ).all()
+    # Unidades
+    unit_defaults = [
+        ("unidad", False),
+        ("kg", True),
+        ("g", True),
+        ("l", True),
+        ("ml", True),
+    ]
+    unit_rows = [
+        {
+            "name": name,
+            "allows_decimal": allows,
+            "company_id": company_id,
+            "branch_id": branch_id,
         }
-        unit_defaults = [
-            ("unidad", False),
-            ("kg", True),
-            ("g", True),
-            ("l", True),
-            ("ml", True),
-        ]
-        for name, allows in unit_defaults:
-            if name not in existing_unit_names:
-                session.add(
-                    Unit(
-                        name=name,
-                        allows_decimal=allows,
-                        company_id=company_id,
-                        branch_id=branch_id,
-                    )
-                )
+        for name, allows in unit_defaults
+    ]
+    stmt = mysql_insert(Unit).values(unit_rows)
+    session.execute(stmt.on_duplicate_key_update(name=stmt.inserted.name))
 
-        has_methods = session.exec(
-            select(PaymentMethod.id)
-            .where(PaymentMethod.company_id == company_id)
-            .where(PaymentMethod.branch_id == branch_id)
-            .limit(1)
-        ).first()
-        if not has_methods:
-            session.add_all(
-                [
-                    PaymentMethod(
-                        name=data["name"],
-                        code=data["code"],
-                        is_active=True,
-                        allows_change=data["allows_change"],
-                        method_id=data["method_id"],
-                        description=data["description"],
-                        kind=data["kind"],
-                        enabled=True,
-                        company_id=company_id,
-                        branch_id=branch_id,
-                    )
-                    for data in DEFAULT_PAYMENT_METHODS
-                ]
-            )
+    # Métodos de pago
+    pm_rows = [
+        {
+            "name": data["name"],
+            "code": data["code"],
+            "is_active": True,
+            "allows_change": data["allows_change"],
+            "method_id": data["method_id"],
+            "description": data["description"],
+            "kind": data["kind"],
+            "enabled": True,
+            "company_id": company_id,
+            "branch_id": branch_id,
+        }
+        for data in DEFAULT_PAYMENT_METHODS
+    ]
+    if pm_rows:
+        stmt = mysql_insert(PaymentMethod).values(pm_rows)
+        session.execute(stmt.on_duplicate_key_update(method_id=stmt.inserted.method_id))
 
 
 async def init_payment_methods(
