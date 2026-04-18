@@ -55,7 +55,7 @@ if [[ $WAITED -ge $MAX_WAIT ]]; then
 fi
 ok "MySQL disponible"
 
-# ─── 2. Esperar Redis (si REDIS_URL está configurada) ───────────────────────
+# ─── 2. Esperar Redis (obligatorio en prod: rate limiting + sesiones + caché L2) ─
 REDIS_URL="${REDIS_URL:-}"
 if [[ -n "$REDIS_URL" ]]; then
     info "Verificando Redis..."
@@ -72,21 +72,21 @@ r.ping()
         WAITED=$((WAITED + 2))
     done
     if [[ $WAITED -ge 30 ]]; then
-        warn "Redis no respondió en 30s — continuando de todas formas"
-    else
-        ok "Redis disponible"
+        # Fail-fast: arrancar Reflex sin Redis implica rate-limit/sesiones rotos al primer request.
+        fail "Redis no disponible después de 30s (REDIS_URL=${REDIS_URL})"
     fi
+    ok "Redis disponible"
 fi
 
 # ─── 3. Migraciones Alembic ─────────────────────────────────────────────────
 SKIP_MIGRATE="${SKIP_MIGRATE:-false}"
 if [[ "$SKIP_MIGRATE" != "true" ]]; then
     info "Ejecutando migraciones Alembic..."
-    if alembic upgrade head; then
-        ok "Migraciones aplicadas correctamente"
-    else
-        warn "Migraciones fallaron — verificar manualmente"
+    # Fail-fast: arrancar con schema incompatible corrompe datos (FKs/constraints rotos).
+    if ! alembic upgrade head; then
+        fail "Migraciones fallaron — abortando arranque"
     fi
+    ok "Migraciones aplicadas correctamente"
 else
     warn "Migraciones saltadas (SKIP_MIGRATE=true)"
 fi

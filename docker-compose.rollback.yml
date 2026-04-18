@@ -14,10 +14,10 @@ services:
     container_name: tuwayki_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD requerido en .env}
       MYSQL_DATABASE: ${DB_NAME:-sistema_ventas}
       MYSQL_USER: ${DB_USER:-app}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
     volumes:
       - mysql_data:/var/lib/mysql
     command: >
@@ -64,10 +64,10 @@ services:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: ${DB_USER:-app}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
       REDIS_URL: redis://redis:6379/0
-      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app

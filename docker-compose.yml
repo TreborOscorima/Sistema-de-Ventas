@@ -21,10 +21,11 @@ services:
     container_name: tuwayki_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      # root y app usan contraseñas separadas: leak de DB_PASSWORD != RCE como root MySQL.
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD requerido en .env}
       MYSQL_DATABASE: ${DB_NAME:-sistema_ventas}
       MYSQL_USER: app
-      MYSQL_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
     volumes:
       - mysql_data:/var/lib/mysql
     command:
@@ -88,7 +89,7 @@ services:
       DB_HOST: ${DB_HOST:-tuwayki_mysql}
       DB_PORT: 3306
       DB_USER: app
-      DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
       REDIS_URL: redis://tuwayki_redis:6379/0
       PUBLIC_SITE_URL: https://tuwayki.app
@@ -96,7 +97,7 @@ services:
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
       # api_url en Reflex = URL base del backend (sin /api). Mismo host que el frontend si NPM hace proxy.
       PUBLIC_API_URL: ${PUBLIC_API_URL:-https://tuwayki.app}
-      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-min-32-chars-for-production}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       GA4_MEASUREMENT_ID: ${GA4_MEASUREMENT_ID:-}
       META_PIXEL_ID: ${META_PIXEL_ID:-}
@@ -126,14 +127,14 @@ services:
       DB_HOST: ${DB_HOST:-tuwayki_mysql}
       DB_PORT: 3306
       DB_USER: app
-      DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
       REDIS_URL: redis://tuwayki_redis:6379/0
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
       PUBLIC_API_URL: https://sys.tuwayki.app
-      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-min-32-chars-for-production}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
     env_file:
       - .env
@@ -161,14 +162,14 @@ services:
       DB_HOST: ${DB_HOST:-tuwayki_mysql}
       DB_PORT: 3306
       DB_USER: app
-      DB_PASSWORD: ${DB_PASSWORD:-sistema_ventas_secret}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
       REDIS_URL: redis://tuwayki_redis:6379/0
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
       PUBLIC_API_URL: https://admin.tuwayki.app
-      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:-change-me-min-32-chars-for-production}
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
     env_file:
       - .env

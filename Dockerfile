@@ -30,18 +30,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar codigo de la aplicacion
-COPY . .
+# Usuario no-root para runtime: cualquier RCE queda contenido a UID 1000.
+# /app/.web se chownea antes de montar el volumen nombrado (el volumen hereda
+# el ownership del directorio en la primera inicialización).
+RUN groupadd --system --gid 1000 app \
+    && useradd --system --uid 1000 --gid app --no-create-home --shell /sbin/nologin app \
+    && mkdir -p /app/.web \
+    && chown -R app:app /app
+
+# Copiar codigo de la aplicacion con ownership correcto (--chown evita
+# un RUN chown extra que duplicaría la capa).
+COPY --chown=app:app . .
 
 # Script de entrada:
 # - espera MySQL/Redis
 # - aplica migraciones Alembic
 # - luego arranca Reflex
-COPY scripts/docker-entrypoint.sh /docker-entrypoint.sh
+COPY --chown=app:app scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Puertos de Reflex (frontend 3000 + backend 8000)
+# Puertos de Reflex (frontend 3000 + backend 8000). >1024 = no requiere root.
 EXPOSE 3000 8000
+
+USER app
 
 # ENTRYPOINT mantiene el pre-arranque obligatorio del sistema
 ENTRYPOINT ["/docker-entrypoint.sh"]
