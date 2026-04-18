@@ -120,12 +120,15 @@ def upgrade() -> None:
             ["original_fiscal_doc_id"],
         )
 
-    # 2. ADD COLUMN original_doc_key GENERATED STORED (MySQL 5.7+)
+    # 2. ADD COLUMN original_doc_key GENERATED VIRTUAL (MySQL 8.0.13+)
+    # Restricción MySQL: STORED incompatible con FK ON DELETE SET NULL sobre la
+    # columna base (fk_fiscaldocument_original) — usar VIRTUAL. MySQL 8 soporta
+    # VIRTUAL en UNIQUE (crea functional index). NOT NULL va DESPUÉS de VIRTUAL.
     if not _has_column(conn, TABLE, "original_doc_key"):
         op.execute(sa.text(
             "ALTER TABLE fiscaldocument "
-            "ADD COLUMN original_doc_key INT NOT NULL "
-            "GENERATED ALWAYS AS (COALESCE(original_fiscal_doc_id, 0)) STORED"
+            "ADD COLUMN original_doc_key INT "
+            "GENERATED ALWAYS AS (COALESCE(original_fiscal_doc_id, 0)) VIRTUAL NOT NULL"
         ))
 
     # 3. Swap de UNIQUE: drop legacy, add new con original_doc_key

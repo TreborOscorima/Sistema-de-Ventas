@@ -194,13 +194,19 @@ def upgrade() -> None:
 
     # ── 3. company CHECKs ──────────────────────────────────────────
     if _has_table(conn, "company"):
+        # -1 es sentinela de "unlimited" (ver auth_state.py _company_plan_snapshot).
+        # Permitimos -1 o >= 1; bloqueamos 0 y otros negativos.
         if not _has_check(conn, "company", "ck_company_max_branches_min"):
             op.create_check_constraint(
-                "ck_company_max_branches_min", "company", "max_branches >= 1"
+                "ck_company_max_branches_min",
+                "company",
+                "max_branches = -1 OR max_branches >= 1",
             )
         if not _has_check(conn, "company", "ck_company_max_users_min"):
             op.create_check_constraint(
-                "ck_company_max_users_min", "company", "max_users >= 1"
+                "ck_company_max_users_min",
+                "company",
+                "max_users = -1 OR max_users >= 1",
             )
         # Enum CHECK para plan_type y subscription_status.
         if not _has_check(conn, "company", "ck_company_plan_type_valid"):
