@@ -52,7 +52,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tuwayki_app
-    restart: unless-stopped
+    restart: on-failure:10
     depends_on:
       mysql:
         condition: service_healthy
@@ -75,6 +75,12 @@ services:
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     volumes:
       - reflex_web:/app/.web
     networks:

@@ -79,7 +79,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tuwayki_landing
-    restart: unless-stopped
+    # on-failure:10 evita loop infinito de reboots si entrypoint falla permanente
+    # (migración rota, .env inválido) — tras 10 intentos Docker detiene el servicio
+    # y se escala a monitoring en vez de consumir CPU silenciosamente.
+    restart: on-failure:10
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -103,6 +106,14 @@ services:
       META_PIXEL_ID: ${META_PIXEL_ID:-}
     env_file:
       - .env
+    # /api/ping = liveness barato (no toca DB/Redis). /api/health es readiness
+    # con validación de dependencias — eso lo consulta NPM/uptime monitor.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     volumes:
       - reflex_web_landing:/app/.web
     networks:
@@ -115,7 +126,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tuwayki_sys
-    restart: unless-stopped
+    restart: on-failure:10
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -138,6 +149,12 @@ services:
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     volumes:
       - reflex_web_sys:/app/.web
     networks:
@@ -150,7 +167,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tuwayki_admin
-    restart: unless-stopped
+    restart: on-failure:10
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -173,6 +190,12 @@ services:
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     volumes:
       - reflex_web_admin:/app/.web
     networks:

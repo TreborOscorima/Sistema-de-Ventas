@@ -43,23 +43,72 @@ def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+async def _check_db() -> tuple[bool, str | None]:
+    """SELECT 1 con timeout: valida que el pool puede dar una conexión viva."""
+    try:
+        from sqlalchemy import text
+
+        from app.utils.db import async_engine
+
+        async with asyncio.timeout(3):
+            async with async_engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        return True, None
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+async def _check_redis() -> tuple[bool, str | None]:
+    """PING con timeout. Si REDIS_URL no está configurada, se considera OK
+    (dev puede correr con fallback en memoria)."""
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return True, None
+    try:
+        import redis.asyncio as aioredis
+
+        client = aioredis.from_url(redis_url, socket_timeout=3)
+        try:
+            async with asyncio.timeout(3):
+                await client.ping()
+            return True, None
+        finally:
+            await client.aclose()
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
 async def _health_check(request: Request) -> JSONResponse:
-    """Health check liviano: confirma que el backend responde."""
+    """Readiness check: valida DB y Redis además del proceso.
+
+    Devuelve 503 si cualquier dependencia está caída — el reverse proxy (NPM)
+    debe dejar de rutear tráfico a esta instancia hasta que vuelva a 200.
+    Para liveness barato (sin tocar dependencias) usar /api/ping.
+    """
     uptime_s = round(time.monotonic() - _BOOT_TS, 1)
-    return JSONResponse(
-        content={
-            "status": "ok",
-            "surface": APP_SURFACE,
-            "version": _read_version(),
-            "uptime_seconds": uptime_s,
-            "timestamp": _utcnow_iso(),
+    db_ok, db_err = await _check_db()
+    redis_ok, redis_err = await _check_redis()
+    all_ok = db_ok and redis_ok
+    payload = {
+        "status": "ok" if all_ok else "degraded",
+        "surface": APP_SURFACE,
+        "version": _read_version(),
+        "uptime_seconds": uptime_s,
+        "timestamp": _utcnow_iso(),
+        "checks": {
+            "db": {"ok": db_ok, "error": db_err},
+            "redis": {"ok": redis_ok, "error": redis_err},
         },
-        status_code=200,
-    )
+    }
+    return JSONResponse(content=payload, status_code=200 if all_ok else 503)
 
 
 async def _ping(request: Request) -> JSONResponse:
-    """Ping mínimo para load balancers y uptime monitors."""
+    """Liveness check: responde sin tocar DB ni Redis.
+
+    Usar desde Docker HEALTHCHECK y uptime monitors — /api/health (readiness)
+    puede devolver 503 durante reconexión transitoria al pool.
+    """
     return JSONResponse(content={"pong": True}, status_code=200)
 
 

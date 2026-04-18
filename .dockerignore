@@ -16,10 +16,12 @@ __pycache__
 .vscode
 .editorconfig
 
-# Tests y desarrollo (opcional: quitar si quieres ejecutar tests en imagen)
-# tests/
-# scripts/stress_*.py
-# scripts/cleanup_*.py
+# Tests y scripts de desarrollo — no se ejecutan en runtime prod.
+# Si alguna vez se requiere correr tests contra la imagen, se puede
+# construir un target alternativo o montar por volumen.
+tests/
+scripts/stress_*.py
+scripts/cleanup_*.py
 
 # Backups, logs y artefactos locales
 backups/

@@ -70,7 +70,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tuwayki_landing
-    restart: unless-stopped
+    # on-failure:10 corta el loop infinito de reboots si entrypoint falla permanente.
+    restart: on-failure:10
     depends_on:
       mysql:
         condition: service_healthy
@@ -96,6 +97,13 @@ services:
       SKIP_MIGRATE: "false"
     env_file:
       - .env
+    # /api/ping = liveness barato; /api/health (con DB+Redis) lo consulta NPM.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     volumes:
       - landing_web:/app/.web
     networks:
@@ -108,7 +116,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tuwayki_sys
-    restart: unless-stopped
+    restart: on-failure:10
     depends_on:
       mysql:
         condition: service_healthy
@@ -135,6 +143,12 @@ services:
       SKIP_MIGRATE: "true"
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     volumes:
       - sys_web:/app/.web
     networks:
@@ -147,7 +161,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tuwayki_admin
-    restart: unless-stopped
+    restart: on-failure:10
     depends_on:
       mysql:
         condition: service_healthy
@@ -174,6 +188,12 @@ services:
       SKIP_MIGRATE: "true"
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     volumes:
       - admin_web:/app/.web
     networks:
