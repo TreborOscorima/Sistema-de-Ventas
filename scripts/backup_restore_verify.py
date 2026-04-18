@@ -17,6 +17,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from scripts.backup_db import resolve_mysql_binary
+
 
 def _env(name: str, default: str | None = None) -> str:
     value = os.getenv(name, default)
@@ -59,11 +61,11 @@ def _create_db(db_name: str) -> None:
 
 
 def _restore_backup_to_db(backup_file: Path, target_db: str) -> None:
-    mysql_exe = Path(r"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe")
-    if not mysql_exe.exists():
+    mysql_exe = resolve_mysql_binary("mysql")
+    if not mysql_exe:
         raise RuntimeError(
-            "mysql.exe no encontrado en ruta esperada: "
-            r"C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe"
+            "mysql no encontrado en PATH ni en rutas comunes de instalación "
+            "(MySQL Server 8.0/8.4). Asegurate de tener el cliente instalado."
         )
 
     host = _env("DB_HOST")
@@ -72,7 +74,7 @@ def _restore_backup_to_db(backup_file: Path, target_db: str) -> None:
     password = os.getenv("DB_PASSWORD", "")
 
     cmd = [
-        str(mysql_exe),
+        mysql_exe,
         f"--host={host}",
         f"--port={port}",
         f"--user={user}",

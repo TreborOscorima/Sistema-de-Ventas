@@ -28,7 +28,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _resolve_mysql_binary(tool_name: str) -> str | None:
+def resolve_mysql_binary(tool_name: str) -> str | None:
     """Resuelve ruta de binarios MySQL (PATH + rutas comunes en Windows)."""
     found = which(tool_name)
     if found:
@@ -43,6 +43,10 @@ def _resolve_mysql_binary(tool_name: str) -> str | None:
         if candidate.exists():
             return str(candidate)
     return None
+
+
+# Alias interno mantenido para compatibilidad con llamadas existentes.
+_resolve_mysql_binary = resolve_mysql_binary
 
 
 def get_db_config() -> dict:
