@@ -35,9 +35,7 @@ from app.utils.timezone import utc_now_naive
 
 logger = get_logger("OwnerState")
 
-APP_SURFACE: str = (os.getenv("APP_SURFACE") or "all").strip().lower()
-if APP_SURFACE not in {"all", "landing", "app", "owner"}:
-    APP_SURFACE = "all"
+from app.utils.env import APP_SURFACE
 
 OWNER_ROOT_PATH: str = "/" if APP_SURFACE == "owner" else "/owner"
 OWNER_LOGIN_PATH: str = "/login" if APP_SURFACE == "owner" else "/owner/login"

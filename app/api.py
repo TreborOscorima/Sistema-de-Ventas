@@ -26,7 +26,7 @@ _logger = logging.getLogger("api")
 # Timestamp de arranque para cálculo de uptime.
 _BOOT_TS = time.monotonic()
 
-APP_SURFACE = (os.getenv("APP_SURFACE") or "all").strip().lower()
+from app.utils.env import APP_SURFACE
 _VERSION_FILE = os.path.join(os.path.dirname(__file__), "..", "VERSION")
 
 

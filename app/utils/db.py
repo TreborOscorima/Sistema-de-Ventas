@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from app.utils.env import require_int_env
 from app.utils.logger import get_logger
 
 load_dotenv()
@@ -36,7 +37,7 @@ def _require_env(var: str) -> str:
 _DB_USER = _require_env("DB_USER")
 _DB_PASSWORD = _require_env("DB_PASSWORD")
 _DB_HOST = _require_env("DB_HOST")
-_DB_PORT = os.getenv("DB_PORT", "3306")
+_DB_PORT = require_int_env("DB_PORT", 3306)
 _DB_NAME = _require_env("DB_NAME")
 
 ASYNC_DATABASE_URL = (

@@ -23,9 +23,7 @@ from app.components.ui import (
     TYPOGRAPHY,
 )
 
-APP_SURFACE: str = (os.getenv("APP_SURFACE") or "all").strip().lower()
-if APP_SURFACE not in {"all", "landing", "app", "owner"}:
-    APP_SURFACE = "all"
+from app.utils.env import APP_SURFACE
 
 PUBLIC_APP_URL = (os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
 OWNER_LOGIN_PATH = "/login" if APP_SURFACE == "owner" else "/owner/login"

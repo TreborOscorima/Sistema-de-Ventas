@@ -42,9 +42,7 @@ from app.pages.owner import owner_page, owner_login_page
 from app.components.notification import NotificationHolder
 from app.api import health_app
 
-APP_SURFACE = (os.getenv("APP_SURFACE") or "all").strip().lower()
-if APP_SURFACE not in {"all", "landing", "app", "owner"}:
-    APP_SURFACE = "all"
+from app.utils.env import APP_SURFACE
 
 PUBLIC_SITE_URL = (os.getenv("PUBLIC_SITE_URL") or "https://tuwayki.app").strip().rstrip("/")
 LANDING_TITLE = "TUWAYKIAPP | Sistema de Ventas para tiendas, servicios y reservas"
