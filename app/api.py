@@ -69,6 +69,13 @@ _FISCAL_RETRY_INTERVAL_SECONDS = int(
 )
 _FISCAL_RETRY_ENABLED = os.getenv("FISCAL_RETRY_ENABLED", "1").strip() != "0"
 
+# El worker solo debe correr en superficies que emiten documentos fiscales (POS).
+# Landing (marketing público) y owner (backoffice plataforma) no tienen razón
+# de golpear AFIP/SUNAT — en el stack 3-superficies eso triplicaría la carga
+# externa y generaría contención sobre la misma cola de reintentos.
+_FISCAL_RETRY_SURFACES = {"app", "all"}
+_FISCAL_RETRY_ALLOWED_HERE = APP_SURFACE in _FISCAL_RETRY_SURFACES
+
 
 async def _fiscal_retry_loop():
     """Ejecuta el worker de reintento fiscal periódicamente con jitter.
@@ -103,9 +110,15 @@ async def _lifespan(app):
     """Lifespan handler: inicia background tasks al arrancar y libera
     recursos al apagar (pool DB async, tareas pendientes)."""
     tasks = []
-    if _FISCAL_RETRY_ENABLED:
+    if _FISCAL_RETRY_ENABLED and _FISCAL_RETRY_ALLOWED_HERE:
         task = asyncio.create_task(_fiscal_retry_loop())
         tasks.append(task)
+    elif _FISCAL_RETRY_ENABLED:
+        _logger.info(
+            "Fiscal retry worker NO iniciado en superficie '%s' (solo corre en %s)",
+            APP_SURFACE,
+            sorted(_FISCAL_RETRY_SURFACES),
+        )
     try:
         yield
     finally:
