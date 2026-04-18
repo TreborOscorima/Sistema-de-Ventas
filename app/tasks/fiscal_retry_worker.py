@@ -72,6 +72,7 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
         "authorized": 0,
         "still_error": 0,
         "skipped": 0,
+        "crashed": False,
         "dry_run": dry_run,
     }
 
@@ -83,7 +84,6 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
 
     try:
         async with get_async_session() as session:
-            # Obtener documentos candidatos al reintento
             docs_stmt = (
                 select(FiscalDocument)
                 .where(
@@ -92,26 +92,39 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
                     )
                 )
                 .where(FiscalDocument.retry_count < MAX_RETRY_ATTEMPTS)
-                # Priorizar los más recientes
                 .order_by(FiscalDocument.created_at.desc())  # type: ignore[union-attr]
                 .limit(_BATCH_LIMIT)
             )
-            docs = (await session.exec(docs_stmt)).all()
+            rows = (await session.exec(docs_stmt)).all()
+            # Desacoplamos los atributos del ORM antes de cerrar la sesión
+            # para evitar DetachedInstanceError si alguien agrega accesos
+            # diferidos más adelante. retry_fiscal_document abre su propia sesión.
+            doc_snapshots = [
+                {
+                    "id": d.id,
+                    "sale_id": d.sale_id,
+                    "company_id": d.company_id,
+                    "branch_id": d.branch_id,
+                    "retry_count": d.retry_count or 0,
+                    "full_number": d.full_number or f"ID:{d.id}",
+                }
+                for d in rows
+            ]
 
-        if not docs:
+        if not doc_snapshots:
             logger.info("No hay documentos para reintentar.")
             return stats
 
-        logger.info("Documentos encontrados para reintento: %d", len(docs))
+        logger.info("Documentos encontrados para reintento: %d", len(doc_snapshots))
 
-        for doc in docs:
+        for doc in doc_snapshots:
             stats["processed"] += 1
-            doc_id = doc.id
-            sale_id = doc.sale_id
-            company_id = doc.company_id
-            branch_id = doc.branch_id
-            retry_count = doc.retry_count or 0
-            full_number = doc.full_number or f"ID:{doc_id}"
+            doc_id = doc["id"]
+            sale_id = doc["sale_id"]
+            company_id = doc["company_id"]
+            branch_id = doc["branch_id"]
+            retry_count = doc["retry_count"]
+            full_number = doc["full_number"]
 
             # Backoff exponencial: 2^retry_count segundos (máx. 60s)
             backoff = min(2 ** retry_count, _MAX_BACKOFF_SECONDS)
@@ -173,6 +186,7 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
 
     except Exception as exc:
         logger.exception("Error crítico en FiscalRetryWorker: %s", exc)
+        stats["crashed"] = True
 
     stats["skipped"] = stats["processed"] - stats["authorized"] - stats["still_error"]
 
@@ -211,4 +225,8 @@ if __name__ == "__main__":
     print("\n--- Resultado ---")
     for k, v in result.items():
         print(f"  {k}: {v}")
-    sys.exit(0 if result.get("still_error", 0) == 0 else 1)
+    # Exit 1 SOLO si el worker crasheó (excepción no controlada).
+    # still_error > 0 es operación normal cuando AFIP/SUNAT está caído —
+    # los documentos volverán a reintentarse en la siguiente corrida del cron.
+    # Alertar por cada tick generaría fatiga de alertas.
+    sys.exit(1 if result.get("crashed") else 0)
