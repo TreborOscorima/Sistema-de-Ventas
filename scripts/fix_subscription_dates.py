@@ -1,9 +1,22 @@
 """Script para corregir subscription_ends_at muy cortas en empresas de plan pago."""
 import asyncio
 import os
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 
-os.environ.setdefault("AUTH_SECRET_KEY", "k" * 32)
+from dotenv import load_dotenv
+
+# Carga .env desde la raíz del repo antes de importar módulos que consumen secretos.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+if not os.getenv("AUTH_SECRET_KEY"):
+    print(
+        "ERROR: AUTH_SECRET_KEY no está configurado. "
+        "Este script muta datos de facturación — abortando para no operar con un secreto inválido.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 from app.utils.db import AsyncSessionLocal
 from app.utils.tenant import tenant_bypass

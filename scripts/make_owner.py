@@ -33,7 +33,14 @@ load_dotenv(ROOT_DIR / ".env")
 def _build_db_url() -> str:
     """Construye la URL de conexión a la BD."""
     db_user = os.getenv("DB_USER", "root")
-    db_password = os.getenv("DB_PASSWORD", "tu_clave_local")
+    db_password = os.getenv("DB_PASSWORD")
+    if not db_password:
+        print(
+            "ERROR: DB_PASSWORD no está configurado. "
+            "Verifica tu archivo .env o variables de entorno antes de ejecutar este script.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     db_host = os.getenv("DB_HOST", "localhost")
     db_port = os.getenv("DB_PORT", "3306")
     db_name = os.getenv("DB_NAME", "sistema_ventas")

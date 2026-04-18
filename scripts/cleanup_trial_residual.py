@@ -1,7 +1,21 @@
 """Script para limpiar trial_ends_at residual en empresas que ya no son trial."""
 import asyncio
 import os
-os.environ.setdefault("AUTH_SECRET_KEY", "k" * 32)
+import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Carga .env desde la raíz del repo antes de importar módulos que consumen secretos.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+if not os.getenv("AUTH_SECRET_KEY"):
+    print(
+        "ERROR: AUTH_SECRET_KEY no está configurado. "
+        "Este script muta estado de empresas — abortando para no operar con un secreto inválido.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 from app.utils.db import AsyncSessionLocal
 from app.utils.tenant import tenant_bypass
