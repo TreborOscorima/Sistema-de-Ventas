@@ -42,6 +42,7 @@ from typing import Any, Dict, List
 
 from sqlmodel import select
 from sqlalchemy import func, or_, desc
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession  # ✅ IMPORTANTE
 
 from app.constants import CASHBOX_INCOME_ACTIONS
@@ -182,97 +183,101 @@ async def get_recent_activity(
     timezone: str | None = None,
 ) -> list[dict[str, Any]]:
     """Obtiene los movimientos recientes de caja para una sucursal."""
+    # S1-02: reset tenant al salir para evitar bleed cross-tenant.
     set_tenant_context(company_id, branch_id)
-    if not branch_id:
-        return []
-    limit_value = int(limit) if limit else 15
-    if limit_value < 1:
-        limit_value = 15
+    try:
+        if not branch_id:
+            return []
+        limit_value = int(limit) if limit else 15
+        if limit_value < 1:
+            limit_value = 15
 
-    query = (
-        select(CashboxLog, Sale, Client)
-        .join(Sale, CashboxLog.sale_id == Sale.id, isouter=True)
-        .join(Client, Sale.client_id == Client.id, isouter=True)
-        .where(CashboxLog.branch_id == branch_id)
-        .where(CashboxLog.is_voided == False)
-        .where(CashboxLog.action.in_(CASHBOX_INCOME_ACTIONS))
-        .order_by(desc(CashboxLog.timestamp))
-        .limit(limit_value)
-    )
-    if company_id:
-        query = query.where(CashboxLog.company_id == company_id)
-
-    rows = (await session.exec(query)).all()
-    sale_ids = list({log.sale_id for log, _sale, _client in rows if log.sale_id})
-    items_by_sale: dict[int, list[dict[str, Any]]] = {}
-    if sale_ids:
-        items_query = select(SaleItem).where(SaleItem.sale_id.in_(sale_ids))
-        items_query = _apply_tenant_filters(
-            items_query, SaleItem, company_id, branch_id
+        query = (
+            select(CashboxLog, Sale, Client)
+            .join(Sale, CashboxLog.sale_id == Sale.id, isouter=True)
+            .join(Client, Sale.client_id == Client.id, isouter=True)
+            .where(CashboxLog.branch_id == branch_id)
+            .where(CashboxLog.is_voided == False)
+            .where(CashboxLog.action.in_(CASHBOX_INCOME_ACTIONS))
+            .order_by(desc(CashboxLog.timestamp))
+            .limit(limit_value)
         )
-        items_query = items_query.order_by(SaleItem.sale_id, SaleItem.id)
-        sale_items = (await session.exec(items_query)).all()
-        for item in sale_items:
-            if not item.sale_id:
-                continue
-            items_by_sale.setdefault(item.sale_id, []).append(
+        if company_id:
+            query = query.where(CashboxLog.company_id == company_id)
+
+        rows = (await session.exec(query)).all()
+        sale_ids = list({log.sale_id for log, _sale, _client in rows if log.sale_id})
+        items_by_sale: dict[int, list[dict[str, Any]]] = {}
+        if sale_ids:
+            items_query = select(SaleItem).where(SaleItem.sale_id.in_(sale_ids))
+            items_query = _apply_tenant_filters(
+                items_query, SaleItem, company_id, branch_id
+            )
+            items_query = items_query.order_by(SaleItem.sale_id, SaleItem.id)
+            sale_items = (await session.exec(items_query)).all()
+            for item in sale_items:
+                if not item.sale_id:
+                    continue
+                items_by_sale.setdefault(item.sale_id, []).append(
+                    {
+                        "description": item.product_name_snapshot
+                        or item.product_barcode_snapshot
+                        or "Producto",
+                        "quantity": item.quantity,
+                        "unit_price": item.unit_price,
+                        "subtotal": item.subtotal,
+                    }
+                )
+        results: list[dict[str, Any]] = []
+        for log, sale, client in rows:
+            action_label = _normalize_cashbox_action(log.action)
+            payment_method = (log.payment_method or "").strip()
+            detail = action_label
+            if payment_method:
+                detail = f"{detail} ({payment_method})"
+            notes_detail = _extract_detail_from_notes(log.notes, action_label)
+            detail_full = detail
+            detail_short = detail
+            if notes_detail:
+                detail_full = f"{detail} - {notes_detail}"
+                detail_short = f"{detail} - {_compact_notes(notes_detail)}"
+            client_name = ""
+            if client and client.name:
+                client_name = client.name
+
+            timestamp = log.timestamp
+            time_display = ""
+            timestamp_display = ""
+            if timestamp:
+                time_display = format_local_datetime(
+                    timestamp,
+                    "%H:%M",
+                    country_code,
+                    timezone=timezone,
+                )
+                timestamp_display = format_local_datetime(
+                    timestamp,
+                    "%Y-%m-%d %H:%M:%S",
+                    country_code,
+                    timezone=timezone,
+                )
+
+            results.append(
                 {
-                    "description": item.product_name_snapshot
-                    or item.product_barcode_snapshot
-                    or "Producto",
-                    "quantity": item.quantity,
-                    "unit_price": item.unit_price,
-                    "subtotal": item.subtotal,
+                    "id": str(log.id),
+                    "timestamp": timestamp_display,
+                    "time": time_display,
+                    "detail_full": detail_full,
+                    "detail_short": detail_short,
+                    "client": client_name,
+                    "amount": float(log.amount or 0),
+                    "sale_id": str(log.sale_id) if log.sale_id else "",
+                    "items": items_by_sale.get(log.sale_id or 0, []),
                 }
             )
-    results: list[dict[str, Any]] = []
-    for log, sale, client in rows:
-        action_label = _normalize_cashbox_action(log.action)
-        payment_method = (log.payment_method or "").strip()
-        detail = action_label
-        if payment_method:
-            detail = f"{detail} ({payment_method})"
-        notes_detail = _extract_detail_from_notes(log.notes, action_label)
-        detail_full = detail
-        detail_short = detail
-        if notes_detail:
-            detail_full = f"{detail} - {notes_detail}"
-            detail_short = f"{detail} - {_compact_notes(notes_detail)}"
-        client_name = ""
-        if client and client.name:
-            client_name = client.name
-
-        timestamp = log.timestamp
-        time_display = ""
-        timestamp_display = ""
-        if timestamp:
-            time_display = format_local_datetime(
-                timestamp,
-                "%H:%M",
-                country_code,
-                timezone=timezone,
-            )
-            timestamp_display = format_local_datetime(
-                timestamp,
-                "%Y-%m-%d %H:%M:%S",
-                country_code,
-                timezone=timezone,
-            )
-
-        results.append(
-            {
-                "id": str(log.id),
-                "timestamp": timestamp_display,
-                "time": time_display,
-                "detail_full": detail_full,
-                "detail_short": detail_short,
-                "client": client_name,
-                "amount": float(log.amount or 0),
-                "sale_id": str(log.sale_id) if log.sale_id else "",
-                "items": items_by_sale.get(log.sale_id or 0, []),
-            }
-        )
-    return results
+        return results
+    finally:
+        set_tenant_context(None, None)
 
 
 def _adapt_product_payload(product: Product) -> dict[str, Any]:
@@ -327,53 +332,58 @@ async def get_product_by_barcode(
     session: AsyncSession | None = None,
 ) -> dict[str, Any] | None:
     """Busca un producto por SKU (variante) o barcode (producto estándar)."""
+    # S1-02: reset tenant al salir (éxito/excepción) → evita bleed cross-tenant
+    # cuando el worker se reutiliza para otra request.
     set_tenant_context(company_id, branch_id)
-    code = (barcode or "").strip()
-    if not code:
-        return None
+    try:
+        code = (barcode or "").strip()
+        if not code:
+            return None
 
-    async def _run(current_session: AsyncSession) -> dict[str, Any] | None:
-        variant_query = select(ProductVariant).where(ProductVariant.sku == code)
-        variant = (
-            await current_session.exec(
-                _apply_tenant_filters(
-                    variant_query, ProductVariant, company_id, branch_id
-                )
-            )
-        ).first()
-        if variant:
-            parent_query = select(Product).where(
-                Product.id == variant.product_id
-            )
-            parent = (
+        async def _run(current_session: AsyncSession) -> dict[str, Any] | None:
+            variant_query = select(ProductVariant).where(ProductVariant.sku == code)
+            variant = (
                 await current_session.exec(
                     _apply_tenant_filters(
-                        parent_query, Product, company_id, branch_id
+                        variant_query, ProductVariant, company_id, branch_id
                     )
                 )
             ).first()
-            if parent:
-                return _adapt_variant_payload(variant, parent)
-
-        product_query = select(Product).where(
-            Product.barcode == code,
-            Product.is_active == True,
-        )
-        product = (
-            await current_session.exec(
-                _apply_tenant_filters(
-                    product_query, Product, company_id, branch_id
+            if variant:
+                parent_query = select(Product).where(
+                    Product.id == variant.product_id
                 )
-            )
-        ).first()
-        if product:
-            return _adapt_product_payload(product)
-        return None
+                parent = (
+                    await current_session.exec(
+                        _apply_tenant_filters(
+                            parent_query, Product, company_id, branch_id
+                        )
+                    )
+                ).first()
+                if parent:
+                    return _adapt_variant_payload(variant, parent)
 
-    if session is not None:
-        return await _run(session)
-    async with get_session() as current_session:
-        return await _run(current_session)
+            product_query = select(Product).where(
+                Product.barcode == code,
+                Product.is_active == True,
+            )
+            product = (
+                await current_session.exec(
+                    _apply_tenant_filters(
+                        product_query, Product, company_id, branch_id
+                    )
+                )
+            ).first()
+            if product:
+                return _adapt_product_payload(product)
+            return None
+
+        if session is not None:
+            return await _run(session)
+        async with get_session() as current_session:
+            return await _run(current_session)
+    finally:
+        set_tenant_context(None, None)
 
 
 async def search_products(
@@ -384,104 +394,108 @@ async def search_products(
     limit: int = 10,
     session: AsyncSession | None = None,
 ) -> list[dict[str, Any]]:
+    # S1-02: reset tenant al salir para evitar bleed cross-tenant.
     set_tenant_context(company_id, branch_id)
-    term = (query or "").strip()
-    if not term:
-        return []
-    like_search = f"%{escape_like(term)}%"
+    try:
+        term = (query or "").strip()
+        if not term:
+            return []
+        like_search = f"%{escape_like(term)}%"
 
-    async def _run(current_session: AsyncSession) -> list[dict[str, Any]]:
-        product_query = select(Product).where(
-            Product.is_active == True,
-            or_(
-                Product.description.ilike(like_search),
-                Product.barcode.ilike(like_search),
-            ),
-        )
-        product_query = _apply_tenant_filters(
-            product_query, Product, company_id, branch_id
-        )
-        products = (
-            await current_session.exec(product_query.limit(limit))
-        ).all()
-
-        variant_query = (
-            select(ProductVariant, Product)
-            .join(Product, Product.id == ProductVariant.product_id)
-            .where(
+        async def _run(current_session: AsyncSession) -> list[dict[str, Any]]:
+            product_query = select(Product).where(
                 Product.is_active == True,
                 or_(
-                    ProductVariant.sku.ilike(like_search),
-                    ProductVariant.size.ilike(like_search),
-                    ProductVariant.color.ilike(like_search),
                     Product.description.ilike(like_search),
-                    func.concat(
-                        Product.description,
-                        " (",
-                        func.coalesce(ProductVariant.size, ""),
-                        " ",
-                        func.coalesce(ProductVariant.color, ""),
-                        ")",
-                    ).ilike(like_search),
+                    Product.barcode.ilike(like_search),
                 ),
             )
-        )
-        variant_query = _apply_tenant_filters(
-            variant_query, ProductVariant, company_id, branch_id
-        )
-        variant_query = _apply_tenant_filters(
-            variant_query, Product, company_id, branch_id
-        )
-        variant_rows = (
-            await current_session.exec(variant_query.limit(limit))
-        ).all()
+            product_query = _apply_tenant_filters(
+                product_query, Product, company_id, branch_id
+            )
+            products = (
+                await current_session.exec(product_query.limit(limit))
+            ).all()
 
-        # Búsqueda por atributos dinámicos (ferretería: calibre, material;
-        # farmacia: principio activo, laboratorio)
-        attr_query = (
-            select(Product)
-            .join(ProductAttribute, ProductAttribute.product_id == Product.id)
-            .where(
-                or_(
-                    ProductAttribute.attribute_value.ilike(like_search),
-                    ProductAttribute.attribute_name.ilike(like_search),
+            variant_query = (
+                select(ProductVariant, Product)
+                .join(Product, Product.id == ProductVariant.product_id)
+                .where(
+                    Product.is_active == True,
+                    or_(
+                        ProductVariant.sku.ilike(like_search),
+                        ProductVariant.size.ilike(like_search),
+                        ProductVariant.color.ilike(like_search),
+                        Product.description.ilike(like_search),
+                        func.concat(
+                            Product.description,
+                            " (",
+                            func.coalesce(ProductVariant.size, ""),
+                            " ",
+                            func.coalesce(ProductVariant.color, ""),
+                            ")",
+                        ).ilike(like_search),
+                    ),
                 )
             )
-        )
-        attr_query = _apply_tenant_filters(
-            attr_query, ProductAttribute, company_id, branch_id
-        )
-        attr_query = _apply_tenant_filters(
-            attr_query, Product, company_id, branch_id
-        )
-        attr_products = (
-            await current_session.exec(attr_query.limit(limit))
-        ).all()
+            variant_query = _apply_tenant_filters(
+                variant_query, ProductVariant, company_id, branch_id
+            )
+            variant_query = _apply_tenant_filters(
+                variant_query, Product, company_id, branch_id
+            )
+            variant_rows = (
+                await current_session.exec(variant_query.limit(limit))
+            ).all()
 
-        # Merge deduplicado
-        seen_ids: set[int] = set()
-        results: list[dict[str, Any]] = []
-        for product in products:
-            if product.id and product.id not in seen_ids:
-                seen_ids.add(product.id)
-                results.append(_adapt_product_payload(product))
-        for variant, parent in variant_rows:
-            if parent:
-                key = ("v", variant.id)
-                vid = variant.id or 0
-                if vid not in seen_ids:
-                    seen_ids.add(vid)
-                    results.append(_adapt_variant_payload(variant, parent))
-        for product in attr_products:
-            if product.id and product.id not in seen_ids:
-                seen_ids.add(product.id)
-                results.append(_adapt_product_payload(product))
-        return results[:limit]
+            # Búsqueda por atributos dinámicos (ferretería: calibre, material;
+            # farmacia: principio activo, laboratorio)
+            attr_query = (
+                select(Product)
+                .join(ProductAttribute, ProductAttribute.product_id == Product.id)
+                .where(
+                    or_(
+                        ProductAttribute.attribute_value.ilike(like_search),
+                        ProductAttribute.attribute_name.ilike(like_search),
+                    )
+                )
+            )
+            attr_query = _apply_tenant_filters(
+                attr_query, ProductAttribute, company_id, branch_id
+            )
+            attr_query = _apply_tenant_filters(
+                attr_query, Product, company_id, branch_id
+            )
+            attr_products = (
+                await current_session.exec(attr_query.limit(limit))
+            ).all()
 
-    if session is not None:
-        return await _run(session)
-    async with get_session() as current_session:
-        return await _run(current_session)
+            # Merge deduplicado
+            seen_ids: set[int] = set()
+            results: list[dict[str, Any]] = []
+            for product in products:
+                if product.id and product.id not in seen_ids:
+                    seen_ids.add(product.id)
+                    results.append(_adapt_product_payload(product))
+            for variant, parent in variant_rows:
+                if parent:
+                    key = ("v", variant.id)
+                    vid = variant.id or 0
+                    if vid not in seen_ids:
+                        seen_ids.add(vid)
+                        results.append(_adapt_variant_payload(variant, parent))
+            for product in attr_products:
+                if product.id and product.id not in seen_ids:
+                    seen_ids.add(product.id)
+                    results.append(_adapt_product_payload(product))
+            return results[:limit]
+
+        if session is not None:
+            return await _run(session)
+        async with get_session() as current_session:
+            return await _run(current_session)
+    finally:
+        set_tenant_context(None, None)
 
 
 async def calculate_item_price(
@@ -492,16 +506,29 @@ async def calculate_item_price(
     session: AsyncSession | None = None,
     variant_id: int | None = None,
 ) -> Decimal:
+    # S1-02: reset tenant al salir para evitar bleed cross-tenant.
     set_tenant_context(company_id, branch_id)
-    if not product_id:
-        return Decimal("0.00")
+    try:
+        if not product_id:
+            return Decimal("0.00")
 
-    async def _run(current_session: AsyncSession) -> Decimal:
-        # Buscar primero por variante si se proporcionó
-        if variant_id:
+        async def _run(current_session: AsyncSession) -> Decimal:
+            # Buscar primero por variante si se proporcionó
+            if variant_id:
+                tier = await _get_price_tier(
+                    current_session,
+                    variant_id=variant_id,
+                    qty=qty,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+                if tier and tier.unit_price is not None:
+                    return _round_money(tier.unit_price)
+
+            # Luego buscar por producto
             tier = await _get_price_tier(
                 current_session,
-                variant_id=variant_id,
+                product_id=product_id,
                 qty=qty,
                 company_id=company_id,
                 branch_id=branch_id,
@@ -509,33 +536,24 @@ async def calculate_item_price(
             if tier and tier.unit_price is not None:
                 return _round_money(tier.unit_price)
 
-        # Luego buscar por producto
-        tier = await _get_price_tier(
-            current_session,
-            product_id=product_id,
-            qty=qty,
-            company_id=company_id,
-            branch_id=branch_id,
-        )
-        if tier and tier.unit_price is not None:
-            return _round_money(tier.unit_price)
-
-        product_query = select(Product).where(Product.id == product_id)
-        product = (
-            await current_session.exec(
-                _apply_tenant_filters(
-                    product_query, Product, company_id, branch_id
+            product_query = select(Product).where(Product.id == product_id)
+            product = (
+                await current_session.exec(
+                    _apply_tenant_filters(
+                        product_query, Product, company_id, branch_id
+                    )
                 )
-            )
-        ).first()
-        if not product:
-            return Decimal("0.00")
-        return _round_money(product.sale_price)
+            ).first()
+            if not product:
+                return Decimal("0.00")
+            return _round_money(product.sale_price)
 
-    if session is not None:
-        return await _run(session)
-    async with get_session() as current_session:
-        return await _run(current_session)
+        if session is not None:
+            return await _run(session)
+        async with get_session() as current_session:
+            return await _run(current_session)
+    finally:
+        set_tenant_context(None, None)
 
 
 async def get_available_stock(
@@ -545,25 +563,37 @@ async def get_available_stock(
     branch_id: int | None,
     session: AsyncSession | None = None,
 ) -> Decimal:
+    # S1-02: reset tenant al salir para evitar bleed cross-tenant.
     set_tenant_context(company_id, branch_id)
-    async def _run(current_session: AsyncSession) -> Decimal:
-        product = None
-        variant = None
-        if variant_id:
-            variant_query = select(ProductVariant).where(
-                ProductVariant.id == variant_id
-            )
-            variant = (
-                await current_session.exec(
-                    _apply_tenant_filters(
-                        variant_query, ProductVariant, company_id, branch_id
+    try:
+        async def _run(current_session: AsyncSession) -> Decimal:
+            product = None
+            variant = None
+            if variant_id:
+                variant_query = select(ProductVariant).where(
+                    ProductVariant.id == variant_id
+                )
+                variant = (
+                    await current_session.exec(
+                        _apply_tenant_filters(
+                            variant_query, ProductVariant, company_id, branch_id
+                        )
                     )
-                )
-            ).first()
-            if variant and variant.product_id:
-                product_query = select(Product).where(
-                    Product.id == variant.product_id
-                )
+                ).first()
+                if variant and variant.product_id:
+                    product_query = select(Product).where(
+                        Product.id == variant.product_id
+                    )
+                    product = (
+                        await current_session.exec(
+                            _apply_tenant_filters(
+                                product_query, Product, company_id, branch_id
+                            )
+                        )
+                    ).first()
+
+            if product is None and product_id:
+                product_query = select(Product).where(Product.id == product_id)
                 product = (
                     await current_session.exec(
                         _apply_tenant_filters(
@@ -572,70 +602,62 @@ async def get_available_stock(
                     )
                 ).first()
 
-        if product is None and product_id:
-            product_query = select(Product).where(Product.id == product_id)
-            product = (
-                await current_session.exec(
-                    _apply_tenant_filters(
-                        product_query, Product, company_id, branch_id
-                    )
+            allows_decimal = False
+            unit_name = getattr(product, "unit", None) if product else None
+            if unit_name:
+                unit_query = select(Unit).where(Unit.name == unit_name)
+                unit_query = _apply_tenant_filters(unit_query, Unit, company_id, branch_id)
+                unit = (await current_session.exec(unit_query)).first()
+                if unit is not None:
+                    allows_decimal = bool(unit.allows_decimal)
+
+            batch_query = None
+            if variant:
+                batch_query = select(ProductBatch).where(
+                    ProductBatch.product_variant_id == variant.id
                 )
-            ).first()
+            elif product:
+                batch_query = select(ProductBatch).where(
+                    ProductBatch.product_id == product.id
+                )
 
-        allows_decimal = False
-        unit_name = getattr(product, "unit", None) if product else None
-        if unit_name:
-            unit_query = select(Unit).where(Unit.name == unit_name)
-            unit_query = _apply_tenant_filters(unit_query, Unit, company_id, branch_id)
-            unit = (await current_session.exec(unit_query)).first()
-            if unit is not None:
-                allows_decimal = bool(unit.allows_decimal)
+            batches: list[ProductBatch] = []
+            if batch_query is not None:
+                batch_query = batch_query.where(ProductBatch.stock > 0)
+                batch_query = _apply_tenant_filters(
+                    batch_query, ProductBatch, company_id, branch_id
+                )
+                batch_query = batch_query.order_by(
+                    ProductBatch.expiration_date.asc(), ProductBatch.id.asc()
+                )
+                batches = (await current_session.exec(batch_query)).all()
 
-        batch_query = None
-        if variant:
-            batch_query = select(ProductBatch).where(
-                ProductBatch.product_variant_id == variant.id
-            )
-        elif product:
-            batch_query = select(ProductBatch).where(
-                ProductBatch.product_id == product.id
-            )
+            if batches:
+                return _sum_batch_stock(batches, allows_decimal)
+            if variant:
+                return _round_quantity(variant.stock, allows_decimal)
+            if product:
+                variant_sum_query = select(
+                    func.coalesce(func.sum(ProductVariant.stock), 0)
+                ).where(ProductVariant.product_id == product.id)
+                variant_sum_query = _apply_tenant_filters(
+                    variant_sum_query, ProductVariant, company_id, branch_id
+                )
+                variant_total = (await current_session.exec(variant_sum_query)).one()
+                try:
+                    if Decimal(str(variant_total)) > 0:
+                        return _round_quantity(variant_total, allows_decimal)
+                except (TypeError, ValueError, ArithmeticError):
+                    logger.debug("Variant stock conversion failed for product %s, using product.stock", product.id)
+                return _round_quantity(product.stock, allows_decimal)
+            return Decimal("0")
 
-        batches: list[ProductBatch] = []
-        if batch_query is not None:
-            batch_query = batch_query.where(ProductBatch.stock > 0)
-            batch_query = _apply_tenant_filters(
-                batch_query, ProductBatch, company_id, branch_id
-            )
-            batch_query = batch_query.order_by(
-                ProductBatch.expiration_date.asc(), ProductBatch.id.asc()
-            )
-            batches = (await current_session.exec(batch_query)).all()
-
-        if batches:
-            return _sum_batch_stock(batches, allows_decimal)
-        if variant:
-            return _round_quantity(variant.stock, allows_decimal)
-        if product:
-            variant_sum_query = select(
-                func.coalesce(func.sum(ProductVariant.stock), 0)
-            ).where(ProductVariant.product_id == product.id)
-            variant_sum_query = _apply_tenant_filters(
-                variant_sum_query, ProductVariant, company_id, branch_id
-            )
-            variant_total = (await current_session.exec(variant_sum_query)).one()
-            try:
-                if Decimal(str(variant_total)) > 0:
-                    return _round_quantity(variant_total, allows_decimal)
-            except (TypeError, ValueError, ArithmeticError):
-                logger.debug("Variant stock conversion failed for product %s, using product.stock", product.id)
-            return _round_quantity(product.stock, allows_decimal)
-        return Decimal("0")
-
-    if session is not None:
-        return await _run(session)
-    async with get_session() as current_session:
-        return await _run(current_session)
+        if session is not None:
+            return await _run(session)
+        async with get_session() as current_session:
+            return await _run(current_session)
+    finally:
+        set_tenant_context(None, None)
 
 
 async def _get_price_tier(
@@ -702,7 +724,8 @@ def _deduct_from_batches(
     quantity: Decimal,
     allows_decimal: bool,
 ) -> list[ProductBatch]:
-    remaining = _round_quantity(quantity, allows_decimal)
+    requested = _round_quantity(quantity, allows_decimal)
+    remaining = requested
     used_batches: list[ProductBatch] = []
     for batch in batches:
         if remaining <= 0:
@@ -715,7 +738,17 @@ def _deduct_from_batches(
         remaining = _round_quantity(remaining - deduct, allows_decimal)
         used_batches.append(batch)
     if remaining > 0:
-        raise StockError("Stock insuficiente en lotes para completar la venta.")
+        ref = ""
+        if batches:
+            head = batches[0]
+            if head.product_variant_id:
+                ref = f" variant_id={head.product_variant_id}"
+            elif head.product_id:
+                ref = f" product_id={head.product_id}"
+        raise StockError(
+            f"Stock insuficiente en lotes{ref}: "
+            f"solicitado={requested}, faltante={remaining}."
+        )
     return used_batches
 
 
@@ -731,6 +764,23 @@ class StockError(ValueError):
         args: Mensaje descriptivo del error
     """
     pass
+
+
+class DuplicateSaleError(ValueError):
+    """S1-01: se detectó una venta previa con el mismo ``idempotency_key``.
+
+    El caller debe tratar este error como éxito idempotente (la venta ya
+    fue registrada en un intento anterior) y **no** reintentar. El
+    atributo ``sale_id`` permite referenciar la venta original en la UI
+    (p.ej. mostrar "venta #42 ya registrada").
+
+    Attributes:
+        sale_id: ID de la venta previamente persistida con la misma key.
+    """
+
+    def __init__(self, sale_id: int, message: str | None = None) -> None:
+        super().__init__(message or f"Sale #{sale_id} already exists (idempotent).")
+        self.sale_id = sale_id
 
 
 @dataclass
@@ -1034,6 +1084,58 @@ class SaleService:
         payment_data: PaymentInfoDTO,
         reservation_id: str | None = None,
         currency_symbol: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> SaleProcessResult:
+        """Wrapper público: aísla set/reset del tenant context.
+
+        S1-02: reset explícito en ``finally`` para evitar que el worker
+        reutilizado herede tenant de la request previa ante excepción.
+        La lógica de negocio vive en :meth:`_process_sale_impl`.
+
+        S1-01: ``idempotency_key`` (opcional) previene ventas duplicadas
+        por doble-click/retry. Ante key ya usada, eleva
+        :class:`DuplicateSaleError` con el ``sale_id`` original.
+        """
+        set_tenant_context(company_id, branch_id)
+        try:
+            if session is None:
+                async with get_session() as managed_session:
+                    return await SaleService._process_sale_impl(
+                        managed_session,
+                        user_id,
+                        company_id,
+                        branch_id,
+                        items,
+                        payment_data,
+                        reservation_id,
+                        currency_symbol,
+                        idempotency_key,
+                    )
+            return await SaleService._process_sale_impl(
+                session,
+                user_id,
+                company_id,
+                branch_id,
+                items,
+                payment_data,
+                reservation_id,
+                currency_symbol,
+                idempotency_key,
+            )
+        finally:
+            set_tenant_context(None, None)
+
+    @staticmethod
+    async def _process_sale_impl(
+        session: AsyncSession,
+        user_id: int | None,
+        company_id: int | None,
+        branch_id: int | None,
+        items: list[SaleItemDTO],
+        payment_data: PaymentInfoDTO,
+        reservation_id: str | None = None,
+        currency_symbol: str | None = None,
+        idempotency_key: str | None = None,
     ) -> SaleProcessResult:
         """Procesa una venta completa de forma atómica.
 
@@ -1083,20 +1185,6 @@ class SaleService:
             await session.commit()
             print(f"Venta #{result.sale.id} - Total: {result.sale_total_display}")
         """
-        set_tenant_context(company_id, branch_id)
-        if session is None:
-            async with get_session() as managed_session:
-                return await SaleService.process_sale(
-                    session=managed_session,
-                    user_id=user_id,
-                    company_id=company_id,
-                    branch_id=branch_id,
-                    items=items,
-                    payment_data=payment_data,
-                    reservation_id=reservation_id,
-                    currency_symbol=currency_symbol,
-                )
-
         payment_method = (payment_data.method or "").strip()
         symbol = (currency_symbol or "").strip()
         if symbol:
@@ -1112,6 +1200,22 @@ class SaleService:
         if not branch_id:
             raise ValueError(MSG.SALE_VAL_BRANCH)
         branch_id = int(branch_id)
+
+        # S1-01: lookup idempotente — si ya existe una Sale con esta key en
+        # el mismo tenant, asumir que fue un reintento exitoso previo y
+        # elevar DuplicateSaleError (el caller lo trata como éxito UI).
+        # Why: un doble-click/retry crearía DOS ventas completas sin esto.
+        idem_key = (idempotency_key or "").strip() or None
+        if idem_key:
+            existing_sale = (
+                await session.exec(
+                    select(Sale)
+                    .where(Sale.company_id == company_id)
+                    .where(Sale.idempotency_key == idem_key)
+                )
+            ).first()
+            if existing_sale:
+                raise DuplicateSaleError(existing_sale.id)
 
         all_methods = (
             await session.exec(
@@ -1547,6 +1651,11 @@ class SaleService:
         initial_payment = _round_money(payment_data.initial_payment)
         if initial_payment < 0:
             raise ValueError(MSG.SALE_VAL_INVALID_INITIAL)
+        # S1-06: rechazar inicial mayor al total de la venta.
+        # Why: evita cobrar excedente sin reembolso → descuadre de caja + confusión
+        #      contable (SaleInstallment con monto negativo imposible de conciliar).
+        if initial_payment > sale_total:
+            raise ValueError(MSG.SALE_VAL_INVALID_INITIAL)
         initial_payment_input = initial_payment
 
         kind = (payment_data.method_kind or "other").strip().lower()
@@ -1587,6 +1696,21 @@ class SaleService:
                 )
                 raise ValueError(message)
         else:
+            # S1-04: card/wallet/other no-crédito — el DTO no expone monto del
+            # proveedor (tarjeta/wallet autorizados externamente), pero sí
+            # exigimos identificación mínima del método para evitar marcar
+            # Sale=completed con un DTO vacío que pase como "other".
+            # Why: frontend malformado → venta fantasma sin trazabilidad.
+            if not is_credit:
+                if kind == "card" and not (payment_data.card.type or "").strip():
+                    raise ValueError(MSG.SALE_VAL_PAYMENT_METHOD)
+                if kind == "wallet" and not (
+                    (payment_data.wallet.provider or "").strip()
+                    or (payment_data.wallet.choice or "").strip()
+                ):
+                    raise ValueError(MSG.SALE_VAL_PAYMENT_METHOD)
+                if kind not in {"cash", "card", "wallet", "mixed"}:
+                    raise ValueError(MSG.SALE_VAL_PAYMENT_METHOD)
             if is_credit:
                 total_paid_now = _round_money(initial_payment)
             else:
@@ -1599,10 +1723,15 @@ class SaleService:
         ):
             total_paid_now = initial_payment_input
 
-        if is_credit and kind in {"cash", "mixed"} and initial_payment_input <= Decimal(
-            "0.00"
-        ):
-            initial_payment = total_paid_now
+        # S1-03: el inicial (que alimenta ``cashbox_amount``) no puede exceder
+        # el efectivo/mixto realmente recibido; de lo contrario la caja queda
+        # con un ingreso fantasma (registra 100 pero solo entraron 10).
+        # Why: cajas descuadradas vs. arqueo físico, difícil de detectar.
+        if is_credit and kind in {"cash", "mixed"}:
+            if initial_payment_input <= Decimal("0.00"):
+                initial_payment = total_paid_now
+            elif initial_payment_input > total_paid_now:
+                initial_payment = total_paid_now
 
         sale_payment_label = payment_method
         if is_credit:
@@ -1647,6 +1776,7 @@ class SaleService:
                 company_id=company_id,
                 branch_id=branch_id,
                 user_id=user_id,
+                idempotency_key=idem_key,  # S1-01
             )
             if hasattr(Sale, "payment_method"):
                 new_sale.payment_method = sale_payment_label
@@ -1654,7 +1784,24 @@ class SaleService:
                 new_sale.payment_condition = "credito"
                 new_sale.client_id = client.id
             session.add(new_sale)
-            await session.flush()
+            try:
+                await session.flush()
+            except IntegrityError as exc:
+                # S1-01: race — otro worker insertó la misma key entre el
+                # lookup y el flush. Refrescamos la existente y elevamos
+                # DuplicateSaleError en lugar de crear una venta fantasma.
+                if idem_key:
+                    await session.rollback()
+                    existing_sale = (
+                        await session.exec(
+                            select(Sale)
+                            .where(Sale.company_id == company_id)
+                            .where(Sale.idempotency_key == idem_key)
+                        )
+                    ).first()
+                    if existing_sale:
+                        raise DuplicateSaleError(existing_sale.id) from exc
+                raise
             await session.refresh(new_sale)
 
             paid_now_total = sale_total
@@ -1685,7 +1832,9 @@ class SaleService:
 
             cashbox_amount = paid_now_total
             if is_credit and initial_payment_input > Decimal("0.00"):
-                cashbox_amount = initial_payment_input
+                # S1-03: el registro de caja nunca puede superar el efectivo
+                # físicamente recibido (paid_now_total).
+                cashbox_amount = min(initial_payment_input, paid_now_total)
 
             if cashbox_amount > 0:
                 cashbox_method_id = None
@@ -1884,6 +2033,11 @@ class SaleService:
                 session.add(sale_item)
 
             if products_to_recalculate:
+                # S1-05: flush explícito para que el SUM agregado lea los
+                # valores de variant.stock recién mutados (no depender de
+                # autoflush; bajo drivers async su comportamiento difiere).
+                # Why: sin esto, product.stock queda con el stock PRE-venta.
+                await session.flush()
                 for product_id in products_to_recalculate:
                     total_query = select(
                         func.coalesce(func.sum(ProductVariant.stock), 0)

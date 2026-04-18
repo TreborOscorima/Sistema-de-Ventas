@@ -1,0 +1,39 @@
+#twk-global-icon-tooltip {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    background: #0f172a;
+    color: #ffffff;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    box-shadow: 0 14px 28px rgba(15, 23, 42, 0.35);
+    opacity: 0;
+    transform: translate3d(-9999px, -9999px, 0) scale(0.96);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+#twk-global-icon-tooltip[data-show="true"] {
+    opacity: 1;
+}
+#twk-global-icon-tooltip::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+}
+#twk-global-icon-tooltip[data-placement="top"]::after {
+    bottom: -5px;
+    border-width: 5px 5px 0 5px;
+    border-style: solid;
+    border-color: #0f172a transparent transparent transparent;
+}
+#twk-global-icon-tooltip[data-placement="bottom"]::after {
+    top: -5px;
+    border-width: 0 5px 5px 5px;
+    border-style: solid;
+    border-color: transparent transparent #0f172a transparent;
+}

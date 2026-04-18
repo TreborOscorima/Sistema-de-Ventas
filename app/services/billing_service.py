@@ -26,6 +26,7 @@ from __future__ import annotations
 import abc
 import json
 import logging
+import re
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -40,7 +41,7 @@ from app.models.sales import Sale, SaleItem
 from app.utils.crypto import decrypt_text
 from app.utils.db import get_async_session
 from app.utils.fiscal_validators import VALID_ENVIRONMENTS, validate_cuit
-from app.utils.tenant import set_tenant_context
+from app.utils.tenant import set_tenant_context, tenant_context
 from app.utils.timezone import utc_now_naive
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,20 @@ logger = logging.getLogger(__name__)
 MAX_RETRY_ATTEMPTS = 3
 NUBEFACT_TIMEOUT_SECONDS = 30
 AFIP_TIMEOUT_SECONDS = 15
+
+# Sanitiza credenciales Nubefact en mensajes de excepción antes de persistirlos
+# en ``FiscalDocument.fiscal_errors`` (visible en UI de reintentos → defensa
+# contra leak cross-tenant si un admin accede al historial).
+_TOKEN_RE = re.compile(r'token\s*=\s*"[^"]*"', re.IGNORECASE)
+_BEARER_RE = re.compile(r'(Authorization[^,}]*?)(?:Bearer|Token)\s+\S+', re.IGNORECASE)
+
+
+def _sanitize_exc(exc: Exception, limit: int = 500) -> str:
+    """Elimina tokens/credenciales del ``str(exc)`` antes de persistir."""
+    msg = str(exc)
+    msg = _TOKEN_RE.sub('token="***"', msg)
+    msg = _BEARER_RE.sub(r'\1***', msg)
+    return msg[:limit]
 
 # Límites de facturación por tipo de plan
 PLAN_BILLING_LIMITS: dict[str, int] = {
@@ -129,13 +144,33 @@ async def sync_afip_last_authorized(config: "CompanyBillingConfig") -> dict:
     factura_prev = config.current_sequence_factura or 0
     boleta_prev = config.current_sequence_boleta or 0
 
+    # Validar environment contra whitelist antes de autenticar
+    environment = (config.environment or "sandbox").strip().lower()
+    if environment not in VALID_ENVIRONMENTS:
+        logger.error(
+            "sync_afip_last_authorized: environment inválido company_id=%s: %s",
+            config.company_id, environment,
+        )
+        return {
+            "synced": False,
+            "fatal": (
+                f"Entorno '{environment}' no válido. "
+                f"Permitidos: {', '.join(sorted(VALID_ENVIRONMENTS))}."
+            ),
+            "errors": [],
+            "factura_afip": 0,
+            "boleta_afip": 0,
+            "factura_prev": factura_prev,
+            "boleta_prev": boleta_prev,
+        }
+
     # Autenticar con WSAA
     try:
         creds = await authenticate(
             company_id=config.company_id,
             certificate_encrypted=config.encrypted_certificate,
             private_key_encrypted=config.encrypted_private_key,
-            environment=config.environment or "sandbox",
+            environment=environment,
             service="wsfe",
         )
     except Exception as exc:
@@ -153,15 +188,27 @@ async def sync_afip_last_authorized(config: "CompanyBillingConfig") -> dict:
             "boleta_prev": boleta_prev,
         }
 
-    # Parsear CUIT como int (eliminar guiones / espacios)
+    # B1-04: Validar CUIT con dígito verificador antes de consultar AFIP.
+    # Un CUIT=0 sólo generaría rechazos confusos en FECompUltimoAutorizado.
     raw_cuit = "".join(ch for ch in (config.afip_tax_id or "") if ch.isdigit())
-    try:
-        cuit_int = int(raw_cuit)
-    except ValueError:
-        cuit_int = 0
+    cuit_ok, cuit_err = validate_cuit(raw_cuit)
+    if not cuit_ok:
+        logger.error(
+            "sync_afip_last_authorized: CUIT inválido company_id=%s: %s",
+            config.company_id, cuit_err,
+        )
+        return {
+            "synced": False,
+            "fatal": f"CUIT inválido: {cuit_err}",
+            "errors": [],
+            "factura_afip": 0,
+            "boleta_afip": 0,
+            "factura_prev": factura_prev,
+            "boleta_prev": boleta_prev,
+        }
+    cuit_int = int(raw_cuit)
 
     punto_venta = config.afip_punto_venta or 1
-    environment = config.environment or "sandbox"
 
     errors: list[str] = []
     nro_tipo_1 = 0
@@ -473,7 +520,7 @@ class SUNATBillingStrategy(BillingStrategy):
             fiscal_doc.fiscal_status = FiscalStatus.error
             fiscal_doc.fiscal_errors = json.dumps({
                 "error": type(exc).__name__,
-                "detail": str(exc)[:500],
+                "detail": _sanitize_exc(exc),
             })
             logger.exception("SUNAT: error inesperado | sale_id=%s", sale.id)
 
@@ -772,7 +819,7 @@ class AFIPBillingStrategy(BillingStrategy):
         except ValueError as exc:
             fiscal_doc.fiscal_status = FiscalStatus.error
             fiscal_doc.fiscal_errors = json.dumps({
-                "error": f"Error de autenticación WSAA: {exc}",
+                "error": f"Error de autenticación WSAA: {_sanitize_exc(exc)}",
                 "tipo": "wsaa_auth",
             })
             logger.error(
@@ -783,7 +830,7 @@ class AFIPBillingStrategy(BillingStrategy):
         except ConnectionError as exc:
             fiscal_doc.fiscal_status = FiscalStatus.error
             fiscal_doc.fiscal_errors = json.dumps({
-                "error": f"No se pudo conectar a WSAA: {exc}",
+                "error": f"No se pudo conectar a WSAA: {_sanitize_exc(exc)}",
                 "tipo": "wsaa_connection",
             })
             logger.error(
@@ -879,7 +926,7 @@ class AFIPBillingStrategy(BillingStrategy):
         except Exception as exc:
             fiscal_doc.fiscal_status = FiscalStatus.error
             fiscal_doc.fiscal_errors = json.dumps({
-                "error": f"Error en FECAESolicitar: {exc}",
+                "error": f"Error en FECAESolicitar: {_sanitize_exc(exc)}",
                 "tipo": "wsfe_exception",
             })
             logger.exception(
@@ -1141,22 +1188,37 @@ async def emit_fiscal_document(
 
     try:
         async with get_async_session() as session:
-            # 0. Idempotencia: checar por sale_id + receipt_type
-            #    (una venta puede tener una factura Y una nota_credito)
-            existing = (
-                await session.exec(
-                    select(FiscalDocument)
-                    .where(FiscalDocument.company_id == company_id)
-                    .where(FiscalDocument.sale_id == sale_id)
-                    .where(FiscalDocument.receipt_type == effective_receipt_type)
-                )
-            ).first()
+            # 0. Idempotencia granular:
+            #    - Factura/Boleta: una sola por venta (por tipo).
+            #    - NC/ND: una por (venta, tipo, original_fiscal_doc_id).
+            #      Distintas NC sobre la misma venta pero distinto doc
+            #      original son emisiones válidas y no deben deduplicarse.
+            idem_q = (
+                select(FiscalDocument)
+                .where(FiscalDocument.company_id == company_id)
+                .where(FiscalDocument.sale_id == sale_id)
+                .where(FiscalDocument.receipt_type == effective_receipt_type)
+            )
+            if effective_receipt_type == ReceiptType.nota_credito:
+                if original_fiscal_doc_id is not None:
+                    idem_q = idem_q.where(
+                        FiscalDocument.original_fiscal_doc_id
+                        == original_fiscal_doc_id
+                    )
+                else:
+                    # Sin original_fiscal_doc_id no se puede desambiguar;
+                    # comportamiento legacy: retornar existente si la hay.
+                    idem_q = idem_q.where(
+                        FiscalDocument.original_fiscal_doc_id.is_(None)
+                    )
+            existing = (await session.exec(idem_q)).first()
             if existing is not None:
                 logger.info(
-                    "FiscalDocument tipo=%s ya existe para sale_id=%s (status=%s), "
-                    "omitiendo emisión duplicada",
+                    "FiscalDocument tipo=%s ya existe para sale_id=%s "
+                    "(original=%s, status=%s), omitiendo emisión duplicada",
                     effective_receipt_type,
                     sale_id,
+                    original_fiscal_doc_id,
                     existing.fiscal_status,
                 )
                 return existing
@@ -1230,19 +1292,30 @@ async def emit_fiscal_document(
             config.current_billing_count += 1
             config.updated_at = utc_now_naive()
 
-            # 5. Cargar la venta y sus ítems
+            # 5. Cargar la venta y sus ítems — filtrado estricto por tenant
+            #    para evitar emisión cross-tenant si el caller envía
+            #    sale_id de otra empresa junto con su propio company_id.
             sale = (
                 await session.exec(
-                    select(Sale).where(Sale.id == sale_id)
+                    select(Sale)
+                    .where(Sale.id == sale_id)
+                    .where(Sale.company_id == company_id)
+                    .where(Sale.branch_id == branch_id)
                 )
             ).first()
             if sale is None:
-                logger.error("Sale id=%s no encontrada", sale_id)
+                logger.error(
+                    "Sale id=%s no encontrada o no pertenece al tenant "
+                    "(company_id=%s, branch_id=%s)",
+                    sale_id, company_id, branch_id,
+                )
                 return None
 
             items = (
                 await session.exec(
-                    select(SaleItem).where(SaleItem.sale_id == sale_id)
+                    select(SaleItem)
+                    .where(SaleItem.sale_id == sale_id)
+                    .where(SaleItem.company_id == company_id)
                 )
             ).all()
 
@@ -1279,6 +1352,12 @@ async def emit_fiscal_document(
                 tax_amount=tax,
                 total_amount=total,
                 fiscal_errors=_fiscal_errors_pre,
+                original_fiscal_doc_id=(
+                    original_fiscal_doc_id
+                    if effective_receipt_type
+                    in (ReceiptType.nota_credito, ReceiptType.nota_debito)
+                    else None
+                ),
             )
             session.add(fiscal_doc)
 
@@ -1324,20 +1403,41 @@ async def emit_fiscal_document(
             "Error crítico en emit_fiscal_document | sale_id=%s",
             sale_id,
         )
-        # Intentar persistir el error en una sesión nueva
+        # B1-01: Si ya existe una fila parcialmente persistida (commit
+        # de numeración en L~1287 ya pasó), actualizamos esa fila en lugar
+        # de crear una nueva huérfana sin serie/número — evita duplicados
+        # y preserva la numeración ya consumida para retry posterior.
         try:
             async with get_async_session() as err_session:
                 set_tenant_context(company_id, branch_id)
+                existing = (
+                    await err_session.exec(
+                        select(FiscalDocument)
+                        .where(FiscalDocument.sale_id == sale_id)
+                        .where(
+                            FiscalDocument.receipt_type
+                            == effective_receipt_type
+                        )
+                    )
+                ).first()
+                error_payload = json.dumps({
+                    "error": type(exc).__name__,
+                    "detail": _sanitize_exc(exc),
+                })
+                if existing is not None:
+                    existing.fiscal_status = FiscalStatus.error
+                    existing.fiscal_errors = error_payload
+                    err_session.add(existing)
+                    await err_session.commit()
+                    return existing
+                # Sólo crear nueva si NO hubo commit parcial previo
                 fiscal_doc = FiscalDocument(
                     company_id=company_id,
                     branch_id=branch_id,
                     sale_id=sale_id,
                     receipt_type=effective_receipt_type,
                     fiscal_status=FiscalStatus.error,
-                    fiscal_errors=json.dumps({
-                        "error": type(exc).__name__,
-                        "detail": str(exc)[:500],
-                    }),
+                    fiscal_errors=error_payload,
                 )
                 err_session.add(fiscal_doc)
                 await err_session.commit()
@@ -1348,6 +1448,10 @@ async def emit_fiscal_document(
                 sale_id,
             )
             return None
+    finally:
+        # B1-10: reset de ContextVar para no contaminar tareas posteriores
+        # en el mismo event loop (fiscal_retry_worker batch).
+        set_tenant_context(None, None)
 
 
 async def retry_fiscal_document(
@@ -1372,11 +1476,14 @@ async def retry_fiscal_document(
 
     try:
         async with get_async_session() as session:
+            # FOR UPDATE serializa retries concurrentes (worker + manual)
+            # evitando doble envío HTTP a la autoridad fiscal.
             fiscal_doc = (
                 await session.exec(
                     select(FiscalDocument)
                     .where(FiscalDocument.id == fiscal_doc_id)
                     .where(FiscalDocument.company_id == company_id)
+                    .with_for_update()
                 )
             ).first()
 
@@ -1388,7 +1495,8 @@ async def retry_fiscal_document(
                 )
                 return None
 
-            # Solo reintentar error o pending
+            # Solo reintentar error o pending — re-chequeo tras el lock,
+            # otro retry pudo haber promovido el estado a authorized/rejected.
             if fiscal_doc.fiscal_status not in (
                 FiscalStatus.error,
                 FiscalStatus.pending,
@@ -1425,23 +1533,29 @@ async def retry_fiscal_document(
                 await session.commit()
                 return fiscal_doc
 
-            # Cargar venta e ítems
+            # Cargar venta e ítems con filtro tenant (defense-in-depth
+            # aunque fiscal_doc ya fue filtrado por company_id arriba).
             sale = (
                 await session.exec(
-                    select(Sale).where(Sale.id == fiscal_doc.sale_id)
+                    select(Sale)
+                    .where(Sale.id == fiscal_doc.sale_id)
+                    .where(Sale.company_id == company_id)
+                    .where(Sale.branch_id == branch_id)
                 )
             ).first()
 
             if sale is None:
                 logger.error(
-                    "retry: Sale id=%s no encontrada",
+                    "retry: Sale id=%s no encontrada en tenant",
                     fiscal_doc.sale_id,
                 )
                 return fiscal_doc
 
             items = (
                 await session.exec(
-                    select(SaleItem).where(SaleItem.sale_id == sale.id)
+                    select(SaleItem)
+                    .where(SaleItem.sale_id == sale.id)
+                    .where(SaleItem.company_id == company_id)
                 )
             ).all()
 
@@ -1481,3 +1595,7 @@ async def retry_fiscal_document(
             fiscal_doc_id,
         )
         return None
+    finally:
+        # B1-10: reset tenant ContextVar — worker procesa múltiples docs
+        # en el mismo event loop.
+        set_tenant_context(None, None)

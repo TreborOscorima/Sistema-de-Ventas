@@ -38,6 +38,10 @@ from app.states.auth_state import (
 )
 from app.utils.db import AsyncSessionLocal, get_async_session
 from app.utils.db_seeds import init_payment_methods
+from app.utils.tenant import tenant_bypass
+from app.utils.logger import get_logger
+
+_logger = get_logger("State")
 
 APP_SURFACE: str = (os.getenv("APP_SURFACE") or "all").strip().lower()
 if APP_SURFACE not in {"all", "landing", "app", "owner"}:
@@ -412,14 +416,41 @@ class State(RootState):
     # ------------------------------------------------------------------
 
     def _check_auth_and_privilege(self, privilege_key: str, deny_msg: str):
-        """Retorna eventos de redirección si el acceso es denegado, sino None."""
+        """Compat histórica: wrapper sobre _page_guard."""
+        return self._page_guard(privilege_key=privilege_key, deny_msg=deny_msg)
+
+    def _page_guard(
+        self,
+        *,
+        privilege_key: str | None = None,
+        plan_block: str | None = None,
+        require_roles: tuple[str, ...] | None = None,
+        extra_check: bool = True,
+        deny_msg: str = "Acceso denegado.",
+    ):
+        """
+        Guard unificado para on_load de páginas privadas.
+
+        Retorna lista de eventos a despachar si se deniega acceso, o None si el
+        acceso es permitido.
+
+        - `privilege_key`: clave en `current_user["privileges"]` que debe ser truthy.
+        - `plan_block`: plan que NO puede acceder (p.ej. "standard"). Se compara lowercase.
+        - `require_roles`: roles permitidos; si el rol del usuario no está, deniega.
+        - `extra_check`: condición adicional pre-evaluada por el caller (p.ej. feature flag).
+        """
         if not self.is_authenticated:
             return [rx.redirect("/")]
-        if not self.current_user["privileges"].get(privilege_key):
-            return [
-                rx.toast(deny_msg, duration=3000),
-                rx.redirect("/dashboard"),
-            ]
+        if plan_block:
+            plan = (self.plan_actual or "").strip().lower()
+            if plan == plan_block:
+                return [rx.toast(deny_msg, duration=3000), rx.redirect("/dashboard")]
+        if require_roles and self.current_user["role"] not in require_roles:
+            return [rx.toast(deny_msg, duration=3000), rx.redirect("/dashboard")]
+        if privilege_key and not self.current_user["privileges"].get(privilege_key):
+            return [rx.toast(deny_msg, duration=3000), rx.redirect("/dashboard")]
+        if not extra_check:
+            return [rx.toast(deny_msg, duration=3000), rx.redirect("/dashboard")]
         return None
 
     @rx.event
@@ -460,26 +491,24 @@ class State(RootState):
 
     @rx.event
     async def page_init_compras(self):
-        """on_load para /compras. Verifica privilegio view_compras y carga proveedores."""
+        """on_load para /compras. Verifica privilegio view_compras|view_ingresos y carga proveedores."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        if not self.is_authenticated:
-            yield rx.redirect("/")
-            return
-        privileges = self.current_user["privileges"]
-        if not (privileges.get("view_compras") or privileges.get("view_ingresos")):
-            yield rx.toast(
-                "Acceso denegado: No tienes permiso para ver Compras.",
-                duration=3000,
-            )
-            yield rx.redirect("/dashboard")
+        # Privilegio compuesto: basta con tener compras o ingresos.
+        privileges = self.current_user["privileges"] if self.is_authenticated else {}
+        has_access = privileges.get("view_compras") or privileges.get("view_ingresos")
+        denied = self._page_guard(
+            extra_check=bool(has_access),
+            deny_msg="Acceso denegado: No tienes permiso para ver Compras.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
             return
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
-        # Enviar delta parcial (la UI renderiza la página de inmediato)
         yield
-        # Cargar proveedores en background (no bloquea event loop)
         yield State.bg_load_suppliers
 
     @rx.event
@@ -536,22 +565,18 @@ class State(RootState):
         """on_load para /clientes. Verifica plan y privilegio view_clientes."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        if not self.is_authenticated:
-            yield rx.redirect("/")
-            return
-        # can_view_clientes inline: plan != standard + privilege
-        plan = (self.plan_actual or "").strip().lower()
-        if plan == "standard" or not self.current_user["privileges"].get("view_clientes"):
-            yield rx.toast(
-                "Acceso denegado: No tienes permiso para ver Clientes.",
-                duration=3000,
-            )
-            yield rx.redirect("/dashboard")
+        denied = self._page_guard(
+            privilege_key="view_clientes",
+            plan_block="standard",
+            deny_msg="Acceso denegado: No tienes permiso para ver Clientes.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
             return
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
-        # Delta parcial: renderiza la UI de inmediato
         yield
 
     @rx.event
@@ -559,21 +584,18 @@ class State(RootState):
         """on_load para /cuentas. Verifica plan y privilegio view_cuentas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        if not self.is_authenticated:
-            yield rx.redirect("/")
-            return
-        plan = (self.plan_actual or "").strip().lower()
-        if plan == "standard" or not self.current_user["privileges"].get("view_cuentas"):
-            yield rx.toast(
-                "Acceso denegado: No tienes permiso para ver Cuentas.",
-                duration=3000,
-            )
-            yield rx.redirect("/dashboard")
+        denied = self._page_guard(
+            privilege_key="view_cuentas",
+            plan_block="standard",
+            deny_msg="Acceso denegado: No tienes permiso para ver Cuentas.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
             return
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
-        # Delta parcial: renderiza la UI de inmediato
         yield
 
     @rx.event
@@ -638,26 +660,20 @@ class State(RootState):
         """on_load para /servicios. Verifica plan, privilegio view_servicios y reservas habilitadas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        if not self.is_authenticated:
-            yield rx.redirect("/")
-            return
-        # can_view_servicios inline
-        plan = (self.plan_actual or "").strip().lower()
-        has_privilege = self.current_user["privileges"].get("view_servicios")
-        has_reservations = self.company_has_reservations
-        if plan == "standard" or not (has_privilege and has_reservations):
-            yield rx.toast(
-                "Acceso denegado: No tienes permiso para ver Servicios.",
-                duration=3000,
-            )
-            yield rx.redirect("/dashboard")
+        denied = self._page_guard(
+            privilege_key="view_servicios",
+            plan_block="standard",
+            extra_check=bool(self.company_has_reservations),
+            deny_msg="Acceso denegado: No tienes permiso para ver Servicios.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
             return
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
-        # Enviar delta parcial (UI renderiza estructura de servicios)
         yield
-        # Cargar reservaciones en background (no bloquea event loop)
         yield State.bg_load_reservations
 
     @rx.event
@@ -665,22 +681,18 @@ class State(RootState):
         """on_load para /configuracion. Requiere rol Administrador o Superadmin."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        if not self.is_authenticated:
-            yield rx.redirect("/")
-            return
-        if self.current_user["role"] not in ["Superadmin", "Administrador"]:
-            yield rx.toast(
-                "Acceso denegado: Se requiere nivel de Administrador.",
-                duration=3000,
-            )
-            yield rx.redirect("/dashboard")
+        denied = self._page_guard(
+            require_roles=("Superadmin", "Administrador"),
+            deny_msg="Acceso denegado: Se requiere nivel de Administrador.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
             return
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
-        # Enviar delta parcial (UI renderiza estructura de config)
         yield
-        # Cargar usuarios en background (no bloquea event loop)
         yield State.bg_load_users
 
     @rx.event
@@ -721,9 +733,8 @@ class State(RootState):
         self.owner_loading = True
         yield
         try:
+            from app.services.owner_service import OwnerService
             async with AsyncSessionLocal() as session:
-                from app.utils.tenant import tenant_bypass
-                from app.services.owner_service import OwnerService
                 with tenant_bypass():
                     items, total = await OwnerService.list_companies(
                         session,
@@ -733,9 +744,8 @@ class State(RootState):
                     )
                 self.owner_companies = items
                 self.owner_companies_total = total
-        except Exception as e:
-            import logging
-            logging.getLogger("State").error(f"Error cargando empresas en page_init_owner: {e}")
+        except Exception:
+            _logger.exception("Error cargando empresas en page_init_owner")
         finally:
             self.owner_loading = False
         yield

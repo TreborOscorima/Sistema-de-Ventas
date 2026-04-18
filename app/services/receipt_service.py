@@ -42,8 +42,35 @@ from decimal import Decimal, ROUND_HALF_UP
 import base64
 import html
 import io
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+
+
+_DATA_URI_RE = re.compile(
+    r"^data:image/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=\s]+$"
+)
+_IMAGE_MAGIC_PREFIXES: tuple[bytes, ...] = (
+    b"\x89PNG\r\n\x1a\n",          # PNG
+    b"\xff\xd8\xff",                # JPEG
+    b"GIF87a",
+    b"GIF89a",
+    b"RIFF",                        # WEBP (RIFF....WEBP)
+)
+
+
+def _is_valid_image_bytes(data: bytes) -> bool:
+    """True si los bytes comienzan con un magic header de imagen conocido."""
+    if not data:
+        return False
+    return any(data.startswith(prefix) for prefix in _IMAGE_MAGIC_PREFIXES)
+
+
+def _is_valid_logo_data_uri(value: str) -> bool:
+    """Valida formato estricto de data URI de imagen base64."""
+    if not value or len(value) > 2_000_000:
+        return False
+    return bool(_DATA_URI_RE.match(value))
 
 from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
@@ -155,18 +182,48 @@ class ReceiptService:
         return left + " " * max(spaces, 1) + right
 
     @staticmethod
+    def _is_path_under(candidate: Path, allowed_roots: list[Path]) -> bool:
+        """Verifica que candidate (resuelto) quede estrictamente bajo algún
+        directorio permitido. Previene path traversal y rutas absolutas
+        controladas por el tenant (exfiltración de archivos del host).
+        """
+        try:
+            resolved = candidate.resolve(strict=False)
+        except Exception:
+            return False
+        for root in allowed_roots:
+            try:
+                resolved.relative_to(root.resolve(strict=False))
+                return True
+            except ValueError:
+                continue
+        return False
+
+    @staticmethod
     def _resolve_logo_assets(
         company_settings: Dict[str, Any], branch_id: int | None
     ) -> Tuple[str | None, bytes | None, str | None]:
         """Resuelve logo desde settings o archivos locales.
 
+        Seguridad:
+            - Paths de disco se aceptan SOLO si resuelven bajo los directorios
+              whitelisted `{root}/assets` o `{root}/.web/public`.
+            - data URIs se validan con regex estricto antes de embeber en HTML.
+            - bytes decodificados de base64 deben tener magic header de imagen.
+
         Returns:
             (logo_path, logo_bytes, logo_data_uri)
         """
         company = company_settings or {}
-        logo_path = None
-        logo_bytes = None
-        logo_data_uri = None
+        root_dir = Path(__file__).resolve().parents[2]
+        allowed_roots = [
+            root_dir / "assets",
+            root_dir / ".web" / "public",
+        ]
+
+        logo_path: str | None = None
+        logo_bytes: bytes | None = None
+        logo_data_uri: str | None = None
 
         raw_logo = (
             company.get("logo_data_uri")
@@ -178,18 +235,32 @@ class ReceiptService:
         if isinstance(raw_logo, str) and raw_logo.strip():
             candidate = raw_logo.strip()
             if candidate.startswith("data:image/"):
-                logo_data_uri = candidate
-            elif Path(candidate).exists():
-                logo_path = candidate
+                if _is_valid_logo_data_uri(candidate):
+                    logo_data_uri = candidate
             else:
+                # Intentar primero como base64 puro (más restrictivo).
+                decoded: bytes | None = None
                 try:
-                    logo_bytes = base64.b64decode(candidate)
-                    logo_data_uri = f"data:image/png;base64,{candidate}"
+                    decoded = base64.b64decode(candidate, validate=True)
                 except Exception:
-                    pass
+                    decoded = None
+                if decoded and _is_valid_image_bytes(decoded):
+                    logo_bytes = decoded
+                    encoded = base64.b64encode(decoded).decode("ascii")
+                    mime = "png" if decoded.startswith(b"\x89PNG") else "jpeg"
+                    logo_data_uri = f"data:image/{mime};base64,{encoded}"
+                else:
+                    # Rama de disco: solo aceptar si cae bajo whitelist.
+                    path_candidate = Path(candidate)
+                    if (
+                        path_candidate.exists()
+                        and ReceiptService._is_path_under(
+                            path_candidate, allowed_roots
+                        )
+                    ):
+                        logo_path = str(path_candidate.resolve())
 
-        if not logo_path and not logo_bytes:
-            root_dir = Path(__file__).resolve().parents[2]
+        if not logo_path and not logo_bytes and not logo_data_uri:
             candidates: list[Path] = []
             if branch_id:
                 candidates.extend(
@@ -211,9 +282,11 @@ class ReceiptService:
                     root_dir / ".web" / "public" / "logo.png",
                 ]
             )
-            for candidate in candidates:
-                if candidate.exists():
-                    logo_path = str(candidate)
+            for candidate_path in candidates:
+                if candidate_path.exists() and ReceiptService._is_path_under(
+                    candidate_path, allowed_roots
+                ):
+                    logo_path = str(candidate_path)
                     break
 
         if logo_path and not logo_data_uri:
@@ -221,10 +294,15 @@ class ReceiptService:
                 suffix = Path(logo_path).suffix.lower().lstrip(".") or "png"
                 mime_type = "png" if suffix not in {"jpg", "jpeg"} else "jpeg"
                 with open(logo_path, "rb") as handle:
-                    encoded = base64.b64encode(handle.read()).decode("ascii")
-                logo_data_uri = f"data:image/{mime_type};base64,{encoded}"
+                    file_bytes = handle.read()
+                if _is_valid_image_bytes(file_bytes):
+                    encoded = base64.b64encode(file_bytes).decode("ascii")
+                    logo_data_uri = f"data:image/{mime_type};base64,{encoded}"
+                else:
+                    logo_path = None
             except Exception:
                 logo_data_uri = None
+                logo_path = None
 
         return logo_path, logo_bytes, logo_data_uri
 
@@ -463,10 +541,13 @@ class ReceiptService:
             company, branch_id
         )
         logo_html = ""
-        if logo_data_uri:
+        if logo_data_uri and _is_valid_logo_data_uri(logo_data_uri):
+            # Escape defensivo de atributo HTML — aun cuando el regex ya
+            # restringe el alfabeto, preferimos defensa en profundidad.
+            safe_uri = html.escape(logo_data_uri, quote=True)
             logo_html = (
-                "<div style='text-align:center;margin-bottom:4px;'>"
-                f"<img src='{logo_data_uri}' style='max-width:100%;height:auto;max-height:80px;'/>"
+                "<div style=\"text-align:center;margin-bottom:4px;\">"
+                f"<img src=\"{safe_uri}\" style=\"max-width:100%;height:auto;max-height:80px;\"/>"
                 "</div>"
             )
 

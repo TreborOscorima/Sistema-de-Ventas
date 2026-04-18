@@ -5,16 +5,20 @@ from decimal import Decimal
 import reflex as rx
 from sqlmodel import Field, Relationship
 import sqlalchemy
-from sqlalchemy import Numeric
+from sqlalchemy import CheckConstraint, Numeric
 from app.utils.timezone import utc_now_naive
+
+from ._mixins import TenantMixin
 
 if TYPE_CHECKING:
     from .auth import User
     from .inventory import Product
 
 
-class Supplier(rx.Model, table=True):
+class Supplier(TenantMixin, rx.Model, table=True):
     """Proveedor de compras."""
+
+    __tablename__ = "supplier"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -25,16 +29,8 @@ class Supplier(rx.Model, table=True):
         ),
     )
 
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
+    __mapper_args__ = {"eager_defaults": True}
+
     name: str = Field(nullable=False, index=True)
     tax_id: str = Field(nullable=False, index=True)
     email: Optional[str] = Field(default=None)
@@ -49,8 +45,10 @@ class Supplier(rx.Model, table=True):
     purchases: List["Purchase"] = Relationship(back_populates="supplier")
 
 
-class Purchase(rx.Model, table=True):
+class Purchase(TenantMixin, rx.Model, table=True):
     """Documento de compra (boleta/factura)."""
+
+    __tablename__ = "purchase"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -80,9 +78,11 @@ class Purchase(rx.Model, table=True):
         ),
     )
 
-    doc_type: str = Field(nullable=False, index=True)
-    series: str = Field(default="", index=True, nullable=False)
-    number: str = Field(nullable=False, index=True)
+    __mapper_args__ = {"eager_defaults": True}
+
+    doc_type: str = Field(nullable=False)
+    series: str = Field(default="", nullable=False)
+    number: str = Field(nullable=False)
     issue_date: datetime = Field(
         sa_column=sqlalchemy.Column(
             sqlalchemy.DateTime(timezone=False),
@@ -96,16 +96,6 @@ class Purchase(rx.Model, table=True):
     currency_code: str = Field(default="PEN", index=True, nullable=False)
     notes: str = Field(default="", nullable=False)
 
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
     supplier_id: int = Field(foreign_key="supplier.id", index=True)
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(
@@ -114,26 +104,42 @@ class Purchase(rx.Model, table=True):
     )
 
     supplier: "Supplier" = Relationship(back_populates="purchases")
-    items: List["PurchaseItem"] = Relationship(back_populates="purchase")
+    items: List["PurchaseItem"] = Relationship(
+        back_populates="purchase",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
     user: Optional["User"] = Relationship()
 
 
-class PurchaseItem(rx.Model, table=True):
+class PurchaseItem(TenantMixin, rx.Model, table=True):
     """Detalle de compra."""
 
-    purchase_id: int = Field(foreign_key="purchase.id", index=True)
+    __tablename__ = "purchaseitem"
+
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_purchaseitem_quantity_positive"),
+        CheckConstraint("unit_cost >= 0", name="ck_purchaseitem_unit_cost_nonneg"),
+        CheckConstraint("subtotal >= 0", name="ck_purchaseitem_subtotal_nonneg"),
+    )
+
+    # CASCADE: al borrar la Purchase parent, sus items se van con ella.
+    purchase_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("purchase.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    # SET NULL: preservamos el histórico aun si se borra el producto.
     product_id: Optional[int] = Field(
-        default=None, foreign_key="product.id", index=True
-    )
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
     )
 
     description_snapshot: str = Field(default="")
@@ -174,12 +180,14 @@ class PurchaseOrderStatus:
     ALL = (DRAFT, SENT, RECEIVED, CANCELLED)
 
 
-class PurchaseOrder(rx.Model, table=True):
+class PurchaseOrder(TenantMixin, rx.Model, table=True):
     """Orden de compra sugerida o enviada al proveedor.
 
     Distinta de Purchase (que representa el documento fiscal ya recibido).
     Una PurchaseOrder en estado 'received' se convierte en Purchase real.
     """
+
+    __tablename__ = "purchaseorder"
 
     __table_args__ = (
         sqlalchemy.Index(
@@ -194,16 +202,6 @@ class PurchaseOrder(rx.Model, table=True):
         ),
     )
 
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
     supplier_id: int = Field(foreign_key="supplier.id", index=True, nullable=False)
     status: str = Field(
         default=PurchaseOrderStatus.DRAFT,
@@ -240,35 +238,40 @@ class PurchaseOrder(rx.Model, table=True):
     )
 
 
-class PurchaseOrderItem(rx.Model, table=True):
+class PurchaseOrderItem(TenantMixin, rx.Model, table=True):
     """Ítem individual sugerido dentro de una PurchaseOrder."""
+
+    __tablename__ = "purchaseorderitem"
 
     __table_args__ = (
         sqlalchemy.Index(
             "ix_poitem_order",
             "purchase_order_id",
         ),
+        CheckConstraint(
+            "suggested_quantity >= 0",
+            name="ck_poitem_suggested_quantity_nonneg",
+        ),
+        CheckConstraint("unit_cost >= 0", name="ck_poitem_unit_cost_nonneg"),
     )
 
+    # CASCADE: los ítems sugeridos mueren con la orden padre.
     purchase_order_id: int = Field(
-        foreign_key="purchaseorder.id",
-        index=True,
-        nullable=False,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("purchaseorder.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
     )
     product_id: Optional[int] = Field(
         default=None,
-        foreign_key="product.id",
-        index=True,
-    )
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
     )
 
     description_snapshot: str = Field(default="")

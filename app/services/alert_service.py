@@ -9,6 +9,7 @@ Proporciona funcionalidades para detectar y notificar:
 from __future__ import annotations
 
 import logging
+from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -32,7 +33,7 @@ from app.models import (
 from app.enums import SaleStatus
 from app.i18n import MSG
 from app.utils.formatting import format_currency
-from app.utils.tenant import set_tenant_context
+from app.utils.tenant import tenant_context
 
 
 class AlertType(str, Enum):
@@ -96,21 +97,41 @@ def _require_tenant(company_id: int | None, branch_id: int | None) -> None:
         raise ValueError("branch_id requerido para alertas.")
 
 
+def _alert_scope(stack: ExitStack, company_id: int, branch_id: int, external):
+    """Devuelve una session usable bajo el scope de tenant correcto.
+
+    A1-03: cuando ``external`` viene (``get_all_alerts``), reutiliza esa
+    sesión y asume que el caller ya abrió ``tenant_context``. En caso
+    contrario, abre un ``tenant_context`` + ``rx.session()`` propios
+    registrados en el ``ExitStack`` para cierre ordenado.
+    """
+    if external is not None:
+        return external
+    stack.enter_context(tenant_context(company_id, branch_id))
+    return stack.enter_context(rx.session())
+
+
 def get_low_stock_alerts(
     company_id: int | None = None,
     branch_id: int | None = None,
+    *,
+    _session=None,
 ) -> List[Alert]:
     """
     Obtiene alertas de productos con stock bajo.
-    
+
+    ``_session`` (interno): permite a ``get_all_alerts`` compartir una
+    única conexión/contexto de tenant entre las 4 consultas de alertas
+    (A1-03). Callers externos no deben pasarlo.
+
     Returns:
         Lista de alertas de stock
     """
     _require_tenant(company_id, branch_id)
-    set_tenant_context(company_id, branch_id)
     alerts = []
-    
-    with rx.session() as session:
+
+    with ExitStack() as stack:
+        session = _alert_scope(stack, company_id, branch_id, _session)
         # Umbral crítico dinámico por producto: max(min_stock_alert * 0.3, STOCK_CRITICAL_FLOOR)
         critical_threshold_expr = func.greatest(
             Product.min_stock_alert * STOCK_CRITICAL_FRACTION,
@@ -216,15 +237,18 @@ def get_installment_alerts(
     branch_id: int | None = None,
     country_code: str | None = None,
     timezone: str | None = None,
+    *,
+    _session=None,
 ) -> List[Alert]:
     """
     Obtiene alertas de cuotas próximas a vencer o vencidas.
-    
+
+    ``_session`` (interno): ver :func:`get_low_stock_alerts`.
+
     Returns:
         Lista de alertas de cuotas
     """
     _require_tenant(company_id, branch_id)
-    set_tenant_context(company_id, branch_id)
     alerts = []
     today, _ = local_day_bounds_utc_naive(
         None,
@@ -232,53 +256,38 @@ def get_installment_alerts(
         timezone=timezone,
     )
     due_threshold = today + timedelta(days=INSTALLMENT_DUE_DAYS)
-    
-    with rx.session() as session:
-        # Cuotas vencidas (no pagadas y fecha pasada)
-        overdue_query = (
-            select(func.count())
+
+    # A1-02: COUNT + SUM con el mismo WHERE en una única query por ventana.
+    # Antes: 4 queries (2 count + 2 sum condicionadas); ahora: 2 queries.
+    pending_amount = SaleInstallment.amount - SaleInstallment.paid_amount
+    pending_status = func.lower(SaleInstallment.status).not_in(
+        ["paid", "completed"]
+    )
+
+    with ExitStack() as stack:
+        session = _alert_scope(stack, company_id, branch_id, _session)
+
+        # Cuotas vencidas (no pagadas y fecha pasada) — count+sum en una query
+        overdue_stmt = (
+            select(
+                func.count().label("cnt"),
+                func.coalesce(func.sum(pending_amount), 0).label("amt"),
+            )
             .select_from(SaleInstallment)
             .join(Sale)
-            .where(
-                and_(
-                    func.lower(SaleInstallment.status).not_in(
-                        ["paid", "completed"]
-                    ),
-                    SaleInstallment.due_date < today,
-                )
-            )
+            .where(and_(pending_status, SaleInstallment.due_date < today))
         )
         if company_id:
-            overdue_query = overdue_query.where(Sale.company_id == company_id)
+            overdue_stmt = overdue_stmt.where(Sale.company_id == company_id)
         if branch_id:
-            overdue_query = overdue_query.where(SaleInstallment.branch_id == branch_id)
-        overdue_count = session.exec(overdue_query).one()
-        
+            overdue_stmt = overdue_stmt.where(SaleInstallment.branch_id == branch_id)
+        overdue_row = session.exec(overdue_stmt).one()
+        overdue_count = int(overdue_row[0] or 0)
+        overdue_amount = (
+            Decimal(str(overdue_row[1])) if overdue_row[1] else Decimal("0")
+        )
+
         if overdue_count > 0:
-            # Obtener monto total vencido
-            overdue_amount_query = (
-                select(func.sum(SaleInstallment.amount - SaleInstallment.paid_amount))
-                .select_from(SaleInstallment)
-                .join(Sale)
-                .where(
-                    and_(
-                        func.lower(SaleInstallment.status).not_in(
-                            ["paid", "completed"]
-                        ),
-                        SaleInstallment.due_date < today,
-                    )
-                )
-            )
-            if company_id:
-                overdue_amount_query = overdue_amount_query.where(
-                    Sale.company_id == company_id
-                )
-            if branch_id:
-                overdue_amount_query = overdue_amount_query.where(
-                    SaleInstallment.branch_id == branch_id
-                )
-            overdue_amount = session.exec(overdue_amount_query).one() or Decimal("0")
-            
             alerts.append(Alert(
                 type=AlertType.INSTALLMENT_OVERDUE,
                 severity=AlertSeverity.ERROR,
@@ -290,53 +299,34 @@ def get_installment_alerts(
                 count=overdue_count,
                 details={"total_amount": float(overdue_amount)}
             ))
-        
-        # Cuotas próximas a vencer (próximos 3 días)
-        due_soon_query = (
-            select(func.count())
+
+        # Cuotas próximas a vencer (próximos 3 días) — count+sum en una query
+        due_soon_stmt = (
+            select(
+                func.count().label("cnt"),
+                func.coalesce(func.sum(pending_amount), 0).label("amt"),
+            )
             .select_from(SaleInstallment)
             .join(Sale)
             .where(
                 and_(
-                    func.lower(SaleInstallment.status).not_in(
-                        ["paid", "completed"]
-                    ),
+                    pending_status,
                     SaleInstallment.due_date >= today,
                     SaleInstallment.due_date <= due_threshold,
                 )
             )
         )
         if company_id:
-            due_soon_query = due_soon_query.where(Sale.company_id == company_id)
+            due_soon_stmt = due_soon_stmt.where(Sale.company_id == company_id)
         if branch_id:
-            due_soon_query = due_soon_query.where(SaleInstallment.branch_id == branch_id)
-        due_soon_count = session.exec(due_soon_query).one()
-        
+            due_soon_stmt = due_soon_stmt.where(SaleInstallment.branch_id == branch_id)
+        due_soon_row = session.exec(due_soon_stmt).one()
+        due_soon_count = int(due_soon_row[0] or 0)
+        due_soon_amount = (
+            Decimal(str(due_soon_row[1])) if due_soon_row[1] else Decimal("0")
+        )
+
         if due_soon_count > 0:
-            due_soon_amount_query = (
-                select(func.sum(SaleInstallment.amount - SaleInstallment.paid_amount))
-                .select_from(SaleInstallment)
-                .join(Sale)
-                .where(
-                    and_(
-                        func.lower(SaleInstallment.status).not_in(
-                            ["paid", "completed"]
-                        ),
-                        SaleInstallment.due_date >= today,
-                        SaleInstallment.due_date <= due_threshold,
-                    )
-                )
-            )
-            if company_id:
-                due_soon_amount_query = due_soon_amount_query.where(
-                    Sale.company_id == company_id
-                )
-            if branch_id:
-                due_soon_amount_query = due_soon_amount_query.where(
-                    SaleInstallment.branch_id == branch_id
-                )
-            due_soon_amount = session.exec(due_soon_amount_query).one() or Decimal("0")
-            
             alerts.append(Alert(
                 type=AlertType.INSTALLMENT_DUE,
                 severity=AlertSeverity.WARNING,
@@ -349,26 +339,30 @@ def get_installment_alerts(
                 count=due_soon_count,
                 details={"total_amount": float(due_soon_amount)}
             ))
-    
+
     return alerts
 
 
 def get_cashbox_alerts(
     company_id: int | None = None,
     branch_id: int | None = None,
+    *,
+    _session=None,
 ) -> List[Alert]:
     """
     Obtiene alertas relacionadas con la caja.
-    
+
+    ``_session`` (interno): ver :func:`get_low_stock_alerts`.
+
     Returns:
         Lista de alertas de caja
     """
     _require_tenant(company_id, branch_id)
-    set_tenant_context(company_id, branch_id)
     alerts = []
     threshold_time = utc_now_naive() - timedelta(hours=CASHBOX_OPEN_HOURS)
-    
-    with rx.session() as session:
+
+    with ExitStack() as stack:
+        session = _alert_scope(stack, company_id, branch_id, _session)
         # Sesiones de caja abiertas por mucho tiempo
         long_open_query = select(CashboxSession).where(
             and_(
@@ -412,6 +406,8 @@ def get_expiring_batches_alerts(
     company_id: int | None = None,
     branch_id: int | None = None,
     days_threshold: int = BATCH_EXPIRING_DAYS,
+    *,
+    _session=None,
 ) -> List[Alert]:
     """
     Obtiene alertas de lotes próximos a vencer y lotes ya vencidos con stock.
@@ -419,6 +415,8 @@ def get_expiring_batches_alerts(
     Aplica a verticales Farmacia / Supermercado donde los productos tienen
     fecha de vencimiento. Solo cuenta lotes con stock > 0 (no tiene sentido
     alertar sobre lotes ya consumidos).
+
+    ``_session`` (interno): ver :func:`get_low_stock_alerts`.
 
     Args:
         days_threshold: Ventana en días para considerar "por vencer".
@@ -428,47 +426,45 @@ def get_expiring_batches_alerts(
         y una de lotes por vencer (WARNING).
     """
     _require_tenant(company_id, branch_id)
-    set_tenant_context(company_id, branch_id)
     alerts: List[Alert] = []
     now = utc_now_naive()
     threshold = now + timedelta(days=days_threshold)
 
-    with rx.session() as session:
+    # A1-02: rows + count total en una sola query usando COUNT() OVER()
+    # (window function soportada por MySQL 8+). Antes: 4 queries (2 select +
+    # 2 count); ahora: 2. El LIMIT(10) sólo afecta las filas devueltas —
+    # la window evalúa el total de la partición.
+    with ExitStack() as stack:
+        session = _alert_scope(stack, company_id, branch_id, _session)
+
         # 1) Lotes ya vencidos con stock > 0
-        expired_query = select(ProductBatch).where(
-            and_(
-                ProductBatch.expiration_date != None,
-                ProductBatch.expiration_date < now,
-                ProductBatch.stock > 0,
+        expired_stmt = (
+            select(ProductBatch, func.count().over().label("total_cnt"))
+            .where(
+                and_(
+                    ProductBatch.expiration_date != None,
+                    ProductBatch.expiration_date < now,
+                    ProductBatch.stock > 0,
+                )
             )
+            .order_by(ProductBatch.expiration_date.asc())
+            .limit(10)
         )
         if company_id:
-            expired_query = expired_query.where(
+            expired_stmt = expired_stmt.where(
                 ProductBatch.company_id == company_id
             )
         if branch_id:
-            expired_query = expired_query.where(
+            expired_stmt = expired_stmt.where(
                 ProductBatch.branch_id == branch_id
             )
-        expired_batches = session.exec(
-            expired_query.order_by(ProductBatch.expiration_date.asc()).limit(10)
-        ).all()
-        expired_count_query = select(func.count()).select_from(ProductBatch).where(
-            and_(
-                ProductBatch.expiration_date != None,
-                ProductBatch.expiration_date < now,
-                ProductBatch.stock > 0,
-            )
-        )
-        if company_id:
-            expired_count_query = expired_count_query.where(
-                ProductBatch.company_id == company_id
-            )
-        if branch_id:
-            expired_count_query = expired_count_query.where(
-                ProductBatch.branch_id == branch_id
-            )
-        expired_count = int(session.exec(expired_count_query).one() or 0)
+        expired_rows = list(session.exec(expired_stmt).all())
+        if expired_rows:
+            expired_count = int(expired_rows[0][1])
+            expired_batches = [r[0] for r in expired_rows]
+        else:
+            expired_count = 0
+            expired_batches = []
 
         if expired_count > 0:
             alerts.append(
@@ -495,38 +491,30 @@ def get_expiring_batches_alerts(
             )
 
         # 2) Lotes por vencer (entre hoy y threshold) con stock > 0
-        soon_query = select(ProductBatch).where(
-            and_(
-                ProductBatch.expiration_date != None,
-                ProductBatch.expiration_date >= now,
-                ProductBatch.expiration_date <= threshold,
-                ProductBatch.stock > 0,
+        soon_stmt = (
+            select(ProductBatch, func.count().over().label("total_cnt"))
+            .where(
+                and_(
+                    ProductBatch.expiration_date != None,
+                    ProductBatch.expiration_date >= now,
+                    ProductBatch.expiration_date <= threshold,
+                    ProductBatch.stock > 0,
+                )
             )
+            .order_by(ProductBatch.expiration_date.asc())
+            .limit(10)
         )
         if company_id:
-            soon_query = soon_query.where(ProductBatch.company_id == company_id)
+            soon_stmt = soon_stmt.where(ProductBatch.company_id == company_id)
         if branch_id:
-            soon_query = soon_query.where(ProductBatch.branch_id == branch_id)
-        soon_batches = session.exec(
-            soon_query.order_by(ProductBatch.expiration_date.asc()).limit(10)
-        ).all()
-        soon_count_query = select(func.count()).select_from(ProductBatch).where(
-            and_(
-                ProductBatch.expiration_date != None,
-                ProductBatch.expiration_date >= now,
-                ProductBatch.expiration_date <= threshold,
-                ProductBatch.stock > 0,
-            )
-        )
-        if company_id:
-            soon_count_query = soon_count_query.where(
-                ProductBatch.company_id == company_id
-            )
-        if branch_id:
-            soon_count_query = soon_count_query.where(
-                ProductBatch.branch_id == branch_id
-            )
-        soon_count = int(session.exec(soon_count_query).one() or 0)
+            soon_stmt = soon_stmt.where(ProductBatch.branch_id == branch_id)
+        soon_rows = list(session.exec(soon_stmt).all())
+        if soon_rows:
+            soon_count = int(soon_rows[0][1])
+            soon_batches = [r[0] for r in soon_rows]
+        else:
+            soon_count = 0
+            soon_batches = []
 
         if soon_count > 0:
             alerts.append(
@@ -567,29 +555,29 @@ async def get_overdue_count(
 ) -> int:
     """Cuenta cuotas vencidas (pendientes con fecha pasada) usando sesión async."""
     _require_tenant(company_id, branch_id)
-    set_tenant_context(company_id, branch_id)
     today, _ = local_day_bounds_utc_naive(
         None,
         country_code,
         timezone=timezone,
     )
-    overdue_query = (
-        select(func.count())
-        .select_from(SaleInstallment)
-        .join(Sale)
-        .where(
-            and_(
-                func.lower(SaleInstallment.status).not_in(["paid", "completed"]),
-                SaleInstallment.due_date < today,
+    with tenant_context(company_id, branch_id):
+        overdue_query = (
+            select(func.count())
+            .select_from(SaleInstallment)
+            .join(Sale)
+            .where(
+                and_(
+                    func.lower(SaleInstallment.status).not_in(["paid", "completed"]),
+                    SaleInstallment.due_date < today,
+                )
             )
         )
-    )
-    if company_id:
-        overdue_query = overdue_query.where(Sale.company_id == company_id)
-    if branch_id:
-        overdue_query = overdue_query.where(SaleInstallment.branch_id == branch_id)
-    result = await session.exec(overdue_query)
-    return int(result.one() or 0)
+        if company_id:
+            overdue_query = overdue_query.where(Sale.company_id == company_id)
+        if branch_id:
+            overdue_query = overdue_query.where(SaleInstallment.branch_id == branch_id)
+        result = await session.exec(overdue_query)
+        return int(result.one() or 0)
 
 
 def get_all_alerts(
@@ -606,37 +594,49 @@ def get_all_alerts(
         Lista de todas las alertas ordenadas por severidad
     """
     _require_tenant(company_id, branch_id)
-    set_tenant_context(company_id, branch_id)
     alerts = []
-    
-    try:
-        alerts.extend(get_low_stock_alerts(company_id, branch_id))
-    except Exception:
-        logger.warning("Error obteniendo alertas de stock bajo", exc_info=True)
 
-    try:
-        alerts.extend(get_expiring_batches_alerts(company_id, branch_id))
-    except Exception:
-        logger.warning("Error obteniendo alertas de lotes por vencer", exc_info=True)
-
-    try:
-        alerts.extend(
-            get_installment_alerts(
-                currency_symbol,
-                company_id,
-                branch_id,
-                country_code=country_code,
-                timezone=timezone,
+    # A1-03: una sola sesión + un solo tenant_context para las 4 consultas.
+    # Antes: 4 conexiones; ahora: 1. Cada getter recibe ``_session`` y
+    # reutiliza el contexto ya activo en este bloque.
+    with tenant_context(company_id, branch_id), rx.session() as session:
+        try:
+            alerts.extend(
+                get_low_stock_alerts(company_id, branch_id, _session=session)
             )
-        )
-    except Exception:
-        logger.warning("Error obteniendo alertas de cuotas", exc_info=True)
+        except Exception:
+            logger.warning("Error obteniendo alertas de stock bajo", exc_info=True)
 
-    try:
-        alerts.extend(get_cashbox_alerts(company_id, branch_id))
-    except Exception:
-        logger.warning("Error obteniendo alertas de caja", exc_info=True)
-    
+        try:
+            alerts.extend(
+                get_expiring_batches_alerts(
+                    company_id, branch_id, _session=session
+                )
+            )
+        except Exception:
+            logger.warning("Error obteniendo alertas de lotes por vencer", exc_info=True)
+
+        try:
+            alerts.extend(
+                get_installment_alerts(
+                    currency_symbol,
+                    company_id,
+                    branch_id,
+                    country_code=country_code,
+                    timezone=timezone,
+                    _session=session,
+                )
+            )
+        except Exception:
+            logger.warning("Error obteniendo alertas de cuotas", exc_info=True)
+
+        try:
+            alerts.extend(
+                get_cashbox_alerts(company_id, branch_id, _session=session)
+            )
+        except Exception:
+            logger.warning("Error obteniendo alertas de caja", exc_info=True)
+
     # Ordenar por severidad (crítico primero)
     severity_order = {
         AlertSeverity.CRITICAL: 0,
@@ -644,9 +644,9 @@ def get_all_alerts(
         AlertSeverity.WARNING: 2,
         AlertSeverity.INFO: 3,
     }
-    
+
     alerts.sort(key=lambda a: severity_order.get(a.severity, 99))
-    
+
     return alerts
 
 
@@ -664,14 +664,14 @@ def get_alert_summary(
         Dict con conteos por severidad
     """
     _require_tenant(company_id, branch_id)
-    set_tenant_context(company_id, branch_id)
-    alerts = get_all_alerts(
-        currency_symbol,
-        company_id,
-        branch_id,
-        country_code=country_code,
-        timezone=timezone,
-    )
+    with tenant_context(company_id, branch_id):
+        alerts = get_all_alerts(
+            currency_symbol,
+            company_id,
+            branch_id,
+            country_code=country_code,
+            timezone=timezone,
+        )
     
     summary = {
         "total": len(alerts),

@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import random
 import time
 from datetime import datetime, timezone
 
@@ -70,13 +71,18 @@ _FISCAL_RETRY_ENABLED = os.getenv("FISCAL_RETRY_ENABLED", "1").strip() != "0"
 
 
 async def _fiscal_retry_loop():
-    """Ejecuta el worker de reintento fiscal periódicamente."""
+    """Ejecuta el worker de reintento fiscal periódicamente con jitter.
+
+    El jitter evita "thundering herd" cuando múltiples workers detrás del ALB
+    golpean AFIP/SUNAT al mismo segundo (todas las instancias fueron iniciadas
+    con ~mismo uptime).
+    """
     from app.tasks.fiscal_retry_worker import run_auto_retry
 
-    # Espera inicial para que la app termine de arrancar
-    await asyncio.sleep(30)
+    # Espera inicial aleatoria (30-60s) para desincronizar instancias al boot.
+    await asyncio.sleep(30 + random.uniform(0, 30))
     _logger.info(
-        "Fiscal retry worker started (interval=%ss)",
+        "Fiscal retry worker started (interval=%ss ±10%%)",
         _FISCAL_RETRY_INTERVAL_SECONDS,
     )
     while True:
@@ -86,22 +92,34 @@ async def _fiscal_retry_loop():
                 _logger.info("Fiscal retry: %s", stats)
         except Exception:
             _logger.exception("Error en fiscal retry worker")
-        await asyncio.sleep(_FISCAL_RETRY_INTERVAL_SECONDS)
+        # Jitter ±10% sobre el intervalo base.
+        jitter = _FISCAL_RETRY_INTERVAL_SECONDS * 0.1
+        delay = _FISCAL_RETRY_INTERVAL_SECONDS + random.uniform(-jitter, jitter)
+        await asyncio.sleep(delay)
 
 
 @contextlib.asynccontextmanager
 async def _lifespan(app):
-    """Lifespan handler: inicia background tasks al arrancar."""
+    """Lifespan handler: inicia background tasks al arrancar y libera
+    recursos al apagar (pool DB async, tareas pendientes)."""
     tasks = []
     if _FISCAL_RETRY_ENABLED:
         task = asyncio.create_task(_fiscal_retry_loop())
         tasks.append(task)
-    yield
-    # Cleanup al apagar
-    for task in tasks:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+    try:
+        yield
+    finally:
+        # Cancelar tareas en curso.
+        for task in tasks:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        # Cerrar pool async de MySQL para evitar Aborted_clients en RDS.
+        try:
+            from app.utils.db import dispose_engine
+            await dispose_engine()
+        except Exception:
+            _logger.exception("Error cerrando engine async en shutdown")
 
 
 # Starlette app con las rutas de operaciones.

@@ -538,7 +538,12 @@ def generate_sales_report(
         query = query.where(Sale.status != SaleStatus.cancelled)
 
     sales = session.exec(query).all()
-    sale_user_lookup = _build_sale_user_lookup(session, sales, company_id)
+    # P1-03: Sale.user ya está prefetched (selectinload arriba) → evitar query redundante
+    sale_user_lookup: dict[int, str] = {
+        int(s.user_id): _safe_string(s.user.username)
+        for s in sales
+        if s.user_id is not None and s.user is not None and getattr(s.user, "username", None)
+    }
 
     period_str = (
         f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "

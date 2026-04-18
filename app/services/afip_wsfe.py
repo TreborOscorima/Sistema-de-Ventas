@@ -24,8 +24,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
-from xml.etree import ElementTree as ET
+# WF1-04: defusedxml previene XXE en respuestas no-trusted de AFIP/WSFEv1.
+# Drop-in compatible con xml.etree.ElementTree (Element/ParseError/fromstring).
+from defusedxml import ElementTree as ET
+from xml.sax.saxutils import escape as _xml_escape_raw
 
 import httpx
 
@@ -76,6 +80,36 @@ class UltimoAutorizadoResult:
 
 # ── SOAP Helpers ─────────────────────────────────────────────
 
+_MONEY_QUANTUM = Decimal("0.01")
+
+
+def _xe(value: object) -> str:
+    """Escape XML-safe para content text + atributos (WF1-01).
+
+    Cualquier string concatenado al envelope SOAP pasa por aquí — previene
+    inyección por caracteres ``< > & " '`` en campos dinámicos (token/sign
+    de WSAA, fechas, mon_id, ids de alícuota IVA, etc.).
+    """
+    if value is None:
+        return ""
+    return _xml_escape_raw(
+        str(value), entities={'"': "&quot;", "'": "&apos;"}
+    )
+
+
+def _money(value: float | Decimal | int | str) -> str:
+    """Formatea un monto a 2 decimales con ROUND_HALF_UP (WF1-03).
+
+    AFIP requiere HALF_UP; el formato ``%.2f`` usa banker's rounding de
+    Python y produce drift de centavos en totales/IVA.
+    """
+    try:
+        d = Decimal(str(value))
+    except Exception:
+        d = Decimal("0")
+    return str(d.quantize(_MONEY_QUANTUM, rounding=ROUND_HALF_UP))
+
+
 def _soap_envelope(method: str, body_content: str) -> str:
     """Construye un envelope SOAP para WSFEv1."""
     return (
@@ -92,12 +126,16 @@ def _soap_envelope(method: str, body_content: str) -> str:
 
 
 def _auth_xml(token: str, sign: str, cuit: int) -> str:
-    """Bloque XML de autenticación para WSFEv1."""
+    """Bloque XML de autenticación para WSFEv1.
+
+    WF1-01: token/sign vienen de WSAA (base64 técnicamente seguro) pero los
+    escapamos por higiene — evita cualquier vector si AFIP cambiara formato.
+    """
     return (
         "<wsfe:Auth>"
-        f"<wsfe:Token>{token}</wsfe:Token>"
-        f"<wsfe:Sign>{sign}</wsfe:Sign>"
-        f"<wsfe:Cuit>{cuit}</wsfe:Cuit>"
+        f"<wsfe:Token>{_xe(token)}</wsfe:Token>"
+        f"<wsfe:Sign>{_xe(sign)}</wsfe:Sign>"
+        f"<wsfe:Cuit>{int(cuit)}</wsfe:Cuit>"
         "</wsfe:Auth>"
     )
 
@@ -196,9 +234,14 @@ async def _soap_call(
         ) from exc
 
     if response.status_code != 200:
+        # WF1-05: body completo sólo a debug; ValueError con snippet corto
+        # para no filtrar contenido del envelope a logs/UI de estados.
+        logger.debug(
+            "WSFEv1 HTTP %s body=%r", response.status_code, response.text
+        )
         raise ValueError(
             f"WSFEv1 retornó HTTP {response.status_code}: "
-            f"{response.text[:500]}"
+            f"{response.text[:100].strip()}"
         )
 
     try:
@@ -241,13 +284,21 @@ async def fe_comp_ultimo_autorizado(
 
     Returns:
         UltimoAutorizadoResult con el último número autorizado.
+
+    Raises:
+        ValueError: Si ``environment`` no está en la whitelist (WF1-02).
     """
-    url = WSFE_URLS.get(environment, WSFE_URLS["sandbox"])
+    if environment not in WSFE_URLS:
+        raise ValueError(
+            f"WSFEv1 environment inválido: {environment!r}. "
+            f"Valores aceptados: {sorted(WSFE_URLS.keys())}."
+        )
+    url = WSFE_URLS[environment]
 
     body = (
         f"{_auth_xml(token, sign, cuit)}"
-        f"<wsfe:PtoVta>{punto_venta}</wsfe:PtoVta>"
-        f"<wsfe:CbteTipo>{cbte_tipo}</wsfe:CbteTipo>"
+        f"<wsfe:PtoVta>{int(punto_venta)}</wsfe:PtoVta>"
+        f"<wsfe:CbteTipo>{int(cbte_tipo)}</wsfe:CbteTipo>"
     )
     envelope = _soap_envelope("FECompUltimoAutorizado", body)
 
@@ -330,7 +381,24 @@ def _build_fecae_request_xml(
     cuit: int,
     req: FECAERequest,
 ) -> str:
-    """Construye el XML para FECAESolicitar."""
+    """Construye el XML para FECAESolicitar.
+
+    WF1-01: todos los strings pasan por ``_xe`` (XML-escape).
+    WF1-03: todos los montos pasan por ``_money`` (Decimal + HALF_UP).
+    WF1-08: valida ``cbte_desde == cbte_hasta`` — ``CantReg=1`` hardcoded no
+    soporta lotes y AFIP rechazaría por inconsistencia.
+    """
+    if int(req.cbte_desde) != int(req.cbte_hasta):
+        raise ValueError(
+            f"FECAESolicitar solo soporta 1 comprobante por request (CantReg=1); "
+            f"recibido cbte_desde={req.cbte_desde} cbte_hasta={req.cbte_hasta}."
+        )
+
+    # Cotización: 6 decimales, HALF_UP.
+    mon_cotiz = Decimal(str(req.mon_cotiz)).quantize(
+        Decimal("0.000001"), rounding=ROUND_HALF_UP
+    )
+
     # Bloque Iva (solo si hay items de IVA — Factura A/B)
     iva_xml = ""
     if req.iva_items:
@@ -338,9 +406,9 @@ def _build_fecae_request_xml(
         for item in req.iva_items:
             iva_entries += (
                 "<wsfe:AlicIva>"
-                f"<wsfe:Id>{item['Id']}</wsfe:Id>"
-                f"<wsfe:BaseImp>{item['BaseImp']:.2f}</wsfe:BaseImp>"
-                f"<wsfe:Importe>{item['Importe']:.2f}</wsfe:Importe>"
+                f"<wsfe:Id>{int(item['Id'])}</wsfe:Id>"
+                f"<wsfe:BaseImp>{_money(item['BaseImp'])}</wsfe:BaseImp>"
+                f"<wsfe:Importe>{_money(item['Importe'])}</wsfe:Importe>"
                 "</wsfe:AlicIva>"
             )
         iva_xml = f"<wsfe:Iva>{iva_entries}</wsfe:Iva>"
@@ -350,29 +418,29 @@ def _build_fecae_request_xml(
         "<wsfe:FeCAEReq>"
         "<wsfe:FeCabReq>"
         f"<wsfe:CantReg>1</wsfe:CantReg>"
-        f"<wsfe:PtoVta>{req.punto_vta}</wsfe:PtoVta>"
-        f"<wsfe:CbteTipo>{req.cbte_tipo}</wsfe:CbteTipo>"
+        f"<wsfe:PtoVta>{int(req.punto_vta)}</wsfe:PtoVta>"
+        f"<wsfe:CbteTipo>{int(req.cbte_tipo)}</wsfe:CbteTipo>"
         "</wsfe:FeCabReq>"
         "<wsfe:FeDetReq>"
         "<wsfe:FECAEDetRequest>"
-        f"<wsfe:Concepto>{req.concepto}</wsfe:Concepto>"
-        f"<wsfe:DocTipo>{req.tipo_doc}</wsfe:DocTipo>"
-        f"<wsfe:DocNro>{req.nro_doc}</wsfe:DocNro>"
-        f"<wsfe:CbteDesde>{req.cbte_desde}</wsfe:CbteDesde>"
-        f"<wsfe:CbteHasta>{req.cbte_hasta}</wsfe:CbteHasta>"
-        f"<wsfe:CbteFch>{req.fecha_cbte}</wsfe:CbteFch>"
-        f"<wsfe:ImpTotal>{req.imp_total:.2f}</wsfe:ImpTotal>"
-        f"<wsfe:ImpTotConc>{req.imp_tot_conc:.2f}</wsfe:ImpTotConc>"
-        f"<wsfe:ImpNeto>{req.imp_neto:.2f}</wsfe:ImpNeto>"
-        f"<wsfe:ImpOpEx>{req.imp_op_ex:.2f}</wsfe:ImpOpEx>"
-        f"<wsfe:ImpTrib>{req.imp_trib:.2f}</wsfe:ImpTrib>"
-        f"<wsfe:ImpIVA>{req.imp_iva:.2f}</wsfe:ImpIVA>"
-        f"<wsfe:MonId>{req.mon_id}</wsfe:MonId>"
-        f"<wsfe:MonCotiz>{req.mon_cotiz:.6f}</wsfe:MonCotiz>"
+        f"<wsfe:Concepto>{int(req.concepto)}</wsfe:Concepto>"
+        f"<wsfe:DocTipo>{int(req.tipo_doc)}</wsfe:DocTipo>"
+        f"<wsfe:DocNro>{int(req.nro_doc)}</wsfe:DocNro>"
+        f"<wsfe:CbteDesde>{int(req.cbte_desde)}</wsfe:CbteDesde>"
+        f"<wsfe:CbteHasta>{int(req.cbte_hasta)}</wsfe:CbteHasta>"
+        f"<wsfe:CbteFch>{_xe(req.fecha_cbte)}</wsfe:CbteFch>"
+        f"<wsfe:ImpTotal>{_money(req.imp_total)}</wsfe:ImpTotal>"
+        f"<wsfe:ImpTotConc>{_money(req.imp_tot_conc)}</wsfe:ImpTotConc>"
+        f"<wsfe:ImpNeto>{_money(req.imp_neto)}</wsfe:ImpNeto>"
+        f"<wsfe:ImpOpEx>{_money(req.imp_op_ex)}</wsfe:ImpOpEx>"
+        f"<wsfe:ImpTrib>{_money(req.imp_trib)}</wsfe:ImpTrib>"
+        f"<wsfe:ImpIVA>{_money(req.imp_iva)}</wsfe:ImpIVA>"
+        f"<wsfe:MonId>{_xe(req.mon_id)}</wsfe:MonId>"
+        f"<wsfe:MonCotiz>{mon_cotiz}</wsfe:MonCotiz>"
         + (
-            f"<wsfe:FchServDesde>{req.fecha_serv_desde}</wsfe:FchServDesde>"
-            f"<wsfe:FchServHasta>{req.fecha_serv_hasta}</wsfe:FchServHasta>"
-            f"<wsfe:FchVtoPago>{req.fecha_vto_pago}</wsfe:FchVtoPago>"
+            f"<wsfe:FchServDesde>{_xe(req.fecha_serv_desde)}</wsfe:FchServDesde>"
+            f"<wsfe:FchServHasta>{_xe(req.fecha_serv_hasta)}</wsfe:FchServHasta>"
+            f"<wsfe:FchVtoPago>{_xe(req.fecha_vto_pago)}</wsfe:FchVtoPago>"
             if req.concepto in (2, 3) and req.fecha_serv_desde
             else ""
         )
@@ -404,8 +472,17 @@ async def fe_cae_solicitar(
 
     Returns:
         CAEResult con el CAE asignado o errores de rechazo.
+
+    Raises:
+        ValueError: Si ``environment`` no está en la whitelist (WF1-02) o si
+            el request es inconsistente (p.ej. rango cbte_desde≠cbte_hasta).
     """
-    url = WSFE_URLS.get(environment, WSFE_URLS["sandbox"])
+    if environment not in WSFE_URLS:
+        raise ValueError(
+            f"WSFEv1 environment inválido: {environment!r}. "
+            f"Valores aceptados: {sorted(WSFE_URLS.keys())}."
+        )
+    url = WSFE_URLS[environment]
     envelope = _build_fecae_request_xml(token, sign, cuit, request)
 
     logger.info(

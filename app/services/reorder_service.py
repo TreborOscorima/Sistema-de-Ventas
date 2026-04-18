@@ -129,7 +129,13 @@ def suggest_reorders_by_supplier(
     supplier_ids = {p.default_supplier_id for p in products if p.default_supplier_id}
     suppliers_map: Dict[int, Supplier] = {}
     if supplier_ids:
-        sup_stmt = select(Supplier).where(Supplier.id.in_(supplier_ids))
+        # Filtrar por tenant — evita leak si default_supplier_id apunta a
+        # un proveedor de otra empresa por inconsistencia histórica.
+        sup_stmt = select(Supplier).where(
+            Supplier.id.in_(supplier_ids),
+            Supplier.company_id == company_id,
+            Supplier.branch_id == branch_id,
+        )
         for s in session.exec(sup_stmt).all():
             suppliers_map[s.id] = s
 
@@ -184,8 +190,16 @@ def create_draft_purchase_order(
 ) -> PurchaseOrder:
     """Crea una PurchaseOrder en estado 'draft' con ítems sugeridos.
 
+    Seguridad:
+        - Los `ReorderSuggestion` del input pueden venir de un state/frontend
+          no confiable. Se recargan los datos autoritativos desde BD y se
+          valida que cada product_id pertenezca al tenant.
+        - Del input se acepta únicamente `product_id` y `suggested_quantity`
+          (la última saneada > 0).
+
     Raises:
-        ValueError si items está vacío o supplier_id no existe en el tenant.
+        ValueError si items está vacío, supplier_id no existe en el tenant,
+        o algún product_id no pertenece al tenant.
     """
     if not items:
         raise ValueError("No se puede crear una PO sin ítems")
@@ -201,23 +215,55 @@ def create_draft_purchase_order(
     if supplier is None:
         raise ValueError(f"Proveedor {supplier_id} no existe en este tenant")
 
+    # Batch load autoritativo desde BD — nunca confiar en los campos del
+    # ReorderSuggestion salvo product_id y suggested_quantity.
+    requested_ids = [int(it.product_id) for it in items if it.product_id]
+    if not requested_ids:
+        raise ValueError("No se puede crear una PO sin ítems")
+
+    products_rows = session.exec(
+        select(Product).where(
+            Product.id.in_(requested_ids),
+            Product.company_id == company_id,
+            Product.branch_id == branch_id,
+        )
+    ).all()
+    products_map: Dict[int, Product] = {int(p.id): p for p in products_rows}
+
+    missing = [pid for pid in requested_ids if pid not in products_map]
+    if missing:
+        raise ValueError(
+            f"Producto(s) no pertenecen al tenant o no existen: {missing}"
+        )
+
     total = Decimal("0.00")
     po_items: List[PurchaseOrderItem] = []
     for it in items:
-        subtotal = (it.suggested_quantity * it.unit_cost).quantize(Decimal("0.01"))
+        pid = int(it.product_id)
+        product = products_map[pid]
+        qty = Decimal(str(it.suggested_quantity or 0))
+        if qty <= 0:
+            raise ValueError(
+                f"Cantidad inválida para producto {pid}: {qty}"
+            )
+        qty = qty.quantize(Decimal("0.0001"))
+        unit_cost = Decimal(str(product.purchase_price or 0))
+        current_stock = Decimal(str(product.stock or 0))
+        min_stock_alert = Decimal(str(product.min_stock_alert or 0))
+        subtotal = (qty * unit_cost).quantize(Decimal("0.01"))
         total += subtotal
         po_items.append(
             PurchaseOrderItem(
-                product_id=it.product_id,
+                product_id=pid,
                 company_id=company_id,
                 branch_id=branch_id,
-                description_snapshot=it.description,
-                barcode_snapshot=it.barcode,
-                current_stock=it.current_stock,
-                min_stock_alert=it.min_stock_alert,
-                suggested_quantity=it.suggested_quantity,
-                unit=it.unit,
-                unit_cost=it.unit_cost,
+                description_snapshot=product.description,
+                barcode_snapshot=product.barcode,
+                current_stock=current_stock,
+                min_stock_alert=min_stock_alert,
+                suggested_quantity=qty,
+                unit=product.unit or "Unidad",
+                unit_cost=unit_cost,
                 subtotal=subtotal,
             )
         )
@@ -271,8 +317,17 @@ def mark_purchase_order_sent(
     branch_id: int,
 ) -> PurchaseOrder:
     """Transiciona draft → sent. Se asume que se notificó al proveedor."""
-    po = session.get(PurchaseOrder, purchase_order_id)
-    if po is None or po.company_id != company_id or po.branch_id != branch_id:
+    # FOR UPDATE serializa transiciones concurrentes — evita doble envío.
+    po = session.exec(
+        select(PurchaseOrder)
+        .where(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.company_id == company_id,
+            PurchaseOrder.branch_id == branch_id,
+        )
+        .with_for_update()
+    ).first()
+    if po is None:
         raise ValueError("PO no encontrada en este tenant")
     if po.status != PurchaseOrderStatus.DRAFT:
         raise ValueError(
@@ -292,8 +347,16 @@ def cancel_purchase_order(
     branch_id: int,
 ) -> PurchaseOrder:
     """Cancela una PO (solo si no fue recibida)."""
-    po = session.get(PurchaseOrder, purchase_order_id)
-    if po is None or po.company_id != company_id or po.branch_id != branch_id:
+    po = session.exec(
+        select(PurchaseOrder)
+        .where(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.company_id == company_id,
+            PurchaseOrder.branch_id == branch_id,
+        )
+        .with_for_update()
+    ).first()
+    if po is None:
         raise ValueError("PO no encontrada en este tenant")
     if po.status == PurchaseOrderStatus.RECEIVED:
         raise ValueError("No se puede cancelar una PO ya recibida")

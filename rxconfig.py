@@ -1,3 +1,15 @@
+"""
+Configuración Reflex + SQLAlchemy.
+
+Principios:
+- Un solo engine sync (el que usa Reflex internamente) bajo el mismo pool del engine async.
+- En producción: ninguna credencial tiene default. Cualquier variable faltante -> RuntimeError.
+- Charset, timezone e isolation level se fijan explícitamente para evitar
+  corrupción de datos internacionales y phantoms en reportes concurrentes.
+- Headers de seguridad: configurados en reverse proxy (nginx) — ver docs/DEPLOYMENT_SECURITY.md.
+"""
+from __future__ import annotations
+
 import os
 from urllib.parse import quote_plus
 
@@ -6,60 +18,65 @@ import reflex as rx
 
 load_dotenv()
 
-# Configuracion de Entorno
-env = (os.getenv("ENV") or "dev").strip().lower()
-is_prod = env in {"prod", "production"}
-api_url = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
-redis_url = (os.getenv("REDIS_URL") or "").strip()
-if is_prod and not redis_url:
-    raise RuntimeError(
-        "Missing required environment variable for production: REDIS_URL"
-    )
+# ---------------------------------------------------------------------------
+# Entorno
+# ---------------------------------------------------------------------------
+ENV = (os.getenv("ENV") or "dev").strip().lower()
+IS_PROD = ENV in {"prod", "production"}
+API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
 
-# Helpers
-def _get_env(var_name: str, default: str | None = None) -> str | None:
+
+def _require_env(var_name: str, *, default: str | None = None, dev_default: str | None = None) -> str:
+    """Lee una env var. En prod nunca acepta default; en dev acepta `dev_default`."""
     value = os.getenv(var_name)
-    if is_prod and not value:
-        raise RuntimeError(
-            f"Missing required environment variable for production: {var_name}"
-        )
-    return value if value is not None else default
+    if value:
+        return value
+    if IS_PROD:
+        raise RuntimeError(f"[rxconfig] Variable obligatoria en producción: {var_name}")
+    return dev_default if dev_default is not None else (default or "")
 
-# DB Config
-db_user = _get_env("DB_USER", "root")
-db_password = _get_env("DB_PASSWORD", "tu_clave_local")
-db_host = _get_env("DB_HOST", "localhost")
-db_port = os.getenv("DB_PORT", "3306")
-db_name = _get_env("DB_NAME", "sistema_ventas")
 
-db_user_escaped = quote_plus(db_user or "")
-db_password_escaped = quote_plus(db_password or "")
+# Redis requerido en prod (sesiones distribuidas + caché L2).
+REDIS_URL = _require_env("REDIS_URL", dev_default="")
 
-# URL sincronica para Reflex
-db_url = (
-    f"mysql+pymysql://{db_user_escaped}:{db_password_escaped}@{db_host}:{db_port}/{db_name}"
+# ---------------------------------------------------------------------------
+# DB
+# ---------------------------------------------------------------------------
+DB_USER = _require_env("DB_USER", dev_default="root")
+DB_PASSWORD = _require_env("DB_PASSWORD")  # sin default, incluso en dev — forzar .env
+DB_HOST = _require_env("DB_HOST", dev_default="localhost")
+DB_PORT = os.getenv("DB_PORT", "3306")
+DB_NAME = _require_env("DB_NAME", dev_default="sistema_ventas")
+
+_USER_ESC = quote_plus(DB_USER)
+_PASS_ESC = quote_plus(DB_PASSWORD)
+
+# URL sync (Reflex + alembic). charset y autocommit parametrizados.
+DB_URL = (
+    f"mysql+pymysql://{_USER_ESC}:{_PASS_ESC}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"?charset=utf8mb4"
 )
 
-# =============================================================================
-# CONFIGURACIÓN DE SEGURIDAD (Producción)
-# =============================================================================
-# Los siguientes headers deben configurarse en el reverse proxy (nginx/Caddy):
-#
-# X-Content-Type-Options: nosniff
-# X-Frame-Options: DENY
-# X-XSS-Protection: 1; mode=block
-# Strict-Transport-Security: max-age=31536000; includeSubDomains
-# Encabezado Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'
-#
-# Ejemplo nginx:
-#   add_header X-Content-Type-Options "nosniff" always;
-#   add_header X-Frame-Options "DENY" always;
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Pool tuning (Reflex lee estas env vars vía reflex.config.environment)
+# ---------------------------------------------------------------------------
+_POOL_DEFAULTS = {
+    "SQLALCHEMY_POOL_SIZE": os.getenv("DB_POOL_SIZE", "15"),
+    "SQLALCHEMY_POOL_RECYCLE": os.getenv("DB_POOL_RECYCLE", "1800"),
+    "SQLALCHEMY_POOL_PRE_PING": "true",
+    "SQLALCHEMY_POOL_TIMEOUT": os.getenv("DB_POOL_TIMEOUT", "10"),
+    "SQLALCHEMY_MAX_OVERFLOW": os.getenv("DB_MAX_OVERFLOW", "10"),
+}
+for _k, _v in _POOL_DEFAULTS.items():
+    os.environ.setdefault(_k, _v)
 
+# ---------------------------------------------------------------------------
+# Reflex config
+# ---------------------------------------------------------------------------
 config = rx.Config(
     app_name="app",
-    db_url=db_url,
-    api_url=api_url,
+    db_url=DB_URL,
+    api_url=API_URL,
     plugins=[
         rx.plugins.TailwindV3Plugin(
             config={
@@ -71,12 +88,8 @@ config = rx.Config(
                             "grotesk": ["'Space Grotesk'", "system-ui", "sans-serif"],
                         },
                         "screens": {
-                            "motion-safe": {
-                                "raw": "(prefers-reduced-motion: no-preference)",
-                            },
-                            "motion-reduce": {
-                                "raw": "(prefers-reduced-motion: reduce)",
-                            },
+                            "motion-safe": {"raw": "(prefers-reduced-motion: no-preference)"},
+                            "motion-reduce": {"raw": "(prefers-reduced-motion: reduce)"},
                         },
                     },
                 },
@@ -84,7 +97,7 @@ config = rx.Config(
         ),
     ],
     disable_plugins=["reflex.plugins.sitemap.SitemapPlugin"],
-    telemetry_enabled=not is_prod,
+    telemetry_enabled=not IS_PROD,
     show_built_with_reflex=False,
     theme=rx.theme(
         has_background=True,
@@ -95,13 +108,3 @@ config = rx.Config(
         transitions="gentle",
     ),
 )
-
-# Pool de conexiones DB optimizado via env vars de Reflex/SQLAlchemy.
-# Estos se leen automáticamente por Reflex (ver reflex.config.environment).
-_pool_defaults = {
-    "SQLALCHEMY_POOL_SIZE": "20",
-    "SQLALCHEMY_POOL_RECYCLE": "1800",
-}
-for _k, _v in _pool_defaults.items():
-    if not os.environ.get(_k):
-        os.environ[_k] = _v

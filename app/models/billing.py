@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Optional
 
 import reflex as rx
 import sqlalchemy
-from sqlalchemy import DateTime, Numeric, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, Numeric, Text, UniqueConstraint
 from sqlmodel import Field, Relationship
 
 from app.enums import FiscalStatus, ReceiptType
@@ -58,6 +58,8 @@ class CompanyBillingConfig(rx.Model, table=True):
             name="uq_companybillingconfig_company",
         ),
     )
+
+    __mapper_args__ = {"eager_defaults": True}
 
     # ── Tenant ───────────────────────────────────────────────
     company_id: int = Field(
@@ -234,10 +236,7 @@ class CompanyBillingConfig(rx.Model, table=True):
     )
     created_at: datetime = Field(
         default_factory=utc_now_naive,
-        sa_column=sqlalchemy.Column(
-            sqlalchemy.DateTime(timezone=False),
-            server_default=sqlalchemy.func.now(),
-        ),
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
     updated_at: Optional[datetime] = Field(
         default=None,
@@ -274,13 +273,29 @@ class FiscalDocument(rx.Model, table=True):
     __tablename__ = "fiscaldocument"
 
     __table_args__ = (
-        # Unicidad por (company_id, sale_id, receipt_type):
-        # permite que la misma venta tenga una Factura/Boleta Y una Nota de Crédito.
+        # Unicidad fina que distingue múltiples NC sobre la misma venta:
+        # - Factura/Boleta: original_fiscal_doc_id=NULL → doc_key=0 → una
+        #   sola fila por (company_id, sale_id, receipt_type).
+        # - NC/ND: cada nota referencia un doc original distinto →
+        #   doc_key = id original → múltiples NC válidas por venta.
+        # Ver columna generada ``original_doc_key`` abajo.
         UniqueConstraint(
             "company_id",
             "sale_id",
             "receipt_type",
-            name="uq_fiscaldocument_company_sale_type",
+            "original_doc_key",
+            name="uq_fiscaldocument_company_sale_type_original",
+        ),
+        # Unicidad de numeración fiscal por (company_id, serie, fiscal_number):
+        # previene correlativos duplicados por desincronización del contador
+        # ``current_sequence_*``. ``fiscal_number`` puede ser NULL pre-emisión;
+        # MySQL permite múltiples NULLs en UNIQUE (es el comportamiento
+        # deseado — sólo valida una vez asignado el número).
+        UniqueConstraint(
+            "company_id",
+            "serie",
+            "fiscal_number",
+            name="uq_fiscaldocument_company_serie_number",
         ),
         sqlalchemy.Index(
             "ix_fiscaldocument_tenant_status",
@@ -292,7 +307,15 @@ class FiscalDocument(rx.Model, table=True):
             "company_id",
             "sent_at",
         ),
+        CheckConstraint(
+            "taxable_amount >= 0", name="ck_fiscaldoc_taxable_nonneg"
+        ),
+        CheckConstraint("tax_amount >= 0", name="ck_fiscaldoc_tax_nonneg"),
+        CheckConstraint("total_amount >= 0", name="ck_fiscaldoc_total_nonneg"),
+        CheckConstraint("retry_count >= 0", name="ck_fiscaldoc_retry_nonneg"),
     )
+
+    __mapper_args__ = {"eager_defaults": True}
 
     # ── Tenant ───────────────────────────────────────────────
     company_id: int = Field(
@@ -307,10 +330,52 @@ class FiscalDocument(rx.Model, table=True):
     )
 
     # ── Venta vinculada ──────────────────────────────────────
+    # RESTRICT explícito: una venta con documento fiscal emitido NO puede
+    # borrarse — el asiento fiscal es persistencia legal (AFIP/SUNAT).
+    # Si se quiere anular, debe emitirse Nota de Crédito + soft-delete.
     sale_id: int = Field(
-        foreign_key="sale.id",
-        index=True,
-        nullable=False,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("sale.id", ondelete="RESTRICT"),
+            nullable=False,
+            index=True,
+        ),
+    )
+
+    # ── Vínculo Nota de Crédito/Débito → Documento original ─
+    # Para NC/ND apunta al FiscalDocument (factura/boleta) que se está
+    # anulando. SET NULL: si el original es borrado (operación
+    # administrativa excepcional), la NC queda huérfana pero conserva
+    # su CAE/CDR emitido.
+    original_fiscal_doc_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("fiscaldocument.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+        description=(
+            "FK self-ref al documento original (solo NC/ND). "
+            "Permite distinguir múltiples NC parciales sobre la misma venta."
+        ),
+    )
+    # Columna generada STORED: clave de unicidad que colapsa NULL a 0.
+    # MySQL permite múltiples NULL en UNIQUE, por lo que sin esta columna
+    # dos boletas con ``original=NULL`` para la misma venta coexistirían.
+    # Con COALESCE → 0, la UNIQUE garantiza:
+    #   - Una sola factura/boleta por venta (key=0, UNIQUE bloquea dup).
+    #   - N NC por venta si referencian docs originales distintos.
+    original_doc_key: int = Field(
+        default=0,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.Computed(
+                "COALESCE(original_fiscal_doc_id, 0)",
+                persisted=True,
+            ),
+            nullable=False,
+        ),
     )
 
     # ── Tipo y numeración ────────────────────────────────────
@@ -408,10 +473,7 @@ class FiscalDocument(rx.Model, table=True):
     )
     created_at: datetime = Field(
         default_factory=utc_now_naive,
-        sa_column=sqlalchemy.Column(
-            sqlalchemy.DateTime(timezone=False),
-            server_default=sqlalchemy.func.now(),
-        ),
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
 
     # ── Datos del receptor (snapshot para auditoría) ─────────

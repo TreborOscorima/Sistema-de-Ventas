@@ -4,14 +4,18 @@ from decimal import Decimal
 import reflex as rx
 from sqlmodel import Field, Relationship
 import sqlalchemy
-from sqlalchemy import Numeric
+from sqlalchemy import CheckConstraint, Numeric
+
+from ._mixins import TenantMixin
 
 if TYPE_CHECKING:
     from .sales import Sale
 
 
-class Client(rx.Model, table=True):
+class Client(TenantMixin, rx.Model, table=True):
     """Cliente para ventas a credito."""
+
+    __tablename__ = "client"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -20,20 +24,12 @@ class Client(rx.Model, table=True):
             "dni",
             name="uq_client_company_branch_dni",
         ),
+        CheckConstraint("credit_limit >= 0", name="ck_client_credit_limit_nonneg"),
+        CheckConstraint("current_debt >= 0", name="ck_client_current_debt_nonneg"),
     )
 
     name: str = Field(index=True, nullable=False)
     dni: str = Field(index=True, nullable=False)
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
     phone: Optional[str] = Field(default=None)
     email: Optional[str] = Field(default=None, max_length=255)
     address: Optional[str] = Field(default=None)

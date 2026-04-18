@@ -10,14 +10,17 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlmodel import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import (
     Sale,
     SaleItem,
+    SaleInstallment,
     SaleReturn,
     SaleReturnItem,
     CashboxLog,
+    Client,
     StockMovement,
     Product,
     ProductVariant,
@@ -25,9 +28,23 @@ from app.models import (
 )
 from app.enums import SaleStatus
 from app.utils.stock import recalculate_stock_totals
+from app.utils.tenant import set_tenant_context
 from app.utils.timezone import utc_now_naive
 
 logger = logging.getLogger(__name__)
+
+
+class DuplicateReturnError(ValueError):
+    """Se intentó registrar una devolución con un ``idempotency_key`` ya usado.
+
+    El atributo ``sale_return_id`` apunta a la devolución original persistida,
+    permitiendo al caller mostrar "devolución ya registrada #N" en lugar de
+    reintentar ciegamente.
+    """
+
+    def __init__(self, sale_return_id: int):
+        super().__init__(f"Duplicate return (sale_return_id={sale_return_id})")
+        self.sale_return_id = sale_return_id
 
 
 @dataclass
@@ -58,6 +75,8 @@ def process_return(
     notes: str,
     items: list[ReturnItemRequest],
     timestamp: datetime | None = None,
+    refund_method: str | None = None,
+    idempotency_key: str | None = None,
 ) -> ReturnResult:
     """Procesa una devolución parcial o total.
 
@@ -70,24 +89,87 @@ def process_return(
         notes: Notas adicionales
         items: Lista de ítems a devolver con cantidades
         timestamp: Timestamp del evento (default: utc_now_naive)
+        refund_method: Medio de pago del reembolso (efectivo/tarjeta/…); se
+            registra como ``CashboxLog.payment_method`` cuando la UI lo
+            provee. ``None`` = no informado (casos legacy).
+        idempotency_key: Token opaco del frontend para deduplicar doble-click
+            y retries. Si existe una devolución previa con la misma clave en
+            este tenant, se eleva ``DuplicateReturnError`` con el id original.
 
     Returns:
         ReturnResult con éxito/error y monto reembolsado
+
+    Raises:
+        DuplicateReturnError: ya existe una devolución con ese idempotency_key.
     """
+    set_tenant_context(company_id, branch_id)
+    try:
+        return _process_return_impl(
+            session,
+            sale_id=sale_id,
+            company_id=company_id,
+            branch_id=branch_id,
+            user_id=user_id,
+            reason=reason,
+            notes=notes,
+            items=items,
+            timestamp=timestamp,
+            refund_method=refund_method,
+            idempotency_key=idempotency_key,
+        )
+    finally:
+        set_tenant_context(None, None)
+
+
+def _process_return_impl(
+    session: Session,
+    *,
+    sale_id: int,
+    company_id: int,
+    branch_id: int,
+    user_id: int,
+    reason: str,
+    notes: str,
+    items: list[ReturnItemRequest],
+    timestamp: datetime | None,
+    refund_method: str | None,
+    idempotency_key: str | None,
+) -> ReturnResult:
     ts = timestamp or utc_now_naive()
 
-    # Validar venta existe y está completada
+    # R1-03: chequeo idempotente pre-flush. Si ya existe devolución con este
+    # token para el tenant, devolvemos el id original — el retry/doble-click
+    # no crea un duplicado.
+    idem_key = (idempotency_key or "").strip() or None
+    if idem_key:
+        existing = session.exec(
+            select(SaleReturn)
+            .where(SaleReturn.company_id == company_id)
+            .where(SaleReturn.idempotency_key == idem_key)
+        ).first()
+        if existing:
+            raise DuplicateReturnError(existing.id)
+
+    # R1-02: FOR UPDATE para serializar devoluciones concurrentes sobre la
+    # misma venta (evita doble reembolso / stock revertido dos veces).
     sale = session.exec(
         select(Sale)
         .where(Sale.id == sale_id)
         .where(Sale.company_id == company_id)
         .where(Sale.branch_id == branch_id)
+        .with_for_update()
     ).first()
 
     if not sale:
         return ReturnResult(success=False, error="Venta no encontrada.")
+    # R1-04: bloquear también ventas ya totalmente devueltas.
     if sale.status == SaleStatus.cancelled:
         return ReturnResult(success=False, error="La venta ya fue anulada.")
+    if sale.status == SaleStatus.returned:
+        return ReturnResult(
+            success=False,
+            error="La venta ya fue devuelta en su totalidad.",
+        )
 
     if not items:
         return ReturnResult(success=False, error="No se seleccionaron ítems para devolver.")
@@ -152,9 +234,24 @@ def process_return(
         branch_id=branch_id,
         user_id=user_id,
         timestamp=ts,
+        idempotency_key=idem_key,
     )
     session.add(sale_return)
-    session.flush()  # Obtener ID
+    try:
+        session.flush()  # Obtener ID
+    except IntegrityError:
+        # Race: otro request insertó la misma idempotency_key entre nuestro
+        # lookup y el flush. Rollback y re-lookup para devolver el id ganador.
+        session.rollback()
+        if idem_key:
+            winner = session.exec(
+                select(SaleReturn)
+                .where(SaleReturn.company_id == company_id)
+                .where(SaleReturn.idempotency_key == idem_key)
+            ).first()
+            if winner:
+                raise DuplicateReturnError(winner.id)
+        raise
 
     # Recopilar IDs para pre-carga batch
     needed_variant_ids: set[int] = set()
@@ -301,7 +398,61 @@ def process_return(
         sale.status = SaleStatus.returned
         session.add(sale)
 
-    # Registrar egreso en CashboxLog
+    # R1-06: en ventas a crédito, el reembolso reduce la deuda del cliente
+    # y cancela cuotas pendientes (top-down: número mayor primero, ya que
+    # las próximas a vencer son las más urgentes de mantener activas si la
+    # devolución es parcial).
+    if (
+        (sale.payment_condition or "").strip().lower() == "credito"
+        and sale.client_id
+        and refund_total > 0
+    ):
+        client = session.exec(
+            select(Client)
+            .where(Client.id == sale.client_id)
+            .where(Client.company_id == company_id)
+            .with_for_update()
+        ).first()
+        if client:
+            current = client.current_debt or Decimal("0.00")
+            new_debt = current - refund_total
+            # Respeta CheckConstraint current_debt >= 0 y evita dejar saldo
+            # negativo aunque el refund supere la deuda (caso de pagos
+            # parciales previos ya descontados).
+            if new_debt < 0:
+                new_debt = Decimal("0.00")
+            client.current_debt = new_debt.quantize(Decimal("0.01"))
+            session.add(client)
+
+        # Cancelar cuotas pendientes absorbiendo el refund de mayor a menor.
+        pending_installments = session.exec(
+            select(SaleInstallment)
+            .where(SaleInstallment.sale_id == sale_id)
+            .where(SaleInstallment.company_id == company_id)
+            .where(SaleInstallment.status.in_(["pending", "partial"]))
+            .order_by(SaleInstallment.number.desc())
+            .with_for_update()
+        ).all()
+        remaining_refund = refund_total
+        for inst in pending_installments:
+            if remaining_refund <= 0:
+                break
+            amount = inst.amount or Decimal("0.00")
+            paid = inst.paid_amount or Decimal("0.00")
+            outstanding = amount - paid
+            if outstanding <= 0:
+                continue
+            if remaining_refund >= outstanding:
+                inst.paid_amount = amount
+                inst.status = "paid"
+                remaining_refund -= outstanding
+            else:
+                inst.paid_amount = (paid + remaining_refund).quantize(Decimal("0.01"))
+                inst.status = "partial"
+                remaining_refund = Decimal("0.00")
+            session.add(inst)
+
+    # Registrar egreso en CashboxLog (R1-07: payment_method si el UI lo pasa)
     log = CashboxLog(
         company_id=company_id,
         branch_id=branch_id,
@@ -311,6 +462,7 @@ def process_return(
         notes=f"Devolución venta #{sale_id} ({len(return_items)} ítems)",
         sale_id=sale_id,
         timestamp=ts,
+        payment_method=(refund_method or None),
     )
     session.add(log)
 

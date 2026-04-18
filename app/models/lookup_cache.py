@@ -94,10 +94,7 @@ class DocumentLookupCache(rx.Model, table=True):
     # ── Metadatos ─────────────────────────────────────────────
     fetched_at: datetime = Field(
         default_factory=utc_now_naive,
-        sa_column=sqlalchemy.Column(
-            sqlalchemy.DateTime(timezone=False),
-            server_default=sqlalchemy.func.now(),
-        ),
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
         description="Momento UTC en que se obtuvo la respuesta.",
     )
     not_found: bool = Field(

@@ -5,6 +5,7 @@ from enum import Enum
 import reflex as rx
 from sqlmodel import Field, Relationship
 import sqlalchemy
+from sqlalchemy import CheckConstraint
 from .auth import UserBranch
 from app.utils.timezone import utc_now_naive
 
@@ -29,6 +30,13 @@ class SubscriptionStatus(str, Enum):
 class Company(rx.Model, table=True):
     """Empresa (tenant)."""
 
+    __tablename__ = "company"
+
+    __table_args__ = (
+        CheckConstraint("max_branches >= 1", name="ck_company_max_branches_min"),
+        CheckConstraint("max_users >= 1", name="ck_company_max_users_min"),
+    )
+
     name: str = Field(nullable=False, index=True)
     ruc: str = Field(nullable=False, index=True, unique=True)
     is_active: bool = Field(default=True)
@@ -40,9 +48,21 @@ class Company(rx.Model, table=True):
         default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
     )
-    plan_type: str = Field(
+    # Persistido como VARCHAR(20) + CHECK IN (...) para validar a nivel DB.
+    # native_enum=False evita ENUM nativo de MySQL (inflexible en migraciones).
+    plan_type: PlanType = Field(
         default=PlanType.TRIAL,
-        description="Nivel de suscripción actual",
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Enum(
+                PlanType,
+                native_enum=False,
+                length=20,
+                validate_strings=True,
+                values_callable=lambda enum_cls: [m.value for m in enum_cls],
+            ),
+            nullable=False,
+            server_default=PlanType.TRIAL.value,
+        ),
     )
     max_branches: int = Field(default=2)
     max_users: int = Field(default=3)
@@ -51,9 +71,19 @@ class Company(rx.Model, table=True):
     has_clients_module: bool = Field(default=True)
     has_credits_module: bool = Field(default=True)
     has_electronic_billing: bool = Field(default=False)
-    subscription_status: str = Field(
+    subscription_status: SubscriptionStatus = Field(
         default=SubscriptionStatus.ACTIVE,
-        description="Estado calculado de la suscripción",
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Enum(
+                SubscriptionStatus,
+                native_enum=False,
+                length=20,
+                validate_strings=True,
+                values_callable=lambda enum_cls: [m.value for m in enum_cls],
+            ),
+            nullable=False,
+            server_default=SubscriptionStatus.ACTIVE.value,
+        ),
     )
     subscription_ends_at: Optional[datetime] = Field(
         default=None,
@@ -66,6 +96,8 @@ class Company(rx.Model, table=True):
 
 class Branch(rx.Model, table=True):
     """Sucursal de empresa."""
+
+    __tablename__ = "branch"
 
     company_id: int = Field(
         foreign_key="company.id",

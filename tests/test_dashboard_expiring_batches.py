@@ -352,12 +352,11 @@ class TestGetExpiringBatchesAlerts:
             )
         ]
 
+        # A1-02: rows + COUNT() OVER() — cada row es (batch, total_cnt).
         session = _AlertSession(
             [
-                _ExecResult(rows=expired),  # expired_query
-                _ExecResult(scalar=1),       # expired_count
-                _ExecResult(rows=soon),      # soon_query
-                _ExecResult(scalar=1),       # soon_count
+                _ExecResult(rows=[(expired[0], 1)]),  # expired_stmt
+                _ExecResult(rows=[(soon[0], 1)]),     # soon_stmt
             ]
         )
         monkeypatch.setattr(rx, "session", lambda: session)
@@ -388,12 +387,11 @@ class TestGetExpiringBatchesAlerts:
         fake_now = datetime(2026, 4, 8, 0, 0, 0)
         monkeypatch.setattr(alert_service, "utc_now_naive", lambda: fake_now)
 
+        # A1-02: sin rows → count=0 implícito (no hay row[0][1] que leer).
         session = _AlertSession(
             [
-                _ExecResult(rows=[]),
-                _ExecResult(scalar=0),
-                _ExecResult(rows=[]),
-                _ExecResult(scalar=0),
+                _ExecResult(rows=[]),  # expired_stmt
+                _ExecResult(rows=[]),  # soon_stmt
             ]
         )
         monkeypatch.setattr(rx, "session", lambda: session)
@@ -419,10 +417,8 @@ class TestGetExpiringBatchesAlerts:
         ]
         session = _AlertSession(
             [
-                _ExecResult(rows=expired),
-                _ExecResult(scalar=1),
-                _ExecResult(rows=[]),
-                _ExecResult(scalar=0),
+                _ExecResult(rows=[(expired[0], 1)]),  # expired_stmt
+                _ExecResult(rows=[]),                  # soon_stmt
             ]
         )
         monkeypatch.setattr(rx, "session", lambda: session)

@@ -517,6 +517,14 @@ class OwnerService:
                 f"Plan inválido: {new_plan}. Válidos: {valid_plans}"
             )
 
+        # Clamp defensivo: evita que un owner o un bug de UI asigne
+        # una suscripción de varios siglos por un valor descontrolado.
+        # 0 ó negativos → sin vencimiento (permitido para casos enterprise).
+        if subscription_months is not None and subscription_months > 120:
+            raise OwnerServiceError(
+                "subscription_months fuera de rango (máximo 120 meses)."
+            )
+
         company = await session.get(Company, company_id)
         if not company:
             raise OwnerServiceError(f"Empresa {company_id} no encontrada.")
@@ -703,7 +711,11 @@ class OwnerService:
 
         before = _company_snapshot(company)
 
-        base = company.trial_ends_at or utc_now_naive()
+        # Si el trial ya venció, extender desde *hoy* (no desde la fecha
+        # pasada), de lo contrario la extensión podría quedar en el pasado
+        # y el trial seguiría expirado tras la operación.
+        now = utc_now_naive()
+        base = max(company.trial_ends_at or now, now)
         company.trial_ends_at = base + timedelta(days=extra_days)
         company.is_active = True
         company.subscription_status = SubscriptionStatus.ACTIVE
@@ -928,18 +940,28 @@ class OwnerService:
         # 1 minúscula y 1 dígito. Evitamos símbolos para simplificar copiado
         # y descartar problemas de render/serialización en UI.
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
-        while True:
-            temp_password = "".join(secrets.choice(alphabet) for _ in range(10))
+        temp_password = ""
+        for _ in range(50):
+            candidate = "".join(secrets.choice(alphabet) for _ in range(10))
             # Mezclar para que la composición no siga un patrón fijo.
-            temp_list = list(temp_password)
+            temp_list = list(candidate)
             secrets.SystemRandom().shuffle(temp_list)
-            temp_password = "".join(temp_list)
-            # Verificar complejidad mínima
-            has_upper = any(c.isupper() for c in temp_password)
-            has_lower = any(c.islower() for c in temp_password)
-            has_digit = any(c.isdigit() for c in temp_password)
-            if has_upper and has_lower and has_digit:
+            candidate = "".join(temp_list)
+            if (
+                any(c.isupper() for c in candidate)
+                and any(c.islower() for c in candidate)
+                and any(c.isdigit() for c in candidate)
+            ):
+                temp_password = candidate
                 break
+        if not temp_password:
+            # Fallback determinístico ante improbabilidad estadística extrema.
+            temp_password = (
+                secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ")
+                + secrets.choice("abcdefghijkmnopqrstuvwxyz")
+                + secrets.choice("23456789")
+                + "".join(secrets.choice(alphabet) for _ in range(7))
+            )
 
         password_hash = bcrypt.hashpw(
             temp_password.encode("utf-8"), bcrypt.gensalt()

@@ -70,7 +70,6 @@ class OwnerAuditLog(rx.Model, table=True):
         sa_column=sqlalchemy.Column(
             sqlalchemy.DateTime(timezone=False),
             nullable=False,
-            server_default=sqlalchemy.func.now(),
         ),
         description="Fecha y hora de la acción",
     )

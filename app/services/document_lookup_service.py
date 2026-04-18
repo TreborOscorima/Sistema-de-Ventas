@@ -158,13 +158,22 @@ class PEDocumentLookup(DocumentLookupStrategy):
     async def lookup(self, doc_number: str, doc_type: str = "") -> LookupResult:
         doc_number = doc_number.strip().replace("-", "")
 
+        # D1-02: defensa en profundidad — si el caller directo (bypass
+        # lookup_document) pasa algo no-numérico, frenamos aquí antes de
+        # construir la URL.
+        if not doc_number.isdigit():
+            return LookupResult(
+                error="El número de documento debe contener solo dígitos.",
+                doc_number=doc_number,
+            )
+
         # Auto-detectar tipo por longitud
         if len(doc_number) == 11:
             doc_type = "RUC"
-            endpoint = f"{self.api_url}/sunat/ruc?numero={doc_number}"
+            endpoint = f"{self.api_url}/sunat/ruc"
         elif len(doc_number) == 8:
             doc_type = "DNI"
-            endpoint = f"{self.api_url}/reniec/dni?numero={doc_number}"
+            endpoint = f"{self.api_url}/reniec/dni"
         else:
             return LookupResult(
                 error=(
@@ -180,7 +189,11 @@ class PEDocumentLookup(DocumentLookupStrategy):
 
         try:
             async with httpx.AsyncClient(timeout=PE_API_TIMEOUT_SECONDS) as client:
-                resp = await client.get(endpoint, headers=headers)
+                resp = await client.get(
+                    endpoint,
+                    params={"numero": doc_number},
+                    headers=headers,
+                )
 
             if resp.status_code == 404:
                 return LookupResult(
@@ -508,16 +521,26 @@ class DocumentLookupFactory:
         country_key = _COUNTRY_ALIASES.get((country or "").strip().upper(), "")
 
         if country_key == "PE":
-            # Prioridad: config > env vars > defaults
+            # Binding atómico: URL y token DEBEN provenir del mismo origen
+            # (config ó env). Nunca mezclar — evita exfiltrar el token de
+            # plataforma hacia una URL controlada por el tenant.
             api_url = ""
             api_token = ""
+            config_url = ""
+            config_token = ""
             if config is not None:
-                api_url = getattr(config, "lookup_api_url", "") or ""
-                api_token = getattr(config, "lookup_api_token", "") or ""
-            if not api_url:
+                config_url = (getattr(config, "lookup_api_url", "") or "").strip()
+                config_token = (getattr(config, "lookup_api_token", "") or "").strip()
+
+            if config_url or config_token:
+                # Origen = config (aunque token esté vacío, NO hacer fallback).
+                api_url = config_url
+                api_token = config_token
+            else:
+                # Origen = env (par completo).
                 api_url = os.getenv("LOOKUP_API_URL", "").strip()
-            if not api_token:
                 api_token = os.getenv("LOOKUP_API_TOKEN", "").strip()
+
             return PEDocumentLookup(
                 api_url=api_url,
                 api_token=api_token,

@@ -30,7 +30,9 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from xml.etree import ElementTree as ET
+# W1-04: defusedxml previene XXE en respuestas no-trusted de AFIP.
+# Drop-in compatible con xml.etree.ElementTree (Element/ParseError/fromstring).
+from defusedxml import ElementTree as ET
 
 import httpx
 from cryptography import x509
@@ -89,16 +91,22 @@ async def _get_company_lock(key: str) -> asyncio.Lock:
         return _cache_locks[key]
 
 
-def _cache_key(company_id: int, service: str) -> str:
-    return f"{company_id}:{service}"
+def _cache_key(company_id: int, service: str, environment: str = "sandbox") -> str:
+    """Compone la clave del cache incluyendo ambiente.
+
+    W1-01: el ambiente forma parte de la clave para evitar que una empresa
+    que togglea sandbox↔production reutilice un token del ambiente anterior.
+    """
+    return f"{company_id}:{environment}:{service}"
 
 
 def get_cached_credentials(
     company_id: int,
     service: str = "wsfe",
+    environment: str = "sandbox",
 ) -> Optional[WSAACredentials]:
     """Retorna credenciales cacheadas si aún son válidas."""
-    key = _cache_key(company_id, service)
+    key = _cache_key(company_id, service, environment)
     creds = _credentials_cache.get(key)
     if creds and creds.is_valid:
         return creds
@@ -110,25 +118,31 @@ def get_cached_credentials(
 def cache_credentials(
     company_id: int,
     credentials: WSAACredentials,
+    environment: str = "sandbox",
 ) -> None:
     """Almacena credenciales en el cache."""
-    key = _cache_key(company_id, credentials.service)
+    key = _cache_key(company_id, credentials.service, environment)
     _credentials_cache[key] = credentials
 
 
 def clear_cache(company_id: int | None = None) -> None:
-    """Limpia el cache de credenciales.
+    """Limpia el cache de credenciales y los locks asociados.
 
-    Si company_id es None, limpia TODO el cache.
+    Si ``company_id`` es None, limpia TODO el cache. Borra además la entrada
+    correspondiente en ``_cache_locks`` para evitar crecimiento monótono en
+    escenarios de churn de empresas (W1-05).
     """
     if company_id is None:
         _credentials_cache.clear()
-    else:
-        keys_to_remove = [
-            k for k in _credentials_cache if k.startswith(f"{company_id}:")
-        ]
-        for k in keys_to_remove:
-            del _credentials_cache[k]
+        _cache_locks.clear()
+        return
+    prefix = f"{company_id}:"
+    cache_keys = [k for k in _credentials_cache if k.startswith(prefix)]
+    for k in cache_keys:
+        del _credentials_cache[k]
+    lock_keys = [k for k in _cache_locks if k.startswith(prefix)]
+    for k in lock_keys:
+        del _cache_locks[k]
 
 
 # ── Generación y firma del TRA ───────────────────────────────
@@ -152,7 +166,9 @@ def build_tra_xml(service: str = "wsfe") -> bytes:
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<loginTicketRequest>"
         "<header>"
-        f"<uniqueId>{int(now.timestamp())}</uniqueId>"
+        # W1-03: usamos milisegundos (time_ns / 1e6) para evitar colisiones
+        # sub-segundo en retries inmediatos — AFIP exige uniqueId único por TRA.
+        f"<uniqueId>{time.time_ns() // 1_000_000}</uniqueId>"
         f'<generationTime>{gen_time.strftime("%Y-%m-%dT%H:%M:%S%z")}</generationTime>'
         f'<expirationTime>{exp_time.strftime("%Y-%m-%dT%H:%M:%S%z")}</expirationTime>'
         "</header>"
@@ -349,14 +365,22 @@ async def authenticate(
         ValueError: Si los certificados son inválidos o WSAA rechaza.
         ConnectionError: Si no se puede contactar a WSAA.
     """
-    key = _cache_key(company_id, service)
+    # W1-02: ambiente debe estar en la whitelist; fallback silencioso a
+    # sandbox era peligroso (billing real podría firmar contra homologación).
+    if environment not in WSAA_URLS:
+        raise ValueError(
+            f"WSAA environment inválido: {environment!r}. "
+            f"Valores aceptados: {sorted(WSAA_URLS.keys())}."
+        )
+
+    key = _cache_key(company_id, service, environment)
 
     # 1. Fast path: verificar cache sin lock
-    cached = get_cached_credentials(company_id, service)
+    cached = get_cached_credentials(company_id, service, environment)
     if cached:
         logger.debug(
-            "WSAA: usando token cacheado company_id=%s service=%s",
-            company_id, service,
+            "WSAA: usando token cacheado company_id=%s env=%s service=%s",
+            company_id, environment, service,
         )
         return cached
 
@@ -364,11 +388,11 @@ async def authenticate(
     company_lock = await _get_company_lock(key)
     async with company_lock:
         # Double-check después de adquirir el lock (otro worker puede haber completado)
-        cached = get_cached_credentials(company_id, service)
+        cached = get_cached_credentials(company_id, service, environment)
         if cached:
             logger.debug(
-                "WSAA: token cacheado post-lock company_id=%s service=%s",
-                company_id, service,
+                "WSAA: token cacheado post-lock company_id=%s env=%s service=%s",
+                company_id, environment, service,
             )
             return cached
 
@@ -390,8 +414,8 @@ async def authenticate(
         tra_xml = build_tra_xml(service)
         cms_base64 = sign_tra(tra_xml, cert_pem, key_pem)
 
-        # 4. Enviar SOAP a WSAA
-        wsaa_url = WSAA_URLS.get(environment, WSAA_URLS["sandbox"])
+        # 4. Enviar SOAP a WSAA — environment validado al inicio (W1-02)
+        wsaa_url = WSAA_URLS[environment]
         soap_envelope = _build_login_cms_soap(cms_base64)
 
         try:
@@ -415,9 +439,15 @@ async def authenticate(
             ) from exc
 
         if response.status_code != 200:
+            # W1-06: no incluimos el cuerpo de la respuesta en el mensaje del
+            # ValueError (podría filtrarse a logs/UI). Solo un snippet corto y
+            # el código HTTP. El body completo queda en el log de debug.
+            logger.debug(
+                "WSAA HTTP %s body=%r", response.status_code, response.text
+            )
             raise ValueError(
                 f"WSAA retornó HTTP {response.status_code}: "
-                f"{response.text[:500]}"
+                f"{response.text[:100].strip()}"
             )
 
         # 5. Parsear respuesta y cachear (dentro del lock)

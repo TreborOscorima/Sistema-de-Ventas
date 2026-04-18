@@ -40,7 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CashboxLog, Client, Sale, SaleInstallment
 from app.utils.calculations import calculate_total
-from app.utils.tenant import set_tenant_context
+from app.utils.tenant import tenant_context
 from app.utils.timezone import utc_now_naive
 
 
@@ -82,32 +82,32 @@ class CreditService:
         Raises:
             ValueError: Si el cliente no existe
         """
-        set_tenant_context(company_id, branch_id)
-        client_query = select(Client).where(Client.id == client_id)
-        if company_id:
-            client_query = client_query.where(Client.company_id == company_id)
-        if branch_id:
-            client_query = client_query.where(Client.branch_id == branch_id)
-        client = (await session.exec(client_query)).first()
-        if not client:
-            raise ValueError("Cliente no encontrado.")
+        with tenant_context(company_id, branch_id):
+            client_query = select(Client).where(Client.id == client_id)
+            if company_id:
+                client_query = client_query.where(Client.company_id == company_id)
+            if branch_id:
+                client_query = client_query.where(Client.branch_id == branch_id)
+            client = (await session.exec(client_query)).first()
+            if not client:
+                raise ValueError("Cliente no encontrado.")
 
-        pending_installments = (
-            await session.exec(
-                select(SaleInstallment)
-                .join(Sale)
-                .where(Sale.client_id == client_id)
-                .where(SaleInstallment.company_id == client.company_id)
-                .where(SaleInstallment.branch_id == client.branch_id)
-                .where(SaleInstallment.status != "paid")
-                .order_by(SaleInstallment.due_date)
-            )
-        ).all()
+            pending_installments = (
+                await session.exec(
+                    select(SaleInstallment)
+                    .join(Sale)
+                    .where(Sale.client_id == client_id)
+                    .where(SaleInstallment.company_id == client.company_id)
+                    .where(SaleInstallment.branch_id == client.branch_id)
+                    .where(SaleInstallment.status != "paid")
+                    .order_by(SaleInstallment.due_date)
+                )
+            ).all()
 
-        return {
-            "current_debt": _round_money(client.current_debt),
-            "pending_installments": pending_installments,
-        }
+            return {
+                "current_debt": _round_money(client.current_debt),
+                "pending_installments": pending_installments,
+            }
 
     @staticmethod
     async def pay_installment(
@@ -165,99 +165,99 @@ class CreditService:
             else:
                 print(f"Pago parcial, pendiente: {installment.amount - installment.paid_amount}")
         """
-        set_tenant_context(company_id, branch_id)
-        payment_amount = _round_money(amount)
-        if payment_amount <= 0:
-            raise ValueError("Monto de pago invalido.")
+        with tenant_context(company_id, branch_id):
+            payment_amount = _round_money(amount)
+            if payment_amount <= 0:
+                raise ValueError("Monto de pago invalido.")
 
-        method_label = (payment_method or "").strip()
-        if not method_label:
-            raise ValueError("Metodo de pago requerido.")
+            method_label = (payment_method or "").strip()
+            if not method_label:
+                raise ValueError("Metodo de pago requerido.")
 
-        installment_query = (
-            select(SaleInstallment)
-            .where(SaleInstallment.id == installment_id)
-            .with_for_update()
-        )
-        if company_id:
-            installment_query = installment_query.where(
-                SaleInstallment.company_id == company_id
-            )
-        if branch_id:
-            installment_query = installment_query.where(
-                SaleInstallment.branch_id == branch_id
-            )
-        installment = (await session.exec(installment_query)).first()
-        if not installment:
-            raise ValueError("Cuota no encontrada.")
-
-        sale_query = (
-            select(Sale)
-            .where(Sale.id == installment.sale_id)
-            .with_for_update()
-        )
-        if company_id:
-            sale_query = sale_query.where(Sale.company_id == company_id)
-        if branch_id:
-            sale_query = sale_query.where(Sale.branch_id == branch_id)
-        sale = (await session.exec(sale_query)).first()
-        if not sale or sale.client_id is None:
-            raise ValueError("Cliente no encontrado.")
-
-        client = (
-            await session.exec(
-                select(Client)
-                .where(Client.id == sale.client_id)
-                .where(Client.company_id == sale.company_id)
-                .where(Client.branch_id == sale.branch_id)
+            installment_query = (
+                select(SaleInstallment)
+                .where(SaleInstallment.id == installment_id)
                 .with_for_update()
             )
-        ).first()
-        if not client:
-            raise ValueError("Cliente no encontrado.")
+            if company_id:
+                installment_query = installment_query.where(
+                    SaleInstallment.company_id == company_id
+                )
+            if branch_id:
+                installment_query = installment_query.where(
+                    SaleInstallment.branch_id == branch_id
+                )
+            installment = (await session.exec(installment_query)).first()
+            if not installment:
+                raise ValueError("Cuota no encontrada.")
 
-        amount_due = Decimal(str(installment.amount or 0))
-        paid_amount = Decimal(str(installment.paid_amount or 0))
-        pending_amount = _round_money(amount_due - paid_amount)
-        if payment_amount > pending_amount:
-            raise ValueError("El monto supera el saldo pendiente.")
-
-        new_paid_amount = _round_money(paid_amount + payment_amount)
-        if new_paid_amount > amount_due:
-            new_paid_amount = amount_due
-        installment.paid_amount = new_paid_amount
-        if installment.paid_amount >= amount_due:
-            installment.status = "paid"
-            installment.payment_date = utc_now_naive()
-        else:
-            installment.status = "partial"
-
-        client.current_debt = _round_money(
-            client.current_debt - payment_amount
-        )
-        if client.current_debt < 0:
-            client.current_debt = Decimal("0.00")
-
-        client_name = (client.name or "").strip() or f"ID {client.id}"
-        notes = (
-            f"Cobro Cuota {installment.number} / "
-            f"Venta #{installment.sale_id} - Cliente: {client_name}"
-        )
-
-        session.add(installment)
-        session.add(client)
-        session.add(
-            CashboxLog(
-                action="Cobranza",
-                amount=payment_amount,
-                payment_method=method_label,
-                notes=notes,
-                timestamp=utc_now_naive(),
-                user_id=user_id,
-                sale_id=sale.id,
-                company_id=sale.company_id,
-                branch_id=sale.branch_id,
+            sale_query = (
+                select(Sale)
+                .where(Sale.id == installment.sale_id)
+                .with_for_update()
             )
-        )
+            if company_id:
+                sale_query = sale_query.where(Sale.company_id == company_id)
+            if branch_id:
+                sale_query = sale_query.where(Sale.branch_id == branch_id)
+            sale = (await session.exec(sale_query)).first()
+            if not sale or sale.client_id is None:
+                raise ValueError("Cliente no encontrado.")
 
-        return installment
+            client = (
+                await session.exec(
+                    select(Client)
+                    .where(Client.id == sale.client_id)
+                    .where(Client.company_id == sale.company_id)
+                    .where(Client.branch_id == sale.branch_id)
+                    .with_for_update()
+                )
+            ).first()
+            if not client:
+                raise ValueError("Cliente no encontrado.")
+
+            amount_due = Decimal(str(installment.amount or 0))
+            paid_amount = Decimal(str(installment.paid_amount or 0))
+            pending_amount = _round_money(amount_due - paid_amount)
+            if payment_amount > pending_amount:
+                raise ValueError("El monto supera el saldo pendiente.")
+
+            new_paid_amount = _round_money(paid_amount + payment_amount)
+            if new_paid_amount > amount_due:
+                new_paid_amount = amount_due
+            installment.paid_amount = new_paid_amount
+            if installment.paid_amount >= amount_due:
+                installment.status = "paid"
+                installment.payment_date = utc_now_naive()
+            else:
+                installment.status = "partial"
+
+            client.current_debt = _round_money(
+                client.current_debt - payment_amount
+            )
+            if client.current_debt < 0:
+                client.current_debt = Decimal("0.00")
+
+            client_name = (client.name or "").strip() or f"ID {client.id}"
+            notes = (
+                f"Cobro Cuota {installment.number} / "
+                f"Venta #{installment.sale_id} - Cliente: {client_name}"
+            )
+
+            session.add(installment)
+            session.add(client)
+            session.add(
+                CashboxLog(
+                    action="Cobranza",
+                    amount=payment_amount,
+                    payment_method=method_label,
+                    notes=notes,
+                    timestamp=utc_now_naive(),
+                    user_id=user_id,
+                    sale_id=sale.id,
+                    company_id=sale.company_id,
+                    branch_id=sale.branch_id,
+                )
+            )
+
+            return installment

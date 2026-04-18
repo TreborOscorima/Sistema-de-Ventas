@@ -5,18 +5,22 @@ from decimal import Decimal
 import reflex as rx
 from sqlmodel import Field, Relationship
 import sqlalchemy
-from sqlalchemy import Numeric
+from sqlalchemy import CheckConstraint, Numeric
 
 from app.enums import SportType
 from app.utils.timezone import utc_now_naive
+
+from ._mixins import TenantMixin
 
 if TYPE_CHECKING:
     from .auth import User
     from .sales import SaleItem
 
 
-class Product(rx.Model, table=True):
+class Product(TenantMixin, rx.Model, table=True):
     """Modelo de producto de inventario."""
+
+    __tablename__ = "product"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -44,19 +48,11 @@ class Product(rx.Model, table=True):
         ),
     )
 
+    __mapper_args__ = {"eager_defaults": True}
+
     barcode: str = Field(index=True, nullable=False)
     description: str = Field(nullable=False, index=True)
     category: str = Field(default="General", index=True)
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
     stock: Decimal = Field(
         default=Decimal("0.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
@@ -121,8 +117,10 @@ class Product(rx.Model, table=True):
     attributes: List["ProductAttribute"] = Relationship(back_populates="product")
 
 
-class ProductVariant(rx.Model, table=True):
+class ProductVariant(TenantMixin, rx.Model, table=True):
     """Variantes de producto (talla/color)."""
+
+    __tablename__ = "productvariant"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -154,16 +152,6 @@ class ProductVariant(rx.Model, table=True):
         default=None,
         sa_column=sqlalchemy.Column(Numeric(10, 4), nullable=True),
     )
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
 
     product: "Product" = Relationship(back_populates="variants")
     batches: List["ProductBatch"] = Relationship(back_populates="product_variant")
@@ -171,8 +159,10 @@ class ProductVariant(rx.Model, table=True):
     sale_items: List["SaleItem"] = Relationship(back_populates="product_variant")
 
 
-class ProductBatch(rx.Model, table=True):
+class ProductBatch(TenantMixin, rx.Model, table=True):
     """Lotes con vencimiento (FEFO)."""
+
+    __tablename__ = "productbatch"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -214,16 +204,6 @@ class ProductBatch(rx.Model, table=True):
         foreign_key="productvariant.id",
         index=True,
     )
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
 
     product: Optional["Product"] = Relationship(back_populates="batches")
     product_variant: Optional["ProductVariant"] = Relationship(
@@ -232,8 +212,10 @@ class ProductBatch(rx.Model, table=True):
     sale_items: List["SaleItem"] = Relationship(back_populates="product_batch")
 
 
-class ProductKit(rx.Model, table=True):
+class ProductKit(TenantMixin, rx.Model, table=True):
     """Definicion de kits (producto compuesto)."""
+
+    __tablename__ = "productkit"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -243,23 +225,30 @@ class ProductKit(rx.Model, table=True):
             "component_product_id",
             name="uq_productkit_company_branch_component",
         ),
+        CheckConstraint("quantity > 0", name="ck_productkit_quantity_positive"),
     )
 
-    kit_product_id: int = Field(foreign_key="product.id", index=True)
-    component_product_id: int = Field(foreign_key="product.id", index=True)
+    # ondelete CASCADE: si se borra el producto-kit o el componente,
+    # la relación de explosión pierde sentido → limpia automáticamente.
+    kit_product_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    component_product_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
     quantity: Decimal = Field(
         default=Decimal("1.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
-    )
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
     )
 
     kit_product: "Product" = Relationship(
@@ -272,8 +261,10 @@ class ProductKit(rx.Model, table=True):
     )
 
 
-class PriceTier(rx.Model, table=True):
+class PriceTier(TenantMixin, rx.Model, table=True):
     """Escalas de precios por cantidad."""
+
+    __tablename__ = "pricetier"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -296,16 +287,6 @@ class PriceTier(rx.Model, table=True):
         default=None,
         foreign_key="productvariant.id",
     )
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
 
     product: Optional["Product"] = Relationship(back_populates="price_tiers")
     product_variant: Optional["ProductVariant"] = Relationship(
@@ -313,7 +294,7 @@ class PriceTier(rx.Model, table=True):
     )
 
 
-class ProductAttribute(rx.Model, table=True):
+class ProductAttribute(TenantMixin, rx.Model, table=True):
     """Atributos dinámicos por producto/variante (EAV ligero).
 
     Permite atributos específicos por rubro sin modificar el schema:
@@ -322,6 +303,8 @@ class ProductAttribute(rx.Model, table=True):
     - Ropa: temporada=verano, marca=Nike (talla/color ya están en ProductVariant)
     - Juguetería: edad_minima=3, marca=Hasbro
     """
+
+    __tablename__ = "productattribute"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -348,14 +331,14 @@ class ProductAttribute(rx.Model, table=True):
     product_id: int = Field(foreign_key="product.id", index=True, nullable=False)
     attribute_name: str = Field(max_length=100, index=True, nullable=False)
     attribute_value: str = Field(max_length=500, nullable=False, default="")
-    company_id: int = Field(foreign_key="company.id", index=True, nullable=False)
-    branch_id: int = Field(foreign_key="branch.id", index=True, nullable=False)
 
     product: Optional["Product"] = Relationship(back_populates="attributes")
 
 
-class Category(rx.Model, table=True):
+class Category(TenantMixin, rx.Model, table=True):
     """Categorias de productos."""
+
+    __tablename__ = "category"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -366,22 +349,14 @@ class Category(rx.Model, table=True):
         ),
     )
 
-    name: str = Field(index=True, nullable=False)
+    name: str = Field(nullable=False)
     requires_batch: bool = Field(default=False)
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
 
 
-class StockMovement(rx.Model, table=True):
+class StockMovement(TenantMixin, rx.Model, table=True):
     """Movimientos de stock (ingresos, ajustes)."""
+
+    __tablename__ = "stockmovement"
 
     __table_args__ = (
         sqlalchemy.Index(
@@ -401,7 +376,7 @@ class StockMovement(rx.Model, table=True):
     timestamp: datetime = Field(
         default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(
-            sqlalchemy.DateTime(timezone=False), index=True
+            sqlalchemy.DateTime(timezone=False),
         ),
     )
     type: str = Field(nullable=False, index=True)
@@ -411,25 +386,34 @@ class StockMovement(rx.Model, table=True):
     )
     description: str = Field(default="")
 
-    product_id: Optional[int] = Field(default=None, foreign_key="product.id", index=True)
-    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
+    # SET NULL: preservamos la historia de movimientos aunque se borre el
+    # producto o el usuario (compliance contable / auditoría).
+    product_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
     )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
+    user_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("user.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
     )
 
     product: Optional["Product"] = Relationship()
     user: Optional["User"] = Relationship()
 
 
-class Unit(rx.Model, table=True):
+class Unit(TenantMixin, rx.Model, table=True):
     """Unidades de medida."""
+
+    __tablename__ = "unit"
 
     __table_args__ = (
         sqlalchemy.UniqueConstraint(
@@ -440,35 +424,17 @@ class Unit(rx.Model, table=True):
         ),
     )
 
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
     name: str = Field(index=True, nullable=False)
     allows_decimal: bool = Field(default=False)
 
 
-class FieldPrice(rx.Model, table=True):
+class FieldPrice(TenantMixin, rx.Model, table=True):
     """Precios de alquiler de canchas."""
+
+    __tablename__ = "fieldprice"
 
     sport: SportType = Field(nullable=False)
     name: str = Field(nullable=False)
-    company_id: int = Field(
-        foreign_key="company.id",
-        index=True,
-        nullable=False,
-    )
-    branch_id: int = Field(
-        foreign_key="branch.id",
-        index=True,
-        nullable=False,
-    )
     price: Decimal = Field(
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),

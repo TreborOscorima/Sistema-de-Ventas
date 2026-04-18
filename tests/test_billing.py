@@ -2156,7 +2156,7 @@ class TestSyncAfipLastAuthorized:
         config.current_sequence_boleta = seq_boleta
         config.encrypted_certificate = "cert-enc"
         config.encrypted_private_key = "key-enc"
-        config.afip_tax_id = "20-12345678-9"
+        config.afip_tax_id = "20-12345678-6"
         config.afip_punto_venta = 1
         config.environment = "sandbox"
         return config
@@ -2257,11 +2257,15 @@ class TestSyncAfipLastAuthorized:
 
     @pytest.mark.asyncio
     async def test_cuit_parsed_correctly_with_dashes(self):
-        """CUIT con guiones (20-12345678-9) debe parsearse a int correctamente."""
+        """CUIT con guiones (20-12345678-6) debe parsearse a int correctamente.
+
+        DV 6 elegido porque es el dígito verificador real del CUIT 20-12345678,
+        requerido por validate_cuit en sync_afip_last_authorized (B1-04).
+        """
         from app.services.billing_service import sync_afip_last_authorized
         from app.services.afip_wsfe import UltimoAutorizadoResult
         config = self._make_config()
-        config.afip_tax_id = "20-12345678-9"
+        config.afip_tax_id = "20-12345678-6"
 
         mock_creds = MagicMock()
         mock_creds.token = "tok"
@@ -2277,7 +2281,7 @@ class TestSyncAfipLastAuthorized:
             with patch("app.services.afip_wsfe.fe_comp_ultimo_autorizado", new=AsyncMock(side_effect=_capture_cuit)):
                 await sync_afip_last_authorized(config)
 
-        assert captured_cuit[0] == 20123456789
+        assert captured_cuit[0] == 20123456786
 
     def test_function_exported_from_billing_service(self):
         """sync_afip_last_authorized debe ser importable desde billing_service."""

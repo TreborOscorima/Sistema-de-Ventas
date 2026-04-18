@@ -1,71 +1,101 @@
+"""
+Engine + session factory asíncronos.
+
+- Pool alineado con rxconfig (mismos DB_* vars).
+- `READ COMMITTED` para evitar phantoms en reportes concurrentes de POS.
+- `utf8mb4` + timezone UTC fijos vía connect_args/init_command.
+- `get_async_session()` abre transacción; commit en éxito, rollback en error.
+- Los listeners de tenant se registran explícitamente desde el bootstrap de la app
+  (no side-effect en import) — ver app/app.py.
+"""
+from __future__ import annotations
+
 import os
-from urllib.parse import quote_plus
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.utils.logger import get_logger
-from app.utils.tenant import register_tenant_listeners
 
 load_dotenv()
 
-logger = get_logger("DatabaseTurbo")
+logger = get_logger("db")
 
 
-def _require_env(var_name: str) -> str:
-    """Obtiene una variable de entorno obligatoria o lanza error."""
-    value = os.getenv(var_name)
-    if not value:
-        raise RuntimeError(f"Variable de entorno requerida no encontrada: {var_name}")
-    return value
+def _require_env(var: str) -> str:
+    v = os.getenv(var)
+    if not v:
+        raise RuntimeError(f"[db] Variable obligatoria: {var}")
+    return v
 
-DB_USER = _require_env("DB_USER")
-DB_PASSWORD = _require_env("DB_PASSWORD")
-DB_HOST = _require_env("DB_HOST")
-DB_PORT = os.getenv("DB_PORT", "3306")
-DB_NAME = _require_env("DB_NAME")
 
-DB_USER_ESCAPED = quote_plus(DB_USER or "")
-DB_PASSWORD_ESCAPED = quote_plus(DB_PASSWORD or "")
+_DB_USER = _require_env("DB_USER")
+_DB_PASSWORD = _require_env("DB_PASSWORD")
+_DB_HOST = _require_env("DB_HOST")
+_DB_PORT = os.getenv("DB_PORT", "3306")
+_DB_NAME = _require_env("DB_NAME")
 
 ASYNC_DATABASE_URL = (
-    f"mysql+aiomysql://{DB_USER_ESCAPED}:{DB_PASSWORD_ESCAPED}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"mysql+aiomysql://{quote_plus(_DB_USER)}:{quote_plus(_DB_PASSWORD)}"
+    f"@{_DB_HOST}:{_DB_PORT}/{_DB_NAME}?charset=utf8mb4"
 )
+
+# Pool tuning — alineado con rxconfig para NO duplicar conexiones a MySQL.
+_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "15"))
+_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "10"))
+_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "1800"))
 
 async_engine: AsyncEngine = create_async_engine(
     ASYNC_DATABASE_URL,
     pool_pre_ping=True,
-    pool_size=20,
-    max_overflow=30,
-    pool_recycle=1800,
+    pool_size=_POOL_SIZE,
+    max_overflow=_MAX_OVERFLOW,
+    pool_timeout=_POOL_TIMEOUT,
+    pool_recycle=_POOL_RECYCLE,
+    pool_use_lifo=True,  # reutiliza conexiones calientes -> menos round-trip SSL
+    isolation_level="READ COMMITTED",
+    connect_args={
+        "init_command": "SET time_zone='+00:00'",
+    },
+    # query_cache_size por defecto (500) es OK; subir solo si se valida con perfiles.
 )
 
 AsyncSessionLocal = async_sessionmaker(
     async_engine,
     class_=AsyncSession,
     expire_on_commit=False,
+    autoflush=False,  # el caller decide cuándo flushear; evita before_flush en SELECTs.
 )
-
-# Registrar listeners de aislamiento multi-tenant.
-register_tenant_listeners()
 
 
 @asynccontextmanager
-async def get_async_session() -> AsyncIterator[AsyncSession]:
-    """Context manager asíncrono para obtener una sesión de base de datos."""
-    # Evita I/O de logs por cada sesión en producción/carga alta.
-    logger.debug("Iniciando transacción asíncrona.")
+async def get_async_session(*, commit: bool = False) -> AsyncIterator[AsyncSession]:
+    """
+    Sesión asíncrona.
+
+    - Por default el caller decide cuándo commitear (comportamiento histórico).
+    - `commit=True`: helper para scripts/tareas cortas que quieren auto-commit
+      al salir sin excepción.
+    - Cualquier excepción dispara rollback y se re-lanza.
+    """
+    session = AsyncSessionLocal()
     try:
-        async with AsyncSessionLocal() as session:
-            try:
-                yield session
-            except Exception as e:
-                logger.error(f"🔥 Error en sesión DB: {e}")
-                await session.rollback()
-                raise
-    except Exception as e:
-        logger.error("🔥 No se pudo abrir sesión DB.", exc_info=True)
+        yield session
+        if commit and session.in_transaction():
+            await session.commit()
+    except Exception:
+        await session.rollback()
+        logger.exception("[db] rollback por excepción en sesión async")
         raise
+    finally:
+        await session.close()
+
+
+async def dispose_engine() -> None:
+    """Cerrar pool al bajar el proceso (hook de shutdown de Reflex/FastAPI)."""
+    await async_engine.dispose()
