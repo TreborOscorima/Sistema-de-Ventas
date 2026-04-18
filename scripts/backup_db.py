@@ -100,10 +100,13 @@ def run_mysqldump(config: dict, output_path: Path) -> bool:
         f"--host={config['host']}",
         f"--port={config['port']}",
         f"--user={config['user']}",
-        "--single-transaction",  # Consistencia para InnoDB
-        "--routines",            # Incluir procedimientos almacenados
-        "--triggers",            # Incluir triggers
-        "--add-drop-table",      # Facilita restauración
+        "--single-transaction",              # Consistencia para InnoDB
+        "--routines",                        # Incluir procedimientos almacenados
+        "--triggers",                        # Incluir triggers
+        "--add-drop-table",                  # Facilita restauración
+        "--default-character-set=utf8mb4",   # Preserva emojis/acentos en dump+restore
+        "--hex-blob",                        # BLOBs en hex: evita corrupción al volcar binarios
+        "--set-gtid-purged=OFF",             # No emitir GTID si el servidor lo tiene
         config["database"],
     ]
     
@@ -146,6 +149,61 @@ def compress_file(input_path: Path, output_path: Path) -> bool:
     except Exception as e:
         print(f"Error comprimiendo: {e}", file=sys.stderr)
         return False
+
+
+# Tamaño mínimo aceptable para un backup de MySQL: un dump válido
+# siempre supera varios KB por los comentarios de cabecera + SET estatements.
+# Un archivo < 1 KB indica que mysqldump falló antes de volcar cualquier tabla.
+_MIN_BACKUP_SIZE_BYTES = 1024
+
+
+def verify_backup_integrity(backup_path: Path) -> tuple[bool, str]:
+    """Valida que el backup tenga contenido plausible antes de confiar en él.
+
+    Controles:
+      - El archivo existe y pesa más de _MIN_BACKUP_SIZE_BYTES.
+      - La cabecera contiene el banner estándar de mysqldump.
+      - El archivo termina con "-- Dump completed" (evita dumps truncados
+        por OOM, disco lleno o timeout del subprocess).
+
+    Funciona tanto para dumps .sql como .sql.gz.
+    """
+    if not backup_path.exists():
+        return False, "archivo no existe"
+
+    size = backup_path.stat().st_size
+    is_compressed = backup_path.suffix == ".gz"
+    # Para .gz el tamaño mínimo no aplica: un dump válido comprimido puede pesar
+    # menos que el umbral. La verificación real para .gz es head+tail descomprimidos.
+    if not is_compressed and size < _MIN_BACKUP_SIZE_BYTES:
+        return False, f"tamaño sospechoso ({size} bytes < {_MIN_BACKUP_SIZE_BYTES})"
+
+    opener = gzip.open if is_compressed else open
+    try:
+        with opener(backup_path, "rt", encoding="utf-8", errors="replace") as f:
+            head = f.read(2048)
+    except OSError as e:
+        return False, f"no se pudo leer cabecera: {e}"
+
+    if "-- MySQL dump" not in head and "-- MariaDB dump" not in head:
+        return False, "cabecera no coincide con dump MySQL/MariaDB"
+
+    # Leer los últimos bytes para confirmar cierre limpio.
+    try:
+        if is_compressed:
+            with gzip.open(backup_path, "rt", encoding="utf-8", errors="replace") as f:
+                tail = f.read()[-512:]
+        else:
+            with open(backup_path, "rb") as f:
+                f.seek(max(0, size - 512))
+                tail = f.read().decode("utf-8", errors="replace")
+    except OSError as e:
+        return False, f"no se pudo leer cola: {e}"
+
+    if "Dump completed" not in tail:
+        return False, "dump truncado (falta marca 'Dump completed')"
+
+    return True, "ok"
 
 
 def cleanup_old_backups(backup_dir: Path, database: str, keep: int) -> int:
@@ -210,13 +268,24 @@ def create_backup(compress: bool = False, keep: int | None = None) -> Path | Non
     # Obtener tamaño del archivo
     size_mb = final_path.stat().st_size / (1024 * 1024)
     print(f"Backup creado: {final_path.name} ({size_mb:.2f} MB)")
-    
-    # Limpiar backups antiguos
+
+    # Verificar integridad ANTES de rotar: un dump corrupto + cleanup
+    # podría borrar el último backup bueno y dejarnos sin respaldo.
+    ok, reason = verify_backup_integrity(final_path)
+    if not ok:
+        print(
+            f"ERROR: el backup falló la validación de integridad ({reason}). "
+            "Se conserva el archivo para inspección manual y se omite la rotación.",
+            file=sys.stderr,
+        )
+        return None
+
+    # Limpiar backups antiguos — solo tras confirmar que el nuevo es válido.
     if keep is not None and keep > 0:
         deleted = cleanup_old_backups(backup_dir, config["database"], keep)
         if deleted > 0:
             print(f"Backups antiguos eliminados: {deleted}")
-    
+
     return final_path
 
 
