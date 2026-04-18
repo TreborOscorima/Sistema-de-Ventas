@@ -1,4 +1,10 @@
-"""Script para corregir subscription_ends_at muy cortas en empresas de plan pago."""
+"""Script para corregir subscription_ends_at muy cortas en empresas de plan pago.
+
+Uso:
+    python scripts/fix_subscription_dates.py --dry-run    # Previsualiza sin mutar
+    python scripts/fix_subscription_dates.py --execute    # Ejecuta el commit
+"""
+import argparse
 import asyncio
 import os
 import sys
@@ -24,7 +30,7 @@ from app.models.company import Company, PlanType
 from sqlalchemy import select
 
 
-async def main():
+async def main(dry_run: bool) -> int:
     async with AsyncSessionLocal() as session:
         with tenant_bypass():
             now = datetime.now()
@@ -44,17 +50,35 @@ async def main():
 
             if not companies:
                 print("No hay empresas con subscription_ends_at incorrecta.")
-                return
+                return 0
 
+            mode = "[DRY RUN]" if dry_run else "[EXECUTE]"
             for c in companies:
                 new_date = now + timedelta(days=365)
-                print(f"  Corrigiendo {c.name}: {c.subscription_ends_at} -> {new_date}")
-                c.subscription_ends_at = new_date
-                session.add(c)
+                print(f"  {mode} {c.name}: {c.subscription_ends_at} -> {new_date}")
+                if not dry_run:
+                    c.subscription_ends_at = new_date
+                    session.add(c)
 
-            await session.commit()
-            print(f"\n{len(companies)} empresa(s) corregidas.")
+            if dry_run:
+                print(
+                    f"\n{len(companies)} empresa(s) serían corregidas. "
+                    "Re-ejecuta con --execute para aplicar los cambios."
+                )
+            else:
+                await session.commit()
+                print(f"\n{len(companies)} empresa(s) corregidas.")
+            return len(companies)
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--dry-run", action="store_true", help="Previsualiza sin mutar.")
+    group.add_argument("--execute", action="store_true", help="Aplica los cambios (commit).")
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    args = _parse_args()
+    asyncio.run(main(dry_run=args.dry_run))
