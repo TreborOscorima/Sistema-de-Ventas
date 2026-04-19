@@ -1667,7 +1667,21 @@ class AuthState(MixinState):
             self.cashbox_log_filter_end_date = ""
             self.cashbox_log_staged_start_date = ""
             self.cashbox_log_staged_end_date = ""
-        return rx.toast(MSG.AUTH_BRANCH_UPDATED, duration=2000)
+
+        # Garantía de aislamiento visual: redirect a la ruta actual fuerza
+        # re-mount completo de la página con el tenant ya cambiado, sin depender
+        # del dispatch selectivo por `current_page` (que deja fuera módulos como
+        # POS/Ventas, Owner, etc). Combina con el enforcement ORM de tenant.py
+        # para garantizar que ninguna sucursal vea datos de otra.
+        current_path = "/"
+        try:
+            current_path = (self.router.url.path or "/") if hasattr(self, "router") else "/"
+        except Exception:
+            current_path = "/"
+        return [
+            rx.toast(MSG.AUTH_BRANCH_UPDATED, duration=2000),
+            rx.redirect(current_path),
+        ]
 
     @rx.event
     def login(self, form_data: dict):
