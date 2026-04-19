@@ -16,6 +16,8 @@ from urllib.parse import quote_plus
 from dotenv import load_dotenv
 import reflex as rx
 
+from app.utils.env import require_int_env
+
 load_dotenv()
 
 # ---------------------------------------------------------------------------
@@ -45,7 +47,8 @@ REDIS_URL = _require_env("REDIS_URL", dev_default="")
 DB_USER = _require_env("DB_USER", dev_default="root")
 DB_PASSWORD = _require_env("DB_PASSWORD")  # sin default, incluso en dev — forzar .env
 DB_HOST = _require_env("DB_HOST", dev_default="localhost")
-DB_PORT = os.getenv("DB_PORT", "3306")
+# DB_PORT: fail-fast si está presente pero no es numérico (consistente con app/utils/db.py).
+DB_PORT = require_int_env("DB_PORT", 3306)
 DB_NAME = _require_env("DB_NAME", dev_default="sistema_ventas")
 
 _USER_ESC = quote_plus(DB_USER)
@@ -53,7 +56,7 @@ _PASS_ESC = quote_plus(DB_PASSWORD)
 
 # URL sync (Reflex + alembic). charset y autocommit parametrizados.
 DB_URL = (
-    f"mysql+pymysql://{_USER_ESC}:{_PASS_ESC}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"mysql+pymysql://{_USER_ESC}:{_PASS_ESC}@{DB_HOST}:{int(DB_PORT)}/{DB_NAME}"
     f"?charset=utf8mb4"
 )
 
