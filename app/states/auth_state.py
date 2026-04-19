@@ -1586,6 +1586,12 @@ class AuthState(MixinState):
         if hasattr(self, "refresh_cashbox_status"):
             self.refresh_cashbox_status()
 
+        # CRÍTICO: invalidar el TTL de runtime refresh para que al re-montar
+        # la página tras rx.redirect() el tenant context se sete correctamente
+        # y no aborte silenciosamente. Sin esto, el usuario ve datos vacíos.
+        if hasattr(self, "_last_runtime_refresh_ts"):
+            self._last_runtime_refresh_ts = 0.0
+
         # Invalidar TTLs para que page_init_* recargue datos al navegar
         if hasattr(self, "_last_suppliers_load_ts"):
             self._last_suppliers_load_ts = 0.0

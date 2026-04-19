@@ -61,6 +61,11 @@ class State(RootState):
     runtime_ctx_loaded: bool = False
     _last_runtime_refresh_ts: float = rx.field(default=0.0, is_var=False)
     _runtime_refresh_ttl: float = rx.field(default=30.0, is_var=False)
+    # Último tenant (company_id, branch_id) procesado por _do_runtime_refresh.
+    # Si el tenant actual difiere, el TTL se bypassa: garantiza que tras cambiar
+    # de sucursal/empresa se fuerce refresh aunque el TTL aún no haya vencido.
+    _last_runtime_company_id: int = rx.field(default=0, is_var=False)
+    _last_runtime_branch_id: int = rx.field(default=0, is_var=False)
 
     # TTL para cargas de datos de página (evita recargas innecesarias en nav SPA)
     _last_suppliers_load_ts: float = rx.field(default=0.0, is_var=False)
@@ -108,9 +113,34 @@ class State(RootState):
         now = time.time()
         # Forzar refresh si subscription_snapshot está vacío (plan no cargado)
         snapshot_empty = not (self.subscription_snapshot or {}).get("plan_type")
-        if not force and not snapshot_empty and (now - self._last_runtime_refresh_ts) < self._runtime_refresh_ttl:
+        # Detectar cambio de tenant: si company/branch actual difiere del último
+        # procesado, bypassamos el TTL. Esto cubre el caso de set_active_branch
+        # + rx.redirect() donde el TTL aún no venció pero el tenant cambió.
+        try:
+            cur_company = int(self.current_user.get("company_id") or 0) if hasattr(self, "current_user") else 0
+        except (TypeError, ValueError):
+            cur_company = 0
+        try:
+            cur_branch = int(self.selected_branch_id) if getattr(self, "selected_branch_id", "") else 0
+        except (TypeError, ValueError):
+            cur_branch = 0
+        last_company = getattr(self, "_last_runtime_company_id", 0) or 0
+        last_branch = getattr(self, "_last_runtime_branch_id", 0) or 0
+        tenant_changed = (cur_company != last_company) or (cur_branch != last_branch)
+        if (
+            not force
+            and not snapshot_empty
+            and not tenant_changed
+            and (now - self._last_runtime_refresh_ts) < self._runtime_refresh_ttl
+        ):
             return
         self._last_runtime_refresh_ts = now
+        # Evitar AttributeError en mocks de tests que no declaran estos campos.
+        try:
+            self._last_runtime_company_id = cur_company
+            self._last_runtime_branch_id = cur_branch
+        except AttributeError:
+            pass
 
         # --- auth + caja + alertas ---
         if hasattr(self, "refresh_auth_runtime_cache"):
@@ -466,6 +496,10 @@ class State(RootState):
             yield redirect
         # Delta parcial: renderiza la UI de inmediato
         yield
+        # Carga explícita de datos del Dashboard en background: no depender
+        # del on_mount del componente (frágil tras rx.redirect por branch switch).
+        if hasattr(self, "load_dashboard_background"):
+            yield State.load_dashboard_background
 
     @rx.event
     async def page_init_ingreso(self):
@@ -575,6 +609,9 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Carga explícita de clientes (tenant-aware). load_clients es sync.
+        if hasattr(self, "load_clients"):
+            self.load_clients()
         yield
 
     @rx.event
@@ -595,6 +632,9 @@ class State(RootState):
         if redirect:
             yield redirect
         yield
+        # Carga explícita de deudores en background (tenant-aware).
+        if hasattr(self, "load_debtors_background"):
+            yield State.load_debtors_background
 
     @rx.event
     async def page_init_inventario(self):
@@ -633,6 +673,9 @@ class State(RootState):
             yield redirect
         # Delta parcial: renderiza la UI de inmediato
         yield
+        # Carga explícita del historial en background (tenant-aware).
+        if hasattr(self, "reload_history_background"):
+            yield State.reload_history_background
 
     @rx.event
     async def page_init_reportes(self):
