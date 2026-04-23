@@ -38,12 +38,21 @@ def import_modal() -> rx.Component:
           rx.el.div(
             rx.icon("cloud-upload", class_name="h-10 w-10 text-slate-400 mx-auto mb-2"),
             rx.el.p(
-              "Arrastre un archivo aquí o haga clic para seleccionar",
+              "Arrastre un archivo aquí",
               class_name="text-sm text-slate-500 text-center",
             ),
             rx.el.p(
               "Formatos: .csv, .xlsx",
               class_name="text-xs text-slate-400 text-center mt-1",
+            ),
+            rx.el.span(
+              rx.icon("folder-open", class_name="h-4 w-4 pointer-events-none"),
+              "Seleccionar archivo",
+              class_name=(
+                "mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium "
+                "text-slate-700 bg-white border border-slate-300 rounded-lg "
+                "hover:bg-slate-50 cursor-pointer pointer-events-none"
+              ),
             ),
             class_name="flex flex-col items-center justify-center py-8",
           ),
@@ -1314,15 +1323,26 @@ def _product_card(product: rx.Var) -> rx.Component:
         # Header: Nombre + Estado activo/inactivo
         rx.el.div(
             rx.el.div(
-                rx.el.span(
-                    product["description"],
-                    class_name="font-medium text-slate-900 text-sm",
+                rx.el.div(
+                    rx.el.span(
+                        product["description"],
+                        class_name="font-medium text-slate-900 text-sm",
+                    ),
+                    rx.cond(
+                        product["is_kit"],
+                        rx.el.span(
+                            "KIT",
+                            class_name="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold tracking-wide",
+                        ),
+                        rx.fragment(),
+                    ),
+                    class_name="flex items-center gap-1.5 flex-wrap",
                 ),
                 rx.el.span(
                     product["category"],
                     class_name=TYPOGRAPHY["caption"],
                 ),
-                class_name="flex flex-col",
+                class_name="flex flex-col gap-0.5",
             ),
             rx.cond(
                 product["is_active"],
@@ -1627,6 +1647,14 @@ def inventario_page() -> rx.Component:
                 rx.el.td(
                   rx.el.div(
                     product["description"],
+                    rx.cond(
+                      product["is_kit"],
+                      rx.el.span(
+                        "KIT",
+                        class_name="ml-1.5 text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-semibold tracking-wide",
+                      ),
+                      rx.fragment(),
+                    ),
                     rx.cond(
                       product["is_active"],
                       rx.fragment(),

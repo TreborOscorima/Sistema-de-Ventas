@@ -8,6 +8,7 @@ from sqlalchemy import or_, func, exists, literal, union_all, case, and_
 from app.models import (
     Product,
     ProductVariant,
+    ProductKit,
     Category,
 )
 from app.utils.tenant import set_tenant_context
@@ -66,7 +67,7 @@ class SearchMixin:
             variant_match,
         )
 
-    def _inventory_row_from_product(self, product: Product) -> Dict[str, Any]:
+    def _inventory_row_from_product(self, product: Product, is_kit: bool = False) -> Dict[str, Any]:
         stock_value = float(product.stock or 0)
         purchase_value = float(product.purchase_price or 0)
         stock_total = self._round_currency(stock_value * purchase_value)
@@ -75,6 +76,7 @@ class SearchMixin:
             "id": product.id,
             "variant_id": None,
             "is_variant": False,
+            "is_kit": is_kit,
             "is_active": getattr(product, 'is_active', True),
             "barcode": product.barcode,
             "description": product.description,
@@ -89,7 +91,7 @@ class SearchMixin:
         }
 
     def _inventory_row_from_variant(
-        self, product: Product, variant: ProductVariant
+        self, product: Product, variant: ProductVariant, is_kit: bool = False
     ) -> Dict[str, Any]:
         label = self._variant_label(variant)
         description = product.description or ""
@@ -111,6 +113,7 @@ class SearchMixin:
             "id": product.id,
             "variant_id": variant.id,
             "is_variant": True,
+            "is_kit": is_kit,
             "is_active": getattr(product, 'is_active', True),
             "barcode": variant.sku or product.barcode,
             "description": description,
@@ -274,6 +277,14 @@ class SearchMixin:
                     )
                 ).all()
             }
+        kit_ids: set = set(
+            session.exec(
+                select(ProductKit.kit_product_id)
+                .where(ProductKit.kit_product_id.in_(product_ids_needed))
+                .where(ProductKit.company_id == company_id)
+                .where(ProductKit.branch_id == branch_id)
+            ).all()
+        )
 
         # Build rows preserving SQL sort order
         rows: List[Dict[str, Any]] = []
@@ -284,9 +295,9 @@ class SearchMixin:
             if vid is not None:
                 variant = variants_map.get(vid)
                 if variant:
-                    rows.append(self._inventory_row_from_variant(product, variant))
+                    rows.append(self._inventory_row_from_variant(product, variant, is_kit=pid in kit_ids))
             else:
-                rows.append(self._inventory_row_from_product(product))
+                rows.append(self._inventory_row_from_product(product, is_kit=pid in kit_ids))
         return rows
 
     def _refresh_inventory_cache(self):
@@ -358,9 +369,19 @@ class SearchMixin:
                     .offset(offset)
                     .limit(per_page)
                 )
+                products_page = session.exec(query).all()
+                page_product_ids = [p.id for p in products_page]
+                page_kit_ids: set = set(
+                    session.exec(
+                        select(ProductKit.kit_product_id)
+                        .where(ProductKit.kit_product_id.in_(page_product_ids))
+                        .where(ProductKit.company_id == company_id)
+                        .where(ProductKit.branch_id == branch_id)
+                    ).all()
+                ) if page_product_ids else set()
                 page_rows = [
-                    self._inventory_row_from_product(product)
-                    for product in session.exec(query).all()
+                    self._inventory_row_from_product(product, is_kit=product.id in page_kit_ids)
+                    for product in products_page
                 ]
 
             # Single query con CASE para obtener los 4 contadores en 1 round-trip
