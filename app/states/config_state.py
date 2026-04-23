@@ -385,6 +385,9 @@ class ConfigState(MixinState):
 
         self.selected_country_code = code
         self.selected_currency_code = new_currency
+        # Resetear arqueo para que las denominaciones del nuevo país partan de cero
+        self.denomination_counts = {}
+        self.cashbox_close_counted_total = 0.0
         self.load_config_data()  # Recargar métodos de pago
 
         return [

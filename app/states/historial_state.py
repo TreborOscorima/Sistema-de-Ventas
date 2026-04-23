@@ -2203,15 +2203,16 @@ class HistorialState(MixinState):
                 available = float(si.quantity or 0) - prev_returned
                 if available <= 0:
                     continue
+                unit_price = float(si.unit_price or 0)
                 items.append({
                     "sale_item_id": si.id,
                     "product_name": si.product_name_snapshot or "Producto",
-                    "unit_price": float(si.unit_price or 0),
+                    "unit_price": unit_price,
                     "original_qty": float(si.quantity or 0),
                     "already_returned": prev_returned,
                     "available_qty": available,
-                    "return_qty": 0,
-                    "refund_line": 0.0,
+                    "return_qty": available,
+                    "refund_line": round(available * unit_price, 2),
                 })
             if not items:
                 return rx.toast("Todos los ítems ya fueron devueltos.", duration=3000)
