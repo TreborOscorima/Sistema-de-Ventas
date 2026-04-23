@@ -109,15 +109,27 @@ class DashboardState(MixinState):
         self.dashboard_loading = loading
 
     def _load_dashboard_data(self) -> None:
-        """Carga todos los datos del dashboard sin manejar UI state."""
-        self._load_sales_summary()
-        self._load_kpis()
-        self._load_alerts()
-        self._load_sales_by_day()
-        self._load_top_products()
-        self._load_sales_by_category()
-        self._load_payment_breakdown()
-        self._load_expiring_batches()
+        """Carga todos los datos del dashboard sin manejar UI state.
+
+        Cada sección se aisla en su propio try/except: si un método falla,
+        las demás secciones siguen cargando. last_refresh siempre se setea
+        al final para que el header salga del estado "Cargando...".
+        """
+        sections = (
+            ("sales_summary", self._load_sales_summary),
+            ("kpis", self._load_kpis),
+            ("alerts", self._load_alerts),
+            ("sales_by_day", self._load_sales_by_day),
+            ("top_products", self._load_top_products),
+            ("sales_by_category", self._load_sales_by_category),
+            ("payment_breakdown", self._load_payment_breakdown),
+            ("expiring_batches", self._load_expiring_batches),
+        )
+        for name, loader in sections:
+            try:
+                loader()
+            except Exception:
+                logger.exception("Dashboard section '%s' failed", name)
         self.last_refresh = self._display_now().strftime("%H:%M:%S")
 
     def _local_period_dates(self) -> tuple[datetime, datetime, datetime, datetime]:
@@ -582,8 +594,8 @@ class DashboardState(MixinState):
                     func.sum(SaleItem.subtotal).label("revenue")
                 )
                 .select_from(SaleItem)
-                .join(Product)
-                .join(Sale)
+                .join(Product, Product.id == SaleItem.product_id)
+                .join(Sale, Sale.id == SaleItem.sale_id)
                 .where(
                     and_(
                         Sale.timestamp >= period_start,
