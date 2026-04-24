@@ -63,7 +63,7 @@ def _promo_row(p: rx.Var) -> rx.Component:
                     rx.cond(
                         p["type"] == PromotionType.FIXED_AMOUNT,
                         State.currency_symbol + p["discount_value"].to_string(),
-                        p["min_quantity"].to_string() + "x" + (p["min_quantity"] - p["free_quantity"]).to_string(),
+                        p["min_quantity"].to_string() + "x" + (p["min_quantity"].to(int) - p["free_quantity"].to(int)).to_string(),
                     ),
                 ),
                 class_name="font-semibold text-amber-700 tabular-nums text-sm",
@@ -130,7 +130,7 @@ def _promo_card(p: rx.Var) -> rx.Component:
         rx.el.p(p["name"], class_name="font-medium text-slate-900 text-sm mt-1"),
         rx.el.p(p["scope_label"], class_name="text-xs text-slate-500"),
         rx.el.div(
-            rx.el.span(p["starts_at"] + " → " + p["ends_at"], class_name="text-xs text-slate-400"),
+            rx.el.span(f"{p['starts_at']} → {p['ends_at']}", class_name="text-xs text-slate-400"),
             class_name="mt-1",
         ),
         rx.el.div(

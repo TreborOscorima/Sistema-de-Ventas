@@ -27,7 +27,7 @@ def _status_badge(status_label: rx.Var, status_color: rx.Var) -> rx.Component:
         status_label,
         class_name=rx.cond(
             status_color != "",
-            status_color + " px-2 py-0.5 rounded-full text-xs font-semibold",
+            f"{status_color} px-2 py-0.5 rounded-full text-xs font-semibold",
             "text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full text-xs font-semibold",
         ),
     )
@@ -126,7 +126,7 @@ def _quotation_detail_modal() -> rx.Component:
             rx.el.td(item["unit_price"], class_name="py-2 px-3 text-sm text-right tabular-nums"),
             rx.el.td(
                 rx.cond(
-                    item["discount_percentage"] > 0,
+                    item["discount_percentage"].to(float) > 0,
                     rx.el.span(f"{item['discount_percentage']}%", class_name="text-amber-600 text-xs"),
                     rx.el.span("—", class_name="text-slate-300 text-xs"),
                 ),
@@ -155,7 +155,7 @@ def _quotation_detail_modal() -> rx.Component:
                     rx.el.p("Total", class_name="text-xs text-slate-500 uppercase tracking-wide"),
                     rx.el.p(q["total_amount"], class_name="text-2xl font-bold text-indigo-700 tabular-nums"),
                     rx.cond(
-                        q["discount_percentage"] > 0,
+                        q["discount_percentage"].to(float) > 0,
                         rx.el.p(f"Desc. global: {q['discount_percentage']}%", class_name="text-xs text-amber-600"),
                         rx.fragment(),
                     ),
