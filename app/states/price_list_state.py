@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 import reflex as rx
-from sqlmodel import select
+from sqlmodel import select, func
 
 from app.models import Client, Product, ProductVariant
 from app.models.price_lists import PriceList, PriceListItem
@@ -77,7 +77,7 @@ class PriceListState(MixinState):
             counts = {}
             for pl in rows:
                 cnt = session.exec(
-                    select(rx.func.count(PriceListItem.id))
+                    select(func.count(PriceListItem.id))
                     .where(PriceListItem.price_list_id == pl.id)
                 ).one()
                 counts[pl.id] = cnt or 0
@@ -85,7 +85,7 @@ class PriceListState(MixinState):
             client_counts = {}
             for pl in rows:
                 cnt = session.exec(
-                    select(rx.func.count(Client.id))
+                    select(func.count(Client.id))
                     .where(Client.price_list_id == pl.id)
                 ).one()
                 client_counts[pl.id] = cnt or 0

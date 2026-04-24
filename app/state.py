@@ -9,6 +9,7 @@ from app.models import Supplier, FieldReservation as FieldReservationModel
 from app.enums import ReservationStatus
 from app.utils.sanitization import escape_like
 from app.states.root_state import RootState
+from app.states.quotation_state import QuotationState
 from app.states.types import (
     Product,
     TransactionItem,
@@ -738,7 +739,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_presupuestos_data(self):
-        await self.page_init_presupuestos()
+        yield QuotationState.page_init_presupuestos
 
     @rx.event
     async def page_init_promociones(self):
