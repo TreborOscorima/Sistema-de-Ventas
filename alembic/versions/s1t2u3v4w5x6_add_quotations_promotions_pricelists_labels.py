@@ -10,7 +10,7 @@ Cambios:
   - Columna product.sale_price_updated_at : Timestamp de último cambio de precio
 
 Revision ID: s1t2u3v4w5x6
-Revises: q8r9s0t1u2v3
+Revises: n6c7d8e9
 Create Date: 2026-04-23
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ from sqlalchemy import inspect as sa_inspect
 
 
 revision = "s1t2u3v4w5x6"
-down_revision = "q8r9s0t1u2v3"
+down_revision = "n6c7d8e9"
 branch_labels = None
 depends_on = None
 
