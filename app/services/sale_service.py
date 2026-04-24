@@ -65,6 +65,8 @@ from app.models import (
     SalePayment,
     Unit,
 )
+from app.models.price_lists import PriceList, PriceListItem
+from app.models.promotions import Promotion, PromotionType, PromotionScope
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.utils.calculations import calculate_subtotal, calculate_total
 from app.utils.db import get_async_session as get_session
@@ -686,7 +688,17 @@ async def _calculate_item_price(
     qty: Decimal,
     company_id: int | None,
     branch_id: int | None,
+    price_list_id: int | None = None,
 ) -> Decimal:
+    # 1. Lista de precios del cliente (mayor prioridad)
+    if price_list_id:
+        pl_price = await _get_price_list_price(
+            session, product.id, variant.id if variant else None, price_list_id
+        )
+        if pl_price is not None:
+            return pl_price
+
+    # 2. Precio por escala/volumen (PriceTier)
     tier = None
     if variant:
         tier = await _get_price_tier(
@@ -706,7 +718,133 @@ async def _calculate_item_price(
         )
     if tier and tier.unit_price is not None:
         return _round_money(tier.unit_price)
+
+    # 3. Precio base del producto
     return _round_money(product.sale_price)
+
+
+async def _get_price_list_price(
+    session: AsyncSession,
+    product_id: int,
+    variant_id: int | None,
+    price_list_id: int,
+) -> Decimal | None:
+    """Busca el precio override en la lista asignada al cliente.
+
+    Busca primero por variante específica; si no encuentra, por producto base.
+    """
+    # Intentar con variante primero
+    if variant_id:
+        stmt = (
+            select(PriceListItem)
+            .where(PriceListItem.price_list_id == price_list_id)
+            .where(PriceListItem.product_id == product_id)
+            .where(PriceListItem.product_variant_id == variant_id)
+        )
+        item = (await session.execute(stmt)).scalar_one_or_none()
+        if item:
+            return _round_money(item.unit_price)
+
+    # Fallback al producto base en la lista
+    stmt = (
+        select(PriceListItem)
+        .where(PriceListItem.price_list_id == price_list_id)
+        .where(PriceListItem.product_id == product_id)
+        .where(PriceListItem.product_variant_id == None)
+    )
+    item = (await session.execute(stmt)).scalar_one_or_none()
+    if item:
+        return _round_money(item.unit_price)
+    return None
+
+
+async def _apply_promotions(
+    session: AsyncSession,
+    product: Product,
+    qty: Decimal,
+    unit_price: Decimal,
+    company_id: int,
+    branch_id: int,
+    now: "datetime | None" = None,
+) -> Decimal:
+    """Aplica la primera promoción activa y vigente que aplique al producto.
+
+    Jerarquía de búsqueda (más específica → más general):
+      1. Scope PRODUCT: coincide con product_id exacto
+      2. Scope CATEGORY: coincide con product.category
+      3. Scope ALL: aplica a cualquier producto
+
+    Retorna el precio unitario final (potencialmente reducido).
+    """
+    from app.utils.timezone import utc_now_naive as _utc_now
+    effective_now = now or _utc_now()
+
+    # Query de todas las promociones activas y vigentes para este tenant
+    stmt = (
+        select(Promotion)
+        .where(Promotion.company_id == company_id)
+        .where(Promotion.branch_id == branch_id)
+        .where(Promotion.is_active == True)
+        .where(Promotion.starts_at <= effective_now)
+        .where(Promotion.ends_at >= effective_now)
+        .order_by(
+            # Ordenar de más específico a más general
+            Promotion.scope.desc(),  # product > category > all (lexicográfico: p > c > a)
+        )
+    )
+    promotions = (await session.execute(stmt)).scalars().all()
+
+    for promo in promotions:
+        # Verificar límite de usos
+        if promo.max_uses is not None and promo.current_uses >= promo.max_uses:
+            continue
+
+        # Verificar que aplica al producto
+        applies = False
+        if promo.scope == PromotionScope.ALL:
+            applies = True
+        elif promo.scope == PromotionScope.PRODUCT and promo.product_id == product.id:
+            applies = True
+        elif promo.scope == PromotionScope.CATEGORY and promo.category == product.category:
+            applies = True
+
+        if not applies:
+            continue
+
+        # Verificar cantidad mínima
+        if qty < Decimal(str(promo.min_quantity)):
+            continue
+
+        # Aplicar descuento
+        disc_val = Decimal(str(promo.discount_value or 0))
+        if promo.promotion_type == PromotionType.PERCENTAGE:
+            factor = (Decimal("100") - disc_val) / Decimal("100")
+            final_price = _round_money(unit_price * factor)
+        elif promo.promotion_type == PromotionType.FIXED_AMOUNT:
+            final_price = _round_money(max(Decimal("0"), unit_price - disc_val))
+        elif promo.promotion_type == PromotionType.BUY_X_GET_Y:
+            # Calcula precio efectivo por unidad en el grupo X+Y
+            min_q = Decimal(str(promo.min_quantity))
+            free_q = Decimal(str(promo.free_quantity or 0))
+            total_group = min_q + free_q
+            if total_group > 0:
+                factor = min_q / total_group
+                final_price = _round_money(unit_price * factor)
+            else:
+                final_price = unit_price
+        else:
+            final_price = unit_price
+
+        # Incrementar contador de usos (no bloqueante, eventual consistency ok)
+        try:
+            promo.current_uses = (promo.current_uses or 0) + 1
+            await session.flush()
+        except Exception:
+            pass
+
+        return final_price
+
+    return unit_price
 
 
 def _sum_batch_stock(
@@ -1298,6 +1436,18 @@ class SaleService:
             (c.name or "").strip().lower() for c in _batch_cat_rows
         }
 
+        # Resolver lista de precios del cliente (si aplica) una sola vez
+        # antes del loop de ítems para evitar N queries.
+        client_price_list_id: int | None = None
+        if payment_data.client_id:
+            client_for_pl_stmt = select(Client).where(Client.id == payment_data.client_id)
+            client_for_pl = (await session.execute(client_for_pl_stmt)).scalar_one_or_none()
+            if client_for_pl and client_for_pl.price_list_id:
+                client_price_list_id = client_for_pl.price_list_id
+
+        # Tiempo UTC para evaluación de promociones (constante durante toda la venta)
+        promo_now = utc_now_naive()
+
         product_snapshot: list[Dict[str, Any]] = []
         decimal_snapshot: list[Dict[str, Any]] = []
         pending_items: list[Dict[str, Any]] = []
@@ -1540,6 +1690,17 @@ class SaleService:
                 item["quantity"],
                 company_id,
                 branch_id,
+                price_list_id=client_price_list_id,
+            )
+            # Aplicar promociones activas (puede reducir unit_price)
+            unit_price = await _apply_promotions(
+                session,
+                product,
+                item["quantity"],
+                unit_price,
+                company_id,
+                branch_id,
+                now=promo_now,
             )
             if unit_price <= 0:
                 raise ValueError(

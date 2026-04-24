@@ -839,7 +839,13 @@ class ProductMixin:
                     )
                     product.unit = product_data.get("unit", "Unidad")
                     product.purchase_price = product_data.get("purchase_price", 0)
-                    product.sale_price = product_data.get("sale_price", 0)
+                    new_sale_price = product_data.get("sale_price", 0)
+                    # Registrar timestamp si el precio de venta cambió
+                    from decimal import Decimal
+                    if Decimal(str(new_sale_price or 0)) != Decimal(str(product.sale_price or 0)):
+                        from app.utils.timezone import utc_now_naive as _now
+                        product.sale_price_updated_at = _now()
+                    product.sale_price = new_sale_price
 
                     session.add(product)
                     msg = "Producto actualizado correctamente."

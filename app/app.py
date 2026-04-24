@@ -38,6 +38,9 @@ from app.pages.clientes import clientes_page
 from app.pages.dashboard import dashboard_page
 from app.pages.reportes import reportes_page
 from app.pages.documentos_fiscales import documentos_fiscales_page
+from app.pages.presupuestos import presupuestos_page
+from app.pages.promociones import promociones_page
+from app.pages.listas_precios import listas_precios_page
 from app.pages.owner import owner_page, owner_login_page
 from app.components.notification import NotificationHolder
 from app.api import health_app
@@ -299,6 +302,18 @@ def page_documentos_fiscales() -> rx.Component:
     return authenticated_layout(documentos_fiscales_page())
 
 
+def page_presupuestos() -> rx.Component:
+    return authenticated_layout(presupuestos_page())
+
+
+def page_promociones() -> rx.Component:
+    return authenticated_layout(promociones_page())
+
+
+def page_listas_precios() -> rx.Component:
+    return authenticated_layout(listas_precios_page())
+
+
 def page_cambiar_contrasena() -> rx.Component:
     return cambiar_contrasena_page()
 
@@ -550,6 +565,24 @@ def _register_app_routes():
         route="/documentos-fiscales",
         title="Documentos Fiscales - TUWAYKIAPP",
         on_load=State.page_init_documentos_fiscales,
+    )
+    _add_private_page(
+        page_presupuestos,
+        route="/presupuestos",
+        title="Presupuestos - TUWAYKIAPP",
+        on_load=State.page_init_presupuestos,
+    )
+    _add_private_page(
+        page_promociones,
+        route="/promociones",
+        title="Promociones - TUWAYKIAPP",
+        on_load=State.page_init_promociones,
+    )
+    _add_private_page(
+        page_listas_precios,
+        route="/listas-precios",
+        title="Listas de Precios - TUWAYKIAPP",
+        on_load=State.page_init_listas_precios,
     )
 
 
