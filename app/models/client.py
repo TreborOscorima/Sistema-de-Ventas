@@ -10,6 +10,7 @@ from ._mixins import TenantMixin
 
 if TYPE_CHECKING:
     from .sales import Sale
+    from .price_lists import PriceList
 
 
 class Client(TenantMixin, rx.Model, table=True):
@@ -42,4 +43,20 @@ class Client(TenantMixin, rx.Model, table=True):
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
 
+    # Lista de precios asignada al cliente: resuelve precio automáticamente en venta.
+    # NULL = usar precio base del producto.
+    price_list_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("pricelist.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+
     sales: List["Sale"] = Relationship(back_populates="client")
+    price_list: Optional["PriceList"] = Relationship(
+        back_populates="clients",
+        sa_relationship_kwargs={"foreign_keys": "[Client.price_list_id]"},
+    )

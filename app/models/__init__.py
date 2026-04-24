@@ -35,12 +35,18 @@ from .sales import (
     SaleReturn,
     SaleReturnItem,
 )
+# PriceList ANTES de Client — Client.price_list_id referencia pricelist.id
+from .price_lists import PriceList, PriceListItem
 from .client import Client
 # billing DESPUÉS de sales — FiscalDocument.sale necesita que Sale
 # esté registrado en el class registry de SQLAlchemy.
 from .billing import CompanyBillingConfig, FiscalDocument
 from .lookup_cache import DocumentLookupCache
 from .platform_config import PlatformBillingSettings
+# Presupuestos DESPUÉS de sales y client (FK a sale.id y client.id)
+from .quotations import Quotation, QuotationItem
+# Promociones: FK opcional a product.id
+from .promotions import Promotion
 
 __all__ = [
     "Permission",
@@ -70,6 +76,8 @@ __all__ = [
     "SaleItem",
     "SalePayment",
     "SaleInstallment",
+    "PriceList",
+    "PriceListItem",
     "Client",
     "CashboxSession",
     "CashboxLog",
@@ -84,4 +92,7 @@ __all__ = [
     "FiscalDocument",
     "DocumentLookupCache",
     "PlatformBillingSettings",
+    "Quotation",
+    "QuotationItem",
+    "Promotion",
 ]

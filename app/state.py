@@ -675,6 +675,65 @@ class State(RootState):
         yield State.bg_load_reservations
 
     @rx.event
+    async def page_init_presupuestos(self):
+        """on_load para /presupuestos."""
+        await self._do_runtime_refresh()
+        self.sync_page_from_route()
+        denied = self._check_auth_and_privilege(
+            "create_ventas",
+            "Acceso denegado: No tienes permiso para ver Presupuestos.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        yield
+        yield State.page_init_presupuestos_data
+
+    @rx.event
+    async def page_init_presupuestos_data(self):
+        await self.page_init_presupuestos()
+
+    @rx.event
+    async def page_init_promociones(self):
+        """on_load para /promociones."""
+        await self._do_runtime_refresh()
+        self.sync_page_from_route()
+        denied = self._page_guard(
+            require_roles=("Superadmin", "Administrador"),
+            deny_msg="Acceso denegado: Se requiere nivel de Administrador.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        yield
+
+    @rx.event
+    async def page_init_listas_precios(self):
+        """on_load para /listas-precios."""
+        await self._do_runtime_refresh()
+        self.sync_page_from_route()
+        denied = self._page_guard(
+            require_roles=("Superadmin", "Administrador"),
+            deny_msg="Acceso denegado: Se requiere nivel de Administrador.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        yield
+
+    @rx.event
     async def page_init_configuracion(self):
         """on_load para /configuracion. Requiere rol Administrador o Superadmin."""
         await self._do_runtime_refresh()

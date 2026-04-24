@@ -1407,6 +1407,146 @@ def _product_card(product: rx.Var) -> rx.Component:
     )
 
 
+def label_generator_modal() -> rx.Component:
+    """Modal para generar PDF masivo de etiquetas con código de barras."""
+    return modal_container(
+        is_open=State.show_label_generator,
+        on_close=State.close_label_generator,
+        title="Generador de Etiquetas",
+        max_width="max-w-lg",
+        children=[
+            rx.el.div(
+                # Tamaño de etiqueta
+                rx.el.div(
+                    rx.el.label("Tamaño de etiqueta", class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1"),
+                    rx.el.select(
+                        rx.el.option("Pequeña (2 columnas)", value="small"),
+                        rx.el.option("Mediana (3 columnas)", value="medium"),
+                        rx.el.option("Grande (1 columna)", value="large"),
+                        default_value=State.label_size,
+                        on_change=State.set_label_size,
+                        class_name="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm",
+                    ),
+                ),
+
+                # Filtro de productos
+                rx.el.div(
+                    rx.el.label("Productos a etiquetar", class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1"),
+                    rx.el.select(
+                        rx.el.option("Todos los productos activos", value="all"),
+                        rx.el.option("Precio cambiado en los últimos N días", value="price_changed"),
+                        rx.el.option("Sin código de barras", value="no_barcode"),
+                        default_value=State.label_filter,
+                        on_change=State.set_label_filter,
+                        class_name="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm",
+                    ),
+                ),
+
+                # Días (visible solo cuando filtro == price_changed)
+                rx.cond(
+                    State.label_filter == "price_changed",
+                    rx.el.div(
+                        rx.el.label("Últimos N días con cambio de precio", class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1"),
+                        rx.el.input(
+                            default_value=State.label_price_changed_days.to_string(),
+                            type="number",
+                            min="1",
+                            max="365",
+                            on_blur=State.set_label_price_changed_days,
+                            class_name="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm",
+                        ),
+                    ),
+                    rx.fragment(),
+                ),
+
+                # Copias por etiqueta
+                rx.el.div(
+                    rx.el.label("Copias por etiqueta", class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1"),
+                    rx.el.input(
+                        default_value=State.label_copies.to_string(),
+                        type="number",
+                        min="1",
+                        max="10",
+                        on_blur=State.set_label_copies,
+                        class_name="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm",
+                    ),
+                ),
+
+                # Mostrar precio de compra
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.input(
+                            type="checkbox",
+                            default_checked=State.label_show_purchase_price,
+                            on_change=State.set_label_show_purchase_price,
+                            class_name="h-4 w-4 rounded border-slate-300 text-indigo-600",
+                        ),
+                        rx.el.span("Incluir precio de compra en etiqueta", class_name="text-sm text-slate-700"),
+                        class_name="flex items-center gap-2",
+                    ),
+                ),
+
+                # Botón preview
+                rx.el.button(
+                    rx.icon("search", class_name="h-4 w-4"),
+                    "Ver productos que se etiquetarán",
+                    on_click=State.load_label_preview,
+                    class_name="flex items-center gap-2 text-sm text-indigo-600 hover:text-indigo-800 underline",
+                ),
+
+                # Preview
+                rx.cond(
+                    State.label_preview_loaded,
+                    rx.el.div(
+                        rx.el.p(
+                            State.label_preview_count.to_string() + " productos en total",
+                            class_name="text-sm font-semibold text-slate-700",
+                        ),
+                        rx.cond(
+                            State.label_preview_products.length() > 0,
+                            rx.el.ul(
+                                rx.foreach(
+                                    State.label_preview_products,
+                                    lambda p: rx.el.li(
+                                        rx.el.span(p["description"], class_name="text-sm text-slate-700"),
+                                        rx.el.span(" · ", class_name="text-slate-300"),
+                                        rx.el.span(p["barcode"], class_name="text-xs font-mono text-slate-400"),
+                                        class_name="py-0.5",
+                                    ),
+                                ),
+                                class_name="space-y-0.5 mt-2 max-h-32 overflow-y-auto",
+                            ),
+                            rx.fragment(),
+                        ),
+                        class_name="bg-slate-50 rounded-lg p-3 border border-slate-100",
+                    ),
+                    rx.fragment(),
+                ),
+
+                class_name="flex flex-col gap-4",
+            ),
+        ],
+        footer=rx.el.div(
+            rx.el.button(
+                rx.cond(
+                    State.is_loading,
+                    rx.el.div(rx.icon("loader-circle", class_name="h-4 w-4 animate-spin"), "Generando...", class_name="flex items-center gap-2"),
+                    rx.el.div(rx.icon("download", class_name="h-4 w-4"), "Descargar PDF", class_name="flex items-center gap-2"),
+                ),
+                on_click=State.download_label_pdf,
+                disabled=State.is_loading,
+                class_name="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm disabled:opacity-50",
+            ),
+            rx.el.button(
+                "Cancelar",
+                on_click=State.close_label_generator,
+                class_name="px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-sm",
+            ),
+            class_name="flex gap-3 justify-end",
+        ),
+    )
+
+
 def inventario_page() -> rx.Component:
   """Página principal de gestión de inventario."""
   content = rx.el.div(
@@ -1563,6 +1703,13 @@ def inventario_page() -> rx.Component:
             "Registrar Fisico",
             on_click=State.open_inventory_check_modal,
             class_name=BUTTON_STYLES["warning"],
+          ),
+          rx.el.button(
+            rx.icon("tag", class_name="h-4 w-4"),
+            "Etiquetas",
+            on_click=State.open_label_generator,
+            class_name=BUTTON_STYLES["ghost"],
+            title="Generar PDF de etiquetas con código de barras",
           ),
           class_name="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end",
         ),
@@ -1774,6 +1921,7 @@ def inventario_page() -> rx.Component:
     edit_product_modal(),
     stock_details_modal(),
     import_modal(),
+    label_generator_modal(),
     on_mount=State.refresh_inventory_cache,
     class_name=f"w-full flex flex-col {SPACING['page_gap']}",
   )

@@ -99,6 +99,17 @@ class Product(TenantMixin, rx.Model, table=True):
     )
     tax_category: str = Field(default="gravado", max_length=20)
 
+    # Auditoría de cambio de precio: permite filtrar productos con precio
+    # modificado esta semana en el generador masivo de etiquetas.
+    sale_price_updated_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.DateTime(timezone=False),
+            nullable=True,
+            index=True,
+        ),
+    )
+
     sale_items: List["SaleItem"] = Relationship(
         back_populates="product",
         sa_relationship_kwargs={"foreign_keys": "[SaleItem.product_id]"},
