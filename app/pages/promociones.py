@@ -87,13 +87,13 @@ def _promo_row(p: rx.Var) -> rx.Component:
                 rx.cond(
                     p["is_active"],
                     rx.el.button(
-                        rx.icon("pause-circle", class_name="h-4 w-4"),
+                        rx.icon("circle-pause", class_name="h-4 w-4"),
                         on_click=State.toggle_promotion(p["id"], False),
                         class_name="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50",
                         title="Desactivar",
                     ),
                     rx.el.button(
-                        rx.icon("play-circle", class_name="h-4 w-4"),
+                        rx.icon("circle-play", class_name="h-4 w-4"),
                         on_click=State.toggle_promotion(p["id"], True),
                         class_name="p-1.5 rounded-lg text-emerald-500 hover:bg-emerald-50",
                         title="Activar",
@@ -143,13 +143,13 @@ def _promo_card(p: rx.Var) -> rx.Component:
             rx.cond(
                 p["is_active"],
                 rx.el.button(
-                    rx.icon("pause-circle", class_name="h-4 w-4"),
+                    rx.icon("circle-pause", class_name="h-4 w-4"),
                     "Desactivar",
                     on_click=State.toggle_promotion(p["id"], False),
                     class_name="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800",
                 ),
                 rx.el.button(
-                    rx.icon("play-circle", class_name="h-4 w-4"),
+                    rx.icon("circle-play", class_name="h-4 w-4"),
                     "Activar",
                     on_click=State.toggle_promotion(p["id"], True),
                     class_name="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800",
@@ -255,8 +255,8 @@ def _promo_form_modal() -> rx.Component:
                             rx.el.label("Lleva (cantidad mínima)", class_name=TYPOGRAPHY["label"]),
                             rx.el.input(
                                 default_value=State.promo_min_quantity,
-                                type="number",
-                                min="1",
+                                type="text",
+                                input_mode="numeric",
                                 on_blur=State.set_promo_min_quantity,
                                 class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
                                 key=State.promo_form_key.to_string(),
@@ -266,8 +266,8 @@ def _promo_form_modal() -> rx.Component:
                             rx.el.label("Gratis (cantidad)", class_name=TYPOGRAPHY["label"]),
                             rx.el.input(
                                 default_value=State.promo_free_quantity,
-                                type="number",
-                                min="0",
+                                type="text",
+                                input_mode="numeric",
                                 on_blur=State.set_promo_free_quantity,
                                 class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
                                 key=State.promo_form_key.to_string(),
@@ -286,9 +286,8 @@ def _promo_form_modal() -> rx.Component:
                         ),
                         rx.el.input(
                             default_value=State.promo_discount_value,
-                            type="number",
-                            min="0",
-                            step="0.01",
+                            type="text",
+                            input_mode="decimal",
                             on_blur=State.set_promo_discount_value,
                             class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
                             key=State.promo_form_key.to_string(),
@@ -323,8 +322,8 @@ def _promo_form_modal() -> rx.Component:
                     rx.el.label("Máx. usos (vacío = ilimitado)", class_name=TYPOGRAPHY["label"]),
                     rx.el.input(
                         default_value=State.promo_max_uses,
-                        type="number",
-                        min="1",
+                        type="text",
+                        input_mode="numeric",
                         placeholder="Sin límite",
                         on_blur=State.set_promo_max_uses,
                         class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),

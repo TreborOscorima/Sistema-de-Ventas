@@ -507,6 +507,8 @@ class TestVentaFlujoPeru:
             ExecResult(all=[]),          # #5 Variant query
             ExecResult(first=None),      # #6 batch query
             ExecResult(all=[]),          # #7 otro
+            ExecResult(all=[]),          # #8 Sprint 1: _apply_promotions (sin promos)
+            ExecResult(all=[]),          # #9 buffer
         ]
 
         with pytest.raises((StockError, ValueError)):
@@ -1113,6 +1115,8 @@ class TestFlujoPipelineCompleto:
             ExecResult(all=[]),           # #5 Variants
             ExecResult(first=None),       # #6 Batch
             ExecResult(all=[]),           # #7 otros
+            ExecResult(all=[]),           # #8 Sprint 1: _apply_promotions (sin promos)
+            ExecResult(all=[]),           # #9 buffer
         ]
 
         result = await SaleService.process_sale(
@@ -1235,6 +1239,8 @@ class TestFlujoPipelineCompleto:
             ExecResult(all=[]),           # #5 Variants
             ExecResult(first=None),       # #6 Batch
             ExecResult(all=[]),           # #7 otros
+            ExecResult(all=[]),           # #8 Sprint 1: _apply_promotions (sin promos)
+            ExecResult(all=[]),           # #9 buffer
         ]
 
         result = await SaleService.process_sale(

@@ -333,8 +333,8 @@ def _new_quotation_modal() -> rx.Component:
                     rx.el.label("Validez (días)", class_name=TYPOGRAPHY["label"]),
                     rx.el.input(
                         default_value=State.quot_validity_days,
-                        type="number",
-                        min="1",
+                        type="text",
+                        input_mode="numeric",
                         on_blur=State.set_quot_validity,
                         class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
                     ),
@@ -344,10 +344,8 @@ def _new_quotation_modal() -> rx.Component:
                     rx.el.label("Descuento global %", class_name=TYPOGRAPHY["label"]),
                     rx.el.input(
                         default_value=State.quot_global_discount,
-                        type="number",
-                        min="0",
-                        max="100",
-                        step="0.5",
+                        type="text",
+                        input_mode="decimal",
                         on_blur=State.set_quot_global_discount,
                         class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
                     ),

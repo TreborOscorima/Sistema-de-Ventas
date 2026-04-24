@@ -95,7 +95,7 @@ def _supplier_group_card(group: rx.Var[dict]) -> rx.Component:
                     "Crear orden de compra",
                 ),
                 rx.fragment(
-                    rx.icon("alert-circle", class_name="h-4 w-4"),
+                    rx.icon("circle-alert", class_name="h-4 w-4"),
                     "Asignar proveedor en inventario",
                 ),
             ),

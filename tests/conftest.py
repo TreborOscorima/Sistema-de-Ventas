@@ -1,6 +1,6 @@
 import os
 from decimal import Decimal
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 
@@ -23,9 +23,50 @@ class ExecResult:
         return self._first_item
 
 
+class _QueueingExecMock:
+    """Reemplazo de AsyncMock para `session.exec` que agota `side_effect` con
+    fallback a ExecResult() vacío, permitiendo que tests con secuencias fijas
+    sigan funcionando cuando el código de producción agrega nuevas queries
+    (ej. _apply_promotions, lookup de price_list del cliente en Sprint 1).
+    """
+
+    def __init__(self) -> None:
+        self.call_count = 0
+        self.call_args_list: list = []
+        self._side_effect_queue: list | None = None
+        self._return_value = ExecResult()
+
+    @property
+    def side_effect(self):
+        return self._side_effect_queue
+
+    @side_effect.setter
+    def side_effect(self, value):
+        self._side_effect_queue = list(value) if value else None
+
+    @property
+    def return_value(self):
+        return self._return_value
+
+    @return_value.setter
+    def return_value(self, value):
+        self._return_value = value
+
+    async def __call__(self, *args, **kwargs):
+        self.call_count += 1
+        self.call_args_list.append(call(*args, **kwargs))
+        if self._side_effect_queue:
+            return self._side_effect_queue.pop(0)
+        return self._return_value
+
+
 class FakeAsyncSession:
     def __init__(self) -> None:
-        self.exec = AsyncMock()
+        # `exec` es un mock custom que soporta `side_effect=[lista]` como AsyncMock
+        # pero, al agotarse la lista, devuelve ExecResult() vacío en vez de lanzar
+        # StopAsyncIteration. Así los tests no se rompen cuando el código agrega
+        # queries nuevas (ej. promociones, listas de precios por cliente).
+        self.exec = _QueueingExecMock()
         self.get = AsyncMock()
         self.added = []
         self.add = Mock(side_effect=self._add)

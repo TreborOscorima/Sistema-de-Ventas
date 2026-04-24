@@ -1469,9 +1469,8 @@ def label_generator_modal() -> rx.Component:
                         rx.el.label("Últimos N días con cambio de precio", class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1"),
                         rx.el.input(
                             default_value=State.label_price_changed_days.to_string(),
-                            type="number",
-                            min="1",
-                            max="365",
+                            type="text",
+                            input_mode="numeric",
                             on_blur=State.set_label_price_changed_days,
                             class_name="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm",
                         ),
@@ -1484,9 +1483,8 @@ def label_generator_modal() -> rx.Component:
                     rx.el.label("Copias por etiqueta", class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1"),
                     rx.el.input(
                         default_value=State.label_copies.to_string(),
-                        type="number",
-                        min="1",
-                        max="10",
+                        type="text",
+                        input_mode="numeric",
                         on_blur=State.set_label_copies,
                         class_name="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm",
                     ),

@@ -249,9 +249,8 @@ def _price_list_detail_modal() -> rx.Component:
                         placeholder="Precio especial",
                         value=State.pl_item_unit_price,
                         on_change=State.set_pl_item_price,
-                        type="number",
-                        min="0",
-                        step="0.01",
+                        type="text",
+                        input_mode="decimal",
                         class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-32"),
                     ),
                     rx.el.button(

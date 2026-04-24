@@ -367,10 +367,12 @@ async def test_process_sale_credit_cashbox_uses_initial_payment(
         exec_result(all_items=[]),
         exec_result(all_items=[unit_sample]),
         exec_result(all_items=[]),  # Category requires_batch
+        exec_result(first_item=client),  # Sprint 1: client_for_pl (lookup price_list)
         exec_result(all_items=[product_sample]),
         exec_result(all_items=[]),
         exec_result(first_item=None),
-        exec_result(all_items=[]),
+        exec_result(all_items=[]),  # _apply_promotions (sin promos)
+        exec_result(all_items=[]),  # buffer
         exec_result(first_item=client),
     ]
 

@@ -741,7 +741,7 @@ async def _get_price_list_price(
             .where(PriceListItem.product_id == product_id)
             .where(PriceListItem.product_variant_id == variant_id)
         )
-        item = (await session.execute(stmt)).scalar_one_or_none()
+        item = (await session.exec(stmt)).first()
         if item:
             return _round_money(item.unit_price)
 
@@ -752,7 +752,7 @@ async def _get_price_list_price(
         .where(PriceListItem.product_id == product_id)
         .where(PriceListItem.product_variant_id == None)
     )
-    item = (await session.execute(stmt)).scalar_one_or_none()
+    item = (await session.exec(stmt)).first()
     if item:
         return _round_money(item.unit_price)
     return None
@@ -792,7 +792,7 @@ async def _apply_promotions(
             Promotion.scope.desc(),  # product > category > all (lexicográfico: p > c > a)
         )
     )
-    promotions = (await session.execute(stmt)).scalars().all()
+    promotions = (await session.exec(stmt)).all()
 
     for promo in promotions:
         # Verificar límite de usos
@@ -1441,7 +1441,7 @@ class SaleService:
         client_price_list_id: int | None = None
         if payment_data.client_id:
             client_for_pl_stmt = select(Client).where(Client.id == payment_data.client_id)
-            client_for_pl = (await session.execute(client_for_pl_stmt)).scalar_one_or_none()
+            client_for_pl = (await session.exec(client_for_pl_stmt)).first()
             if client_for_pl and client_for_pl.price_list_id:
                 client_price_list_id = client_for_pl.price_list_id
 
