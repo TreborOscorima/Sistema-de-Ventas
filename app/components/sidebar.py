@@ -16,12 +16,12 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
     active_class = rx.cond(
         State.sidebar_open,
         f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}",
-        f"relative flex items-center justify-center {RADIUS['lg']} bg-indigo-600 text-white p-2.5 {TRANSITIONS['fast']}",
+        f"relative flex items-center justify-center {RADIUS['md']} bg-indigo-600 text-white p-1.5 {TRANSITIONS['fast']}",
     )
     inactive_class = rx.cond(
         State.sidebar_open,
         f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}",
-        f"relative flex items-center justify-center {RADIUS['lg']} p-2.5 text-slate-600 hover:bg-white/60 hover:text-slate-900 {TRANSITIONS['fast']}",
+        f"relative flex items-center justify-center {RADIUS['md']} p-1.5 text-slate-600 hover:bg-white/60 hover:text-slate-900 {TRANSITIONS['fast']}",
     )
 
     target_route = rx.cond(
@@ -107,7 +107,7 @@ def _submenu_section(
 ) -> rx.Component:
     """Renderiza un bloque de submenú si la página y ruta coinciden."""
     return rx.cond(
-        (item["page"] == page_label) & (State.active_page == page_label),
+        (item["page"] == page_label) & (State.active_page == page_label) & State.sidebar_open,
         rx.el.div(
             rx.foreach(
                 subsections,
@@ -325,10 +325,18 @@ def _sidebar_auth_content() -> rx.Component:
                                 SERVICES_SUBSECTIONS,
                                 State.service_tab,
                             ),
-                            class_name="flex flex-col gap-0.5 pt-2",
+                            class_name=rx.cond(
+                                State.sidebar_open,
+                                "flex flex-col gap-0.5 pt-2",
+                                "flex flex-col",
+                            ),
                         ),
                     ),
-                    class_name="flex flex-col gap-0.5 p-2",
+                    class_name=rx.cond(
+                        State.sidebar_open,
+                        "flex flex-col gap-0.5 p-2",
+                        "flex flex-col gap-0.5 px-1.5 py-1",
+                    ),
                 ),
             ),
         ),
