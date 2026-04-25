@@ -1,7 +1,14 @@
+import asyncio
+
 import reflex as rx
 from typing import List, Dict, Any
 from urllib.parse import parse_qs
 from .mixin_state import MixinState
+
+# Ventana de gracia (segundos) entre `mouse_leave` del item del rail y el
+# cierre real del flyout. Da tiempo al cursor para alcanzar el panel sin
+# que el flyout se desvanezca durante el viaje.
+_FLYOUT_CLOSE_DELAY_S: float = 0.18
 
 # Mapeo de rutas a páginas
 ROUTE_TO_PAGE = {
@@ -66,6 +73,13 @@ class UIState(MixinState):
     sidebar_open: bool = True
     current_page: str = ""  # Vacío inicialmente, se setea según privilegios
     current_active_item: str = rx.SessionStorage("")
+    # Flyout (popover lateral con submódulos) cuando el sidebar está colapsado.
+    # Guarda el `page` del módulo cuyo flyout está abierto, "" si ninguno.
+    open_flyout: str = ""
+    # Token monotónico para invalidar cierres pendientes en background tasks.
+    # Cada apertura o nuevo cierre incrementa el token; un cierre que se
+    # ejecuta tras el sleep solo aplica si el token sigue siendo el suyo.
+    _flyout_close_token: int = rx.field(default=0, is_var=False)
     # Compatibilidad con sesiones previas; ya no se usa para evitar eventos extra en navegación.
     pending_page: str = rx.SessionStorage("")
     # LEGACY: solo se conservan para set programático (go_to_subscription, etc.)
@@ -162,6 +176,46 @@ class UIState(MixinState):
     @rx.event
     def toggle_sidebar(self):
         self.sidebar_open = not self.sidebar_open
+        # Al togglear el sidebar, cualquier flyout abierto debe cerrarse.
+        if self.open_flyout:
+            self._flyout_close_token += 1
+            self.open_flyout = ""
+
+    @rx.event
+    def open_rail_flyout(self, page: str):
+        """Abre el flyout lateral del rail para el módulo dado.
+
+        No-op cuando el sidebar está expandido (no hay rail; los submenús
+        se muestran inline). Cancela cualquier cierre pendiente
+        incrementando `_flyout_close_token`.
+        """
+        if self.sidebar_open:
+            return
+        self._flyout_close_token += 1
+        if self.open_flyout != page:
+            self.open_flyout = page
+
+    @rx.event(background=True)
+    async def schedule_close_rail_flyout(self, page: str):
+        """Programa un cierre debounced del flyout.
+
+        Si el cursor reentra al item o al panel, `open_rail_flyout` invalida
+        el cierre incrementando el token. Tras el sleep, solo se ejecuta el
+        cierre si el token sigue siendo el capturado al inicio Y el flyout
+        sigue abierto para la misma `page`.
+        """
+        async with self:
+            if self.sidebar_open:
+                return
+            self._flyout_close_token += 1
+            token = self._flyout_close_token
+        await asyncio.sleep(_FLYOUT_CLOSE_DELAY_S)
+        async with self:
+            if (
+                self._flyout_close_token == token
+                and self.open_flyout == page
+            ):
+                self.open_flyout = ""
 
     @rx.event
     def set_page(self, page: str):

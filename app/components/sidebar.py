@@ -11,17 +11,26 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         & (State.overdue_alerts_count > 0)
     )
     show_badge = has_overdue & State.sidebar_open
+    # Páginas con submódulos: en rail mostramos un punto indicador.
+    has_submenu = (
+        (page == "Configuracion")
+        | (page == "Gestion de Caja")
+        | (page == "Servicios")
+    )
+    show_submenu_dot = has_submenu & ~State.sidebar_open
 
-    # Estilos para item activo vs inactivo (responsive: rail vs expandido)
+    # Estilos para item activo vs inactivo (responsive: rail vs expandido).
+    # En el rail (colapsado) usamos un tile cuadrado h-10 w-10 centrado para
+    # que los iconos queden visualmente equilibrados dentro del rail de 64px.
     active_class = rx.cond(
         State.sidebar_open,
         f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} bg-indigo-600 text-white px-3 py-2 font-semibold {SHADOWS['sm']} {TRANSITIONS['fast']}",
-        f"relative flex items-center justify-center {RADIUS['md']} bg-indigo-600 text-white p-1.5 {TRANSITIONS['fast']}",
+        f"relative flex items-center justify-center mx-auto h-10 w-10 {RADIUS['lg']} bg-indigo-600 text-white {SHADOWS['sm']} {TRANSITIONS['fast']}",
     )
     inactive_class = rx.cond(
         State.sidebar_open,
         f"relative flex items-center gap-3 min-w-0 {RADIUS['lg']} px-3 py-2 text-slate-600 hover:bg-white/60 hover:text-slate-900 font-medium {TRANSITIONS['fast']}",
-        f"relative flex items-center justify-center {RADIUS['md']} p-1.5 text-slate-600 hover:bg-white/60 hover:text-slate-900 {TRANSITIONS['fast']}",
+        f"relative flex items-center justify-center mx-auto h-10 w-10 {RADIUS['lg']} text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 {TRANSITIONS['fast']}",
     )
 
     target_route = rx.cond(
@@ -30,6 +39,22 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         route,
     )
     is_active = State.active_page == page
+
+    # Indicador de submódulo: un punto en la esquina del tile cuando el rail
+    # está colapsado, para señalar que el item tiene submódulos accesibles
+    # via flyout en hover. Sólo se muestra en rail (no expandido) y para
+    # páginas con submódulos.
+    submenu_dot = rx.cond(
+        show_submenu_dot,
+        rx.el.span(
+            class_name=rx.cond(
+                is_active,
+                "absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-white/80",
+                "absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-indigo-400",
+            ),
+        ),
+        rx.fragment(),
+    )
 
     link = rx.link(
         rx.el.div(
@@ -50,6 +75,7 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
                 ),
                 rx.fragment(),
             ),
+            submenu_dot,
             class_name=rx.cond(
                 is_active,
                 active_class,
@@ -144,55 +170,87 @@ def _rail_flyout(
 ) -> rx.Component:
     """Popover lateral con submenú cuando el sidebar está colapsado.
 
-    Aparece en hover (CSS `group-hover`) sobre items que tienen submódulos.
-    Permite acceder a las subsecciones sin expandir el sidebar.
+    Visibilidad controlada por `State.open_flyout` (state-driven, no CSS
+    hover). El item del rail dispara `open_rail_flyout` en `mouse_enter` y
+    `schedule_close_rail_flyout` (debounced 180ms) en `mouse_leave`. El
+    panel reusa los mismos handlers, así que mover el cursor al panel
+    cancela el cierre pendiente y lo mantiene abierto mientras se navega.
     """
+    is_open = State.open_flyout == page_label
     return rx.cond(
         (item["page"] == page_label) & ~State.sidebar_open,
         rx.el.div(
-            # Encabezado del flyout con el nombre del módulo padre
+            # Panel flotante con submódulos.
             rx.el.div(
-                rx.el.span(
-                    page_label,
-                    class_name="text-xs font-semibold text-slate-500 uppercase tracking-wider",
+                # Encabezado del flyout con el nombre del módulo padre
+                rx.el.div(
+                    rx.el.span(
+                        page_label,
+                        class_name="text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap",
+                    ),
+                    class_name="px-3 py-2 border-b border-slate-100 flex-shrink-0",
                 ),
-                class_name="px-3 py-2 border-b border-slate-100",
-            ),
-            # Lista de subsecciones
-            rx.el.div(
-                rx.foreach(
-                    subsections,
-                    lambda section: rx.link(
-                        rx.el.div(
-                            rx.icon(section["icon"], class_name="h-4 w-4 flex-shrink-0"),
-                            rx.el.span(
-                                section["label"],
-                                class_name="text-sm",
+                # Lista de subsecciones — `flex-1 min-h-0 overflow-y-auto`
+                # garantiza que el scroll interno se active cuando el
+                # contenido excede la altura disponible del panel.
+                rx.el.div(
+                    rx.foreach(
+                        subsections,
+                        lambda section: rx.link(
+                            rx.el.div(
+                                rx.icon(section["icon"], class_name="h-4 w-4 flex-shrink-0"),
+                                rx.el.span(
+                                    section["label"],
+                                    class_name="text-sm whitespace-nowrap",
+                                ),
+                                class_name="flex items-center gap-2",
                             ),
-                            class_name="flex items-center gap-2",
-                        ),
-                        href=route + "?tab=" + section["key"],
-                        underline="none",
-                        class_name=rx.cond(
-                            (State.active_page == page_label) & (active_tab == section["key"]),
-                            _SUBMENU_ACTIVE,
-                            _SUBMENU_INACTIVE,
+                            href=route + "?tab=" + section["key"],
+                            underline="none",
+                            class_name=rx.cond(
+                                (State.active_page == page_label) & (active_tab == section["key"]),
+                                _SUBMENU_ACTIVE,
+                                _SUBMENU_INACTIVE,
+                            ),
                         ),
                     ),
+                    class_name=(
+                        "flex-1 min-h-0 overflow-y-auto p-2 flex flex-col gap-0.5 "
+                        "scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent"
+                    ),
                 ),
-                class_name="flex flex-col gap-0.5 p-2",
+                class_name=(
+                    "w-64 max-h-full bg-white border border-slate-200 rounded-xl shadow-xl "
+                    "flex flex-col overflow-hidden"
+                ),
             ),
-            # Posicionado al lado derecho del rail. `hidden md:block` evita que
-            # aparezca en mobile (donde el rail mismo está oculto con w-0).
-            # `group-hover:opacity-100` + `pointer-events-auto` activan el panel
-            # al pasar el mouse por el wrapper `group`.
-            class_name=(
-                "hidden md:flex md:flex-col absolute left-full top-0 ml-2 z-[60] "
-                "min-w-56 bg-white border border-slate-200 rounded-xl shadow-lg "
+            # Wrapper: posiciona el panel adyacente al rail y centrado
+            # verticalmente en el viewport (`inset-y-2 items-center`). La
+            # visibilidad la controla `State.open_flyout == page_label` —
+            # un único Var booleano, sin trucos de CSS hover.
+            #
+            # Pointer-events-auto SOLO cuando el flyout está abierto: el
+            # wrapper completo (toda la franja vertical pegada al rail)
+            # actúa como "safe area" — el cursor puede viajar por
+            # cualquier punto de esa franja desde el icono hasta el panel
+            # sin que se dispare `on_mouse_leave` (porque el wrapper
+            # captura el evento, no el background). Esto resuelve el
+            # gap entre rail e item: 180ms ya no es un límite estricto
+            # de tiempo de viaje, sino solo el debounce real para cuando
+            # el cursor sale completamente del strip.
+            #
+            # Cuando el flyout está cerrado: `pointer-events-none` +
+            # `invisible` — no bloquea el contenido de la página detrás.
+            on_mouse_enter=State.open_rail_flyout(page_label),
+            on_mouse_leave=State.schedule_close_rail_flyout(page_label),
+            class_name=rx.cond(
+                is_open,
+                "hidden md:flex fixed left-16 inset-y-2 z-[60] pl-2 items-center "
+                "opacity-100 visible pointer-events-auto "
+                "transition-opacity duration-150",
+                "hidden md:flex fixed left-16 inset-y-2 z-[60] pl-2 items-center "
                 "opacity-0 invisible pointer-events-none "
-                "group-hover:opacity-100 group-hover:visible group-hover:pointer-events-auto "
-                "focus-within:opacity-100 focus-within:visible focus-within:pointer-events-auto "
-                "transition-all duration-150"
+                "transition-opacity duration-150",
             ),
         ),
         rx.fragment(),
@@ -414,20 +472,29 @@ def _sidebar_auth_content() -> rx.Component:
                                 SERVICES_SUBSECTIONS,
                                 State.service_tab,
                             ),
-                            # `relative group` en el wrapper colapsado permite
-                            # que el flyout absoluto se posicione al costado
-                            # del item y reciba el hover.
+                            # `relative` en el wrapper colapsado mantiene el
+                            # contexto de posicionamiento. La apertura del
+                            # flyout es state-driven: `on_mouse_enter` abre
+                            # el flyout para esta página, `on_mouse_leave`
+                            # programa un cierre debounced (180ms) que se
+                            # cancela si el cursor reentra al item o entra
+                            # al panel del flyout. Los handlers están
+                            # siempre conectados; el evento `open_rail_flyout`
+                            # hace early-return si `sidebar_open` es True,
+                            # así que no genera cambios de estado spurios.
+                            on_mouse_enter=State.open_rail_flyout(item["page"]),
+                            on_mouse_leave=State.schedule_close_rail_flyout(item["page"]),
                             class_name=rx.cond(
                                 State.sidebar_open,
                                 "flex flex-col gap-0.5 pt-2",
-                                "relative group flex flex-col",
+                                "relative flex flex-col",
                             ),
                         ),
                     ),
                     class_name=rx.cond(
                         State.sidebar_open,
                         "flex flex-col gap-0.5 p-2",
-                        "flex flex-col gap-0.5 px-1.5 py-1",
+                        "flex flex-col gap-1 py-2",
                     ),
                 ),
             ),
@@ -542,13 +609,16 @@ def sidebar() -> rx.Component:
                     _sidebar_guest_content(),
                 ),
                 id="sidebar-nav",
-                # En colapsado permitimos overflow-x para que el flyout de
-                # submódulos pueda extenderse hacia la derecha del rail.
-                # En expandido mantenemos el corte horizontal estándar.
+                # En expandido scrolleamos verticalmente y cortamos en X.
+                # En colapsado usamos overflow-visible en ambos ejes:
+                # mezclar overflow-y:auto con overflow-x:visible activa
+                # `overflow: auto` en ambos por spec del navegador, y eso
+                # recorta el flyout absoluto. El rail (≤18 items @ h-10)
+                # cabe sobradamente en viewport sin necesidad de scroll.
                 class_name=rx.cond(
                     State.sidebar_open,
                     "flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
-                    "flex-1 min-w-0 overflow-y-auto overflow-x-visible scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
+                    "flex-1 min-w-0 overflow-visible",
                 ),
             ),
             # Footer condicional: solo para autenticados
@@ -560,9 +630,10 @@ def sidebar() -> rx.Component:
             class_name=rx.cond(
         State.sidebar_open,
         f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
-        # En colapsado: overflow-y-hidden permite que el contenido scrollee dentro,
-        # pero overflow-x-visible deja al flyout de submódulos escapar el rail.
-        f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-y-hidden overflow-x-visible bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-0 md:w-16",
+        # En colapsado: overflow-visible en ambos ejes para que el flyout
+        # de submódulos no se recorte. El viewport mismo recorta cualquier
+        # overflow vertical inesperado (sidebar usa h-screen).
+        f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-visible bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-0 md:w-16",
     ),
     style={"height": "100dvh"},
     key="sidebar-root",
