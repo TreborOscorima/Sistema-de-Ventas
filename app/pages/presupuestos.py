@@ -369,7 +369,7 @@ def _new_quotation_modal() -> rx.Component:
                 rx.el.label("Agregar producto", class_name=TYPOGRAPHY["label"]),
                 rx.el.div(
                     rx.debounce_input(
-                        rx.el.input(
+                        rx.input(
                             placeholder="Buscar por nombre o código de barras...",
                             value=State.quot_search,
                             on_change=State.quot_search_products,

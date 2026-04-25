@@ -232,7 +232,7 @@ def _price_list_detail_modal() -> rx.Component:
                 rx.el.div(
                     rx.el.div(
                         rx.debounce_input(
-                            rx.el.input(
+                            rx.input(
                                 placeholder="Buscar producto por nombre o código...",
                                 value=State.pl_item_product_search,
                                 on_change=State.pl_search_products,
