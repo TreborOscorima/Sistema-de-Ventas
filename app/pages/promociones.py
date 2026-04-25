@@ -11,7 +11,7 @@ from app.components.ui import (
     SHADOWS,
     TRANSITIONS,
     BADGE_STYLES,
-    page_title,
+    page_header,
     modal_container,
     empty_state,
 )
@@ -371,11 +371,10 @@ def _promo_form_modal() -> rx.Component:
 
 def promociones_page() -> rx.Component:
     return rx.fragment(
-        page_title("Ofertas y Promociones", "Configura descuentos automáticos para el punto de venta"),
-
-        # Barra de filtros y acción
-        rx.el.div(
-            rx.el.div(
+        page_header(
+            "OFERTAS Y PROMOCIONES",
+            "Configura descuentos automáticos para el punto de venta",
+            actions=[
                 rx.el.select(
                     rx.el.option("Todas", value="all"),
                     rx.el.option("Activas ahora", value="active"),
@@ -384,15 +383,13 @@ def promociones_page() -> rx.Component:
                     on_change=State.set_promotions_filter,
                     class_name=SELECT_STYLES.get("default", "border rounded px-3 py-2 text-sm"),
                 ),
-                class_name="flex items-center gap-3",
-            ),
-            rx.el.button(
-                rx.icon("plus", class_name="h-4 w-4"),
-                "Nueva Promoción",
-                on_click=State.open_new_promotion,
-                class_name=f"flex items-center gap-2 {BUTTON_STYLES.get('primary', 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700')} text-sm",
-            ),
-            class_name="flex items-center justify-between",
+                rx.el.button(
+                    rx.icon("plus", class_name="h-4 w-4"),
+                    "Nueva Promoción",
+                    on_click=State.open_new_promotion,
+                    class_name=f"flex items-center gap-2 {BUTTON_STYLES['primary']} text-sm",
+                ),
+            ],
         ),
 
         # Tabla desktop

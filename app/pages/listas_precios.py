@@ -10,7 +10,7 @@ from app.components.ui import (
     RADIUS,
     SHADOWS,
     TRANSITIONS,
-    page_title,
+    page_header,
     modal_container,
     empty_state,
 )
@@ -310,20 +310,17 @@ def _price_list_detail_modal() -> rx.Component:
 
 def listas_precios_page() -> rx.Component:
     return rx.fragment(
-        page_title(
-            "Listas de Precios",
+        page_header(
+            "LISTAS DE PRECIOS",
             "Define precios especiales por canal, cliente mayorista o grupo",
-        ),
-
-        # Acción principal
-        rx.el.div(
-            rx.el.button(
-                rx.icon("plus", class_name="h-4 w-4"),
-                "Nueva Lista",
-                on_click=State.open_new_price_list,
-                class_name=f"flex items-center gap-2 {BUTTON_STYLES.get('primary', 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700')} text-sm",
-            ),
-            class_name="flex justify-end",
+            actions=[
+                rx.el.button(
+                    rx.icon("plus", class_name="h-4 w-4"),
+                    "Nueva Lista",
+                    on_click=State.open_new_price_list,
+                    class_name=f"flex items-center gap-2 {BUTTON_STYLES['primary']} text-sm",
+                ),
+            ],
         ),
 
         # Grid de listas

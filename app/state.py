@@ -9,7 +9,6 @@ from app.models import Supplier, FieldReservation as FieldReservationModel
 from app.enums import ReservationStatus
 from app.utils.sanitization import escape_like
 from app.states.root_state import RootState
-from app.states.quotation_state import QuotationState
 from app.states.types import (
     Product,
     TransactionItem,
@@ -657,6 +656,24 @@ class State(RootState):
         yield
 
     @rx.event
+    async def page_init_etiquetas(self):
+        """on_load para /etiquetas. Verifica privilegio view_inventario."""
+        await self._do_runtime_refresh()
+        self.sync_page_from_route()
+        denied = self._check_auth_and_privilege(
+            "view_inventario",
+            "Acceso denegado: No tienes permiso para ver Etiquetas.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        yield
+
+    @rx.event
     async def page_init_historial(self):
         """on_load para /historial. Verifica privilegio view_historial."""
         await self._do_runtime_refresh()
@@ -720,7 +737,7 @@ class State(RootState):
 
     @rx.event
     async def page_init_presupuestos(self):
-        """on_load para /presupuestos."""
+        """on_load para /presupuestos. Guard + carga de datos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
@@ -734,16 +751,13 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+            return
         yield
-        yield State.page_init_presupuestos_data
-
-    @rx.event
-    async def page_init_presupuestos_data(self):
-        yield QuotationState.page_init_presupuestos
+        yield State.bg_load_quotations
 
     @rx.event
     async def page_init_promociones(self):
-        """on_load para /promociones."""
+        """on_load para /promociones. Guard + carga de datos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._page_guard(
@@ -757,11 +771,13 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+            return
         yield
+        yield State.bg_load_promotions
 
     @rx.event
     async def page_init_listas_precios(self):
-        """on_load para /listas-precios."""
+        """on_load para /listas-precios. Guard + carga de datos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._page_guard(
@@ -775,7 +791,9 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+            return
         yield
+        yield State.bg_load_price_lists
 
     @rx.event
     async def page_init_configuracion(self):

@@ -60,6 +60,11 @@ class QuotationState(MixinState):
     quot_validity_days: str = "15"
     quot_notes: str = ""
     quot_global_discount: str = "0"
+    # Idempotency key estable durante toda la edición del formulario.
+    # Se asigna al abrir el form y se reusa en cada intento de save_quotation,
+    # de forma que el UNIQUE (company_id, idempotency_key) bloquee duplicados
+    # ante doble-click o reintentos por timeout.
+    quot_idempotency_key: str = ""
 
     # Carrito del presupuesto
     quot_cart: list[dict[str, Any]] = []
@@ -74,10 +79,18 @@ class QuotationState(MixinState):
     # ── Clientes disponibles (para selector) ─────────────────────────
     quotation_clients: list[dict[str, Any]] = []
 
+    # Presupuesto pre-cargado al POS pendiente de vincular tras confirmar venta
+    _pending_quotation_id: int = rx.field(default=0, is_var=False)
+
     # ─── Inicialización de página ────────────────────────────────────
+    # Nombre con prefijo `bg_` para no colisionar con el guard
+    # `State.page_init_presupuestos` (definido en app/state.py).
+    # Reflex resuelve mixins por MRO: si dos clases definen el mismo nombre
+    # gana la más específica, dejando muerta a la otra. Mantener nombres
+    # distintos garantiza que ambos métodos sean alcanzables.
 
     @rx.event
-    async def page_init_presupuestos(self):
+    async def bg_load_quotations(self):
         guard = self._require_active_subscription()
         if guard:
             yield guard
@@ -97,8 +110,24 @@ class QuotationState(MixinState):
             return
 
         from app.utils.tenant import set_tenant_context
+        from sqlalchemy import update as sa_update
         set_tenant_context(company_id, branch_id)
+        now = utc_now_naive()
         with rx.session() as session:
+            # Auto-expirar presupuestos vencidos del tenant antes de listar.
+            # Idempotente y barato (UPDATE WHERE status IN draft|sent AND expires_at < now);
+            # garantiza que el filtro "Vencidos" muestre lo correcto sin job externo.
+            session.exec(
+                sa_update(Quotation)
+                .where(Quotation.company_id == company_id)
+                .where(Quotation.branch_id == branch_id)
+                .where(Quotation.expires_at.isnot(None))
+                .where(Quotation.expires_at < now)
+                .where(Quotation.status.in_([QuotationStatus.DRAFT, QuotationStatus.SENT]))
+                .values(status=QuotationStatus.EXPIRED)
+            )
+            session.commit()
+
             stmt = (
                 select(Quotation)
                 .where(Quotation.company_id == company_id)
@@ -172,6 +201,7 @@ class QuotationState(MixinState):
         self.quot_search = ""
         self.quot_search_results = []
         self.quot_form_key += 1
+        self.quot_idempotency_key = str(uuid.uuid4())
 
     @rx.event
     def close_quotation_form(self):
@@ -330,6 +360,11 @@ class QuotationState(MixinState):
                 except (ValueError, TypeError):
                     continue
 
+            # Reusar la key estable del formulario; si por algún motivo no
+            # fue inicializada (legacy/state hidratado) generar una nueva.
+            idem_key = self.quot_idempotency_key or str(uuid.uuid4())
+            self.quot_idempotency_key = idem_key
+
             dto = CreateQuotationDTO(
                 client_id=int(self.quot_client_id) if self.quot_client_id else None,
                 user_id=user_id,
@@ -339,7 +374,7 @@ class QuotationState(MixinState):
                 validity_days=int(self.quot_validity_days or 15),
                 discount_percentage=float(self.quot_global_discount or 0),
                 notes=self.quot_notes.strip() or None,
-                idempotency_key=str(uuid.uuid4()),
+                idempotency_key=idem_key,
             )
 
             async with get_async_session() as session:
@@ -493,3 +528,127 @@ class QuotationState(MixinState):
     @rx.var(cache=False)
     def quotations_total_pages(self) -> int:
         return max(1, -(-self.quotations_total // self.quotations_page_size))
+
+    # ─── Convertir presupuesto a Venta (pre-carga el carrito POS) ────
+
+    @rx.event
+    @require_permission("create_ventas")
+    async def convert_quotation_to_cart(self, quotation_id: int):
+        """Carga los ítems del presupuesto en el carrito POS y redirige a /ventas.
+
+        Al confirmar la venta, confirm_sale() llama a mark_converted() para
+        vincular el presupuesto a la sale resultante.
+        """
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id:
+            yield rx.toast("Empresa no definida.", duration=3000)
+            return
+
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+
+        with rx.session() as session:
+            q = session.exec(
+                select(Quotation).where(Quotation.id == quotation_id)
+            ).first()
+            if not q:
+                yield rx.toast("Presupuesto no encontrado.", duration=3000)
+                return
+            if q.status == QuotationStatus.CONVERTED:
+                yield rx.toast("Este presupuesto ya fue convertido a venta.", duration=3000)
+                return
+            if q.status == QuotationStatus.REJECTED:
+                yield rx.toast("Este presupuesto fue rechazado y no puede convertirse.", duration=3000)
+                return
+            # Bloquear si está vencido (status=EXPIRED o expires_at en el pasado).
+            now_check = utc_now_naive()
+            if q.status == QuotationStatus.EXPIRED or (
+                q.expires_at is not None and q.expires_at < now_check
+            ):
+                yield rx.toast(
+                    "Este presupuesto está vencido. Renueva la fecha o crea uno nuevo.",
+                    duration=3500,
+                )
+                return
+
+            q_items = session.exec(
+                select(QuotationItem).where(QuotationItem.quotation_id == quotation_id)
+            ).all()
+
+            product_ids = [qi.product_id for qi in q_items if qi.product_id]
+            products_map: dict[int, Any] = {}
+            if product_ids:
+                from app.models import Product as ProductModel
+                prods = session.exec(
+                    select(ProductModel).where(ProductModel.id.in_(product_ids))
+                ).all()
+                products_map = {p.id: p for p in prods}
+
+            client_data: dict[str, Any] | None = None
+            if q.client_id:
+                cli = session.exec(select(Client).where(Client.id == q.client_id)).first()
+                if cli:
+                    balance = float(max((cli.credit_limit or 0) - (cli.current_debt or 0), 0))
+                    client_data = {
+                        "id": cli.id,
+                        "name": cli.name,
+                        "credit_limit": float(cli.credit_limit or 0),
+                        "current_debt": float(cli.current_debt or 0),
+                        "balance": self._round_currency(balance),
+                        "price_list_id": cli.price_list_id or 0,
+                    }
+
+            global_disc_factor = Decimal("1") - (
+                Decimal(str(q.discount_percentage or 0)) / Decimal("100")
+            )
+
+            cart_items: list[dict[str, Any]] = []
+            for qi in q_items:
+                product = products_map.get(qi.product_id) if qi.product_id else None
+                unit = (product.unit if product else None) or "Unidad"
+                item_disc_factor = Decimal("1") - (
+                    Decimal(str(qi.discount_percentage or 0)) / Decimal("100")
+                )
+                effective_price = self._round_currency(
+                    float(Decimal(str(qi.unit_price or 0)) * item_disc_factor * global_disc_factor)
+                )
+                qty = float(qi.quantity or 1)
+                cart_items.append({
+                    "temp_id": str(uuid.uuid4()),
+                    "barcode": qi.product_barcode_snapshot or "",
+                    "description": qi.product_name_snapshot or "",
+                    "category": qi.product_category_snapshot or "General",
+                    "quantity": qty,
+                    "unit": unit,
+                    "price": effective_price,
+                    "sale_price": effective_price,
+                    "subtotal": self._round_currency(qty * effective_price),
+                    "product_id": qi.product_id,
+                    "variant_id": qi.product_variant_id,
+                    "batch_id": None,
+                    "batch_number": "",
+                    "requires_batch": False,
+                    "kit_product_id": None,
+                    "kit_name": "",
+                })
+
+        if not cart_items:
+            yield rx.toast("El presupuesto no tiene ítems válidos.", duration=3000)
+            return
+
+        # Reemplazar carrito POS con los ítems del presupuesto
+        self.new_sale_items = cart_items
+        self._reset_sale_form()
+        self._pending_quotation_id = quotation_id
+
+        if client_data:
+            self.selected_client = client_data
+            self._active_price_list_id = int(client_data.get("price_list_id") or 0)
+
+        self.show_quotation_detail = False
+        yield rx.toast(
+            f"Presupuesto #{quotation_id} cargado en el POS ({len(cart_items)} ítem{'s' if len(cart_items) != 1 else ''}).",
+            duration=3000,
+        )
+        yield rx.redirect("/venta")

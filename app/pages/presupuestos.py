@@ -12,7 +12,7 @@ from app.components.ui import (
     SHADOWS,
     TRANSITIONS,
     BADGE_STYLES,
-    page_title,
+    page_header,
     modal_container,
     pagination_controls,
     empty_state,
@@ -232,6 +232,16 @@ def _quotation_detail_modal() -> rx.Component:
             ),
         ],
         footer=rx.el.div(
+            rx.cond(
+                (q["status"] == QuotationStatus.ACCEPTED) | (q["status"] == QuotationStatus.SENT),
+                rx.el.button(
+                    rx.icon("shopping-cart", class_name="h-4 w-4"),
+                    "Convertir a Venta",
+                    on_click=State.convert_quotation_to_cart(q["id"]),
+                    class_name="flex items-center gap-2 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium",
+                ),
+                rx.fragment(),
+            ),
             rx.el.button(
                 rx.icon("download", class_name="h-4 w-4"),
                 "Descargar PDF",
@@ -461,11 +471,10 @@ def _new_quotation_modal() -> rx.Component:
 
 def presupuestos_page() -> rx.Component:
     return rx.fragment(
-        page_title("Presupuestos", "Crea y gestiona cotizaciones para tus clientes"),
-
-        # Filtros y acción principal
-        rx.el.div(
-            rx.el.div(
+        page_header(
+            "PRESUPUESTOS",
+            "Crea y gestiona cotizaciones para tus clientes",
+            actions=[
                 rx.el.select(
                     rx.el.option("Todos los estados", value=""),
                     rx.el.option("Borradores", value="draft"),
@@ -478,15 +487,13 @@ def presupuestos_page() -> rx.Component:
                     on_change=State.set_quotations_filter_status,
                     class_name=SELECT_STYLES.get("default", "border rounded px-3 py-2 text-sm"),
                 ),
-                class_name="flex items-center gap-3",
-            ),
-            rx.el.button(
-                rx.icon("plus", class_name="h-4 w-4"),
-                "Nuevo Presupuesto",
-                on_click=State.open_quotation_form,
-                class_name=f"flex items-center gap-2 {BUTTON_STYLES.get('primary', 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700')} text-sm",
-            ),
-            class_name="flex items-center justify-between",
+                rx.el.button(
+                    rx.icon("plus", class_name="h-4 w-4"),
+                    "Nuevo Presupuesto",
+                    on_click=State.open_quotation_form,
+                    class_name=f"flex items-center gap-2 {BUTTON_STYLES['primary']} text-sm",
+                ),
+            ],
         ),
 
         # Tabla desktop

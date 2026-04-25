@@ -46,9 +46,11 @@ class PriceListState(MixinState):
     pl_item_variant_id: str = ""
 
     # ─── Página init ─────────────────────────────────────────────────
+    # Renombrado para evitar shadowing del guard en `State.page_init_listas_precios`
+    # (ver nota en quotation_state.bg_load_quotations).
 
     @rx.event
-    async def page_init_listas_precios(self):
+    async def bg_load_price_lists(self):
         guard = self._require_active_subscription()
         if guard:
             yield guard

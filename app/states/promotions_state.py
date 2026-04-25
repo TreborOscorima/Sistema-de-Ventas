@@ -60,9 +60,11 @@ class PromotionsState(MixinState):
     promotion_categories: list[str] = []
 
     # ─── Página init ─────────────────────────────────────────────────
+    # Renombrado para evitar shadowing del guard en `State.page_init_promociones`
+    # (ver nota en quotation_state.bg_load_quotations).
 
     @rx.event
-    async def page_init_promociones(self):
+    async def bg_load_promotions(self):
         guard = self._require_active_subscription()
         if guard:
             yield guard
@@ -263,6 +265,27 @@ class PromotionsState(MixinState):
                     )
                     session.add(promo)
 
+                # Validar que el producto referenciado pertenece al tenant
+                # actual antes de asignarlo. Sin este check un cliente
+                # manipulado podría enlazar promo a producto de otra empresa.
+                resolved_product_id: int | None = None
+                if self.promo_product_id.strip():
+                    from app.models import Product as _Product
+                    candidate_pid = int(self.promo_product_id)
+                    candidate = session.exec(
+                        select(_Product)
+                        .where(_Product.id == candidate_pid)
+                        .where(_Product.company_id == company_id)
+                        .where(_Product.branch_id == branch_id)
+                    ).first()
+                    if not candidate:
+                        yield rx.toast(
+                            "El producto seleccionado no pertenece a esta empresa/sucursal.",
+                            duration=3500,
+                        )
+                        return
+                    resolved_product_id = candidate.id
+
                 promo.name = self.promo_name.strip()
                 promo.description = self.promo_description.strip() or None
                 promo.promotion_type = self.promo_type
@@ -273,7 +296,7 @@ class PromotionsState(MixinState):
                 promo.starts_at = starts
                 promo.ends_at = ends
                 promo.max_uses = int(self.promo_max_uses) if self.promo_max_uses.strip() else None
-                promo.product_id = int(self.promo_product_id) if self.promo_product_id.strip() else None
+                promo.product_id = resolved_product_id
                 promo.category = self.promo_category.strip() or None
                 promo.is_active = self.promo_is_active
                 session.commit()
