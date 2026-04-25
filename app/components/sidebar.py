@@ -135,6 +135,70 @@ def _submenu_section(
     )
 
 
+def _rail_flyout(
+    item: rx.Var[dict],
+    page_label: str,
+    route: str,
+    subsections: list,
+    active_tab: rx.Var[str],
+) -> rx.Component:
+    """Popover lateral con submenú cuando el sidebar está colapsado.
+
+    Aparece en hover (CSS `group-hover`) sobre items que tienen submódulos.
+    Permite acceder a las subsecciones sin expandir el sidebar.
+    """
+    return rx.cond(
+        (item["page"] == page_label) & ~State.sidebar_open,
+        rx.el.div(
+            # Encabezado del flyout con el nombre del módulo padre
+            rx.el.div(
+                rx.el.span(
+                    page_label,
+                    class_name="text-xs font-semibold text-slate-500 uppercase tracking-wider",
+                ),
+                class_name="px-3 py-2 border-b border-slate-100",
+            ),
+            # Lista de subsecciones
+            rx.el.div(
+                rx.foreach(
+                    subsections,
+                    lambda section: rx.link(
+                        rx.el.div(
+                            rx.icon(section["icon"], class_name="h-4 w-4 flex-shrink-0"),
+                            rx.el.span(
+                                section["label"],
+                                class_name="text-sm",
+                            ),
+                            class_name="flex items-center gap-2",
+                        ),
+                        href=route + "?tab=" + section["key"],
+                        underline="none",
+                        class_name=rx.cond(
+                            (State.active_page == page_label) & (active_tab == section["key"]),
+                            _SUBMENU_ACTIVE,
+                            _SUBMENU_INACTIVE,
+                        ),
+                    ),
+                ),
+                class_name="flex flex-col gap-0.5 p-2",
+            ),
+            # Posicionado al lado derecho del rail. `hidden md:block` evita que
+            # aparezca en mobile (donde el rail mismo está oculto con w-0).
+            # `group-hover:opacity-100` + `pointer-events-auto` activan el panel
+            # al pasar el mouse por el wrapper `group`.
+            class_name=(
+                "hidden md:flex md:flex-col absolute left-full top-0 ml-2 z-[60] "
+                "min-w-56 bg-white border border-slate-200 rounded-xl shadow-lg "
+                "opacity-0 invisible pointer-events-none "
+                "group-hover:opacity-100 group-hover:visible group-hover:pointer-events-auto "
+                "focus-within:opacity-100 focus-within:visible focus-within:pointer-events-auto "
+                "transition-all duration-150"
+            ),
+        ),
+        rx.fragment(),
+    )
+
+
 def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.Component:
     """Botón de submenú con estilo mejorado."""
     active_class = f"w-full text-left {RADIUS['lg']} bg-white text-indigo-700 px-3 py-1.5 {SHADOWS['sm']} border-l-2 border-indigo-500"
@@ -304,6 +368,7 @@ def _sidebar_auth_content() -> rx.Component:
                         State.navigation_items,
                         lambda item: rx.el.div(
                             nav_item(item["label"], item["icon"], item["page"], item["route"]),
+                            # Submenús inline (sólo cuando el sidebar está expandido).
                             _submenu_section(
                                 item,
                                 "Configuracion",
@@ -325,10 +390,37 @@ def _sidebar_auth_content() -> rx.Component:
                                 SERVICES_SUBSECTIONS,
                                 State.service_tab,
                             ),
+                            # Flyout lateral en hover (sólo cuando el sidebar
+                            # está colapsado / rail). Permite acceder a los
+                            # submódulos sin tener que expandir.
+                            _rail_flyout(
+                                item,
+                                "Configuracion",
+                                "/configuracion",
+                                CONFIG_SUBSECTIONS,
+                                State.config_tab,
+                            ),
+                            _rail_flyout(
+                                item,
+                                "Gestion de Caja",
+                                "/caja",
+                                CASH_SUBSECTIONS,
+                                State.cash_tab,
+                            ),
+                            _rail_flyout(
+                                item,
+                                "Servicios",
+                                "/servicios",
+                                SERVICES_SUBSECTIONS,
+                                State.service_tab,
+                            ),
+                            # `relative group` en el wrapper colapsado permite
+                            # que el flyout absoluto se posicione al costado
+                            # del item y reciba el hover.
                             class_name=rx.cond(
                                 State.sidebar_open,
                                 "flex flex-col gap-0.5 pt-2",
-                                "flex flex-col",
+                                "relative group flex flex-col",
                             ),
                         ),
                     ),
@@ -450,7 +542,14 @@ def sidebar() -> rx.Component:
                     _sidebar_guest_content(),
                 ),
                 id="sidebar-nav",
-                class_name="flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
+                # En colapsado permitimos overflow-x para que el flyout de
+                # submódulos pueda extenderse hacia la derecha del rail.
+                # En expandido mantenemos el corte horizontal estándar.
+                class_name=rx.cond(
+                    State.sidebar_open,
+                    "flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
+                    "flex-1 min-w-0 overflow-y-auto overflow-x-visible scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
+                ),
             ),
             # Footer condicional: solo para autenticados
             rx.cond(
@@ -461,7 +560,9 @@ def sidebar() -> rx.Component:
             class_name=rx.cond(
         State.sidebar_open,
         f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
-        f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-0 md:w-16",
+        # En colapsado: overflow-y-hidden permite que el contenido scrollee dentro,
+        # pero overflow-x-visible deja al flyout de submódulos escapar el rail.
+        f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-y-hidden overflow-x-visible bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-0 md:w-16",
     ),
     style={"height": "100dvh"},
     key="sidebar-root",
