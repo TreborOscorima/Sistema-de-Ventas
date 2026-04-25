@@ -541,6 +541,6 @@ def presupuestos_page() -> rx.Component:
         # Modales
         _new_quotation_modal(),
         _quotation_detail_modal(),
-
-        on_mount=State.page_init_presupuestos,
+        # rx.fragment no soporta on_mount; la carga inicial la dispara
+        # `app.add_page(on_load=State.page_init_presupuestos)` en app/app.py.
     )

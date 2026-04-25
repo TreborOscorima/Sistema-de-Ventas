@@ -164,11 +164,16 @@ def _promo_card(p: rx.Var) -> rx.Component:
 # ─── Modal: Formulario de Promoción ──────────────────────────────────────────
 
 def _promo_form_modal() -> rx.Component:
-    is_edit = State.promo_editing_id > 0
+    # Reflex 0.8: NO precomputar comparaciones Var como locals; el bundler
+    # las inlinea como identifiers no definidos en el JSX final.
     return modal_container(
         is_open=State.show_promotion_form,
         on_close=State.close_promotion_form,
-        title=rx.cond(is_edit, "Editar Promoción", "Nueva Promoción"),
+        title=rx.cond(
+            State.promo_editing_id > 0,
+            "Editar Promoción",
+            "Nueva Promoción",
+        ),
         max_width="max-w-2xl",
         children=[
             rx.el.div(
@@ -352,7 +357,15 @@ def _promo_form_modal() -> rx.Component:
         ],
         footer=rx.el.div(
             rx.el.button(
-                rx.cond(State.is_loading, "Guardando...", rx.cond(is_edit, "Actualizar", "Crear Promoción")),
+                rx.cond(
+                    State.is_loading,
+                    "Guardando...",
+                    rx.cond(
+                        State.promo_editing_id > 0,
+                        "Actualizar",
+                        "Crear Promoción",
+                    ),
+                ),
                 on_click=State.save_promotion,
                 disabled=State.is_loading,
                 class_name=f"flex items-center gap-2 {BUTTON_STYLES.get('primary', 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700')}",
@@ -429,6 +442,6 @@ def promociones_page() -> rx.Component:
 
         # Modal
         _promo_form_modal(),
-
-        on_mount=State.page_init_promociones,
+        # rx.fragment no soporta on_mount; la carga inicial la dispara
+        # `app.add_page(on_load=State.page_init_promociones)` en app/app.py.
     )

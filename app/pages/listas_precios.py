@@ -78,11 +78,17 @@ def _price_list_card(pl: rx.Var) -> rx.Component:
 # ─── Modal: Crear/Editar lista ────────────────────────────────────────────────
 
 def _price_list_form_modal() -> rx.Component:
-    is_edit = State.pl_editing_id > 0
+    # Reflex 0.8: NO precomputar Vars como locals fuera del return —
+    # el bundler los inlinea como identifiers no definidos en JSX.
+    # Inline los `rx.cond` con la comparación cada vez.
     return modal_container(
         is_open=State.show_price_list_form,
         on_close=State.close_price_list_form,
-        title=rx.cond(is_edit, "Editar Lista de Precios", "Nueva Lista de Precios"),
+        title=rx.cond(
+            State.pl_editing_id > 0,
+            "Editar Lista de Precios",
+            "Nueva Lista de Precios",
+        ),
         max_width="max-w-lg",
         children=[
             rx.el.div(
@@ -152,7 +158,15 @@ def _price_list_form_modal() -> rx.Component:
         ],
         footer=rx.el.div(
             rx.el.button(
-                rx.cond(State.is_loading, "Guardando...", rx.cond(is_edit, "Actualizar", "Crear Lista")),
+                rx.cond(
+                    State.is_loading,
+                    "Guardando...",
+                    rx.cond(
+                        State.pl_editing_id > 0,
+                        "Actualizar",
+                        "Crear Lista",
+                    ),
+                ),
                 on_click=State.save_price_list,
                 disabled=State.is_loading,
                 class_name=f"flex items-center gap-2 {BUTTON_STYLES.get('primary', 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700')}",
@@ -202,13 +216,12 @@ def _item_row(item: rx.Var) -> rx.Component:
 
 
 def _price_list_detail_modal() -> rx.Component:
-    pl = State.selected_price_list
     return modal_container(
         is_open=State.show_price_list_detail,
         on_close=State.close_price_list_detail,
         title=rx.el.div(
             rx.el.span("Precios especiales: ", class_name="text-slate-500 font-normal"),
-            rx.el.span(pl["name"], class_name="font-bold"),
+            rx.el.span(State.selected_price_list["name"], class_name="font-bold"),
             class_name="flex items-center gap-1 flex-wrap",
         ),
         max_width="max-w-2xl",
@@ -348,6 +361,6 @@ def listas_precios_page() -> rx.Component:
         # Modales
         _price_list_form_modal(),
         _price_list_detail_modal(),
-
-        on_mount=State.page_init_listas_precios,
+        # Nota: rx.fragment no soporta on_mount. La carga inicial la dispara
+        # `app.add_page(on_load=State.page_init_listas_precios)` en app/app.py.
     )
