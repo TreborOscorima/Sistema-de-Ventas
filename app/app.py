@@ -226,10 +226,16 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
                 # Skeleton solo en el área de contenido
                 _content_skeleton(),
             ),
+            # Margen izquierdo en desktop:
+            #   - abierto:  md:ml-64 xl:ml-72  (ancho completo del sidebar)
+            #   - cerrado:  md:ml-16          (rail mode de 64 px — sidebar.py
+            #               usa md:w-16 en estado colapsado).
+            # En mobile (< md) el sidebar es overlay con w-0, así que el contenido
+            # siempre llena el viewport (ml-0 implícito en ambos estados).
             class_name=rx.cond(
                 State.sidebar_open,
                 "h-screen bg-slate-50 overflow-y-auto overscroll-y-contain transition-[margin] duration-300 md:ml-64 xl:ml-72",
-                "h-screen bg-slate-50 overflow-y-auto overscroll-y-contain transition-[margin] duration-300",
+                "h-screen bg-slate-50 overflow-y-auto overscroll-y-contain transition-[margin] duration-300 md:ml-16",
             ),
             style={"height": "100dvh"},
         ),
