@@ -67,7 +67,12 @@ class ClientesState(MixinState):
         "email": "",
         "credit_limit": "0.00",
         "current_debt": "0.00",
+        # "" = sin lista asignada (usa precios base + tiers)
+        "price_list_id": "",
     }
+    # Listas de precios disponibles para el selector del modal.
+    # Se cargan junto con los clientes (mismo tenant).
+    available_price_lists: list[dict] = []
 
     def _empty_client_form(self) -> dict:
         return {
@@ -79,6 +84,7 @@ class ClientesState(MixinState):
             "email": "",
             "credit_limit": "0.00",
             "current_debt": "0.00",
+            "price_list_id": "",
         }
 
     def _parse_decimal(self, value: str | float | Decimal) -> Decimal:
@@ -141,6 +147,7 @@ class ClientesState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             self.clients = []
+            self.available_price_lists = []
             return
         with rx.session() as session:
             query = (
@@ -170,8 +177,22 @@ class ClientesState(MixinState):
                     "email": client.email or "",
                     "credit_limit": client.credit_limit,
                     "current_debt": client.current_debt,
+                    "price_list_id": client.price_list_id or 0,
                 }
                 for client in results
+            ]
+            # Listas activas del tenant para el selector del modal de cliente.
+            from app.models.price_lists import PriceList
+            pl_rows = session.exec(
+                select(PriceList)
+                .where(PriceList.company_id == company_id)
+                .where(PriceList.branch_id == branch_id)
+                .where(PriceList.is_active == True)  # noqa: E712
+                .order_by(PriceList.is_default.desc(), PriceList.name)
+            ).all()
+            self.available_price_lists = [
+                {"id": str(pl.id), "name": pl.name, "is_default": pl.is_default}
+                for pl in pl_rows
             ]
 
     @rx.event
@@ -183,6 +204,7 @@ class ClientesState(MixinState):
     def open_modal(self, client: dict | None = None):
         self.select_after_save = False
         if isinstance(client, dict) and client:
+            pl_id = client.get("price_list_id") or 0
             self.current_client = {
                 "id": client.get("id"),
                 "name": client.get("name", "") or "",
@@ -192,6 +214,7 @@ class ClientesState(MixinState):
                 "email": client.get("email", "") or "",
                 "credit_limit": str(client.get("credit_limit", "0.00")),
                 "current_debt": str(client.get("current_debt", "0.00")),
+                "price_list_id": str(pl_id) if pl_id else "",
             }
         else:
             self.current_client = self._empty_client_form()
@@ -265,6 +288,31 @@ class ClientesState(MixinState):
                         "El documento ya está registrado.", "error"
                     )
 
+                # Validar la lista de precios contra el tenant. Sin este check
+                # un cliente manipulado podría enlazarse con una lista de otra
+                # empresa, que se resolvería al cobrar la venta.
+                resolved_price_list_id: int | None = None
+                pl_raw = (self.current_client.get("price_list_id") or "").strip()
+                if pl_raw:
+                    try:
+                        candidate_id = int(pl_raw)
+                    except (ValueError, TypeError):
+                        candidate_id = 0
+                    if candidate_id:
+                        from app.models.price_lists import PriceList as _PriceList
+                        candidate = session.exec(
+                            select(_PriceList)
+                            .where(_PriceList.id == candidate_id)
+                            .where(_PriceList.company_id == company_id)
+                            .where(_PriceList.branch_id == branch_id)
+                        ).first()
+                        if not candidate:
+                            return self.add_notification(
+                                "La lista de precios seleccionada no pertenece a esta sucursal.",
+                                "error",
+                            )
+                        resolved_price_list_id = candidate.id
+
                 if client_id:
                     # FIX 39a: with_for_update to prevent TOCTOU on credit fields
                     client = session.exec(
@@ -283,6 +331,7 @@ class ClientesState(MixinState):
                     client.email = email
                     client.credit_limit = credit_limit
                     client.current_debt = current_debt
+                    client.price_list_id = resolved_price_list_id
                     session.add(client)
                     session.commit()
                     session.refresh(client)
@@ -296,6 +345,7 @@ class ClientesState(MixinState):
                         email=email,
                         credit_limit=credit_limit,
                         current_debt=current_debt,
+                        price_list_id=resolved_price_list_id,
                         company_id=company_id,
                         branch_id=branch_id,
                     )

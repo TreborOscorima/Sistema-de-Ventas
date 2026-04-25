@@ -219,6 +219,34 @@ def client_form_modal() -> rx.Component:
           ),
           class_name="flex flex-col gap-1",
         ),
+        rx.el.div(
+          rx.el.label(
+            "Lista de precios",
+            class_name=TYPOGRAPHY["label"],
+          ),
+          rx.el.select(
+            rx.el.option("Sin lista (precio base + tiers)", value=""),
+            rx.foreach(
+              State.available_price_lists,
+              lambda pl: rx.el.option(
+                rx.cond(
+                  pl["is_default"],
+                  pl["name"] + " (predeterminada)",
+                  pl["name"],
+                ),
+                value=pl["id"],
+              ),
+            ),
+            value=State.current_client["price_list_id"],
+            on_change=lambda v: State.update_current_client("price_list_id", v),
+            class_name=INPUT_STYLES["default"],
+          ),
+          rx.el.p(
+            "Determina los precios al vender a este cliente.",
+            class_name="text-xs text-slate-500",
+          ),
+          class_name="flex flex-col gap-1 md:col-span-2",
+        ),
         class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
       )
     ],
