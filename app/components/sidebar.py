@@ -167,16 +167,25 @@ def _rail_flyout(
     route: str,
     subsections: list,
     active_tab: rx.Var[str],
+    item_idx: rx.Var[int],
 ) -> rx.Component:
     """Popover lateral con submenú cuando el sidebar está colapsado.
 
     Visibilidad controlada por `State.open_flyout` (state-driven, no CSS
     hover). El item del rail dispara `open_rail_flyout` en `mouse_enter` y
-    `schedule_close_rail_flyout` (debounced 180ms) en `mouse_leave`. El
-    panel reusa los mismos handlers, así que mover el cursor al panel
-    cancela el cierre pendiente y lo mantiene abierto mientras se navega.
+    `schedule_close_rail_flyout` (debounced 180ms) en `mouse_leave`.
+
+    Posicionamiento adyacente al icono (`absolute left-full`) en vez de
+    centrado en viewport. Para items en la mitad inferior del rail, el
+    panel se ancla al fondo del icono y crece hacia arriba (`bottom-0`),
+    así no se corta contra el borde inferior del viewport — caso típico
+    de Configuración con 8 submódulos al final del rail.
     """
     is_open = State.open_flyout == page_label
+    # Flip: items en la mitad inferior anclan el panel a `bottom-0` para
+    # extenderse hacia arriba. Heurística por índice (no necesita medir
+    # el DOM): suficiente para un rail vertical estable.
+    flip = item_idx >= (State.navigation_items.length() / 2)
     return rx.cond(
         (item["page"] == page_label) & ~State.sidebar_open,
         rx.el.div(
@@ -220,37 +229,54 @@ def _rail_flyout(
                     ),
                 ),
                 class_name=(
-                    "w-64 max-h-full bg-white border border-slate-200 rounded-xl shadow-xl "
+                    "w-64 max-h-[calc(100vh-2rem)] bg-white border border-slate-200 rounded-xl shadow-xl "
                     "flex flex-col overflow-hidden"
                 ),
             ),
-            # Wrapper: posiciona el panel adyacente al rail y centrado
-            # verticalmente en el viewport (`inset-y-2 items-center`). La
-            # visibilidad la controla `State.open_flyout == page_label` —
-            # un único Var booleano, sin trucos de CSS hover.
+            # Wrapper: `absolute left-full` lo posiciona inmediatamente a
+            # la derecha del item del rail (que es `relative`), eliminando
+            # el viaje diagonal del cursor desde el icono al panel. El
+            # gap visual con el rail viene de `pl-2` (padding-left).
             #
-            # Pointer-events-auto SOLO cuando el flyout está abierto: el
-            # wrapper completo (toda la franja vertical pegada al rail)
-            # actúa como "safe area" — el cursor puede viajar por
-            # cualquier punto de esa franja desde el icono hasta el panel
-            # sin que se dispare `on_mouse_leave` (porque el wrapper
-            # captura el evento, no el background). Esto resuelve el
-            # gap entre rail e item: 180ms ya no es un límite estricto
-            # de tiempo de viaje, sino solo el debounce real para cuando
-            # el cursor sale completamente del strip.
+            # Anclaje vertical condicional:
+            #   - Items en la mitad superior (`flip=False`): `top-0` —
+            #     panel anclado al borde superior del icono, crece hacia
+            #     abajo.
+            #   - Items en la mitad inferior (`flip=True`): `bottom-0` —
+            #     panel anclado al borde inferior del icono, crece hacia
+            #     arriba. Evita que paneles tall (Configuración con 8
+            #     submódulos) se corten contra el borde inferior del
+            #     viewport cuando el icono está al final del rail.
             #
-            # Cuando el flyout está cerrado: `pointer-events-none` +
-            # `invisible` — no bloquea el contenido de la página detrás.
+            # El sidebar ya está en `overflow-visible` cuando colapsado,
+            # así que el `absolute` no se recorta.
+            #
+            # Pointer-events-auto sólo cuando el flyout está abierto: el
+            # wrapper actúa como "safe area" — cursor sobre el wrapper
+            # mantiene el flyout. Cuando cerrado: `invisible` +
+            # `pointer-events-none` — no bloquea contenido del fondo.
             on_mouse_enter=State.open_rail_flyout(page_label),
             on_mouse_leave=State.schedule_close_rail_flyout(page_label),
             class_name=rx.cond(
-                is_open,
-                "hidden md:flex fixed left-16 inset-y-2 z-[60] pl-2 items-center "
-                "opacity-100 visible pointer-events-auto "
-                "transition-opacity duration-150",
-                "hidden md:flex fixed left-16 inset-y-2 z-[60] pl-2 items-center "
-                "opacity-0 invisible pointer-events-none "
-                "transition-opacity duration-150",
+                flip,
+                rx.cond(
+                    is_open,
+                    "hidden md:block absolute left-full bottom-0 pl-2 z-[60] "
+                    "opacity-100 visible pointer-events-auto "
+                    "transition-opacity duration-150",
+                    "hidden md:block absolute left-full bottom-0 pl-2 z-[60] "
+                    "opacity-0 invisible pointer-events-none "
+                    "transition-opacity duration-150",
+                ),
+                rx.cond(
+                    is_open,
+                    "hidden md:block absolute left-full top-0 pl-2 z-[60] "
+                    "opacity-100 visible pointer-events-auto "
+                    "transition-opacity duration-150",
+                    "hidden md:block absolute left-full top-0 pl-2 z-[60] "
+                    "opacity-0 invisible pointer-events-none "
+                    "transition-opacity duration-150",
+                ),
             ),
         ),
         rx.fragment(),
@@ -424,7 +450,7 @@ def _sidebar_auth_content() -> rx.Component:
                 rx.el.div(
                     rx.foreach(
                         State.navigation_items,
-                        lambda item: rx.el.div(
+                        lambda item, idx: rx.el.div(
                             nav_item(item["label"], item["icon"], item["page"], item["route"]),
                             # Submenús inline (sólo cuando el sidebar está expandido).
                             _submenu_section(
@@ -450,13 +476,16 @@ def _sidebar_auth_content() -> rx.Component:
                             ),
                             # Flyout lateral en hover (sólo cuando el sidebar
                             # está colapsado / rail). Permite acceder a los
-                            # submódulos sin tener que expandir.
+                            # submódulos sin tener que expandir. `idx` se pasa
+                            # para decidir el anclaje vertical del panel
+                            # (top-0 vs bottom-0) según la posición del item.
                             _rail_flyout(
                                 item,
                                 "Configuracion",
                                 "/configuracion",
                                 CONFIG_SUBSECTIONS,
                                 State.config_tab,
+                                idx,
                             ),
                             _rail_flyout(
                                 item,
@@ -464,6 +493,7 @@ def _sidebar_auth_content() -> rx.Component:
                                 "/caja",
                                 CASH_SUBSECTIONS,
                                 State.cash_tab,
+                                idx,
                             ),
                             _rail_flyout(
                                 item,
@@ -471,6 +501,7 @@ def _sidebar_auth_content() -> rx.Component:
                                 "/servicios",
                                 SERVICES_SUBSECTIONS,
                                 State.service_tab,
+                                idx,
                             ),
                             # `relative` en el wrapper colapsado mantiene el
                             # contexto de posicionamiento. La apertura del
