@@ -228,14 +228,7 @@ def client_form_modal() -> rx.Component:
             rx.el.option("Sin lista (precio base + tiers)", value=""),
             rx.foreach(
               State.available_price_lists,
-              lambda pl: rx.el.option(
-                rx.cond(
-                  pl["is_default"],
-                  pl["name"] + " (predeterminada)",
-                  pl["name"],
-                ),
-                value=pl["id"],
-              ),
+              lambda pl: rx.el.option(pl["display_name"], value=pl["id"]),
             ),
             value=State.current_client["price_list_id"],
             on_change=lambda v: State.update_current_client("price_list_id", v),

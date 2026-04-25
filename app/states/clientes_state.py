@@ -190,8 +190,18 @@ class ClientesState(MixinState):
                 .where(PriceList.is_active == True)  # noqa: E712
                 .order_by(PriceList.is_default.desc(), PriceList.name)
             ).all()
+            # Pre-computar display_name para evitar concat de Var+str en la UI
+            # (Reflex 0.8 no soporta `var + literal` sobre ObjectItemOperation;
+            # con esto el componente sólo lee strings ya formateados).
             self.available_price_lists = [
-                {"id": str(pl.id), "name": pl.name, "is_default": pl.is_default}
+                {
+                    "id": str(pl.id),
+                    "name": pl.name,
+                    "display_name": (
+                        f"{pl.name} (predeterminada)" if pl.is_default else pl.name
+                    ),
+                    "is_default": pl.is_default,
+                }
                 for pl in pl_rows
             ]
 
