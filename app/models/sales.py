@@ -242,6 +242,28 @@ class SaleItem(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    # Trazabilidad de descuentos aplicados sobre el precio base.
+    # SET NULL: conservamos el SaleItem (con su precio histórico) aunque la
+    # promo o lista sean borradas; la trazabilidad se pierde graciosamente.
+    applied_promotion_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("promotion.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+    applied_price_list_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("pricelist.id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        ),
+    )
+
     sale: Optional["Sale"] = Relationship(back_populates="items")
     product: Optional["Product"] = Relationship(
         back_populates="sale_items",

@@ -84,6 +84,12 @@ class CartMixin:
     variant_picker_colors: List[str] = []
     variant_picker_rows: List[_VariantPickerRow] = []
 
+    # Visual feedback: precio resuelto desde lista asignada al cliente
+    price_list_price_applied: bool = False
+    # Visual feedback: promoción activa aplicada al ítem en carrito
+    promotion_applied: bool = False
+    promotion_name: str = ""
+
     _autocomplete_debounce_seq: int = rx.field(default=0, is_var=False)
 
     async def _process_barcode(self, barcode: str):
@@ -202,6 +208,71 @@ class CartMixin:
             f"{description} | Stock: {stock_display} | {currency}{price}"
         )
 
+    async def _resolve_price_list_price(
+        self,
+        product_id: int,
+        variant_id: int | None,
+        price_list_id: int,
+        company_id: int,
+        branch_id: int,
+    ) -> Decimal | None:
+        """Wrapper sobre :func:`app.services.pricing.resolve_price_list_price`.
+
+        Mantiene la firma usada por el preview del carrito y abre su propia
+        sesión async; toda la lógica de query vive en ``pricing``.
+        """
+        from app.services.pricing import resolve_price_list_price
+        try:
+            async with get_async_session() as session:
+                return await resolve_price_list_price(
+                    session,
+                    product_id=product_id,
+                    variant_id=variant_id,
+                    price_list_id=price_list_id,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+        except Exception:
+            logging.exception("Error resolving price list price for product %s", product_id)
+            return None
+
+    async def _apply_promotion_to_item(
+        self,
+        product_id: int,
+        category: str,
+        quantity: Decimal,
+        unit_price: Decimal,
+        company_id: int,
+        branch_id: int,
+    ) -> tuple[Decimal, str]:
+        """Wrapper sobre los helpers de ``pricing`` para preview del carrito.
+
+        No incrementa ``current_uses`` (eso ocurre solo al confirmar la venta
+        en :func:`sale_service._apply_promotions`). Garantiza que el precio
+        mostrado en el carrito coincida con el que cobrará la venta.
+        """
+        from app.services.pricing import (
+            apply_promotion_to_price,
+            find_applicable_promotion,
+        )
+        try:
+            async with get_async_session() as session:
+                promo = await find_applicable_promotion(
+                    session,
+                    product_id=product_id,
+                    category=category,
+                    quantity=quantity,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                )
+                if promo is None:
+                    return unit_price, ""
+                final_price = apply_promotion_to_price(promo, unit_price)
+                return self._round_currency(final_price), promo.name
+        except Exception:
+            logging.exception("Error applying promotion to cart item for product %s", product_id)
+            return unit_price, ""
+
     async def _apply_price_tier(
         self,
         product: Any | None = None,
@@ -230,34 +301,74 @@ class CartMixin:
         if not company_id or not branch_id:
             return None
 
-        # Guardar precio original para detectar si se aplicó tier
         original_sale_price = self._product_value(product, "sale_price", 0)
 
-        tier_price = await SaleService.calculate_item_price(
+        # ── Phase 1: Jerarquía de precio: 1) PriceListItem > 2) PriceTier > 3) sale_price ──
+        resolved_price: Decimal | None = None
+        price_from_list = False
+        price_from_tier = False
+
+        price_list_id = int(getattr(self, "_active_price_list_id", 0) or 0)
+        if price_list_id:
+            pl_price = await self._resolve_price_list_price(
+                int(product_id),
+                int(variant_id) if variant_id else None,
+                price_list_id,
+                int(company_id),
+                int(branch_id),
+            )
+            if pl_price is not None and pl_price > 0:
+                resolved_price = pl_price
+                price_from_list = True
+
+        if resolved_price is None:
+            tier_price = await SaleService.calculate_item_price(
+                int(product_id),
+                Decimal(str(qty)),
+                int(company_id),
+                int(branch_id),
+                variant_id=int(variant_id) if variant_id else None,
+            )
+            if tier_price and tier_price > 0:
+                resolved_price = tier_price
+                try:
+                    price_from_tier = bool(
+                        original_sale_price
+                        and float(tier_price) != float(original_sale_price)
+                    )
+                except (TypeError, ValueError):
+                    price_from_tier = False
+
+        if not resolved_price or resolved_price <= 0:
+            self.price_list_price_applied = False
+            self.wholesale_price_applied = False
+            self.promotion_applied = False
+            self.promotion_name = ""
+            return None
+
+        # ── Phase 2: Aplicar promoción activa (si existe) ──
+        category = self._product_value(product, "category", "General") or "General"
+        final_price, promo_name = await self._apply_promotion_to_item(
             int(product_id),
+            category,
             Decimal(str(qty)),
+            resolved_price,
             int(company_id),
             int(branch_id),
-            variant_id=int(variant_id) if variant_id else None,
         )
-        if tier_price and tier_price > 0:
-            self.new_sale_item["price"] = self._round_currency(tier_price)
-            self.new_sale_item["sale_price"] = self._round_currency(tier_price)
-            self.new_sale_item["subtotal"] = self._round_currency(
-                self.new_sale_item["quantity"] * self.new_sale_item["price"]
-            )
-            # Indicar si el precio aplicado es mayorista (distinto al precio normal)
-            try:
-                is_wholesale = (
-                    original_sale_price
-                    and float(tier_price) != float(original_sale_price)
-                )
-            except (TypeError, ValueError):
-                is_wholesale = False
-            self.wholesale_price_applied = bool(is_wholesale)
-        else:
-            self.wholesale_price_applied = False
-        return tier_price
+
+        # ── Phase 3: Actualizar item y flags ──
+        self.new_sale_item["price"] = self._round_currency(final_price)
+        self.new_sale_item["sale_price"] = self._round_currency(final_price)
+        self.new_sale_item["subtotal"] = self._round_currency(
+            self.new_sale_item["quantity"] * self.new_sale_item["price"]
+        )
+        self.price_list_price_applied = price_from_list
+        self.wholesale_price_applied = price_from_tier and not price_from_list
+        self.promotion_applied = bool(promo_name)
+        self.promotion_name = promo_name or ""
+
+        return final_price
 
     def _fill_sale_item_from_product(
         self,
@@ -827,6 +938,10 @@ class CartMixin:
         self.selected_product = None
         self.last_scanned_label = ""
         self.wholesale_price_applied = False
+        self.price_list_price_applied = False
+        self.promotion_applied = False
+        self.promotion_name = ""
+
     async def handle_sale_change(self, field: str, value: Union[str, float]):
         try:
             if field in ["quantity", "price"]:

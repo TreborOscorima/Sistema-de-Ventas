@@ -65,8 +65,7 @@ from app.models import (
     SalePayment,
     Unit,
 )
-from app.models.price_lists import PriceList, PriceListItem
-from app.models.promotions import Promotion, PromotionType, PromotionScope
+# PriceListItem y Promotion se acceden vía app.services.pricing (single source of truth).
 from app.schemas.sale_schemas import PaymentInfoDTO, SaleItemDTO
 from app.utils.calculations import calculate_subtotal, calculate_total
 from app.utils.db import get_async_session as get_session
@@ -690,72 +689,41 @@ async def _calculate_item_price(
     branch_id: int | None,
     price_list_id: int | None = None,
 ) -> Decimal:
-    # 1. Lista de precios del cliente (mayor prioridad)
-    if price_list_id:
-        pl_price = await _get_price_list_price(
-            session, product.id, variant.id if variant else None, price_list_id
-        )
-        if pl_price is not None:
-            return pl_price
+    """Resuelve el precio base (pre-promoción) usando los helpers compartidos.
 
-    # 2. Precio por escala/volumen (PriceTier)
-    tier = None
-    if variant:
-        tier = await _get_price_tier(
-            session,
-            variant_id=variant.id,
-            qty=qty,
-            company_id=company_id,
-            branch_id=branch_id,
-        )
-    if tier is None:
-        tier = await _get_price_tier(
+    Mantiene la jerarquía PriceList → PriceTier → ``sale_price``. La aplicación
+    de promociones se delega a :func:`_apply_promotions` para preservar el
+    incremento controlado de ``current_uses``.
+    """
+    from app.services.pricing import (
+        resolve_price_list_price,
+        resolve_price_tier_price,
+    )
+
+    if price_list_id:
+        pl_price = await resolve_price_list_price(
             session,
             product_id=product.id,
-            qty=qty,
+            variant_id=variant.id if variant else None,
+            price_list_id=price_list_id,
             company_id=company_id,
             branch_id=branch_id,
         )
-    if tier and tier.unit_price is not None:
-        return _round_money(tier.unit_price)
+        if pl_price is not None:
+            return _round_money(pl_price)
 
-    # 3. Precio base del producto
-    return _round_money(product.sale_price)
-
-
-async def _get_price_list_price(
-    session: AsyncSession,
-    product_id: int,
-    variant_id: int | None,
-    price_list_id: int,
-) -> Decimal | None:
-    """Busca el precio override en la lista asignada al cliente.
-
-    Busca primero por variante específica; si no encuentra, por producto base.
-    """
-    # Intentar con variante primero
-    if variant_id:
-        stmt = (
-            select(PriceListItem)
-            .where(PriceListItem.price_list_id == price_list_id)
-            .where(PriceListItem.product_id == product_id)
-            .where(PriceListItem.product_variant_id == variant_id)
-        )
-        item = (await session.exec(stmt)).first()
-        if item:
-            return _round_money(item.unit_price)
-
-    # Fallback al producto base en la lista
-    stmt = (
-        select(PriceListItem)
-        .where(PriceListItem.price_list_id == price_list_id)
-        .where(PriceListItem.product_id == product_id)
-        .where(PriceListItem.product_variant_id == None)
+    tier_price = await resolve_price_tier_price(
+        session,
+        product_id=product.id,
+        variant_id=variant.id if variant else None,
+        quantity=qty,
+        company_id=company_id,
+        branch_id=branch_id,
     )
-    item = (await session.exec(stmt)).first()
-    if item:
-        return _round_money(item.unit_price)
-    return None
+    if tier_price is not None:
+        return _round_money(tier_price)
+
+    return _round_money(product.sale_price)
 
 
 async def _apply_promotions(
@@ -766,85 +734,152 @@ async def _apply_promotions(
     company_id: int,
     branch_id: int,
     now: "datetime | None" = None,
-) -> Decimal:
-    """Aplica la primera promoción activa y vigente que aplique al producto.
+) -> tuple[Decimal, int | None]:
+    """Resuelve y aplica la promoción al ítem. Retorna ``(precio, promo_id)``.
 
-    Jerarquía de búsqueda (más específica → más general):
-      1. Scope PRODUCT: coincide con product_id exacto
-      2. Scope CATEGORY: coincide con product.category
-      3. Scope ALL: aplica a cualquier producto
+    **No** incrementa ``current_uses`` aquí. La incrementación es delegada a
+    :func:`_consume_promotions_for_sale`, que corre una sola vez al final del
+    proceso de venta — garantizando que ``current_uses`` cuente "ventas que
+    usaron la promo", no "líneas dentro de la venta", y evita duplicados.
 
-    Retorna el precio unitario final (potencialmente reducido).
+    Esta separación además permite al caller decidir el orden: aplicar todos
+    los items primero, después tomar lock sobre el conjunto único de promos
+    usadas y mutar ``current_uses`` bajo ``with_for_update``.
     """
-    from app.utils.timezone import utc_now_naive as _utc_now
-    effective_now = now or _utc_now()
-
-    # Query de todas las promociones activas y vigentes para este tenant
-    stmt = (
-        select(Promotion)
-        .where(Promotion.company_id == company_id)
-        .where(Promotion.branch_id == branch_id)
-        .where(Promotion.is_active == True)
-        .where(Promotion.starts_at <= effective_now)
-        .where(Promotion.ends_at >= effective_now)
-        .order_by(
-            # Ordenar de más específico a más general
-            Promotion.scope.desc(),  # product > category > all (lexicográfico: p > c > a)
-        )
+    from app.services.pricing import (
+        apply_promotion_to_price,
+        find_applicable_promotion,
     )
-    promotions = (await session.exec(stmt)).all()
 
-    for promo in promotions:
-        # Verificar límite de usos
-        if promo.max_uses is not None and promo.current_uses >= promo.max_uses:
-            continue
+    promo = await find_applicable_promotion(
+        session,
+        product_id=product.id,
+        category=product.category,
+        quantity=qty,
+        company_id=company_id,
+        branch_id=branch_id,
+        now=now,
+    )
+    if promo is None:
+        return unit_price, None
 
-        # Verificar que aplica al producto
-        applies = False
-        if promo.scope == PromotionScope.ALL:
-            applies = True
-        elif promo.scope == PromotionScope.PRODUCT and promo.product_id == product.id:
-            applies = True
-        elif promo.scope == PromotionScope.CATEGORY and promo.category == product.category:
-            applies = True
+    final_price = _round_money(apply_promotion_to_price(promo, unit_price))
+    return final_price, promo.id
 
-        if not applies:
-            continue
 
-        # Verificar cantidad mínima
-        if qty < Decimal(str(promo.min_quantity)):
-            continue
+async def _consume_promotions_for_sale(
+    session: AsyncSession,
+    promotion_ids: set[int],
+    company_id: int,
+    branch_id: int,
+) -> None:
+    """Incrementa ``current_uses`` una sola vez por cada promoción usada.
 
-        # Aplicar descuento
-        disc_val = Decimal(str(promo.discount_value or 0))
-        if promo.promotion_type == PromotionType.PERCENTAGE:
-            factor = (Decimal("100") - disc_val) / Decimal("100")
-            final_price = _round_money(unit_price * factor)
-        elif promo.promotion_type == PromotionType.FIXED_AMOUNT:
-            final_price = _round_money(max(Decimal("0"), unit_price - disc_val))
-        elif promo.promotion_type == PromotionType.BUY_X_GET_Y:
-            # Calcula precio efectivo por unidad en el grupo X+Y
-            min_q = Decimal(str(promo.min_quantity))
-            free_q = Decimal(str(promo.free_quantity or 0))
-            total_group = min_q + free_q
-            if total_group > 0:
-                factor = min_q / total_group
-                final_price = _round_money(unit_price * factor)
-            else:
-                final_price = unit_price
-        else:
-            final_price = unit_price
+    Bajo ``FOR UPDATE`` para serializar contra ventas concurrentes; relee
+    ``max_uses`` y omite el incremento si otra venta concurrente ya consumió
+    el cap (mejor sobre-permitir una venta que abortarla post-cobro).
 
-        # Incrementar contador de usos (no bloqueante, eventual consistency ok)
-        try:
+    Best-effort: una excepción aquí no aborta la venta, sólo se loguea.
+    """
+    if not promotion_ids:
+        return
+
+    from app.models.promotions import Promotion
+
+    try:
+        stmt = (
+            select(Promotion)
+            .where(Promotion.id.in_(promotion_ids))
+            .where(Promotion.company_id == company_id)
+            .where(Promotion.branch_id == branch_id)
+            .with_for_update()
+        )
+        promos = (await session.exec(stmt)).all()
+        for promo in promos:
+            if (
+                promo.max_uses is not None
+                and (promo.current_uses or 0) >= promo.max_uses
+            ):
+                logger.warning(
+                    "Promo %s alcanzó max_uses bajo concurrencia; "
+                    "no se incrementa current_uses para sale en curso.",
+                    promo.id,
+                )
+                continue
             promo.current_uses = (promo.current_uses or 0) + 1
-            await session.flush()
-        except Exception:
-            pass
+        await session.flush()
+    except Exception:
+        logger.exception(
+            "Fallo al consumir promociones %s; la venta no se aborta.",
+            promotion_ids,
+        )
 
-        return final_price
 
-    return unit_price
+async def _resolve_item_pricing(
+    session: AsyncSession,
+    product: Product,
+    variant: ProductVariant | None,
+    qty: Decimal,
+    company_id: int,
+    branch_id: int,
+    price_list_id: int | None,
+    now: "datetime | None" = None,
+) -> tuple[Decimal, int | None, int | None]:
+    """Resuelve precio efectivo y trazabilidad para un ítem de venta.
+
+    Encapsula:
+      1. Resolución de precio base con tracking de la lista usada (si aplicó).
+      2. Aplicación de promoción con tracking del id (si aplicó).
+
+    Retorna ``(final_price, applied_price_list_id, applied_promotion_id)``,
+    donde los ids son ``None`` cuando ese descuento no impactó al precio.
+    """
+    from app.services.pricing import (
+        resolve_price_list_price,
+        resolve_price_tier_price,
+    )
+
+    base_price: Decimal | None = None
+    applied_pl_id: int | None = None
+
+    if price_list_id:
+        pl_price = await resolve_price_list_price(
+            session,
+            product_id=product.id,
+            variant_id=variant.id if variant else None,
+            price_list_id=price_list_id,
+            company_id=company_id,
+            branch_id=branch_id,
+        )
+        if pl_price is not None and pl_price > 0:
+            base_price = _round_money(pl_price)
+            applied_pl_id = price_list_id
+
+    if base_price is None:
+        tier_price = await resolve_price_tier_price(
+            session,
+            product_id=product.id,
+            variant_id=variant.id if variant else None,
+            quantity=qty,
+            company_id=company_id,
+            branch_id=branch_id,
+        )
+        if tier_price is not None and tier_price > 0:
+            base_price = _round_money(tier_price)
+
+    if base_price is None:
+        base_price = _round_money(product.sale_price)
+
+    final_price, applied_promo_id = await _apply_promotions(
+        session,
+        product,
+        qty,
+        base_price,
+        company_id,
+        branch_id,
+        now=now,
+    )
+    return final_price, applied_pl_id, applied_promo_id
 
 
 def _sum_batch_stock(
@@ -1447,6 +1482,9 @@ class SaleService:
 
         # Tiempo UTC para evaluación de promociones (constante durante toda la venta)
         promo_now = utc_now_naive()
+        # Conjunto único de promociones aplicadas en esta venta. current_uses
+        # se incrementa una sola vez por venta al final, bajo lock.
+        applied_promotion_ids: set[int] = set()
 
         product_snapshot: list[Dict[str, Any]] = []
         decimal_snapshot: list[Dict[str, Any]] = []
@@ -1683,7 +1721,11 @@ class SaleService:
                     MSG.SALE_VAL_NOT_FOUND.format(identifier=identifier)
                 )
 
-            unit_price = await _calculate_item_price(
+            (
+                unit_price,
+                applied_pl_id,
+                applied_promo_id,
+            ) = await _resolve_item_pricing(
                 session,
                 product,
                 variant,
@@ -1691,17 +1733,10 @@ class SaleService:
                 company_id,
                 branch_id,
                 price_list_id=client_price_list_id,
-            )
-            # Aplicar promociones activas (puede reducir unit_price)
-            unit_price = await _apply_promotions(
-                session,
-                product,
-                item["quantity"],
-                unit_price,
-                company_id,
-                branch_id,
                 now=promo_now,
             )
+            if applied_promo_id is not None:
+                applied_promotion_ids.add(applied_promo_id)
             if unit_price <= 0:
                 raise ValueError(
                     MSG.SALE_VAL_INVALID_PRICE.format(description=item["description"])
@@ -1727,6 +1762,9 @@ class SaleService:
                 "product_id": product.id,
                 "product_variant_id": variant.id if variant else None,
                 "product_batch_id": None,
+                # Trazabilidad: se persiste en SaleItem para reporte futuro
+                "applied_promotion_id": applied_promo_id,
+                "applied_price_list_id": applied_pl_id,
             }
             decimal_snapshot.append(decimal_item)
 
@@ -2190,6 +2228,8 @@ class SaleService:
                     product_category_snapshot=product.category or "General",
                     kit_product_id=item.get("kit_product_id") or None,
                     kit_product_name=item.get("kit_name") or "",
+                    applied_promotion_id=item.get("applied_promotion_id"),
+                    applied_price_list_id=item.get("applied_price_list_id"),
                 )
                 session.add(sale_item)
 
@@ -2301,6 +2341,16 @@ class SaleService:
                     payment_summary = f"{payment_summary}\n{credit_block}"
                 else:
                     payment_summary = credit_block
+
+            # Consumir promociones (1 incremento por venta, bajo FOR UPDATE).
+            # Se hace ANTES del flush final para que si el caller revierte, el
+            # incremento también se revierta como parte de la misma transacción.
+            await _consume_promotions_for_sale(
+                session,
+                applied_promotion_ids,
+                company_id,
+                branch_id,
+            )
 
             # Flush final para asegurar integridad antes de devolver al caller.
             # El commit/rollback es responsabilidad EXCLUSIVA del caller,

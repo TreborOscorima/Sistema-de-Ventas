@@ -992,10 +992,25 @@ def quick_add_bar() -> rx.Component:
                 rx.el.div(
                     rx.el.label("Precio", class_name="text-xs text-slate-500 sm:hidden"),
                     rx.cond(
-                        State.wholesale_price_applied,
+                        State.price_list_price_applied,
                         rx.el.span(
-                            "Mayorista",
-                            class_name="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 leading-none",
+                            "Lista",
+                            class_name="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 leading-none",
+                        ),
+                        rx.cond(
+                            State.wholesale_price_applied,
+                            rx.el.span(
+                                "Mayorista",
+                                class_name="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 leading-none",
+                            ),
+                            rx.fragment(),
+                        ),
+                    ),
+                    rx.cond(
+                        State.promotion_applied,
+                        rx.el.span(
+                            State.promotion_name,
+                            class_name="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 leading-none",
                         ),
                         rx.fragment(),
                     ),
@@ -1013,9 +1028,17 @@ def quick_add_bar() -> rx.Component:
                         class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
                     ),
                     class_name=rx.cond(
-                        State.wholesale_price_applied,
-                        "flex items-center gap-1 px-3 py-2 border border-amber-300 rounded-lg bg-amber-50/50 focus-within:ring-2 focus-within:ring-amber-500",
-                        "flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
+                        State.price_list_price_applied,
+                        "flex items-center gap-1 px-3 py-2 border border-blue-300 rounded-lg bg-blue-50/50 focus-within:ring-2 focus-within:ring-blue-500",
+                        rx.cond(
+                            State.wholesale_price_applied,
+                            "flex items-center gap-1 px-3 py-2 border border-amber-300 rounded-lg bg-amber-50/50 focus-within:ring-2 focus-within:ring-amber-500",
+                            rx.cond(
+                                State.promotion_applied,
+                                "flex items-center gap-1 px-3 py-2 border border-emerald-300 rounded-lg bg-emerald-50/50 focus-within:ring-2 focus-within:ring-emerald-500",
+                                "flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500",
+                            ),
+                        ),
                     ),
                 ),
                 class_name="flex flex-col gap-1 w-[122px] sm:w-28",

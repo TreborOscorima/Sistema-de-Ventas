@@ -84,6 +84,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     client_search_query: str = ""
     client_suggestions: list[dict] = []
     selected_client: dict | None = None
+    _active_price_list_id: int = rx.field(default=0, is_var=False)
     is_credit_mode: bool = False
     credit_installments: int = DEFAULT_INSTALLMENTS_COUNT
     credit_interval_days: int = DEFAULT_CREDIT_INTERVAL_DAYS
@@ -166,6 +167,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 "id": client.id,
                 "name": client.name,
                 "dni": client.dni,
+                "price_list_id": client.price_list_id or 0,
                 "balance": self._round_currency(
                     float(max(client.credit_limit - client.current_debt, 0))
                 ),
@@ -185,15 +187,20 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             if balance is None:
                 balance = 0
             selected["balance"] = self._round_currency(max(balance, 0))
+            selected["price_list_id"] = getattr(client_data, "price_list_id", None) or 0
         elif isinstance(client_data, dict) and client_data:
             selected = dict(client_data)
         self.selected_client = dict(selected) if isinstance(selected, dict) else None
+        self._active_price_list_id = int(
+            (selected or {}).get("price_list_id") or 0
+        )
         self.client_search_query = ""
         self.client_suggestions = []
 
     @rx.event
     def clear_selected_client(self):
         self.selected_client = None
+        self._active_price_list_id = 0
 
     @rx.event
     def set_sale_receipt_type(self, value: str):
@@ -453,6 +460,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
 
     def _reset_credit_context(self):
         self.selected_client = None
+        self._active_price_list_id = 0
         self.client_search_query = ""
         self.client_suggestions = []
         self.is_credit_mode = False
@@ -640,6 +648,22 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             fiscal_sale_id = result.sale.id
             fiscal_company_id = self.current_user.get("company_id")
             fiscal_branch_id = self._branch_id()
+
+            # ── Si había un presupuesto pre-cargado, marcarlo como convertido ──
+            _pending_quot = int(getattr(self, "_pending_quotation_id", 0) or 0)
+            if _pending_quot:
+                try:
+                    from app.services.quotation_service import QuotationService as _QS
+                    await _QS.mark_converted(
+                        _pending_quot,
+                        fiscal_sale_id,
+                        int(fiscal_company_id or 0),
+                        int(fiscal_branch_id or 0),
+                    )
+                except Exception:
+                    pass  # non-critical: la venta ya fue registrada
+                self._pending_quotation_id = 0
+
             receipt_type = self._determine_receipt_type(result.sale)
             buyer_doc_type, buyer_doc_number, buyer_name = (
                 self._extract_buyer_info()
