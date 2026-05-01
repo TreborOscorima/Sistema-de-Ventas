@@ -734,6 +734,8 @@ async def _apply_promotions(
     company_id: int,
     branch_id: int,
     now: "datetime | None" = None,
+    coupon_code: str | None = None,
+    cart_subtotal: Decimal | None = None,
 ) -> tuple[Decimal, int | None]:
     """Resuelve y aplica la promoción al ítem. Retorna ``(precio, promo_id)``.
 
@@ -759,6 +761,8 @@ async def _apply_promotions(
         company_id=company_id,
         branch_id=branch_id,
         now=now,
+        coupon_code=coupon_code,
+        cart_subtotal=cart_subtotal,
     )
     if promo is None:
         return unit_price, None
@@ -815,7 +819,7 @@ async def _consume_promotions_for_sale(
         )
 
 
-async def _resolve_item_pricing(
+async def _resolve_item_base_price(
     session: AsyncSession,
     product: Product,
     variant: ProductVariant | None,
@@ -823,16 +827,12 @@ async def _resolve_item_pricing(
     company_id: int,
     branch_id: int,
     price_list_id: int | None,
-    now: "datetime | None" = None,
-) -> tuple[Decimal, int | None, int | None]:
-    """Resuelve precio efectivo y trazabilidad para un ítem de venta.
+) -> tuple[Decimal, int | None]:
+    """Resuelve el precio base y el id de lista aplicada (si la hubo).
 
-    Encapsula:
-      1. Resolución de precio base con tracking de la lista usada (si aplicó).
-      2. Aplicación de promoción con tracking del id (si aplicó).
-
-    Retorna ``(final_price, applied_price_list_id, applied_promotion_id)``,
-    donde los ids son ``None`` cuando ese descuento no impactó al precio.
+    Extraído de ``_resolve_item_pricing`` para que el pre-pass que calcula
+    ``cart_subtotal`` pueda obtener (base_price, applied_pl_id) sin duplicar
+    queries al volver a entrar en la pasada principal.
     """
     from app.services.pricing import (
         resolve_price_list_price,
@@ -870,6 +870,51 @@ async def _resolve_item_pricing(
     if base_price is None:
         base_price = _round_money(product.sale_price)
 
+    return base_price, applied_pl_id
+
+
+async def _resolve_item_pricing(
+    session: AsyncSession,
+    product: Product,
+    variant: ProductVariant | None,
+    qty: Decimal,
+    company_id: int,
+    branch_id: int,
+    price_list_id: int | None,
+    now: "datetime | None" = None,
+    coupon_code: str | None = None,
+    cart_subtotal: Decimal | None = None,
+    precomputed_base_price: Decimal | None = None,
+    precomputed_applied_pl_id: int | None = None,
+) -> tuple[Decimal, int | None, int | None]:
+    """Resuelve precio efectivo y trazabilidad para un ítem de venta.
+
+    Encapsula:
+      1. Resolución de precio base con tracking de la lista usada (si aplicó).
+      2. Aplicación de promoción con tracking del id (si aplicó).
+
+    Retorna ``(final_price, applied_price_list_id, applied_promotion_id)``,
+    donde los ids son ``None`` cuando ese descuento no impactó al precio.
+
+    ``precomputed_base_price`` / ``precomputed_applied_pl_id``: si el caller ya
+    resolvió el precio base en una pasada previa (típicamente para acumular
+    ``cart_subtotal`` antes de evaluar ``min_cart_amount``), pasar esos valores
+    para evitar repetir las queries de PriceList/Tier.
+    """
+    if precomputed_base_price is not None:
+        base_price = precomputed_base_price
+        applied_pl_id = precomputed_applied_pl_id
+    else:
+        base_price, applied_pl_id = await _resolve_item_base_price(
+            session,
+            product,
+            variant,
+            qty,
+            company_id,
+            branch_id,
+            price_list_id,
+        )
+
     final_price, applied_promo_id = await _apply_promotions(
         session,
         product,
@@ -878,6 +923,8 @@ async def _resolve_item_pricing(
         company_id,
         branch_id,
         now=now,
+        coupon_code=coupon_code,
+        cart_subtotal=cart_subtotal,
     )
     return final_price, applied_pl_id, applied_promo_id
 
@@ -1258,6 +1305,8 @@ class SaleService:
         reservation_id: str | None = None,
         currency_symbol: str | None = None,
         idempotency_key: str | None = None,
+        coupon_code: str | None = None,
+        promo_now: "datetime.datetime | None" = None,
     ) -> SaleProcessResult:
         """Wrapper público: aísla set/reset del tenant context.
 
@@ -1283,6 +1332,8 @@ class SaleService:
                         reservation_id,
                         currency_symbol,
                         idempotency_key,
+                        coupon_code,
+                        promo_now,
                     )
             return await SaleService._process_sale_impl(
                 session,
@@ -1294,6 +1345,8 @@ class SaleService:
                 reservation_id,
                 currency_symbol,
                 idempotency_key,
+                coupon_code,
+                promo_now,
             )
         finally:
             set_tenant_context(None, None)
@@ -1309,6 +1362,8 @@ class SaleService:
         reservation_id: str | None = None,
         currency_symbol: str | None = None,
         idempotency_key: str | None = None,
+        coupon_code: str | None = None,
+        promo_now: "datetime.datetime | None" = None,
     ) -> SaleProcessResult:
         """Procesa una venta completa de forma atómica.
 
@@ -1480,8 +1535,9 @@ class SaleService:
             if client_for_pl and client_for_pl.price_list_id:
                 client_price_list_id = client_for_pl.price_list_id
 
-        # Tiempo UTC para evaluación de promociones (constante durante toda la venta)
-        promo_now = utc_now_naive()
+        # Hora local de la empresa para evaluación de promociones (constante durante toda la venta).
+        # Se recibe del caller para usar el timezone correcto; fallback a UTC si no se pasa.
+        promo_now = promo_now or utc_now_naive()
         # Conjunto único de promociones aplicadas en esta venta. current_uses
         # se incrementa una sola vez por venta al final, bajo lock.
         applied_promotion_ids: set[int] = set()
@@ -1664,18 +1720,23 @@ class SaleService:
 
         resolved_items: list[Dict[str, Any]] = []
         batch_cache: dict[tuple[str, int], list[ProductBatch]] = {}
-        for item in pending_items:
+
+        def _match_product(item: Dict[str, Any]) -> tuple[Product, ProductVariant | None]:
+            """Resuelve (product, variant) para un item del carrito.
+
+            Centraliza la lógica de matching para que pueda reusarse en el
+            pre-pass de cómputo de subtotal y en la pasada principal de
+            pricing+stock sin duplicar las cinco estrategias de búsqueda.
+            """
             product = None
             variant = None
 
-            # 1. Intentar búsqueda por ID de variante (más confiable para variantes)
             vid = item.get("variant_id")
             if vid:
                 variant = variants_by_id.get(vid)
                 if variant:
                     product = products_by_id.get(variant.product_id)
 
-            # 2. Intentar búsqueda por ID (más confiable para productos)
             pid = item.get("product_id")
             if pid and not product:
                 product = products_by_id.get(pid)
@@ -1684,7 +1745,6 @@ class SaleService:
                     if variant:
                         product = products_by_id.get(variant.product_id)
 
-            # 3. Intentar búsqueda por código de barras (SKU de variante)
             if not product:
                 barcode = (item.get("barcode") or "").strip()
                 if barcode:
@@ -1692,13 +1752,11 @@ class SaleService:
                     if variant:
                         product = products_by_id.get(variant.product_id)
 
-            # 4. Intentar búsqueda por código de barras (producto)
             if not product:
                 barcode = (item.get("barcode") or "").strip()
                 if barcode:
                     product = products_by_barcode.get(barcode)
 
-            # 5. Intentar búsqueda por descripción
             if not product:
                 description = item.get("description", "")
                 if description in ambiguous_descriptions:
@@ -1707,19 +1765,46 @@ class SaleService:
                     )
                 product = products_by_description.get(description)
 
-            # 5. Validación final
             if not product:
-                identifier = ""
                 if item.get("barcode"):
                     identifier = f"código {item['barcode']}"
                 elif item.get("description"):
                     identifier = item["description"]
                 else:
                     identifier = "desconocido"
-
                 raise StockError(
                     MSG.SALE_VAL_NOT_FOUND.format(identifier=identifier)
                 )
+            return product, variant
+
+        # ── Pre-pass: matching + precio base (sin promo) → cart_subtotal. ──
+        # Necesario para que `min_cart_amount` pueda evaluarse con el contexto
+        # completo del carrito. Se cachea (product, variant, base_price, pl_id)
+        # para que la pasada principal solo deba aplicar la promo y no repita
+        # las queries de PriceList/Tier.
+        prepared_items: list[
+            tuple[Product, ProductVariant | None, Decimal, int | None]
+        ] = []
+        cart_subtotal_pre_promo = Decimal("0.00")
+        for item in pending_items:
+            matched_product, matched_variant = _match_product(item)
+            base_price, applied_pl_id_pre = await _resolve_item_base_price(
+                session,
+                matched_product,
+                matched_variant,
+                item["quantity"],
+                company_id,
+                branch_id,
+                price_list_id=client_price_list_id,
+            )
+            prepared_items.append(
+                (matched_product, matched_variant, base_price, applied_pl_id_pre)
+            )
+            cart_subtotal_pre_promo += calculate_subtotal(item["quantity"], base_price)
+        cart_subtotal_pre_promo = _round_money(cart_subtotal_pre_promo)
+
+        for idx, item in enumerate(pending_items):
+            product, variant, base_price, pre_pl_id = prepared_items[idx]
 
             (
                 unit_price,
@@ -1734,6 +1819,10 @@ class SaleService:
                 branch_id,
                 price_list_id=client_price_list_id,
                 now=promo_now,
+                coupon_code=coupon_code,
+                cart_subtotal=cart_subtotal_pre_promo,
+                precomputed_base_price=base_price,
+                precomputed_applied_pl_id=pre_pl_id,
             )
             if applied_promo_id is not None:
                 applied_promotion_ids.add(applied_promo_id)
@@ -1750,6 +1839,7 @@ class SaleService:
                     "unit": item["unit"],
                     "price": _money_to_float(unit_price),
                     "subtotal": _money_to_float(subtotal),
+                    "base_price": _money_to_float(base_price),
                 }
             )
             decimal_item = {
@@ -1765,6 +1855,9 @@ class SaleService:
                 # Trazabilidad: se persiste en SaleItem para reporte futuro
                 "applied_promotion_id": applied_promo_id,
                 "applied_price_list_id": applied_pl_id,
+                # Snapshot del precio pre-promo para que el reporte de
+                # promociones pueda calcular descuento real (final − base) × qty.
+                "unit_price_base": base_price,
             }
             decimal_snapshot.append(decimal_item)
 
@@ -2222,6 +2315,7 @@ class SaleService:
                     branch_id=branch_id,
                     quantity=item["quantity"],
                     unit_price=item["price"],
+                    unit_price_base=item.get("unit_price_base") or item["price"],
                     subtotal=item["subtotal"],
                     product_name_snapshot=name_snapshot,
                     product_barcode_snapshot=barcode_snapshot,

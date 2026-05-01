@@ -155,6 +155,55 @@ def _fiscal_lookup_input() -> rx.Component:
     )
 
 
+def _coupon_input() -> rx.Component:
+    """Input para ingresar/aplicar un cupón de descuento al carrito."""
+    return rx.el.div(
+        rx.el.span(
+            rx.icon("ticket", class_name="h-3.5 w-3.5 inline mr-1 text-fuchsia-500"),
+            "Cupón",
+            class_name="text-xs font-medium text-slate-500",
+        ),
+        rx.el.div(
+            rx.el.input(
+                placeholder="Código",
+                default_value=State.cart_coupon_code,
+                on_change=State.set_cart_coupon_input,
+                disabled=State.cart_coupon_status == "applied",
+                class_name=(
+                    "flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm uppercase "
+                    "focus:outline-none focus:ring-2 focus:ring-fuchsia-300 disabled:bg-emerald-50 "
+                    "disabled:text-emerald-700 disabled:font-semibold"
+                ),
+            ),
+            rx.cond(
+                State.cart_coupon_status == "applied",
+                rx.el.button(
+                    rx.icon("x", class_name="h-4 w-4"),
+                    on_click=State.clear_cart_coupon,
+                    title="Quitar cupón",
+                    class_name="px-2 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50",
+                ),
+                rx.el.button(
+                    "Aplicar",
+                    on_click=State.apply_cart_coupon,
+                    class_name="px-3 py-1.5 rounded-lg bg-fuchsia-600 text-white text-sm font-medium hover:bg-fuchsia-700",
+                ),
+            ),
+            class_name="flex items-center gap-1.5 mt-1",
+        ),
+        rx.cond(
+            State.cart_coupon_status == "invalid",
+            rx.el.p(State.cart_coupon_message, class_name="text-xs text-rose-600 mt-1"),
+            rx.cond(
+                State.cart_coupon_status == "applied",
+                rx.el.p(State.cart_coupon_message, class_name="text-xs text-emerald-600 mt-1"),
+                rx.fragment(),
+            ),
+        ),
+        class_name="flex flex-col px-3 py-2 border-b border-slate-100",
+    )
+
+
 def _receipt_type_selector() -> rx.Component:
     """Selector de tipo de comprobante fiscal (boleta/factura/nota de venta).
 
@@ -241,6 +290,15 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
+                rx.cond(
+                    item["promotion_name"] != "",
+                    rx.el.span(
+                        rx.icon("tag", class_name="h-3 w-3 inline mr-0.5"),
+                        item["promotion_name"],
+                        class_name="text-xs font-mono text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 w-fit",
+                    ),
+                    rx.fragment(),
+                ),
                 class_name="flex flex-col gap-0.5",
             ),
             class_name="py-2 px-3 text-sm",
@@ -250,7 +308,23 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
             class_name="py-2 px-3 text-center text-sm",
         ),
         rx.el.td(
-            rx.el.span(State.currency_symbol, item["price"].to_string()),
+            rx.cond(
+                item["promotion_name"] != "",
+                rx.el.div(
+                    rx.el.span(
+                        State.currency_symbol,
+                        item["base_price"].to_string(),
+                        class_name="text-slate-400 line-through text-xs leading-none",
+                    ),
+                    rx.el.span(
+                        State.currency_symbol,
+                        item["price"].to_string(),
+                        class_name="text-emerald-600 font-semibold",
+                    ),
+                    class_name="flex flex-col items-end gap-0.5",
+                ),
+                rx.el.span(State.currency_symbol, item["price"].to_string()),
+            ),
             class_name="py-2 px-3 text-right text-sm hidden sm:table-cell",
         ),
         rx.el.td(
@@ -307,6 +381,15 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
+                rx.cond(
+                    item["promotion_name"] != "",
+                    rx.el.span(
+                        rx.icon("tag", class_name="h-3 w-3 inline mr-0.5"),
+                        item["promotion_name"],
+                        class_name="text-xs font-mono text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 w-fit",
+                    ),
+                    rx.fragment(),
+                ),
                 class_name="flex flex-col gap-0.5",
             ),
             rx.el.button(
@@ -326,7 +409,23 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
             ),
             rx.el.div(
                 rx.el.span("Precio:", class_name="text-xs text-slate-500"),
-                rx.el.span(State.currency_symbol, item["price"].to_string(), class_name="font-medium"),
+                rx.cond(
+                    item["promotion_name"] != "",
+                    rx.el.div(
+                        rx.el.span(
+                            State.currency_symbol,
+                            item["base_price"].to_string(),
+                            class_name="text-slate-400 line-through text-xs",
+                        ),
+                        rx.el.span(
+                            State.currency_symbol,
+                            item["price"].to_string(),
+                            class_name="font-semibold text-emerald-600",
+                        ),
+                        class_name="flex flex-col items-start leading-tight",
+                    ),
+                    rx.el.span(State.currency_symbol, item["price"].to_string(), class_name="font-medium"),
+                ),
                 class_name="flex items-center gap-1",
             ),
             rx.el.div(
@@ -2036,6 +2135,7 @@ def _payment_form_body(variant: str) -> rx.Component:
     # ── Footer: receipt selector + fiscal + total + confirm ─────────────────
     if is_desktop:
         footer = rx.el.div(
+            _coupon_input(),
             _receipt_type_selector(),
             _fiscal_lookup_input(),
             rx.el.div(
@@ -2084,6 +2184,7 @@ def _payment_form_body(variant: str) -> rx.Component:
         )
     else:
         footer = rx.el.div(
+            _coupon_input(),
             _receipt_type_selector(),
             _fiscal_lookup_input(),
             rx.el.div(

@@ -20,6 +20,7 @@ from sqlalchemy import and_
 from sqlalchemy.orm import selectinload
 
 from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User
+from app.models import Promotion
 from app.enums import SaleStatus, PaymentMethodType
 from app.i18n import MSG
 from app.utils.tenant import set_tenant_context, tenant_bypass
@@ -633,6 +634,15 @@ def generate_sales_report(
             item_cost = cost_price * Decimal(str(item.quantity or 0))
             total_costo += item_cost
 
+            # Descuento real = (base − final) × qty. Para items pre-migración el
+            # back-fill dejó base = final → descuento histórico = 0.
+            unit_base = Decimal(str(getattr(item, "unit_price_base", None) or item.unit_price or 0))
+            unit_final = Decimal(str(item.unit_price or 0))
+            qty_dec = Decimal(str(item.quantity or 0))
+            line_discount = (unit_base - unit_final) * qty_dec
+            if line_discount > 0:
+                total_descuentos += line_discount
+
             category = item.product_category_snapshot or "Sin categoría"
             if category not in by_category:
                 by_category[category] = {"count": 0, "total": Decimal("0"), "cost": Decimal("0"), "qty": 0}
@@ -664,6 +674,7 @@ def generate_sales_report(
         ("(-) Costo de Ventas:", _format_currency(total_costo, currency_symbol)),
         ("(=) Utilidad Bruta:", _format_currency(utilidad_bruta, currency_symbol)),
         (MSG.REPORT_KPI_MARGIN, f"{margen_bruto:.2f}%"),
+        ("(-) Descuentos otorgados:", _format_currency(total_descuentos, currency_symbol)),
         ("", ""),
         (MSG.REPORT_KPI_TRANSACTIONS, ventas_count),
         (MSG.REPORT_KPI_AVG_TICKET, _format_currency(ticket_promedio, currency_symbol)),
@@ -1024,7 +1035,7 @@ def generate_sales_report(
         company_name,
         "LISTADO DETALLADO DE TRANSACCIONES",
         period_str,
-        columns=11,
+        columns=13,
         **header_kwargs,
     )
 
@@ -1038,7 +1049,9 @@ def generate_sales_report(
         "Variante",
         "Categoría",
         "Cantidad",
-        f"Precio Unitario ({currency_label})",
+        f"Precio Base ({currency_label})",
+        f"Precio Final ({currency_label})",
+        f"Descuento ({currency_label})",
         f"Subtotal ({currency_label})",
     ]
     _style_header_row(ws_detail, row, headers)
@@ -1071,6 +1084,8 @@ def generate_sales_report(
                 category = "Sin categoría"
                 quantity = Decimal("0")
                 unit_price = Decimal("0")
+                base_price = Decimal("0")
+                discount = Decimal("0")
                 subtotal = Decimal("0")
             else:
                 variant_label = _variant_label_from_item(item)
@@ -1082,6 +1097,9 @@ def generate_sales_report(
                 )
                 quantity = _safe_decimal(item.quantity)
                 unit_price = _safe_decimal(item.unit_price)
+                base_price = _safe_decimal(getattr(item, "unit_price_base", None) or item.unit_price)
+                line_disc = (base_price - unit_price) * quantity
+                discount = line_disc if line_disc > 0 else Decimal("0")
                 subtotal = _safe_decimal(item.subtotal)
 
             ws_detail.cell(
@@ -1120,10 +1138,12 @@ def generate_sales_report(
             ws_detail.cell(row=row, column=7, value=_safe_string(variant_label, "-"))
             ws_detail.cell(row=row, column=8, value=_safe_string(category, "General"))
             ws_detail.cell(row=row, column=9, value=quantity).number_format = NUMBER_FORMAT
-            ws_detail.cell(row=row, column=10, value=unit_price).number_format = currency_format
-            ws_detail.cell(row=row, column=11, value=subtotal).number_format = currency_format
+            ws_detail.cell(row=row, column=10, value=base_price).number_format = currency_format
+            ws_detail.cell(row=row, column=11, value=unit_price).number_format = currency_format
+            ws_detail.cell(row=row, column=12, value=discount).number_format = currency_format
+            ws_detail.cell(row=row, column=13, value=subtotal).number_format = currency_format
 
-            for col in range(1, 12):
+            for col in range(1, 14):
                 ws_detail.cell(row=row, column=col).border = THIN_BORDER
             row += 1
 
@@ -1140,15 +1160,19 @@ def generate_sales_report(
         {"type": "text", "value": ""},
         {"type": "sum", "col_letter": "I", "number_format": NUMBER_FORMAT},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "K", "number_format": currency_format},
+        {"type": "text", "value": ""},
+        {"type": "sum", "col_letter": "L", "number_format": currency_format},
+        {"type": "sum", "col_letter": "M", "number_format": currency_format},
     ])
 
     _add_notes_section(ws_detail, detail_totals_row, [
         "Cada fila representa un ítem vendido dentro de una transacción.",
         "Nº Venta: correlativo interno de la operación comercial.",
-        "Subtotal = Cantidad × Precio Unitario para cada ítem.",
+        "Precio Base = precio sin descuento; Precio Final = precio cobrado tras promo/lista.",
+        "Descuento = (Precio Base − Precio Final) × Cantidad. Ítems pre-mayo/2026 muestran 0 (no se persistía el snapshot).",
+        "Subtotal = Cantidad × Precio Final para cada ítem.",
         "Método de Pago muestra la forma de cobro aplicada a la venta.",
-    ], columns=11)
+    ], columns=13)
 
     _auto_adjust_columns(ws_detail)
 
@@ -2834,6 +2858,307 @@ def generate_cashbox_report(
     _auto_adjust_columns(ws_conciliation)
 
     # Guardar
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
+# =============================================================================
+# RENDIMIENTO DE PROMOCIONES
+# =============================================================================
+
+
+def generate_promotions_report(
+    session,
+    start_date: datetime,
+    end_date: datetime,
+    company_name: str = "TUWAYKIAPP",
+    currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
+    generated_at: datetime | None = None,
+) -> io.BytesIO:
+    """Genera el reporte de rendimiento de promociones del período.
+
+    Para cada promo aplicada en alguna venta del período, agrega:
+      * Ventas que la usaron (count distinct sale_id)
+      * Unidades vendidas con la promo
+      * Ingreso bruto generado (Σ unit_price × qty)
+      * Descuento total otorgado (Σ (base − final) × qty)
+      * Ticket promedio de las ventas que la usaron
+
+    Las ventas anuladas se excluyen para que el reporte refleje impacto
+    comercial efectivo. Las promos sin uso en el período no aparecen.
+    """
+    set_tenant_context(company_id, branch_id)
+    wb = Workbook()
+    currency_label = _currency_label(currency_symbol)
+    currency_format = _currency_format(currency_symbol)
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
+
+    period_str = (
+        f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
+        f"{_format_report_datetime(end_date, '%d/%m/%Y', country_code, timezone)}"
+    )
+
+    # ── Carga: items con promo aplicada en ventas no anuladas del período ──
+    items_query = (
+        select(SaleItem, Sale, Promotion)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .join(Promotion, Promotion.id == SaleItem.applied_promotion_id)
+        .where(SaleItem.applied_promotion_id.is_not(None))
+        .where(Sale.timestamp >= start_date)
+        .where(Sale.timestamp <= end_date)
+        .where(Sale.status != SaleStatus.cancelled)
+    )
+    if company_id:
+        items_query = items_query.where(Sale.company_id == company_id)
+    if branch_id:
+        items_query = items_query.where(Sale.branch_id == branch_id)
+
+    rows = session.exec(items_query).all()
+
+    # Agregación en memoria (cardinality acotada por MAX_REPORT_ROWS upstream).
+    aggregates: dict[int, dict[str, Any]] = {}
+    for item, sale, promo in rows:
+        bucket = aggregates.setdefault(promo.id, {
+            "promo_name": promo.name,
+            "promo_type": promo.promotion_type,
+            "discount_value": Decimal(str(promo.discount_value or 0)),
+            "scope": promo.scope,
+            "coupon_code": promo.coupon_code or "",
+            "min_cart_amount": Decimal(str(getattr(promo, "min_cart_amount", 0) or 0)),
+            "sale_ids": set(),
+            "units": Decimal("0"),
+            "revenue": Decimal("0"),
+            "discount_total": Decimal("0"),
+        })
+        bucket["sale_ids"].add(sale.id)
+        qty = Decimal(str(item.quantity or 0))
+        unit_final = Decimal(str(item.unit_price or 0))
+        unit_base = Decimal(str(getattr(item, "unit_price_base", None) or item.unit_price or 0))
+        bucket["units"] += qty
+        bucket["revenue"] += unit_final * qty
+        line_disc = (unit_base - unit_final) * qty
+        if line_disc > 0:
+            bucket["discount_total"] += line_disc
+
+    # ── HOJA 1: Resumen ejecutivo ──
+    ws_summary = wb.active
+    ws_summary.title = "Resumen"
+    row = _add_company_header(
+        ws_summary,
+        company_name,
+        "RENDIMIENTO DE PROMOCIONES",
+        period_str,
+        columns=4,
+        **header_kwargs,
+    )
+
+    total_promos_used = len(aggregates)
+    total_units = sum((b["units"] for b in aggregates.values()), Decimal("0"))
+    total_revenue = sum((b["revenue"] for b in aggregates.values()), Decimal("0"))
+    total_discount = sum((b["discount_total"] for b in aggregates.values()), Decimal("0"))
+    total_sales_with_promo = len({sid for b in aggregates.values() for sid in b["sale_ids"]})
+
+    row += 1
+    ws_summary.cell(row=row, column=1, value="INDICADORES").font = SUBTITLE_FONT
+    row += 1
+    indicators = [
+        ("Promociones distintas aplicadas:", total_promos_used),
+        ("Ventas que usaron al menos una promo:", total_sales_with_promo),
+        ("Unidades vendidas con promo:", f"{total_units:,.2f}"),
+        ("Ingreso bruto bajo promo:", _format_currency(total_revenue, currency_symbol)),
+        ("Descuento total otorgado:", _format_currency(total_discount, currency_symbol)),
+    ]
+    for label, value in indicators:
+        ws_summary.cell(row=row, column=1, value=label).font = Font(bold=True)
+        ws_summary.cell(row=row, column=2, value=value)
+        row += 1
+
+    if total_promos_used == 0:
+        row += 1
+        ws_summary.cell(
+            row=row,
+            column=1,
+            value="No se aplicaron promociones en el período seleccionado.",
+        ).font = Font(italic=True, color="6B7280")
+
+    _auto_adjust_columns(ws_summary)
+
+    # ── HOJA 2: Ranking por descuento otorgado ──
+    ws_ranking = wb.create_sheet("Ranking")
+    row = _add_company_header(
+        ws_ranking,
+        company_name,
+        "RANKING DE PROMOCIONES",
+        period_str,
+        columns=10,
+        **header_kwargs,
+    )
+
+    headers = [
+        "Promoción",
+        "Tipo",
+        "Ámbito",
+        "Cupón",
+        "Umbral Carrito",
+        "Ventas",
+        "Unidades",
+        f"Ingreso ({currency_label})",
+        f"Descuento ({currency_label})",
+        "Ticket Prom.",
+    ]
+    _style_header_row(ws_ranking, row, headers)
+    data_start = row + 1
+    row += 1
+
+    # Ordenado por descuento otorgado (mayor impacto primero).
+    sorted_promos = sorted(
+        aggregates.items(),
+        key=lambda kv: kv[1]["discount_total"],
+        reverse=True,
+    )
+
+    type_labels = {
+        "percentage": "% Descuento",
+        "fixed_amount": "Monto Fijo",
+        "buy_x_get_y": "Lleva X Paga Y",
+    }
+    scope_labels = {"all": "Todos", "category": "Categoría", "product": "Producto"}
+
+    for promo_id, b in sorted_promos:
+        sales_count = len(b["sale_ids"])
+        avg_ticket = (b["revenue"] / sales_count) if sales_count > 0 else Decimal("0")
+        ws_ranking.cell(row=row, column=1, value=_safe_string(b["promo_name"]))
+        ws_ranking.cell(row=row, column=2, value=type_labels.get(b["promo_type"], b["promo_type"]))
+        ws_ranking.cell(row=row, column=3, value=scope_labels.get(b["scope"], b["scope"]))
+        ws_ranking.cell(row=row, column=4, value=_safe_string(b["coupon_code"], "—"))
+        ws_ranking.cell(
+            row=row,
+            column=5,
+            value=(
+                _format_currency(b["min_cart_amount"], currency_symbol)
+                if b["min_cart_amount"] > 0
+                else "—"
+            ),
+        )
+        ws_ranking.cell(row=row, column=6, value=sales_count)
+        ws_ranking.cell(row=row, column=7, value=float(b["units"])).number_format = NUMBER_FORMAT
+        ws_ranking.cell(row=row, column=8, value=float(b["revenue"])).number_format = currency_format
+        ws_ranking.cell(row=row, column=9, value=float(b["discount_total"])).number_format = currency_format
+        ws_ranking.cell(row=row, column=10, value=float(avg_ticket)).number_format = currency_format
+
+        for col in range(1, 11):
+            ws_ranking.cell(row=row, column=col).border = THIN_BORDER
+        row += 1
+
+    if sorted_promos:
+        totals_row = row
+        _add_totals_row_with_formulas(ws_ranking, totals_row, data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "F", "number_format": NUMBER_FORMAT},
+            {"type": "sum", "col_letter": "G", "number_format": NUMBER_FORMAT},
+            {"type": "sum", "col_letter": "H", "number_format": currency_format},
+            {"type": "sum", "col_letter": "I", "number_format": currency_format},
+            {"type": "text", "value": ""},
+        ])
+
+        _add_notes_section(ws_ranking, totals_row, [
+            "Promoción: nombre tal como fue creada en el módulo de Promociones.",
+            "Ventas: ventas distintas en las que la promo participó (al menos un ítem).",
+            "Descuento = Σ (precio base − precio final) × cantidad por cada ítem.",
+            "Promos sin descuento real (ej. BUY_X_GET_Y mal configurado) muestran 0.",
+            "Las ventas anuladas no se contabilizan.",
+        ], columns=10)
+
+    _auto_adjust_columns(ws_ranking)
+
+    # ── HOJA 3: Detalle por línea ──
+    ws_detail = wb.create_sheet("Detalle")
+    row = _add_company_header(
+        ws_detail,
+        company_name,
+        "DETALLE DE LÍNEAS CON PROMOCIÓN",
+        period_str,
+        columns=8,
+        **header_kwargs,
+    )
+
+    detail_headers = [
+        "Fecha",
+        "Nº Venta",
+        "Producto",
+        "Promoción",
+        "Cantidad",
+        f"Precio Base ({currency_label})",
+        f"Precio Final ({currency_label})",
+        f"Descuento ({currency_label})",
+    ]
+    _style_header_row(ws_detail, row, detail_headers)
+    detail_data_start = row + 1
+    row += 1
+
+    # Ordenado por fecha descendente para que las recientes queden arriba.
+    rows_sorted = sorted(rows, key=lambda r: r[1].timestamp or datetime.min, reverse=True)
+    for item, sale, promo in rows_sorted:
+        qty = Decimal(str(item.quantity or 0))
+        unit_final = Decimal(str(item.unit_price or 0))
+        unit_base = Decimal(str(getattr(item, "unit_price_base", None) or item.unit_price or 0))
+        line_disc = (unit_base - unit_final) * qty
+
+        ws_detail.cell(
+            row=row,
+            column=1,
+            value=(
+                _format_report_datetime(
+                    sale.timestamp, "%d/%m/%Y %H:%M", country_code, timezone
+                )
+                if sale.timestamp
+                else "—"
+            ),
+        )
+        ws_detail.cell(row=row, column=2, value=sale.id)
+        ws_detail.cell(row=row, column=3, value=_safe_string(item.product_name_snapshot))
+        ws_detail.cell(row=row, column=4, value=_safe_string(promo.name))
+        ws_detail.cell(row=row, column=5, value=float(qty)).number_format = NUMBER_FORMAT
+        ws_detail.cell(row=row, column=6, value=float(unit_base)).number_format = currency_format
+        ws_detail.cell(row=row, column=7, value=float(unit_final)).number_format = currency_format
+        ws_detail.cell(
+            row=row,
+            column=8,
+            value=float(line_disc if line_disc > 0 else Decimal("0")),
+        ).number_format = currency_format
+        for col in range(1, 9):
+            ws_detail.cell(row=row, column=col).border = THIN_BORDER
+        row += 1
+
+    if rows_sorted:
+        detail_totals_row = row
+        _add_totals_row_with_formulas(ws_detail, detail_totals_row, detail_data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "E", "number_format": NUMBER_FORMAT},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "H", "number_format": currency_format},
+        ])
+
+    _auto_adjust_columns(ws_detail)
+
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)

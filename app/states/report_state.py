@@ -14,12 +14,13 @@ from sqlalchemy import exists
 
 from app.constants import MAX_REPORT_ROWS
 from app.enums import SaleStatus
-from app.models import Sale, CashboxLog, SaleInstallment, Product, ProductVariant
+from app.models import Sale, SaleItem, CashboxLog, SaleInstallment, Product, ProductVariant
 from app.services.report_service import (
     generate_sales_report,
     generate_inventory_report,
     generate_receivables_report,
     generate_cashbox_report,
+    generate_promotions_report,
 )
 from app.utils.tenant import set_tenant_context
 from .mixin_state import MixinState
@@ -70,6 +71,7 @@ class ReportState(MixinState):
             {"value": "inventario", "label": "Inventario Valorizado", "icon": "package"},
             {"value": "cuentas", "label": "Cuentas por Cobrar", "icon": "credit-card"},
             {"value": "caja", "label": "Gestión de Caja", "icon": "banknote"},
+            {"value": "promociones", "label": "Rendimiento de Promociones", "icon": "ticket"},
         ]
 
     @rx.var(cache=True)
@@ -318,6 +320,25 @@ class ReportState(MixinState):
                                 self.report_error = "Reporte de caja demasiado grande."
                                 return
 
+                        elif self.report_type == "promociones":
+                            count_query = (
+                                select(func.count(SaleItem.id))
+                                .join(Sale, Sale.id == SaleItem.sale_id)
+                                .where(SaleItem.applied_promotion_id.is_not(None))
+                                .where(Sale.timestamp >= start_date)
+                                .where(Sale.timestamp <= end_date)
+                                .where(Sale.status != SaleStatus.cancelled)
+                                .where(SaleItem.company_id == company_id)
+                                .where(SaleItem.branch_id == branch_id)
+                            )
+                            total_promo_items = session.exec(count_query).one()
+                            if isinstance(total_promo_items, tuple):
+                                total_promo_items = total_promo_items[0]
+                            if int(total_promo_items or 0) > MAX_REPORT_ROWS:
+                                self.report_loading = False
+                                self.report_error = "Reporte de promociones demasiado grande."
+                                return
+
                     if self.report_type == "ventas":
                         output = generate_sales_report(
                             session,
@@ -386,6 +407,25 @@ class ReportState(MixinState):
                         )
                         filename = (
                             "Reporte_Caja_"
+                            f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
+                            f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
+                        )
+
+                    elif self.report_type == "promociones":
+                        output = generate_promotions_report(
+                            session,
+                            start_date,
+                            end_date,
+                            company_name=self.company_name,
+                            currency_symbol=self.currency_symbol,
+                            company_id=company_id,
+                            branch_id=branch_id,
+                            country_code=country_code,
+                            timezone=timezone,
+                            generated_at=self._display_now(),
+                        )
+                        filename = (
+                            "Reporte_Promociones_"
                             f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
                             f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
                         )

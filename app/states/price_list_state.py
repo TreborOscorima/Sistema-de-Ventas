@@ -127,17 +127,28 @@ class PriceListState(MixinState):
             for item in items:
                 product_name = ""
                 barcode = ""
+                sale_price_val = 0.0
                 if item.product_id:
                     p = session.exec(select(Product).where(Product.id == item.product_id)).first()
                     if p:
                         product_name = p.description or ""
                         barcode = p.barcode or ""
+                        sale_price_val = float(p.sale_price or 0)
                 variant_desc = ""
                 if item.product_variant_id:
                     v = session.exec(select(ProductVariant).where(ProductVariant.id == item.product_variant_id)).first()
                     if v:
                         parts = [v.size, v.color]
                         variant_desc = " / ".join(x for x in parts if x)
+
+                unit_price_f = float(item.unit_price or 0)
+                diff_display = ""
+                diff_is_discount = True
+                if sale_price_val > 0 and unit_price_f != sale_price_val:
+                    diff_pct = ((unit_price_f - sale_price_val) / sale_price_val) * 100
+                    diff_sign = "+" if diff_pct > 0 else ""
+                    diff_display = f"{diff_sign}{diff_pct:.1f}%"
+                    diff_is_discount = diff_pct < 0
 
                 result.append({
                     "id": item.id,
@@ -146,8 +157,12 @@ class PriceListState(MixinState):
                     "barcode": barcode,
                     "variant_id": item.product_variant_id,
                     "variant_desc": variant_desc,
-                    "unit_price": float(item.unit_price or 0),
-                    "unit_price_display": self._format_currency(float(item.unit_price or 0)),
+                    "unit_price": unit_price_f,
+                    "unit_price_display": self._format_currency(unit_price_f),
+                    "sale_price": sale_price_val,
+                    "sale_price_display": self._format_currency(sale_price_val),
+                    "diff_display": diff_display,
+                    "diff_is_discount": diff_is_discount,
                 })
 
         self.price_list_items = result

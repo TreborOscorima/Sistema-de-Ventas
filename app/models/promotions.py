@@ -12,7 +12,7 @@ Scope de aplicación:
   - PRODUCT  : aplica a un producto específico (o variante)
 """
 from typing import Optional, TYPE_CHECKING
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 
 import reflex as rx
@@ -60,6 +60,11 @@ class Promotion(TenantMixin, rx.Model, table=True):
             "branch_id",
             "product_id",
         ),
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "coupon_code",
+            name="uq_promotion_company_coupon_code",
+        ),
         CheckConstraint("discount_value >= 0", name="ck_promotion_discount_nonneg"),
         CheckConstraint(
             "starts_at <= ends_at",
@@ -68,6 +73,14 @@ class Promotion(TenantMixin, rx.Model, table=True):
         CheckConstraint(
             "min_quantity >= 1",
             name="ck_promotion_min_qty_positive",
+        ),
+        CheckConstraint(
+            "weekdays_mask BETWEEN 0 AND 127",
+            name="ck_promotion_weekdays_mask_range",
+        ),
+        CheckConstraint(
+            "min_cart_amount >= 0",
+            name="ck_promotion_min_cart_amount_nonneg",
         ),
     )
 
@@ -130,6 +143,46 @@ class Promotion(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    # Días de la semana en los que aplica la promo. Bitmask:
+    #   Lunes=1, Martes=2, Miércoles=4, Jueves=8, Viernes=16, Sábado=32, Domingo=64.
+    # Default 127 = todos los días (compatibilidad hacia atrás).
+    weekdays_mask: int = Field(
+        default=127,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer, nullable=False, server_default="127"
+        ),
+    )
+
+    # Banda horaria opcional. Si ambas son NULL, aplica todo el día.
+    # Si time_from > time_to, el rango cruza medianoche (ej: 22:00 → 02:00).
+    time_from: Optional[time] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.Time(timezone=False), nullable=True),
+    )
+    time_to: Optional[time] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.Time(timezone=False), nullable=True),
+    )
+
+    # Código de cupón. NULL = promo automática (siempre se evalúa).
+    # No-NULL = sólo aplica si el cliente ingresa el código en el POS.
+    # UNIQUE por company_id (NULL no choca consigo mismo en MySQL).
+    coupon_code: Optional[str] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.String(40), nullable=True, index=True),
+    )
+
+    # Umbral de subtotal del carrito requerido para que aplique la promo.
+    # 0 = sin umbral (default histórico, no rompe promos pre-migración).
+    # >0 = la promo sólo dispara cuando SUM(qty × base_price) >= min_cart_amount.
+    # Útil para campañas tipo "10% off si el carrito supera $1000".
+    min_cart_amount: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(
+            Numeric(12, 2), nullable=False, server_default="0.00"
+        ),
+    )
+
     # Límite de usos (NULL = ilimitado)
     max_uses: Optional[int] = Field(default=None, sa_column=sqlalchemy.Column(sqlalchemy.Integer, nullable=True))
     current_uses: int = Field(
@@ -171,4 +224,38 @@ class Promotion(TenantMixin, rx.Model, table=True):
     product: Optional["Product"] = Relationship()
     created_by: Optional["User"] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Promotion.created_by_user_id]"}
+    )
+
+
+class PromotionProduct(rx.Model, table=True):
+    """Asociación promoción ↔ producto para scope=PRODUCT multi-producto.
+
+    Reemplaza la relación 1-a-1 de ``Promotion.product_id`` permitiendo
+    que una misma regla aplique a varios SKUs distintos. Backward-compat:
+    si no hay filas aquí para una promo, el motor cae al ``product_id``
+    heredado en ``Promotion``.
+    """
+
+    __tablename__ = "promotion_product"
+    __table_args__ = (
+        sqlalchemy.UniqueConstraint(
+            "promotion_id", "product_id",
+            name="uq_promotion_product_pair",
+        ),
+        sqlalchemy.Index("ix_promotion_product_promo", "promotion_id"),
+    )
+
+    promotion_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("promotion.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    product_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="CASCADE"),
+            nullable=False,
+        )
     )

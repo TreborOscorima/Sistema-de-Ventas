@@ -46,6 +46,7 @@ class CartMixin:
         "unit": "Unidad",
         "price": 0,
         "sale_price": 0,
+        "base_price": 0,
         "subtotal": 0,
         "product_id": None,
         "variant_id": None,
@@ -54,6 +55,7 @@ class CartMixin:
         "requires_batch": False,
         "kit_product_id": None,
         "kit_name": "",
+        "promotion_name": "",
     }
     new_sale_items: List[Dict[str, Any]] = []
     autocomplete_suggestions: List[str] = []
@@ -89,6 +91,12 @@ class CartMixin:
     # Visual feedback: promoción activa aplicada al ítem en carrito
     promotion_applied: bool = False
     promotion_name: str = ""
+
+    # Cupón ingresado por el cajero/cliente. Vacío = sólo promos automáticas.
+    # Se normaliza a mayúsculas en el setter.
+    cart_coupon_code: str = ""
+    cart_coupon_status: str = ""  # "", "applied", "invalid"
+    cart_coupon_message: str = ""
 
     _autocomplete_debounce_seq: int = rx.field(default=0, is_var=False)
 
@@ -208,76 +216,20 @@ class CartMixin:
             f"{description} | Stock: {stock_display} | {currency}{price}"
         )
 
-    async def _resolve_price_list_price(
-        self,
-        product_id: int,
-        variant_id: int | None,
-        price_list_id: int,
-        company_id: int,
-        branch_id: int,
-    ) -> Decimal | None:
-        """Wrapper sobre :func:`app.services.pricing.resolve_price_list_price`.
-
-        Mantiene la firma usada por el preview del carrito y abre su propia
-        sesión async; toda la lógica de query vive en ``pricing``.
-        """
-        from app.services.pricing import resolve_price_list_price
-        try:
-            async with get_async_session() as session:
-                return await resolve_price_list_price(
-                    session,
-                    product_id=product_id,
-                    variant_id=variant_id,
-                    price_list_id=price_list_id,
-                    company_id=company_id,
-                    branch_id=branch_id,
-                )
-        except Exception:
-            logging.exception("Error resolving price list price for product %s", product_id)
-            return None
-
-    async def _apply_promotion_to_item(
-        self,
-        product_id: int,
-        category: str,
-        quantity: Decimal,
-        unit_price: Decimal,
-        company_id: int,
-        branch_id: int,
-    ) -> tuple[Decimal, str]:
-        """Wrapper sobre los helpers de ``pricing`` para preview del carrito.
-
-        No incrementa ``current_uses`` (eso ocurre solo al confirmar la venta
-        en :func:`sale_service._apply_promotions`). Garantiza que el precio
-        mostrado en el carrito coincida con el que cobrará la venta.
-        """
-        from app.services.pricing import (
-            apply_promotion_to_price,
-            find_applicable_promotion,
-        )
-        try:
-            async with get_async_session() as session:
-                promo = await find_applicable_promotion(
-                    session,
-                    product_id=product_id,
-                    category=category,
-                    quantity=quantity,
-                    company_id=company_id,
-                    branch_id=branch_id,
-                )
-                if promo is None:
-                    return unit_price, ""
-                final_price = apply_promotion_to_price(promo, unit_price)
-                return self._round_currency(final_price), promo.name
-        except Exception:
-            logging.exception("Error applying promotion to cart item for product %s", product_id)
-            return unit_price, ""
-
     async def _apply_price_tier(
         self,
         product: Any | None = None,
         quantity_override: float | Decimal | None = None,
     ) -> Decimal | None:
+        """Resuelve el precio efectivo del ítem en el formulario de venta.
+
+        Usa ``resolve_effective_price`` (la misma función que ``_recompute_cart_prices``
+        y ``sale_service``) para garantizar que el precio del carrito siempre coincida
+        con el que se cobrará al confirmar la venta.
+        """
+        from app.models import Product as ProductModel
+        from app.services.pricing import PriceSource, resolve_effective_price
+
         product = product or self.selected_product
         if not product:
             return None
@@ -301,74 +253,83 @@ class CartMixin:
         if not company_id or not branch_id:
             return None
 
-        original_sale_price = self._product_value(product, "sale_price", 0)
+        coupon_status = getattr(self, "cart_coupon_status", "")
+        coupon = (
+            getattr(self, "cart_coupon_code", "") or None
+        ) if coupon_status == "applied" else None
+        price_list_id = int(getattr(self, "_active_price_list_id", 0) or 0) or None
 
-        # ── Phase 1: Jerarquía de precio: 1) PriceListItem > 2) PriceTier > 3) sale_price ──
-        resolved_price: Decimal | None = None
-        price_from_list = False
-        price_from_tier = False
-
-        price_list_id = int(getattr(self, "_active_price_list_id", 0) or 0)
-        if price_list_id:
-            pl_price = await self._resolve_price_list_price(
-                int(product_id),
-                int(variant_id) if variant_id else None,
-                price_list_id,
-                int(company_id),
-                int(branch_id),
+        # Subtotal pre-promo del carrito para evaluar promos con min_cart_amount.
+        cart_subtotal_pre_promo = Decimal("0.00")
+        for existing in self.new_sale_items:
+            existing_qty = Decimal(str(existing.get("quantity") or 0))
+            existing_base = Decimal(
+                str(existing.get("base_price") or existing.get("sale_price") or 0)
             )
-            if pl_price is not None and pl_price > 0:
-                resolved_price = pl_price
-                price_from_list = True
+            cart_subtotal_pre_promo += existing_qty * existing_base
+        qty_dec = Decimal(str(qty))
 
-        if resolved_price is None:
-            tier_price = await SaleService.calculate_item_price(
-                int(product_id),
-                Decimal(str(qty)),
-                int(company_id),
-                int(branch_id),
-                variant_id=int(variant_id) if variant_id else None,
-            )
-            if tier_price and tier_price > 0:
-                resolved_price = tier_price
-                try:
-                    price_from_tier = bool(
-                        original_sale_price
-                        and float(tier_price) != float(original_sale_price)
+        try:
+            async with get_async_session() as session:
+                orm_product = (
+                    await session.exec(
+                        sql_select(ProductModel)
+                        .where(ProductModel.id == int(product_id))
+                        .where(ProductModel.company_id == int(company_id))
+                        .where(ProductModel.branch_id == int(branch_id))
                     )
-                except (TypeError, ValueError):
-                    price_from_tier = False
+                ).first()
+                if not orm_product:
+                    return None
 
-        if not resolved_price or resolved_price <= 0:
-            self.price_list_price_applied = False
-            self.wholesale_price_applied = False
-            self.promotion_applied = False
-            self.promotion_name = ""
+                # Primer pass: precio base sin promo para obtener el subtotal correcto.
+                base_res = await resolve_effective_price(
+                    session,
+                    product=orm_product,
+                    variant_id=int(variant_id) if variant_id else None,
+                    quantity=qty_dec,
+                    company_id=int(company_id),
+                    branch_id=int(branch_id),
+                    client_price_list_id=price_list_id,
+                    coupon_code=None,
+                    cart_subtotal=None,
+                )
+                cart_subtotal_pre_promo += qty_dec * base_res.base_price
+
+                # Segundo pass: resolución completa con promo y subtotal real.
+                resolution = await resolve_effective_price(
+                    session,
+                    product=orm_product,
+                    variant_id=int(variant_id) if variant_id else None,
+                    quantity=qty_dec,
+                    company_id=int(company_id),
+                    branch_id=int(branch_id),
+                    client_price_list_id=price_list_id,
+                    coupon_code=coupon,
+                    cart_subtotal=cart_subtotal_pre_promo,
+                )
+        except Exception:
+            logging.exception("Error resolving effective price for product %s", product_id)
             return None
 
-        # ── Phase 2: Aplicar promoción activa (si existe) ──
-        category = self._product_value(product, "category", "General") or "General"
-        final_price, promo_name = await self._apply_promotion_to_item(
-            int(product_id),
-            category,
-            Decimal(str(qty)),
-            resolved_price,
-            int(company_id),
-            int(branch_id),
-        )
+        price_from_list = resolution.source == PriceSource.PRICE_LIST
+        price_from_tier = resolution.source == PriceSource.TIER
+        promo = resolution.applied_promotion
+        promo_name = promo.name if promo else ""
 
-        # ── Phase 3: Actualizar item y flags ──
-        self.new_sale_item["price"] = self._round_currency(final_price)
-        self.new_sale_item["sale_price"] = self._round_currency(final_price)
+        self.new_sale_item["price"] = self._round_currency(resolution.final_price)
+        self.new_sale_item["sale_price"] = self._round_currency(resolution.final_price)
+        self.new_sale_item["base_price"] = self._round_currency(resolution.base_price)
         self.new_sale_item["subtotal"] = self._round_currency(
             self.new_sale_item["quantity"] * self.new_sale_item["price"]
         )
         self.price_list_price_applied = price_from_list
         self.wholesale_price_applied = price_from_tier and not price_from_list
         self.promotion_applied = bool(promo_name)
-        self.promotion_name = promo_name or ""
+        self.promotion_name = promo_name
+        self.new_sale_item["promotion_name"] = promo_name
 
-        return final_price
+        return Decimal(str(resolution.final_price))
 
     def _fill_sale_item_from_product(
         self,
@@ -584,6 +545,7 @@ class CartMixin:
                     "unit": p.unit or "Unidad",
                     "price": float(unit_price),
                     "sale_price": float(unit_price),
+                    "base_price": float(unit_price),
                     "subtotal": float(component_subtotal),
                     "product_id": p.id,
                     "variant_id": None,
@@ -592,6 +554,7 @@ class CartMixin:
                     "requires_batch": False,
                     "kit_product_id": int(kit_id),
                     "kit_name": str(kit_name),
+                    "promotion_name": "",
                 }
                 self._apply_item_rounding(item)
                 items_added.append(item)
@@ -923,6 +886,7 @@ class CartMixin:
             "unit": "Unidad",
             "price": 0,
             "sale_price": 0,
+            "base_price": 0,
             "subtotal": 0,
             "product_id": None,
             "variant_id": None,
@@ -931,6 +895,7 @@ class CartMixin:
             "requires_batch": False,
             "kit_product_id": None,
             "kit_name": "",
+            "promotion_name": "",
         }
         self.autocomplete_suggestions = []
         self.autocomplete_results = []
@@ -1359,6 +1324,7 @@ class CartMixin:
             items = list(self.new_sale_items)
             items[existing_index] = updated_item
             self.new_sale_items = items
+            await self._recompute_cart_prices()
             self._reset_sale_form()
             self._refresh_payment_feedback()
             return [
@@ -1375,6 +1341,7 @@ class CartMixin:
         item_copy["temp_id"] = str(uuid.uuid4())
         self._apply_item_rounding(item_copy)
         self.new_sale_items.append(item_copy)
+        await self._recompute_cart_prices()
         self._reset_sale_form()
         self._refresh_payment_feedback()
         return [
@@ -1388,11 +1355,12 @@ class CartMixin:
         ]
 
     @rx.event
-    def remove_item_from_sale(self, temp_id: str):
+    async def remove_item_from_sale(self, temp_id: str):
         self.new_sale_items = [
             item for item in self.new_sale_items if item["temp_id"] != temp_id
         ]
         self.sale_receipt_ready = False
+        await self._recompute_cart_prices()
         self._refresh_payment_feedback()
         self.sale_receipt_ready = False
 
@@ -1540,3 +1508,207 @@ class CartMixin:
     async def search_product_grid(self, value: str):
         """Búsqueda dentro del grid visual."""
         return await self.load_product_grid(search=value)
+
+    # ── Cupón de descuento ───────────────────────────────────────
+
+    @rx.event
+    def set_cart_coupon_input(self, value: str):
+        """Setter del input mientras el cajero tipea (sin validar)."""
+        self.cart_coupon_code = value.upper().strip()
+        if self.cart_coupon_status:
+            self.cart_coupon_status = ""
+            self.cart_coupon_message = ""
+
+    @rx.event
+    async def apply_cart_coupon(self):
+        """Valida el cupón contra la BD y, si es válido, recompone precios."""
+        from app.models import Promotion
+        from app.utils.tenant import set_tenant_context
+        from sqlmodel import select
+
+        code = (self.cart_coupon_code or "").strip().upper()
+        if not code:
+            self.cart_coupon_status = "invalid"
+            self.cart_coupon_message = "Ingresá un código de cupón."
+            return rx.toast("Ingresá un código.", duration=2500)
+
+        company_id = self.current_user.get("company_id") if hasattr(self, "current_user") else None
+        branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
+        if not company_id:
+            return
+
+        set_tenant_context(company_id, branch_id)
+        now = self._display_now().replace(tzinfo=None)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        with rx.session() as session:
+            promo = session.exec(
+                select(Promotion)
+                .where(Promotion.company_id == company_id)
+                .where(Promotion.branch_id == branch_id)
+                .where(Promotion.coupon_code == code)
+                .where(Promotion.is_active == True)  # noqa: E712
+                .where(Promotion.starts_at <= now)
+                .where(Promotion.ends_at >= today_start)
+            ).first()
+
+        if not promo:
+            self.cart_coupon_status = "invalid"
+            self.cart_coupon_message = "Cupón inválido o vencido."
+            return rx.toast("Cupón inválido o vencido.", duration=3000)
+
+        if promo.max_uses is not None and (promo.current_uses or 0) >= promo.max_uses:
+            self.cart_coupon_status = "invalid"
+            self.cart_coupon_message = "El cupón ya alcanzó su límite de usos."
+            return rx.toast("El cupón está agotado.", duration=3000)
+
+        # Validar restricciones de día de semana
+        mask = getattr(promo, "weekdays_mask", 127) or 127
+        weekday_bit = 1 << now.weekday()
+        if not (mask & weekday_bit):
+            self.cart_coupon_status = "invalid"
+            self.cart_coupon_message = "El cupón no aplica este día de la semana."
+            return rx.toast("El cupón no aplica hoy.", duration=3000)
+
+        # Validar franja horaria
+        time_from = getattr(promo, "time_from", None)
+        time_to = getattr(promo, "time_to", None)
+        if time_from is not None and time_to is not None:
+            cur_t = now.time()
+            if time_from <= time_to:
+                in_window = time_from <= cur_t <= time_to
+            else:
+                in_window = cur_t >= time_from or cur_t <= time_to
+            if not in_window:
+                from_str = time_from.strftime("%H:%M")
+                to_str = time_to.strftime("%H:%M")
+                self.cart_coupon_status = "invalid"
+                self.cart_coupon_message = f"El cupón solo aplica de {from_str} a {to_str}."
+                return rx.toast(self.cart_coupon_message, duration=3500)
+
+        # Validar monto mínimo de carrito antes de marcar como aplicado.
+        min_cart = Decimal(str(getattr(promo, "min_cart_amount", None) or 0))
+        if min_cart > 0:
+            cart_sub = Decimal("0.00")
+            for it in self.new_sale_items:
+                it_qty = Decimal(str(it.get("quantity") or 0))
+                it_base = Decimal(str(it.get("base_price") or it.get("sale_price") or 0))
+                cart_sub += it_qty * it_base
+            if cart_sub < min_cart:
+                currency = getattr(self, "currency_symbol", "S/")
+                self.cart_coupon_status = "invalid"
+                self.cart_coupon_message = (
+                    f"El carrito debe superar {currency} {min_cart:.2f} para aplicar este cupón."
+                )
+                return rx.toast(self.cart_coupon_message, duration=3500)
+
+        self.cart_coupon_status = "applied"
+        self.cart_coupon_message = f"Cupón '{promo.name}' aplicado."
+        await self._recompute_cart_prices()
+        return rx.toast(self.cart_coupon_message, duration=2500)
+
+    @rx.event
+    async def clear_cart_coupon(self):
+        """Limpia el cupón aplicado y recompone precios."""
+        self.cart_coupon_code = ""
+        self.cart_coupon_status = ""
+        self.cart_coupon_message = ""
+        await self._recompute_cart_prices()
+
+    async def _recompute_cart_prices(self):
+        """Re-resuelve precio efectivo de cada ítem del carrito tras
+        aplicar/quitar cupón. Llama a ``resolve_effective_price`` para
+        recomponer desde la jerarquía completa (price_list > tier > sale_price)
+        en vez de partir del precio cacheado del item — esto evita acumular
+        descuentos cuando el cupón se aplica sobre un ítem que ya tenía promo.
+
+        Hace dos pasadas: la primera computa precios base sin promo para
+        obtener el subtotal pre-promo; la segunda aplica promos pasando ese
+        subtotal como contexto, lo que permite evaluar ``min_cart_amount``
+        coherentemente sobre todo el carrito (no por ítem aislado).
+        """
+        from app.models import Product
+        from app.services.pricing import resolve_effective_price
+        from sqlmodel import select
+
+        company_id = self.current_user.get("company_id") if hasattr(self, "current_user") else None
+        branch_id = self._branch_id() if hasattr(self, "_branch_id") else None
+        if not company_id or not self.new_sale_items:
+            return
+
+        client_pl_id = getattr(self, "client_price_list_id", None)
+        coupon = self.cart_coupon_code if self.cart_coupon_status == "applied" else None
+        local_now = self._display_now().replace(tzinfo=None)
+
+        async with get_async_session() as session:
+            # ── Pasada 1: precios base + subtotal pre-promo. ──
+            # Se omite cart_subtotal a propósito (None) para que la pasada 1
+            # NO dispare promos con umbral; solo nos interesa el base_price.
+            base_resolutions: list[tuple[Decimal, Decimal] | None] = []
+            cart_subtotal_pre_promo = Decimal("0.00")
+            for item in self.new_sale_items:
+                product_id = item.get("product_id")
+                if not product_id:
+                    base_resolutions.append(None)
+                    continue
+                product = (
+                    await session.exec(
+                        select(Product)
+                        .where(Product.id == int(product_id))
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    )
+                ).first()
+                if not product:
+                    base_resolutions.append(None)
+                    continue
+                qty = Decimal(str(item.get("quantity") or 0))
+                resolution = await resolve_effective_price(
+                    session,
+                    product=product,
+                    variant_id=item.get("variant_id"),
+                    quantity=qty,
+                    company_id=int(company_id),
+                    branch_id=int(branch_id),
+                    client_price_list_id=client_pl_id,
+                    now=local_now,
+                    coupon_code=None,
+                    cart_subtotal=None,
+                )
+                base_resolutions.append((qty, resolution.base_price))
+                cart_subtotal_pre_promo += qty * resolution.base_price
+
+            # ── Pasada 2: aplicar promo con cart_subtotal completo. ──
+            for item, prepared in zip(self.new_sale_items, base_resolutions):
+                if prepared is None:
+                    continue
+                qty, base_price = prepared
+                product_id = item.get("product_id")
+                product = (
+                    await session.exec(
+                        select(Product)
+                        .where(Product.id == int(product_id))
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    )
+                ).first()
+                if not product:
+                    continue
+                resolution = await resolve_effective_price(
+                    session,
+                    product=product,
+                    variant_id=item.get("variant_id"),
+                    quantity=qty,
+                    company_id=int(company_id),
+                    branch_id=int(branch_id),
+                    client_price_list_id=client_pl_id,
+                    now=local_now,
+                    coupon_code=coupon,
+                    cart_subtotal=cart_subtotal_pre_promo,
+                )
+                item["price"] = self._round_currency(resolution.final_price)
+                item["sale_price"] = self._round_currency(resolution.base_price)
+                item["base_price"] = self._round_currency(resolution.base_price)
+                item["subtotal"] = self._round_currency(qty * Decimal(str(item["price"])))
+                applied_promo = resolution.applied_promotion
+                item["promotion_name"] = applied_promo.name if applied_promo else ""
+        self.new_sale_items = list(self.new_sale_items)

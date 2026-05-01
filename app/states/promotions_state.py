@@ -52,16 +52,51 @@ class PromotionsState(MixinState):
     promo_starts_at: str = ""
     promo_ends_at: str = ""
     promo_max_uses: str = ""
-    promo_product_id: str = ""
+    promo_product_ids: list[str] = []
+    promo_product_search: str = ""
     promo_category: str = ""
     promo_is_active: bool = True
+
+    # Días de aplicación (Mon..Sun)
+    promo_day_mon: bool = True
+    promo_day_tue: bool = True
+    promo_day_wed: bool = True
+    promo_day_thu: bool = True
+    promo_day_fri: bool = True
+    promo_day_sat: bool = True
+    promo_day_sun: bool = True
+
+    # Banda horaria opcional ("HH:MM"). Vacío = todo el día.
+    promo_time_from: str = ""
+    promo_time_to: str = ""
+
+    # Código de cupón (opcional). Vacío = promo automática.
+    promo_coupon_code: str = ""
+
+    # Umbral de subtotal del carrito. "" o "0" = sin umbral.
+    promo_min_cart_amount: str = ""
 
     # Categorías disponibles para selector
     promotion_categories: list[str] = []
 
+    # Productos disponibles para selector (scope=PRODUCT)
+    promotion_products: list[dict[str, Any]] = []
+
     # ─── Página init ─────────────────────────────────────────────────
     # Renombrado para evitar shadowing del guard en `State.page_init_promociones`
     # (ver nota en quotation_state.bg_load_quotations).
+
+    @rx.var(cache=True)
+    def filtered_promotion_products(self) -> list[dict[str, Any]]:
+        """Productos filtrados por el buscador del formulario."""
+        search = (self.promo_product_search or "").strip().lower()
+        if not search:
+            return self.promotion_products
+        return [
+            p for p in self.promotion_products
+            if search in (p.get("description") or "").lower()
+            or search in (p.get("barcode") or "").lower()
+        ]
 
     @rx.event
     async def bg_load_promotions(self):
@@ -71,6 +106,7 @@ class PromotionsState(MixinState):
             return
         await self._load_promotions()
         await self._load_promo_categories()
+        await self._load_promo_products()
 
     # ─── Carga ───────────────────────────────────────────────────────
 
@@ -80,6 +116,7 @@ class PromotionsState(MixinState):
         if not company_id:
             return
 
+        from app.models.promotions import PromotionProduct
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
@@ -95,16 +132,37 @@ class PromotionsState(MixinState):
             stmt = stmt.order_by(Promotion.starts_at.desc())
             rows = session.exec(stmt).all()
 
+            # Cargar product_ids multi-producto para promos con scope=PRODUCT
+            promo_ids = [p.id for p in rows if p.scope == PromotionScope.PRODUCT]
+            pp_map: dict[int, list[int]] = {}
+            if promo_ids:
+                pp_rows = session.exec(
+                    select(PromotionProduct).where(
+                        PromotionProduct.promotion_id.in_(promo_ids)
+                    )
+                ).all()
+                for pp in pp_rows:
+                    pp_map.setdefault(pp.promotion_id, []).append(pp.product_id)
+
         now = utc_now_naive()
         result = []
         for p in rows:
-            is_running = (
-                p.is_active
-                and p.starts_at <= now <= p.ends_at
+            product_ids = pp_map.get(p.id) or (
+                [p.product_id] if p.product_id else []
             )
             scope_label = _SCOPE_LABELS.get(p.scope, p.scope)
             if p.scope == PromotionScope.CATEGORY and p.category:
                 scope_label = f"Categoría: {p.category}"
+            elif p.scope == PromotionScope.PRODUCT and product_ids:
+                scope_label = (
+                    f"Producto específico"
+                    if len(product_ids) == 1
+                    else f"{len(product_ids)} productos"
+                )
+
+            status, status_label = _compute_status(p, now)
+            usage_label = _format_usage(p.current_uses or 0, p.max_uses)
+            is_running = status == "active"
 
             result.append({
                 "id": p.id,
@@ -123,10 +181,26 @@ class PromotionsState(MixinState):
                 "ends_at_iso": p.ends_at.strftime("%Y-%m-%d") if p.ends_at else "",
                 "is_active": p.is_active,
                 "is_running": is_running,
-                "current_uses": p.current_uses,
+                "status": status,
+                "status_label": status_label,
+                "usage_label": usage_label,
+                "current_uses": p.current_uses or 0,
                 "max_uses": p.max_uses,
                 "product_id": p.product_id,
+                "product_ids": product_ids,
                 "category": p.category or "",
+                "weekdays_mask": p.weekdays_mask or 127,
+                "weekdays_label": _format_weekdays(p.weekdays_mask or 127),
+                "time_from": p.time_from.strftime("%H:%M") if p.time_from else "",
+                "time_to": p.time_to.strftime("%H:%M") if p.time_to else "",
+                "time_window_label": (
+                    f"{p.time_from.strftime('%H:%M')}–{p.time_to.strftime('%H:%M')}"
+                    if p.time_from and p.time_to
+                    else ""
+                ),
+                "coupon_code": p.coupon_code or "",
+                "min_cart_amount": float(p.min_cart_amount or 0),
+                "min_cart_amount_label": _format_min_cart(p.min_cart_amount or 0),
             })
         self.promotions = result
 
@@ -150,6 +224,34 @@ class PromotionsState(MixinState):
             cats = session.exec(stmt).all()
         self.promotion_categories = [c for c in cats if c]
 
+    async def _load_promo_products(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id:
+            return
+        from app.models import Product
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+        with rx.session() as session:
+            stmt = (
+                select(Product.id, Product.description, Product.barcode, Product.category)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.is_active == True)  # noqa: E712
+                .order_by(Product.description)
+            )
+            rows = session.exec(stmt).all()
+        self.promotion_products = [
+            {
+                "id": r[0],
+                "description": r[1],
+                "barcode": r[2] or "",
+                "category": r[3] or "",
+                "label": f"{r[1]} ({r[2]})" if r[2] else r[1],
+            }
+            for r in rows
+        ]
+
     # ─── Formulario ──────────────────────────────────────────────────
 
     @rx.event
@@ -165,9 +267,15 @@ class PromotionsState(MixinState):
         self.promo_starts_at = utc_now_naive().strftime("%Y-%m-%d")
         self.promo_ends_at = (utc_now_naive() + timedelta(days=7)).strftime("%Y-%m-%d")
         self.promo_max_uses = ""
-        self.promo_product_id = ""
+        self.promo_product_ids = []
+        self.promo_product_search = ""
         self.promo_category = ""
         self.promo_is_active = True
+        self._set_weekdays_from_mask(127)
+        self.promo_time_from = ""
+        self.promo_time_to = ""
+        self.promo_coupon_code = ""
+        self.promo_min_cart_amount = ""
         self.show_promotion_form = True
         self.promo_form_key += 1
 
@@ -184,11 +292,44 @@ class PromotionsState(MixinState):
         self.promo_starts_at = promo.get("starts_at_iso", "")
         self.promo_ends_at = promo.get("ends_at_iso", "")
         self.promo_max_uses = str(promo.get("max_uses") or "")
-        self.promo_product_id = str(promo.get("product_id") or "")
+        # Multi-producto: cargar desde product_ids; fallback a product_id legacy
+        saved_pids = promo.get("product_ids") or []
+        if not saved_pids and promo.get("product_id"):
+            saved_pids = [promo["product_id"]]
+        self.promo_product_ids = [str(pid) for pid in saved_pids]
+        self.promo_product_search = ""
         self.promo_category = promo.get("category", "")
         self.promo_is_active = promo.get("is_active", True)
+        self._set_weekdays_from_mask(promo.get("weekdays_mask", 127) or 127)
+        self.promo_time_from = promo.get("time_from", "") or ""
+        self.promo_time_to = promo.get("time_to", "") or ""
+        self.promo_coupon_code = promo.get("coupon_code", "") or ""
+        min_cart = promo.get("min_cart_amount") or 0
+        self.promo_min_cart_amount = (
+            "" if not min_cart or float(min_cart) <= 0 else str(min_cart)
+        )
         self.show_promotion_form = True
         self.promo_form_key += 1
+
+    def _set_weekdays_from_mask(self, mask: int) -> None:
+        self.promo_day_mon = bool(mask & 1)
+        self.promo_day_tue = bool(mask & 2)
+        self.promo_day_wed = bool(mask & 4)
+        self.promo_day_thu = bool(mask & 8)
+        self.promo_day_fri = bool(mask & 16)
+        self.promo_day_sat = bool(mask & 32)
+        self.promo_day_sun = bool(mask & 64)
+
+    def _weekdays_to_mask(self) -> int:
+        return (
+            (1 if self.promo_day_mon else 0)
+            | (2 if self.promo_day_tue else 0)
+            | (4 if self.promo_day_wed else 0)
+            | (8 if self.promo_day_thu else 0)
+            | (16 if self.promo_day_fri else 0)
+            | (32 if self.promo_day_sat else 0)
+            | (64 if self.promo_day_sun else 0)
+        )
 
     @rx.event
     def close_promotion_form(self):
@@ -216,11 +357,45 @@ class PromotionsState(MixinState):
     @rx.event
     def set_promo_max_uses(self, v: str): self.promo_max_uses = v
     @rx.event
-    def set_promo_product_id(self, v: str): self.promo_product_id = v
+    def toggle_promo_product_id(self, product_id_str: str):
+        ids = list(self.promo_product_ids)
+        if product_id_str in ids:
+            ids.remove(product_id_str)
+        else:
+            ids.append(product_id_str)
+        self.promo_product_ids = ids
+
+    @rx.event
+    def set_promo_product_search(self, v: str): self.promo_product_search = v
+
     @rx.event
     def set_promo_category(self, v: str): self.promo_category = v
     @rx.event
     def set_promo_is_active(self, v: bool): self.promo_is_active = v
+    @rx.event
+    def set_promo_day_mon(self, v: bool): self.promo_day_mon = v
+    @rx.event
+    def set_promo_day_tue(self, v: bool): self.promo_day_tue = v
+    @rx.event
+    def set_promo_day_wed(self, v: bool): self.promo_day_wed = v
+    @rx.event
+    def set_promo_day_thu(self, v: bool): self.promo_day_thu = v
+    @rx.event
+    def set_promo_day_fri(self, v: bool): self.promo_day_fri = v
+    @rx.event
+    def set_promo_day_sat(self, v: bool): self.promo_day_sat = v
+    @rx.event
+    def set_promo_day_sun(self, v: bool): self.promo_day_sun = v
+    @rx.event
+    def set_promo_time_from(self, v: str): self.promo_time_from = v
+    @rx.event
+    def set_promo_time_to(self, v: str): self.promo_time_to = v
+    @rx.event
+    def set_promo_coupon_code(self, v: str):
+        self.promo_coupon_code = (v or "").upper().strip()
+    @rx.event
+    def set_promo_min_cart_amount(self, v: float):
+        self.promo_min_cart_amount = "" if not v or v <= 0 else str(v)
 
     # ─── Guardar promoción ───────────────────────────────────────────
 
@@ -246,6 +421,19 @@ class PromotionsState(MixinState):
                 yield rx.toast("La fecha de inicio debe ser anterior a la de fin.", duration=3000)
                 return
 
+            if self.promo_scope == PromotionScope.PRODUCT and not self.promo_product_ids:
+                yield rx.toast(
+                    "Seleccioná al menos un producto para el ámbito 'Producto específico'.",
+                    duration=3500,
+                )
+                return
+            if self.promo_scope == PromotionScope.CATEGORY and not self.promo_category.strip():
+                yield rx.toast(
+                    "Seleccioná una categoría para el ámbito 'Por categoría'.",
+                    duration=3500,
+                )
+                return
+
             from app.utils.tenant import set_tenant_context
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
@@ -265,26 +453,37 @@ class PromotionsState(MixinState):
                     )
                     session.add(promo)
 
-                # Validar que el producto referenciado pertenece al tenant
-                # actual antes de asignarlo. Sin este check un cliente
-                # manipulado podría enlazar promo a producto de otra empresa.
+                # Validar y resolver los productos seleccionados.
+                # Solo persiste product_id/join-rows cuando scope == PRODUCT.
                 resolved_product_id: int | None = None
-                if self.promo_product_id.strip():
+                resolved_product_ids: list[int] = []
+                if self.promo_scope == PromotionScope.PRODUCT and self.promo_product_ids:
                     from app.models import Product as _Product
-                    candidate_pid = int(self.promo_product_id)
-                    candidate = session.exec(
-                        select(_Product)
-                        .where(_Product.id == candidate_pid)
-                        .where(_Product.company_id == company_id)
-                        .where(_Product.branch_id == branch_id)
-                    ).first()
-                    if not candidate:
-                        yield rx.toast(
-                            "El producto seleccionado no pertenece a esta empresa/sucursal.",
-                            duration=3500,
-                        )
-                        return
-                    resolved_product_id = candidate.id
+                    from app.models.promotions import PromotionProduct
+                    for pid_str in self.promo_product_ids:
+                        try:
+                            candidate_pid = int(pid_str)
+                        except (ValueError, TypeError):
+                            continue
+                        candidate = session.exec(
+                            select(_Product)
+                            .where(_Product.id == candidate_pid)
+                            .where(_Product.company_id == company_id)
+                            .where(_Product.branch_id == branch_id)
+                        ).first()
+                        if not candidate:
+                            yield rx.toast(
+                                f"Producto ID {candidate_pid} no pertenece a esta empresa/sucursal.",
+                                duration=3500,
+                            )
+                            return
+                        resolved_product_ids.append(candidate.id)
+                    if resolved_product_ids:
+                        resolved_product_id = resolved_product_ids[0]
+
+                resolved_category: str | None = None
+                if self.promo_scope == PromotionScope.CATEGORY:
+                    resolved_category = self.promo_category.strip() or None
 
                 promo.name = self.promo_name.strip()
                 promo.description = self.promo_description.strip() or None
@@ -297,9 +496,104 @@ class PromotionsState(MixinState):
                 promo.ends_at = ends
                 promo.max_uses = int(self.promo_max_uses) if self.promo_max_uses.strip() else None
                 promo.product_id = resolved_product_id
-                promo.category = self.promo_category.strip() or None
+                promo.category = resolved_category
                 promo.is_active = self.promo_is_active
+
+                mask = self._weekdays_to_mask()
+                if mask == 0:
+                    yield rx.toast(
+                        "Seleccioná al menos un día de la semana.",
+                        duration=3500,
+                    )
+                    return
+                promo.weekdays_mask = mask
+
+                tf = _parse_time(self.promo_time_from)
+                tt = _parse_time(self.promo_time_to)
+                if (tf is None) ^ (tt is None):
+                    yield rx.toast(
+                        "Definí ambas horas (desde y hasta) o dejá las dos vacías.",
+                        duration=3500,
+                    )
+                    return
+                promo.time_from = tf
+                promo.time_to = tt
+
+                # Cupón: vacío = automática. Validar unicidad por company.
+                coupon = (self.promo_coupon_code or "").strip().upper() or None
+                if coupon:
+                    existing = session.exec(
+                        select(Promotion)
+                        .where(Promotion.company_id == company_id)
+                        .where(Promotion.coupon_code == coupon)
+                        .where(Promotion.id != (promo.id or 0))
+                    ).first()
+                    if existing:
+                        yield rx.toast(
+                            f"El cupón '{coupon}' ya está en uso por otra promoción.",
+                            duration=3500,
+                        )
+                        return
+                promo.coupon_code = coupon
+
+                # Umbral del carrito (opcional). Vacío o 0 = sin umbral.
+                # Validamos signo no negativo aquí en vez de delegar al CHECK
+                # de BD para devolver un mensaje claro al usuario.
+                raw_min_cart = (self.promo_min_cart_amount or "").strip()
+                if not raw_min_cart:
+                    promo.min_cart_amount = Decimal("0.00")
+                else:
+                    try:
+                        min_cart_val = Decimal(raw_min_cart)
+                    except Exception:
+                        yield rx.toast(
+                            "El monto mínimo de carrito debe ser un número válido.",
+                            duration=3500,
+                        )
+                        return
+                    if min_cart_val < 0:
+                        yield rx.toast(
+                            "El monto mínimo de carrito no puede ser negativo.",
+                            duration=3500,
+                        )
+                        return
+                    promo.min_cart_amount = min_cart_val
+
                 session.commit()
+                session.refresh(promo)
+
+                # Sync promotion_product join-table
+                if self.promo_scope == PromotionScope.PRODUCT:
+                    from app.models.promotions import PromotionProduct
+                    existing_pp = session.exec(
+                        select(PromotionProduct).where(
+                            PromotionProduct.promotion_id == promo.id
+                        )
+                    ).all()
+                    existing_ids = {pp.product_id for pp in existing_pp}
+                    new_ids = set(resolved_product_ids)
+                    for pp in existing_pp:
+                        if pp.product_id not in new_ids:
+                            session.delete(pp)
+                    for pid in new_ids:
+                        if pid not in existing_ids:
+                            session.add(PromotionProduct(
+                                promotion_id=promo.id,
+                                product_id=pid,
+                            ))
+                    session.commit()
+                else:
+                    # Si se cambió el scope a algo distinto de PRODUCT, limpiar
+                    from app.models.promotions import PromotionProduct
+                    old_pp = session.exec(
+                        select(PromotionProduct).where(
+                            PromotionProduct.promotion_id == promo.id
+                        )
+                    ).all()
+                    for pp in old_pp:
+                        session.delete(pp)
+                    if old_pp:
+                        session.commit()
 
             self.show_promotion_form = False
             await self._load_promotions()
@@ -344,3 +638,66 @@ def _parse_date(value: str) -> datetime | None:
         except (ValueError, AttributeError):
             continue
     return None
+
+
+def _parse_time(value: str):
+    """Convierte 'HH:MM' o 'HH:MM:SS' a datetime.time, o None si está vacío."""
+    from datetime import time as _time
+    if not value or not value.strip():
+        return None
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(value.strip(), fmt).time()
+        except ValueError:
+            continue
+    return None
+
+
+def _compute_status(p: Promotion, now: datetime) -> tuple[str, str]:
+    """Determina el estado real de una promo respecto a `now`.
+
+    Orden de prioridad: pausa manual > vencida > programada > agotada > activa.
+    """
+    if not p.is_active:
+        return "paused", "Pausada"
+    if p.ends_at.date() < now.date():
+        return "expired", "Vencida"
+    if p.starts_at > now:
+        return "scheduled", "Programada"
+    if p.max_uses is not None and (p.current_uses or 0) >= p.max_uses:
+        return "exhausted", "Agotada"
+    return "active", "Activa"
+
+
+def _format_usage(current: int, maximum: int | None) -> str:
+    if maximum is None:
+        return f"{current} usos"
+    return f"{current}/{maximum} usos"
+
+
+_WEEKDAY_SHORT = ["L", "M", "X", "J", "V", "S", "D"]
+
+
+def _format_min_cart(value) -> str:
+    """Etiqueta legible del umbral de carrito. ``""`` cuando no hay umbral."""
+    try:
+        amount = float(value or 0)
+    except (TypeError, ValueError):
+        return ""
+    if amount <= 0:
+        return ""
+    if amount.is_integer():
+        return f"Carrito ≥ {int(amount)}"
+    return f"Carrito ≥ {amount:.2f}"
+
+
+def _format_weekdays(mask: int) -> str:
+    if mask == 127:
+        return "Todos los días"
+    if mask == 31:  # L-V
+        return "Lunes a Viernes"
+    if mask == 96:  # S+D
+        return "Fines de semana"
+    if mask == 0:
+        return "(Ningún día)"
+    return " ".join(d for i, d in enumerate(_WEEKDAY_SHORT) if mask & (1 << i))

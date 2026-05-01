@@ -455,6 +455,21 @@ class ReceiptService:
                 receipt_lines.append(
                     ReceiptService._row("", right_text, width)
                 )
+            base_price_val = item.get("base_price")
+            if base_price_val is not None:
+                base_f = float(ReceiptService._round_currency(base_price_val))
+                price_f = float(ReceiptService._round_currency(item["price"]))
+                if base_f > price_f + 0.005:
+                    discount_unit = base_f - price_f
+                    discount_total = discount_unit * float(item["quantity"])
+                    discount_pct = round(discount_unit / base_f * 100)
+                    receipt_lines.append(
+                        ReceiptService._row(
+                            f"  Dto. {discount_pct}%:",
+                            f"-{currency_formatter(discount_total, currency_symbol)}",
+                            width,
+                        )
+                    )
             receipt_lines.append("")
             receipt_lines.append(ReceiptService._line(width))
 

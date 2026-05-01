@@ -230,6 +230,7 @@ def _price_list_detail_modal() -> rx.Component:
             rx.el.div(
                 rx.el.p("Agregar precio especial", class_name="text-sm font-semibold text-slate-700"),
                 rx.el.div(
+                    # Fila 1: buscador de producto (ancho completo)
                     rx.el.div(
                         rx.debounce_input(
                             rx.input(
@@ -256,23 +257,27 @@ def _price_list_detail_modal() -> rx.Component:
                             ),
                             rx.fragment(),
                         ),
-                        class_name="relative flex-1",
+                        class_name="relative",
                     ),
-                    rx.el.input(
-                        placeholder="Precio especial",
-                        value=State.pl_item_unit_price,
-                        on_change=State.set_pl_item_price,
-                        type="text",
-                        input_mode="decimal",
-                        class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-32"),
+                    # Fila 2: input de precio + botón Agregar
+                    rx.el.div(
+                        rx.el.input(
+                            placeholder="Precio especial",
+                            value=State.pl_item_unit_price,
+                            on_change=State.set_pl_item_price,
+                            type="text",
+                            input_mode="decimal",
+                            class_name="h-10 w-40 px-3 text-sm bg-white border border-slate-200 rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                        ),
+                        rx.el.button(
+                            rx.icon("plus", class_name="h-4 w-4"),
+                            "Agregar",
+                            on_click=State.add_price_list_item,
+                            class_name=f"flex items-center gap-1 {BUTTON_STYLES.get('primary', 'px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700')} text-sm whitespace-nowrap",
+                        ),
+                        class_name="flex items-center gap-2",
                     ),
-                    rx.el.button(
-                        rx.icon("plus", class_name="h-4 w-4"),
-                        "Agregar",
-                        on_click=State.add_price_list_item,
-                        class_name=f"flex items-center gap-1 {BUTTON_STYLES.get('primary', 'px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700')} text-sm whitespace-nowrap",
-                    ),
-                    class_name="flex items-start gap-2",
+                    class_name="flex flex-col gap-2",
                 ),
                 class_name="space-y-2 bg-slate-50 rounded-xl p-3",
             ),

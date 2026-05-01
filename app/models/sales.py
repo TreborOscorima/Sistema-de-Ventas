@@ -186,6 +186,16 @@ class SaleItem(TenantMixin, rx.Model, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
+    # Snapshot del precio antes de aplicar promoción. Se persiste para que los
+    # reportes puedan calcular el descuento monetario otorgado sin re-resolver
+    # PriceList/Tier (que pueden haber cambiado tras la venta). Para filas
+    # pre-migración se back-fillea con ``unit_price`` (descuento implícito = 0).
+    unit_price_base: Decimal = Field(
+        default=Decimal("0.00"),
+        sa_column=sqlalchemy.Column(
+            Numeric(10, 2), nullable=False, server_default="0.00"
+        ),
+    )
     subtotal: Decimal = Field(
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),

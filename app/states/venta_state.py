@@ -616,6 +616,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                         payment_data=payment_dto,
                         reservation_id=reservation_id,
                         currency_symbol=self.currency_symbol,
+                        coupon_code=(self.cart_coupon_code or None) if getattr(self, "cart_coupon_status", "") == "applied" else None,
+                        promo_now=self._display_now().replace(tzinfo=None),
                     )
                     await session.commit()
                     logger.info(
@@ -700,6 +702,9 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             self._reset_sale_form()
             self._reset_payment_fields()
             self._reset_credit_context()
+            self.cart_coupon_code = ""
+            self.cart_coupon_status = ""
+            self.cart_coupon_message = ""
             self._refresh_payment_feedback()
 
             if hasattr(self, "reload_history"):

@@ -58,6 +58,11 @@ def _make_promotion(
     category: str | None = None,
     starts_at=None,
     ends_at=None,
+    weekdays_mask: int = 127,
+    time_from=None,
+    time_to=None,
+    coupon_code: str | None = None,
+    min_cart_amount: str | Decimal | int = "0",
 ) -> SimpleNamespace:
     now = utc_now_naive()
     return SimpleNamespace(
@@ -75,6 +80,11 @@ def _make_promotion(
         category=category,
         starts_at=starts_at or (now - timedelta(days=1)),
         ends_at=ends_at or (now + timedelta(days=30)),
+        weekdays_mask=weekdays_mask,
+        time_from=time_from,
+        time_to=time_to,
+        coupon_code=coupon_code,
+        min_cart_amount=Decimal(str(min_cart_amount)),
     )
 
 
@@ -329,6 +339,275 @@ async def test_promotion_first_match_wins_in_iteration_order(
     )
 
     assert result is specific
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Filtros de día y banda horaria
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_promotion_skipped_when_today_not_in_weekdays_mask(
+    session_mock, exec_result
+):
+    """mask=1 (sólo lunes) no debe matchear un miércoles."""
+    from datetime import datetime as _dt
+    wednesday_noon = _dt(2026, 4, 29, 12, 0)  # 2026-04-29 es miércoles
+    promo = _make_promotion(weekdays_mask=1)  # solo lunes (bit 0)
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1,
+        category="General",
+        quantity=Decimal("1"),
+        company_id=1,
+        branch_id=1,
+        now=wednesday_noon,
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_promotion_matches_when_today_in_weekdays_mask(
+    session_mock, exec_result
+):
+    from datetime import datetime as _dt
+    wednesday_noon = _dt(2026, 4, 29, 12, 0)
+    promo = _make_promotion(weekdays_mask=4)  # solo miércoles (bit 2)
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1,
+        category="General",
+        quantity=Decimal("1"),
+        company_id=1,
+        branch_id=1,
+        now=wednesday_noon,
+    )
+    assert result is promo
+
+
+@pytest.mark.asyncio
+async def test_promotion_skipped_outside_time_window(
+    session_mock, exec_result
+):
+    from datetime import datetime as _dt, time as _t
+    noon = _dt(2026, 4, 29, 12, 0)
+    promo = _make_promotion(time_from=_t(15, 0), time_to=_t(18, 0))
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1,
+        category="General",
+        quantity=Decimal("1"),
+        company_id=1,
+        branch_id=1,
+        now=noon,
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_promotion_matches_inside_time_window(
+    session_mock, exec_result
+):
+    from datetime import datetime as _dt, time as _t
+    afternoon = _dt(2026, 4, 29, 16, 30)
+    promo = _make_promotion(time_from=_t(15, 0), time_to=_t(18, 0))
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1,
+        category="General",
+        quantity=Decimal("1"),
+        company_id=1,
+        branch_id=1,
+        now=afternoon,
+    )
+    assert result is promo
+
+
+@pytest.mark.asyncio
+async def test_promotion_time_window_crosses_midnight(
+    session_mock, exec_result
+):
+    """time_from > time_to debe interpretarse como rango cruzando medianoche."""
+    from datetime import datetime as _dt, time as _t
+    promo = _make_promotion(time_from=_t(22, 0), time_to=_t(2, 0))
+
+    # 23:30 → dentro del rango (22:00-medianoche)
+    late_night = _dt(2026, 4, 29, 23, 30)
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1, now=late_night,
+    )
+    assert result is promo
+
+    # 12:00 → fuera del rango
+    midday = _dt(2026, 4, 29, 12, 0)
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1, now=midday,
+    )
+    assert result is None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Cupones
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_promotion_with_coupon_skipped_when_no_coupon_provided(
+    session_mock, exec_result
+):
+    """Una promo con coupon_code no debe aplicar si el caller no lo ingresó."""
+    promo = _make_promotion(coupon_code="VERANO20")
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1,
+        coupon_code=None,
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_promotion_with_coupon_skipped_when_code_mismatch(
+    session_mock, exec_result
+):
+    promo = _make_promotion(coupon_code="VERANO20")
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1,
+        coupon_code="OTRO",
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_promotion_with_coupon_matches_case_insensitive(
+    session_mock, exec_result
+):
+    promo = _make_promotion(coupon_code="VERANO20")
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1,
+        coupon_code="verano20",
+    )
+    assert result is promo
+
+
+@pytest.mark.asyncio
+async def test_promotion_with_coupon_wins_over_automatic(
+    session_mock, exec_result
+):
+    """Cuando el cupón matchea, gana sobre la promo automática."""
+    coupon_promo = _make_promotion(promo_id=1, coupon_code="VERANO20", scope="all")
+    auto_promo = _make_promotion(promo_id=2, coupon_code=None, scope="all")
+    # El motor confía en el orden del SQL (coupon_code NULL al final). Mock
+    # respeta ese orden.
+    session_mock.exec.side_effect = [exec_result(all_items=[coupon_promo, auto_promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1,
+        coupon_code="VERANO20",
+    )
+    assert result is coupon_promo
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# find_applicable_promotion — filtro min_cart_amount
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_promotion_with_min_cart_skipped_when_subtotal_below(
+    session_mock, exec_result
+):
+    """Promo con umbral de carrito no aplica si el subtotal está por debajo."""
+    promo = _make_promotion(min_cart_amount="1000")
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1,
+        cart_subtotal=Decimal("500"),
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_promotion_with_min_cart_applies_when_subtotal_meets(
+    session_mock, exec_result
+):
+    """Promo con umbral aplica cuando el subtotal alcanza el mínimo exacto."""
+    promo = _make_promotion(min_cart_amount="1000")
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1,
+        cart_subtotal=Decimal("1000"),
+    )
+    assert result is promo
+
+
+@pytest.mark.asyncio
+async def test_promotion_with_min_cart_skipped_when_subtotal_omitted(
+    session_mock, exec_result
+):
+    """Sin cart_subtotal explícito, una promo con umbral > 0 se descarta.
+
+    Defensa: mejor no aplicar el descuento que cobrarlo mal por falta de
+    contexto del carrito.
+    """
+    promo = _make_promotion(min_cart_amount="1000")
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1,
+        # cart_subtotal omitido a propósito
+    )
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_promotion_without_min_cart_ignores_subtotal_arg(
+    session_mock, exec_result
+):
+    """Promo con min_cart_amount=0 aplica aunque no se pase subtotal."""
+    promo = _make_promotion(min_cart_amount="0")
+    session_mock.exec.side_effect = [exec_result(all_items=[promo])]
+
+    result = await find_applicable_promotion(
+        session_mock,
+        product_id=1, category="General", quantity=Decimal("1"),
+        company_id=1, branch_id=1,
+    )
+    assert result is promo
 
 
 # ──────────────────────────────────────────────────────────────────────────────

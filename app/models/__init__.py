@@ -46,7 +46,7 @@ from .platform_config import PlatformBillingSettings
 # Presupuestos DESPUÉS de sales y client (FK a sale.id y client.id)
 from .quotations import Quotation, QuotationItem
 # Promociones: FK opcional a product.id
-from .promotions import Promotion
+from .promotions import Promotion, PromotionProduct
 
 __all__ = [
     "Permission",
@@ -95,4 +95,5 @@ __all__ = [
     "Quotation",
     "QuotationItem",
     "Promotion",
+    "PromotionProduct",
 ]

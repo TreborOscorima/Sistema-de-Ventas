@@ -181,8 +181,19 @@ def _report_description() -> rx.Component:
                 class_name="text-sm text-slate-600 mt-2 space-y-1 list-none",
             ),
         ),
+        "promociones": rx.fragment(
+            rx.el.p("🎟️ ", rx.el.strong("Rendimiento de Promociones"), class_name="font-medium text-slate-800"),
+            rx.el.ul(
+                rx.el.li("✓ KPIs globales (promos activas, descuento total, ticket promedio)"),
+                rx.el.li("✓ Ranking de promos por descuento otorgado"),
+                rx.el.li("✓ Unidades vendidas e ingreso bruto por promo"),
+                rx.el.li("✓ Ventas distintas que usaron cada promo"),
+                rx.el.li("✓ Detalle línea-a-línea con base/final/descuento"),
+                class_name="text-sm text-slate-600 mt-2 space-y-1 list-none",
+            ),
+        ),
     }
-    
+
     return rx.el.div(
         rx.match(
             State.report_type,
@@ -190,6 +201,7 @@ def _report_description() -> rx.Component:
             ("inventario", descriptions["inventario"]),
             ("cuentas", descriptions["cuentas"]),
             ("caja", descriptions["caja"]),
+            ("promociones", descriptions["promociones"]),
             descriptions["ventas"],
         ),
         class_name="p-4 bg-indigo-50 border border-indigo-100 rounded-xl",
@@ -270,7 +282,7 @@ def reportes_page() -> rx.Component:
                 
                 # Período (solo para ventas y caja)
                 rx.cond(
-                    (State.report_type == "ventas") | (State.report_type == "caja"),
+                    (State.report_type == "ventas") | (State.report_type == "caja") | (State.report_type == "promociones"),
                     rx.el.div(
                         rx.el.h3("2. SELECCIONA EL PERIODO", class_name=f"{TYPOGRAPHY['section_title']} mb-4"),
                         rx.el.div(
@@ -289,7 +301,7 @@ def reportes_page() -> rx.Component:
                     rx.el.div(
                         rx.el.h3(
                             rx.cond(
-                                (State.report_type == "ventas") | (State.report_type == "caja"),
+                                (State.report_type == "ventas") | (State.report_type == "caja") | (State.report_type == "promociones"),
                                 "3. OPCIONES ADICIONALES",
                                 "2. OPCIONES ADICIONALES",
                             ),
@@ -330,7 +342,7 @@ def reportes_page() -> rx.Component:
                             class_name="flex items-start justify-between gap-3 py-2 border-b border-slate-100",
                         ),
                         rx.cond(
-                            (State.report_type == "ventas") | (State.report_type == "caja"),
+                            (State.report_type == "ventas") | (State.report_type == "caja") | (State.report_type == "promociones"),
                             rx.el.div(
                                 rx.el.span("Período:", class_name="text-slate-500"),
                                 rx.el.span(State.report_period_label, class_name="font-medium text-slate-800 ml-2 text-right"),
