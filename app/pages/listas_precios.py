@@ -199,7 +199,26 @@ def _item_row(item: rx.Var) -> rx.Component:
             class_name="py-2 px-3 text-sm",
         ),
         rx.el.td(
+            rx.el.span(item["sale_price_display"], class_name="text-sm text-slate-400 tabular-nums"),
+            class_name="py-2 px-3 text-right",
+        ),
+        rx.el.td(
             rx.el.span(item["unit_price_display"], class_name="font-semibold text-indigo-700 tabular-nums text-sm"),
+            class_name="py-2 px-3 text-right",
+        ),
+        rx.el.td(
+            rx.cond(
+                item["diff_display"] != "",
+                rx.el.span(
+                    item["diff_display"],
+                    class_name=rx.cond(
+                        item["diff_is_discount"],
+                        "text-xs font-medium px-1.5 py-0.5 rounded-full bg-green-50 text-green-600",
+                        "text-xs font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600",
+                    ),
+                ),
+                rx.el.span("—", class_name="text-slate-300 text-xs"),
+            ),
             class_name="py-2 px-3 text-right",
         ),
         rx.el.td(
@@ -293,7 +312,9 @@ def _price_list_detail_modal() -> rx.Component:
                             rx.el.tr(
                                 rx.el.th("Producto", class_name=TABLE_STYLES["header_cell"]),
                                 rx.el.th("Variante", class_name=TABLE_STYLES["header_cell"]),
+                                rx.el.th("Precio base", class_name=TABLE_STYLES["header_cell"] + " text-right"),
                                 rx.el.th("Precio especial", class_name=TABLE_STYLES["header_cell"] + " text-right"),
+                                rx.el.th("Dif.", class_name=TABLE_STYLES["header_cell"] + " text-right"),
                                 rx.el.th("", class_name=TABLE_STYLES["header_cell"]),
                                 class_name=TABLE_STYLES["header"],
                             ),
