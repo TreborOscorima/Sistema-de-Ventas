@@ -45,6 +45,9 @@ class PriceListState(MixinState):
     pl_item_unit_price: str = ""
     pl_item_variant_id: str = ""
 
+    # ── Descuento masivo ─────────────────────────────────────────────
+    pl_bulk_discount_pct: float = 0.0
+
     # ─── Página init ─────────────────────────────────────────────────
     # Renombrado para evitar shadowing del guard en `State.page_init_listas_precios`
     # (ver nota en quotation_state.bg_load_quotations).
@@ -372,6 +375,58 @@ class PriceListState(MixinState):
         await self._load_price_list_items(pl_id)
         await self._load_price_lists()
         yield rx.toast("Precio actualizado en la lista.", duration=3000)
+
+    @rx.event
+    def set_pl_bulk_discount_pct(self, v: float):
+        self.pl_bulk_discount_pct = v
+
+    @rx.event
+    @require_permission("manage_config")
+    async def apply_bulk_discount(self):
+        """Recalcula unit_price de todos los ítems de la lista aplicando un % de descuento sobre Product.sale_price."""
+        pl_id = self.selected_price_list.get("id")
+        if not pl_id:
+            yield rx.toast("No hay lista seleccionada.", duration=3000)
+            return
+        try:
+            pct = Decimal(str(self.pl_bulk_discount_pct or 0))
+            if pct <= 0 or pct >= 100:
+                yield rx.toast("El descuento debe ser un valor entre 1 y 99.", duration=3000)
+                return
+        except Exception:
+            yield rx.toast("Porcentaje inválido.", duration=3000)
+            return
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+
+        updated = 0
+        with rx.session() as session:
+            items = session.exec(
+                select(PriceListItem)
+                .where(PriceListItem.price_list_id == pl_id)
+                .where(PriceListItem.company_id == company_id)
+            ).all()
+            for item in items:
+                if not item.product_id:
+                    continue
+                p = session.exec(
+                    select(Product).where(Product.id == item.product_id)
+                ).first()
+                if p and p.sale_price:
+                    factor = (Decimal("100") - pct) / Decimal("100")
+                    item.unit_price = round(Decimal(str(p.sale_price)) * factor, 2)
+                    updated += 1
+            session.commit()
+
+        await self._load_price_list_items(pl_id)
+        self.pl_bulk_discount_pct = 0.0
+        yield rx.toast(
+            f"{updated} precio{'s' if updated != 1 else ''} actualizado{'s' if updated != 1 else ''} con {pct}% de descuento.",
+            duration=4000,
+        )
 
     @rx.event
     @require_permission("manage_config")

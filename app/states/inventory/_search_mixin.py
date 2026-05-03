@@ -479,7 +479,7 @@ class SearchMixin:
         block = self._require_active_subscription()
         if block:
             return block
-        name = (self.new_category_name or "").strip()
+        name = (self.new_category_name or "").strip().upper()
         if not name:
             return
         company_id = self._company_id()

@@ -901,6 +901,14 @@ def client_selector() -> rx.Component:
                             State.selected_client["dni"],
                             class_name="text-xs text-slate-500 font-mono",
                         ),
+                        rx.cond(
+                            State.active_price_list_name != "",
+                            rx.el.span(
+                                State.active_price_list_name,
+                                class_name="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full leading-none",
+                            ),
+                            rx.fragment(),
+                        ),
                         spacing="1",
                         align="start",
                         class_name="min-w-0",
@@ -1369,6 +1377,27 @@ def sale_products_card() -> rx.Component:
     """
     return rx.el.div(
         quick_add_bar(),
+        # Banner: presupuesto activo cargado en el carrito
+        rx.cond(
+            State.loaded_quotation_id > 0,
+            rx.el.div(
+                rx.icon("file-text", class_name="w-4 h-4 text-indigo-600 shrink-0"),
+                rx.el.span(
+                    "Presupuesto #",
+                    State.loaded_quotation_id.to_string(),
+                    " cargado — al confirmar quedará marcado como Convertido.",
+                    class_name="text-xs text-indigo-700",
+                ),
+                rx.el.button(
+                    rx.icon("x", class_name="w-3.5 h-3.5"),
+                    on_click=State.dismiss_loaded_quotation,
+                    class_name="ml-auto p-0.5 rounded text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100",
+                    title="Descartar vínculo con presupuesto",
+                ),
+                class_name="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border-b border-indigo-100",
+            ),
+            rx.fragment(),
+        ),
         # Pharmacy mode: batch required reminder
         rx.cond(
             State.selected_business_vertical == "farmacia",
@@ -1547,12 +1576,12 @@ def _payment_form_body(variant: str) -> rx.Component:
 
     # ── Payment method button classes ──────────────────────────────────────
     pm_btn_active = (
-        "flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white w-full justify-center"
+        "flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600 text-white w-full justify-center"
         if is_desktop else
         "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-indigo-600 text-white"
     )
     pm_btn_inactive = (
-        "flex items-center gap-2 px-3 py-2 rounded-lg border bg-white text-slate-700 hover:bg-slate-50 w-full justify-center"
+        "flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-white text-slate-700 hover:bg-slate-50 w-full justify-center"
         if is_desktop else
         "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-slate-700 hover:bg-slate-50"
     )
@@ -1564,14 +1593,14 @@ def _payment_form_body(variant: str) -> rx.Component:
 
     # ── Payment method grid wrapper ─────────────────────────────────────────
     pm_grid_class = (
-        "grid grid-cols-2 gap-2"
+        "grid grid-cols-2 gap-1.5"
         if is_desktop else
         "grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 sm:p-4"
     )
 
     # ── Credit section wrapper class ────────────────────────────────────────
     credit_section_class = (
-        "p-4 border-b"
+        "px-3 py-2 border-b"
         if is_desktop else
         "px-3 sm:px-4 pb-3 border-b"
     )
@@ -1598,7 +1627,7 @@ def _payment_form_body(variant: str) -> rx.Component:
         "text-sm font-medium text-slate-700"
     )
     cash_section_class = (
-        "flex flex-col gap-2"
+        "flex flex-col gap-2 px-3 py-2 border-b border-slate-100"
         if is_desktop else
         "flex flex-col gap-2 px-3 sm:px-4 pb-3"
     )
@@ -1690,7 +1719,7 @@ def _payment_form_body(variant: str) -> rx.Component:
 
     # ── Options section wrapper class ───────────────────────────────────────
     options_section_class = (
-        "p-4 border-b min-h-[80px]"
+        "px-3 py-2 border-b min-h-[64px]"
         if is_desktop else
         ""
     )
@@ -1702,7 +1731,7 @@ def _payment_form_body(variant: str) -> rx.Component:
         "text-sm font-medium text-slate-500"
     )
     total_amount_class = (
-        "text-3xl font-bold text-indigo-600"
+        "text-2xl font-bold text-indigo-600"
         if is_desktop else
         "text-3xl sm:text-4xl font-bold text-indigo-600"
     )
@@ -1712,7 +1741,7 @@ def _payment_form_body(variant: str) -> rx.Component:
         "flex items-baseline gap-0.5"
     )
     total_container_class = (
-        "flex flex-col items-center py-3"
+        "flex items-baseline justify-between mb-2"
         if is_desktop else
         "flex flex-col items-center"
     )
@@ -1734,7 +1763,7 @@ def _payment_form_body(variant: str) -> rx.Component:
         "flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold opacity-50 cursor-not-allowed"
     )
     confirm_wrapper_class = (
-        "p-4 flex flex-col gap-2"
+        "px-3 py-2 flex flex-col gap-2"
         if is_desktop else
         "flex gap-2 mt-3"
     )
@@ -1760,11 +1789,7 @@ def _payment_form_body(variant: str) -> rx.Component:
     # ── Credit section header ───────────────────────────────────────────────
     if is_desktop:
         credit_header = rx.el.div(
-            rx.el.div(
-                rx.el.span("VENTA A CREDITO / FIADO", class_name="text-xs font-medium text-slate-600"),
-                rx.el.span("Configurar cuotas y pago inicial", class_name="text-xs text-slate-400"),
-                class_name="flex flex-col",
-            ),
+            rx.el.span("CREDITO / FIADO", class_name="text-xs font-medium text-slate-600"),
             toggle_switch(
                 checked=State.is_credit_mode,
                 on_change=State.toggle_credit_mode,
@@ -1818,12 +1843,11 @@ def _payment_form_body(variant: str) -> rx.Component:
 
     if is_desktop:
         pm_section = rx.el.div(
-            rx.el.p("Método de pago", class_name="text-xs font-medium text-slate-500 uppercase mb-2"),
             rx.el.div(
                 pm_buttons,
                 class_name=pm_grid_class,
             ),
-            class_name="p-4 border-b",
+            class_name="p-2 border-b",
         )
     else:
         pm_section = rx.el.div(
@@ -2136,13 +2160,14 @@ def _payment_form_body(variant: str) -> rx.Component:
     if is_desktop:
         footer = rx.el.div(
             _coupon_input(),
+            cash_option,
             _receipt_type_selector(),
             _fiscal_lookup_input(),
             rx.el.div(
                 rx.el.div(
                     rx.el.span("TOTAL", class_name=total_label_class),
                     rx.el.div(
-                        rx.el.span(State.currency_symbol, class_name="text-xl text-indigo-600"),
+                        rx.el.span(State.currency_symbol, class_name="text-base text-indigo-600"),
                         rx.el.span(
                             State.sale_total.to_string(),
                             class_name=total_amount_class,
@@ -2151,9 +2176,6 @@ def _payment_form_body(variant: str) -> rx.Component:
                     ),
                     class_name=total_container_class,
                 ),
-                class_name="p-3 bg-slate-50",
-            ),
-            rx.el.div(
                 rx.el.button(
                     rx.cond(
                         State.is_loading,
@@ -2177,7 +2199,7 @@ def _payment_form_body(variant: str) -> rx.Component:
                         confirm_active_class,
                     ),
                 ),
-                rx.fragment(),
+                _quot_action_buttons(),
                 class_name=confirm_wrapper_class,
             ),
             class_name=footer_class,
@@ -2185,6 +2207,7 @@ def _payment_form_body(variant: str) -> rx.Component:
     else:
         footer = rx.el.div(
             _coupon_input(),
+            cash_option,
             _receipt_type_selector(),
             _fiscal_lookup_input(),
             rx.el.div(
@@ -2223,7 +2246,7 @@ def _payment_form_body(variant: str) -> rx.Component:
                         confirm_active_class,
                     ),
                 ),
-                rx.fragment(),
+                _quot_action_buttons(),
                 class_name=confirm_wrapper_class,
             ),
             class_name=footer_class,
@@ -2240,7 +2263,6 @@ def _payment_form_body(variant: str) -> rx.Component:
                 class_name=credit_section_class,
             ),
             rx.el.div(
-                cash_option,
                 card_option,
                 wallet_option,
                 mixed_option,
@@ -2257,7 +2279,6 @@ def _payment_form_body(variant: str) -> rx.Component:
                 credit_fields,
                 class_name=credit_section_class,
             ),
-            cash_option,
             card_option,
             wallet_option,
             mixed_option,
@@ -2265,16 +2286,292 @@ def _payment_form_body(variant: str) -> rx.Component:
         )
 
 
+def _quot_action_buttons() -> rx.Component:
+    """Botones de presupuesto en el footer del POS (guardar y cargar)."""
+    return rx.el.div(
+        rx.el.button(
+            rx.icon("bookmark", class_name="h-3.5 w-3.5"),
+            rx.el.span("Guardar", class_name="hidden sm:inline"),
+            on_click=State.open_quot_save_modal,
+            disabled=State.new_sale_items.length() == 0,
+            class_name=(
+                "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium "
+                "text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg "
+                "hover:bg-indigo-100 disabled:opacity-40 disabled:cursor-not-allowed "
+                "transition-colors"
+            ),
+            title="Guardar el carrito actual como presupuesto",
+        ),
+        rx.el.button(
+            rx.icon("folder-open", class_name="h-3.5 w-3.5"),
+            rx.el.span("Cargar", class_name="hidden sm:inline"),
+            on_click=State.open_pos_quot_drawer,
+            class_name=(
+                "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium "
+                "text-slate-600 bg-slate-50 border border-slate-200 rounded-lg "
+                "hover:bg-slate-100 transition-colors"
+            ),
+            title="Buscar y cargar un presupuesto existente",
+        ),
+        class_name="flex gap-2 flex-wrap justify-center",
+    )
+
+
+def _quot_save_modal() -> rx.Component:
+    """Modal para guardar el carrito POS como presupuesto."""
+    return rx.cond(
+        State.show_quot_save_modal,
+        rx.el.div(
+            rx.el.div(
+                # Header
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("bookmark", class_name="h-5 w-5 text-indigo-600"),
+                        rx.el.span(
+                            "Guardar como Presupuesto",
+                            class_name="font-semibold text-slate-800",
+                        ),
+                        class_name="flex items-center gap-2",
+                    ),
+                    rx.el.button(
+                        rx.icon("x", class_name="h-4 w-4"),
+                        on_click=State.close_quot_save_modal,
+                        class_name="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100",
+                    ),
+                    class_name="flex items-center justify-between p-4 border-b",
+                ),
+                # Body
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.label(
+                            "Validez (días)",
+                            class_name="block text-xs font-medium text-slate-600 mb-1",
+                        ),
+                        rx.el.input(
+                            default_value=State.quot_save_validity_days,
+                            type="number",
+                            min="1",
+                            max="365",
+                            on_blur=State.set_quot_save_validity,
+                            class_name=(
+                                "w-full border border-slate-200 rounded-lg px-3 py-2 "
+                                "text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                            ),
+                        ),
+                    ),
+                    rx.el.div(
+                        rx.el.label(
+                            "Notas (opcionales)",
+                            class_name="block text-xs font-medium text-slate-600 mb-1",
+                        ),
+                        rx.el.textarea(
+                            placeholder="Condiciones, observaciones para el cliente...",
+                            default_value=State.quot_save_notes,
+                            on_blur=State.set_quot_save_notes,
+                            class_name=(
+                                "w-full border border-slate-200 rounded-lg px-3 py-2 "
+                                "text-sm resize-none h-20 focus:outline-none "
+                                "focus:ring-2 focus:ring-indigo-300"
+                            ),
+                        ),
+                    ),
+                    rx.el.p(
+                        rx.icon("info", class_name="h-3.5 w-3.5 shrink-0 text-slate-400"),
+                        "El carrito continuará activo tras guardar.",
+                        class_name="flex items-center gap-1.5 text-xs text-slate-400",
+                    ),
+                    class_name="p-4 space-y-3",
+                ),
+                # Footer
+                rx.el.div(
+                    rx.el.button(
+                        rx.cond(State.is_loading, "Guardando...", "Guardar"),
+                        on_click=State.save_pos_cart_as_quotation,
+                        disabled=State.is_loading,
+                        class_name=(
+                            "px-4 py-2 text-sm font-medium text-white bg-indigo-600 "
+                            "rounded-lg hover:bg-indigo-700 disabled:opacity-60 "
+                            "disabled:cursor-not-allowed transition-colors"
+                        ),
+                    ),
+                    rx.el.button(
+                        "Cancelar",
+                        on_click=State.close_quot_save_modal,
+                        class_name=(
+                            "px-4 py-2 text-sm border border-slate-200 rounded-lg "
+                            "hover:bg-slate-50 transition-colors"
+                        ),
+                    ),
+                    class_name="flex gap-2 justify-end p-4 border-t bg-slate-50",
+                ),
+                class_name="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4",
+            ),
+            class_name=(
+                "fixed inset-0 z-50 flex items-center justify-center "
+                "bg-black/40 backdrop-blur-sm"
+            ),
+        ),
+        rx.fragment(),
+    )
+
+
+def _quot_load_drawer() -> rx.Component:
+    """Drawer lateral para buscar y cargar presupuestos en el POS."""
+
+    def _result_row(q: rx.Var) -> rx.Component:
+        return rx.el.div(
+            rx.el.div(
+                rx.el.div(
+                    rx.el.span(
+                        "#", q["id"].to_string(),
+                        class_name="font-mono text-xs font-semibold text-slate-700",
+                    ),
+                    rx.el.span(
+                        q["status_label"],
+                        class_name=rx.cond(
+                            q["is_expired"],
+                            "text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700",
+                            "text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700",
+                        ),
+                    ),
+                    class_name="flex items-center gap-2",
+                ),
+                rx.el.span(
+                    q["total_amount"],
+                    class_name="font-bold text-indigo-700 tabular-nums text-sm",
+                ),
+                class_name="flex items-center justify-between",
+            ),
+            rx.el.div(
+                rx.el.span(
+                    "Creado: ", q["created_at"],
+                    class_name="text-xs text-slate-400",
+                ),
+                rx.el.span(
+                    "Vence: ", q["expires_at"],
+                    class_name="text-xs text-slate-400",
+                ),
+                class_name="flex gap-3 mt-0.5",
+            ),
+            rx.cond(
+                q["notes_preview"] != "",
+                rx.el.p(
+                    q["notes_preview"],
+                    class_name="text-xs text-slate-500 italic mt-0.5 truncate",
+                ),
+                rx.fragment(),
+            ),
+            rx.el.button(
+                rx.icon("shopping-cart", class_name="h-3.5 w-3.5"),
+                "Cargar al POS",
+                on_click=State.convert_quotation_to_cart(q["id"]),
+                disabled=q["is_expired"],
+                class_name=(
+                    "mt-2 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium "
+                    "text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 "
+                    "disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                ),
+            ),
+            class_name=(
+                "p-3 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 "
+                "space-y-0.5 transition-colors"
+            ),
+        )
+
+    return rx.cond(
+        State.show_pos_quot_drawer,
+        rx.el.div(
+            # Overlay
+            rx.el.div(
+                on_click=State.close_pos_quot_drawer,
+                class_name="absolute inset-0 bg-black/30",
+            ),
+            # Panel
+            rx.el.div(
+                # Header
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("folder-open", class_name="h-5 w-5 text-indigo-600"),
+                        rx.el.span(
+                            "Cargar Presupuesto",
+                            class_name="font-semibold text-slate-800",
+                        ),
+                        class_name="flex items-center gap-2",
+                    ),
+                    rx.el.button(
+                        rx.icon("x", class_name="h-4 w-4"),
+                        on_click=State.close_pos_quot_drawer,
+                        class_name="p-1 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100",
+                    ),
+                    class_name="flex items-center justify-between p-4 border-b shrink-0",
+                ),
+                # Buscador
+                rx.el.div(
+                    rx.debounce_input(
+                        rx.input(
+                            placeholder="Buscar por #ID o texto en notas...",
+                            value=State.pos_quot_search,
+                            on_change=State.search_pos_quotations,
+                            class_name=(
+                                "w-full border border-slate-200 rounded-lg px-3 py-2 "
+                                "text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                            ),
+                            auto_focus=True,
+                        ),
+                        debounce_timeout=350,
+                    ),
+                    rx.cond(
+                        State.pos_quot_loading,
+                        rx.el.p(
+                            rx.spinner(size="1"),
+                            "Buscando...",
+                            class_name="flex items-center gap-2 text-xs text-slate-400 mt-1",
+                        ),
+                        rx.fragment(),
+                    ),
+                    class_name="p-3 border-b shrink-0",
+                ),
+                # Resultados
+                rx.el.div(
+                    rx.cond(
+                        State.pos_quot_results.length() > 0,
+                        rx.foreach(State.pos_quot_results, _result_row),
+                        rx.cond(
+                            State.pos_quot_search != "",
+                            rx.el.p(
+                                "Sin resultados. Prueba con otro término.",
+                                class_name="text-sm text-slate-400 text-center py-8",
+                            ),
+                            rx.el.div(
+                                rx.icon(
+                                    "folder-open",
+                                    class_name="h-10 w-10 text-slate-200 mx-auto",
+                                ),
+                                rx.el.p(
+                                    "Escribe un #ID o texto para buscar presupuestos pendientes.",
+                                    class_name="text-xs text-slate-400 text-center mt-2",
+                                ),
+                                class_name="py-10",
+                            ),
+                        ),
+                    ),
+                    class_name="flex-1 overflow-y-auto p-3 space-y-2",
+                ),
+                class_name=(
+                    "absolute right-0 top-0 h-full w-80 bg-slate-50 shadow-2xl "
+                    "flex flex-col z-10"
+                ),
+            ),
+            class_name="fixed inset-0 z-50",
+        ),
+        rx.fragment(),
+    )
+
+
 def payment_sidebar() -> rx.Component:
     """Sidebar derecho con método de pago y total."""
     scrollable, footer = _payment_form_body("desktop")
     return rx.el.aside(
-        # Header
-        rx.el.div(
-            rx.icon("wallet", class_name="h-5 w-5 text-indigo-600"),
-            rx.el.span("COBRO", class_name="font-bold text-slate-800"),
-            class_name="flex items-center gap-2 p-4 border-b shrink-0",
-        ),
         scrollable,
         footer,
         class_name="w-full max-w-[22rem] bg-white border rounded-lg shadow-sm overflow-hidden flex flex-col h-full",
@@ -2286,7 +2583,6 @@ def payment_mobile_section() -> rx.Component:
     (
         pm_section,
         credit_section,
-        cash_option,
         card_option,
         wallet_option,
         mixed_option,
@@ -2304,7 +2600,6 @@ def payment_mobile_section() -> rx.Component:
         ),
         pm_section,
         credit_section,
-        cash_option,
         card_option,
         wallet_option,
         mixed_option,
@@ -2480,6 +2775,8 @@ def venta_page() -> rx.Component:
         sale_receipt_modal(),
         batch_picker_modal(),
         variant_picker_modal(),
+        _quot_save_modal(),
+        _quot_load_drawer(),
         class_name="flex min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)]",
     )
     return permission_guard(

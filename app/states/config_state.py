@@ -146,6 +146,29 @@ class ConfigState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         with rx.session() as session:
+            # Cargar moneda y país activos desde CompanySettings (necesario para
+            # que currency_symbol sea correcto en todos los módulos, no solo /configuracion)
+            if company_id:
+                settings_stmt = select(CompanySettings).where(
+                    CompanySettings.company_id == company_id
+                )
+                settings = None
+                if branch_id:
+                    settings = session.exec(
+                        settings_stmt.where(CompanySettings.branch_id == branch_id)
+                    ).first()
+                if not settings:
+                    settings = session.exec(
+                        settings_stmt.order_by(
+                            CompanySettings.branch_id, CompanySettings.id
+                        )
+                    ).first()
+                if settings:
+                    if settings.default_currency_code:
+                        self.selected_currency_code = settings.default_currency_code
+                    if settings.country_code:
+                        self.selected_country_code = settings.country_code
+
             # Cargar monedas
             currencies = session.exec(select(Currency)).all()
             if not currencies:

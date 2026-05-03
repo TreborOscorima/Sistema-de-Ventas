@@ -34,6 +34,8 @@ class Client(TenantMixin, rx.Model, table=True):
     phone: Optional[str] = Field(default=None)
     email: Optional[str] = Field(default=None, max_length=255)
     address: Optional[str] = Field(default=None)
+    # Segmento comercial: nuevo | regular | vip | mayorista
+    segment: Optional[str] = Field(default=None, max_length=20)
     credit_limit: Decimal = Field(
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),

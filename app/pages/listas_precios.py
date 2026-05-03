@@ -298,6 +298,35 @@ def _price_list_detail_modal() -> rx.Component:
                     ),
                     class_name="flex flex-col gap-2",
                 ),
+                # Fila 3: descuento masivo (solo visible si hay ítems)
+                rx.cond(
+                    State.price_list_items.length() > 0,
+                    rx.el.div(
+                        rx.el.div(class_name="border-t border-slate-200"),
+                        rx.el.div(
+                            rx.el.span("Descuento masivo", class_name="text-xs font-medium text-slate-500 whitespace-nowrap"),
+                            rx.el.input(
+                                placeholder="%",
+                                value=State.pl_bulk_discount_pct,
+                                on_change=State.set_pl_bulk_discount_pct,
+                                type="number",
+                                min="1",
+                                max="99",
+                                step="1",
+                                class_name="h-8 w-20 px-2 text-sm border border-slate-200 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400",
+                            ),
+                            rx.el.button(
+                                "Aplicar a todos",
+                                on_click=State.apply_bulk_discount,
+                                class_name="text-xs px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium whitespace-nowrap",
+                            ),
+                            rx.el.span("% off sobre precio base", class_name="text-xs text-slate-400 hidden sm:inline"),
+                            class_name="flex items-center gap-2 flex-wrap",
+                        ),
+                        class_name="space-y-2 pt-1",
+                    ),
+                    rx.fragment(),
+                ),
                 class_name="space-y-2 bg-slate-50 rounded-xl p-3",
             ),
 

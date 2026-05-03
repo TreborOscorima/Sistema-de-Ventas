@@ -15,6 +15,7 @@ from app.services.quotation_service import (
     CreateQuotationDTO,
     QuotationItemDTO,
     QuotationService,
+    UpdateQuotationDTO,
 )
 from app.utils.db import get_async_session
 from app.utils.timezone import utc_now_naive
@@ -53,9 +54,10 @@ class QuotationState(MixinState):
     quotations_filter_status: str = ""
     quotations_search: str = ""
 
-    # ── Formulario de creación ───────────────────────────────────────
+    # ── Formulario de creación / edición ────────────────────────────
     show_quotation_form: bool = False
     quot_form_key: int = 0
+    quot_edit_id: int = 0  # >0 cuando estamos editando un presupuesto existente
     quot_client_id: str = ""
     quot_validity_days: str = "15"
     quot_notes: str = ""
@@ -78,6 +80,21 @@ class QuotationState(MixinState):
 
     # ── Clientes disponibles (para selector) ─────────────────────────
     quotation_clients: list[dict[str, Any]] = []
+
+    # ── Integración POS: guardar carrito como presupuesto ────────────
+    # Var pública usada por la UI del POS para mostrar el banner de
+    # "cotización activa". Se sincroniza con _pending_quotation_id.
+    loaded_quotation_id: int = 0
+    show_quot_save_modal: bool = False
+    quot_save_validity_days: float = 15.0
+    quot_save_notes: str = ""
+    quot_save_idempotency_key: str = ""
+
+    # ── Integración POS: drawer de búsqueda de presupuestos ──────────
+    show_pos_quot_drawer: bool = False
+    pos_quot_search: str = ""
+    pos_quot_results: list[dict[str, Any]] = []
+    pos_quot_loading: bool = False
 
     # Presupuesto pre-cargado al POS pendiente de vincular tras confirmar venta
     _pending_quotation_id: int = rx.field(default=0, is_var=False)
@@ -149,6 +166,15 @@ class QuotationState(MixinState):
             )
             rows = session.exec(stmt).all()
 
+            # Bulk-load de nombres de clientes
+            client_ids = list({q.client_id for q in rows if q.client_id})
+            client_name_map: dict[int, str] = {}
+            if client_ids:
+                cli_rows = session.exec(
+                    select(Client).where(Client.id.in_(client_ids))
+                ).all()
+                client_name_map = {c.id: c.name for c in cli_rows}
+
         result = []
         for q in rows:
             result.append({
@@ -161,6 +187,7 @@ class QuotationState(MixinState):
                 "total_amount": self._format_currency(float(q.total_amount or 0)),
                 "total_raw": float(q.total_amount or 0),
                 "client_id": q.client_id,
+                "client_name": client_name_map.get(q.client_id, "Público en general") if q.client_id else "Público en general",
                 "notes": q.notes or "",
                 "converted_sale_id": q.converted_sale_id,
             })
@@ -193,6 +220,7 @@ class QuotationState(MixinState):
     @rx.event
     def open_quotation_form(self):
         self.show_quotation_form = True
+        self.quot_edit_id = 0
         self.quot_cart = []
         self.quot_client_id = ""
         self.quot_validity_days = "15"
@@ -206,6 +234,59 @@ class QuotationState(MixinState):
     @rx.event
     def close_quotation_form(self):
         self.show_quotation_form = False
+        self.quot_edit_id = 0
+
+    @rx.event
+    async def open_quotation_edit(self, quotation_id: int):
+        """Carga un presupuesto existente en el formulario para editar."""
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id:
+            return
+
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+        with rx.session() as session:
+            q = session.exec(
+                select(Quotation)
+                .where(Quotation.id == quotation_id)
+                .where(Quotation.company_id == company_id)
+            ).first()
+            if not q:
+                yield rx.toast("Presupuesto no encontrado.", duration=3000)
+                return
+            if q.status not in (QuotationStatus.DRAFT, QuotationStatus.SENT):
+                yield rx.toast(
+                    "Solo se pueden editar presupuestos en estado Borrador o Enviado.",
+                    duration=3000,
+                )
+                return
+            items_stmt = select(QuotationItem).where(QuotationItem.quotation_id == quotation_id)
+            db_items = session.exec(items_stmt).all()
+
+        self.quot_edit_id = quotation_id
+        self.quot_client_id = str(q.client_id) if q.client_id else ""
+        self.quot_validity_days = str(q.validity_days or 15)
+        self.quot_notes = q.notes or ""
+        self.quot_global_discount = str(float(q.discount_percentage or 0))
+        self.quot_idempotency_key = ""  # No se usa en update
+        self.quot_cart = [
+            {
+                "product_id": str(qi.product_id) if qi.product_id else "",
+                "description": qi.product_name_snapshot or "",
+                "barcode": qi.product_barcode_snapshot or "",
+                "quantity": str(float(qi.quantity or 1)),
+                "unit_price": str(float(qi.unit_price or 0)),
+                "discount_percentage": str(float(qi.discount_percentage or 0)),
+                "subtotal": self._round_currency(float(qi.subtotal or 0)),
+            }
+            for qi in db_items
+        ]
+        self.quot_search = ""
+        self.quot_search_results = []
+        self.quot_form_key += 1
+        self.show_quotation_detail = False
+        self.show_quotation_form = True
 
     @rx.event
     def set_quot_client(self, value: str):
@@ -302,12 +383,6 @@ class QuotationState(MixinState):
             self._recalc_quot_item(idx)
 
     @rx.event
-    def quot_update_item_price(self, idx: int, value: str):
-        if 0 <= idx < len(self.quot_cart):
-            self.quot_cart[idx]["unit_price"] = value
-            self._recalc_quot_item(idx)
-
-    @rx.event
     def quot_update_item_discount(self, idx: int, value: str):
         if 0 <= idx < len(self.quot_cart):
             self.quot_cart[idx]["discount_percentage"] = value
@@ -360,32 +435,48 @@ class QuotationState(MixinState):
                 except (ValueError, TypeError):
                     continue
 
-            # Reusar la key estable del formulario; si por algún motivo no
-            # fue inicializada (legacy/state hidratado) generar una nueva.
-            idem_key = self.quot_idempotency_key or str(uuid.uuid4())
-            self.quot_idempotency_key = idem_key
-
-            dto = CreateQuotationDTO(
-                client_id=int(self.quot_client_id) if self.quot_client_id else None,
-                user_id=user_id,
-                company_id=company_id,
-                branch_id=branch_id,
-                items=items,
-                validity_days=int(self.quot_validity_days or 15),
-                discount_percentage=float(self.quot_global_discount or 0),
-                notes=self.quot_notes.strip() or None,
-                idempotency_key=idem_key,
-            )
-
-            async with get_async_session() as session:
-                quotation = await QuotationService.create_quotation(dto, session=session)
-                await session.commit()
+            if self.quot_edit_id:
+                dto_update = UpdateQuotationDTO(
+                    quotation_id=self.quot_edit_id,
+                    client_id=int(self.quot_client_id) if self.quot_client_id else None,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    items=items,
+                    validity_days=int(self.quot_validity_days or 15),
+                    discount_percentage=float(self.quot_global_discount or 0),
+                    notes=self.quot_notes.strip() or None,
+                )
+                async with get_async_session() as session:
+                    await QuotationService.update_quotation(dto_update, session=session)
+                    await session.commit()
+                msg = f"Presupuesto #{self.quot_edit_id} actualizado."
+            else:
+                # Reusar la key estable del formulario; si por algún motivo no
+                # fue inicializada (legacy/state hidratado) generar una nueva.
+                idem_key = self.quot_idempotency_key or str(uuid.uuid4())
+                self.quot_idempotency_key = idem_key
+                dto_create = CreateQuotationDTO(
+                    client_id=int(self.quot_client_id) if self.quot_client_id else None,
+                    user_id=user_id,
+                    company_id=company_id,
+                    branch_id=branch_id,
+                    items=items,
+                    validity_days=int(self.quot_validity_days or 15),
+                    discount_percentage=float(self.quot_global_discount or 0),
+                    notes=self.quot_notes.strip() or None,
+                    idempotency_key=idem_key,
+                )
+                async with get_async_session() as session:
+                    await QuotationService.create_quotation(dto_create, session=session)
+                    await session.commit()
+                msg = "Presupuesto creado exitosamente."
 
             self.show_quotation_form = False
+            self.quot_edit_id = 0
             await self._load_quotations()
-            yield rx.toast("Presupuesto creado exitosamente.", duration=3000)
+            yield rx.toast(msg, duration=3000)
         except Exception as exc:
-            logger.exception("Error al crear presupuesto: %s", exc)
+            logger.exception("Error al guardar presupuesto: %s", exc)
             yield rx.toast(f"Error: {exc}", duration=4000)
         finally:
             self.is_loading = False
@@ -407,6 +498,11 @@ class QuotationState(MixinState):
                 return
             items_stmt = select(QuotationItem).where(QuotationItem.quotation_id == quotation_id)
             items = session.exec(items_stmt).all()
+            client_name = "Público en general"
+            if q.client_id:
+                cli = session.exec(select(Client).where(Client.id == q.client_id)).first()
+                if cli:
+                    client_name = cli.name
 
         self.selected_quotation = {
             "id": q.id,
@@ -419,6 +515,7 @@ class QuotationState(MixinState):
             "discount_percentage": float(q.discount_percentage or 0),
             "notes": q.notes or "",
             "client_id": q.client_id,
+            "client_name": client_name,
             "converted_sale_id": q.converted_sale_id,
             "validity_days": q.validity_days,
         }
@@ -641,10 +738,18 @@ class QuotationState(MixinState):
         self.new_sale_items = cart_items
         self._reset_sale_form()
         self._pending_quotation_id = quotation_id
+        self.loaded_quotation_id = quotation_id  # var pública para banner UI
 
         if client_data:
             self.selected_client = client_data
             self._active_price_list_id = int(client_data.get("price_list_id") or 0)
+
+        # Pre-fill monto en efectivo para que el cajero no tenga que re-ingresarlo.
+        # Solo aplica cuando el método activo es efectivo; otros métodos no lo necesitan.
+        if getattr(self, "payment_method_kind", "cash") in {"cash", ""}:
+            quot_total = self._round_currency(sum(item["subtotal"] for item in cart_items))
+            self.payment_cash_amount = quot_total
+            self._update_cash_feedback()
 
         self.show_quotation_detail = False
         yield rx.toast(
@@ -652,3 +757,175 @@ class QuotationState(MixinState):
             duration=3000,
         )
         yield rx.redirect("/venta")
+
+    # ─── POS: guardar carrito como presupuesto ───────────────────────
+
+    @rx.event
+    def dismiss_loaded_quotation(self):
+        """Descarta el vínculo con el presupuesto sin borrar el carrito."""
+        self._pending_quotation_id = 0
+        self.loaded_quotation_id = 0
+
+    @rx.event
+    def open_quot_save_modal(self):
+        """Abre modal para guardar el carrito POS como presupuesto."""
+        if not self.new_sale_items:
+            return rx.toast("El carrito está vacío.", duration=3000)
+        self.show_quot_save_modal = True
+        self.quot_save_validity_days = 15.0
+        self.quot_save_notes = ""
+        self.quot_save_idempotency_key = str(uuid.uuid4())
+
+    @rx.event
+    def close_quot_save_modal(self):
+        self.show_quot_save_modal = False
+
+    @rx.event
+    def set_quot_save_validity(self, value: float):
+        self.quot_save_validity_days = value
+
+    @rx.event
+    def set_quot_save_notes(self, value: str):
+        self.quot_save_notes = value
+
+    @rx.event
+    @require_permission("create_ventas")
+    async def save_pos_cart_as_quotation(self):
+        """Serializa el carrito POS actual como un Quotation sin afectar stock."""
+        if not self.new_sale_items:
+            yield rx.toast("El carrito está vacío.", duration=3000)
+            return
+        self.is_loading = True
+        try:
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            user_id = (self.current_user or {}).get("id")
+            client_id = None
+            if isinstance(self.selected_client, dict):
+                client_id = self.selected_client.get("id")
+
+            items = []
+            for item in self.new_sale_items:
+                pid = item.get("product_id")
+                vid = item.get("variant_id")
+                items.append(
+                    QuotationItemDTO(
+                        product_id=int(pid) if pid else None,
+                        product_variant_id=int(vid) if vid else None,
+                        quantity=float(item.get("quantity") or 1),
+                        unit_price=float(
+                            item.get("sale_price") or item.get("price") or 0
+                        ),
+                        discount_percentage=0.0,
+                    )
+                )
+
+            idem_key = self.quot_save_idempotency_key or str(uuid.uuid4())
+            dto = CreateQuotationDTO(
+                client_id=client_id,
+                user_id=user_id,
+                company_id=company_id,
+                branch_id=branch_id,
+                items=items,
+                validity_days=int(self.quot_save_validity_days or 15),
+                discount_percentage=0.0,
+                notes=self.quot_save_notes.strip() or None,
+                idempotency_key=idem_key,
+            )
+
+            async with get_async_session() as session:
+                quotation = await QuotationService.create_quotation(
+                    dto, session=session
+                )
+                await session.commit()
+
+            self.show_quot_save_modal = False
+            yield rx.toast(
+                f"Presupuesto #{quotation.id} guardado. El carrito sigue activo.",
+                duration=3500,
+            )
+        except Exception as exc:
+            logger.exception("Error guardando presupuesto desde POS: %s", exc)
+            yield rx.toast(f"Error: {exc}", duration=4000)
+        finally:
+            self.is_loading = False
+
+    # ─── POS: drawer de búsqueda/carga de presupuestos ───────────────
+
+    @rx.event
+    def open_pos_quot_drawer(self):
+        self.show_pos_quot_drawer = True
+        self.pos_quot_search = ""
+        self.pos_quot_results = []
+
+    @rx.event
+    def close_pos_quot_drawer(self):
+        self.show_pos_quot_drawer = False
+        self.pos_quot_search = ""
+        self.pos_quot_results = []
+
+    @rx.event
+    async def search_pos_quotations(self, query: str):
+        self.pos_quot_search = query
+        self.pos_quot_loading = True
+        try:
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            if not company_id:
+                return
+
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(company_id, branch_id)
+            now = utc_now_naive()
+
+            with rx.session() as session:
+                stmt = (
+                    select(Quotation)
+                    .where(Quotation.company_id == company_id)
+                    .where(Quotation.branch_id == branch_id)
+                    .where(
+                        Quotation.status.in_([
+                            QuotationStatus.DRAFT,
+                            QuotationStatus.SENT,
+                            QuotationStatus.ACCEPTED,
+                        ])
+                    )
+                )
+                stripped = query.strip()
+                if stripped:
+                    try:
+                        q_id = int(stripped)
+                        stmt = stmt.where(Quotation.id == q_id)
+                    except ValueError:
+                        stmt = stmt.where(
+                            func.lower(Quotation.notes).contains(stripped.lower())
+                        )
+                stmt = stmt.order_by(Quotation.created_at.desc()).limit(20)
+                rows = session.exec(stmt).all()
+
+            results = []
+            for q in rows:
+                is_expired = q.expires_at is not None and q.expires_at < now
+                status = QuotationStatus.EXPIRED if is_expired else q.status
+                results.append({
+                    "id": q.id,
+                    "created_at": self._format_company_datetime(
+                        q.created_at, "%d/%m/%Y"
+                    ),
+                    "expires_at": self._format_company_datetime(
+                        q.expires_at, "%d/%m/%Y"
+                    ),
+                    "status": status,
+                    "status_label": _STATUS_LABEL.get(status, status),
+                    "status_color": _STATUS_COLOR.get(
+                        status, "text-slate-600 bg-slate-100"
+                    ),
+                    "total_amount": self._format_currency(
+                        float(q.total_amount or 0)
+                    ),
+                    "is_expired": is_expired,
+                    "notes_preview": (q.notes or "")[:60],
+                })
+            self.pos_quot_results = results
+        finally:
+            self.pos_quot_loading = False

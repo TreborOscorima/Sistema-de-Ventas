@@ -67,12 +67,20 @@ class ClientesState(MixinState):
         "email": "",
         "credit_limit": "0.00",
         "current_debt": "0.00",
-        # "" = sin lista asignada (usa precios base + tiers)
         "price_list_id": "",
+        "segment": "",
     }
     # Listas de precios disponibles para el selector del modal.
-    # Se cargan junto con los clientes (mismo tenant).
     available_price_lists: list[dict] = []
+
+    # ── Historial de ventas por cliente ──────────────────────────
+    show_historial: bool = False
+    historial_client: dict = {}
+    client_sales: list[dict] = []
+    historial_sale_count: int = 0
+    historial_total_spent: str = "0.00"
+
+    _VALID_SEGMENTS: list[str] = ["nuevo", "regular", "vip", "mayorista"]
 
     def _empty_client_form(self) -> dict:
         return {
@@ -85,6 +93,7 @@ class ClientesState(MixinState):
             "credit_limit": "0.00",
             "current_debt": "0.00",
             "price_list_id": "",
+            "segment": "",
         }
 
     def _parse_decimal(self, value: str | float | Decimal) -> Decimal:
@@ -121,6 +130,11 @@ class ClientesState(MixinState):
                 dni = getattr(client, "dni", "")
                 phone = getattr(client, "phone", "")
                 address = getattr(client, "address", "")
+            segment = (
+                client.get("segment", "") or ""
+                if isinstance(client, dict)
+                else (getattr(client, "segment", "") or "")
+            )
             credit_limit = self._parse_decimal(credit_limit_raw)
             current_debt = self._parse_decimal(current_debt_raw)
             available = credit_limit - current_debt
@@ -136,6 +150,7 @@ class ClientesState(MixinState):
                     "credit_limit": credit_limit,
                     "current_debt": current_debt,
                     "credit_available": available,
+                    "segment": segment,
                 }
             )
         return rows
@@ -178,6 +193,7 @@ class ClientesState(MixinState):
                     "credit_limit": client.credit_limit,
                     "current_debt": client.current_debt,
                     "price_list_id": client.price_list_id or 0,
+                    "segment": client.segment or "",
                 }
                 for client in results
             ]
@@ -225,6 +241,7 @@ class ClientesState(MixinState):
                 "credit_limit": str(client.get("credit_limit", "0.00")),
                 "current_debt": str(client.get("current_debt", "0.00")),
                 "price_list_id": str(pl_id) if pl_id else "",
+                "segment": client.get("segment", "") or "",
             }
         else:
             self.current_client = self._empty_client_form()
@@ -267,6 +284,8 @@ class ClientesState(MixinState):
         phone = sanitize_phone((self.current_client.get("phone") or ""))
         address = sanitize_text((self.current_client.get("address") or ""))
         email = sanitize_text((self.current_client.get("email") or ""), max_length=255).strip() or None
+        raw_segment = (self.current_client.get("segment") or "").strip().lower()
+        segment: str | None = raw_segment if raw_segment in self._VALID_SEGMENTS else None
         credit_limit = self._parse_decimal(
             self.current_client.get("credit_limit", "0.00")
         )
@@ -342,6 +361,7 @@ class ClientesState(MixinState):
                     client.credit_limit = credit_limit
                     client.current_debt = current_debt
                     client.price_list_id = resolved_price_list_id
+                    client.segment = segment
                     session.add(client)
                     session.commit()
                     session.refresh(client)
@@ -356,6 +376,7 @@ class ClientesState(MixinState):
                         credit_limit=credit_limit,
                         current_debt=current_debt,
                         price_list_id=resolved_price_list_id,
+                        segment=segment,
                         company_id=company_id,
                         branch_id=branch_id,
                     )
@@ -447,3 +468,54 @@ class ClientesState(MixinState):
 
         self.load_clients()
         return self.add_notification("Cliente eliminado.", "success")
+
+    # ── Historial de ventas por cliente ──────────────────────────────────────
+
+    @rx.event
+    def open_historial(self, client: dict):
+        self.historial_client = client
+        self.client_sales = []
+        self.historial_sale_count = 0
+        self.historial_total_spent = "0.00"
+        self.show_historial = True
+        self._load_client_sales_inner(client.get("id"))
+
+    def _load_client_sales_inner(self, client_id: int | None):
+        if not client_id:
+            return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return
+        from app.enums import SaleStatus
+        with rx.session() as session:
+            rows = session.exec(
+                select(Sale)
+                .where(Sale.client_id == client_id)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+                .order_by(Sale.timestamp.desc())
+            ).all()
+        total = Decimal("0.00")
+        sales_list = []
+        for s in rows:
+            is_completed = s.status == SaleStatus.completed
+            if is_completed:
+                total += s.total_amount
+            sales_list.append({
+                "id": s.id,
+                "fecha": s.timestamp.strftime("%d/%m/%Y %H:%M") if s.timestamp else "-",
+                "condicion": "Crédito" if s.payment_condition == "credito" else "Contado",
+                "total": str(s.total_amount),
+                "estado": "Completada" if is_completed else "Anulada",
+                "anulada": not is_completed,
+            })
+        self.client_sales = sales_list
+        self.historial_sale_count = len(sales_list)
+        self.historial_total_spent = f"{total:.2f}"
+
+    @rx.event
+    def close_historial(self):
+        self.show_historial = False
+        self.historial_client = {}
+        self.client_sales = []

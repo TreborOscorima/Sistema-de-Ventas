@@ -330,6 +330,7 @@ class _Messages:
     SALE_VAL_MIXED_AMOUNTS = "Complete los montos del pago mixto."
     SALE_VAL_CLIENT_REQUIRED = "Cliente requerido para venta a credito."
     SALE_VAL_CLIENT_NOT_FOUND = "Cliente no encontrado."
+    SALE_VAL_NO_CREDIT_LINE = "El cliente no tiene línea de crédito habilitada. Asigne un límite mayor a S/0 en Clientes."
     SALE_VAL_CREDIT_LIMIT = "Limite de credito excedido."
     SALE_VAL_INVALID_INSTALLMENTS = "Cantidad de cuotas invalida."
 

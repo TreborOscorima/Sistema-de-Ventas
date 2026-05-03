@@ -13,6 +13,23 @@ def _config_card() -> rx.Component:
             class_name="text-sm font-semibold text-slate-700 mb-4",
         ),
 
+        # Formato de página
+        rx.el.div(
+            rx.el.label(
+                "Formato de impresión",
+                class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1",
+            ),
+            rx.el.select(
+                rx.el.option("A4 — Impresora normal (stickers troquelados)", value="a4"),
+                rx.el.option("Rollo térmico 58 mm (cajera / portable)", value="thermal_58"),
+                rx.el.option("Rollo térmico 80 mm (Zebra / industrial)", value="thermal_80"),
+                value=State.label_page_format,
+                on_change=State.set_label_page_format,
+                class_name="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white",
+            ),
+            class_name="flex flex-col gap-1",
+        ),
+
         # Tamaño de etiqueta
         rx.el.div(
             rx.el.label(
@@ -65,6 +82,25 @@ def _config_card() -> rx.Component:
                 class_name="flex flex-col gap-1",
             ),
             rx.fragment(),
+        ),
+
+        # Filtro por categoría
+        rx.el.div(
+            rx.el.label(
+                "Categoría",
+                class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1",
+            ),
+            rx.el.select(
+                rx.el.option("Todas las categorías", value=""),
+                rx.foreach(
+                    State.label_available_categories,
+                    lambda cat: rx.el.option(cat, value=cat),
+                ),
+                value=State.label_category,
+                on_change=State.set_label_category,
+                class_name="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white",
+            ),
+            class_name="flex flex-col gap-1",
         ),
 
         # Copias por etiqueta
@@ -266,4 +302,5 @@ def etiquetas_page() -> rx.Component:
         ),
 
         class_name="flex flex-col gap-6",
+        on_mount=State.load_label_categories,
     )

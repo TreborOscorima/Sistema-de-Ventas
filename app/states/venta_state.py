@@ -100,6 +100,12 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     fiscal_ar_cbte_letra: str = ""  # "A", "B", "C" — auto-determinado
 
     @rx.var(cache=True)
+    def active_price_list_name(self) -> str:
+        if not self.selected_client:
+            return ""
+        return self.selected_client.get("price_list_name", "") or ""
+
+    @rx.var(cache=True)
     def selected_client_credit_available(self) -> float:
         if not self.selected_client:
             return 0.0
@@ -149,6 +155,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         if not company_id or not branch_id:
             self.client_suggestions = []
             return
+        from app.models.price_lists import PriceList
         with rx.session() as session:
             clients = session.exec(
                 select(Client)
@@ -162,12 +169,20 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 .where(Client.branch_id == branch_id)
                 .limit(CLIENT_SUGGESTIONS_LIMIT)
             ).all()
+            pl_ids = list({c.price_list_id for c in clients if c.price_list_id})
+            pl_name_map: dict[int, str] = {}
+            if pl_ids:
+                pl_rows = session.exec(
+                    select(PriceList).where(PriceList.id.in_(pl_ids))
+                ).all()
+                pl_name_map = {pl.id: pl.name for pl in pl_rows}
         self.client_suggestions = [
             {
                 "id": client.id,
                 "name": client.name,
                 "dni": client.dni,
                 "price_list_id": client.price_list_id or 0,
+                "price_list_name": pl_name_map.get(client.price_list_id, "") if client.price_list_id else "",
                 "balance": self._round_currency(
                     float(max(client.credit_limit - client.current_debt, 0))
                 ),
@@ -665,6 +680,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 except Exception:
                     pass  # non-critical: la venta ya fue registrada
                 self._pending_quotation_id = 0
+                if hasattr(self, "loaded_quotation_id"):
+                    self.loaded_quotation_id = 0
 
             receipt_type = self._determine_receipt_type(result.sale)
             buyer_doc_type, buyer_doc_number, buyer_name = (

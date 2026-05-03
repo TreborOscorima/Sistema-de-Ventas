@@ -21,6 +21,7 @@ from app.services.report_service import (
     generate_receivables_report,
     generate_cashbox_report,
     generate_promotions_report,
+    generate_price_lists_report,
 )
 from app.utils.tenant import set_tenant_context
 from .mixin_state import MixinState
@@ -72,6 +73,7 @@ class ReportState(MixinState):
             {"value": "cuentas", "label": "Cuentas por Cobrar", "icon": "credit-card"},
             {"value": "caja", "label": "Gestión de Caja", "icon": "banknote"},
             {"value": "promociones", "label": "Rendimiento de Promociones", "icon": "ticket"},
+            {"value": "listas_precios", "label": "Rendimiento por Lista de Precios", "icon": "tag"},
         ]
 
     @rx.var(cache=True)
@@ -339,6 +341,24 @@ class ReportState(MixinState):
                                 self.report_error = "Reporte de promociones demasiado grande."
                                 return
 
+                        elif self.report_type == "listas_precios":
+                            count_query = (
+                                select(func.count(SaleItem.id))
+                                .join(Sale, Sale.id == SaleItem.sale_id)
+                                .where(Sale.timestamp >= start_date)
+                                .where(Sale.timestamp <= end_date)
+                                .where(Sale.status != SaleStatus.cancelled)
+                                .where(SaleItem.company_id == company_id)
+                                .where(SaleItem.branch_id == branch_id)
+                            )
+                            total_pl_items = session.exec(count_query).one()
+                            if isinstance(total_pl_items, tuple):
+                                total_pl_items = total_pl_items[0]
+                            if int(total_pl_items or 0) > MAX_REPORT_ROWS:
+                                self.report_loading = False
+                                self.report_error = "Reporte de listas de precios demasiado grande."
+                                return
+
                     if self.report_type == "ventas":
                         output = generate_sales_report(
                             session,
@@ -426,6 +446,25 @@ class ReportState(MixinState):
                         )
                         filename = (
                             "Reporte_Promociones_"
+                            f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
+                            f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
+                        )
+
+                    elif self.report_type == "listas_precios":
+                        output = generate_price_lists_report(
+                            session,
+                            start_date,
+                            end_date,
+                            company_name=self.company_name,
+                            currency_symbol=self.currency_symbol,
+                            company_id=company_id,
+                            branch_id=branch_id,
+                            country_code=country_code,
+                            timezone=timezone,
+                            generated_at=self._display_now(),
+                        )
+                        filename = (
+                            "Reporte_ListasPrecios_"
                             f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
                             f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
                         )

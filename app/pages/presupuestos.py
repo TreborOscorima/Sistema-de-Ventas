@@ -48,6 +48,10 @@ def _quotation_row(q: rx.Var) -> rx.Component:
             class_name="py-3 px-4",
         ),
         rx.el.td(
+            rx.el.span(q["client_name"], class_name="text-sm text-slate-600 truncate max-w-[140px] block"),
+            class_name="py-3 px-4",
+        ),
+        rx.el.td(
             rx.el.span(q["total_amount"], class_name="font-semibold text-slate-900 tabular-nums"),
             class_name="py-3 px-4 text-sm text-right",
         ),
@@ -94,6 +98,7 @@ def _quotation_card(q: rx.Var) -> rx.Component:
             rx.el.span(f"Vence: {q['expires_at']}", class_name="text-xs text-slate-400"),
             class_name="flex gap-3 mt-1",
         ),
+        rx.el.p(q["client_name"], class_name="text-xs text-slate-500 mt-0.5 truncate"),
         rx.el.div(
             rx.el.button(
                 rx.icon("eye", class_name="h-4 w-4"),
@@ -147,6 +152,7 @@ def _quotation_detail_modal() -> rx.Component:
                 rx.el.div(
                     rx.el.p(rx.el.span("Nro: ", class_name="text-slate-500"), rx.el.span(f"#{q['id']}", class_name="font-mono font-semibold"), class_name="text-sm"),
                     rx.el.p(rx.el.span("Estado: ", class_name="text-slate-500"), _status_badge(q["status_label"], q["status_color"]), class_name="text-sm flex items-center gap-1"),
+                    rx.el.p(rx.el.span("Cliente: ", class_name="text-slate-500"), rx.el.span(q["client_name"], class_name="text-sm font-medium"), class_name="text-sm"),
                     rx.el.p(rx.el.span("Creado: ", class_name="text-slate-500"), rx.el.span(q["created_at"], class_name="text-sm")),
                     rx.el.p(rx.el.span("Válido hasta: ", class_name="text-slate-500"), rx.el.span(q["expires_at"], class_name="text-sm font-medium text-amber-700")),
                     class_name="space-y-1",
@@ -242,6 +248,16 @@ def _quotation_detail_modal() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
+            rx.cond(
+                (q["status"] == QuotationStatus.DRAFT) | (q["status"] == QuotationStatus.SENT),
+                rx.el.button(
+                    rx.icon("pencil", class_name="h-4 w-4"),
+                    "Editar",
+                    on_click=State.open_quotation_edit(q["id"]),
+                    class_name="flex items-center gap-2 px-3 py-1.5 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium",
+                ),
+                rx.fragment(),
+            ),
             rx.el.button(
                 rx.icon("download", class_name="h-4 w-4"),
                 "Descargar PDF",
@@ -253,7 +269,7 @@ def _quotation_detail_modal() -> rx.Component:
                 on_click=State.close_quotation_detail,
                 class_name=f"{BUTTON_STYLES.get('secondary', 'px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50')}",
             ),
-            class_name="flex gap-3 justify-end",
+            class_name="flex gap-3 justify-end flex-wrap",
         ),
     )
 
@@ -280,14 +296,7 @@ def _new_quotation_modal() -> rx.Component:
                 class_name="py-2 px-3",
             ),
             rx.el.td(
-                rx.el.input(
-                    default_value=item["unit_price"],
-                    type="number",
-                    min="0",
-                    step="0.01",
-                    on_blur=lambda v: State.quot_update_item_price(idx, v),
-                    class_name=INPUT_STYLES.get("default", "border rounded px-2 py-1 w-24 text-sm text-right"),
-                ),
+                rx.el.span(item["unit_price"], class_name="tabular-nums text-sm text-right block w-24"),
                 class_name="py-2 px-3",
             ),
             rx.el.td(
@@ -320,7 +329,7 @@ def _new_quotation_modal() -> rx.Component:
     return modal_container(
         is_open=State.show_quotation_form,
         on_close=State.close_quotation_form,
-        title="Nuevo Presupuesto",
+        title=rx.cond(State.quot_edit_id > 0, "Editar Presupuesto", "Nuevo Presupuesto"),
         max_width="max-w-4xl",
         children=[
             # Datos del cliente y validez
@@ -452,7 +461,11 @@ def _new_quotation_modal() -> rx.Component:
         ],
         footer=rx.el.div(
             rx.el.button(
-                rx.cond(State.is_loading, "Guardando...", "Guardar Presupuesto"),
+                rx.cond(
+                    State.is_loading,
+                    "Guardando...",
+                    rx.cond(State.quot_edit_id > 0, "Actualizar Presupuesto", "Guardar Presupuesto"),
+                ),
                 on_click=State.save_quotation,
                 disabled=State.is_loading,
                 class_name=f"flex items-center gap-2 {BUTTON_STYLES.get('primary', 'px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700')}",
@@ -507,6 +520,7 @@ def presupuestos_page() -> rx.Component:
                             rx.el.th("Creado", class_name=TABLE_STYLES["header_cell"]),
                             rx.el.th("Vence", class_name=TABLE_STYLES["header_cell"]),
                             rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
+                            rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
                             rx.el.th("Total", class_name=TABLE_STYLES["header_cell"] + " text-right"),
                             rx.el.th("Acciones", class_name=TABLE_STYLES["header_cell"] + " text-right"),
                             class_name=TABLE_STYLES["header"],

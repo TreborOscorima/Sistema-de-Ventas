@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 LabelSize = Literal["small", "medium", "large"]
 LabelFilter = Literal["all", "price_changed", "no_barcode"]
+LabelPageFormat = Literal["a4", "thermal_58", "thermal_80"]
 
 _LABEL_DIMS: dict[str, tuple[float, float]] = {
     # (ancho_mm, alto_mm)
@@ -44,6 +45,8 @@ _LABEL_DIMS: dict[str, tuple[float, float]] = {
     "large": (100.0, 60.0),
 }
 _LABELS_PER_ROW = {"small": 4, "medium": 3, "large": 2}
+# Área imprimible de rollo térmico (papel - márgenes mínimos)
+_THERMAL_PRINTABLE_W: dict[str, float] = {"thermal_58": 48.0, "thermal_80": 72.0}
 _GENERIC_BARCODES = {"0000000000000", "0", "", "N/A", "n/a"}
 
 
@@ -56,6 +59,8 @@ class LabelConfig:
     copies: int = 1  # copias por producto
     company_name: str = ""
     currency_symbol: str = "S/ "
+    category: str | None = None          # None = todas las categorías
+    page_format: LabelPageFormat = "a4"  # a4 | thermal_58 | thermal_80
 
 
 class LabelService:
@@ -106,6 +111,9 @@ class LabelService:
                 )
             )
 
+        if config.category:
+            stmt = stmt.where(Product.category == config.category)
+
         stmt = stmt.order_by(Product.category, Product.description)
         rows = (await session.execute(stmt)).scalars().all()
 
@@ -126,17 +134,18 @@ class LabelService:
     # ── Generar PDF de etiquetas ────────────────────────────────────────
 
     @staticmethod
-    def generate_pdf(
-        products: list[dict],
-        config: LabelConfig,
-    ) -> bytes:
+    def generate_pdf(products: list[dict], config: LabelConfig) -> bytes:
         """Genera PDF con etiquetas de código de barras para imprimir."""
+        if config.page_format == "a4":
+            return LabelService._generate_pdf_a4(products, config)
+        return LabelService._generate_pdf_thermal(products, config)
+
+    @staticmethod
+    def _generate_pdf_a4(products: list[dict], config: LabelConfig) -> bytes:
         try:
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.units import mm
             from reportlab.pdfgen import canvas as rl_canvas
-            from reportlab.graphics.barcode import code128
-            from reportlab.lib import colors
         except ImportError:
             logger.error("reportlab no está instalado.")
             raise
@@ -155,11 +164,9 @@ class LabelService:
 
         c = rl_canvas.Canvas(buffer, pagesize=A4)
 
-        # Expandir por copies
-        all_labels: list[dict] = []
-        for product in products:
-            for _ in range(max(1, config.copies)):
-                all_labels.append(product)
+        all_labels: list[dict] = [
+            p for p in products for _ in range(max(1, config.copies))
+        ]
 
         if not all_labels:
             c.setFont("Helvetica", 12)
@@ -172,7 +179,7 @@ class LabelService:
         row = 0
         max_rows_per_page = int((page_h - 2 * margin) / (label_h + gap_v))
 
-        for idx, product in enumerate(all_labels):
+        for product in all_labels:
             if col == labels_per_row:
                 col = 0
                 row += 1
@@ -187,6 +194,47 @@ class LabelService:
 
             _draw_label(c, x, y, label_w, label_h, product, config)
             col += 1
+
+        c.save()
+        buffer.seek(0)
+        return buffer.read()
+
+    @staticmethod
+    def _generate_pdf_thermal(products: list[dict], config: LabelConfig) -> bytes:
+        """Genera PDF para impresora térmica de rollo (58mm o 80mm).
+
+        Cada etiqueta ocupa una página del PDF con las dimensiones exactas del
+        rollo. El driver de la impresora térmica avanza/corta entre páginas.
+        """
+        try:
+            from reportlab.lib.units import mm
+            from reportlab.pdfgen import canvas as rl_canvas
+        except ImportError:
+            logger.error("reportlab no está instalado.")
+            raise
+
+        roll_w = _THERMAL_PRINTABLE_W[config.page_format] * mm
+        _, label_h_mm = _LABEL_DIMS[config.size]
+        label_h = label_h_mm * mm
+
+        buffer = io.BytesIO()
+        c = rl_canvas.Canvas(buffer, pagesize=(roll_w, label_h))
+
+        all_labels: list[dict] = [
+            p for p in products for _ in range(max(1, config.copies))
+        ]
+
+        if not all_labels:
+            c.setFont("Helvetica", 7)
+            c.drawCentredString(roll_w / 2, label_h / 2, "Sin productos.")
+            c.save()
+            buffer.seek(0)
+            return buffer.read()
+
+        for i, product in enumerate(all_labels):
+            _draw_label(c, 0, 0, roll_w, label_h, product, config)
+            if i < len(all_labels) - 1:
+                c.showPage()
 
         c.save()
         buffer.seek(0)

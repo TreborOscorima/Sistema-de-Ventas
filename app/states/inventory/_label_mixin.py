@@ -6,7 +6,7 @@ from typing import Any
 
 import reflex as rx
 
-from app.services.label_service import LabelConfig, LabelFilter, LabelSize, LabelService
+from app.services.label_service import LabelConfig, LabelService
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,13 @@ class LabelMixin:
     label_copies: int = 1
     label_show_purchase_price: bool = False
 
+    # ── Formato de página ─────────────────────────────────────────────
+    label_page_format: str = "a4"        # a4 | thermal_58 | thermal_80
+
+    # ── Filtro por categoría ──────────────────────────────────────────
+    label_category: str = ""
+    label_available_categories: list[str] = []
+
     # ── Preview de productos a etiquetar ─────────────────────────────
     label_preview_products: list[dict[str, Any]] = []
     label_preview_count: int = 0
@@ -39,6 +46,8 @@ class LabelMixin:
         self.label_price_changed_days = 7
         self.label_copies = 1
         self.label_show_purchase_price = False
+        self.label_page_format = "a4"
+        self.label_category = ""
         self.label_preview_products = []
         self.label_preview_count = 0
         self.label_preview_loaded = False
@@ -77,6 +86,49 @@ class LabelMixin:
     def set_label_show_purchase_price(self, v: bool):
         self.label_show_purchase_price = v
 
+    @rx.event
+    def set_label_page_format(self, v: str):
+        self.label_page_format = v
+
+    @rx.event
+    def set_label_category(self, v: str):
+        self.label_category = v
+        self.label_preview_loaded = False
+        self.label_preview_products = []
+
+    # ─── Cargar categorías disponibles ───────────────────────────────
+
+    @rx.event
+    async def load_label_categories(self):
+        """Carga las categorías distintas de productos activos del tenant."""
+        from sqlmodel import select as sql_select
+        from app.models import Product
+        from app.utils.db import get_async_session
+        from app.utils.tenant import set_tenant_context
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id:
+            return
+        try:
+            set_tenant_context(company_id, branch_id)
+            async with get_async_session() as s:
+                stmt = (
+                    sql_select(Product.category)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(Product.is_active == True)
+                    .where(Product.category != None)
+                    .distinct()
+                    .order_by(Product.category)
+                )
+                rows = (await s.execute(stmt)).scalars().all()
+                self.label_available_categories = [r for r in rows if r]
+        except Exception as exc:
+            logger.exception("Error cargando categorías de etiquetas: %s", exc)
+        finally:
+            set_tenant_context(None, None)
+
     # ─── Preview ─────────────────────────────────────────────────────
 
     @rx.event
@@ -97,6 +149,8 @@ class LabelMixin:
                 copies=1,
                 show_purchase_price=self.label_show_purchase_price,
                 currency_symbol=self.currency_symbol,
+                category=self.label_category or None,
+                page_format=self.label_page_format,
             )
             products = await LabelService.get_products_for_labels(
                 config, company_id, branch_id
@@ -131,6 +185,8 @@ class LabelMixin:
                 show_purchase_price=self.label_show_purchase_price,
                 company_name=settings.get("company_name", ""),
                 currency_symbol=self.currency_symbol,
+                category=self.label_category or None,
+                page_format=self.label_page_format,
             )
 
             products = await LabelService.get_products_for_labels(
@@ -147,7 +203,8 @@ class LabelMixin:
                 "no_barcode": "sin-barcode",
             }.get(self.label_filter, self.label_filter)
 
-            filename = f"etiquetas_{filter_suffix}_{self.label_size}.pdf"
+            cat_suffix = f"_{self.label_category}" if self.label_category else ""
+            filename = f"etiquetas_{filter_suffix}{cat_suffix}_{self.label_size}_{self.label_page_format}.pdf"
             yield rx.download(data=pdf_bytes, filename=filename)
         except Exception as exc:
             logger.exception("Error generando PDF de etiquetas: %s", exc)

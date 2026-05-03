@@ -2052,6 +2052,8 @@ class SaleService:
             credit_base = _round_money(sale_total - initial_payment)
             if credit_base < Decimal("0.00"):
                 credit_base = Decimal("0.00")
+            if _round_money(client.credit_limit) <= Decimal("0.00"):
+                raise ValueError(MSG.SALE_VAL_NO_CREDIT_LINE)
             if _round_money(client.current_debt) + credit_base > _round_money(
                 client.credit_limit
             ):

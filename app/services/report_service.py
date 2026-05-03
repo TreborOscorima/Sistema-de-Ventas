@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User
 from app.models import Promotion
+from app.models import PriceList
 from app.enums import SaleStatus, PaymentMethodType
 from app.i18n import MSG
 from app.utils.tenant import set_tenant_context, tenant_bypass
@@ -3155,6 +3156,203 @@ def generate_promotions_report(
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "sum", "col_letter": "H", "number_format": currency_format},
+        ])
+
+    _auto_adjust_columns(ws_detail)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
+
+
+def generate_price_lists_report(
+    session,
+    start_date: datetime,
+    end_date: datetime,
+    company_name: str = "TUWAYKIAPP",
+    currency_symbol: str | None = None,
+    company_id: int | None = None,
+    branch_id: int | None = None,
+    country_code: str | None = None,
+    timezone: str | None = None,
+    generated_at: datetime | None = None,
+) -> io.BytesIO:
+    """Genera el reporte de rendimiento por lista de precios del período.
+
+    Para cada lista de precios que motivó al menos una línea de venta en el período,
+    agrega: ventas distintas, unidades, ingresos (precio final) y descuento otorgado
+    (diferencia precio base - precio final cuando la lista aplicó rebaja).
+    Los ítems sin lista asignada se agrupan bajo "Precio base / Sin lista".
+    Las ventas anuladas se excluyen.
+    """
+    set_tenant_context(company_id, branch_id)
+    wb = Workbook()
+    currency_label = _currency_label(currency_symbol)
+    currency_format = _currency_format(currency_symbol)
+    header_kwargs = {
+        "generated_at": generated_at,
+        "country_code": country_code,
+        "timezone": timezone,
+    }
+
+    period_str = (
+        f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
+        f"{_format_report_datetime(end_date, '%d/%m/%Y', country_code, timezone)}"
+    )
+
+    # Carga: todos los SaleItems en ventas completadas del período
+    items_query = (
+        select(SaleItem, Sale)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(Sale.timestamp >= start_date)
+        .where(Sale.timestamp <= end_date)
+        .where(Sale.status != SaleStatus.cancelled)
+    )
+    if company_id:
+        items_query = items_query.where(Sale.company_id == company_id)
+    if branch_id:
+        items_query = items_query.where(Sale.branch_id == branch_id)
+
+    rows = session.exec(items_query).all()
+
+    # Mapeo de IDs de listas a sus nombres (una sola consulta)
+    pl_ids = {item.applied_price_list_id for item, _ in rows if item.applied_price_list_id}
+    pl_name_map: dict[int, str] = {}
+    if pl_ids:
+        pl_rows = session.exec(
+            select(PriceList).where(PriceList.id.in_(list(pl_ids)))
+        ).all()
+        pl_name_map = {pl.id: pl.name for pl in pl_rows}
+
+    # Agregación en memoria por applied_price_list_id (None → "Precio base / Sin lista")
+    NO_LIST_KEY = 0
+    NO_LIST_NAME = "Precio base / Sin lista"
+    aggregates: dict[int, dict] = {}
+
+    for item, sale in rows:
+        key = item.applied_price_list_id or NO_LIST_KEY
+        bucket = aggregates.setdefault(key, {
+            "name": pl_name_map.get(key, NO_LIST_NAME) if key != NO_LIST_KEY else NO_LIST_NAME,
+            "sale_ids": set(),
+            "units": Decimal("0"),
+            "revenue": Decimal("0"),
+            "discount_total": Decimal("0"),
+        })
+        bucket["sale_ids"].add(sale.id)
+        qty = Decimal(str(item.quantity or 0))
+        unit_final = Decimal(str(item.unit_price or 0))
+        unit_base = Decimal(str(getattr(item, "unit_price_base", None) or item.unit_price or 0))
+        bucket["units"] += qty
+        bucket["revenue"] += unit_final * qty
+        line_disc = (unit_base - unit_final) * qty
+        if line_disc > 0:
+            bucket["discount_total"] += line_disc
+
+    # HOJA 1: Resumen ejecutivo
+    ws_summary = wb.active
+    ws_summary.title = "Resumen"
+    row = _add_company_header(
+        ws_summary,
+        company_name,
+        "RENDIMIENTO POR LISTA DE PRECIOS",
+        period_str,
+        columns=4,
+        **header_kwargs,
+    )
+
+    total_lists = len(aggregates)
+    total_units = sum((b["units"] for b in aggregates.values()), Decimal("0"))
+    total_revenue = sum((b["revenue"] for b in aggregates.values()), Decimal("0"))
+    total_discount = sum((b["discount_total"] for b in aggregates.values()), Decimal("0"))
+    total_sales = len({sid for b in aggregates.values() for sid in b["sale_ids"]})
+
+    row += 1
+    ws_summary.cell(row=row, column=1, value="INDICADORES").font = SUBTITLE_FONT
+    row += 1
+    indicators = [
+        ("Listas de precios aplicadas:", total_lists),
+        ("Ventas totales en el período:", total_sales),
+        ("Unidades vendidas:", f"{total_units:,.2f}"),
+        ("Ingresos totales:", _format_currency(total_revenue, currency_symbol)),
+        ("Descuento otorgado:", _format_currency(total_discount, currency_symbol)),
+    ]
+    for label, value in indicators:
+        ws_summary.cell(row=row, column=1, value=label).font = Font(bold=True)
+        ws_summary.cell(row=row, column=2, value=value)
+        row += 1
+
+    if total_lists == 0:
+        row += 1
+        ws_summary.cell(
+            row=row,
+            column=1,
+            value="No hay ventas en el período seleccionado.",
+        ).font = Font(italic=True, color="6B7280")
+
+    _auto_adjust_columns(ws_summary)
+
+    # HOJA 2: Por lista de precios
+    ws_detail = wb.create_sheet("Por Lista de Precios")
+    row = _add_company_header(
+        ws_detail,
+        company_name,
+        "DETALLE POR LISTA DE PRECIOS",
+        period_str,
+        columns=7,
+        **header_kwargs,
+    )
+
+    headers = [
+        "Lista de Precios",
+        "Ventas",
+        "Unidades",
+        f"Ingresos ({currency_label})",
+        f"Descuento ({currency_label})",
+        f"Ingreso Prom. / Venta ({currency_label})",
+        "% Dscto. s/ Ingreso",
+    ]
+    _style_header_row(ws_detail, row, headers)
+    data_start = row + 1
+    row += 1
+
+    # Ordenado por ingresos descendente; "Sin lista" al final
+    sorted_lists = sorted(
+        aggregates.items(),
+        key=lambda kv: (kv[0] == NO_LIST_KEY, -float(kv[1]["revenue"])),
+    )
+
+    for key, b in sorted_lists:
+        sales_count = len(b["sale_ids"])
+        avg_ticket = (b["revenue"] / sales_count) if sales_count > 0 else Decimal("0")
+        base_plus_rev = b["revenue"] + b["discount_total"]
+        disc_pct = (b["discount_total"] / base_plus_rev) if base_plus_rev > 0 else Decimal("0")
+
+        ws_detail.cell(row=row, column=1, value=_safe_string(b["name"]))
+        ws_detail.cell(row=row, column=2, value=sales_count).number_format = NUMBER_FORMAT
+        ws_detail.cell(row=row, column=3, value=float(b["units"])).number_format = NUMBER_FORMAT
+        ws_detail.cell(row=row, column=4, value=float(b["revenue"])).number_format = currency_format
+        ws_detail.cell(row=row, column=5, value=float(b["discount_total"])).number_format = currency_format
+        ws_detail.cell(row=row, column=6, value=float(avg_ticket)).number_format = currency_format
+        pct_cell = ws_detail.cell(row=row, column=7, value=float(disc_pct))
+        pct_cell.number_format = PERCENT_FORMAT
+        if disc_pct > Decimal("0.10"):
+            pct_cell.fill = WARNING_FILL
+
+        for col in range(1, 8):
+            ws_detail.cell(row=row, column=col).border = THIN_BORDER
+        row += 1
+
+    if sorted_lists:
+        totals_row = row
+        _add_totals_row_with_formulas(ws_detail, totals_row, data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "sum", "col_letter": "B", "number_format": NUMBER_FORMAT},
+            {"type": "sum", "col_letter": "C", "number_format": NUMBER_FORMAT},
+            {"type": "sum", "col_letter": "D", "number_format": currency_format},
+            {"type": "sum", "col_letter": "E", "number_format": currency_format},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
         ])
 
     _auto_adjust_columns(ws_detail)

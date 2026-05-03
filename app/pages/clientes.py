@@ -13,11 +13,62 @@ from app.components.ui import (
   permission_guard,
 )
 
+# ── Helpers de segmento ──────────────────────────────────────────────────────
+
+_SEGMENT_LABELS: dict[str, str] = {
+  "nuevo": "Nuevo",
+  "regular": "Regular",
+  "vip": "VIP",
+  "mayorista": "Mayorista",
+}
+
+_SEGMENT_CLASSES: dict[str, str] = {
+  "nuevo":     "bg-blue-100 text-blue-700",
+  "regular":   "bg-slate-100 text-slate-600",
+  "vip":       "bg-amber-100 text-amber-700",
+  "mayorista": "bg-purple-100 text-purple-700",
+}
+
+
+def _segment_badge(segment: rx.Var[str]) -> rx.Component:
+  """Badge de color según segmento; oculto si está vacío."""
+  def _badge(seg: str, label: str, cls: str) -> rx.Component:
+    return rx.cond(
+      segment == seg,
+      rx.el.span(label, class_name=f"text-xs font-medium px-2 py-0.5 rounded-full {cls}"),
+      rx.fragment(),
+    )
+
+  return rx.cond(
+    (segment == None) | (segment == ""),
+    rx.fragment(),
+    rx.el.span(
+      rx.cond(segment == "nuevo",     "Nuevo",     rx.cond(
+      segment == "regular",  "Regular",   rx.cond(
+      segment == "vip",      "VIP",        rx.cond(
+      segment == "mayorista","Mayorista",  segment)))),
+      class_name=rx.cond(
+        segment == "nuevo",     "text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700",
+        rx.cond(segment == "regular",  "text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600",
+        rx.cond(segment == "vip",      "text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700",
+        rx.cond(segment == "mayorista","text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700",
+                                       "text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500")))),
+    ),
+  )
+
+
+# ── Tabla desktop ────────────────────────────────────────────────────────────
 
 def client_row(client: rx.Var[dict]) -> rx.Component:
-  """Fila de cliente para la tabla de listado."""
   return rx.el.tr(
-    rx.el.td(client["name"], class_name="py-3 px-4 font-medium text-slate-900"),
+    rx.el.td(
+      rx.el.div(
+        client["name"],
+        _segment_badge(client["segment"]),
+        class_name="flex items-center gap-2",
+      ),
+      class_name="py-3 px-4 font-medium text-slate-900",
+    ),
     rx.el.td(client["dni"], class_name="py-3 px-4"),
     rx.el.td(
       rx.cond(
@@ -43,6 +94,13 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
     rx.el.td(
       rx.el.div(
         rx.el.button(
+          rx.icon("history", class_name="h-4 w-4"),
+          on_click=lambda _, c=client: State.open_historial(c),
+          class_name=BUTTON_STYLES["icon_primary"],
+          title="Ver historial de ventas",
+          aria_label="Ver historial",
+        ),
+        rx.el.button(
           rx.icon("pencil", class_name="h-4 w-4"),
           on_click=lambda _, c=client: State.open_modal(c),
           class_name=BUTTON_STYLES["icon_primary"],
@@ -66,22 +124,18 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
   )
 
 
-# ════════════════════════════════════════════════════════════
-# CARD MÓVIL (vista responsiva para pantallas pequeñas)
-# ════════════════════════════════════════════════════════════
+# ── Card móvil ───────────────────────────────────────────────────────────────
 
 def _client_card(client: rx.Var) -> rx.Component:
-  """Card de cliente para vista móvil."""
   return rx.el.div(
-    # Header: Nombre
     rx.el.div(
-      rx.el.span(
-        client["name"],
-        class_name="font-medium text-slate-900 text-sm",
+      rx.el.div(
+        rx.el.span(client["name"], class_name="font-medium text-slate-900 text-sm"),
+        _segment_badge(client["segment"]),
+        class_name="flex items-center gap-2 flex-wrap",
       ),
       class_name="flex items-center justify-between gap-2",
     ),
-    # Body: Documento, Teléfono, Dirección
     rx.el.div(
       rx.el.div(
         rx.el.span(State.personal_id_label, class_name=TYPOGRAPHY["caption"]),
@@ -109,13 +163,19 @@ def _client_card(client: rx.Var) -> rx.Component:
       ),
       class_name="flex flex-col gap-1.5 mt-2",
     ),
-    # Footer: Crédito + Acciones
     rx.el.div(
       rx.el.span(
         State.currency_symbol, " ", client["credit_available"].to_string(),
         class_name="font-semibold tabular-nums text-emerald-700",
       ),
       rx.el.div(
+        rx.el.button(
+          rx.icon("history", class_name="h-4 w-4"),
+          on_click=lambda _, c=client: State.open_historial(c),
+          class_name=BUTTON_STYLES["icon_primary"],
+          title="Ver historial",
+          aria_label="Ver historial de ventas",
+        ),
         rx.el.button(
           rx.icon("pencil", class_name="h-4 w-4"),
           on_click=lambda _, c=client: State.open_modal(c),
@@ -140,8 +200,9 @@ def _client_card(client: rx.Var) -> rx.Component:
   )
 
 
+# ── Modal crear/editar cliente ───────────────────────────────────────────────
+
 def client_form_modal() -> rx.Component:
-  """Modal de creación/edición de cliente."""
   return modal_container(
     is_open=State.show_modal,
     on_close=State.close_modal,
@@ -150,7 +211,7 @@ def client_form_modal() -> rx.Component:
       "Nuevo Cliente",
       "Editar Cliente",
     ),
-    description="Completa los datos del cliente para ventas a credito.",
+    description="Completa los datos del cliente.",
     children=[
       rx.el.div(
         rx.el.div(
@@ -205,9 +266,21 @@ def client_form_modal() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label(
-            "Limite de credito", class_name=TYPOGRAPHY["label"]
+          rx.el.label("Segmento", class_name=TYPOGRAPHY["label"]),
+          rx.el.select(
+            rx.el.option("Sin segmento", value=""),
+            rx.el.option("Nuevo",     value="nuevo"),
+            rx.el.option("Regular",   value="regular"),
+            rx.el.option("VIP",       value="vip"),
+            rx.el.option("Mayorista", value="mayorista"),
+            value=State.current_client["segment"],
+            on_change=lambda v: State.update_current_client("segment", v),
+            class_name=INPUT_STYLES["default"],
           ),
+          class_name="flex flex-col gap-1",
+        ),
+        rx.el.div(
+          rx.el.label("Limite de credito", class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             type="number",
             step="0.01",
@@ -220,10 +293,7 @@ def client_form_modal() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label(
-            "Lista de precios",
-            class_name=TYPOGRAPHY["label"],
-          ),
+          rx.el.label("Lista de precios", class_name=TYPOGRAPHY["label"]),
           rx.el.select(
             rx.el.option("Sin lista (precio base + tiers)", value=""),
             rx.foreach(
@@ -263,13 +333,110 @@ def client_form_modal() -> rx.Component:
   )
 
 
+# ── Modal historial de ventas ────────────────────────────────────────────────
+
+def _sale_row(sale: rx.Var[dict]) -> rx.Component:
+  return rx.el.tr(
+    rx.el.td(sale["fecha"],    class_name="py-2 px-3 text-sm tabular-nums"),
+    rx.el.td(sale["condicion"], class_name="py-2 px-3 text-sm"),
+    rx.el.td(
+      rx.el.span(
+        State.currency_symbol, " ", sale["total"],
+        class_name=rx.cond(
+          sale["anulada"],
+          "tabular-nums text-slate-400 line-through",
+          "tabular-nums font-medium text-slate-800",
+        ),
+      ),
+      class_name="py-2 px-3 text-right",
+    ),
+    rx.el.td(
+      rx.el.span(
+        sale["estado"],
+        class_name=rx.cond(
+          sale["anulada"],
+          "text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-600",
+          "text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700",
+        ),
+      ),
+      class_name="py-2 px-3",
+    ),
+    class_name="border-b hover:bg-slate-50 transition-colors",
+  )
+
+
+def historial_modal() -> rx.Component:
+  return modal_container(
+    is_open=State.show_historial,
+    on_close=State.close_historial,
+    title=rx.el.span(
+      "Historial — ",
+      State.historial_client["name"],
+    ),
+    description="Ventas registradas para este cliente.",
+    children=[
+      # Resumen
+      rx.el.div(
+        rx.el.div(
+          rx.el.p(
+            State.historial_sale_count.to_string(),
+            class_name="text-2xl font-bold text-slate-800",
+          ),
+          rx.el.p("Ventas totales", class_name="text-xs text-slate-500 mt-0.5"),
+          class_name="flex flex-col items-center p-4 bg-slate-50 rounded-xl",
+        ),
+        rx.el.div(
+          rx.el.p(
+            State.currency_symbol, " ", State.historial_total_spent,
+            class_name="text-2xl font-bold text-emerald-700",
+          ),
+          rx.el.p("Total facturado", class_name="text-xs text-slate-500 mt-0.5"),
+          class_name="flex flex-col items-center p-4 bg-emerald-50 rounded-xl",
+        ),
+        class_name="grid grid-cols-2 gap-3 mb-4",
+      ),
+      # Tabla de ventas
+      rx.cond(
+        State.client_sales.length() == 0,
+        empty_state("Este cliente no tiene ventas registradas."),
+        rx.el.div(
+          rx.el.table(
+            rx.el.thead(
+              rx.el.tr(
+                rx.el.th("Fecha",     scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Condición", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Total",     scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+                rx.el.th("Estado",    scope="col", class_name=TABLE_STYLES["header_cell"]),
+                class_name=TABLE_STYLES["header"],
+              )
+            ),
+            rx.el.tbody(rx.foreach(State.client_sales, _sale_row)),
+            class_name="min-w-full text-sm",
+          ),
+          class_name="overflow-x-auto max-h-80 overflow-y-auto border border-slate-200 rounded-xl",
+        ),
+      ),
+    ],
+    footer=rx.el.div(
+      rx.el.button(
+        "Cerrar",
+        on_click=State.close_historial,
+        class_name=BUTTON_STYLES["secondary"],
+      ),
+      class_name="flex justify-end pt-2",
+    ),
+    max_width="max-w-2xl",
+  )
+
+
+# ── Página principal ─────────────────────────────────────────────────────────
+
 def clientes_page() -> rx.Component:
-  """Página principal de gestión de clientes."""
   content = rx.fragment(
     rx.el.div(
       page_header(
         "CLIENTES",
-        "Administra los clientes y su linea de credito.",
+        "Administra clientes para ventas, crédito y presupuestos.",
         actions=[
           rx.el.button(
             rx.icon("plus", class_name="h-4 w-4"),
@@ -296,17 +463,17 @@ def clientes_page() -> rx.Component:
         class_name=CARD_STYLES["default"],
       ),
       rx.el.div(
-        # Vista móvil: Cards (visible en < md)
+        # Vista móvil
         rx.el.div(
           rx.foreach(State.clients_view, _client_card),
           class_name="flex flex-col gap-3 md:hidden",
         ),
-        # Vista desktop: Tabla (oculta en < md)
+        # Vista desktop
         rx.el.div(
           rx.el.table(
             rx.el.thead(
               rx.el.tr(
-                rx.el.th("Nombre", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                rx.el.th("Nombre",  scope="col", class_name=TABLE_STYLES["header_cell"]),
                 rx.el.th(State.personal_id_label, scope="col", class_name=TABLE_STYLES["header_cell"]),
                 rx.el.th("Teléfono", scope="col", class_name=TABLE_STYLES["header_cell"]),
                 rx.el.th("Direccion", scope="col", class_name=TABLE_STYLES["header_cell"]),
@@ -336,6 +503,7 @@ def clientes_page() -> rx.Component:
       class_name="flex flex-col gap-6 p-4 sm:p-6 w-full",
     ),
     client_form_modal(),
+    historial_modal(),
     on_mount=State.load_clients,
   )
   return permission_guard(

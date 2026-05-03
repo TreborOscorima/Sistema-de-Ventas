@@ -63,6 +63,18 @@ class CreateQuotationDTO:
     idempotency_key: str | None = None
 
 
+@dataclass
+class UpdateQuotationDTO:
+    quotation_id: int
+    client_id: int | None
+    company_id: int
+    branch_id: int
+    items: list[QuotationItemDTO]
+    validity_days: int = 15
+    discount_percentage: float = 0.0
+    notes: str | None = None
+
+
 # ─── Servicio ────────────────────────────────────────────────────────────────
 
 class QuotationService:
@@ -158,6 +170,100 @@ class QuotationService:
             total += subtotal
 
         # Aplicar descuento global al total
+        global_discount_factor = (
+            (Decimal("100") - Decimal(str(dto.discount_percentage))) / Decimal("100")
+        )
+        quotation.total_amount = (total * global_discount_factor).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        await session.flush()
+        return quotation
+
+    # ── Actualizar presupuesto ───────────────────────────────────────────
+
+    @staticmethod
+    async def update_quotation(
+        dto: UpdateQuotationDTO,
+        session: AsyncSession | None = None,
+    ) -> Quotation:
+        set_tenant_context(dto.company_id, dto.branch_id)
+        try:
+            if session is None:
+                async with get_async_session() as s:
+                    result = await QuotationService._update_impl(s, dto)
+                    await s.commit()
+                    return result
+            return await QuotationService._update_impl(session, dto)
+        finally:
+            set_tenant_context(None, None)
+
+    @staticmethod
+    async def _update_impl(session: AsyncSession, dto: UpdateQuotationDTO) -> Quotation:
+        from sqlalchemy import delete as sa_delete
+
+        stmt = (
+            select(Quotation)
+            .where(Quotation.id == dto.quotation_id)
+            .where(Quotation.company_id == dto.company_id)
+            .where(Quotation.branch_id == dto.branch_id)
+        )
+        quotation = (await session.execute(stmt)).scalar_one_or_none()
+        if not quotation:
+            raise ValueError(f"Presupuesto #{dto.quotation_id} no encontrado.")
+        if quotation.status not in (QuotationStatus.DRAFT, QuotationStatus.SENT):
+            raise ValueError("Solo se pueden editar presupuestos en estado Borrador o Enviado.")
+
+        # Eliminar ítems anteriores
+        await session.execute(
+            sa_delete(QuotationItem).where(QuotationItem.quotation_id == dto.quotation_id)
+        )
+
+        # Actualizar cabecera
+        quotation.client_id = dto.client_id
+        quotation.validity_days = dto.validity_days
+        quotation.discount_percentage = Decimal(str(dto.discount_percentage))
+        quotation.notes = dto.notes
+        now = utc_now_naive()
+        quotation.expires_at = now + timedelta(days=dto.validity_days)
+
+        # Recrear ítems
+        total = Decimal("0.00")
+        for item_dto in dto.items:
+            product_name = ""
+            product_barcode = ""
+            product_category = ""
+            if item_dto.product_id:
+                product_stmt = select(Product).where(Product.id == item_dto.product_id)
+                product = (await session.execute(product_stmt)).scalar_one_or_none()
+                if product:
+                    product_name = product.description or ""
+                    product_barcode = product.barcode or ""
+                    product_category = product.category or ""
+
+            qty = Decimal(str(item_dto.quantity))
+            price = Decimal(str(item_dto.unit_price))
+            discount_pct = Decimal(str(item_dto.discount_percentage))
+            discount_factor = (Decimal("100") - discount_pct) / Decimal("100")
+            subtotal = (qty * price * discount_factor).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            qi = QuotationItem(
+                company_id=dto.company_id,
+                branch_id=dto.branch_id,
+                quotation_id=dto.quotation_id,
+                product_id=item_dto.product_id,
+                product_variant_id=item_dto.product_variant_id,
+                quantity=qty,
+                unit_price=price,
+                discount_percentage=discount_pct,
+                subtotal=subtotal,
+                product_name_snapshot=product_name,
+                product_barcode_snapshot=product_barcode,
+                product_category_snapshot=product_category,
+            )
+            session.add(qi)
+            total += subtotal
+
         global_discount_factor = (
             (Decimal("100") - Decimal(str(dto.discount_percentage))) / Decimal("100")
         )
