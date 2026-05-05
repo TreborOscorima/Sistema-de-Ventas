@@ -32,6 +32,7 @@ class SaleItemDTO(BaseSchema):
     batch_id: int | None = None
     kit_product_id: int | None = None
     kit_name: str = ""
+    applied_promotion_id: int | None = None
 
 
 class PaymentBreakdownItemDTO(BaseSchema):

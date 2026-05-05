@@ -210,8 +210,10 @@ class QuotationService:
         quotation = (await session.execute(stmt)).scalar_one_or_none()
         if not quotation:
             raise ValueError(f"Presupuesto #{dto.quotation_id} no encontrado.")
-        if quotation.status not in (QuotationStatus.DRAFT, QuotationStatus.SENT):
-            raise ValueError("Solo se pueden editar presupuestos en estado Borrador o Enviado.")
+        if quotation.status not in (QuotationStatus.DRAFT, QuotationStatus.SENT, QuotationStatus.ACCEPTED):
+            raise ValueError("Solo se pueden editar presupuestos en estado Borrador, Enviado o Aceptado.")
+
+        was_accepted = quotation.status == QuotationStatus.ACCEPTED
 
         # Eliminar ítems anteriores
         await session.execute(
@@ -225,6 +227,8 @@ class QuotationService:
         quotation.notes = dto.notes
         now = utc_now_naive()
         quotation.expires_at = now + timedelta(days=dto.validity_days)
+        if was_accepted:
+            quotation.status = QuotationStatus.DRAFT
 
         # Recrear ítems
         total = Decimal("0.00")

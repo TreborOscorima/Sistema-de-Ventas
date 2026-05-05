@@ -168,6 +168,10 @@ class CartMixin:
         return self.new_sale_item["subtotal"]
 
     @rx.var(cache=True)
+    def products_cart_subtotal(self) -> float:
+        return self._round_currency(sum(item["subtotal"] for item in self.new_sale_items))
+
+    @rx.var(cache=True)
     def sale_total(self) -> float:
         # Evita lecturas a BD durante render reactivo. Usa estado ya cargado.
         reservation_balance = 0.0
@@ -1361,6 +1365,15 @@ class CartMixin:
         ]
         self.sale_receipt_ready = False
         await self._recompute_cart_prices()
+        # En modo crédito, si el pago inicial pre-llenado supera el nuevo total
+        # (puede ocurrir al quitar un ítem de un presupuesto), lo limpiamos para
+        # que el operador ingrese un valor coherente antes de confirmar.
+        if getattr(self, "is_credit_mode", False) and hasattr(self, "payment_cash_amount"):
+            new_total = self._round_currency(
+                sum(item["subtotal"] for item in self.new_sale_items)
+            )
+            if self._round_currency(self.payment_cash_amount) > new_total + 0.005:
+                self.payment_cash_amount = 0
         self._refresh_payment_feedback()
         self.sale_receipt_ready = False
 
@@ -1609,7 +1622,6 @@ class CartMixin:
     @rx.event
     async def clear_cart_coupon(self):
         """Limpia el cupón aplicado y recompone precios."""
-        self.cart_coupon_code = ""
         self.cart_coupon_status = ""
         self.cart_coupon_message = ""
         await self._recompute_cart_prices()
@@ -1705,10 +1717,21 @@ class CartMixin:
                     coupon_code=coupon,
                     cart_subtotal=cart_subtotal_pre_promo,
                 )
-                item["price"] = self._round_currency(resolution.final_price)
+                effective = resolution.final_price
+                quot_price = item.get("quotation_price")
+                if quot_price:
+                    quot_dec = Decimal(str(quot_price))
+                    if quot_dec < effective:
+                        effective = quot_dec
+                item["price"] = self._round_currency(effective)
                 item["sale_price"] = self._round_currency(resolution.base_price)
                 item["base_price"] = self._round_currency(resolution.base_price)
                 item["subtotal"] = self._round_currency(qty * Decimal(str(item["price"])))
                 applied_promo = resolution.applied_promotion
                 item["promotion_name"] = applied_promo.name if applied_promo else ""
+                item["applied_promotion_id"] = applied_promo.id if applied_promo else None
+                if not applied_promo and quot_price:
+                    quot_dec = Decimal(str(quot_price))
+                    if quot_dec < Decimal(str(resolution.base_price)):
+                        item["promotion_name"] = "Desc. presupuesto"
         self.new_sale_items = list(self.new_sale_items)

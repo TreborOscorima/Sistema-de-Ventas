@@ -70,6 +70,14 @@ DAY_NAMES_ES = [
     "Domingo",
 ]
 
+_EMPTY_RESERVATION: FieldReservation = {
+    "id": "", "client_name": "", "dni": "", "phone": "", "sport": "", "sport_label": "",
+    "field_name": "", "start_datetime": "", "end_datetime": "",
+    "advance_amount": 0.0, "total_amount": 0.0, "paid_amount": 0.0,
+    "status": "", "created_at": "", "cancellation_reason": "", "delete_reason": "",
+}
+
+
 class ServicesState(MixinState):
     """Estado para el módulo de servicios (reservas de canchas).
 
@@ -486,14 +494,15 @@ class ServicesState(MixinState):
             ]
 
     @rx.var(cache=True)
-    def reservation_selected_for_payment(self) -> FieldReservation | None:
+    def reservation_selected_for_payment(self) -> FieldReservation:
         if not self.reservation_payment_id:
-            return None
-        return self._find_reservation_by_id(self.reservation_payment_id)
+            return _EMPTY_RESERVATION
+        found = self._find_reservation_by_id(self.reservation_payment_id)
+        return found if found is not None else _EMPTY_RESERVATION
 
     @rx.var(cache=True)
     def selected_reservation_balance(self) -> float:
-        if not self.reservation_selected_for_payment:
+        if not self.reservation_payment_id:
             return 0.0
         return float(self.reservation_selected_for_payment["total_amount"]) - float(self.reservation_selected_for_payment["advance_amount"])
 
@@ -1668,6 +1677,7 @@ class ServicesState(MixinState):
         self.reservation_payment_routed = True
         return rx.redirect("/venta")
 
+    @rx.event
     def clear_pending_reservation(self):
         """Limpia la reserva pendiente de pago para permitir ventas normales."""
         self.reservation_payment_id = ""

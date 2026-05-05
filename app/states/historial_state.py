@@ -26,6 +26,8 @@ from app.models import (
     Company,
     CompanyBillingConfig,
     FiscalDocument,
+    Promotion,
+    PriceList,
 )
 from .mixin_state import MixinState
 from app.utils.exports import (
@@ -37,6 +39,7 @@ from app.utils.exports import (
     add_totals_row_with_formulas,
     add_notes_section,
     CURRENCY_FORMAT,
+    PERCENT_FORMAT,
     NUMBER_FORMAT,
     THIN_BORDER,
     POSITIVE_FILL,
@@ -823,6 +826,9 @@ class HistorialState(MixinState):
                 payment_method = self._sale_payment_method_label(
                     sale, payments, payment_method
                 )
+                if (sale.payment_condition or "").strip().lower() == "credito" and payment_details.strip() in {"", "-"}:
+                    paid = sum(Decimal(str(getattr(p, "amount", 0) or 0)) for p in payments)
+                    payment_details = f"Inicial: {self._format_currency(float(paid))}" if paid > 0 else "Crédito/Fiado"
                 fallback = log_payment_info.get(sale.id)
                 if fallback and payment_method == MSG.FALLBACK_NOT_SPECIFIED:
                     payment_method = fallback.get("payment_method", payment_method)
@@ -1460,6 +1466,9 @@ class HistorialState(MixinState):
             payment_method = self._sale_payment_method_label(
                 sale, payments, payment_method
             )
+            if (sale.payment_condition or "").strip().lower() == "credito" and payment_details.strip() in {"", "-"}:
+                paid = sum(Decimal(str(getattr(p, "amount", 0) or 0)) for p in payments)
+                payment_details = f"Inicial: {self._format_currency(float(paid))}" if paid > 0 else "Crédito/Fiado"
             if payment_method == MSG.FALLBACK_NOT_SPECIFIED:
                 log_info = self._sale_log_payment_info(session, [sale.id]).get(
                     sale.id, {}
@@ -1546,7 +1555,7 @@ class HistorialState(MixinState):
             company_name,
             "HISTORIAL DE MOVIMIENTOS Y VENTAS",
             period_label,
-            columns=11,
+            columns=15,
             generated_at=self._display_now(),
         )
 
@@ -1560,7 +1569,11 @@ class HistorialState(MixinState):
             "Variante",
             "Categoría",
             "Cantidad",
-            f"Precio Unitario ({currency_label})",
+            f"Precio Base ({currency_label})",
+            f"Precio Final ({currency_label})",
+            f"Descuento ({currency_label})",
+            "% Descuento",
+            "Fuente Descuento",
             f"Subtotal ({currency_label})",
         ]
         style_header_row(ws, row, headers)
@@ -1586,6 +1599,34 @@ class HistorialState(MixinState):
             sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
             sale_user_lookup = self._build_sale_user_lookup(session, sales)
+
+            # Pre-cargar nombres de fuentes de descuento
+            _hist_promo_ids = {
+                item.applied_promotion_id
+                for s in sales for item in (s.items or [])
+                if getattr(item, "applied_promotion_id", None)
+            }
+            _hist_pl_ids = {
+                item.applied_price_list_id
+                for s in sales for item in (s.items or [])
+                if getattr(item, "applied_price_list_id", None)
+            }
+            _promos_by_id: dict[int, str] = {}
+            _pls_by_id: dict[int, str] = {}
+            if _hist_promo_ids:
+                _promos_by_id = {
+                    p.id: (p.name or "Promoción")
+                    for p in session.exec(
+                        select(Promotion).where(Promotion.id.in_(_hist_promo_ids))
+                    ).all()
+                }
+            if _hist_pl_ids:
+                _pls_by_id = {
+                    pl.id: (pl.name or "Lista de Precios")
+                    for pl in session.exec(
+                        select(PriceList).where(PriceList.id.in_(_hist_pl_ids))
+                    ).all()
+                }
 
             invalid_labels = {"", "-", "no especificado"}
             for sale in sales:
@@ -1660,6 +1701,10 @@ class HistorialState(MixinState):
                         quantity = Decimal("0")
                         unit_price = Decimal("0")
                         subtotal = Decimal("0")
+                        display_base = Decimal("0")
+                        line_discount = Decimal("0")
+                        discount_pct_fraction = 0.0
+                        discount_source = "Sin Descuento"
                     else:
                         variant_label = "-"
                         if item.product_variant:
@@ -1685,6 +1730,30 @@ class HistorialState(MixinState):
                         quantity = Decimal(str(item.quantity or 0))
                         unit_price = Decimal(str(item.unit_price or 0))
                         subtotal = Decimal(str(item.subtotal or 0))
+                        unit_price_base_raw = Decimal(str(item.unit_price_base or 0))
+                        display_base = unit_price_base_raw if unit_price_base_raw > 0 else unit_price
+                        line_discount = (
+                            (display_base - unit_price) * quantity
+                            if display_base > unit_price
+                            else Decimal("0")
+                        )
+                        discount_pct_fraction = (
+                            float((display_base - unit_price) / display_base)
+                            if display_base > unit_price
+                            else 0.0
+                        )
+                        promo_id = getattr(item, "applied_promotion_id", None)
+                        pl_id = getattr(item, "applied_price_list_id", None)
+                        promo_name = _promos_by_id.get(promo_id, "") if promo_id else ""
+                        pl_name = _pls_by_id.get(pl_id, "") if pl_id else ""
+                        if promo_id and promo_name:
+                            discount_source = f"Promoción: {promo_name}"
+                        elif pl_id and pl_name:
+                            discount_source = f"Lista: {pl_name}"
+                        elif line_discount > 0:
+                            discount_source = "Desc. Especial"
+                        else:
+                            discount_source = "Sin Descuento"
 
                     ws.cell(
                         row=row,
@@ -1702,38 +1771,51 @@ class HistorialState(MixinState):
                     ws.cell(row=row, column=7, value=variant_label)
                     ws.cell(row=row, column=8, value=category)
                     ws.cell(row=row, column=9, value=quantity).number_format = NUMBER_FORMAT
-                    ws.cell(row=row, column=10, value=unit_price).number_format = currency_format
-                    ws.cell(row=row, column=11, value=subtotal).number_format = currency_format
+                    ws.cell(row=row, column=10, value=display_base).number_format = currency_format
+                    ws.cell(row=row, column=11, value=unit_price).number_format = currency_format
+                    ws.cell(row=row, column=12, value=line_discount).number_format = currency_format
+                    ws.cell(row=row, column=13, value=discount_pct_fraction).number_format = PERCENT_FORMAT
+                    ws.cell(row=row, column=14, value=discount_source)
+                    ws.cell(row=row, column=15, value=subtotal).number_format = currency_format
 
-                    for col in range(1, 12):
+                    for col in range(1, 16):
                         ws.cell(row=row, column=col).border = THIN_BORDER
                     row += 1
 
         # Fila de totales
         totals_row = row
         add_totals_row_with_formulas(ws, totals_row, data_start, [
-            {"type": "label", "value": "TOTALES"},
-            {"type": "text", "value": ""},
-            {"type": "text", "value": ""},
-            {"type": "text", "value": ""},
-            {"type": "text", "value": ""},
-            {"type": "text", "value": ""},
-            {"type": "text", "value": ""},
-            {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "I", "number_format": NUMBER_FORMAT},
-            {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "K", "number_format": currency_format},
+            {"type": "label", "value": "TOTALES"},           # 1
+            {"type": "text", "value": ""},                    # 2
+            {"type": "text", "value": ""},                    # 3
+            {"type": "text", "value": ""},                    # 4
+            {"type": "text", "value": ""},                    # 5
+            {"type": "text", "value": ""},                    # 6
+            {"type": "text", "value": ""},                    # 7
+            {"type": "text", "value": ""},                    # 8
+            {"type": "sum", "col_letter": "I", "number_format": NUMBER_FORMAT},   # 9: cantidad
+            {"type": "text", "value": ""},                    # 10: precio base
+            {"type": "text", "value": ""},                    # 11: precio final
+            {"type": "sum", "col_letter": "L", "number_format": currency_format}, # 12: descuento
+            {"type": "text", "value": ""},                    # 13: %
+            {"type": "text", "value": ""},                    # 14: fuente
+            {"type": "sum", "col_letter": "O", "number_format": currency_format}, # 15: subtotal
         ])
 
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Nº Venta: Identificador único de la transacción en el sistema.",
-            "Subtotal: Cantidad x Precio Unitario por cada ítem.",
+            "Precio Base: Precio original del producto antes de aplicar descuentos.",
+            "Precio Final: Precio efectivamente cobrado al cliente.",
+            "Descuento ($): (Precio Base - Precio Final) × Cantidad.",
+            "% Descuento: Porcentaje de reducción respecto al precio base.",
+            "Fuente Descuento: Origen del descuento (Promoción, Lista de Precios, Especial).",
+            "Subtotal: Precio Final × Cantidad.",
             "Crédito (Completado): El cliente pagó la totalidad del crédito.",
             "Crédito (Adelanto): El cliente realizó un pago parcial.",
             "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
             "Venta al contado: Cliente no identificado, pago inmediato.",
-        ], columns=11)
+        ], columns=15)
 
         auto_adjust_column_widths(ws)
 

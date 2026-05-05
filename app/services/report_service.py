@@ -547,6 +547,32 @@ def generate_sales_report(
         if s.user_id is not None and s.user is not None and getattr(s.user, "username", None)
     }
 
+    # Pre-cargar nombres de Promoción y Lista de Precios para hoja Detalle
+    _promo_ids = {
+        item.applied_promotion_id
+        for s in sales
+        for item in (s.items or [])
+        if getattr(item, "applied_promotion_id", None)
+    }
+    _pl_ids = {
+        item.applied_price_list_id
+        for s in sales
+        for item in (s.items or [])
+        if getattr(item, "applied_price_list_id", None)
+    }
+    _promos_by_id: dict[int, str] = {}
+    _pls_by_id: dict[int, str] = {}
+    if _promo_ids:
+        _promos_by_id = {
+            p.id: (p.name or "Promoción")
+            for p in session.exec(select(Promotion).where(Promotion.id.in_(_promo_ids))).all()
+        }
+    if _pl_ids:
+        _pls_by_id = {
+            pl.id: (pl.name or "Lista de precios")
+            for pl in session.exec(select(PriceList).where(PriceList.id.in_(_pl_ids))).all()
+        }
+
     period_str = (
         f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
         f"{_format_report_datetime(end_date, '%d/%m/%Y', country_code, timezone)}"
@@ -646,11 +672,19 @@ def generate_sales_report(
 
             category = item.product_category_snapshot or "Sin categoría"
             if category not in by_category:
-                by_category[category] = {"count": 0, "total": Decimal("0"), "cost": Decimal("0"), "qty": 0}
+                by_category[category] = {
+                    "count": 0,
+                    "total": Decimal("0"),
+                    "cost": Decimal("0"),
+                    "qty": 0,
+                    "discount": Decimal("0"),
+                }
             by_category[category]["count"] += 1
             by_category[category]["total"] += item_total
             by_category[category]["cost"] += item_cost
             by_category[category]["qty"] += int(item.quantity or 0)
+            if line_discount > 0:
+                by_category[category]["discount"] += line_discount
 
         # Por método de pago
         for payment in (sale.payments or []):
@@ -768,7 +802,7 @@ def generate_sales_report(
         company_name,
         MSG.REPORT_CATEGORY_TITLE,
         period_str,
-        columns=7,
+        columns=9,
         **header_kwargs,
     )
 
@@ -776,6 +810,8 @@ def generate_sales_report(
         "Categoría",
         "Unidades Vendidas",
         f"Venta Bruta ({currency_label})",
+        f"(-) Descuentos ({currency_label})",
+        f"(=) Venta Neta ({currency_label})",
         f"Costo ({currency_label})",
         f"Utilidad ({currency_label})",
         "Margen (%)",
@@ -791,15 +827,18 @@ def generate_sales_report(
         ws_category.cell(row=row, column=1, value=_safe_string(cat_name))
         ws_category.cell(row=row, column=2, value=cat_data["qty"])
         ws_category.cell(row=row, column=3, value=cat_data["total"]).number_format = currency_format
-        ws_category.cell(row=row, column=4, value=cat_data["cost"]).number_format = currency_format
-        # Utilidad = Fórmula: Venta - Costo
+        ws_category.cell(row=row, column=4, value=cat_data.get("discount", Decimal("0"))).number_format = currency_format
+        # Venta Neta = Venta Bruta - Descuentos
         ws_category.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = currency_format
-        # Margen % = Fórmula: Utilidad / Venta
-        ws_category.cell(row=row, column=6, value=f"=IF(C{row}>0,E{row}/C{row},0)").number_format = PERCENT_FORMAT
-        # % del Total = se calculará con referencia al total
-        ws_category.cell(row=row, column=7, value=cat_data["total"]).number_format = currency_format  # Temporal
+        ws_category.cell(row=row, column=6, value=cat_data["cost"]).number_format = currency_format
+        # Utilidad = Venta Neta - Costo
+        ws_category.cell(row=row, column=7, value=f"=E{row}-F{row}").number_format = currency_format
+        # Margen % = Utilidad / Venta Neta
+        ws_category.cell(row=row, column=8, value=f"=IF(E{row}>0,G{row}/E{row},0)").number_format = PERCENT_FORMAT
+        # % del Total (placeholder, se sustituye abajo con fórmula dinámica)
+        ws_category.cell(row=row, column=9, value=cat_data["total"]).number_format = currency_format
 
-        for col in range(1, 8):
+        for col in range(1, 10):
             ws_category.cell(row=row, column=col).border = THIN_BORDER
         row += 1
 
@@ -810,20 +849,24 @@ def generate_sales_report(
         {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "sum", "col_letter": "D", "number_format": currency_format},
         {"type": "sum", "col_letter": "E", "number_format": currency_format},
-        {"type": "formula", "value": f"=IF(C{cat_totals_row}>0,E{cat_totals_row}/C{cat_totals_row},0)", "number_format": PERCENT_FORMAT},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
+        {"type": "sum", "col_letter": "G", "number_format": currency_format},
+        {"type": "formula", "value": f"=IF(E{cat_totals_row}>0,G{cat_totals_row}/E{cat_totals_row},0)", "number_format": PERCENT_FORMAT},
         {"type": "text", "value": "100.00%"},
     ])
 
-    # Actualizar columna G con fórmulas de participación
+    # Sustituir col I con fórmulas de participación respecto a Venta Neta total
     for r in range(cat_data_start, cat_totals_row):
-        ws_category.cell(row=r, column=7, value=f"=IF($C${cat_totals_row}>0,C{r}/$C${cat_totals_row},0)").number_format = PERCENT_FORMAT
+        ws_category.cell(row=r, column=9, value=f"=IF($E${cat_totals_row}>0,E{r}/$E${cat_totals_row},0)").number_format = PERCENT_FORMAT
 
     _add_notes_section(ws_category, cat_totals_row, [
-        "Unidades Vendidas: Cantidad total de productos vendidos de esta categoría.",
-        "Utilidad = Venta Bruta - Costo.",
-        "Margen = Utilidad ÷ Venta Bruta (indica rentabilidad por categoría).",
-        "Participación = Venta de categoría ÷ Venta Total (peso relativo).",
-    ], columns=7)
+        "Venta Bruta: importe total facturado antes de descontar promociones.",
+        "Descuentos: suma de (Precio Base − Precio Final) × Cantidad por ítem de esta categoría.",
+        "Venta Neta = Venta Bruta − Descuentos (importe efectivamente cobrado).",
+        "Utilidad = Venta Neta − Costo de adquisición.",
+        "Margen = Utilidad ÷ Venta Neta.",
+        "Participación = Venta Neta de categoría ÷ Venta Neta Total.",
+    ], columns=9)
 
     _auto_adjust_columns(ws_category)
 
@@ -1036,7 +1079,7 @@ def generate_sales_report(
         company_name,
         "LISTADO DETALLADO DE TRANSACCIONES",
         period_str,
-        columns=13,
+        columns=16,
         **header_kwargs,
     )
 
@@ -1054,6 +1097,9 @@ def generate_sales_report(
         f"Precio Final ({currency_label})",
         f"Descuento ({currency_label})",
         f"Subtotal ({currency_label})",
+        "% Descuento",
+        "Tipo Descuento",
+        "Nombre Descuento",
     ]
     _style_header_row(ws_detail, row, headers)
     detail_data_start = row + 1
@@ -1088,6 +1134,9 @@ def generate_sales_report(
                 base_price = Decimal("0")
                 discount = Decimal("0")
                 subtotal = Decimal("0")
+                discount_pct = Decimal("0")
+                discount_type = ""
+                discount_name = ""
             else:
                 variant_label = _variant_label_from_item(item)
                 product_name = _product_base_name_from_item(item, variant_label)
@@ -1102,6 +1151,31 @@ def generate_sales_report(
                 line_disc = (base_price - unit_price) * quantity
                 discount = line_disc if line_disc > 0 else Decimal("0")
                 subtotal = _safe_decimal(item.subtotal)
+
+                # Porcentaje de descuento unitario
+                discount_pct = (
+                    ((base_price - unit_price) / base_price * 100)
+                    if base_price > 0 and base_price > unit_price
+                    else Decimal("0")
+                )
+
+                # Clasificar la fuente del descuento
+                promo_id = getattr(item, "applied_promotion_id", None)
+                pl_id = getattr(item, "applied_price_list_id", None)
+                promo_name = _promos_by_id.get(promo_id, "") if promo_id else ""
+                pl_name = _pls_by_id.get(pl_id, "") if pl_id else ""
+                if promo_id and promo_name:
+                    discount_type = "Promoción"
+                    discount_name = promo_name
+                elif pl_id and pl_name:
+                    discount_type = "Lista de Precios"
+                    discount_name = pl_name
+                elif discount > 0:
+                    discount_type = "Desc. Especial"
+                    discount_name = ""
+                else:
+                    discount_type = "Sin Descuento"
+                    discount_name = ""
 
             ws_detail.cell(
                 row=row,
@@ -1143,8 +1217,18 @@ def generate_sales_report(
             ws_detail.cell(row=row, column=11, value=unit_price).number_format = currency_format
             ws_detail.cell(row=row, column=12, value=discount).number_format = currency_format
             ws_detail.cell(row=row, column=13, value=subtotal).number_format = currency_format
+            ws_detail.cell(row=row, column=14, value=float(_round_currency(discount_pct)) / 100).number_format = PERCENT_FORMAT
+            ws_detail.cell(row=row, column=15, value=_safe_string(discount_type))
+            ws_detail.cell(row=row, column=16, value=_safe_string(discount_name))
 
-            for col in range(1, 14):
+            # Colorear filas con descuento para resaltar visualmente
+            if discount > 0:
+                for col in range(1, 17):
+                    ws_detail.cell(row=row, column=col).fill = PatternFill(
+                        start_color="FFF9E6", end_color="FFF9E6", fill_type="solid"
+                    )
+
+            for col in range(1, 17):
                 ws_detail.cell(row=row, column=col).border = THIN_BORDER
             row += 1
 
@@ -1164,16 +1248,22 @@ def generate_sales_report(
         {"type": "text", "value": ""},
         {"type": "sum", "col_letter": "L", "number_format": currency_format},
         {"type": "sum", "col_letter": "M", "number_format": currency_format},
+        {"type": "text", "value": ""},
+        {"type": "text", "value": ""},
+        {"type": "text", "value": ""},
     ])
 
     _add_notes_section(ws_detail, detail_totals_row, [
         "Cada fila representa un ítem vendido dentro de una transacción.",
         "Nº Venta: correlativo interno de la operación comercial.",
-        "Precio Base = precio sin descuento; Precio Final = precio cobrado tras promo/lista.",
-        "Descuento = (Precio Base − Precio Final) × Cantidad. Ítems pre-mayo/2026 muestran 0 (no se persistía el snapshot).",
+        "Precio Base = precio de lista sin descuento; Precio Final = precio efectivamente cobrado.",
+        "Descuento ($) = (Precio Base − Precio Final) × Cantidad. % Descuento = porcentaje unitario.",
+        "Tipo Descuento: Promoción / Lista de Precios / Desc. Especial (presupuesto/manual) / Sin Descuento.",
+        "Nombre Descuento: nombre de la promoción o lista de precios aplicada.",
         "Subtotal = Cantidad × Precio Final para cada ítem.",
-        "Método de Pago muestra la forma de cobro aplicada a la venta.",
-    ], columns=13)
+        "Filas en amarillo claro indican que se aplicó algún tipo de descuento.",
+        "Ítems pre-mayo/2026 muestran Precio Base = Precio Final (no se persistía el snapshot).",
+    ], columns=16)
 
     _auto_adjust_columns(ws_detail)
 
@@ -3001,7 +3091,7 @@ def generate_promotions_report(
         company_name,
         "RANKING DE PROMOCIONES",
         period_str,
-        columns=10,
+        columns=12,
         **header_kwargs,
     )
 
@@ -3013,9 +3103,11 @@ def generate_promotions_report(
         "Umbral Carrito",
         "Ventas",
         "Unidades",
-        f"Ingreso ({currency_label})",
+        f"Ingreso Bruto ({currency_label})",
         f"Descuento ({currency_label})",
+        f"Ingreso Neto ({currency_label})",
         "Ticket Prom.",
+        "% Desc. Promedio",
     ]
     _style_header_row(ws_ranking, row, headers)
     data_start = row + 1
@@ -3038,6 +3130,12 @@ def generate_promotions_report(
     for promo_id, b in sorted_promos:
         sales_count = len(b["sale_ids"])
         avg_ticket = (b["revenue"] / sales_count) if sales_count > 0 else Decimal("0")
+        revenue_bruto = b["revenue"] + b["discount_total"]
+        avg_disc_pct = (
+            b["discount_total"] / revenue_bruto
+            if revenue_bruto > 0
+            else Decimal("0")
+        )
         ws_ranking.cell(row=row, column=1, value=_safe_string(b["promo_name"]))
         ws_ranking.cell(row=row, column=2, value=type_labels.get(b["promo_type"], b["promo_type"]))
         ws_ranking.cell(row=row, column=3, value=scope_labels.get(b["scope"], b["scope"]))
@@ -3053,11 +3151,13 @@ def generate_promotions_report(
         )
         ws_ranking.cell(row=row, column=6, value=sales_count)
         ws_ranking.cell(row=row, column=7, value=float(b["units"])).number_format = NUMBER_FORMAT
-        ws_ranking.cell(row=row, column=8, value=float(b["revenue"])).number_format = currency_format
+        ws_ranking.cell(row=row, column=8, value=float(revenue_bruto)).number_format = currency_format
         ws_ranking.cell(row=row, column=9, value=float(b["discount_total"])).number_format = currency_format
-        ws_ranking.cell(row=row, column=10, value=float(avg_ticket)).number_format = currency_format
+        ws_ranking.cell(row=row, column=10, value=float(b["revenue"])).number_format = currency_format
+        ws_ranking.cell(row=row, column=11, value=float(avg_ticket)).number_format = currency_format
+        ws_ranking.cell(row=row, column=12, value=float(avg_disc_pct)).number_format = PERCENT_FORMAT
 
-        for col in range(1, 11):
+        for col in range(1, 13):
             ws_ranking.cell(row=row, column=col).border = THIN_BORDER
         row += 1
 
@@ -3073,16 +3173,20 @@ def generate_promotions_report(
             {"type": "sum", "col_letter": "G", "number_format": NUMBER_FORMAT},
             {"type": "sum", "col_letter": "H", "number_format": currency_format},
             {"type": "sum", "col_letter": "I", "number_format": currency_format},
+            {"type": "sum", "col_letter": "J", "number_format": currency_format},
             {"type": "text", "value": ""},
+            {"type": "formula", "value": f"=IF(H{totals_row}>0,I{totals_row}/H{totals_row},0)", "number_format": PERCENT_FORMAT},
         ])
 
         _add_notes_section(ws_ranking, totals_row, [
             "Promoción: nombre tal como fue creada en el módulo de Promociones.",
             "Ventas: ventas distintas en las que la promo participó (al menos un ítem).",
+            "Ingreso Bruto = precio base × cantidad (antes de descuento).",
             "Descuento = Σ (precio base − precio final) × cantidad por cada ítem.",
-            "Promos sin descuento real (ej. BUY_X_GET_Y mal configurado) muestran 0.",
+            "Ingreso Neto = Ingreso Bruto − Descuento (lo efectivamente cobrado).",
+            "% Desc. Promedio = Descuento total / Ingreso Bruto total de la promo.",
             "Las ventas anuladas no se contabilizan.",
-        ], columns=10)
+        ], columns=12)
 
     _auto_adjust_columns(ws_ranking)
 
@@ -3093,19 +3197,27 @@ def generate_promotions_report(
         company_name,
         "DETALLE DE LÍNEAS CON PROMOCIÓN",
         period_str,
-        columns=8,
+        columns=10,
         **header_kwargs,
     )
+
+    _promo_type_labels = {
+        "percentage": "% Descuento",
+        "fixed_amount": "Monto Fijo",
+        "buy_x_get_y": "Lleva X Paga Y",
+    }
 
     detail_headers = [
         "Fecha",
         "Nº Venta",
         "Producto",
         "Promoción",
+        "Tipo Promo",
         "Cantidad",
         f"Precio Base ({currency_label})",
         f"Precio Final ({currency_label})",
         f"Descuento ({currency_label})",
+        "% Descuento",
     ]
     _style_header_row(ws_detail, row, detail_headers)
     detail_data_start = row + 1
@@ -3118,6 +3230,13 @@ def generate_promotions_report(
         unit_final = Decimal(str(item.unit_price or 0))
         unit_base = Decimal(str(getattr(item, "unit_price_base", None) or item.unit_price or 0))
         line_disc = (unit_base - unit_final) * qty
+        line_disc = line_disc if line_disc > 0 else Decimal("0")
+        pct = (
+            (unit_base - unit_final) / unit_base
+            if unit_base > 0 and unit_base > unit_final
+            else Decimal("0")
+        )
+        promo_type_raw = getattr(promo, "discount_type", "") or ""
 
         ws_detail.cell(
             row=row,
@@ -3133,15 +3252,13 @@ def generate_promotions_report(
         ws_detail.cell(row=row, column=2, value=sale.id)
         ws_detail.cell(row=row, column=3, value=_safe_string(item.product_name_snapshot))
         ws_detail.cell(row=row, column=4, value=_safe_string(promo.name))
-        ws_detail.cell(row=row, column=5, value=float(qty)).number_format = NUMBER_FORMAT
-        ws_detail.cell(row=row, column=6, value=float(unit_base)).number_format = currency_format
-        ws_detail.cell(row=row, column=7, value=float(unit_final)).number_format = currency_format
-        ws_detail.cell(
-            row=row,
-            column=8,
-            value=float(line_disc if line_disc > 0 else Decimal("0")),
-        ).number_format = currency_format
-        for col in range(1, 9):
+        ws_detail.cell(row=row, column=5, value=_promo_type_labels.get(promo_type_raw, promo_type_raw))
+        ws_detail.cell(row=row, column=6, value=float(qty)).number_format = NUMBER_FORMAT
+        ws_detail.cell(row=row, column=7, value=float(unit_base)).number_format = currency_format
+        ws_detail.cell(row=row, column=8, value=float(unit_final)).number_format = currency_format
+        ws_detail.cell(row=row, column=9, value=float(line_disc)).number_format = currency_format
+        ws_detail.cell(row=row, column=10, value=float(pct)).number_format = PERCENT_FORMAT
+        for col in range(1, 11):
             ws_detail.cell(row=row, column=col).border = THIN_BORDER
         row += 1
 
@@ -3152,10 +3269,12 @@ def generate_promotions_report(
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "E", "number_format": NUMBER_FORMAT},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "F", "number_format": NUMBER_FORMAT},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "H", "number_format": currency_format},
+            {"type": "sum", "col_letter": "I", "number_format": currency_format},
+            {"type": "text", "value": ""},
         ])
 
     _auto_adjust_columns(ws_detail)
@@ -3293,13 +3412,13 @@ def generate_price_lists_report(
     _auto_adjust_columns(ws_summary)
 
     # HOJA 2: Por lista de precios
-    ws_detail = wb.create_sheet("Por Lista de Precios")
+    ws_by_list = wb.create_sheet("Por Lista de Precios")
     row = _add_company_header(
-        ws_detail,
+        ws_by_list,
         company_name,
         "DETALLE POR LISTA DE PRECIOS",
         period_str,
-        columns=7,
+        columns=8,
         **header_kwargs,
     )
 
@@ -3307,12 +3426,13 @@ def generate_price_lists_report(
         "Lista de Precios",
         "Ventas",
         "Unidades",
-        f"Ingresos ({currency_label})",
-        f"Descuento ({currency_label})",
-        f"Ingreso Prom. / Venta ({currency_label})",
-        "% Dscto. s/ Ingreso",
+        f"Ingreso Bruto ({currency_label})",
+        f"(-) Descuento ({currency_label})",
+        f"(=) Ingreso Neto ({currency_label})",
+        f"Ticket Prom. ({currency_label})",
+        "% Dscto. s/ Bruto",
     ]
-    _style_header_row(ws_detail, row, headers)
+    _style_header_row(ws_by_list, row, headers)
     data_start = row + 1
     row += 1
 
@@ -3324,36 +3444,130 @@ def generate_price_lists_report(
 
     for key, b in sorted_lists:
         sales_count = len(b["sale_ids"])
+        ingreso_bruto = b["revenue"] + b["discount_total"]
         avg_ticket = (b["revenue"] / sales_count) if sales_count > 0 else Decimal("0")
-        base_plus_rev = b["revenue"] + b["discount_total"]
-        disc_pct = (b["discount_total"] / base_plus_rev) if base_plus_rev > 0 else Decimal("0")
+        disc_pct = (b["discount_total"] / ingreso_bruto) if ingreso_bruto > 0 else Decimal("0")
 
-        ws_detail.cell(row=row, column=1, value=_safe_string(b["name"]))
-        ws_detail.cell(row=row, column=2, value=sales_count).number_format = NUMBER_FORMAT
-        ws_detail.cell(row=row, column=3, value=float(b["units"])).number_format = NUMBER_FORMAT
-        ws_detail.cell(row=row, column=4, value=float(b["revenue"])).number_format = currency_format
-        ws_detail.cell(row=row, column=5, value=float(b["discount_total"])).number_format = currency_format
-        ws_detail.cell(row=row, column=6, value=float(avg_ticket)).number_format = currency_format
-        pct_cell = ws_detail.cell(row=row, column=7, value=float(disc_pct))
+        ws_by_list.cell(row=row, column=1, value=_safe_string(b["name"]))
+        ws_by_list.cell(row=row, column=2, value=sales_count).number_format = NUMBER_FORMAT
+        ws_by_list.cell(row=row, column=3, value=float(b["units"])).number_format = NUMBER_FORMAT
+        ws_by_list.cell(row=row, column=4, value=float(ingreso_bruto)).number_format = currency_format
+        ws_by_list.cell(row=row, column=5, value=float(b["discount_total"])).number_format = currency_format
+        ws_by_list.cell(row=row, column=6, value=float(b["revenue"])).number_format = currency_format
+        ws_by_list.cell(row=row, column=7, value=float(avg_ticket)).number_format = currency_format
+        pct_cell = ws_by_list.cell(row=row, column=8, value=float(disc_pct))
         pct_cell.number_format = PERCENT_FORMAT
         if disc_pct > Decimal("0.10"):
             pct_cell.fill = WARNING_FILL
 
-        for col in range(1, 8):
-            ws_detail.cell(row=row, column=col).border = THIN_BORDER
+        for col in range(1, 9):
+            ws_by_list.cell(row=row, column=col).border = THIN_BORDER
         row += 1
 
     if sorted_lists:
         totals_row = row
-        _add_totals_row_with_formulas(ws_detail, totals_row, data_start, [
+        _add_totals_row_with_formulas(ws_by_list, totals_row, data_start, [
             {"type": "label", "value": "TOTALES"},
             {"type": "sum", "col_letter": "B", "number_format": NUMBER_FORMAT},
             {"type": "sum", "col_letter": "C", "number_format": NUMBER_FORMAT},
             {"type": "sum", "col_letter": "D", "number_format": currency_format},
             {"type": "sum", "col_letter": "E", "number_format": currency_format},
+            {"type": "sum", "col_letter": "F", "number_format": currency_format},
             {"type": "text", "value": ""},
+            {"type": "formula", "value": f"=IF(D{totals_row}>0,E{totals_row}/D{totals_row},0)", "number_format": PERCENT_FORMAT},
+        ])
+        _add_notes_section(ws_by_list, totals_row, [
+            "Ingreso Bruto = Precio Base × Cantidad (antes del descuento por lista).",
+            "Descuento = Σ (Precio Base − Precio Final) × Cantidad.",
+            "Ingreso Neto = Ingreso Bruto − Descuento (importe efectivamente cobrado).",
+            "% Dscto. = Descuento / Ingreso Bruto. Celdas en amarillo superan el 10%.",
+        ], columns=8)
+
+    _auto_adjust_columns(ws_by_list)
+
+    # HOJA 3: Detalle de líneas por lista de precios
+    ws_detail = wb.create_sheet("Detalle de Líneas")
+    row = _add_company_header(
+        ws_detail,
+        company_name,
+        "DETALLE DE LÍNEAS POR LISTA DE PRECIOS",
+        period_str,
+        columns=9,
+        **header_kwargs,
+    )
+
+    detail_headers = [
+        "Fecha",
+        "Nº Venta",
+        "Lista de Precios",
+        "Producto",
+        "Cantidad",
+        f"Precio Base ({currency_label})",
+        f"Precio Lista ({currency_label})",
+        f"Descuento ({currency_label})",
+        "% Descuento",
+    ]
+    _style_header_row(ws_detail, row, detail_headers)
+    detail_data_start = row + 1
+    row += 1
+
+    # Ordenado por fecha descendente
+    rows_sorted_pl = sorted(rows, key=lambda r: r[1].timestamp or datetime.min, reverse=True)
+    for item, sale in rows_sorted_pl:
+        qty = Decimal(str(item.quantity or 0))
+        unit_final = Decimal(str(item.unit_price or 0))
+        unit_base = Decimal(str(getattr(item, "unit_price_base", None) or item.unit_price or 0))
+        line_disc = (unit_base - unit_final) * qty
+        line_disc = line_disc if line_disc > 0 else Decimal("0")
+        pct = (
+            (unit_base - unit_final) / unit_base
+            if unit_base > 0 and unit_base > unit_final
+            else Decimal("0")
+        )
+        pl_key = item.applied_price_list_id or NO_LIST_KEY
+        pl_name = pl_name_map.get(pl_key, NO_LIST_NAME) if pl_key != NO_LIST_KEY else NO_LIST_NAME
+
+        ws_detail.cell(
+            row=row,
+            column=1,
+            value=(
+                _format_report_datetime(sale.timestamp, "%d/%m/%Y %H:%M", country_code, timezone)
+                if sale.timestamp
+                else "—"
+            ),
+        )
+        ws_detail.cell(row=row, column=2, value=sale.id)
+        ws_detail.cell(row=row, column=3, value=_safe_string(pl_name))
+        ws_detail.cell(row=row, column=4, value=_safe_string(item.product_name_snapshot))
+        ws_detail.cell(row=row, column=5, value=float(qty)).number_format = NUMBER_FORMAT
+        ws_detail.cell(row=row, column=6, value=float(unit_base)).number_format = currency_format
+        ws_detail.cell(row=row, column=7, value=float(unit_final)).number_format = currency_format
+        ws_detail.cell(row=row, column=8, value=float(line_disc)).number_format = currency_format
+        ws_detail.cell(row=row, column=9, value=float(pct)).number_format = PERCENT_FORMAT
+        for col in range(1, 10):
+            ws_detail.cell(row=row, column=col).border = THIN_BORDER
+        row += 1
+
+    if rows_sorted_pl:
+        detail_totals_row = row
+        _add_totals_row_with_formulas(ws_detail, detail_totals_row, detail_data_start, [
+            {"type": "label", "value": "TOTALES"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "E", "number_format": NUMBER_FORMAT},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "H", "number_format": currency_format},
             {"type": "text", "value": ""},
         ])
+        _add_notes_section(ws_detail, detail_totals_row, [
+            "Precio Base = precio de catálogo del producto sin ningún descuento.",
+            "Precio Lista = precio efectivamente cobrado según la lista asignada al cliente.",
+            "Descuento = (Precio Base − Precio Lista) × Cantidad.",
+            "% Descuento = porcentaje unitario de rebaja otorgada por la lista.",
+            "Incluye ítems sin lista (grupo 'Precio base / Sin lista') con descuento 0.",
+        ], columns=9)
 
     _auto_adjust_columns(ws_detail)
 

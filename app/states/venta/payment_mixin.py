@@ -341,6 +341,8 @@ class PaymentMixin:
                     (self.payment_cash_message or "").strip()
                     or "Ingrese un monto valido en efectivo."
                 )
+            if is_credit and cash_amount > sale_total + 0.005:
+                return "El pago inicial no puede superar el total de la venta. Corrija el monto recibido."
 
         if kind == "mixed":
             total_paid = self._round_currency(
@@ -358,6 +360,8 @@ class PaymentMixin:
                     (self.payment_mixed_message or "").strip()
                     or "Complete los montos del pago mixto."
                 )
+            if is_credit and total_paid > sale_total + 0.005:
+                return "El pago inicial no puede superar el total de la venta. Corrija los montos."
 
         return None
 

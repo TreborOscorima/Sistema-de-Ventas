@@ -103,7 +103,18 @@ class CloseMixin:
         from app.utils.db_seeds import get_country_config
         country = getattr(self, "selected_country_code", "PE")
         config = get_country_config(country)
-        return config.get("denominations", [])
+        denoms = config.get("denominations", [])
+        # Reemplazar el símbolo hardcodeado con el símbolo de moneda configurado.
+        # Acceder a self.currency_symbol registra la dependencia reactiva en Reflex.
+        live_symbol = (self.currency_symbol or "").strip()
+        country_symbol = config.get("currency_symbol", "").strip()
+        if live_symbol and live_symbol != country_symbol:
+            return [
+                {**d, "label": live_symbol + d["label"][len(country_symbol):]}
+                if d["label"].startswith(country_symbol) else d
+                for d in denoms
+            ]
+        return denoms
 
     @rx.var(cache=True)
     def denomination_rows(self) -> list[dict]:

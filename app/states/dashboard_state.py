@@ -42,6 +42,8 @@ from app.utils.exports import (
     add_totals_row_with_formulas,
     add_notes_section,
     THIN_BORDER,
+    CURRENCY_FORMAT,
+    PERCENT_FORMAT,
 )
 
 
@@ -919,6 +921,7 @@ class DashboardState(MixinState):
     def export_categories_excel(self):
         """Exporta ventas por categoría a Excel con formato profesional."""
         import io
+        from decimal import Decimal
         from openpyxl.styles import Alignment
         from openpyxl.chart import PieChart, Reference
 
@@ -926,7 +929,50 @@ class DashboardState(MixinState):
         currency_format = self._currency_excel_format()
         currency_label = self._currency_symbol_clean()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
-        percent_format = '0.0%'
+
+        # Calcular descuentos por categoría en el mismo período
+        period_start, period_end, _, _ = self._get_period_dates()
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        discount_by_cat: dict[str, float] = {}
+        if company_id and branch_id:
+            with rx.session() as session:
+                category_expr = func.coalesce(
+                    func.nullif(func.trim(SaleItem.product_category_snapshot), ""),
+                    Product.category,
+                    MSG.FALLBACK_NO_CATEGORY,
+                )
+                disc_rows = session.exec(
+                    select(
+                        category_expr,
+                        func.sum(
+                            func.greatest(
+                                (SaleItem.unit_price_base - SaleItem.unit_price)
+                                * SaleItem.quantity,
+                                0,
+                            )
+                        ).label("discount_total"),
+                    )
+                    .select_from(SaleItem)
+                    .outerjoin(Product, Product.id == SaleItem.product_id)
+                    .join(Sale, Sale.id == SaleItem.sale_id)
+                    .where(
+                        and_(
+                            Sale.timestamp >= period_start,
+                            Sale.timestamp <= period_end,
+                            Sale.status != SaleStatus.cancelled,
+                            Sale.company_id == company_id,
+                            Sale.branch_id == branch_id,
+                            SaleItem.company_id == company_id,
+                            SaleItem.branch_id == branch_id,
+                        )
+                    )
+                    .group_by(category_expr)
+                ).all()
+                discount_by_cat = {
+                    (row[0] or MSG.FALLBACK_NO_CATEGORY): float(row[1] or 0)
+                    for row in disc_rows
+                }
 
         wb, ws = create_excel_workbook(MSG.REPORT_CAT_SALES_SHEET)
 
@@ -935,31 +981,52 @@ class DashboardState(MixinState):
             company_name,
             "REPORTE DE VENTAS POR CATEGORÍA",
             self.period_label,
-            columns=4,
+            columns=6,
             generated_at=self._display_now(),
         )
 
-        headers = ["#", "Categoría", f"Total Ventas ({currency_label})", "Participación"]
+        headers = [
+            "#",
+            "Categoría",
+            f"Venta Bruta ({currency_label})",
+            f"Descuentos ({currency_label})",
+            f"Venta Neta ({currency_label})",
+            "Participación (%)",
+        ]
         style_header_row(ws, row, headers)
         data_start = row + 1
         row += 1
 
-        total = sum(cat.get("total", 0) for cat in export_categories)
+        total_net = sum(cat.get("total", 0) for cat in export_categories)
         for idx, cat in enumerate(export_categories, 1):
-            pct = cat["total"] / total if total > 0 else 0
+            cat_name = cat["category"]
+            net_sales = float(cat.get("total", 0))
+            disc = discount_by_cat.get(cat_name, 0.0)
+            gross = net_sales + disc
+            pct = net_sales / total_net if total_net > 0 else 0.0
 
             ws.cell(row=row, column=1, value=idx).border = THIN_BORDER
-            ws.cell(row=row, column=2, value=cat["category"]).border = THIN_BORDER
+            ws.cell(row=row, column=2, value=cat_name).border = THIN_BORDER
 
-            cell_total = ws.cell(row=row, column=3, value=cat["total"])
-            cell_total.number_format = currency_format
-            cell_total.border = THIN_BORDER
-            cell_total.alignment = Alignment(horizontal='right')
+            cell_gross = ws.cell(row=row, column=3, value=gross)
+            cell_gross.number_format = currency_format
+            cell_gross.border = THIN_BORDER
+            cell_gross.alignment = Alignment(horizontal="right")
 
-            cell_pct = ws.cell(row=row, column=4, value=pct)
-            cell_pct.number_format = percent_format
+            cell_disc = ws.cell(row=row, column=4, value=disc)
+            cell_disc.number_format = currency_format
+            cell_disc.border = THIN_BORDER
+            cell_disc.alignment = Alignment(horizontal="right")
+
+            cell_net = ws.cell(row=row, column=5, value=net_sales)
+            cell_net.number_format = currency_format
+            cell_net.border = THIN_BORDER
+            cell_net.alignment = Alignment(horizontal="right")
+
+            cell_pct = ws.cell(row=row, column=6, value=pct)
+            cell_pct.number_format = PERCENT_FORMAT
             cell_pct.border = THIN_BORDER
-            cell_pct.alignment = Alignment(horizontal='right')
+            cell_pct.alignment = Alignment(horizontal="right")
 
             row += 1
 
@@ -967,26 +1034,37 @@ class DashboardState(MixinState):
             {"type": "text", "value": ""},
             {"type": "label", "value": "TOTAL"},
             {"type": "sum", "col_letter": "C", "number_format": currency_format},
-            {"type": "text", "value": 1, "number_format": percent_format},
+            {"type": "sum", "col_letter": "D", "number_format": currency_format},
+            {"type": "sum", "col_letter": "E", "number_format": currency_format},
+            {"type": "text", "value": "100.00%"},
         ])
         totals_row = row
 
-        # Gráfico de torta
+        # Actualizar participación con fórmulas relativas al total neto
+        for r in range(data_start, totals_row):
+            ws.cell(
+                row=r, column=6,
+                value=f"=IF($E${totals_row}>0,E{r}/$E${totals_row},0)",
+            ).number_format = PERCENT_FORMAT
+
+        # Gráfico de torta sobre Venta Neta
         if len(export_categories) > 0:
             chart = PieChart()
-            chart.title = "Distribución de Ventas"
-            data_ref = Reference(ws, min_col=3, min_row=data_start - 1, max_row=totals_row - 1)
+            chart.title = "Distribución Venta Neta"
+            data_ref = Reference(ws, min_col=5, min_row=data_start - 1, max_row=totals_row - 1)
             labels = Reference(ws, min_col=2, min_row=data_start, max_row=totals_row - 1)
             chart.add_data(data_ref, titles_from_data=True)
             chart.set_categories(labels)
             chart.width = 12
             chart.height = 8
-            ws.add_chart(chart, "F4")
+            ws.add_chart(chart, "H4")
 
         add_notes_section(ws, totals_row, [
-            "Total Ventas: Suma de ventas completadas en el período seleccionado.",
-            "Participación: Porcentaje respecto al total general de ventas.",
-        ], columns=4)
+            "Venta Bruta: Monto total antes de descontar promociones y listas de precios.",
+            "Descuentos: Total de descuentos aplicados en el período (Venta Bruta - Venta Neta).",
+            "Venta Neta: Monto efectivamente cobrado al cliente.",
+            "Participación: Porcentaje de Venta Neta respecto al total general.",
+        ], columns=6)
 
         auto_adjust_column_widths(ws)
 

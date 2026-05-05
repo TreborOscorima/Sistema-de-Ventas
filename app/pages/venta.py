@@ -169,6 +169,7 @@ def _coupon_input() -> rx.Component:
                 default_value=State.cart_coupon_code,
                 on_change=State.set_cart_coupon_input,
                 disabled=State.cart_coupon_status == "applied",
+                key=State.last_sale_id,
                 class_name=(
                     "flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm uppercase "
                     "focus:outline-none focus:ring-2 focus:ring-fuchsia-300 disabled:bg-emerald-50 "
@@ -888,58 +889,57 @@ def client_selector() -> rx.Component:
     """Selector de cliente para ventas a credito."""
     return rx.box(
         rx.cond(
-            State.selected_client != None,
-            rx.hstack(
-                rx.hstack(
-                    rx.vstack(
-                        rx.el.span(
-                            State.selected_client["name"],
-                            class_name="text-sm font-semibold text-slate-900",
-                        ),
-                        rx.el.span(
-                            "DNI: ",
-                            State.selected_client["dni"],
-                            class_name="text-xs text-slate-500 font-mono",
-                        ),
-                        rx.cond(
-                            State.active_price_list_name != "",
-                            rx.el.span(
-                                State.active_price_list_name,
-                                class_name="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full leading-none",
-                            ),
-                            rx.fragment(),
-                        ),
-                        spacing="1",
-                        align="start",
-                        class_name="min-w-0",
-                    ),
-                    rx.badge(
-                        rx.el.span(
-                            "Linea de Credito: ",
-                            State.currency_symbol,
-                            State.selected_client_credit_available.to_string(),
-                        ),
-                        color_scheme="green",
-                        variant="soft",
-                        size="2",
-                        class_name="whitespace-nowrap",
-                    ),
-                    spacing="3",
-                    align="center",
-                    class_name="flex-1 min-w-0",
+            State.has_selected_client,
+            # Vista compacta inline cuando hay cliente seleccionado
+            rx.el.div(
+                rx.icon("user", class_name="h-3.5 w-3.5 text-slate-400 shrink-0"),
+                rx.el.span(
+                    State.selected_client["name"],
+                    class_name="text-sm font-semibold text-slate-700",
                 ),
-                rx.icon_button(
-                    "trash-2",
-                    on_click=State.clear_selected_client,
-                    color_scheme="red",
+                rx.cond(
+                    State.selected_client_has_dni,
+                    rx.el.span(
+                        rx.el.span(class_name="w-px h-3.5 bg-slate-200 inline-block"),
+                        rx.el.span("DNI:", class_name="text-xs text-slate-400"),
+                        rx.el.span(
+                            State.selected_client["dni"],
+                            class_name="text-xs font-mono text-slate-600",
+                        ),
+                        class_name="inline-flex items-center gap-1",
+                    ),
+                    rx.el.span(""),
+                ),
+                rx.el.div(class_name="w-px h-3.5 bg-slate-200 mx-0.5"),
+                rx.badge(
+                    "Crédito: ",
+                    State.currency_symbol,
+                    State.selected_client_credit_available.to_string(),
+                    color_scheme="green",
                     variant="soft",
-                    size="2",
+                    size="1",
+                    class_name="whitespace-nowrap",
+                ),
+                rx.cond(
+                    State.active_price_list_name != "",
+                    rx.el.span(
+                        rx.el.span(class_name="w-px h-3.5 bg-slate-200 inline-block"),
+                        rx.el.span(
+                            State.active_price_list_name,
+                            class_name="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full leading-none",
+                        ),
+                        class_name="inline-flex items-center gap-1",
+                    ),
+                    rx.el.span(""),
+                ),
+                rx.el.button(
+                    rx.icon("x", class_name="h-3.5 w-3.5"),
+                    on_click=State.clear_selected_client,
                     title="Quitar cliente",
                     aria_label="Quitar cliente",
+                    class_name="ml-auto p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors shrink-0",
                 ),
-                align="center",
-                justify="between",
-                class_name="w-full",
+                class_name="flex items-center gap-1.5 w-full flex-wrap",
             ),
             rx.vstack(
                 rx.el.div(
@@ -1209,7 +1209,7 @@ def products_table(embedded: bool = False) -> rx.Component:
         rx.el.div(
             rx.cond(
                 State.new_sale_items.length() > 0,
-                rx.fragment(
+                rx.el.div(
                     # Vista móvil: cards
                     rx.el.div(
                         rx.foreach(State.new_sale_items, mobile_sale_item_card),
@@ -1249,6 +1249,7 @@ def products_table(embedded: bool = False) -> rx.Component:
                         ),
                         class_name="w-full hidden sm:table",
                     ),
+                    class_name="contents",
                 ),
                 rx.el.div(
                     rx.icon("package-open", class_name="h-10 w-10 sm:h-12 sm:w-12 text-slate-300"),
@@ -1377,27 +1378,6 @@ def sale_products_card() -> rx.Component:
     """
     return rx.el.div(
         quick_add_bar(),
-        # Banner: presupuesto activo cargado en el carrito
-        rx.cond(
-            State.loaded_quotation_id > 0,
-            rx.el.div(
-                rx.icon("file-text", class_name="w-4 h-4 text-indigo-600 shrink-0"),
-                rx.el.span(
-                    "Presupuesto #",
-                    State.loaded_quotation_id.to_string(),
-                    " cargado — al confirmar quedará marcado como Convertido.",
-                    class_name="text-xs text-indigo-700",
-                ),
-                rx.el.button(
-                    rx.icon("x", class_name="w-3.5 h-3.5"),
-                    on_click=State.dismiss_loaded_quotation,
-                    class_name="ml-auto p-0.5 rounded text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100",
-                    title="Descartar vínculo con presupuesto",
-                ),
-                class_name="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border-b border-indigo-100",
-            ),
-            rx.fragment(),
-        ),
         # Pharmacy mode: batch required reminder
         rx.cond(
             State.selected_business_vertical == "farmacia",
@@ -1444,123 +1424,153 @@ def sale_products_card() -> rx.Component:
     )
 
 
+def _data_pill(icon_name: str, label: str, value) -> rx.Component:
+    return rx.el.div(
+        rx.icon(icon_name, class_name="h-3.5 w-3.5 text-slate-400 shrink-0"),
+        rx.el.span(label, class_name="text-xs text-slate-400"),
+        rx.el.span(value, class_name="text-xs font-semibold text-slate-700"),
+        class_name="flex items-center gap-1",
+    )
+
+
 def reservation_info_card() -> rx.Component:
-    """Card prominente de reserva/servicio si existe."""
+    """Card compacta de reserva/servicio si existe."""
     return rx.cond(
-        State.reservation_selected_for_payment != None,
+        State.reservation_payment_id != "",
         rx.el.div(
-            # Header con icono, título y botón cerrar
+            # Header + datos en una sola fila
             rx.el.div(
                 rx.el.div(
                     rx.el.div(
-                        rx.icon("calendar-check", class_name="h-6 w-6 text-white"),
-                        class_name="p-2 bg-emerald-600 rounded-lg",
+                        rx.icon("calendar-check", class_name="h-4 w-4 text-white"),
+                        class_name="p-1.5 bg-emerald-600 rounded-lg shrink-0",
                     ),
+                    rx.el.span("Cobro de Servicio", class_name="font-bold text-slate-800 text-sm"),
                     rx.el.div(
-                        rx.el.span("Cobro de Servicio", class_name="font-bold text-slate-800"),
-                        rx.el.span("Alquiler de Campo", class_name="text-sm text-slate-500"),
-                        class_name="flex flex-col",
+                        class_name="w-px h-4 bg-slate-200 mx-1",
                     ),
-                    class_name="flex items-center gap-2",
+                    # Datos inline compactos
+                    _data_pill("user", "Cliente:", State.reservation_selected_for_payment["client_name"]),
+                    rx.el.div(class_name="w-px h-3 bg-slate-200"),
+                    _data_pill("map-pin", "Campo:", State.reservation_selected_for_payment["field_name"]),
+                    rx.el.div(class_name="w-px h-3 bg-slate-200"),
+                    _data_pill("clock", "Horario:", State.reservation_selected_for_payment["start_datetime"]),
+                    rx.el.div(class_name="w-px h-3 bg-slate-200"),
+                    _data_pill("phone", "Tel:", State.reservation_selected_for_payment["phone"]),
+                    class_name="flex items-center gap-2 flex-wrap flex-1 min-w-0",
                 ),
-                # Botón cerrar para limpiar la reserva pendiente
                 rx.el.button(
-                    rx.icon("x", class_name="h-5 w-5"),
+                    rx.icon("x", class_name="h-4 w-4"),
                     on_click=State.clear_pending_reservation,
                     title="Cerrar cobro de servicio",
                     aria_label="Cerrar cobro de servicio",
-                    class_name="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors",
+                    class_name="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors shrink-0",
                 ),
-                class_name="flex items-center justify-between",
-            ),
-            # Datos del cliente y reserva
-            rx.el.div(
-                # Columna 1: Cliente
-                rx.el.div(
-                    rx.el.div(
-                        rx.icon("user", class_name="h-4 w-4 text-slate-400"),
-                        rx.el.span("Cliente", class_name="text-xs text-slate-500 uppercase"),
-                        class_name="flex items-center gap-1",
-                    ),
-                    rx.el.span(
-                        State.reservation_selected_for_payment["client_name"],
-                        class_name="font-semibold text-slate-800",
-                    ),
-                    class_name="flex flex-col gap-1",
-                ),
-                # Columna 2: Campo
-                rx.el.div(
-                    rx.el.div(
-                        rx.icon("map-pin", class_name="h-4 w-4 text-slate-400"),
-                        rx.el.span("Campo", class_name="text-xs text-slate-500 uppercase"),
-                        class_name="flex items-center gap-1",
-                    ),
-                    rx.el.span(
-                        State.reservation_selected_for_payment["field_name"],
-                        class_name="font-semibold text-slate-800",
-                    ),
-                    class_name="flex flex-col gap-1",
-                ),
-                # Columna 3: Horario
-                rx.el.div(
-                    rx.el.div(
-                        rx.icon("clock", class_name="h-4 w-4 text-slate-400"),
-                        rx.el.span("Horario", class_name="text-xs text-slate-500 uppercase"),
-                        class_name="flex items-center gap-1",
-                    ),
-                    rx.el.span(
-                        State.reservation_selected_for_payment["start_datetime"],
-                        class_name="font-semibold text-slate-800 text-sm",
-                    ),
-                    class_name="flex flex-col gap-1",
-                ),
-                # Columna 4: Teléfono
-                rx.el.div(
-                    rx.el.div(
-                        rx.icon("phone", class_name="h-4 w-4 text-slate-400"),
-                        rx.el.span("Teléfono", class_name="text-xs text-slate-500 uppercase"),
-                        class_name="flex items-center gap-1",
-                    ),
-                    rx.el.span(
-                        State.reservation_selected_for_payment["phone"],
-                        class_name="font-semibold text-slate-800",
-                    ),
-                    class_name="flex flex-col gap-1",
-                ),
-                class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mt-2",
+                class_name="flex items-center justify-between gap-2",
             ),
             # Resumen de montos
             rx.el.div(
                 rx.el.div(
-                    rx.el.span("Total Reserva", class_name="text-sm text-slate-600"),
+                    rx.el.span("Total Reserva", class_name="text-xs text-slate-500"),
                     rx.el.span(
                         State.currency_symbol,
                         State.reservation_selected_for_payment["total_amount"].to_string(),
-                        class_name="text-lg font-bold text-slate-800",
+                        class_name="text-base font-bold text-slate-700",
                     ),
-                    class_name="flex flex-col items-center p-2 bg-slate-50 rounded-lg",
+                    class_name="flex flex-col items-center py-1.5 px-2 bg-slate-50 rounded-lg",
                 ),
                 rx.el.div(
-                    rx.el.span("Adelanto Pagado", class_name="text-sm text-slate-600"),
+                    rx.el.span("Adelanto Pagado", class_name="text-xs text-slate-500"),
                     rx.el.span(
                         State.currency_symbol,
                         State.reservation_selected_for_payment["advance_amount"].to_string(),
-                        class_name="text-lg font-bold text-emerald-600",
+                        class_name="text-base font-bold text-emerald-600",
                     ),
-                    class_name="flex flex-col items-center p-2 bg-emerald-50 rounded-lg",
+                    class_name="flex flex-col items-center py-1.5 px-2 bg-emerald-50 rounded-lg",
                 ),
                 rx.el.div(
-                    rx.el.span("Saldo a Cobrar", class_name="text-sm text-slate-600"),
+                    rx.el.span("Saldo a Cobrar", class_name="text-xs text-slate-500"),
                     rx.el.span(
                         State.currency_symbol,
                         State.selected_reservation_balance.to_string(),
-                        class_name="text-2xl font-bold text-indigo-600",
+                        class_name="text-xl font-bold text-indigo-600",
                     ),
-                    class_name="flex flex-col items-center p-2 bg-indigo-50 rounded-lg border-2 border-indigo-200",
+                    class_name="flex flex-col items-center py-1.5 px-2 bg-indigo-50 rounded-lg border-2 border-indigo-200",
                 ),
-                class_name="grid grid-cols-1 sm:grid-cols-3 gap-1 mt-2",
+                class_name="grid grid-cols-3 gap-1 mt-2",
             ),
-            class_name="bg-white border-2 border-emerald-200 rounded-xl p-2 shadow-sm",
+            class_name="bg-white border-2 border-emerald-200 rounded-xl p-2.5 shadow-sm",
+        ),
+        rx.fragment(),
+    )
+
+
+def _presupuesto_banner() -> rx.Component:
+    """Banner flotante de presupuesto cargado en el carrito."""
+    return rx.cond(
+        State.loaded_quotation_id > 0,
+        rx.el.div(
+            rx.icon("file-text", class_name="w-4 h-4 text-indigo-600 shrink-0"),
+            rx.el.span(
+                "Presupuesto #",
+                State.loaded_quotation_id.to_string(),
+                " cargado — al confirmar quedará marcado como Procesado.",
+                class_name="text-xs text-indigo-700",
+            ),
+            rx.el.button(
+                rx.icon("x", class_name="w-3.5 h-3.5"),
+                on_click=State.dismiss_loaded_quotation,
+                class_name="ml-auto p-0.5 rounded text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100",
+                title="Descartar vínculo con presupuesto",
+            ),
+            class_name=(
+                "flex items-center gap-2 px-3 py-2 "
+                "bg-indigo-50 border border-indigo-200 rounded-xl shadow-sm"
+            ),
+        ),
+        rx.fragment(),
+    )
+
+
+def _reservation_products_breakdown() -> rx.Component:
+    """Desglose Servicio + Productos = Total cuando ambos coexisten."""
+    return rx.cond(
+        (State.reservation_payment_id != "")
+        & (State.new_sale_items.length() > 0),
+        rx.el.div(
+            rx.el.div(
+                rx.el.span("Servicio", class_name="text-xs text-slate-500"),
+                rx.el.span(
+                    State.currency_symbol,
+                    State.selected_reservation_balance.to_string(),
+                    class_name="text-sm font-semibold text-slate-700",
+                ),
+                class_name="flex flex-col items-center",
+            ),
+            rx.icon("plus", class_name="h-4 w-4 text-slate-400"),
+            rx.el.div(
+                rx.el.span("Productos", class_name="text-xs text-slate-500"),
+                rx.el.span(
+                    State.currency_symbol,
+                    State.products_cart_subtotal.to_string(),
+                    class_name="text-sm font-semibold text-slate-700",
+                ),
+                class_name="flex flex-col items-center",
+            ),
+            rx.icon("equal", class_name="h-4 w-4 text-slate-400"),
+            rx.el.div(
+                rx.el.span("Total a Cobrar", class_name="text-xs font-medium text-indigo-600"),
+                rx.el.span(
+                    State.currency_symbol,
+                    State.sale_total.to_string(),
+                    class_name="text-base font-bold text-indigo-700",
+                ),
+                class_name="flex flex-col items-center",
+            ),
+            class_name=(
+                "flex items-center justify-center gap-4 py-2 px-4 "
+                "bg-slate-50 border border-slate-200 rounded-xl"
+            ),
         ),
         rx.fragment(),
     )
@@ -2688,7 +2698,7 @@ def venta_page() -> rx.Component:
         # Contenido principal
         rx.el.div(
             rx.cond(
-                State.reservation_selected_for_payment != None,
+                State.reservation_payment_id != "",
                 rx.fragment(),
                 rx.el.div(
                     rx.el.div(
@@ -2758,7 +2768,16 @@ def venta_page() -> rx.Component:
             ),
             # Info de reserva/servicio prominente (si aplica)
             reservation_info_card(),
-            client_selector(),
+            # Banner presupuesto cargado (contexto global, fuera de la card de productos)
+            _presupuesto_banner(),
+            # Desglose servicio + productos cuando ambos coexisten
+            _reservation_products_breakdown(),
+            # Selector de cliente — oculto cuando la reserva ya provee el cliente
+            rx.cond(
+                State.reservation_payment_id == "",
+                client_selector(),
+                rx.fragment(),
+            ),
             # Barra de entrada rápida
             sale_products_card(),
             # Pago móvil/tablet

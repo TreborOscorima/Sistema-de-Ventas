@@ -100,6 +100,16 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     fiscal_ar_cbte_letra: str = ""  # "A", "B", "C" — auto-determinado
 
     @rx.var(cache=True)
+    def has_selected_client(self) -> bool:
+        return self.selected_client is not None
+
+    @rx.var(cache=True)
+    def selected_client_has_dni(self) -> bool:
+        if not self.selected_client:
+            return False
+        return bool(self.selected_client.get("dni", ""))
+
+    @rx.var(cache=True)
     def active_price_list_name(self) -> str:
         if not self.selected_client:
             return ""
@@ -642,7 +652,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 except (ValueError, StockError) as exc:
                     await session.rollback()
                     logger.warning("Validacion de venta fallida: %s", exc)
-                    self.add_notification(str(exc), "error")
+                    yield rx.toast(str(exc), duration=6000)
                     return
                 except Exception as exc:
                     await session.rollback()

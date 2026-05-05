@@ -249,7 +249,9 @@ def _quotation_detail_modal() -> rx.Component:
                 rx.fragment(),
             ),
             rx.cond(
-                (q["status"] == QuotationStatus.DRAFT) | (q["status"] == QuotationStatus.SENT),
+                (q["status"] == QuotationStatus.DRAFT)
+                | (q["status"] == QuotationStatus.SENT)
+                | (q["status"] == QuotationStatus.ACCEPTED),
                 rx.el.button(
                     rx.icon("pencil", class_name="h-4 w-4"),
                     "Editar",
@@ -323,6 +325,7 @@ def _new_quotation_modal() -> rx.Component:
                 ),
                 class_name="py-2 px-3 text-center",
             ),
+            key=item["product_id"],
             class_name="border-b border-slate-100",
         )
 
@@ -495,7 +498,7 @@ def presupuestos_page() -> rx.Component:
                     rx.el.option("Aceptados", value="accepted"),
                     rx.el.option("Rechazados", value="rejected"),
                     rx.el.option("Vencidos", value="expired"),
-                    rx.el.option("Convertidos", value="converted"),
+                    rx.el.option("Procesados", value="converted"),
                     default_value=State.quotations_filter_status,
                     on_change=State.set_quotations_filter_status,
                     class_name=SELECT_STYLES.get("default", "border rounded px-3 py-2 text-sm"),

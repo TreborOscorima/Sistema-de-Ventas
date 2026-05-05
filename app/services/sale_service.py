@@ -1559,6 +1559,8 @@ class SaleService:
                 raise ValueError(
                     MSG.SALE_VAL_INVALID_QTY.format(description=description)
                 )
+            price_from_cart = getattr(item, "price", None)
+            sale_price_from_cart = getattr(item, "sale_price", None)
             pending_items.append(
                 {
                     "description": description,
@@ -1571,6 +1573,15 @@ class SaleService:
                     "batch_id": getattr(item, "batch_id", None),
                     "category": getattr(item, "category", None) or "",
                     "allows_decimal": allows_decimal,
+                    # Precio efectivo del carrito (ya validado por el motor de precios
+                    # en _recompute_cart_prices, incluyendo descuentos de cotización y
+                    # promociones). Se usa para bypasear la re-resolución en el service.
+                    "price_override": _to_decimal(price_from_cart) if price_from_cart and price_from_cart > 0 else None,
+                    # Precio base (sin descuento) para mostrar tachado en el comprobante.
+                    "display_base_price": _to_decimal(sale_price_from_cart) if sale_price_from_cart and sale_price_from_cart > 0 else None,
+                    # Promoción pre-resuelta por el carrito; se propaga para que
+                    # _consume_promotions_for_sale pueda incrementar current_uses.
+                    "applied_promotion_id_from_cart": getattr(item, "applied_promotion_id", None),
                 }
             )
 
@@ -1788,15 +1799,19 @@ class SaleService:
         cart_subtotal_pre_promo = Decimal("0.00")
         for item in pending_items:
             matched_product, matched_variant = _match_product(item)
-            base_price, applied_pl_id_pre = await _resolve_item_base_price(
-                session,
-                matched_product,
-                matched_variant,
-                item["quantity"],
-                company_id,
-                branch_id,
-                price_list_id=client_price_list_id,
-            )
+            if item.get("price_override") is not None:
+                base_price = _round_money(item["price_override"])
+                applied_pl_id_pre = None
+            else:
+                base_price, applied_pl_id_pre = await _resolve_item_base_price(
+                    session,
+                    matched_product,
+                    matched_variant,
+                    item["quantity"],
+                    company_id,
+                    branch_id,
+                    price_list_id=client_price_list_id,
+                )
             prepared_items.append(
                 (matched_product, matched_variant, base_price, applied_pl_id_pre)
             )
@@ -1806,24 +1821,29 @@ class SaleService:
         for idx, item in enumerate(pending_items):
             product, variant, base_price, pre_pl_id = prepared_items[idx]
 
-            (
-                unit_price,
-                applied_pl_id,
-                applied_promo_id,
-            ) = await _resolve_item_pricing(
-                session,
-                product,
-                variant,
-                item["quantity"],
-                company_id,
-                branch_id,
-                price_list_id=client_price_list_id,
-                now=promo_now,
-                coupon_code=coupon_code,
-                cart_subtotal=cart_subtotal_pre_promo,
-                precomputed_base_price=base_price,
-                precomputed_applied_pl_id=pre_pl_id,
-            )
+            if item.get("price_override") is not None:
+                unit_price = base_price
+                applied_pl_id = None
+                applied_promo_id = item.get("applied_promotion_id_from_cart")
+            else:
+                (
+                    unit_price,
+                    applied_pl_id,
+                    applied_promo_id,
+                ) = await _resolve_item_pricing(
+                    session,
+                    product,
+                    variant,
+                    item["quantity"],
+                    company_id,
+                    branch_id,
+                    price_list_id=client_price_list_id,
+                    now=promo_now,
+                    coupon_code=coupon_code,
+                    cart_subtotal=cart_subtotal_pre_promo,
+                    precomputed_base_price=base_price,
+                    precomputed_applied_pl_id=pre_pl_id,
+                )
             if applied_promo_id is not None:
                 applied_promotion_ids.add(applied_promo_id)
             if unit_price <= 0:
@@ -1832,6 +1852,12 @@ class SaleService:
                 )
             subtotal = calculate_subtotal(item["quantity"], unit_price)
 
+            display_base = item.get("display_base_price")
+            snapshot_base = (
+                display_base
+                if display_base is not None and display_base > unit_price
+                else base_price
+            )
             product_snapshot.append(
                 {
                     "description": item["description"],
@@ -1839,7 +1865,7 @@ class SaleService:
                     "unit": item["unit"],
                     "price": _money_to_float(unit_price),
                     "subtotal": _money_to_float(subtotal),
-                    "base_price": _money_to_float(base_price),
+                    "base_price": _money_to_float(snapshot_base),
                 }
             )
             decimal_item = {
@@ -1857,7 +1883,10 @@ class SaleService:
                 "applied_price_list_id": applied_pl_id,
                 # Snapshot del precio pre-promo para que el reporte de
                 # promociones pueda calcular descuento real (final − base) × qty.
-                "unit_price_base": base_price,
+                # Usa snapshot_base (display_base_price del carrito cuando es mayor que
+                # unit_price) en vez de base_price, que en la ruta price_override es
+                # el precio YA descontado.  Ref: bug unit_price_base == unit_price.
+                "unit_price_base": snapshot_base,
             }
             decimal_snapshot.append(decimal_item)
 
@@ -1957,17 +1986,9 @@ class SaleService:
             total_paid_now = _round_money(cash_amount)
             if not is_credit:
                 if cash_amount <= 0 or cash_amount < sale_total:
-                    message = (
-                        payment_data.cash.message
-                        or MSG.SALE_VAL_CASH_AMOUNT
-                    )
-                    raise ValueError(message)
+                    raise ValueError(MSG.SALE_VAL_CASH_AMOUNT)
             elif cash_amount < 0:
-                message = (
-                    payment_data.cash.message
-                    or MSG.SALE_VAL_CASH_AMOUNT
-                )
-                raise ValueError(message)
+                raise ValueError(MSG.SALE_VAL_CASH_AMOUNT)
         elif kind == "mixed":
             total_paid_now = _round_money(
                 _to_decimal(payment_data.mixed.cash)
@@ -1976,17 +1997,9 @@ class SaleService:
             )
             if not is_credit:
                 if total_paid_now <= 0 or total_paid_now < sale_total:
-                    message = (
-                        payment_data.mixed.message
-                        or MSG.SALE_VAL_MIXED_AMOUNTS
-                    )
-                    raise ValueError(message)
+                    raise ValueError(MSG.SALE_VAL_MIXED_AMOUNTS)
             elif total_paid_now < 0:
-                message = (
-                    payment_data.mixed.message
-                    or MSG.SALE_VAL_MIXED_AMOUNTS
-                )
-                raise ValueError(message)
+                raise ValueError(MSG.SALE_VAL_MIXED_AMOUNTS)
         else:
             # S1-04: card/wallet/other no-crédito — el DTO no expone monto del
             # proveedor (tarjeta/wallet autorizados externamente), pero sí
@@ -2052,12 +2065,12 @@ class SaleService:
             credit_base = _round_money(sale_total - initial_payment)
             if credit_base < Decimal("0.00"):
                 credit_base = Decimal("0.00")
-            if _round_money(client.credit_limit) <= Decimal("0.00"):
-                raise ValueError(MSG.SALE_VAL_NO_CREDIT_LINE)
-            if _round_money(client.current_debt) + credit_base > _round_money(
-                client.credit_limit
-            ):
-                raise ValueError(MSG.SALE_VAL_CREDIT_LIMIT)
+            # credit_limit = 0 → fiado informal sin tope; solo aplicar cap si hay límite explícito
+            if _round_money(client.credit_limit) > Decimal("0.00"):
+                if _round_money(client.current_debt) + credit_base > _round_money(
+                    client.credit_limit
+                ):
+                    raise ValueError(MSG.SALE_VAL_CREDIT_LIMIT)
 
         try:
             timestamp = utc_now_naive()
@@ -2130,7 +2143,7 @@ class SaleService:
                 # físicamente recibido (paid_now_total).
                 cashbox_amount = min(initial_payment_input, paid_now_total)
 
-            if cashbox_amount > 0:
+            if cashbox_amount > 0 or is_credit:
                 cashbox_method_id = None
                 main_payment_code = None
                 if kind == "cash":

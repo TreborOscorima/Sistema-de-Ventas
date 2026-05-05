@@ -431,6 +431,14 @@ class HistoryMixin:
         total_paid = paid_total + installments_paid
         paid_total = self._round_currency(paid_total)
         total_paid = self._round_currency(total_paid)
+        if (sale.payment_condition or "").strip().lower() == "credito":
+            if paid_total > 0:
+                method_label = "Crédito c/ Inicial"
+                if not details_text or details_text == "-":
+                    details_text = f"Inicial: {self._format_currency(paid_total)}"
+            else:
+                method_label = "Crédito"
+                details_text = "Crédito/Fiado"
         items: list[dict] = []
         items_total = 0
         for item in sale.items or []:

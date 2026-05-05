@@ -30,7 +30,7 @@ _STATUS_LABEL = {
     QuotationStatus.ACCEPTED: "Aceptado",
     QuotationStatus.REJECTED: "Rechazado",
     QuotationStatus.EXPIRED: "Vencido",
-    QuotationStatus.CONVERTED: "Convertido",
+    QuotationStatus.CONVERTED: "Procesado",
 }
 
 _STATUS_COLOR = {
@@ -255,9 +255,9 @@ class QuotationState(MixinState):
             if not q:
                 yield rx.toast("Presupuesto no encontrado.", duration=3000)
                 return
-            if q.status not in (QuotationStatus.DRAFT, QuotationStatus.SENT):
+            if q.status not in (QuotationStatus.DRAFT, QuotationStatus.SENT, QuotationStatus.ACCEPTED):
                 yield rx.toast(
-                    "Solo se pueden editar presupuestos en estado Borrador o Enviado.",
+                    "Solo se pueden editar presupuestos en estado Borrador, Enviado o Aceptado.",
                     duration=3000,
                 )
                 return
@@ -710,6 +710,7 @@ class QuotationState(MixinState):
                 effective_price = self._round_currency(
                     float(Decimal(str(qi.unit_price or 0)) * item_disc_factor * global_disc_factor)
                 )
+                unit_price_base = self._round_currency(float(qi.unit_price or 0))
                 qty = float(qi.quantity or 1)
                 cart_items.append({
                     "temp_id": str(uuid.uuid4()),
@@ -719,7 +720,8 @@ class QuotationState(MixinState):
                     "quantity": qty,
                     "unit": unit,
                     "price": effective_price,
-                    "sale_price": effective_price,
+                    "sale_price": unit_price_base,
+                    "base_price": unit_price_base,
                     "subtotal": self._round_currency(qty * effective_price),
                     "product_id": qi.product_id,
                     "variant_id": qi.product_variant_id,
@@ -728,6 +730,10 @@ class QuotationState(MixinState):
                     "requires_batch": False,
                     "kit_product_id": None,
                     "kit_name": "",
+                    "promotion_name": "Desc. presupuesto" if effective_price < unit_price_base else "",
+                    # Precio pactado en el presupuesto: sobrevive a _recompute_cart_prices.
+                    # Si una promoción da un precio menor, la promoción gana (min).
+                    "quotation_price": effective_price,
                 })
 
         if not cart_items:
