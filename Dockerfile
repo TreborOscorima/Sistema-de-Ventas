@@ -67,14 +67,14 @@ COPY --chown=app:app . .
 COPY --chown=app:app scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-# Reflex 0.9.x prod mode sirve frontend + backend + API en puerto 3000 (--frontend-port).
-# Puerto 8000 (--backend-port) solo activo en modo dev. >1024 = no requiere root.
+# Reflex prod mode: frontend Next.js en :3000, backend Granian (API/WS) en :8000.
+# Ambos puertos activos cuando se corre sin --backend-only.
 EXPOSE 3000 8000
 
-# Liveness check: /api/ping responde sin tocar DB/Redis → ideal para Docker.
-# Readiness con dependencias se mide en /api/health desde el reverse proxy (NPM).
+# Liveness: /api/ping en el backend (puerto 8000), sin tocar DB/Redis.
+# Readiness con dependencias (DB + Redis) se mide con /api/health desde NPM.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-    CMD curl -fsS http://localhost:3000/api/ping || exit 1
+    CMD curl -fsS http://localhost:8000/api/ping || exit 1
 
 USER app
 
