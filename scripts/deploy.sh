@@ -221,8 +221,10 @@ fi
 ok "Backend respondiendo en puerto $BACKEND_PORT"
 
 # ─── 9b. Esperar al frontend (solo en modo completo) ────────────────────────
+# Reflex 0.9.2 prod mode sirve frontend + API desde el mismo proceso (BACKEND_PORT).
+# Ya no existe un servidor Next.js separado en puerto 3000.
 if [[ "$BACKEND_ONLY" != "true" ]]; then
-    FRONTEND_PORT=3000
+    FRONTEND_PORT=$BACKEND_PORT
     info "Esperando a que el frontend responda en puerto $FRONTEND_PORT (máx 300s)..."
     FE_WAITED=0
     FE_MAX=300
@@ -266,7 +268,7 @@ echo "  Commit:    $(git rev-parse --short HEAD)"
 echo "  Branch:    $BRANCH"
 echo "  Backend:   http://127.0.0.1:${BACKEND_PORT}"
 if [[ "$BACKEND_ONLY" != "true" ]]; then
-echo "  Frontend:  http://127.0.0.1:3000"
+echo "  Frontend:  http://127.0.0.1:${BACKEND_PORT}"
 fi
 echo "  Health:    http://127.0.0.1:${BACKEND_PORT}/api/health"
 echo "  Logs:      $APP_DIR/logs/backend.out"
