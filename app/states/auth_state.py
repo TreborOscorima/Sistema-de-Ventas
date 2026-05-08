@@ -2032,6 +2032,24 @@ class AuthState(MixinState):
 
     @rx.event
     def logout(self):
+        user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
+        if user_id:
+            try:
+                from app.models.sales import CashboxSession as _CashboxSession
+                with rx.session() as _sess:
+                    orphan = _sess.exec(
+                        select(_CashboxSession).where(
+                            _CashboxSession.user_id == user_id,
+                            _CashboxSession.is_open == True,
+                        )
+                    ).first()
+                    if orphan:
+                        orphan.is_open = False
+                        orphan.closing_time = utc_now_naive()
+                        _sess.add(orphan)
+                        _sess.commit()
+            except Exception:
+                pass  # non-critical: logout must always complete
         self.token = ""
         self.refresh_token = ""
         self.password_change_error = ""

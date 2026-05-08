@@ -2014,7 +2014,7 @@ class SaleService:
                     or (payment_data.wallet.choice or "").strip()
                 ):
                     raise ValueError(MSG.SALE_VAL_PAYMENT_METHOD)
-                if kind not in {"cash", "card", "wallet", "mixed"}:
+                if kind not in {"cash", "debit", "credit", "yape", "plin", "transfer", "card", "wallet", "mixed", "other"}:
                     raise ValueError(MSG.SALE_VAL_PAYMENT_METHOD)
             if is_credit:
                 total_paid_now = _round_money(initial_payment)

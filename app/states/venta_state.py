@@ -53,6 +53,7 @@ from app.i18n import MSG
 from app.utils.db import get_async_session
 from app.utils.logger import get_logger
 from app.utils.sanitization import escape_like
+from app.utils.timezone import format_local_datetime
 from .mixin_state import MixinState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin
 
@@ -717,7 +718,13 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             self.last_sale_receipt = result.receipt_items
             self.last_sale_reservation_context = result.reservation_context
             self.last_sale_total = result.sale_total_display
-            self.last_sale_timestamp = result.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            _ts_settings = self._company_settings_snapshot()
+            self.last_sale_timestamp = format_local_datetime(
+                result.timestamp,
+                "%Y-%m-%d %H:%M:%S",
+                _ts_settings.get("country_code") or "PE",
+                timezone=_ts_settings.get("timezone") or None,
+            )
             self.last_payment_summary = result.payment_summary
             self.last_sale_id = str(result.sale.id)
             self.sale_receipt_ready = True

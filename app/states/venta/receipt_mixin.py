@@ -10,6 +10,7 @@ from app.models import Sale
 from app.services.receipt_service import ReceiptService
 from app.utils.db import get_async_session
 from app.utils.payment import payment_method_label
+from app.utils.timezone import format_local_datetime
 
 
 class ReceiptMixin:
@@ -139,7 +140,13 @@ class ReceiptMixin:
                         return rx.toast("Venta no encontrada.", duration=3000)
 
                     branch_id = sale.branch_id
-                    timestamp = sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+                    _rp_settings = self._company_settings_snapshot()
+                    timestamp = format_local_datetime(
+                        sale.timestamp,
+                        "%Y-%m-%d %H:%M:%S",
+                        _rp_settings.get("country_code") or "PE",
+                        timezone=_rp_settings.get("timezone") or None,
+                    )
                     total = sale.total_amount
                     payment_summary = self._payment_summary_from_payments(
                         sale.payments or []
@@ -328,7 +335,13 @@ class ReceiptMixin:
                 return
 
             branch_id = sale.branch_id
-            timestamp = sale.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            _rp_settings = self._company_settings_snapshot()
+            timestamp = format_local_datetime(
+                sale.timestamp,
+                "%Y-%m-%d %H:%M:%S",
+                _rp_settings.get("country_code") or "PE",
+                timezone=_rp_settings.get("timezone") or None,
+            )
             total = sale.total_amount
             payment_summary = self._payment_summary_from_payments(
                 sale.payments or []

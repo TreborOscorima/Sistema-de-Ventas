@@ -366,6 +366,7 @@ def get_cashbox_alerts(
         # Sesiones de caja abiertas por mucho tiempo
         long_open_query = select(CashboxSession).where(
             and_(
+                CashboxSession.is_open == True,
                 CashboxSession.closing_time == None,
                 CashboxSession.opening_time < threshold_time,
             )
