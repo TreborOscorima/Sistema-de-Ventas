@@ -32,7 +32,8 @@ FROM python:3.11-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    HOME=/app
 
 # Runtime deps:
 # - curl/unzip: Reflex descarga bun en primer arranque
@@ -64,15 +65,16 @@ COPY --chown=app:app . .
 # - aplica migraciones Alembic (fail-fast)
 # - luego arranca Reflex
 COPY --chown=app:app scripts/docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-# Puerto 8000 sirve frontend + backend + API en modo prod (0.9.x). >1024 = no requiere root.
-EXPOSE 8000
+# Reflex 0.9.x prod mode sirve frontend + backend + API en puerto 3000 (--frontend-port).
+# Puerto 8000 (--backend-port) solo activo en modo dev. >1024 = no requiere root.
+EXPOSE 3000 8000
 
 # Liveness check: /api/ping responde sin tocar DB/Redis → ideal para Docker.
 # Readiness con dependencias se mide en /api/health desde el reverse proxy (NPM).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-    CMD curl -fsS http://localhost:8000/api/ping || exit 1
+    CMD curl -fsS http://localhost:3000/api/ping || exit 1
 
 USER app
 
