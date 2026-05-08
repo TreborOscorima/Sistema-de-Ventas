@@ -188,6 +188,11 @@ if [[ "$BACKEND_ONLY" == "true" ]]; then
         > logs/backend.out 2>&1 &
     MAX_WAIT=60
 else
+    # Reflex 0.9.x prod mode requiere .web/package.json antes de arrancar.
+    # Si deploy.sh borró .web/ (cambios de frontend), hay que re-inicializar.
+    info "Inicializando directorio web (reflex init)..."
+    $PYTHON -m reflex init
+    ok "Reflex web directory listo"
     info "Iniciando backend + frontend en puerto $BACKEND_PORT..."
     nohup $PYTHON -m reflex run \
         --env prod \
