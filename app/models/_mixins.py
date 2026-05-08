@@ -5,11 +5,11 @@ largo de los modelos SQLModel/Reflex, principalmente el scope
 multi-tenant.
 
 Uso:
-    class Product(TenantMixin, rx.Model, table=True):
+    class Product(TenantMixin, SQLModel, table=True):
         # company_id/branch_id inyectados por el mixin.
         barcode: str = Field(...)
 
-Nota sobre MRO: ``TenantMixin`` debe ir ANTES de ``rx.Model`` en la
+Nota sobre MRO: ``TenantMixin`` debe ir ANTES de ``SQLModel`` en la
 lista de bases. SQLModel procesa las anotaciones heredadas como
 columnas, por lo que el orden define correctamente la precedencia
 del metaclass.

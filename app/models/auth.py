@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 class RolePermission(SQLModel, table=True):
     """Tabla intermedia para relacionar roles y permisos.
 
-    Se mantiene ``id`` sintético inyectado por ``rx.Model``, pero el
+    Se mantiene ``id`` sintético (primary key), pero el
     UNIQUE compuesto ``(role_id, permission_id)`` previene asignaciones
     duplicadas que inflarían el vínculo RBAC.
     """

@@ -1997,7 +1997,7 @@ class TestCertMetadataStateVars:
         """Los nuevos vars deben tener default vacío."""
         from app.states.billing_state import BillingState
         # Verificar que los fields tienen default ""
-        fields = BillingState.__fields__ if hasattr(BillingState, "__fields__") else {}
+        fields = getattr(BillingState, "model_fields", {})
         if "billing_cert_issuer" in fields:
             assert fields["billing_cert_issuer"].default == ""
         if "billing_cert_serial" in fields:
@@ -2022,7 +2022,7 @@ class TestCaeVencimientoField:
         from app.models.billing import FiscalDocument
         doc = FiscalDocument.__new__(FiscalDocument)
         # El campo tiene default=None
-        fields = FiscalDocument.__fields__
+        fields = FiscalDocument.model_fields
         assert fields["cae_vencimiento"].default is None
 
     def test_cae_vencimiento_accepts_yyyymmdd(self):

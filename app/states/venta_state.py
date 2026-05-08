@@ -204,10 +204,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     def select_client(self, client_data: dict | Client):
         selected = None
         if isinstance(client_data, Client):
-            if hasattr(client_data, "model_dump"):
-                selected = client_data.model_dump()
-            else:
-                selected = client_data.dict()
+            selected = client_data.model_dump()
             balance = client_data.credit_limit - client_data.current_debt
             if balance is None:
                 balance = 0
