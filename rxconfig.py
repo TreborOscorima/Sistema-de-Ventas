@@ -80,7 +80,6 @@ config = rx.Config(
     app_name="app",
     db_url=DB_URL,
     api_url=API_URL,
-    state_auto_setters=True,  # workaround temporal — remover antes de v1.0 tras migrar ~250 set_<var>
     plugins=[
         rx.plugins.RadixThemesPlugin(
             theme=rx.theme(
