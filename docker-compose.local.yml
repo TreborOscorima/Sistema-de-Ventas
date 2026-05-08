@@ -1,0 +1,45 @@
+# =============================================================================
+# docker-compose.local.yml — Override para testing local en Windows/Mac
+#
+# Uso (solo superficie app-sys contra MySQL local de Windows):
+#   docker compose -f docker-compose.prod.yml -f docker-compose.local.yml \
+#     up -d mysql redis app-sys
+#
+# Acceso: http://localhost:8000
+#
+# Lo que hace este override:
+#   - Reemplaza npm_network external → bridge local (sin nginx-proxy-manager)
+#   - Expone el puerto 8000 (backend Granian) al host
+#   - Apunta PUBLIC_API_URL a localhost:8000 (api_url bakeado en el frontend)
+#   - Solo necesitás tener en .env: DB_PASSWORD, AUTH_SECRET_KEY, MYSQL_ROOT_PASSWORD
+# =============================================================================
+
+services:
+  app-sys:
+    ports:
+      - "8000:8000"    # Backend Granian (API + WS) — url principal local
+      - "3000:3000"    # Frontend Next.js (opcional, para inspección directa)
+    environment:
+      PUBLIC_API_URL: "http://localhost:8000"
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"  # sin Redis externo puede fallar en local
+
+  app-landing:
+    ports:
+      - "8001:8000"
+      - "3001:3000"
+    environment:
+      PUBLIC_API_URL: "http://localhost:8001"
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
+
+  app-admin:
+    ports:
+      - "8002:8000"
+      - "3002:3000"
+    environment:
+      PUBLIC_API_URL: "http://localhost:8002"
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
+
+networks:
+  npm_network:
+    driver: bridge    # Override: local bridge en lugar de external (no requiere NPM)
+    name: tuwayki_local_npm
