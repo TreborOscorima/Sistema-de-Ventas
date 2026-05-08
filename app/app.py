@@ -3,10 +3,6 @@ import os
 import reflex as rx
 import app.models  # Importar modelos para que Reflex detecte las tablas
 
-# Evitar warnings de metadata duplicada en Reflex/SQLAlchemy.
-rx.ModelRegistry.models = {rx.Model}
-rx.ModelRegistry._metadata = rx.Model.metadata
-
 # IMPORTANTE: registrar listeners de aislamiento multi-tenant ANTES de cualquier query.
 # El side-effect fue removido de app/utils/db.py para que los tests no dependan de
 # import-order. Ahora es responsabilidad explícita del bootstrap.

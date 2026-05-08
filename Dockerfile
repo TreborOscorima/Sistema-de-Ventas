@@ -66,8 +66,8 @@ COPY --chown=app:app . .
 COPY --chown=app:app scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Puertos de Reflex (frontend 3000 + backend 8000). >1024 = no requiere root.
-EXPOSE 3000 8000
+# Puerto 8000 sirve frontend + backend + API en modo prod (0.9.x). >1024 = no requiere root.
+EXPOSE 8000
 
 # Liveness check: /api/ping responde sin tocar DB/Redis → ideal para Docker.
 # Readiness con dependencias se mide en /api/health desde el reverse proxy (NPM).
