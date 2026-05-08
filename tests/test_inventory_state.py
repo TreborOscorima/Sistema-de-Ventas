@@ -81,7 +81,7 @@ def test_add_category_creates_when_missing(monkeypatch):
     assert state.new_category_name == ""
     assert load_called["value"] is True
     assert any(
-        isinstance(obj, Category) and obj.name == "Bebidas"
+        isinstance(obj, Category) and obj.name == "BEBIDAS"
         for obj in fake_session.added
     )
     fake_session.commit.assert_called_once()

@@ -13,6 +13,9 @@ class FakeExecResult:
     def all(self):
         return self._items
 
+    def first(self):
+        return self._items[0] if self._items else None
+
 
 class FakeSession:
     def __init__(self, responses):
@@ -68,6 +71,8 @@ def test_load_config_data_filters_legacy_credit_sale_method(monkeypatch):
 
     fake_session = FakeSession(
         [
+            [],  # CompanySettings branch query (first)
+            [],  # CompanySettings fallback query (first)
             [SimpleNamespace(code="PEN", name="Sol peruano (PEN)", symbol="S/")],
             [],
             [

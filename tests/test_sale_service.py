@@ -363,17 +363,16 @@ async def test_process_sale_credit_cashbox_uses_initial_payment(
         current_debt=Decimal("0.00"),
     )
     session_mock.get.return_value = client
+    # price=50.00 en SaleItemDTO → price_override != None → omite PriceTier y Promotions
     session_mock.exec.side_effect = [
-        exec_result(all_items=[]),
-        exec_result(all_items=[unit_sample]),
-        exec_result(all_items=[]),  # Category requires_batch
-        exec_result(first_item=client),  # Sprint 1: client_for_pl (lookup price_list)
-        exec_result(all_items=[product_sample]),
-        exec_result(all_items=[]),
-        exec_result(first_item=None),
-        exec_result(all_items=[]),  # _apply_promotions (sin promos)
-        exec_result(all_items=[]),  # buffer
-        exec_result(first_item=client),
+        exec_result(all_items=[]),              # 0: PaymentMethod
+        exec_result(all_items=[unit_sample]),   # 1: Unit
+        exec_result(all_items=[]),              # 2: Category requires_batch
+        exec_result(first_item=client),         # 3: client_for_pl (price list lookup)
+        exec_result(all_items=[product_sample]), # 4: Products
+        exec_result(all_items=[]),              # 5: ProductVariants by SKU
+        exec_result(all_items=[]),              # 6: ProductBatch
+        exec_result(first_item=client),         # 7: Client credit check
     ]
 
     result = await SaleService.process_sale(

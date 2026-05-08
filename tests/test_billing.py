@@ -233,7 +233,8 @@ class TestMonthlyQuota:
         config.current_billing_count = 500
         config.max_billing_limit = 500
         config.billing_count_reset_date = datetime(2026, 4, 1)
-        allowed, msg = _check_monthly_quota(config)
+        with patch("app.services.billing_service.utc_now_naive", return_value=datetime(2026, 4, 15)):
+            allowed, msg = _check_monthly_quota(config)
         assert allowed is False
         assert "Límite mensual" in msg
 
@@ -613,7 +614,8 @@ class TestEmitFiscalDocument:
         at_limit.first.return_value = config
         mock_session.exec.side_effect = [no_doc, at_limit]
 
-        with patch("app.services.billing_service.get_async_session") as mock_get:
+        with patch("app.services.billing_service.get_async_session") as mock_get, \
+             patch("app.services.billing_service.utc_now_naive", return_value=datetime(2026, 4, 15)):
             mock_get.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_get.return_value.__aexit__ = AsyncMock(return_value=False)
             result = await emit_fiscal_document(
@@ -1053,6 +1055,7 @@ class TestEndToEndBillingFlow:
         nubefact_response.json.return_value = json.loads(nubefact_response.text)
 
         with patch("app.services.billing_service.get_async_session") as mock_get, \
+             patch("app.services.billing_service.utc_now_naive", return_value=datetime(2026, 4, 15)), \
              patch("httpx.AsyncClient") as mock_httpx:
             mock_get.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_get.return_value.__aexit__ = AsyncMock(return_value=False)

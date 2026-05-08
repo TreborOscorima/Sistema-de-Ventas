@@ -425,6 +425,7 @@ class TestVentaFlujoPeru:
         mock_http_resp.json.return_value = nubefact_resp
 
         with patch("app.services.billing_service.get_async_session") as mock_get, \
+             patch("app.services.billing_service.utc_now_naive", return_value=datetime(2026, 4, 15)), \
              patch("httpx.AsyncClient") as mock_httpx:
             mock_get.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_get.return_value.__aexit__ = AsyncMock(return_value=False)
@@ -1326,13 +1327,15 @@ class TestFlujoPipelineCompleto:
     def test_cuota_mensual_bloquea_cuando_se_agota(self):
         """La cuota mensual bloquea cuando billing_count == max_limit."""
         from app.services.billing_service import _check_monthly_quota
+        from unittest.mock import patch
 
         config = MagicMock()
         config.current_billing_count = 500
         config.max_billing_limit = 500
         config.billing_count_reset_date = datetime(2026, 4, 1)
 
-        allowed, msg = _check_monthly_quota(config)
+        with patch("app.services.billing_service.utc_now_naive", return_value=datetime(2026, 4, 15)):
+            allowed, msg = _check_monthly_quota(config)
         assert allowed is False
         assert "Límite mensual" in msg
 
