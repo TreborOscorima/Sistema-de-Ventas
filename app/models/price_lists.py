@@ -13,8 +13,7 @@ from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from decimal import Decimal
 
-import reflex as rx
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
 from sqlalchemy import CheckConstraint, Numeric
 
@@ -26,7 +25,7 @@ if TYPE_CHECKING:
     from .client import Client
 
 
-class PriceList(TenantMixin, rx.Model, table=True):
+class PriceList(TenantMixin, SQLModel, table=True):
     """Lista de precios nominada (ej: Mayorista, VIP, Distribuidores)."""
 
     __tablename__ = "pricelist"
@@ -46,6 +45,7 @@ class PriceList(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(nullable=False, max_length=100, index=True)
     description: Optional[str] = Field(default=None, max_length=500)
 
@@ -89,7 +89,7 @@ class PriceList(TenantMixin, rx.Model, table=True):
     )
 
 
-class PriceListItem(TenantMixin, rx.Model, table=True):
+class PriceListItem(TenantMixin, SQLModel, table=True):
     """Precio override de un producto/variante dentro de una lista."""
 
     __tablename__ = "pricelistitem"
@@ -118,6 +118,7 @@ class PriceListItem(TenantMixin, rx.Model, table=True):
         CheckConstraint("unit_price >= 0", name="ck_pricelistitem_price_nonneg"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     price_list_id: int = Field(
         sa_column=sqlalchemy.Column(
             sqlalchemy.Integer,

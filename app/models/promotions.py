@@ -15,8 +15,7 @@ from typing import Optional, TYPE_CHECKING
 from datetime import datetime, time
 from decimal import Decimal
 
-import reflex as rx
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
 from sqlalchemy import CheckConstraint, Numeric
 
@@ -40,7 +39,7 @@ class PromotionScope(str):
     PRODUCT = "product"
 
 
-class Promotion(TenantMixin, rx.Model, table=True):
+class Promotion(TenantMixin, SQLModel, table=True):
     """Regla de promoción/descuento automático aplicada en la venta."""
 
     __tablename__ = "promotion"
@@ -84,6 +83,7 @@ class Promotion(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(nullable=False, max_length=150, index=True)
     description: Optional[str] = Field(
         default=None, sa_column=sqlalchemy.Column(sqlalchemy.Text)
@@ -227,7 +227,7 @@ class Promotion(TenantMixin, rx.Model, table=True):
     )
 
 
-class PromotionProduct(rx.Model, table=True):
+class PromotionProduct(SQLModel, table=True):
     """Asociación promoción ↔ producto para scope=PRODUCT multi-producto.
 
     Reemplaza la relación 1-a-1 de ``Promotion.product_id`` permitiendo
@@ -245,6 +245,7 @@ class PromotionProduct(rx.Model, table=True):
         sqlalchemy.Index("ix_promotion_product_promo", "promotion_id"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     promotion_id: int = Field(
         sa_column=sqlalchemy.Column(
             sqlalchemy.Integer,

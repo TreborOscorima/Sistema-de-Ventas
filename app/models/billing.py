@@ -19,10 +19,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-import reflex as rx
 import sqlalchemy
 from sqlalchemy import CheckConstraint, DateTime, Numeric, Text, UniqueConstraint
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 from app.enums import FiscalStatus, ReceiptType
 from app.utils.timezone import utc_now_naive
@@ -36,7 +35,7 @@ if TYPE_CHECKING:
 # ═════════════════════════════════════════════════════════════
 
 
-class CompanyBillingConfig(rx.Model, table=True):
+class CompanyBillingConfig(SQLModel, table=True):
     """Configuración de facturación electrónica por empresa.
 
     Una fila por empresa (no por sucursal): las credenciales fiscales
@@ -61,6 +60,7 @@ class CompanyBillingConfig(rx.Model, table=True):
 
     __mapper_args__ = {"eager_defaults": True}
 
+    id: int | None = Field(default=None, primary_key=True)
     # ── Tenant ───────────────────────────────────────────────
     company_id: int = Field(
         foreign_key="company.id",
@@ -254,7 +254,7 @@ class CompanyBillingConfig(rx.Model, table=True):
 # ═════════════════════════════════════════════════════════════
 
 
-class FiscalDocument(rx.Model, table=True):
+class FiscalDocument(SQLModel, table=True):
     """Documento fiscal electrónico vinculado a una venta.
 
     Almacena la respuesta de SUNAT (CDR) o AFIP (CAE), datos de QR,
@@ -317,6 +317,7 @@ class FiscalDocument(rx.Model, table=True):
 
     __mapper_args__ = {"eager_defaults": True}
 
+    id: int | None = Field(default=None, primary_key=True)
     # ── Tenant ───────────────────────────────────────────────
     company_id: int = Field(
         foreign_key="company.id",

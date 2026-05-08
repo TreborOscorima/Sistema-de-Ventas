@@ -2,8 +2,7 @@ from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from decimal import Decimal
 
-import reflex as rx
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
 from sqlalchemy import CheckConstraint, Numeric
 
@@ -17,7 +16,7 @@ if TYPE_CHECKING:
     from .sales import SaleItem
 
 
-class Product(TenantMixin, rx.Model, table=True):
+class Product(TenantMixin, SQLModel, table=True):
     """Modelo de producto de inventario."""
 
     __tablename__ = "product"
@@ -50,6 +49,7 @@ class Product(TenantMixin, rx.Model, table=True):
 
     __mapper_args__ = {"eager_defaults": True}
 
+    id: int | None = Field(default=None, primary_key=True)
     barcode: str = Field(index=True, nullable=False)
     description: str = Field(nullable=False, index=True)
     category: str = Field(default="General", index=True)
@@ -128,7 +128,7 @@ class Product(TenantMixin, rx.Model, table=True):
     attributes: List["ProductAttribute"] = Relationship(back_populates="product")
 
 
-class ProductVariant(TenantMixin, rx.Model, table=True):
+class ProductVariant(TenantMixin, SQLModel, table=True):
     """Variantes de producto (talla/color)."""
 
     __tablename__ = "productvariant"
@@ -148,6 +148,7 @@ class ProductVariant(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     product_id: int = Field(foreign_key="product.id", index=True)
     sku: str = Field(index=True, nullable=False)
     size: Optional[str] = Field(default=None)
@@ -170,7 +171,7 @@ class ProductVariant(TenantMixin, rx.Model, table=True):
     sale_items: List["SaleItem"] = Relationship(back_populates="product_variant")
 
 
-class ProductBatch(TenantMixin, rx.Model, table=True):
+class ProductBatch(TenantMixin, SQLModel, table=True):
     """Lotes con vencimiento (FEFO)."""
 
     __tablename__ = "productbatch"
@@ -198,6 +199,7 @@ class ProductBatch(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     batch_number: str = Field(index=True, nullable=False)
     expiration_date: Optional[datetime] = Field(
         default=None,
@@ -223,7 +225,7 @@ class ProductBatch(TenantMixin, rx.Model, table=True):
     sale_items: List["SaleItem"] = Relationship(back_populates="product_batch")
 
 
-class ProductKit(TenantMixin, rx.Model, table=True):
+class ProductKit(TenantMixin, SQLModel, table=True):
     """Definicion de kits (producto compuesto)."""
 
     __tablename__ = "productkit"
@@ -239,6 +241,7 @@ class ProductKit(TenantMixin, rx.Model, table=True):
         CheckConstraint("quantity > 0", name="ck_productkit_quantity_positive"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     # ondelete CASCADE: si se borra el producto-kit o el componente,
     # la relación de explosión pierde sentido → limpia automáticamente.
     kit_product_id: int = Field(
@@ -272,7 +275,7 @@ class ProductKit(TenantMixin, rx.Model, table=True):
     )
 
 
-class PriceTier(TenantMixin, rx.Model, table=True):
+class PriceTier(TenantMixin, SQLModel, table=True):
     """Escalas de precios por cantidad."""
 
     __tablename__ = "pricetier"
@@ -288,6 +291,7 @@ class PriceTier(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     min_quantity: int = Field(nullable=False)
     unit_price: Decimal = Field(
         default=Decimal("0.00"),
@@ -305,7 +309,7 @@ class PriceTier(TenantMixin, rx.Model, table=True):
     )
 
 
-class ProductAttribute(TenantMixin, rx.Model, table=True):
+class ProductAttribute(TenantMixin, SQLModel, table=True):
     """Atributos dinámicos por producto/variante (EAV ligero).
 
     Permite atributos específicos por rubro sin modificar el schema:
@@ -339,6 +343,7 @@ class ProductAttribute(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     product_id: int = Field(foreign_key="product.id", index=True, nullable=False)
     attribute_name: str = Field(max_length=100, index=True, nullable=False)
     attribute_value: str = Field(max_length=500, nullable=False, default="")
@@ -346,7 +351,7 @@ class ProductAttribute(TenantMixin, rx.Model, table=True):
     product: Optional["Product"] = Relationship(back_populates="attributes")
 
 
-class Category(TenantMixin, rx.Model, table=True):
+class Category(TenantMixin, SQLModel, table=True):
     """Categorias de productos."""
 
     __tablename__ = "category"
@@ -360,11 +365,12 @@ class Category(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(nullable=False)
     requires_batch: bool = Field(default=False)
 
 
-class StockMovement(TenantMixin, rx.Model, table=True):
+class StockMovement(TenantMixin, SQLModel, table=True):
     """Movimientos de stock (ingresos, ajustes)."""
 
     __tablename__ = "stockmovement"
@@ -384,6 +390,7 @@ class StockMovement(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     timestamp: datetime = Field(
         default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(
@@ -421,7 +428,7 @@ class StockMovement(TenantMixin, rx.Model, table=True):
     user: Optional["User"] = Relationship()
 
 
-class Unit(TenantMixin, rx.Model, table=True):
+class Unit(TenantMixin, SQLModel, table=True):
     """Unidades de medida."""
 
     __tablename__ = "unit"
@@ -435,15 +442,17 @@ class Unit(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(index=True, nullable=False)
     allows_decimal: bool = Field(default=False)
 
 
-class FieldPrice(TenantMixin, rx.Model, table=True):
+class FieldPrice(TenantMixin, SQLModel, table=True):
     """Precios de alquiler de canchas."""
 
     __tablename__ = "fieldprice"
 
+    id: int | None = Field(default=None, primary_key=True)
     sport: SportType = Field(nullable=False)
     name: str = Field(nullable=False)
     price: Decimal = Field(

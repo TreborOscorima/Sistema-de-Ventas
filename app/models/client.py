@@ -1,8 +1,7 @@
 from typing import List, Optional, TYPE_CHECKING
 from decimal import Decimal
 
-import reflex as rx
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
 from sqlalchemy import CheckConstraint, Numeric
 
@@ -13,7 +12,7 @@ if TYPE_CHECKING:
     from .price_lists import PriceList
 
 
-class Client(TenantMixin, rx.Model, table=True):
+class Client(TenantMixin, SQLModel, table=True):
     """Cliente para ventas a credito."""
 
     __tablename__ = "client"
@@ -29,6 +28,7 @@ class Client(TenantMixin, rx.Model, table=True):
         CheckConstraint("current_debt >= 0", name="ck_client_current_debt_nonneg"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(index=True, nullable=False)
     dni: str = Field(index=True, nullable=False)
     phone: Optional[str] = Field(default=None)

@@ -8,8 +8,7 @@ from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from decimal import Decimal
 
-import reflex as rx
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
 from sqlalchemy import CheckConstraint, Numeric
 
@@ -33,7 +32,7 @@ class QuotationStatus(str):
     CONVERTED = "converted"
 
 
-class Quotation(TenantMixin, rx.Model, table=True):
+class Quotation(TenantMixin, SQLModel, table=True):
     """Cabecera de presupuesto/cotización."""
 
     __tablename__ = "quotation"
@@ -60,6 +59,7 @@ class Quotation(TenantMixin, rx.Model, table=True):
         CheckConstraint("total_amount >= 0", name="ck_quotation_total_nonneg"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     created_at: datetime = Field(
         default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(
@@ -140,7 +140,7 @@ class Quotation(TenantMixin, rx.Model, table=True):
     )
 
 
-class QuotationItem(TenantMixin, rx.Model, table=True):
+class QuotationItem(TenantMixin, SQLModel, table=True):
     """Ítem de presupuesto con snapshot y descuento por línea."""
 
     __tablename__ = "quotationitem"
@@ -161,6 +161,7 @@ class QuotationItem(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     quotation_id: int = Field(
         sa_column=sqlalchemy.Column(
             sqlalchemy.Integer,

@@ -5,13 +5,12 @@ Modelos para el Backoffice de Owners (plataforma SaaS).
 from datetime import datetime
 from typing import Optional
 
-import reflex as rx
 import sqlalchemy
-from sqlmodel import Field
+from sqlmodel import Field, SQLModel
 from app.utils.timezone import utc_now_naive
 
 
-class OwnerAuditLog(rx.Model, table=True):
+class OwnerAuditLog(SQLModel, table=True):
     """Registro de auditoría para acciones de owner sobre empresas."""
 
     __tablename__ = "owner_audit_log"
@@ -21,6 +20,7 @@ class OwnerAuditLog(rx.Model, table=True):
         sqlalchemy.Index("ix_owner_audit_log_action", "action"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     actor_user_id: Optional[int] = Field(
         foreign_key="user.id",
         default=None,

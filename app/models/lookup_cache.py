@@ -13,15 +13,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-import reflex as rx
 import sqlalchemy
 from sqlalchemy import Text, UniqueConstraint
-from sqlmodel import Field
+from sqlmodel import Field, SQLModel
 
 from app.utils.timezone import utc_now_naive
 
 
-class DocumentLookupCache(rx.Model, table=True):
+class DocumentLookupCache(SQLModel, table=True):
     """Cache de resultados de consulta a APIs fiscales externas."""
 
     __tablename__ = "document_lookup_cache"
@@ -34,6 +33,7 @@ class DocumentLookupCache(rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     # ── Identificación del documento ──────────────────────────
     country: str = Field(
         max_length=5,

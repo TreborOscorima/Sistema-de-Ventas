@@ -2,8 +2,7 @@ from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from decimal import Decimal
 
-import reflex as rx
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
 from sqlalchemy import CheckConstraint, Numeric
 
@@ -18,7 +17,7 @@ if TYPE_CHECKING:
     from .inventory import Product, ProductBatch, ProductVariant
 
 
-class Sale(TenantMixin, rx.Model, table=True):
+class Sale(TenantMixin, SQLModel, table=True):
     """Cabecera de venta."""
 
     __tablename__ = "sale"
@@ -50,6 +49,7 @@ class Sale(TenantMixin, rx.Model, table=True):
 
     __mapper_args__ = {"eager_defaults": True}
 
+    id: int | None = Field(default=None, primary_key=True)
     timestamp: datetime = Field(
         default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(
@@ -114,7 +114,7 @@ class Sale(TenantMixin, rx.Model, table=True):
     )
 
 
-class SalePayment(TenantMixin, rx.Model, table=True):
+class SalePayment(TenantMixin, SQLModel, table=True):
     """Transaccion de pago asociada a una venta."""
 
     __tablename__ = "salepayment"
@@ -128,6 +128,7 @@ class SalePayment(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     # CASCADE para que la baja lógica de Sale (ORM) + hard-delete SQL
     # siempre eliminen el detalle de pagos.
     sale_id: int = Field(
@@ -155,7 +156,7 @@ class SalePayment(TenantMixin, rx.Model, table=True):
     sale: Optional["Sale"] = Relationship(back_populates="payments")
 
 
-class SaleItem(TenantMixin, rx.Model, table=True):
+class SaleItem(TenantMixin, SQLModel, table=True):
     """Detalle de venta."""
 
     __tablename__ = "saleitem"
@@ -178,6 +179,7 @@ class SaleItem(TenantMixin, rx.Model, table=True):
         CheckConstraint("subtotal >= 0", name="ck_saleitem_subtotal_nonneg"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     quantity: Decimal = Field(
         default=Decimal("1.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
@@ -287,7 +289,7 @@ class SaleItem(TenantMixin, rx.Model, table=True):
     )
 
 
-class SaleInstallment(TenantMixin, rx.Model, table=True):
+class SaleInstallment(TenantMixin, SQLModel, table=True):
     """Cuotas de una venta a credito."""
 
     __tablename__ = "saleinstallment"
@@ -316,6 +318,7 @@ class SaleInstallment(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     # CASCADE: cuotas desaparecen al borrar la venta.
     sale_id: int = Field(
         sa_column=sqlalchemy.Column(
@@ -348,7 +351,7 @@ class SaleInstallment(TenantMixin, rx.Model, table=True):
     sale: Optional["Sale"] = Relationship(back_populates="installments")
 
 
-class CashboxSession(TenantMixin, rx.Model, table=True):
+class CashboxSession(TenantMixin, SQLModel, table=True):
     """Sesion de caja (apertura/cierre)."""
 
     __tablename__ = "cashboxsession"
@@ -363,6 +366,7 @@ class CashboxSession(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     opening_time: datetime = Field(
         default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
@@ -394,7 +398,7 @@ class CashboxSession(TenantMixin, rx.Model, table=True):
     user: Optional["User"] = Relationship(back_populates="sessions")
 
 
-class CashboxLog(TenantMixin, rx.Model, table=True):
+class CashboxLog(TenantMixin, SQLModel, table=True):
     """Log de movimientos de caja."""
 
     __tablename__ = "cashboxlog"
@@ -413,6 +417,7 @@ class CashboxLog(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     timestamp: datetime = Field(
         default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(
@@ -448,7 +453,7 @@ class CashboxLog(TenantMixin, rx.Model, table=True):
     user: Optional["User"] = Relationship(back_populates="logs")
 
 
-class FieldReservation(TenantMixin, rx.Model, table=True):
+class FieldReservation(TenantMixin, SQLModel, table=True):
     """Reserva de canchas deportivas."""
 
     __tablename__ = "fieldreservation"
@@ -469,6 +474,7 @@ class FieldReservation(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     client_name: str = Field(nullable=False)
     client_dni: Optional[str] = Field(default=None)
     client_phone: Optional[str] = Field(default=None)
@@ -509,7 +515,7 @@ class FieldReservation(TenantMixin, rx.Model, table=True):
     user: Optional["User"] = Relationship(back_populates="reservations")
 
 
-class PaymentMethod(TenantMixin, rx.Model, table=True):
+class PaymentMethod(TenantMixin, SQLModel, table=True):
     """Metodos de pago configurables."""
 
     __tablename__ = "paymentmethod"
@@ -529,6 +535,7 @@ class PaymentMethod(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(nullable=False)
     code: str = Field(index=True, nullable=False)
     is_active: bool = Field(default=True)
@@ -540,17 +547,18 @@ class PaymentMethod(TenantMixin, rx.Model, table=True):
     enabled: bool = Field(default=True)
 
 
-class Currency(rx.Model, table=True):
+class Currency(SQLModel, table=True):
     """Monedas disponibles."""
 
     __tablename__ = "currency"
 
+    id: int | None = Field(default=None, primary_key=True)
     code: str = Field(unique=True, index=True, nullable=False)
     name: str = Field(nullable=False)
     symbol: str = Field(nullable=False)
 
 
-class CompanySettings(TenantMixin, rx.Model, table=True):
+class CompanySettings(TenantMixin, SQLModel, table=True):
     """Configuracion de datos de empresa (singleton).
 
     Almacena la configuración global del negocio incluyendo
@@ -567,6 +575,7 @@ class CompanySettings(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     company_name: str = Field(default="", nullable=False)
     ruc: str = Field(default="", nullable=False)
     address: str = Field(default="", nullable=False)
@@ -584,7 +593,7 @@ class CompanySettings(TenantMixin, rx.Model, table=True):
     )
 
 
-class SaleReturn(TenantMixin, rx.Model, table=True):
+class SaleReturn(TenantMixin, SQLModel, table=True):
     """Devolución total o parcial de una venta."""
 
     __tablename__ = "salereturn"
@@ -608,6 +617,7 @@ class SaleReturn(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     timestamp: datetime = Field(
         default_factory=utc_now_naive,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
@@ -653,7 +663,7 @@ class SaleReturn(TenantMixin, rx.Model, table=True):
     )
 
 
-class SaleReturnItem(TenantMixin, rx.Model, table=True):
+class SaleReturnItem(TenantMixin, SQLModel, table=True):
     """Ítem individual devuelto, vinculado al SaleItem original.
 
     Incluye ``company_id``/``branch_id`` denormalizados desde el parent
@@ -678,6 +688,7 @@ class SaleReturnItem(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     # CASCADE con el parent SaleReturn (alineado con cascade ORM).
     sale_return_id: int = Field(
         sa_column=sqlalchemy.Column(

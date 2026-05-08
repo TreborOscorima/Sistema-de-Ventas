@@ -82,6 +82,15 @@ config = rx.Config(
     api_url=API_URL,
     state_auto_setters=True,  # workaround temporal — remover antes de v1.0 tras migrar ~250 set_<var>
     plugins=[
+        rx.plugins.RadixThemesPlugin(
+            theme=rx.theme(
+                appearance="light",
+                has_background=True,
+                radius="medium",
+                accent_color="indigo",
+                gray_color="slate",
+            )
+        ),
         rx.plugins.TailwindV3Plugin(
             config={
                 "plugins": ["@tailwindcss/typography@0.5.19"],
@@ -103,12 +112,4 @@ config = rx.Config(
     disable_plugins=[rx.plugins.SitemapPlugin],
     telemetry_enabled=not IS_PROD,
     show_built_with_reflex=False,
-    theme=rx.theme(
-        has_background=True,
-        radius="medium",
-        accent_color="indigo",
-        gray_color="slate",
-        spacing="relaxed",
-        transitions="gentle",
-    ),
 )

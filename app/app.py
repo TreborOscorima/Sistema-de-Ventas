@@ -357,7 +357,6 @@ def page_owner_backoffice() -> rx.Component:
 
 
 app = rx.App(
-    theme=rx.theme(appearance="light"),
     api_transformer=health_app,
     head_components=[
         # Accesibilidad + estilos base (cacheables, Cache-Control immutable en nginx).

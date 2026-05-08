@@ -1,15 +1,14 @@
 from typing import List, Optional, TYPE_CHECKING
 
-import reflex as rx
 import sqlalchemy
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .company import Branch, Company
     from .sales import CashboxLog, CashboxSession, FieldReservation, Sale
 
 
-class RolePermission(rx.Model, table=True):
+class RolePermission(SQLModel, table=True):
     """Tabla intermedia para relacionar roles y permisos.
 
     Se mantiene ``id`` sintético inyectado por ``rx.Model``, pero el
@@ -27,6 +26,7 @@ class RolePermission(rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     role_id: int = Field(
         sa_column=sqlalchemy.Column(
             sqlalchemy.Integer,
@@ -45,7 +45,7 @@ class RolePermission(rx.Model, table=True):
     )
 
 
-class Role(rx.Model, table=True):
+class Role(SQLModel, table=True):
     """Rol configurable para RBAC."""
 
     __tablename__ = "role"
@@ -58,6 +58,7 @@ class Role(rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(
         foreign_key="company.id",
         index=True,
@@ -74,11 +75,12 @@ class Role(rx.Model, table=True):
     )
 
 
-class Permission(rx.Model, table=True):
+class Permission(SQLModel, table=True):
     """Permiso granular asociado a roles."""
 
     __tablename__ = "permission"
 
+    id: int | None = Field(default=None, primary_key=True)
     codename: str = Field(unique=True, index=True, nullable=False)
     description: str = Field(default="")
 
@@ -88,7 +90,7 @@ class Permission(rx.Model, table=True):
     )
 
 
-class UserBranch(rx.Model, table=True):
+class UserBranch(SQLModel, table=True):
     """Tabla intermedia para accesos de usuario a sucursales."""
 
     __tablename__ = "userbranch"
@@ -106,7 +108,7 @@ class UserBranch(rx.Model, table=True):
     branch_id: int = Field(foreign_key="branch.id")
 
 
-class User(rx.Model, table=True):
+class User(SQLModel, table=True):
     """Modelo de usuario con RBAC."""
 
     __tablename__ = "user"
@@ -124,6 +126,7 @@ class User(rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     username: str = Field(index=True, nullable=False)
     # Unicidad por (company_id, email) — un mismo email puede administrar
     # distintas empresas (owner contable, etc.). Ver migración Layer 1.

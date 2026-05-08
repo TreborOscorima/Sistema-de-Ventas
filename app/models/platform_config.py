@@ -12,17 +12,16 @@ Master billing credentials:
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
-import reflex as rx
 import sqlalchemy
 from sqlalchemy import Text
-from sqlmodel import Field
+from sqlmodel import Field, SQLModel
 from app.utils.timezone import utc_now_naive
 
 
 PLATFORM_CONFIG_ID = 1  # Singleton — siempre id=1
 
 
-class PlatformBillingSettings(rx.Model, table=True):
+class PlatformBillingSettings(SQLModel, table=True):
     """Configuración global de billing a nivel SaaS (singleton, id=1).
 
     Modelo master: el Owner configura UNA vez las credenciales del
@@ -32,6 +31,7 @@ class PlatformBillingSettings(rx.Model, table=True):
 
     __tablename__ = "platform_billing_settings"
 
+    id: int | None = Field(default=None, primary_key=True)
     # ── PE — Nubefact Integrador Master ──────────────────────────
     pe_nubefact_master_url: Optional[str] = Field(
         default=None,

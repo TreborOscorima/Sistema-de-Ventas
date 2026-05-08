@@ -2,8 +2,7 @@ from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from decimal import Decimal
 
-import reflex as rx
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
 from sqlalchemy import CheckConstraint, Numeric
 from app.utils.timezone import utc_now_naive
@@ -15,7 +14,7 @@ if TYPE_CHECKING:
     from .inventory import Product
 
 
-class Supplier(TenantMixin, rx.Model, table=True):
+class Supplier(TenantMixin, SQLModel, table=True):
     """Proveedor de compras."""
 
     __tablename__ = "supplier"
@@ -31,6 +30,7 @@ class Supplier(TenantMixin, rx.Model, table=True):
 
     __mapper_args__ = {"eager_defaults": True}
 
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(nullable=False, index=True)
     tax_id: str = Field(nullable=False, index=True)
     email: Optional[str] = Field(default=None)
@@ -45,7 +45,7 @@ class Supplier(TenantMixin, rx.Model, table=True):
     purchases: List["Purchase"] = Relationship(back_populates="supplier")
 
 
-class Purchase(TenantMixin, rx.Model, table=True):
+class Purchase(TenantMixin, SQLModel, table=True):
     """Documento de compra (boleta/factura)."""
 
     __tablename__ = "purchase"
@@ -80,6 +80,7 @@ class Purchase(TenantMixin, rx.Model, table=True):
 
     __mapper_args__ = {"eager_defaults": True}
 
+    id: int | None = Field(default=None, primary_key=True)
     doc_type: str = Field(nullable=False)
     series: str = Field(default="", nullable=False)
     number: str = Field(nullable=False)
@@ -111,7 +112,7 @@ class Purchase(TenantMixin, rx.Model, table=True):
     user: Optional["User"] = Relationship()
 
 
-class PurchaseItem(TenantMixin, rx.Model, table=True):
+class PurchaseItem(TenantMixin, SQLModel, table=True):
     """Detalle de compra."""
 
     __tablename__ = "purchaseitem"
@@ -122,6 +123,7 @@ class PurchaseItem(TenantMixin, rx.Model, table=True):
         CheckConstraint("subtotal >= 0", name="ck_purchaseitem_subtotal_nonneg"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     # CASCADE: al borrar la Purchase parent, sus items se van con ella.
     purchase_id: int = Field(
         sa_column=sqlalchemy.Column(
@@ -180,7 +182,7 @@ class PurchaseOrderStatus:
     ALL = (DRAFT, SENT, RECEIVED, CANCELLED)
 
 
-class PurchaseOrder(TenantMixin, rx.Model, table=True):
+class PurchaseOrder(TenantMixin, SQLModel, table=True):
     """Orden de compra sugerida o enviada al proveedor.
 
     Distinta de Purchase (que representa el documento fiscal ya recibido).
@@ -202,6 +204,7 @@ class PurchaseOrder(TenantMixin, rx.Model, table=True):
         ),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     supplier_id: int = Field(foreign_key="supplier.id", index=True, nullable=False)
     status: str = Field(
         default=PurchaseOrderStatus.DRAFT,
@@ -238,7 +241,7 @@ class PurchaseOrder(TenantMixin, rx.Model, table=True):
     )
 
 
-class PurchaseOrderItem(TenantMixin, rx.Model, table=True):
+class PurchaseOrderItem(TenantMixin, SQLModel, table=True):
     """Ítem individual sugerido dentro de una PurchaseOrder."""
 
     __tablename__ = "purchaseorderitem"
@@ -255,6 +258,7 @@ class PurchaseOrderItem(TenantMixin, rx.Model, table=True):
         CheckConstraint("unit_cost >= 0", name="ck_poitem_unit_cost_nonneg"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     # CASCADE: los ítems sugeridos mueren con la orden padre.
     purchase_order_id: int = Field(
         sa_column=sqlalchemy.Column(

@@ -2,8 +2,7 @@ from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from enum import Enum
 
-import reflex as rx
-from sqlmodel import Field, Relationship
+from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
 from sqlalchemy import CheckConstraint
 from .auth import UserBranch
@@ -27,7 +26,7 @@ class SubscriptionStatus(str, Enum):
     SUSPENDED = "suspended"
 
 
-class Company(rx.Model, table=True):
+class Company(SQLModel, table=True):
     """Empresa (tenant)."""
 
     __tablename__ = "company"
@@ -37,6 +36,7 @@ class Company(rx.Model, table=True):
         CheckConstraint("max_users >= 1", name="ck_company_max_users_min"),
     )
 
+    id: int | None = Field(default=None, primary_key=True)
     name: str = Field(nullable=False, index=True)
     ruc: str = Field(nullable=False, index=True, unique=True)
     is_active: bool = Field(default=True)
@@ -94,11 +94,12 @@ class Company(rx.Model, table=True):
     users: List["User"] = Relationship(back_populates="company")
 
 
-class Branch(rx.Model, table=True):
+class Branch(SQLModel, table=True):
     """Sucursal de empresa."""
 
     __tablename__ = "branch"
 
+    id: int | None = Field(default=None, primary_key=True)
     company_id: int = Field(
         foreign_key="company.id",
         index=True,
