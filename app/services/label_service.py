@@ -25,6 +25,7 @@ from decimal import Decimal
 from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from sqlmodel import select, and_, or_
 
 from app.models import Product, ProductVariant
@@ -65,6 +66,14 @@ class LabelConfig:
 
 class LabelService:
 
+    @staticmethod
+    def resolve_barcode(product) -> str:
+        """Retorna el barcode del producto o genera uno interno basado en el ID."""
+        bc = (getattr(product, "barcode", None) or "").strip()
+        if not bc or bc in _GENERIC_BARCODES:
+            return f"INT{product.id:010d}"
+        return bc
+
     # ── Obtener productos para etiquetar ────────────────────────────────
 
     @staticmethod
@@ -92,6 +101,7 @@ class LabelService:
     ) -> list[dict]:
         stmt = (
             select(Product)
+            .options(selectinload(Product.variants))
             .where(Product.company_id == company_id)
             .where(Product.branch_id == branch_id)
             .where(Product.is_active == True)
@@ -101,34 +111,57 @@ class LabelService:
             cutoff = utc_now_naive() - timedelta(days=config.price_changed_days)
             stmt = stmt.where(Product.sale_price_updated_at >= cutoff)
 
-        elif config.filter_type == "no_barcode":
-            # Productos sin código de barras válido
-            stmt = stmt.where(
-                or_(
-                    Product.barcode == None,
-                    Product.barcode == "",
-                    Product.barcode.in_(list(_GENERIC_BARCODES)),
-                )
-            )
-
         if config.category:
             stmt = stmt.where(Product.category == config.category)
 
         stmt = stmt.order_by(Product.category, Product.description)
-        rows = (await session.execute(stmt)).scalars().all()
+        products = (await session.execute(stmt)).scalars().all()
 
-        result = []
-        for p in rows:
-            barcode = _resolve_barcode(p)
-            result.append({
-                "id": p.id,
-                "barcode": barcode,
-                "description": p.description or "",
-                "category": p.category or "",
-                "sale_price": float(p.sale_price or 0),
-                "purchase_price": float(p.purchase_price or 0),
-                "unit": p.unit or "Unidad",
-            })
+        result: list[dict] = []
+        for p in products:
+            active_variants = [
+                v for v in (p.variants or [])
+                if v.company_id == company_id and v.branch_id == branch_id
+            ]
+            if active_variants:
+                for v in active_variants:
+                    parts = []
+                    if v.size:
+                        parts.append(str(v.size).strip())
+                    if v.color:
+                        parts.append(str(v.color).strip())
+                    label = " ".join(parts)
+                    sku = (v.sku or "").strip()
+                    # Solo nombre + talla/color; el SKU/barcode va bajo el código de barras
+                    description = (p.description or "") + (f" ({label})" if label else "")
+                    bc_valid = sku and sku not in _GENERIC_BARCODES
+                    bc = sku if bc_valid else f"INT{p.id:010d}"
+                    if config.filter_type == "no_barcode" and bc_valid:
+                        continue
+                    result.append({
+                        "id": p.id,
+                        "variant_id": v.id,
+                        "barcode": bc,
+                        "description": description,
+                        "category": p.category or "",
+                        "sale_price": float(p.sale_price or 0),
+                        "purchase_price": float(p.purchase_price or 0),
+                        "unit": p.unit or "Unidad",
+                    })
+            else:
+                bc = LabelService.resolve_barcode(p)
+                if config.filter_type == "no_barcode" and not bc.startswith("INT"):
+                    continue
+                result.append({
+                    "id": p.id,
+                    "variant_id": None,
+                    "barcode": bc,
+                    "description": p.description or "",
+                    "category": p.category or "",
+                    "sale_price": float(p.sale_price or 0),
+                    "purchase_price": float(p.purchase_price or 0),
+                    "unit": p.unit or "Unidad",
+                })
         return result
 
     # ── Generar PDF de etiquetas ────────────────────────────────────────
@@ -247,9 +280,37 @@ def _resolve_barcode(product: Product) -> str:
     """Retorna el barcode del producto o genera uno interno basado en el ID."""
     bc = (product.barcode or "").strip()
     if not bc or bc in _GENERIC_BARCODES:
-        # Barcode interno: prefijo "INT" + ID con ceros
         return f"INT{product.id:010d}"
     return bc
+
+
+def _wrap_text(
+    text: str, font_name: str, font_size: float, max_width: float
+) -> list[str]:
+    """Divide texto en líneas que caben en max_width (puntos ReportLab)."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    words = text.split()
+    if not words:
+        return [""]
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip() if current else word
+        if stringWidth(candidate, font_name, font_size) <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            # Palabra sola más ancha que el área: truncar
+            if stringWidth(word, font_name, font_size) > max_width:
+                while len(word) > 1 and stringWidth(word + "…", font_name, font_size) > max_width:
+                    word = word[:-1]
+                word += "…"
+            current = word
+    if current:
+        lines.append(current)
+    return lines or [""]
 
 
 def _draw_label(
@@ -261,47 +322,103 @@ def _draw_label(
     product: dict,
     config: LabelConfig,
 ) -> None:
-    """Dibuja una etiqueta individual en la posición dada."""
+    """Dibuja una etiqueta individual con marcas de corte y nombre con wrap."""
     from reportlab.lib.units import mm
     from reportlab.graphics.barcode import code128
     from reportlab.lib import colors
+    from reportlab.pdfbase.pdfmetrics import stringWidth
 
     pad = 2 * mm
-
-    # Fondo blanco con borde
-    c.setStrokeColor(colors.HexColor("#CBD5E1"))
-    c.setFillColor(colors.white)
-    c.setLineWidth(0.3)
-    c.rect(x, y, w, h, fill=1, stroke=1)
-
     inner_x = x + pad
-    inner_y = y + pad
     inner_w = w - 2 * pad
 
-    # ── Nombre del producto ──────────────────────────────────────────
-    c.setFillColor(colors.black)
-    font_size = 7 if config.size == "small" else 8
-    c.setFont("Helvetica-Bold", font_size)
+    # ── Marcas de corte en las cuatro esquinas ────────────────────────
+    c.setStrokeColor(colors.HexColor("#94A3B8"))
+    c.setLineWidth(0.5)
+    cut = 3 * mm
+    # Inferior-izquierda
+    c.line(x, y, x + cut, y)
+    c.line(x, y, x, y + cut)
+    # Inferior-derecha
+    c.line(x + w - cut, y, x + w, y)
+    c.line(x + w, y, x + w, y + cut)
+    # Superior-izquierda
+    c.line(x, y + h, x + cut, y + h)
+    c.line(x, y + h, x, y + h - cut)
+    # Superior-derecha
+    c.line(x + w - cut, y + h, x + w, y + h)
+    c.line(x + w, y + h, x + w, y + h - cut)
 
+    # ── Métricas de fuentes ───────────────────────────────────────────
+    name_font = "Helvetica-Bold"
+    name_size = 7 if config.size == "small" else 8
+    price_font = "Helvetica-Bold"
+    price_size = 9 if config.size == "small" else 11 if config.size == "medium" else 13
+    line_h = name_size * 1.3  # interlineado en puntos
+
+    # ── Precio: calcular ancho antes de posicionar el nombre ──────────
+    price = product.get("sale_price", 0)
+    currency = config.currency_symbol.strip()
+    price_str = f"{currency} {float(price):.2f}"
+    c.setFont(price_font, price_size)
+    price_w = stringWidth(price_str, price_font, price_size)
+
+    # ── Nombre con word-wrap (reserva espacio para el precio) ─────────
     name = product.get("description") or ""
-    max_chars = 22 if config.size == "small" else 30 if config.size == "medium" else 40
-    if len(name) > max_chars:
-        name = name[:max_chars - 1] + "…"
+    name_avail_w = inner_w - price_w - 2 * mm
+    c.setFont(name_font, name_size)
+    name_lines = _wrap_text(name, name_font, name_size, name_avail_w)
 
-    text_y = y + h - pad - font_size * 0.4 * mm
-    c.drawString(inner_x, text_y, name)
+    max_lines = 2
+    if len(name_lines) > max_lines:
+        name_lines = name_lines[:max_lines]
+        last = name_lines[-1]
+        while last and stringWidth(last + "…", name_font, name_size) > name_avail_w:
+            last = last[:-1]
+        name_lines[-1] = last + "…"
 
-    # ── Categoría (medium/large) ─────────────────────────────────────
+    # ── Baseline de la primera línea (anclada al borde superior) ──────
+    top_y = y + h - pad - name_size * 0.4 * mm
+
+    # ── Dibujar nombre línea a línea ──────────────────────────────────
+    c.setFillColor(colors.black)
+    c.setFont(name_font, name_size)
+    for i, line in enumerate(name_lines):
+        c.drawString(inner_x, top_y - i * line_h, line)
+
+    # ── Dibujar precio (alineado top-right al mismo baseline) ─────────
+    c.setFont(price_font, price_size)
+    c.setFillColor(colors.HexColor("#4F46E5"))
+    c.drawRightString(x + w - pad, top_y, price_str)
+    c.setFillColor(colors.black)
+
+    # Y después del bloque de nombre
+    after_name_y = top_y - len(name_lines) * line_h
+
+    # ── Categoría (medium / large) ────────────────────────────────────
     if config.size != "small":
-        cat = product.get("category") or ""
-        if cat and len(cat) > 20:
-            cat = cat[:19] + "…"
+        cat = (product.get("category") or "").strip()
+        if cat:
+            if len(cat) > 30:
+                cat = cat[:29] + "…"
+            c.setFont("Helvetica", 6)
+            c.setFillColor(colors.HexColor("#64748B"))
+            c.drawString(inner_x, after_name_y - 1.5, cat)
+            c.setFillColor(colors.black)
+
+    # ── Precio de compra (large + activado) ───────────────────────────
+    if config.size == "large" and config.show_purchase_price:
+        pp = product.get("purchase_price", 0)
         c.setFont("Helvetica", 6)
-        c.setFillColor(colors.HexColor("#64748B"))
-        c.drawString(inner_x, text_y - 4 * mm, cat)
+        c.setFillColor(colors.HexColor("#94A3B8"))
+        c.drawRightString(
+            x + w - pad,
+            after_name_y - 1.5,
+            f"Costo: {currency} {float(pp):.2f}",
+        )
         c.setFillColor(colors.black)
 
-    # ── Código de barras ─────────────────────────────────────────────
+    # ── Código de barras ──────────────────────────────────────────────
     barcode_val = product.get("barcode") or ""
     if barcode_val:
         try:
@@ -310,7 +427,6 @@ def _draw_label(
                 "medium": 12 * mm,
                 "large": 16 * mm,
             }[config.size]
-
             bc = code128.Code128(
                 barcode_val,
                 barHeight=bc_height,
@@ -319,30 +435,19 @@ def _draw_label(
                 fontSize=6,
                 fontName="Helvetica",
             )
-            bc_w = bc.width
-            bc_x = x + (w - bc_w) / 2
-            bc_y = y + pad + (3 * mm if config.size != "small" else 2 * mm)
+            if bc.width > inner_w:
+                ratio = (inner_w * 0.92) / bc.width
+                bc = code128.Code128(
+                    barcode_val,
+                    barHeight=bc_height,
+                    barWidth=max(0.22, 0.6 * ratio),
+                    humanReadable=True,
+                    fontSize=6,
+                    fontName="Helvetica",
+                )
+            bc_x = x + (w - bc.width) / 2
+            bc_y = y + pad
             bc.drawOn(c, bc_x, bc_y)
         except Exception:
-            # Fallback: mostrar el valor como texto
             c.setFont("Helvetica", 6)
-            c.drawCentredString(x + w / 2, y + pad + 5 * mm, barcode_val)
-
-    # ── Precio ──────────────────────────────────────────────────────
-    price = product.get("sale_price", 0)
-    currency = config.currency_symbol.strip()
-    price_str = f"{currency} {float(price):.2f}"
-
-    price_font_size = 9 if config.size == "small" else 11 if config.size == "medium" else 13
-    c.setFont("Helvetica-Bold", price_font_size)
-    c.setFillColor(colors.HexColor("#4F46E5"))
-    c.drawRightString(x + w - pad, y + h - pad - font_size * 0.4 * mm, price_str)
-    c.setFillColor(colors.black)
-
-    # Precio de compra (large, si activado)
-    if config.size == "large" and config.show_purchase_price:
-        pp = product.get("purchase_price", 0)
-        c.setFont("Helvetica", 6)
-        c.setFillColor(colors.HexColor("#94A3B8"))
-        c.drawRightString(x + w - pad, y + h - pad - (font_size + 4) * 0.4 * mm, f"Costo: {currency} {float(pp):.2f}")
-        c.setFillColor(colors.black)
+            c.drawCentredString(x + w / 2, y + pad + 3 * mm, barcode_val)

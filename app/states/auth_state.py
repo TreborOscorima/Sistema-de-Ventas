@@ -82,6 +82,7 @@ DEFAULT_USER_PRIVILEGES: Privileges = {
     "create_ventas": True,
     "view_inventario": True,
     "edit_inventario": True,
+    "view_etiquetas": True,
     "view_historial": True,
     "export_data": False,
     "view_cashbox": True,
@@ -96,6 +97,9 @@ DEFAULT_USER_PRIVILEGES: Privileges = {
     "manage_proveedores": True,
     "view_cuentas": True,
     "manage_cuentas": False,
+    "view_presupuestos": True,
+    "manage_promociones": False,
+    "manage_listas_precios": False,
 }
 
 ADMIN_PRIVILEGES: Privileges = {
@@ -106,6 +110,7 @@ ADMIN_PRIVILEGES: Privileges = {
     "create_ventas": True,
     "view_inventario": True,
     "edit_inventario": True,
+    "view_etiquetas": True,
     "view_historial": True,
     "export_data": True,
     "view_cashbox": True,
@@ -120,6 +125,9 @@ ADMIN_PRIVILEGES: Privileges = {
     "manage_proveedores": True,
     "view_cuentas": True,
     "manage_cuentas": True,
+    "view_presupuestos": True,
+    "manage_promociones": True,
+    "manage_listas_precios": True,
 }
 
 CASHIER_PRIVILEGES: Privileges = {
@@ -130,6 +138,7 @@ CASHIER_PRIVILEGES: Privileges = {
     "create_ventas": True,
     "view_inventario": True,
     "edit_inventario": False,
+    "view_etiquetas": False,
     "view_historial": False,
     "export_data": False,
     "view_cashbox": True,
@@ -144,6 +153,9 @@ CASHIER_PRIVILEGES: Privileges = {
     "manage_proveedores": False,
     "view_cuentas": False,
     "manage_cuentas": False,
+    "view_presupuestos": False,
+    "manage_promociones": False,
+    "manage_listas_precios": False,
 }
 
 SUPERADMIN_PRIVILEGES: Privileges = {key: True for key in DEFAULT_USER_PRIVILEGES}
@@ -862,6 +874,22 @@ class AuthState(MixinState):
     @rx.var(cache=True)
     def can_view_inventario(self) -> bool:
         return bool(self.current_user["privileges"].get("view_inventario"))
+
+    @rx.var(cache=True)
+    def can_view_etiquetas(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_etiquetas"))
+
+    @rx.var(cache=True)
+    def can_view_presupuestos(self) -> bool:
+        return bool(self.current_user["privileges"].get("view_presupuestos"))
+
+    @rx.var(cache=True)
+    def can_manage_promociones(self) -> bool:
+        return bool(self.current_user["privileges"].get("manage_promociones"))
+
+    @rx.var(cache=True)
+    def can_manage_listas_precios(self) -> bool:
+        return bool(self.current_user["privileges"].get("manage_listas_precios"))
 
     @rx.var(cache=True)
     def can_view_historial(self) -> bool:

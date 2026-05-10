@@ -308,6 +308,7 @@ class QuotationState(MixinState):
 
     @rx.event
     async def quot_search_products(self, query: str):
+        from app.services.sale_service import search_products as _search_products
         self.quot_search = query
         if len(query.strip()) < 2:
             self.quot_search_results = []
@@ -318,33 +319,11 @@ class QuotationState(MixinState):
         if not company_id:
             return
 
-        from app.utils.tenant import set_tenant_context
-        set_tenant_context(company_id, branch_id)
-        q_lower = query.strip().lower()
-        with rx.session() as session:
-            stmt = (
-                select(Product)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-                .where(Product.is_active == True)
-                .where(
-                    (func.lower(Product.description).contains(q_lower))
-                    | (Product.barcode.contains(query.strip()))
-                )
-                .limit(10)
-            )
-            rows = session.exec(stmt).all()
-
-        self.quot_search_results = [
-            {
-                "id": str(p.id),
-                "description": p.description,
-                "barcode": p.barcode,
-                "sale_price": float(p.sale_price or 0),
-                "category": p.category or "",
-            }
-            for p in rows
-        ]
+        try:
+            self.quot_search_results = await _search_products(query, company_id, branch_id)
+        except Exception as exc:
+            logger.exception("Error buscando productos en presupuesto: %s", exc)
+            self.quot_search_results = []
 
     @rx.event
     def quot_add_product(self, product_data: dict):
@@ -353,7 +332,8 @@ class QuotationState(MixinState):
         self.quot_search_results = []
         # Verificar si ya está en el carrito
         for item in self.quot_cart:
-            if item["product_id"] == product_data.get("id"):
+            if (item["product_id"] == product_data.get("id") and
+                    item.get("variant_id") == product_data.get("variant_id")):
                 item["quantity"] = str(float(item["quantity"]) + 1)
                 item["subtotal"] = self._round_currency(
                     float(item["quantity"]) * float(item["unit_price"])
@@ -364,6 +344,7 @@ class QuotationState(MixinState):
 
         self.quot_cart.append({
             "product_id": product_data.get("id"),
+            "variant_id": product_data.get("variant_id"),
             "description": product_data.get("description", ""),
             "barcode": product_data.get("barcode", ""),
             "quantity": "1",
@@ -426,7 +407,7 @@ class QuotationState(MixinState):
                     items.append(
                         QuotationItemDTO(
                             product_id=int(item["product_id"]) if item.get("product_id") else None,
-                            product_variant_id=None,
+                            product_variant_id=int(item["variant_id"]) if item.get("variant_id") else None,
                             quantity=float(item.get("quantity") or 1),
                             unit_price=float(item.get("unit_price") or 0),
                             discount_percentage=float(item.get("discount_percentage") or 0),

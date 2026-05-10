@@ -192,6 +192,7 @@ class Privileges(TypedDict):
     create_ventas: bool
     view_inventario: bool
     edit_inventario: bool
+    view_etiquetas: bool
     view_historial: bool
     export_data: bool
     view_cashbox: bool
@@ -206,6 +207,9 @@ class Privileges(TypedDict):
     manage_proveedores: bool
     view_cuentas: bool
     manage_cuentas: bool
+    view_presupuestos: bool
+    manage_promociones: bool
+    manage_listas_precios: bool
 
 class NewUser(TypedDict):
     username: str

@@ -657,11 +657,11 @@ class State(RootState):
 
     @rx.event
     async def page_init_etiquetas(self):
-        """on_load para /etiquetas. Verifica privilegio view_inventario."""
+        """on_load para /etiquetas. Verifica privilegio view_etiquetas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
-            "view_inventario",
+            "view_etiquetas",
             "Acceso denegado: No tienes permiso para ver Etiquetas.",
         )
         if denied:
@@ -741,7 +741,7 @@ class State(RootState):
         await self._do_runtime_refresh()
         self.sync_page_from_route()
         denied = self._check_auth_and_privilege(
-            "create_ventas",
+            "view_presupuestos",
             "Acceso denegado: No tienes permiso para ver Presupuestos.",
         )
         if denied:
@@ -760,9 +760,9 @@ class State(RootState):
         """on_load para /promociones. Guard + carga de datos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        denied = self._page_guard(
-            require_roles=("Superadmin", "Administrador"),
-            deny_msg="Acceso denegado: Se requiere nivel de Administrador.",
+        denied = self._check_auth_and_privilege(
+            "manage_promociones",
+            "Acceso denegado: No tienes permiso para gestionar Promociones.",
         )
         if denied:
             for ev in denied:
@@ -780,9 +780,9 @@ class State(RootState):
         """on_load para /listas-precios. Guard + carga de datos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        denied = self._page_guard(
-            require_roles=("Superadmin", "Administrador"),
-            deny_msg="Acceso denegado: Se requiere nivel de Administrador.",
+        denied = self._check_auth_and_privilege(
+            "manage_listas_precios",
+            "Acceso denegado: No tienes permiso para gestionar Listas de Precios.",
         )
         if denied:
             for ev in denied:
