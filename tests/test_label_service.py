@@ -35,6 +35,7 @@ def _make_product(
     sale_price: str | Decimal = "100.00",
     purchase_price: str | Decimal = "60.00",
     unit: str = "Unidad",
+    variants: list | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=pid,
@@ -44,6 +45,7 @@ def _make_product(
         sale_price=Decimal(str(sale_price)),
         purchase_price=Decimal(str(purchase_price)),
         unit=unit,
+        variants=variants,
     )
 
 
