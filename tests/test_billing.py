@@ -271,7 +271,7 @@ class TestFiscalAmounts:
         from app.services.billing_service import _compute_fiscal_amounts
         sale = MagicMock()
         sale.total_amount = Decimal("118.00")
-        base, tax, total = _compute_fiscal_amounts(sale, [])
+        base, tax, total = _compute_fiscal_amounts(sale, [], tax_rate=Decimal("0.18"))
         assert total == Decimal("118.00")
         assert base == Decimal("100.00")
         assert tax == Decimal("18.00")
@@ -280,7 +280,7 @@ class TestFiscalAmounts:
         from app.services.billing_service import _compute_fiscal_amounts
         sale = MagicMock()
         sale.total_amount = Decimal("0")
-        base, tax, total = _compute_fiscal_amounts(sale, [])
+        base, tax, total = _compute_fiscal_amounts(sale, [], tax_rate=Decimal("0.18"))
         assert base == Decimal("0.00")
         assert tax == Decimal("0.00")
 
@@ -288,7 +288,7 @@ class TestFiscalAmounts:
         from app.services.billing_service import _compute_fiscal_amounts
         sale = MagicMock()
         sale.total_amount = Decimal("59.00")  # Common Peruvian price
-        base, tax, total = _compute_fiscal_amounts(sale, [])
+        base, tax, total = _compute_fiscal_amounts(sale, [], tax_rate=Decimal("0.18"))
         assert total == Decimal("59.00")
         assert base + tax == total
         # Verify base is correctly rounded
@@ -299,18 +299,18 @@ class TestFiscalAmounts:
         from app.services.billing_service import _compute_fiscal_amounts
         sale = MagicMock()
         sale.total_amount = Decimal("121.00")
-        base, tax, total = _compute_fiscal_amounts(sale, [], country="AR")
+        base, tax, total = _compute_fiscal_amounts(sale, [], tax_rate=Decimal("0.21"))
         assert total == Decimal("121.00")
         assert base == Decimal("100.00")
         assert tax == Decimal("21.00")
 
-    def test_unknown_country_defaults_to_pe(self):
+    def test_custom_rate_10_5(self):
         from app.services.billing_service import _compute_fiscal_amounts
         sale = MagicMock()
-        sale.total_amount = Decimal("118.00")
-        base, tax, total = _compute_fiscal_amounts(sale, [], country="XX")
-        assert base == Decimal("100.00")
-        assert tax == Decimal("18.00")
+        sale.total_amount = Decimal("110.50")
+        base, tax, total = _compute_fiscal_amounts(sale, [], tax_rate=Decimal("0.105"))
+        assert total == Decimal("110.50")
+        assert base + tax == total
 
 
 # ═════════════════════════════════════════════════════════════
@@ -637,7 +637,7 @@ class TestEmitFiscalDocument:
 
         mock_session = AsyncMock()
         mock_session.add = MagicMock()  # session.add() es sync en SQLAlchemy
-        # Call sequence: 1) no existing doc, 2) config, 3) sale, 4) items
+        # Call sequence: 1) no existing doc, 2) config, 3) sale, 4) items, 5) tax rate
         no_doc = MagicMock()
         no_doc.first.return_value = None
         config_result = MagicMock()
@@ -646,7 +646,11 @@ class TestEmitFiscalDocument:
         sale_result.first.return_value = mock_sale
         items_result = MagicMock()
         items_result.all.return_value = mock_items
-        mock_session.exec.side_effect = [no_doc, config_result, sale_result, items_result]
+        tax_rate_result = MagicMock()
+        tax_obj = MagicMock()
+        tax_obj.rate = Decimal("18.00")
+        tax_rate_result.first.return_value = tax_obj
+        mock_session.exec.side_effect = [no_doc, config_result, sale_result, items_result, tax_rate_result]
 
         with patch("app.services.billing_service.get_async_session") as mock_get:
             mock_get.return_value.__aenter__ = AsyncMock(return_value=mock_session)
@@ -771,7 +775,11 @@ class TestEmitFiscalDocument:
         sale_result.first.return_value = mock_sale
         items_result = MagicMock()
         items_result.all.return_value = mock_items
-        mock_session.exec.side_effect = [no_doc, config_result, sale_result, items_result]
+        tax_rate_result = MagicMock()
+        tax_obj = MagicMock()
+        tax_obj.rate = Decimal("18.00")
+        tax_rate_result.first.return_value = tax_obj
+        mock_session.exec.side_effect = [no_doc, config_result, sale_result, items_result, tax_rate_result]
 
         with patch("app.services.billing_service.get_async_session") as mock_get, \
              patch("httpx.AsyncClient") as mock_httpx:
@@ -1040,7 +1048,11 @@ class TestEndToEndBillingFlow:
         sale_result.first.return_value = sale
         items_result = MagicMock()
         items_result.all.return_value = [item1, item2]
-        mock_session.exec.side_effect = [no_doc, config_result, sale_result, items_result]
+        tax_rate_result = MagicMock()
+        tax_obj = MagicMock()
+        tax_obj.rate = Decimal("18.00")
+        tax_rate_result.first.return_value = tax_obj
+        mock_session.exec.side_effect = [no_doc, config_result, sale_result, items_result, tax_rate_result]
 
         # Nubefact response: success
         nubefact_response = MagicMock()
@@ -1162,7 +1174,11 @@ class TestEndToEndBillingFlow:
         sale_result.first.return_value = sale
         items_result = MagicMock()
         items_result.all.return_value = [item]
-        mock_session.exec.side_effect = [no_doc, config_result, sale_result, items_result]
+        tax_rate_result = MagicMock()
+        tax_obj = MagicMock()
+        tax_obj.rate = Decimal("18.00")
+        tax_rate_result.first.return_value = tax_obj
+        mock_session.exec.side_effect = [no_doc, config_result, sale_result, items_result, tax_rate_result]
 
         # Nubefact returns 500
         error_response = MagicMock()
@@ -1387,12 +1403,17 @@ class TestFiscalRetryWorkerConfig:
         assert _FISCAL_RETRY_INTERVAL_SECONDS > 0
         assert isinstance(_FISCAL_RETRY_ENABLED, bool)
 
-    def test_tax_rate_by_country_complete(self):
-        from app.services.billing_service import _TAX_RATE_BY_COUNTRY
-        assert "PE" in _TAX_RATE_BY_COUNTRY
-        assert "AR" in _TAX_RATE_BY_COUNTRY
-        assert _TAX_RATE_BY_COUNTRY["PE"] == Decimal("0.18")
-        assert _TAX_RATE_BY_COUNTRY["AR"] == Decimal("0.21")
+    def test_country_tax_presets_complete(self):
+        from app.utils.tax_presets import COUNTRY_TAX_PRESETS, get_presets_for_country
+        assert "PE" in COUNTRY_TAX_PRESETS
+        assert "AR" in COUNTRY_TAX_PRESETS
+        pe = get_presets_for_country("PE")
+        assert pe[0]["rate"] == Decimal("18.00")
+        ar = get_presets_for_country("AR")
+        rates = {p["label"]: p["rate"] for p in ar}
+        assert rates["Estándar"] == Decimal("21.00")
+        assert rates["Reducida"] == Decimal("10.50")
+        assert rates["Incrementada"] == Decimal("27.00")
 
 
 class TestCertificateMetadata:

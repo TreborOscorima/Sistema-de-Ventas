@@ -198,6 +198,15 @@ class ReceiptMixin:
         company = self._company_settings_snapshot(branch_id=branch_id)
         receipt_width = self._receipt_width(branch_id=branch_id)
         paper_width_mm = self._receipt_paper_mm(branch_id=branch_id)
+        _tax_rate_pct = float(company.get("default_tax_rate_pct", 0.0))
+        _show_tax = bool(company.get("show_tax_on_receipt", False))
+        if _show_tax and _tax_rate_pct > 0:
+            _rate_f = _tax_rate_pct / 100.0
+            _base = float(total) / (1 + _rate_f)
+            _tax_amt = float(total) - _base
+        else:
+            _base = float(total)
+            _tax_amt = 0.0
         receipt_data = {
             "items": receipt_items,
             "total": total,
@@ -209,6 +218,11 @@ class ReceiptMixin:
             "width": receipt_width,
             "paper_width_mm": paper_width_mm,
             "branch_id": branch_id,
+            "show_tax_on_receipt": _show_tax,
+            "tax_name": company.get("default_tax_name", ""),
+            "tax_rate_pct": _tax_rate_pct,
+            "base_amount": round(_base, 2),
+            "tax_amount": round(_tax_amt, 2),
         }
 
         html_content = ReceiptService.generate_receipt_html(
@@ -367,6 +381,15 @@ class ReceiptMixin:
         company = self._company_settings_snapshot(branch_id=branch_id)
         receipt_width = self._receipt_width(branch_id=branch_id)
         paper_width_mm = self._receipt_paper_mm(branch_id=branch_id)
+        _tax_rate_pct = float(company.get("default_tax_rate_pct", 0.0))
+        _show_tax = bool(company.get("show_tax_on_receipt", False))
+        if _show_tax and _tax_rate_pct > 0:
+            _rate_f = _tax_rate_pct / 100.0
+            _base = float(total) / (1 + _rate_f)
+            _tax_amt = float(total) - _base
+        else:
+            _base = float(total)
+            _tax_amt = 0.0
         receipt_data = {
             "items": receipt_items,
             "total": total,
@@ -378,6 +401,11 @@ class ReceiptMixin:
             "width": receipt_width,
             "paper_width_mm": paper_width_mm,
             "branch_id": branch_id,
+            "show_tax_on_receipt": _show_tax,
+            "tax_name": company.get("default_tax_name", ""),
+            "tax_rate_pct": _tax_rate_pct,
+            "base_amount": round(_base, 2),
+            "tax_amount": round(_tax_amt, 2),
         }
 
         try:

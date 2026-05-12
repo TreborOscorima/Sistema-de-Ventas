@@ -293,6 +293,8 @@ class ConfigState(MixinState):
             self.load_users()
         if hasattr(self, "load_branches"):
             self.load_branches()
+        if hasattr(self, "load_tax_config"):
+            self.load_tax_config()
 
     @rx.event(background=True)
     async def load_config_page_background(self):

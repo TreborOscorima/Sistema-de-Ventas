@@ -52,7 +52,7 @@ PAGE_TO_ROUTE = {
     "Documentos Fiscales": "/documentos-fiscales",
 }
 
-CONFIG_TABS = {"empresa", "sucursales", "usuarios", "monedas", "unidades", "pagos", "facturacion", "suscripcion"}
+CONFIG_TABS = {"empresa", "sucursales", "usuarios", "monedas", "unidades", "pagos", "impuestos", "facturacion", "suscripcion"}
 CASH_TABS = {"resumen", "movimientos"}
 SERVICES_TABS = {"campo", "precios_campo"}
 

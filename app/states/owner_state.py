@@ -405,7 +405,7 @@ class OwnerState:
                 with tenant_bypass():
                     items, total = await OwnerService.list_companies(
                         session,
-                        search=self.owner_search,
+                        search=self.owner_search.strip(),
                         page=self.owner_page,
                         per_page=self.owner_per_page,
                     )
@@ -427,7 +427,7 @@ class OwnerState:
         """Busca empresas por nombre o RUC."""
         if not self.is_owner_authenticated:
             return
-        self.owner_search = (search or "").strip()
+        self.owner_search = search or ""
         self.owner_page = 1
         # Debounce para evitar query por cada tecla y mantener escritura fluida.
         self._owner_search_debounce_seq += 1

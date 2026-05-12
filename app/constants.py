@@ -215,6 +215,7 @@ CONFIG_SUBSECTIONS: list[dict] = [
     {"key": "monedas", "label": "Selector de Monedas", "icon": "coins"},
     {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
     {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
+    {"key": "impuestos", "label": "Impuestos", "icon": "percent"},
     {"key": "facturacion", "label": "Facturacion Electronica", "icon": "file-text"},
     {"key": "suscripcion", "label": "Suscripcion", "icon": "sparkles"},
 ]

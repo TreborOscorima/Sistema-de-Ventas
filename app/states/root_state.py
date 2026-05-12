@@ -38,6 +38,7 @@ from .owner_state import OwnerState
 from .quotation_state import QuotationState
 from .promotions_state import PromotionsState
 from .price_list_state import PriceListState
+from .tax_state import TaxConfigState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin
 
 _mixins = [
@@ -64,6 +65,7 @@ _mixins = [
     QuotationState,
     PromotionsState,
     PriceListState,
+    TaxConfigState,
 ]
 
 _OVERDUE_CHECK_TTL: float = 60.0  # Segundos entre checks de cuotas vencidas

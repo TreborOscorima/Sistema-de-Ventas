@@ -427,6 +427,7 @@ class MixinState:
         if not company_id:
             return defaults
         try:
+            from app.models.taxes import CompanyTaxRate
             with rx.session() as session:
                 settings_stmt = select(CompanySettings).where(
                     CompanySettings.company_id == company_id
@@ -451,6 +452,12 @@ class MixinState:
                         .where(Branch.company_id == company_id)
                         .where(Branch.id == effective_bid)
                     ).first()
+                default_tax = session.exec(
+                    select(CompanyTaxRate)
+                    .where(CompanyTaxRate.company_id == company_id)
+                    .where(CompanyTaxRate.is_active == True)
+                    .order_by(CompanyTaxRate.is_default.desc(), CompanyTaxRate.display_order, CompanyTaxRate.id)
+                ).first()
         except Exception:
             logger.exception(
                 "_company_settings_snapshot: DB query failed | company=%s",
@@ -479,6 +486,7 @@ class MixinState:
         else:
             timezone_value = config.get("timezone", "")
 
+        show_tax = bool(getattr(settings, "show_tax_on_receipt", True))
         result = {
             "company_name": settings.company_name or "",
             "ruc": settings.ruc or "",
@@ -496,6 +504,9 @@ class MixinState:
             "branch_address": branch_address,
             "country_code": getattr(settings, "country_code", None) or country_code,
             "timezone": timezone_value,
+            "show_tax_on_receipt": show_tax,
+            "default_tax_name": default_tax.tax_name if default_tax else "",
+            "default_tax_rate_pct": float(default_tax.rate) if default_tax else 0.0,
         }
 
         # Guardar en cache

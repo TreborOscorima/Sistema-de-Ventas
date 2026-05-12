@@ -480,6 +480,26 @@ class ReceiptService:
             receipt_lines.append(ReceiptService._line(width))
 
         receipt_lines.append("")
+        show_tax = data.get("show_tax_on_receipt", False)
+        tax_name = data.get("tax_name", "")
+        tax_rate_pct = data.get("tax_rate_pct", 0.0)
+        base_amount = data.get("base_amount", total)
+        tax_amount = data.get("tax_amount", 0.0)
+        if show_tax and tax_name and tax_rate_pct > 0:
+            receipt_lines.append(
+                ReceiptService._row(
+                    "Subtotal:",
+                    currency_formatter(base_amount, currency_symbol),
+                    width,
+                )
+            )
+            receipt_lines.append(
+                ReceiptService._row(
+                    f"{tax_name} ({tax_rate_pct:.2f}%):",
+                    currency_formatter(tax_amount, currency_symbol),
+                    width,
+                )
+            )
         receipt_lines.append(
             ReceiptService._row(
                 "TOTAL A PAGAR:",

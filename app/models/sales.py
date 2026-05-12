@@ -591,6 +591,13 @@ class CompanySettings(TenantMixin, SQLModel, table=True):
         max_length=30,
         description="Rubro del negocio: general, bodega, ferreteria, farmacia, ropa, jugueteria, restaurante",
     )
+    show_tax_on_receipt: bool = Field(
+        default=True,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Boolean, nullable=False, server_default="1"
+        ),
+        description="Muestra el desglose de impuesto en el recibo de venta.",
+    )
 
 
 class SaleReturn(TenantMixin, SQLModel, table=True):

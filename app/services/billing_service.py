@@ -1103,34 +1103,27 @@ def _check_monthly_quota(
     return True, ""
 
 
-_TAX_RATE_BY_COUNTRY: dict[str, Decimal] = {
-    "PE": Decimal("0.18"),   # Perú: IGV 18%
-    "AR": Decimal("0.21"),   # Argentina: IVA alícuota general 21%
-}
 _DEFAULT_TAX_RATE = Decimal("0.18")
 
 
 def _compute_fiscal_amounts(
     sale: Sale,
     items: list[SaleItem],
-    country: str = "PE",
+    tax_rate: Decimal,
 ) -> tuple[Decimal, Decimal, Decimal]:
     """Calcula montos fiscales desde los ítems de la venta.
 
-    Asume que los precios ya incluyen impuesto (tax_included=True,
-    estándar retail en Perú y Argentina).
+    Asume que los precios ya incluyen impuesto (tax_included=True).
 
     Args:
         sale: Venta con total_amount.
-        items: Ítems de la venta (no usados aún; reservados para exenciones futuras).
-        country: Código ISO país del CompanyBillingConfig (PE, AR, …).
+        items: Ítems de la venta (reservados para exenciones por ítem).
+        tax_rate: Tasa en fracción (ej. 0.18 para 18%).
 
     Returns:
         (base_imponible, monto_impuesto, total)
     """
     total = sale.total_amount or Decimal("0")
-    tax_rate = _TAX_RATE_BY_COUNTRY.get(country.upper(), _DEFAULT_TAX_RATE)
-
     base = (total / (1 + tax_rate)).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
@@ -1319,9 +1312,14 @@ async def emit_fiscal_document(
                 )
             ).all()
 
-            # 6. Calcular montos fiscales (tasa por país del config)
+            # 6. Calcular montos fiscales (tasa dinámica configurada por empresa)
+            from app.services.tax_service import get_default_rate_async
+            try:
+                _company_tax_rate = await get_default_rate_async(company_id, session)
+            except Exception:
+                _company_tax_rate = _DEFAULT_TAX_RATE
             base, tax, total = _compute_fiscal_amounts(
-                sale, items, country=config.country
+                sale, items, tax_rate=_company_tax_rate
             )
 
             # 7. Crear FiscalDocument

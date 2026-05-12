@@ -448,8 +448,9 @@ def return_modal() -> rx.Component:
           class_name="text-sm font-medium text-slate-700 mb-1 block",
         ),
         rx.el.textarea(
-          value=State.return_notes,
-          on_change=State.set_return_notes,
+          default_value=State.return_notes,
+          on_blur=State.set_return_notes,
+          key=State.return_sale_id,
           placeholder="Detalle adicional sobre la devolución...",
           rows=2,
           class_name=INPUT_STYLES["default"] + " resize-none",

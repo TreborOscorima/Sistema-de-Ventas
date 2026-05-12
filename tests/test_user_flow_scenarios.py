@@ -719,7 +719,7 @@ class TestVentaFlujoPeru:
 
         sale = MagicMock()
         sale.total_amount = Decimal("118.00")
-        base, tax, total = _compute_fiscal_amounts(sale, [], country="PE")
+        base, tax, total = _compute_fiscal_amounts(sale, [], tax_rate=Decimal("0.18"))
 
         assert base == Decimal("100.00")
         assert tax == Decimal("18.00")
@@ -973,7 +973,7 @@ class TestVentaFlujoArgentina:
 
         sale = MagicMock()
         sale.total_amount = Decimal("1210.00")
-        base, tax, total = _compute_fiscal_amounts(sale, [], country="AR")
+        base, tax, total = _compute_fiscal_amounts(sale, [], tax_rate=Decimal("0.21"))
 
         assert total == Decimal("1210.00")
         assert base == Decimal("1000.00")

@@ -47,6 +47,7 @@ from .platform_config import PlatformBillingSettings
 from .quotations import Quotation, QuotationItem
 # Promociones: FK opcional a product.id
 from .promotions import Promotion, PromotionProduct
+from .taxes import CompanyTaxRate
 
 __all__ = [
     "Permission",
@@ -96,4 +97,5 @@ __all__ = [
     "QuotationItem",
     "Promotion",
     "PromotionProduct",
+    "CompanyTaxRate",
 ]
