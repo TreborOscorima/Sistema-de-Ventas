@@ -63,6 +63,7 @@ def _make_promotion(
     time_to=None,
     coupon_code: str | None = None,
     min_cart_amount: str | Decimal | int = "0",
+    max_units_per_transaction: int | None = None,
 ) -> SimpleNamespace:
     now = utc_now_naive()
     return SimpleNamespace(
@@ -85,6 +86,7 @@ def _make_promotion(
         time_to=time_to,
         coupon_code=coupon_code,
         min_cart_amount=Decimal(str(min_cart_amount)),
+        max_units_per_transaction=max_units_per_transaction,
     )
 
 
@@ -628,17 +630,84 @@ def test_apply_fixed_amount_clamps_to_zero():
     assert final == Decimal("0")
 
 
-def test_apply_buy_x_get_y_unit_factor():
-    """Promo 3x2: min_quantity=2 paga, free_quantity=1 regalo, total_group=3.
-
-    Precio efectivo unitario = unit * (2/3).
-    """
+def test_apply_buy_x_get_y_exact_group():
+    """Lleva 3 paga 2: comprar exactamente 3 → 1 gratis → paga 2."""
     promo = _make_promotion(
-        promotion_type="buy_x_get_y", min_quantity=2, free_quantity=1
+        promotion_type="buy_x_get_y", min_quantity=3, free_quantity=1
     )
-    final = apply_promotion_to_price(promo, Decimal("30.00"))
-    expected = Decimal("30.00") * (Decimal("2") / Decimal("3"))
-    assert final == expected
+    # 3 unidades → 1 grupo completo → 1 gratis → paga 2
+    # precio efectivo por unidad = 30 * (2/3); total = 3 * 20 = 60 = 2 * 30
+    final = apply_promotion_to_price(promo, Decimal("30.00"), Decimal("3"))
+    assert final * Decimal("3") == Decimal("60.00")
+
+
+def test_apply_buy_x_get_y_two_complete_groups():
+    """Lleva 3 paga 2 con 6 unidades: 2 grupos → 2 gratis → paga 4."""
+    promo = _make_promotion(
+        promotion_type="buy_x_get_y", min_quantity=3, free_quantity=1
+    )
+    final = apply_promotion_to_price(promo, Decimal("30.00"), Decimal("6"))
+    assert final * Decimal("6") == Decimal("120.00")  # 4 × 30
+
+
+def test_apply_buy_x_get_y_partial_group_no_extra_discount():
+    """1 grupo completo (3) + 1 unidad suelta → 4 total, paga 3 (solo 1 gratis)."""
+    promo = _make_promotion(
+        promotion_type="buy_x_get_y", min_quantity=3, free_quantity=1
+    )
+    final = apply_promotion_to_price(promo, Decimal("30.00"), Decimal("4"))
+    assert final * Decimal("4") == Decimal("90.00")  # 3 × 30
+
+
+def test_apply_nth_unit_discount_exact_group():
+    """Cada 3u, la 3ra con 50% off: comprando 3 → paga 2.5."""
+    promo = _make_promotion(
+        promotion_type="nth_unit_discount", min_quantity=3, discount_value="50"
+    )
+    # 1 grupo completo: descuento = 1 × 0.5 × 100 / 3 = 16.67 por unidad
+    # total = 3 × 83.33 = 250 (= 2 full + 1 al 50%)
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("3"))
+    assert final * Decimal("3") == Decimal("250.00")
+
+
+def test_apply_nth_unit_discount_two_groups():
+    """Cada 3u, la 3ra con 50% off: comprando 6 → 2 grupos → paga 5."""
+    promo = _make_promotion(
+        promotion_type="nth_unit_discount", min_quantity=3, discount_value="50"
+    )
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("6"))
+    assert final * Decimal("6") == Decimal("500.00")  # 5 × 100
+
+
+def test_apply_nth_unit_discount_partial_group_no_extra_discount():
+    """1 grupo completo (3) + 1 suelta → paga 3.5, no 3 (la suelta es full)."""
+    promo = _make_promotion(
+        promotion_type="nth_unit_discount", min_quantity=3, discount_value="50"
+    )
+    # 4 unidades: 1 grupo → descuento = 50 total distribuido en 4 = 12.5/u
+    # total = 4 × 87.5 = 350 (= 3 full + 1 al 50%)
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("4"))
+    assert final * Decimal("4") == Decimal("350.00")
+
+
+def test_apply_nth_unit_discount_second_unit_70pct():
+    """Caso real del super: cada 2u, la 2da con 70% off. 2 unidades → promedio $1201.85."""
+    promo = _make_promotion(
+        promotion_type="nth_unit_discount", min_quantity=2, discount_value="70"
+    )
+    price = Decimal("1849.00")
+    final = apply_promotion_to_price(promo, price, Decimal("2"))
+    # Unit1=1849 + Unit2=554.70 = 2403.70 → promedio = 1201.85
+    assert (final * Decimal("2")).quantize(Decimal("0.01")) == Decimal("2403.70")
+
+
+def test_apply_nth_unit_discount_zero_pct_is_safe():
+    """discount_value=0 no aplica descuento."""
+    promo = _make_promotion(
+        promotion_type="nth_unit_discount", min_quantity=2, discount_value="0"
+    )
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("2"))
+    assert final == Decimal("100.00")
 
 
 def test_apply_unknown_type_returns_unit_price_unchanged():
@@ -647,15 +716,112 @@ def test_apply_unknown_type_returns_unit_price_unchanged():
     assert final == Decimal("100.00")
 
 
-def test_apply_buy_x_get_y_with_zero_total_group_is_safe():
-    """Edge case: free_quantity ajustado a un valor que haría total_group=0
-    no debe dividir por cero."""
+def test_apply_buy_x_get_y_with_zero_free_quantity_is_safe():
+    """free_quantity=0 o negativo no debe dar descuento ni dividir por cero."""
     promo = _make_promotion(
         promotion_type="buy_x_get_y", min_quantity=1, free_quantity=-1
     )
-    # min_q + free_q = 0, retorna unit_price intacto
-    final = apply_promotion_to_price(promo, Decimal("50.00"))
+    final = apply_promotion_to_price(promo, Decimal("50.00"), Decimal("3"))
     assert final == Decimal("50.00")
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# apply_promotion_to_price — max_units_per_transaction (cap)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def test_cap_percentage_exact_limit():
+    """25% off, máx 8 u.: comprar 8 → todas reciben descuento."""
+    promo = _make_promotion(
+        promotion_type="percentage",
+        discount_value="25",
+        max_units_per_transaction=8,
+    )
+    # 8 unidades × $100 × 0.75 = $600 → precio unitario = $75
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("8"))
+    assert final == Decimal("75.00")
+
+
+def test_cap_percentage_over_limit():
+    """25% off, máx 8 u.: comprar 10 → solo 8 reciben descuento."""
+    promo = _make_promotion(
+        promotion_type="percentage",
+        discount_value="25",
+        max_units_per_transaction=8,
+    )
+    # 8 a $75 + 2 a $100 = 600 + 200 = 800 → precio unitario = 80
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("10"))
+    assert final == Decimal("80.00")
+
+
+def test_cap_percentage_under_limit():
+    """25% off, máx 8 u.: comprar 5 → todas reciben descuento (sin blend)."""
+    promo = _make_promotion(
+        promotion_type="percentage",
+        discount_value="25",
+        max_units_per_transaction=8,
+    )
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("5"))
+    assert final == Decimal("75.00")
+
+
+def test_cap_fixed_amount_over_limit():
+    """$20 off por unidad, máx 4 u.: comprar 6 → solo 4 reciben descuento."""
+    promo = _make_promotion(
+        promotion_type="fixed_amount",
+        discount_value="20",
+        max_units_per_transaction=4,
+    )
+    # 4 a $80 + 2 a $100 = 320 + 200 = 520 → unitario = 520/6 ≈ 86.666...
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("6"))
+    expected = (Decimal("4") * Decimal("80") + Decimal("2") * Decimal("100")) / Decimal("6")
+    assert final == expected
+
+
+def test_cap_none_no_blend():
+    """Sin cap (None): el descuento aplica a todas las unidades normalmente."""
+    promo = _make_promotion(
+        promotion_type="percentage",
+        discount_value="10",
+        max_units_per_transaction=None,
+    )
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("100"))
+    assert final == Decimal("90.00")
+
+
+def test_cap_buy_x_get_y_over_limit():
+    """3x2 con máx 6 u.: comprar 9 → solo primeras 6 acceden al lleva3paga2."""
+    promo = _make_promotion(
+        promotion_type="buy_x_get_y",
+        min_quantity=3,
+        free_quantity=1,
+        max_units_per_transaction=6,
+    )
+    # Capped: 6 u. → floor(6/3)=2 grupos → 2 gratis → 4 pagadas → unit_price * (4/6)
+    # discounted_unit_6 = 100 * (4/6) = 66.666...
+    # remaining: 3 u. a $100
+    # total = 6 * 66.666... + 3 * 100 = 400 + 300 = 700
+    # unitario = 700/9 ≈ 77.777...
+    final = apply_promotion_to_price(promo, Decimal("100.00"), Decimal("9"))
+    discounted_unit_capped = Decimal("100") * (Decimal("4") / Decimal("6"))
+    expected = (Decimal("6") * discounted_unit_capped + Decimal("3") * Decimal("100")) / Decimal("9")
+    assert final == expected
+
+
+def test_buy_x_get_y_subtotal_exact_no_rounding_artifact():
+    """BUY_X_GET_Y: subtotal de 3u a $5.50 (1 gratis c/3) debe ser $11.00 exacto.
+
+    Sin la corrección, _round_money(5.50 × 2/3) = 3.67 → 3.67 × 3 = $11.01.
+    Con NUMERIC(10,4) el precio intermedio se guarda sin redondear y
+    calculate_subtotal aplica el redondeo solo al total.
+    """
+    from app.utils.calculations import calculate_subtotal
+
+    promo = _make_promotion(
+        promotion_type="buy_x_get_y", min_quantity=3, free_quantity=1
+    )
+    unit_price = apply_promotion_to_price(promo, Decimal("5.50"), Decimal("3"))
+    assert calculate_subtotal(Decimal("3"), unit_price) == Decimal("11.00")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

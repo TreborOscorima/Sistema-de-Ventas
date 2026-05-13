@@ -13,7 +13,7 @@ from app.models.inventory import Category, ProductBatch, ProductKit, ProductVari
 from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.db import get_async_session
-from ..types import TransactionItem
+from ..types import SaleItemDict, TransactionItem
 
 
 class _VariantPickerCell(TypedDict):
@@ -57,7 +57,7 @@ class CartMixin:
         "kit_name": "",
         "promotion_name": "",
     }
-    new_sale_items: List[Dict[str, Any]] = []
+    new_sale_items: List[SaleItemDict] = []
     autocomplete_suggestions: List[str] = []
     autocomplete_results: List[Dict[str, Any]] = []
     autocomplete_selected_index: int = -1
@@ -196,10 +196,9 @@ class CartMixin:
     def _apply_item_rounding(self, item: TransactionItem):
         unit = item.get("unit", "")
         item["quantity"] = self._normalize_quantity_value(item.get("quantity", 0), unit)
-        item["price"] = self._round_currency(item.get("price", 0))
         if "sale_price" in item:
             item["sale_price"] = self._round_currency(item.get("sale_price", 0))
-        item["subtotal"] = self._round_currency(item["quantity"] * item["price"])
+        item["subtotal"] = self._round_currency(item["quantity"] * item.get("price", 0))
 
     def _product_value(self, product: Any, key: str, default: Any = None) -> Any:
         if isinstance(product, dict):
@@ -321,11 +320,11 @@ class CartMixin:
         promo = resolution.applied_promotion
         promo_name = promo.name if promo else ""
 
-        self.new_sale_item["price"] = self._round_currency(resolution.final_price)
+        self.new_sale_item["price"] = round(float(resolution.final_price), 4)
         self.new_sale_item["sale_price"] = self._round_currency(resolution.final_price)
         self.new_sale_item["base_price"] = self._round_currency(resolution.base_price)
         self.new_sale_item["subtotal"] = self._round_currency(
-            self.new_sale_item["quantity"] * self.new_sale_item["price"]
+            self.new_sale_item["quantity"] * float(resolution.final_price)
         )
         self.price_list_price_applied = price_from_list
         self.wholesale_price_applied = price_from_tier and not price_from_list
@@ -1639,7 +1638,7 @@ class CartMixin:
         coherentemente sobre todo el carrito (no por ítem aislado).
         """
         from app.models import Product
-        from app.services.pricing import resolve_effective_price
+        from app.services.pricing import promo_receipt_hint, resolve_effective_price
         from sqlmodel import select
 
         company_id = self.current_user.get("company_id") if hasattr(self, "current_user") else None
@@ -1723,13 +1722,14 @@ class CartMixin:
                     quot_dec = Decimal(str(quot_price))
                     if quot_dec < effective:
                         effective = quot_dec
-                item["price"] = self._round_currency(effective)
-                item["sale_price"] = self._round_currency(resolution.base_price)
+                item["price"] = round(float(effective), 4)
+                item["sale_price"] = self._round_currency(effective)
                 item["base_price"] = self._round_currency(resolution.base_price)
-                item["subtotal"] = self._round_currency(qty * Decimal(str(item["price"])))
+                item["subtotal"] = self._round_currency(qty * effective)
                 applied_promo = resolution.applied_promotion
                 item["promotion_name"] = applied_promo.name if applied_promo else ""
                 item["applied_promotion_id"] = applied_promo.id if applied_promo else None
+                item["promo_receipt_hint"] = promo_receipt_hint(applied_promo) if applied_promo else None
                 if not applied_promo and quot_price:
                     quot_dec = Decimal(str(quot_price))
                     if quot_dec < Decimal(str(resolution.base_price)):

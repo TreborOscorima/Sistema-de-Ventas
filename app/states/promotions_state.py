@@ -21,6 +21,7 @@ _TYPE_LABELS = {
     PromotionType.PERCENTAGE: "Descuento %",
     PromotionType.FIXED_AMOUNT: "Monto fijo",
     PromotionType.BUY_X_GET_Y: "Lleva X paga Y",
+    PromotionType.NTH_UNIT_DISCOUNT: "Últ. unidad desc.",
 }
 
 _SCOPE_LABELS = {
@@ -75,6 +76,9 @@ class PromotionsState(MixinState):
 
     # Umbral de subtotal del carrito. "" o "0" = sin umbral.
     promo_min_cart_amount: str = ""
+
+    # Límite de unidades por transacción que reciben el descuento. "" = sin límite.
+    promo_max_units_per_transaction: str = ""
 
     # Categorías disponibles para selector
     promotion_categories: list[str] = []
@@ -201,6 +205,7 @@ class PromotionsState(MixinState):
                 "coupon_code": p.coupon_code or "",
                 "min_cart_amount": float(p.min_cart_amount or 0),
                 "min_cart_amount_label": _format_min_cart(p.min_cart_amount or 0),
+                "max_units_per_transaction": p.max_units_per_transaction,
             })
         self.promotions = result
 
@@ -229,10 +234,12 @@ class PromotionsState(MixinState):
         branch_id = self._branch_id()
         if not company_id:
             return
-        from app.models import Product
+        from app.models import Product, ProductVariant
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
+        products: list[dict[str, Any]] = []
         with rx.session() as session:
+            # Productos base
             stmt = (
                 select(Product.id, Product.description, Product.barcode, Product.category)
                 .where(Product.company_id == company_id)
@@ -240,17 +247,49 @@ class PromotionsState(MixinState):
                 .where(Product.is_active == True)  # noqa: E712
                 .order_by(Product.description)
             )
-            rows = session.exec(stmt).all()
-        self.promotion_products = [
-            {
-                "id": r[0],
-                "description": r[1],
-                "barcode": r[2] or "",
-                "category": r[3] or "",
-                "label": f"{r[1]} ({r[2]})" if r[2] else r[1],
+            for r in session.exec(stmt).all():
+                products.append({
+                    "id": r[0],
+                    "description": r[1],
+                    "barcode": r[2] or "",
+                    "category": r[3] or "",
+                    "label": f"{r[1]} ({r[2]})" if r[2] else r[1],
+                })
+
+            # Variantes — usan el product_id del padre para que el toggle
+            # del checkbox actúe sobre el mismo producto en PromotionProduct
+            stmt_v = (
+                select(ProductVariant)
+                .join(Product, ProductVariant.product_id == Product.id)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+                .where(Product.is_active == True)  # noqa: E712
+                .order_by(Product.description, ProductVariant.size, ProductVariant.color)
+            )
+            variant_rows = session.exec(stmt_v).all()
+            parent_ids = {v.product_id for v in variant_rows}
+            parents = {
+                p.id: p
+                for p in session.exec(
+                    select(Product).where(Product.id.in_(parent_ids))
+                ).all()
             }
-            for r in rows
-        ]
+            for v in variant_rows:
+                parent = parents.get(v.product_id)
+                if not parent:
+                    continue
+                parts = [s for s in [v.size, v.color] if s]
+                variant_label = " / ".join(parts) if parts else v.sku
+                desc = f"{parent.description} — {variant_label}"
+                products.append({
+                    "id": v.product_id,
+                    "description": desc,
+                    "barcode": v.sku,
+                    "category": parent.category or "",
+                    "label": f"{desc} ({v.sku})",
+                })
+
+        self.promotion_products = products
 
     # ─── Formulario ──────────────────────────────────────────────────
 
@@ -276,6 +315,7 @@ class PromotionsState(MixinState):
         self.promo_time_to = ""
         self.promo_coupon_code = ""
         self.promo_min_cart_amount = ""
+        self.promo_max_units_per_transaction = ""
         self.show_promotion_form = True
         self.promo_form_key += 1
 
@@ -307,6 +347,10 @@ class PromotionsState(MixinState):
         min_cart = promo.get("min_cart_amount") or 0
         self.promo_min_cart_amount = (
             "" if not min_cart or float(min_cart) <= 0 else str(min_cart)
+        )
+        max_units = promo.get("max_units_per_transaction")
+        self.promo_max_units_per_transaction = (
+            "" if not max_units or int(max_units) <= 0 else str(max_units)
         )
         self.show_promotion_form = True
         self.promo_form_key += 1
@@ -396,6 +440,9 @@ class PromotionsState(MixinState):
     @rx.event
     def set_promo_min_cart_amount(self, v: float):
         self.promo_min_cart_amount = "" if not v or v <= 0 else str(v)
+    @rx.event
+    def set_promo_max_units_per_transaction(self, v: str):
+        self.promo_max_units_per_transaction = v
 
     # ─── Guardar promoción ───────────────────────────────────────────
 
@@ -451,7 +498,6 @@ class PromotionsState(MixinState):
                         created_at=utc_now_naive(),
                         created_by_user_id=user_id,
                     )
-                    session.add(promo)
 
                 # Validar y resolver los productos seleccionados.
                 # Solo persiste product_id/join-rows cuando scope == PRODUCT.
@@ -559,6 +605,29 @@ class PromotionsState(MixinState):
                         return
                     promo.min_cart_amount = min_cart_val
 
+                # Límite de unidades por transacción (opcional). Vacío = sin límite.
+                raw_max_units = (self.promo_max_units_per_transaction or "").strip()
+                if not raw_max_units:
+                    promo.max_units_per_transaction = None
+                else:
+                    try:
+                        max_units_val = int(raw_max_units)
+                    except (ValueError, TypeError):
+                        yield rx.toast(
+                            "El límite de unidades por transacción debe ser un número entero.",
+                            duration=3500,
+                        )
+                        return
+                    if max_units_val < 1:
+                        yield rx.toast(
+                            "El límite de unidades por transacción debe ser al menos 1.",
+                            duration=3500,
+                        )
+                        return
+                    promo.max_units_per_transaction = max_units_val
+
+                if not self.promo_editing_id:
+                    session.add(promo)
                 session.commit()
                 session.refresh(promo)
 

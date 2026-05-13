@@ -55,6 +55,7 @@ class IngresoState(MixinState):
     batch_date: str = ""
 
     entry_form_key: int = 0
+    entry_sale_price_key: int = 0
     new_entry_item: TransactionItem = {
         "temp_id": "",
         "barcode": "",
@@ -79,6 +80,15 @@ class IngresoState(MixinState):
     new_entry_items: List[TransactionItem] = []
     entry_autocomplete_suggestions: List[str] = []
     entry_autocomplete_active_index: int = -1
+    # True cuando el usuario escribió el precio de venta manualmente;
+    # False = el precio se calcula automáticamente desde el margen.
+    _entry_sale_price_manual: bool = rx.field(default=False, is_var=False)
+
+    @rx.var(cache=False)
+    def entry_sale_price_display(self) -> str:
+        """Devuelve el precio de venta como string; vacío si es 0 (para mostrar placeholder)."""
+        val = float(self.new_entry_item.get("sale_price", 0) or 0)
+        return str(val) if val > 0 else ""
 
     @rx.var(cache=True)
     def entry_subtotal(self) -> float:
@@ -120,8 +130,19 @@ class IngresoState(MixinState):
                     self.new_entry_item[field] = self._normalize_quantity_value(
                         numeric, self.new_entry_item.get("unit", "")
                     )
+                elif field == "sale_price":
+                    self._entry_sale_price_manual = True
+                    self.new_entry_item[field] = self._round_currency(numeric)
                 else:
                     self.new_entry_item[field] = self._round_currency(numeric)
+                    # Auto-calcular precio de venta si no fue editado manualmente
+                    if field == "price" and not self._entry_sale_price_manual:
+                        margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+                        if margin > 0:
+                            self.new_entry_item["sale_price"] = self._round_currency(
+                                numeric * (1 + margin / 100)
+                            )
+                            self.entry_sale_price_key += 1
             else:
                 self.new_entry_item[field] = value
                 if field == "unit":
@@ -394,6 +415,10 @@ class IngresoState(MixinState):
             self.entry_mode = "standard"
         self.variant_size = ""
         self.variant_color = ""
+        self._entry_sale_price_manual = False
+        self.entry_sale_price_key += 1
+        # Force remount of uncontrolled fields (qty, price) to reflect product data
+        self.entry_form_key += 1
 
     def _process_entry_barcode(self, barcode_value: str | None):
         self.new_entry_item["barcode"] = str(barcode_value) if barcode_value else ""
@@ -433,6 +458,13 @@ class IngresoState(MixinState):
     def process_entry_barcode_from_input(self, barcode_value):
         """Procesa el barcode del input cuando pierde el foco"""
         return self._process_entry_barcode(barcode_value)
+
+    @rx.event
+    def set_entry_barcode_value(self, barcode_value: str):
+        """Persiste el barcode del input en el estado al perder foco (sin lookup)."""
+        barcode = (barcode_value or "").strip()
+        if barcode:
+            self.new_entry_item["barcode"] = barcode
 
     @rx.event
     def handle_barcode_enter(self, key: str, input_id: str):
@@ -1146,6 +1178,7 @@ class IngresoState(MixinState):
 
     def _reset_entry_form(self):
         self.entry_form_key += 1
+        self.entry_sale_price_key += 1
         self.new_entry_item = {
             "temp_id": "",
             "barcode": "",
@@ -1169,6 +1202,7 @@ class IngresoState(MixinState):
         }
         self.entry_autocomplete_suggestions = []
         self.entry_autocomplete_active_index = -1
+        self._entry_sale_price_manual = False
         self._set_new_product_mode()
 
     def _find_product_by_barcode(self, barcode: str) -> Optional[Dict[str, Any]]:
@@ -1230,7 +1264,8 @@ class IngresoState(MixinState):
         return None
 
     def _fill_entry_item_from_product(self, product: Dict[str, Any]):
-        self.new_entry_item["barcode"] = product.get("barcode", "")
+        db_barcode = product.get("barcode")
+        self.new_entry_item["barcode"] = str(db_barcode) if db_barcode else (self.new_entry_item.get("barcode") or "")
         self.new_entry_item["description"] = product.get("description", "")
         self.new_entry_item["category"] = product.get("category") or MSG.FALLBACK_GENERAL
         self.new_entry_item["unit"] = product.get("unit") or MSG.FALLBACK_UNIT

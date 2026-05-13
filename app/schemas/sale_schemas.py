@@ -32,6 +32,8 @@ class SaleItemDTO(BaseSchema):
     batch_id: int | None = None
     kit_product_id: int | None = None
     kit_name: str = ""
+    base_price: Decimal | None = None
+    promo_receipt_hint: str | None = None
     applied_promotion_id: int | None = None
 
 

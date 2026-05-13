@@ -736,7 +736,7 @@ async def _apply_promotions(
     now: "datetime | None" = None,
     coupon_code: str | None = None,
     cart_subtotal: Decimal | None = None,
-) -> tuple[Decimal, int | None]:
+) -> tuple[Decimal, int | None, str | None]:
     """Resuelve y aplica la promoción al ítem. Retorna ``(precio, promo_id)``.
 
     **No** incrementa ``current_uses`` aquí. La incrementación es delegada a
@@ -751,6 +751,7 @@ async def _apply_promotions(
     from app.services.pricing import (
         apply_promotion_to_price,
         find_applicable_promotion,
+        promo_receipt_hint,
     )
 
     promo = await find_applicable_promotion(
@@ -765,10 +766,10 @@ async def _apply_promotions(
         cart_subtotal=cart_subtotal,
     )
     if promo is None:
-        return unit_price, None
+        return unit_price, None, None
 
-    final_price = _round_money(apply_promotion_to_price(promo, unit_price))
-    return final_price, promo.id
+    final_price = apply_promotion_to_price(promo, unit_price, qty)
+    return final_price, promo.id, promo_receipt_hint(promo)
 
 
 async def _consume_promotions_for_sale(
@@ -886,7 +887,7 @@ async def _resolve_item_pricing(
     cart_subtotal: Decimal | None = None,
     precomputed_base_price: Decimal | None = None,
     precomputed_applied_pl_id: int | None = None,
-) -> tuple[Decimal, int | None, int | None]:
+) -> tuple[Decimal, int | None, int | None, str | None]:
     """Resuelve precio efectivo y trazabilidad para un ítem de venta.
 
     Encapsula:
@@ -915,7 +916,7 @@ async def _resolve_item_pricing(
             price_list_id,
         )
 
-    final_price, applied_promo_id = await _apply_promotions(
+    final_price, applied_promo_id, promo_hint = await _apply_promotions(
         session,
         product,
         qty,
@@ -926,7 +927,7 @@ async def _resolve_item_pricing(
         coupon_code=coupon_code,
         cart_subtotal=cart_subtotal,
     )
-    return final_price, applied_pl_id, applied_promo_id
+    return final_price, applied_pl_id, applied_promo_id, promo_hint
 
 
 def _sum_batch_stock(
@@ -1560,7 +1561,7 @@ class SaleService:
                     MSG.SALE_VAL_INVALID_QTY.format(description=description)
                 )
             price_from_cart = getattr(item, "price", None)
-            sale_price_from_cart = getattr(item, "sale_price", None)
+            base_price_from_cart = getattr(item, "base_price", None)
             pending_items.append(
                 {
                     "description": description,
@@ -1578,10 +1579,12 @@ class SaleService:
                     # promociones). Se usa para bypasear la re-resolución en el service.
                     "price_override": _to_decimal(price_from_cart) if price_from_cart and price_from_cart > 0 else None,
                     # Precio base (sin descuento) para mostrar tachado en el comprobante.
-                    "display_base_price": _to_decimal(sale_price_from_cart) if sale_price_from_cart and sale_price_from_cart > 0 else None,
+                    "display_base_price": _to_decimal(base_price_from_cart) if base_price_from_cart and base_price_from_cart > 0 else None,
                     # Promoción pre-resuelta por el carrito; se propaga para que
                     # _consume_promotions_for_sale pueda incrementar current_uses.
                     "applied_promotion_id_from_cart": getattr(item, "applied_promotion_id", None),
+                    # Label de descuento para el comprobante (ej: "50% (últ. unidad)").
+                    "promo_receipt_hint_from_cart": getattr(item, "promo_receipt_hint", None),
                 }
             )
 
@@ -1800,7 +1803,7 @@ class SaleService:
         for item in pending_items:
             matched_product, matched_variant = _match_product(item)
             if item.get("price_override") is not None:
-                base_price = _round_money(item["price_override"])
+                base_price = _to_decimal(item["price_override"])
                 applied_pl_id_pre = None
             else:
                 base_price, applied_pl_id_pre = await _resolve_item_base_price(
@@ -1825,11 +1828,13 @@ class SaleService:
                 unit_price = base_price
                 applied_pl_id = None
                 applied_promo_id = item.get("applied_promotion_id_from_cart")
+                promo_hint = item.get("promo_receipt_hint_from_cart")
             else:
                 (
                     unit_price,
                     applied_pl_id,
                     applied_promo_id,
+                    promo_hint,
                 ) = await _resolve_item_pricing(
                     session,
                     product,
@@ -1866,6 +1871,7 @@ class SaleService:
                     "price": _money_to_float(unit_price),
                     "subtotal": _money_to_float(subtotal),
                     "base_price": _money_to_float(snapshot_base),
+                    "promo_receipt_hint": promo_hint,
                 }
             )
             decimal_item = {

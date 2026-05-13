@@ -43,6 +43,7 @@ class TaxConfigState(MixinState):
     deleting_rate_id: int = -1
 
     tax_config_loading: bool = False
+    active_preset_country: str = ""
 
     # ── Computed vars ──────────────────────────────────────────────────────────
 
@@ -287,6 +288,7 @@ class TaxConfigState(MixinState):
             tax_service.initialize_country_defaults(company_id, code, session)
             session.commit()
         self.load_tax_config()
+        self.active_preset_country = code
         presets = get_presets_for_country(code)
         tax_name = presets[0]["tax_name"] if presets else "IVA"
         return rx.toast(

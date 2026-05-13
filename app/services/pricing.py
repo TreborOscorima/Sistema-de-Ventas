@@ -301,12 +301,59 @@ async def find_applicable_promotion(
     return None
 
 
-def apply_promotion_to_price(promo: Promotion, unit_price: Decimal) -> Decimal:
-    """Calcula el precio unitario tras aplicar la promoción.
+def promo_receipt_hint(promo: Promotion) -> str | None:
+    """Label de descuento para el comprobante según tipo de promo.
+
+    Devuelve None para que el caller use el % efectivo promedio (comportamiento
+    por defecto). Para tipos cuyo % promedio no coincide con lo anunciado al
+    cliente, devuelve un label descriptivo explícito.
+    """
+    if promo.promotion_type == PromotionType.NTH_UNIT_DISCOUNT:
+        pct = int(promo.discount_value or 0)
+        return f"{pct}% (últ. unidad)"
+
+    if promo.promotion_type == PromotionType.BUY_X_GET_Y:
+        free_q = int(promo.free_quantity or 0)
+        min_q = int(promo.min_quantity)
+        return f"{free_q} gratis (c/{min_q})"
+
+    return None
+
+
+def apply_promotion_to_price(
+    promo: Promotion,
+    unit_price: Decimal,
+    quantity: Decimal = Decimal("1"),
+) -> Decimal:
+    """Calcula el precio unitario efectivo tras aplicar la promoción.
 
     Función pura: no muta ``promo`` ni el caller. El redondeo queda a cargo
     del caller (cada capa tiene su propia política de quantize).
+
+    Para BUY_X_GET_Y el resultado es un precio-por-unidad promediado sobre
+    ``quantity``, de modo que ``quantity × retorno`` produce el total exacto
+    (grupos completos de gratis, sin descuento en unidades extra sueltas).
+
+    ``max_units_per_transaction``: cuando está definido, sólo las primeras
+    N unidades reciben el descuento; el resto paga precio full. El precio
+    devuelto es el promedio ponderado entre unidades con descuento y sin él.
     """
+    max_cap = getattr(promo, "max_units_per_transaction", None)
+    if max_cap is not None and max_cap > 0 and quantity > Decimal(str(max_cap)):
+        capped = Decimal(str(max_cap))
+        remaining = quantity - capped
+        discounted_unit = _apply_discount_uncapped(promo, unit_price, capped)
+        return (capped * discounted_unit + remaining * unit_price) / quantity
+
+    return _apply_discount_uncapped(promo, unit_price, quantity)
+
+
+def _apply_discount_uncapped(
+    promo: Promotion,
+    unit_price: Decimal,
+    quantity: Decimal,
+) -> Decimal:
+    """Núcleo de cálculo sin límite de unidades por transacción."""
     disc_val = Decimal(str(promo.discount_value or 0))
 
     if promo.promotion_type == PromotionType.PERCENTAGE:
@@ -319,9 +366,23 @@ def apply_promotion_to_price(promo: Promotion, unit_price: Decimal) -> Decimal:
     if promo.promotion_type == PromotionType.BUY_X_GET_Y:
         min_q = Decimal(str(promo.min_quantity))
         free_q = Decimal(str(promo.free_quantity or 0))
-        total_group = min_q + free_q
-        if total_group > 0:
-            return unit_price * (min_q / total_group)
+        if min_q > 0 and free_q > 0 and quantity > 0:
+            # Grupos completos de "lleva min_q": cada grupo libera free_q unidades.
+            complete_groups = int(quantity / min_q)
+            free_units = Decimal(complete_groups) * free_q
+            paid_units = quantity - free_units
+            return unit_price * (paid_units / quantity)
+
+    if promo.promotion_type == PromotionType.NTH_UNIT_DISCOUNT:
+        n = Decimal(str(promo.min_quantity))
+        pct_off = Decimal(str(promo.discount_value or 0))
+        if n > 0 and pct_off > 0 and quantity > 0:
+            # Cada grupo de n unidades: (n-1) a precio full + 1 con pct_off% de descuento.
+            # Descuento total = complete_groups × unit_price × (pct_off/100).
+            # Se distribuye como reducción del precio unitario promedio.
+            complete_groups = Decimal(int(quantity / n))
+            discount_per_unit = complete_groups * (pct_off / Decimal("100")) * unit_price / quantity
+            return unit_price - discount_per_unit
 
     return unit_price
 
@@ -397,7 +458,7 @@ async def resolve_effective_price(
         coupon_code=coupon_code,
         cart_subtotal=cart_subtotal,
     )
-    final_price = apply_promotion_to_price(promo, base_price) if promo else base_price
+    final_price = apply_promotion_to_price(promo, base_price, quantity) if promo else base_price
 
     return PriceResolution(
         base_price=base_price,

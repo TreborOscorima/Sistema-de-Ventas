@@ -985,6 +985,113 @@ def company_settings_section() -> rx.Component:
       ),
             class_name=f"{CARD_STYLES['default']} space-y-4",
     ),
+    # ── Márgenes de Ganancia ──────────────────────────────────────────────
+    rx.el.div(
+      rx.el.div(
+        rx.el.h2(
+          "MARGENES DE GANANCIA",
+          class_name="text-xl font-semibold text-slate-700",
+        ),
+        rx.el.p(
+          "Porcentaje aplicado al precio de compra para calcular el precio de venta sugerido.",
+          class_name=TYPOGRAPHY["body_secondary"],
+        ),
+        class_name="space-y-1",
+      ),
+      rx.el.div(
+        # Margen global de empresa
+        rx.el.div(
+          rx.el.label(
+            "Margen Global de Empresa (%)",
+            class_name=TYPOGRAPHY["label"],
+          ),
+          rx.el.div(
+            rx.el.input(
+              default_value=State.company_profit_margin,
+              on_blur=State.set_company_profit_margin,
+              placeholder="Ej: 30",
+              type_="number",
+              min="0",
+              max="9999",
+              step="0.01",
+              key=State.company_form_key.to_string() + "-company_margin",
+              class_name=INPUT_STYLES["default"],
+            ),
+            rx.el.span(
+              "%",
+              class_name="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none",
+            ),
+            class_name="relative",
+          ),
+          rx.el.p(
+            "Se aplica a todas las sucursales que no tengan margen propio.",
+            class_name=TYPOGRAPHY["caption"],
+          ),
+          class_name="flex flex-col gap-1",
+        ),
+        # Override de sucursal actual
+        rx.el.div(
+          rx.el.label(
+            "Margen de Esta Sucursal (%) — opcional",
+            class_name=TYPOGRAPHY["label"],
+          ),
+          rx.el.div(
+            rx.el.input(
+              default_value=State.branch_profit_margin,
+              on_blur=State.set_branch_profit_margin,
+              placeholder="Vacío = usa margen de empresa",
+              type_="number",
+              min="0",
+              max="9999",
+              step="0.01",
+              key=State.company_form_key.to_string() + "-branch_margin",
+              class_name=INPUT_STYLES["default"],
+            ),
+            rx.el.span(
+              "%",
+              class_name="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none",
+            ),
+            class_name="relative",
+          ),
+          rx.el.p(
+            "Deja en blanco para heredar el margen global de empresa.",
+            class_name=TYPOGRAPHY["caption"],
+          ),
+          class_name="flex flex-col gap-1",
+        ),
+        class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
+      ),
+      # Vista previa del margen efectivo
+      rx.el.div(
+        rx.el.div(
+          rx.icon("trending-up", class_name="h-4 w-4 text-indigo-500"),
+          rx.el.span(
+            "Margen efectivo de esta sucursal: ",
+            class_name="text-sm text-slate-500",
+          ),
+          rx.el.span(
+            State.effective_profit_margin + "%",
+            class_name="text-sm font-semibold text-indigo-600",
+          ),
+          rx.el.span(
+            " → precio de compra $10 genera precio de venta $" +
+            State.effective_profit_margin_preview,
+            class_name="text-xs text-slate-400 ml-1",
+          ),
+          class_name="flex items-center gap-2 flex-wrap",
+        ),
+        class_name="rounded-lg bg-indigo-50 border border-indigo-100 px-4 py-3",
+      ),
+      rx.el.div(
+        rx.el.button(
+          "Guardar Margenes",
+          on_click=State.save_profit_margin,
+          class_name=f"{BUTTON_STYLES['primary']} w-full sm:w-auto min-h-[44px]",
+        ),
+        class_name="flex justify-end sm:justify-start",
+      ),
+      class_name=f"{CARD_STYLES['default']} space-y-4",
+    ),
     class_name="space-y-4",
   )
 
@@ -2084,7 +2191,11 @@ def _tax_rate_row(rate: rx.Var) -> rx.Component:
       ),
       class_name="flex items-center gap-1",
     ),
-    class_name="flex items-center justify-between px-3 py-2.5 rounded-md border border-slate-100 bg-slate-50 hover:bg-white transition-colors",
+    class_name=rx.cond(
+      rate["is_default"],
+      "flex items-center justify-between px-3 py-2.5 rounded-md border border-indigo-200 bg-indigo-50 transition-colors",
+      "flex items-center justify-between px-3 py-2.5 rounded-md border border-slate-100 bg-slate-50 hover:bg-white transition-colors",
+    ),
   )
 
 
@@ -2258,10 +2369,13 @@ def impuestos_section() -> rx.Component:
           rx.el.button(
             country_label,
             on_click=State.apply_country_presets(country_code),
-            class_name=(
+            class_name=rx.cond(
+              State.active_preset_country == country_code,
+              "text-xs px-3 py-1.5 rounded-md border border-indigo-300 "
+              "bg-indigo-50 text-indigo-700 font-semibold transition-colors",
               "text-xs px-3 py-1.5 rounded-md border border-slate-200 "
               "bg-white hover:bg-indigo-50 hover:border-indigo-200 "
-              "hover:text-indigo-700 text-slate-600 transition-colors font-medium"
+              "hover:text-indigo-700 text-slate-600 transition-colors font-medium",
             ),
           )
           for country_code, country_label in preset_countries

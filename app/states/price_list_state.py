@@ -271,6 +271,7 @@ class PriceListState(MixinState):
             self.selected_price_list = pl_data
         self.show_price_list_detail = True
         self.pl_item_product_id = ""
+        self.pl_item_variant_id = ""
         self.pl_item_unit_price = ""
         self.pl_item_product_search = ""
         self.pl_item_product_results = []
@@ -295,7 +296,9 @@ class PriceListState(MixinState):
         from sqlalchemy import func as sa_func
         set_tenant_context(company_id, branch_id)
         q_lower = query.strip().lower()
+        results: list[dict] = []
         with rx.session() as session:
+            # Productos base
             stmt = (
                 select(Product)
                 .where(Product.company_id == company_id)
@@ -307,20 +310,58 @@ class PriceListState(MixinState):
                 )
                 .limit(10)
             )
-            rows = session.exec(stmt).all()
-        self.pl_item_product_results = [
-            {
-                "id": str(p.id),
-                "description": p.description,
-                "barcode": p.barcode,
-                "sale_price": float(p.sale_price or 0),
+            for p in session.exec(stmt).all():
+                results.append({
+                    "id": str(p.id),
+                    "variant_id": "",
+                    "description": p.description,
+                    "barcode": p.barcode or "",
+                    "sale_price": float(p.sale_price or 0),
+                })
+
+            # Variantes
+            stmt_v = (
+                select(ProductVariant)
+                .join(Product, ProductVariant.product_id == Product.id)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+                .where(Product.is_active == True)
+                .where(
+                    (sa_func.lower(Product.description).contains(q_lower))
+                    | (sa_func.lower(ProductVariant.sku).contains(q_lower))
+                    | (sa_func.lower(ProductVariant.size).contains(q_lower))
+                    | (sa_func.lower(ProductVariant.color).contains(q_lower))
+                )
+                .limit(10)
+            )
+            variant_rows = session.exec(stmt_v).all()
+            parent_ids = {v.product_id for v in variant_rows}
+            parents = {
+                p.id: p
+                for p in session.exec(
+                    select(Product).where(Product.id.in_(parent_ids))
+                ).all()
             }
-            for p in rows
-        ]
+            for v in variant_rows:
+                parent = parents.get(v.product_id)
+                if not parent:
+                    continue
+                parts = [s for s in [v.size, v.color] if s]
+                variant_label = " / ".join(parts) if parts else v.sku
+                results.append({
+                    "id": str(v.product_id),
+                    "variant_id": str(v.id),
+                    "description": f"{parent.description} — {variant_label}",
+                    "barcode": v.sku,
+                    "sale_price": float(parent.sale_price or 0),
+                })
+
+        self.pl_item_product_results = results
 
     @rx.event
     def pl_select_product(self, product: dict):
         self.pl_item_product_id = product.get("id", "")
+        self.pl_item_variant_id = product.get("variant_id", "")
         self.pl_item_unit_price = str(product.get("sale_price", ""))
         self.pl_item_product_search = product.get("description", "")
         self.pl_item_product_results = []
@@ -346,13 +387,14 @@ class PriceListState(MixinState):
         branch_id = self._branch_id()
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
+        variant_id_int = int(self.pl_item_variant_id) if self.pl_item_variant_id else None
         with rx.session() as session:
             # Verificar si ya existe
             existing = session.exec(
                 select(PriceListItem)
                 .where(PriceListItem.price_list_id == pl_id)
                 .where(PriceListItem.product_id == int(self.pl_item_product_id))
-                .where(PriceListItem.product_variant_id == None)
+                .where(PriceListItem.product_variant_id == variant_id_int)
             ).first()
             if existing:
                 existing.unit_price = price
@@ -362,7 +404,7 @@ class PriceListState(MixinState):
                     branch_id=branch_id,
                     price_list_id=pl_id,
                     product_id=int(self.pl_item_product_id),
-                    product_variant_id=None,
+                    product_variant_id=variant_id_int,
                     unit_price=price,
                     created_at=utc_now_naive(),
                 )
@@ -370,6 +412,7 @@ class PriceListState(MixinState):
             session.commit()
 
         self.pl_item_product_id = ""
+        self.pl_item_variant_id = ""
         self.pl_item_unit_price = ""
         self.pl_item_product_search = ""
         await self._load_price_list_items(pl_id)

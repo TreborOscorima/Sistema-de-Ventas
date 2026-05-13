@@ -52,6 +52,7 @@ class InventoryState(
         "unit": "",
         "purchase_price": 0,
         "sale_price": 0,
+        "custom_profit_margin": "",
     }
     is_editing_product: bool = False
     show_variants: bool = False

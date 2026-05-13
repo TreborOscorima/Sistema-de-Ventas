@@ -518,6 +518,10 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Cargar márgenes para el auto-cálculo del precio de venta
+        if not getattr(self, "company_profit_margin", "").strip():
+            if hasattr(self, "load_settings"):
+                self.load_settings()
         # Delta parcial: renderiza la UI de inmediato
         yield
 
@@ -652,6 +656,10 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Cargar márgenes para placeholder del modal de edición de producto
+        if not getattr(self, "company_profit_margin", "").strip():
+            if hasattr(self, "load_settings"):
+                self.load_settings()
         # Delta parcial: renderiza la UI de inmediato
         yield
 

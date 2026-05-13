@@ -466,12 +466,16 @@ class ReceiptService:
                     ReceiptService._row("", right_text, width)
                 )
             if has_discount:
-                discount_unit = base_f - price_f
-                discount_total = discount_unit * float(item["quantity"])
-                discount_pct = round(discount_unit / base_f * 100)
+                discount_total = base_f * float(item["quantity"]) - float(item["subtotal"])
+                hint = item.get("promo_receipt_hint")
+                if hint:
+                    dto_label = f"  Dto. {hint}:"
+                else:
+                    discount_pct = round((base_f - price_f) / base_f * 100) if base_f else 0
+                    dto_label = f"  Dto. {discount_pct}%:"
                 receipt_lines.append(
                     ReceiptService._row(
-                        f"  Dto. {discount_pct}%:",
+                        dto_label,
                         f"-{currency_formatter(discount_total, currency_symbol)}",
                         width,
                     )

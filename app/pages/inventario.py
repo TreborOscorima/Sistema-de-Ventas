@@ -320,6 +320,33 @@ def edit_product_modal() -> rx.Component:
             ),
           ),
           rx.el.div(
+            rx.el.label(
+              "% Ganancia",
+              class_name=f"block {TYPOGRAPHY['label']}",
+            ),
+            rx.el.div(
+              rx.el.input(
+                type="number",
+                placeholder=State.effective_profit_margin + " (global)",
+                default_value=State.editing_product["custom_profit_margin"].to_string(),
+                on_blur=lambda v: State.handle_edit_product_change("profit_margin", v),
+                min="0",
+                max="9999",
+                step="0.01",
+                class_name=INPUT_STYLES["default"],
+              ),
+              rx.el.span(
+                "%",
+                class_name="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none",
+              ),
+              class_name="relative",
+            ),
+            rx.el.p(
+              "Vacío = usa margen global. Al cambiar recalcula Precio Venta.",
+              class_name=TYPOGRAPHY["caption"],
+            ),
+          ),
+          rx.el.div(
             rx.el.label("Precio Venta", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.input(
               type="number",

@@ -185,17 +185,17 @@ class SaleItem(TenantMixin, SQLModel, table=True):
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
     )
     unit_price: Decimal = Field(
-        default=Decimal("0.00"),
-        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+        default=Decimal("0.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
     )
     # Snapshot del precio antes de aplicar promoción. Se persiste para que los
     # reportes puedan calcular el descuento monetario otorgado sin re-resolver
     # PriceList/Tier (que pueden haber cambiado tras la venta). Para filas
     # pre-migración se back-fillea con ``unit_price`` (descuento implícito = 0).
     unit_price_base: Decimal = Field(
-        default=Decimal("0.00"),
+        default=Decimal("0.0000"),
         sa_column=sqlalchemy.Column(
-            Numeric(10, 2), nullable=False, server_default="0.00"
+            Numeric(10, 4), nullable=False, server_default="0.0000"
         ),
     )
     subtotal: Decimal = Field(
@@ -597,6 +597,11 @@ class CompanySettings(TenantMixin, SQLModel, table=True):
             sqlalchemy.Boolean, nullable=False, server_default="1"
         ),
         description="Muestra el desglose de impuesto en el recibo de venta.",
+    )
+    default_profit_margin: Optional[Decimal] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(Numeric(5, 2), nullable=True),
+        description="Margen de ganancia % por defecto para esta empresa/sucursal. NULL = sin margen configurado.",
     )
 
 

@@ -58,6 +58,12 @@ class ConfigState(MixinState):
     show_upgrade_modal: bool = False
     show_pricing_modal: bool = False
 
+    # Márgenes de ganancia porcentual
+    # company_profit_margin → margen global (almacenado en la sucursal principal)
+    # branch_profit_margin  → override de la sucursal actual ("" = hereda empresa)
+    company_profit_margin: str = ""
+    branch_profit_margin: str = ""
+
     # País de operación
     selected_country_code: str = "PE"
 
@@ -281,6 +287,32 @@ class ConfigState(MixinState):
                 # Cargar la zona horaria (si existe)
                 if hasattr(settings, "timezone") and settings.timezone:
                     self.timezone = settings.timezone
+
+            # Márgenes: empresa = primera sucursal (menor branch_id), rama = sucursal actual
+            all_settings = session.exec(
+                select(CompanySettings)
+                .where(CompanySettings.company_id == company_id)
+                .order_by(CompanySettings.branch_id)
+            ).all()
+            if all_settings:
+                company_row = all_settings[0]
+                self.company_profit_margin = (
+                    str(company_row.default_profit_margin)
+                    if company_row.default_profit_margin is not None
+                    else ""
+                )
+            else:
+                self.company_profit_margin = ""
+            self.branch_profit_margin = ""
+            if branch_id:
+                branch_row = next(
+                    (s for s in all_settings if s.branch_id == branch_id), None
+                )
+                if branch_row and branch_row.default_profit_margin is not None:
+                    # Solo mostrar override si es distinto del margen de empresa
+                    company_margin = all_settings[0].default_profit_margin if all_settings else None
+                    if branch_row.branch_id != all_settings[0].branch_id:
+                        self.branch_profit_margin = str(branch_row.default_profit_margin)
         self.company_form_key += 1
 
     @rx.event
@@ -574,6 +606,139 @@ class ConfigState(MixinState):
             self._emit_runtime_sync_event(),
             rx.toast("Configuracion de empresa guardada.", duration=2500),
         ]
+
+    @rx.var(cache=False)
+    def effective_profit_margin(self) -> str:
+        """Margen efectivo: override de sucursal si existe, sino el global de empresa."""
+        if self.branch_profit_margin.strip():
+            return self.branch_profit_margin.strip()
+        if self.company_profit_margin.strip():
+            return self.company_profit_margin.strip()
+        return "0"
+
+    @rx.var(cache=False)
+    def effective_profit_margin_decimal(self) -> float:
+        """Margen efectivo como float para cálculos de precio."""
+        try:
+            return float(self.effective_profit_margin)
+        except (ValueError, TypeError):
+            return 0.0
+
+    @rx.var(cache=False)
+    def effective_profit_margin_preview(self) -> str:
+        """Precio de venta sugerido si el precio de compra fuera $10."""
+        try:
+            margin = float(self.effective_profit_margin)
+            sale = 10.0 * (1 + margin / 100)
+            return f"{sale:.2f}"
+        except (ValueError, TypeError):
+            return "10.00"
+
+    def set_company_profit_margin(self, value: str):
+        self.company_profit_margin = value
+
+    def set_branch_profit_margin(self, value: str):
+        self.branch_profit_margin = value
+
+    @rx.event
+    def save_profit_margin(self):
+        """Guarda los márgenes y recalcula sale_price de productos sin override."""
+        toast = self._require_manage_config()
+        if toast:
+            return toast
+
+        def _parse_margin(raw: str) -> Decimal | None:
+            val = (raw or "").strip()
+            if not val:
+                return None
+            try:
+                d = Decimal(val)
+                if d < 0 or d > 9999:
+                    return None
+                return d.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            except Exception:
+                return None
+
+        company_margin = _parse_margin(self.company_profit_margin)
+        branch_margin = _parse_margin(self.branch_profit_margin)
+
+        if self.company_profit_margin.strip() and company_margin is None:
+            return rx.toast("Margen de empresa invalido. Ingresa un número >= 0.", duration=3500)
+        if self.branch_profit_margin.strip() and branch_margin is None:
+            return rx.toast("Margen de sucursal invalido. Ingresa un número >= 0.", duration=3500)
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+
+        from app.models.inventory import Product
+
+        with rx.session() as session:
+            all_settings = session.exec(
+                select(CompanySettings)
+                .where(CompanySettings.company_id == company_id)
+                .order_by(CompanySettings.branch_id)
+            ).all()
+
+            if not all_settings:
+                session.commit()
+                return rx.toast("Margenes de ganancia guardados.", duration=2500)
+
+            main_branch_id = all_settings[0].branch_id
+
+            # Guardar margen global en la sucursal principal
+            all_settings[0].default_profit_margin = company_margin
+            session.add(all_settings[0])
+
+            # Guardar override de sucursal actual si es diferente a la principal
+            if branch_id and branch_id != main_branch_id:
+                branch_row = next(
+                    (s for s in all_settings if s.branch_id == branch_id), None
+                )
+                if branch_row:
+                    branch_row.default_profit_margin = branch_margin
+                    session.add(branch_row)
+                elif branch_margin is not None:
+                    new_row = CompanySettings(
+                        company_id=company_id,
+                        branch_id=branch_id,
+                        default_profit_margin=branch_margin,
+                    )
+                    session.add(new_row)
+                    all_settings = list(all_settings) + [new_row]
+
+            # Recalcular sale_price en cascada para todos los productos sin override
+            total_updated = 0
+            for s in all_settings:
+                is_main = (s.branch_id == main_branch_id)
+                if is_main:
+                    effective = company_margin
+                else:
+                    # El margen propio ya fue actualizado en memoria arriba si era la sucursal actual
+                    effective = s.default_profit_margin if s.default_profit_margin is not None else company_margin
+                if effective is None or effective <= 0:
+                    continue
+                products = session.exec(
+                    select(Product)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == s.branch_id)
+                    .where(Product.custom_profit_margin.is_(None))
+                    .where(Product.purchase_price > 0)
+                ).all()
+                for p in products:
+                    p.sale_price = float(
+                        Decimal(str(float(p.purchase_price) * (1 + float(effective) / 100))).quantize(
+                            Decimal("0.01"), rounding=ROUND_HALF_UP
+                        )
+                    )
+                    session.add(p)
+                total_updated += len(products)
+
+            session.commit()
+
+        suffix = f" {total_updated} productos actualizados." if total_updated else "."
+        return rx.toast(f"Margenes guardados.{suffix}", duration=3000)
 
     @rx.event
     def go_to_config_tab(self, tab: str):

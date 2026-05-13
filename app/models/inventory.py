@@ -109,6 +109,11 @@ class Product(TenantMixin, SQLModel, table=True):
             index=True,
         ),
     )
+    custom_profit_margin: Optional[Decimal] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(Numeric(5, 2), nullable=True),
+        description="Override de margen % para este producto. NULL = hereda margen de sucursal/empresa.",
+    )
 
     sale_items: List["SaleItem"] = Relationship(
         back_populates="product",

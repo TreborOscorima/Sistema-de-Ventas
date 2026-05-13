@@ -40,6 +40,18 @@ class SearchMixin:
                 .order_by(Category.name)
             ).all()
             names = [c.name for c in cats]
+            # Include categories stored directly on products (may not be in Category table)
+            product_cats = session.exec(
+                select(Product.category)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.category.is_not(None))
+                .distinct()
+            ).all()
+            for cat in product_cats:
+                if cat and cat not in names:
+                    names.append(cat)
+            names.sort()
             if "General" not in names:
                 names.insert(0, "General")
             self.categories = names

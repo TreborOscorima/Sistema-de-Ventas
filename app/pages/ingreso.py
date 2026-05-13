@@ -375,6 +375,23 @@ def ingreso_page() -> rx.Component:
         class_name="w-full",
     )
 
+    category_input = rx.el.div(
+        rx.el.label(
+            "Categoría",
+            class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
+        ),
+        rx.el.select(
+            rx.foreach(
+                State.categories,
+                lambda cat: rx.el.option(cat, value=cat),
+            ),
+            value=State.new_entry_item["category"],
+            on_change=lambda val: State.handle_entry_change("category", val),
+            class_name=SELECT_STYLES["default"],
+        ),
+        class_name="w-full",
+    )
+
     variant_existing_inputs = rx.el.div(
         rx.el.label(
             "Talla/Color",
@@ -474,7 +491,15 @@ def ingreso_page() -> rx.Component:
     quantity_inputs = rx.cond(
         State.has_variants,
         rx.cond(State.is_existing_product, variant_existing_inputs, variant_new_inputs),
-        rx.cond(State.requires_batches, batch_quantity_inputs, rx.fragment()),
+        rx.cond(
+            State.requires_batches,
+            batch_quantity_inputs,
+            rx.cond(
+                State.is_existing_product,
+                rx.fragment(),
+                category_input,
+            ),
+        ),
     )
 
     entry_mode_selector = rx.cond(
@@ -527,6 +552,7 @@ def ingreso_page() -> rx.Component:
                         class_name=INPUT_STYLES["default"],
                         type="text",
                         auto_complete="off",
+                        on_blur=lambda val: State.set_entry_barcode_value(val),
                     ),
                     on_submit=State.handle_entry_barcode_form_submit,
                 ),
@@ -604,6 +630,7 @@ def ingreso_page() -> rx.Component:
                     rx.foreach(
                         State.units, lambda unit: rx.el.option(unit, value=unit)
                     ),
+                    key=State.entry_form_key.to_string() + "_unit",
                     default_value=State.new_entry_item["unit"],
                     on_change=lambda val: State.handle_entry_change("unit", val),
                     class_name=SELECT_STYLES["default"],
@@ -632,11 +659,16 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.el.input(
                     type="number",
-                    key=State.entry_form_key.to_string() + "_sprice",
+                    key=State.entry_sale_price_key.to_string(),
                     on_blur=lambda val: State.handle_entry_change("sale_price", val),
                     on_key_down=lambda key: State.handle_entry_field_keydown(key),
                     class_name=INPUT_STYLES["default"],
-                    default_value=State.new_entry_item["sale_price"].to_string(),
+                    default_value=State.entry_sale_price_display,
+                    placeholder=rx.cond(
+                        State.effective_profit_margin_decimal > 0,
+                        "Margen: " + State.effective_profit_margin + "%",
+                        "",
+                    ),
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
             ),

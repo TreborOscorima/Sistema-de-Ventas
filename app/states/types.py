@@ -154,6 +154,26 @@ class CashboxLogEntry(TypedDict):
     formatted_cost: str
     formatted_quantity: str
 
+class SaleItemDict(TypedDict):
+    temp_id: str
+    barcode: str
+    description: str
+    category: str
+    quantity: float
+    unit: str
+    price: float
+    sale_price: float
+    base_price: float
+    subtotal: float
+    product_id: int | None
+    variant_id: int | None
+    batch_id: int | None
+    batch_number: str
+    requires_batch: bool
+    kit_product_id: int | None
+    kit_name: str
+    promotion_name: str
+
 class RecentTransactionLine(TypedDict):
     left: str
     right: str

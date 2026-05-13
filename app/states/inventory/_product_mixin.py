@@ -65,6 +65,7 @@ class ProductMixin:
         product_id = _read_value("id", None)
 
         # Convertir modelo a dict para edicion
+        raw_margin = _read_value("custom_profit_margin", None)
         self.editing_product = {
             "id": product_id,
             "barcode": _read_value("barcode", ""),
@@ -74,6 +75,7 @@ class ProductMixin:
             "unit": _read_value("unit", ""),
             "purchase_price": _read_value("purchase_price", 0),
             "sale_price": _read_value("sale_price", 0),
+            "custom_profit_margin": str(raw_margin) if raw_margin is not None else "",
         }
 
         self.show_variants = False
@@ -330,14 +332,64 @@ class ProductMixin:
 
     @rx.event
     def handle_edit_product_change(self, field: str, value: str):
-        if field in ["stock", "purchase_price", "sale_price"]:
+        from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+
+        def _q(val: float) -> float:
             try:
-                if value == "":
-                    self.editing_product[field] = 0
+                return float(Decimal(str(val)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+            except InvalidOperation:
+                return val
+
+        if field == "profit_margin":
+            self.editing_product["custom_profit_margin"] = value
+            try:
+                value_str = str(value)
+                margin = float(value_str) if value_str.strip() else 0.0
+                purchase = float(self.editing_product.get("purchase_price") or 0)
+                if purchase > 0:
+                    self.editing_product["sale_price"] = _q(purchase * (1 + margin / 100))
+            except (ValueError, TypeError):
+                pass
+
+        elif field == "sale_price":
+            try:
+                sale = float(str(value)) if str(value).strip() else 0.0
+                self.editing_product["sale_price"] = sale
+                purchase = float(self.editing_product.get("purchase_price") or 0)
+                if purchase > 0 and sale > 0:
+                    self.editing_product["custom_profit_margin"] = str(
+                        _q((sale - purchase) / purchase * 100)
+                    )
                 else:
-                    self.editing_product[field] = float(value)
+                    self.editing_product["custom_profit_margin"] = ""
+            except (ValueError, TypeError):
+                pass
+
+        elif field == "purchase_price":
+            try:
+                purchase = float(str(value)) if str(value).strip() else 0.0
+                self.editing_product["purchase_price"] = purchase
+                raw_margin = str(self.editing_product.get("custom_profit_margin") or "").strip()
+                if raw_margin and purchase > 0:
+                    # Hay margen explícito → mantenerlo y recalcular sale_price
+                    margin = float(raw_margin)
+                    self.editing_product["sale_price"] = _q(purchase * (1 + margin / 100))
+                elif purchase > 0:
+                    # No hay margen → recalcular el % implícito desde el sale_price actual
+                    sale = float(self.editing_product.get("sale_price") or 0)
+                    if sale > 0:
+                        self.editing_product["custom_profit_margin"] = str(
+                            _q((sale - purchase) / purchase * 100)
+                        )
+            except (ValueError, TypeError):
+                pass
+
+        elif field == "stock":
+            try:
+                self.editing_product[field] = float(value) if str(value).strip() else 0.0
             except ValueError:
                 pass
+
         else:
             self.editing_product[field] = value
 
@@ -841,15 +893,32 @@ class ProductMixin:
                     product.purchase_price = product_data.get("purchase_price", 0)
                     new_sale_price = product_data.get("sale_price", 0)
                     # Registrar timestamp si el precio de venta cambió
-                    from decimal import Decimal
+                    from decimal import Decimal, InvalidOperation
                     if Decimal(str(new_sale_price or 0)) != Decimal(str(product.sale_price or 0)):
                         from app.utils.timezone import utc_now_naive as _now
                         product.sale_price_updated_at = _now()
                     product.sale_price = new_sale_price
+                    # Persistir override de margen por producto
+                    raw_margin = (product_data.get("custom_profit_margin") or "").strip()
+                    try:
+                        product.custom_profit_margin = (
+                            Decimal(raw_margin).quantize(Decimal("0.01")) if raw_margin else None
+                        )
+                    except (InvalidOperation, ValueError):
+                        product.custom_profit_margin = None
 
                     session.add(product)
                     msg = "Producto actualizado correctamente."
                 else:
+                    # Parsear margen custom para nuevo producto
+                    from decimal import Decimal, InvalidOperation
+                    raw_margin = (product_data.get("custom_profit_margin") or "").strip()
+                    try:
+                        parsed_margin = (
+                            Decimal(raw_margin).quantize(Decimal("0.01")) if raw_margin else None
+                        )
+                    except (InvalidOperation, ValueError):
+                        parsed_margin = None
                     # Crear
                     new_product = Product(
                         barcode=barcode,
@@ -863,6 +932,7 @@ class ProductMixin:
                         unit=product_data.get("unit", "Unidad"),
                         purchase_price=product_data.get("purchase_price", 0),
                         sale_price=product_data.get("sale_price", 0),
+                        custom_profit_margin=parsed_margin,
                         company_id=company_id,
                         branch_id=branch_id,
                     )

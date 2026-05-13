@@ -1,10 +1,11 @@
 """Modelos de Ofertas y Promociones.
 
 Motor de descuentos automáticos aplicado al carrito de ventas.
-Soporta tres tipos:
-  - PERCENTAGE  : descuento porcentual (ej: 15% off)
-  - FIXED_AMOUNT: descuento de monto fijo (ej: $10 off)
-  - BUY_X_GET_Y : lleva X paga Y (ej: 3x2)
+Soporta cuatro tipos:
+  - PERCENTAGE       : descuento porcentual (ej: 15% off)
+  - FIXED_AMOUNT     : descuento de monto fijo (ej: $10 off)
+  - BUY_X_GET_Y      : lleva X paga Y (ej: 3x2)
+  - NTH_UNIT_DISCOUNT: cada N unidades, la Nth tiene X% de descuento (ej: 2da unidad 70% off)
 
 Scope de aplicación:
   - ALL      : aplica a cualquier producto
@@ -31,6 +32,7 @@ class PromotionType(str):
     PERCENTAGE = "percentage"
     FIXED_AMOUNT = "fixed_amount"
     BUY_X_GET_Y = "buy_x_get_y"
+    NTH_UNIT_DISCOUNT = "nth_unit_discount"
 
 
 class PromotionScope(str):
@@ -81,6 +83,10 @@ class Promotion(TenantMixin, SQLModel, table=True):
             "min_cart_amount >= 0",
             name="ck_promotion_min_cart_amount_nonneg",
         ),
+        CheckConstraint(
+            "max_units_per_transaction IS NULL OR max_units_per_transaction >= 1",
+            name="ck_promotion_max_units_per_tx_pos",
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -121,6 +127,13 @@ class Promotion(TenantMixin, SQLModel, table=True):
         sa_column=sqlalchemy.Column(
             sqlalchemy.Integer, nullable=False, server_default="0"
         ),
+    )
+
+    # Límite de unidades que reciben el descuento por transacción.
+    # NULL = sin límite. ej: "25% off, máx 8 unidades por ticket".
+    max_units_per_transaction: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.Integer, nullable=True),
     )
 
     # Vigencia temporal

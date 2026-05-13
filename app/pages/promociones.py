@@ -111,7 +111,11 @@ def _promo_row(p: rx.Var) -> rx.Component:
                     rx.cond(
                         p["type"] == PromotionType.FIXED_AMOUNT,
                         State.currency_symbol + p["discount_value"].to_string(),
-                        p["min_quantity"].to_string() + "x" + (p["min_quantity"].to(int) - p["free_quantity"].to(int)).to_string(),
+                        rx.cond(
+                            p["type"] == PromotionType.BUY_X_GET_Y,
+                            p["min_quantity"].to_string() + "x" + (p["min_quantity"].to(int) - p["free_quantity"].to(int)).to_string(),
+                            "c/" + p["min_quantity"].to_string() + "u -" + p["discount_value"].to_string() + "%",
+                        ),
                     ),
                 ),
                 class_name="font-semibold text-amber-700 tabular-nums text-sm",
@@ -194,7 +198,15 @@ def _promo_card(p: rx.Var) -> rx.Component:
                 rx.cond(
                     p["type"] == PromotionType.PERCENTAGE,
                     p["discount_value"].to_string() + "% off",
-                    p["discount_value"].to_string(),
+                    rx.cond(
+                        p["type"] == PromotionType.FIXED_AMOUNT,
+                        State.currency_symbol + p["discount_value"].to_string() + " off",
+                        rx.cond(
+                            p["type"] == PromotionType.BUY_X_GET_Y,
+                            p["min_quantity"].to_string() + "x" + (p["min_quantity"].to(int) - p["free_quantity"].to(int)).to_string(),
+                            "c/" + p["min_quantity"].to_string() + "u -" + p["discount_value"].to_string() + "%",
+                        ),
+                    ),
                 ),
                 class_name="font-bold text-amber-700 tabular-nums",
             ),
@@ -285,6 +297,7 @@ def _promo_form_modal() -> rx.Component:
                         rx.el.option("Descuento porcentual (%)", value=PromotionType.PERCENTAGE),
                         rx.el.option("Monto fijo", value=PromotionType.FIXED_AMOUNT),
                         rx.el.option("Lleva X paga Y", value=PromotionType.BUY_X_GET_Y),
+                        rx.el.option("Última unidad del grupo con descuento", value=PromotionType.NTH_UNIT_DISCOUNT),
                         default_value=State.promo_type,
                         on_change=State.set_promo_type,
                         class_name=SELECT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
@@ -389,7 +402,7 @@ def _promo_form_modal() -> rx.Component:
                     rx.fragment(),
                 ),
 
-                # Valor del descuento / X e Y para BUY_X_GET_Y
+                # Valor del descuento / X e Y para BUY_X_GET_Y / Nth unidad
                 rx.cond(
                     State.promo_type == PromotionType.BUY_X_GET_Y,
                     rx.el.div(
@@ -417,22 +430,50 @@ def _promo_form_modal() -> rx.Component:
                         ),
                         class_name="col-span-2 grid grid-cols-2 gap-4",
                     ),
-                    rx.el.div(
-                        rx.el.label(
-                            rx.cond(
-                                State.promo_type == PromotionType.PERCENTAGE,
-                                "Descuento (%)",
-                                "Monto fijo",
+                    rx.cond(
+                        State.promo_type == PromotionType.NTH_UNIT_DISCOUNT,
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.label("Unidades por grupo", class_name=TYPOGRAPHY["label"]),
+                                rx.el.input(
+                                    default_value=State.promo_min_quantity,
+                                    type="text",
+                                    input_mode="numeric",
+                                    on_blur=State.set_promo_min_quantity,
+                                    class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
+                                    key=State.promo_form_key.to_string(),
+                                ),
                             ),
-                            class_name=TYPOGRAPHY["label"],
+                            rx.el.div(
+                                rx.el.label("% descuento en la última unidad", class_name=TYPOGRAPHY["label"]),
+                                rx.el.input(
+                                    default_value=State.promo_discount_value,
+                                    type="text",
+                                    input_mode="decimal",
+                                    on_blur=State.set_promo_discount_value,
+                                    class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
+                                    key=State.promo_form_key.to_string(),
+                                ),
+                            ),
+                            class_name="col-span-2 grid grid-cols-2 gap-4",
                         ),
-                        rx.el.input(
-                            default_value=State.promo_discount_value,
-                            type="text",
-                            input_mode="decimal",
-                            on_blur=State.set_promo_discount_value,
-                            class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
-                            key=State.promo_form_key.to_string(),
+                        rx.el.div(
+                            rx.el.label(
+                                rx.cond(
+                                    State.promo_type == PromotionType.PERCENTAGE,
+                                    "Descuento (%)",
+                                    "Monto fijo",
+                                ),
+                                class_name=TYPOGRAPHY["label"],
+                            ),
+                            rx.el.input(
+                                default_value=State.promo_discount_value,
+                                type="text",
+                                input_mode="decimal",
+                                on_blur=State.set_promo_discount_value,
+                                class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
+                                key=State.promo_form_key.to_string(),
+                            ),
                         ),
                     ),
                 ),
@@ -468,6 +509,20 @@ def _promo_form_modal() -> rx.Component:
                         input_mode="numeric",
                         placeholder="Sin límite",
                         on_blur=State.set_promo_max_uses,
+                        class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
+                        key=State.promo_form_key.to_string(),
+                    ),
+                ),
+
+                # Límite de unidades por transacción
+                rx.el.div(
+                    rx.el.label("Máx. unidades con descuento por ticket (vacío = sin límite)", class_name=TYPOGRAPHY["label"]),
+                    rx.el.input(
+                        default_value=State.promo_max_units_per_transaction,
+                        type="text",
+                        input_mode="numeric",
+                        placeholder="Sin límite",
+                        on_blur=State.set_promo_max_units_per_transaction,
                         class_name=INPUT_STYLES.get("default", "border rounded px-3 py-2 text-sm w-full"),
                         key=State.promo_form_key.to_string(),
                     ),
