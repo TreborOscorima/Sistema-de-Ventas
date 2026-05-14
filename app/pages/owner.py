@@ -2096,7 +2096,7 @@ def _owner_content() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.h1(
-                    "Gestión de la Plataforma",
+                    "Control de Empresas",
                     class_name="text-xl sm:text-2xl font-bold text-slate-800",
                 ),
                 rx.el.p(

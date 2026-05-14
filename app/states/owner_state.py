@@ -733,7 +733,7 @@ class OwnerState:
                         max_users=max_users,
                         max_branches=max_branches,
                         has_reservations_module=self.owner_form_has_reservations,
-                        has_services_module=self.owner_form_has_services,
+                        has_services_module=self.owner_form_has_reservations,
                         has_clients_module=self.owner_form_has_clients,
                         has_credits_module=self.owner_form_has_credits,
                         has_electronic_billing=self.owner_form_has_billing,

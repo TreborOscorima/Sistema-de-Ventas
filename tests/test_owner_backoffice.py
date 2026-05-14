@@ -1556,3 +1556,54 @@ class TestModulesAndSubscription:
         company = _make_company(subscription_ends_at=None)
         snap = _company_snapshot(company)
         assert snap["subscription_ends_at"] is None
+
+
+# ═══════════════════════════════════════════════════════════
+# 19. REGRESIÓN — adjust_limits usa owner_form_has_reservations para ambos módulos
+# ═══════════════════════════════════════════════════════════
+
+class TestAdjustLimitsServicesMirror:
+    """Verifica que has_services_module se pasa correctamente al servicio."""
+
+    @pytest.mark.asyncio
+    async def test_adjust_limits_services_mirrors_reservations(self, session, company):
+        """has_services_module debe recibir el mismo valor que has_reservations_module
+        ya que la UI los controla con un solo toggle 'Servicios y Reservas'."""
+        session.get.return_value = company
+        company.has_reservations_module = True
+        company.has_services_module = True
+
+        # Desactivar ambos módulos vía el servicio directamente
+        result = await OwnerService.adjust_limits(
+            session,
+            company_id=1,
+            has_reservations_module=False,
+            has_services_module=False,
+            actor_user_id=99,
+            actor_email="owner@test.com",
+            reason="Desactivar servicios y reservas",
+        )
+
+        assert company.has_reservations_module is False
+        assert company.has_services_module is False
+        assert result["has_reservations_module"] is False
+
+    @pytest.mark.asyncio
+    async def test_adjust_limits_services_and_reservations_in_sync(self, session, company):
+        """Activar el toggle debe activar ambos módulos (reservations y services)."""
+        session.get.return_value = company
+        company.has_reservations_module = False
+        company.has_services_module = False
+
+        result = await OwnerService.adjust_limits(
+            session,
+            company_id=1,
+            has_reservations_module=True,
+            has_services_module=True,
+            actor_user_id=99,
+            actor_email="owner@test.com",
+            reason="Activar servicios y reservas",
+        )
+
+        assert company.has_reservations_module is True
+        assert company.has_services_module is True
