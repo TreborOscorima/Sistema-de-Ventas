@@ -198,6 +198,11 @@ def _reveal_script() -> str:
         "},{threshold:0.01,rootMargin:'0px 0px 80px 0px'});"
         "els.forEach(function(el){io.observe(el);});"
         "},300);"
+        # Close mobile menu when any hash link is clicked
+        "document.addEventListener('click',function(e){"
+        "var link=e.target.closest('a[href^=\"#\"]');"
+        "if(link){var d=document.querySelector('header details');if(d)d.removeAttribute('open');}"
+        "});"
     )
 
 
@@ -254,6 +259,22 @@ def _global_styles() -> str:
 @keyframes revealFallback { to { opacity: 1; transform: none; } }
 .reveal:not(.in-view) { animation: revealFallback 0s 2.5s forwards; }
 .reveal-stagger:not(.in-view) > * { animation: revealFallback 0s 2.5s forwards; }
+/* Hero section gradient background */
+.hero-section {
+  background: linear-gradient(160deg, #ffffff 0%, #eef2ff 40%, #f0fdf4 100%);
+  position: relative;
+}
+.hero-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.45;
+  pointer-events: none;
+}
+/* Ensure hero content sits above the dot grid */
+.hero-section > * { position: relative; }
 """
 
 
@@ -277,14 +298,14 @@ MODULES = [
     {
         "icon": "shopping-cart",
         "title": "Punto de venta",
-        "description": "Cobra rapido, genera tickets y mantene trazabilidad por usuario.",
-        "bullets": ["Efectivo, tarjeta y transferencia", "Descuento de stock automatico", "Historial por sucursal"],
+        "description": "Cobra rápido, genera tickets y mantén trazabilidad por usuario.",
+        "bullets": ["Efectivo, tarjeta y transferencia", "Descuento de stock automático", "Historial por sucursal"],
     },
     {
         "icon": "package",
         "title": "Inventario inteligente",
         "description": "Stock por sucursal con alertas, movimientos auditables y Kardex.",
-        "bullets": ["Categorias, unidades y valorizacion", "Stock minimo con sugerencias", "Kardex con trazabilidad"],
+        "bullets": ["Categorías, unidades y valorización", "Stock mínimo con alertas", "Kardex con trazabilidad"],
     },
     {
         "icon": "calendar-plus",
@@ -294,46 +315,46 @@ MODULES = [
     },
     {
         "icon": "wallet",
-        "title": "Gestion de caja",
-        "description": "Apertura, cierre y auditoria diaria con evidencia de movimientos.",
+        "title": "Gestión de caja",
+        "description": "Apertura, cierre y auditoría diaria con evidencia de movimientos.",
         "bullets": ["Arqueo y diferencias visibles", "Ingresos/egresos con motivo", "Control por turno y responsable"],
     },
     {
         "icon": "users",
         "title": "Usuarios y permisos",
         "description": "Multi-tenant con roles claros por empresa y sucursal.",
-        "bullets": ["Perfiles por funcion", "Acceso por modulo", "Escala sin perder seguridad"],
+        "bullets": ["Perfiles por función", "Acceso por módulo", "Escala sin perder seguridad"],
     },
     {
         "icon": "pie-chart",
         "title": "Reportes ejecutivos",
-        "description": "Indicadores por periodo y categoria para decidir con datos.",
-        "bullets": ["Dashboards por sucursal", "Top productos y categorias", "Lectura rapida de rentabilidad"],
+        "description": "Indicadores por período y categoría para decidir con datos.",
+        "bullets": ["Dashboards por sucursal", "Top productos y categorías", "Lectura rápida de rentabilidad"],
     },
 ]
 
 STEPS = [
     ("01", "Activa tu cuenta", "Empresa, sucursal inicial y credenciales de equipo."),
-    ("02", "Configura operacion", "Moneda, catalogo, permisos y reglas de trabajo."),
-    ("03", "Empieza a vender", "Ventas y cobros con trazabilidad automatica."),
+    ("02", "Configura la operación", "Moneda, catálogo, permisos y reglas de trabajo."),
+    ("03", "Empieza a vender", "Ventas y cobros con trazabilidad automática."),
     ("04", "Controla en tiempo real", "Caja, stock y reservas en una sola vista."),
     ("05", "Escala con datos", "Reportes para optimizar y crecer con orden."),
 ]
 
 FAQ_ITEMS = [
-    ("Cuanto tarda implementarlo?", "Puedes comenzar el mismo dia. El onboarding toma minutos y escalas por modulos."),
-    ("Necesito tarjeta para el trial?", "No. Prueba gratis de 15 dias sin tarjeta. Valida el flujo completo antes de decidir."),
-    ("Sirve para varias empresas o sucursales?", "Si. Arquitectura multi-tenant: cada empresa y sucursal opera con aislamiento total."),
-    ("Puedo vender productos y servicios?", "Si. Punto de venta, reservas, adelantos, cobro final y caja en un solo sistema."),
-    ("Que incluye el soporte?", "Acompanamiento funcional, resolucion de dudas y guia para adopcion ordenada."),
-    ("Que pasa cuando termina el trial?", "Eliges Standard, Professional o Enterprise. Tu configuracion se mantiene intacta."),
+    ("¿Cuánto tarda implementarlo?", "Puedes comenzar el mismo día. El onboarding toma minutos y escalas por módulos según tu ritmo."),
+    ("¿Necesito tarjeta para el trial?", "No. Prueba gratis de 15 días sin tarjeta. Valida el flujo completo antes de decidir."),
+    ("¿Sirve para varias empresas o sucursales?", "Sí. Arquitectura multi-tenant real: cada empresa y sucursal opera con aislamiento total de datos."),
+    ("¿Puedo vender productos y servicios?", "Sí. Punto de venta, reservas, adelantos, cobro final y caja en un solo sistema integrado."),
+    ("¿Qué incluye el soporte?", "Acompañamiento funcional, resolución de dudas y guía para una adopción ordenada."),
+    ("¿Qué pasa cuando termina el trial?", "Eliges Standard, Professional o Enterprise. Tu configuración y datos se mantienen intactos."),
 ]
 
 STRENGTH_METRICS = [
     {"icon": "shield-check", "title": "Multi-tenant real", "detail": "Aislamiento total de datos entre empresas y sucursales. Cada negocio opera con privacidad absoluta."},
     {"icon": "database", "title": "Trazabilidad completa", "detail": "Cada movimiento de caja, venta y ajuste queda registrado con usuario, timestamp y sucursal."},
-    {"icon": "git-branch", "title": "Arquitectura escalable", "detail": "Agrega sucursales, usuarios y modulos sin migrar datos ni detener operaciones."},
-    {"icon": "lock", "title": "Permisos granulares", "detail": "Control de acceso por rol, modulo y sucursal. Define exactamente quien ve y hace que."},
+    {"icon": "git-branch", "title": "Arquitectura escalable", "detail": "Agrega sucursales, usuarios y módulos sin migrar datos ni detener operaciones."},
+    {"icon": "lock", "title": "Permisos granulares", "detail": "Control de acceso por rol, módulo y sucursal. Define exactamente quién ve y hace qué."},
 ]
 
 # ── Shared Links ─────────────────────────────────────────────
@@ -511,9 +532,9 @@ def _plan_card(
         cta_cls = "mt-8 inline-flex w-full items-center justify-center rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 transition-colors hover:bg-slate-50"
 
     badge_cls = (
-        "inline-flex rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-300"
+        "inline-flex rounded-full bg-slate-700 px-3 py-1 text-xs font-semibold text-slate-200"
         if is_enterprise
-        else "inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
+        else "inline-flex rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white"
     )
     badge = rx.el.span(badge_text, class_name=badge_cls) if badge_text else rx.fragment()
 
@@ -580,7 +601,7 @@ def _announcement_banner() -> rx.Component:
             rx.el.div(
                 rx.el.p(
                     rx.el.span("Nuevo", class_name="mr-2 rounded bg-emerald-500 px-1.5 py-0.5 text-xs font-bold uppercase text-white"),
-                    "Modulo de Reservas con cobro parcial integrado",
+                    "Módulo de Reservas con cobro parcial integrado",
                     class_name="text-sm font-medium text-white",
                 ),
                 rx.el.button(
@@ -607,8 +628,8 @@ def _header_section() -> rx.Component:
                 class_name="flex items-center gap-2.5",
             ),
             rx.el.nav(
-                _nav_link("Modulos", "#modulos", "click_nav_modulos", "header_nav"),
-                _nav_link("Como funciona", "#como-funciona", "click_nav_como_funciona", "header_nav"),
+                _nav_link("Módulos", "#modulos", "click_nav_modulos", "header_nav"),
+                _nav_link("Cómo funciona", "#como-funciona", "click_nav_como_funciona", "header_nav"),
                 _nav_link("Planes", "#planes", "click_nav_planes", "header_nav"),
                 _nav_link("FAQ", "#faq", "click_nav_faq", "header_nav"),
                 class_name="hidden items-center gap-6 md:flex",
@@ -634,8 +655,8 @@ def _header_section() -> rx.Component:
                     class_name="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white md:hidden",
                 ),
                 rx.el.div(
-                    _nav_link("Modulos", "#modulos", "click_nav_modulos_mobile", "mobile_menu"),
-                    _nav_link("Como funciona", "#como-funciona", "click_nav_como_funciona_mobile", "mobile_menu"),
+                    _nav_link("Módulos", "#modulos", "click_nav_modulos_mobile", "mobile_menu"),
+                    _nav_link("Cómo funciona", "#como-funciona", "click_nav_como_funciona_mobile", "mobile_menu"),
                     _nav_link("Planes", "#planes", "click_nav_planes_mobile", "mobile_menu"),
                     _nav_link("FAQ", "#faq", "click_nav_faq_mobile", "mobile_menu"),
                     rx.el.a(
@@ -664,7 +685,7 @@ def _hero_section() -> rx.Component:
             rx.el.div(
                 rx.el.span(
                     "Plataforma SaaS multi-sucursal",
-                    class_name="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm",
+                    class_name="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm",
                 ),
                 rx.el.h1(
                     "Deja de cruzar planillas. Controla ventas, stock y caja desde un solo lugar.",
@@ -682,10 +703,10 @@ def _hero_section() -> rx.Component:
                 ),
                 rx.el.div(
                     rx.el.a(
-                        "Comenzar trial de 15 dias",
+                        "Comenzar trial de 15 días",
                         href=_app_href("/registro"),
                         on_click=rx.call_script(_track_event_script("click_trial_cta", "hero_primary_cta")),
-                        class_name="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700",
+                        class_name="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 shadow-sm",
                     ),
                     rx.el.a(
                         rx.icon("message-circle", class_name="h-4 w-4"),
@@ -693,25 +714,29 @@ def _hero_section() -> rx.Component:
                         href=_demo_link,
                         target="_blank", rel="noopener noreferrer",
                         on_click=rx.call_script(_track_event_script("click_demo_cta", "hero_secondary_cta")),
-                        class_name="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50",
+                        class_name="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white/80 px-5 py-3 text-sm font-semibold text-slate-700 transition-colors hover:bg-white",
                     ),
                     class_name="mt-8 flex flex-col gap-3 sm:flex-row",
                 ),
                 class_name="reveal max-w-2xl",
             ),
             _hero_preview_card(),
-            class_name="grid grid-cols-1 items-start gap-10 lg:grid-cols-[0.95fr_1.05fr]",
+            class_name=rx.cond(
+                MarketingState.show_announcement,
+                "grid grid-cols-1 items-start gap-10 lg:grid-cols-2 mx-auto w-full max-w-7xl px-4 pt-16 pb-16 sm:px-6 lg:px-8 lg:pt-20",
+                "grid grid-cols-1 items-start gap-10 lg:grid-cols-2 mx-auto w-full max-w-7xl px-4 pt-24 pb-16 sm:px-6 lg:px-8 lg:pt-28",
+            ),
         ),
-        class_name="mx-auto w-full max-w-7xl px-4 pt-24 pb-16 sm:px-6 lg:px-8 lg:pt-28",
+        class_name="hero-section w-full",
     )
 
 
 def _metrics_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
-            _metric_card("+38%", "mejor visibilidad diaria", "Caja, ventas y reservas en una vista"),
-            _metric_card("-52%", "menos errores operativos", "Flujos estandarizados y trazables"),
-            _metric_card("15 dias", "trial gratuito", "Sin tarjeta, sin friccion"),
+            _metric_card("1 sola", "plataforma integrada", "Ventas, caja, stock y reservas unificados"),
+            _metric_card("Multi-sucursal", "desde el día 1", "Aislamiento total entre empresas y sedes"),
+            _metric_card("15 días", "prueba gratuita", "Sin tarjeta, sin compromiso"),
             _metric_card("24/7", "acceso cloud", "Desktop, tablet y mobile"),
             class_name="reveal-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4",
         ),
@@ -724,7 +749,7 @@ def _logos_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
             rx.el.p(
-                "Empresas que ya validan su operacion con TUWAYKIAPP",
+                "Operaciones que ya centralizan su gestión con TUWAYKIAPP",
                 class_name="reveal text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
             ),
             rx.el.div(
@@ -741,21 +766,21 @@ def _comparison_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
             rx.el.div(
-                rx.el.p("Problema vs solucion", class_name="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"),
+                rx.el.p("Problema vs solución", class_name="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500"),
                 rx.el.h2(
-                    "Deja de improvisar. Centraliza la operacion.",
+                    "Deja de improvisar. Centraliza la operación.",
                     class_name="mt-2 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
                     style={"fontFamily": "'Space Grotesk', sans-serif"},
                 ),
                 rx.el.p(
-                    "Visualiza el antes y despues cuando dejas de cruzar Excel para saber si la caja cuadra.",
+                    "Visualiza el antes y después cuando dejas de cruzar Excel para saber si la caja cuadra.",
                     class_name="mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
                 ),
                 class_name="reveal max-w-4xl",
             ),
             rx.el.div(
                 _comparison_card(
-                    "Operacion fragmentada", "triangle-alert",
+                    "Operación fragmentada", "triangle-alert",
                     [
                         "Caja en Excel, ventas en otro sistema, reservas por WhatsApp",
                         "Errores por doble carga y falta de trazabilidad entre areas",
@@ -764,7 +789,7 @@ def _comparison_section() -> rx.Component:
                     tone="negative",
                 ),
                 _comparison_card(
-                    "Operacion unificada", "sparkles",
+                    "Operación unificada", "sparkles",
                     [
                         "Venta, caja, stock y reservas en un solo flujo integrado",
                         "Datos consistentes por sucursal y por usuario responsable",
@@ -783,7 +808,7 @@ def _modules_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
             rx.el.h2(
-                "Modulos conectados para operar sin friccion",
+                "Módulos conectados para operar sin fricción",
                 class_name="reveal text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
                 style={"fontFamily": "'Space Grotesk', sans-serif"},
             ),
@@ -805,12 +830,12 @@ def _timeline_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
             rx.el.h2(
-                "Como funciona",
+                "Cómo funciona",
                 class_name="reveal text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
                 style={"fontFamily": "'Space Grotesk', sans-serif"},
             ),
             rx.el.p(
-                "Implementacion en cinco pasos para salir a operar rapido.",
+                "Implementación en cinco pasos para salir a operar rápido.",
                 class_name="reveal mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
             ),
             rx.el.div(
@@ -864,9 +889,9 @@ def _cloud_panel() -> rx.Component:
                         )
                         for t in [
                             "Accede desde cualquier dispositivo con internet",
-                            "Actualizaciones automaticas sin intervencion",
+                            "Actualizaciones automáticas sin intervención",
                             "Backups diarios en la nube incluidos",
-                            "Soporte tecnico remoto inmediato",
+                            "Soporte técnico remoto inmediato",
                             "Escalable: crece sin cambiar de infraestructura",
                             "Sin costos de hardware ni mantenimiento de servidor",
                         ]
@@ -889,8 +914,8 @@ def _cloud_panel() -> rx.Component:
                             class_name="flex items-start gap-2",
                         )
                         for t in [
-                            "Requiere conexion a internet estable",
-                            "Pago mensual recurrente segun el plan",
+                            "Requiere conexión a internet estable",
+                            "Pago mensual recurrente según el plan",
                             "Los datos se alojan en servidores externos",
                         ]
                     ],
@@ -908,9 +933,9 @@ def _cloud_panel() -> rx.Component:
                     "Elegir Standard", _standard_link, "click_plan_standard", tone="standard"),
                 _plan_card("Professional", "Para operaciones de mayor volumen y necesidad de control avanzado.", "$75",
                     ["Hasta 10 sucursales", "Usuarios ilimitados", "Configuraciones avanzadas", "Prioridad de soporte", "Mayor profundidad de reportes"],
-                    "Elegir Professional", _professional_link, "click_plan_professional", tone="professional", badge_text="Mas elegido"),
-                _plan_card("Enterprise", "Para companias con demanda de escala, personalizacion y SLA dedicado.", "$175",
-                    ["Plan personalizable por operacion", "Onboarding y arquitectura dedicada", "Integraciones y flujos a medida", "Acompanamiento prioritario", "Gobernanza enterprise"],
+                    "Elegir Professional", _professional_link, "click_plan_professional", tone="professional", badge_text="Más elegido"),
+                _plan_card("Enterprise", "Para compañías con demanda de escala, personalización y SLA dedicado.", "$175",
+                    ["Plan personalizable por operación", "Onboarding y arquitectura dedicada", "Integraciones y flujos a medida", "Acompañamiento prioritario", "Gobernanza enterprise"],
                     "Solicitar Enterprise", _enterprise_link, "click_plan_enterprise", tone="enterprise", badge_text="Escala total"),
                 class_name="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3",
             ),
@@ -937,12 +962,12 @@ def _local_panel() -> rx.Component:
                             class_name="flex items-start gap-2",
                         )
                         for t in [
-                            "Funciona sin conexion a internet",
-                            "Pago unico anual — sin mensualidades",
+                            "Funciona sin conexión a internet",
+                            "Pago único anual — sin mensualidades",
                             "Tus datos permanecen 100% en tu equipo",
                             "Control total sobre tu infraestructura",
                             "Ideal para zonas con internet inestable",
-                            "Rendimiento optimo sin depender de la red",
+                            "Rendimiento óptimo sin depender de la red",
                         ]
                     ],
                     class_name="space-y-1.5",
@@ -966,7 +991,7 @@ def _local_panel() -> rx.Component:
                             "Requiere un equipo dedicado (PC o servidor local)",
                             "Los backups y mantenimiento los gestiona tu equipo",
                             "Solo se accede desde la red local (sin acceso remoto)",
-                            "Las actualizaciones requieren instalacion manual",
+                            "Las actualizaciones requieren instalación manual",
                         ]
                     ],
                     class_name="space-y-1.5",
@@ -993,10 +1018,10 @@ def _local_panel() -> rx.Component:
                         )
                         for t in [
                             "Sistema completo (ventas, caja, inventario, reportes)",
-                            "Instalacion y configuracion inicial incluida",
-                            "Soporte tecnico por 12 meses",
-                            "Capacitacion inicial para tu equipo",
-                            "Actualizaciones durante el periodo contratado",
+                            "Instalación y configuración inicial incluida",
+                            "Soporte técnico por 12 meses",
+                            "Capacitación inicial para tu equipo",
+                            "Actualizaciones durante el período contratado",
                         ]
                     ],
                     class_name="mt-5 space-y-2",
@@ -1019,7 +1044,7 @@ def _pricing_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
             rx.el.h2(
-                "Elige como quieres usar TUWAYKIAPP",
+                "Elige cómo quieres usar TUWAYKIAPP",
                 class_name="reveal text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
                 style={"fontFamily": "'Space Grotesk', sans-serif"},
             ),
@@ -1038,7 +1063,7 @@ def _pricing_section() -> rx.Component:
                     ),
                 ),
                 rx.el.button(
-                    rx.icon("hard-drive", class_name="h-4 w-4"), "Instalacion Local",
+                    rx.icon("hard-drive", class_name="h-4 w-4"), "Instalación Local",
                     on_click=MarketingState.set_tab_local,
                     class_name=rx.cond(
                         MarketingState.active_tab == "local",
@@ -1073,8 +1098,8 @@ def _faq_section() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.div(
-                    rx.el.p("Aun tienes dudas antes de activar tu trial?", class_name="text-base font-semibold text-slate-900"),
-                    rx.el.p("Nuestro equipo te ayuda a elegir plan y a estimar implementacion segun tu operacion.", class_name="mt-1 text-sm text-slate-600"),
+                    rx.el.p("¿Aún tienes dudas antes de activar tu trial?", class_name="text-base font-semibold text-slate-900"),
+                    rx.el.p("Nuestro equipo te ayuda a elegir plan y a estimar implementación según tu operación.", class_name="mt-1 text-sm text-slate-600"),
                     class_name="flex-1",
                 ),
                 rx.el.div(
@@ -1104,14 +1129,14 @@ def _cta_section() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.h2(
-                    "Tu operacion merece mas que planillas y sistemas desconectados",
-                    class_name="text-2xl font-extrabold tracking-tight text-white sm:text-3xl",
+                    "Tu operación merece más que planillas y sistemas desconectados",
+                    class_name="text-2xl font-extrabold tracking-tight text-white sm:text-3xl text-center",
                     style={"fontFamily": "'Space Grotesk', sans-serif"},
                 ),
                 rx.el.p(
-                    "Activa tu prueba de 15 dias sin tarjeta. Centraliza ventas, inventario, caja y reservas ",
+                    "Activa tu prueba de 15 días sin tarjeta. Centraliza ventas, inventario, caja y reservas ",
                     rx.el.span("desde hoy.", class_name="whitespace-nowrap"),
-                    class_name="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base",
+                    class_name="mt-4 max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base text-center",
                 ),
                 rx.el.div(
                     rx.el.a(
@@ -1126,7 +1151,7 @@ def _cta_section() -> rx.Component:
                     ),
                     class_name="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center",
                 ),
-                class_name="reveal mx-auto w-full max-w-7xl overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 px-8 py-14 sm:px-12 sm:py-16 shadow-2xl",
+                class_name="reveal mx-auto w-full max-w-7xl overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 px-8 py-14 sm:px-12 sm:py-16 shadow-2xl flex flex-col items-center",
             ),
         ),
         class_name="mx-auto w-full max-w-7xl px-4 pb-16 sm:px-6 lg:px-8",
@@ -1143,7 +1168,7 @@ def _footer_section() -> rx.Component:
                         rx.el.span("TUWAYKIAPP", class_name="text-lg font-extrabold tracking-tight text-slate-900"),
                         href=_site_href("/"), class_name="inline-flex items-center gap-2.5",
                     ),
-                    rx.el.p("Sistema de ventas SaaS para negocios multi-sucursal con enfoque en control real.", class_name="mt-3 max-w-xs text-sm text-slate-600"),
+                    rx.el.p("Sistema de gestión SaaS para negocios multi-sucursal con enfoque en control real.", class_name="mt-3 max-w-xs text-sm text-slate-600"),
                     rx.el.a(
                         "WhatsApp +5491168376517",
                         href=f"https://wa.me/{WHATSAPP_NUMBER}", target="_blank", rel="noopener noreferrer",
@@ -1153,7 +1178,7 @@ def _footer_section() -> rx.Component:
                 ),
                 rx.el.div(
                     rx.el.h4("Producto", class_name="text-sm font-bold text-slate-900"),
-                    _footer_link("Modulos", "#modulos", "click_footer_modulos", "footer_producto"),
+                    _footer_link("Módulos", "#modulos", "click_footer_modulos", "footer_producto"),
                     _footer_link("Planes", "#planes", "click_footer_planes", "footer_producto"),
                     _footer_link("FAQ", "#faq", "click_footer_faq", "footer_producto"),
                     class_name="flex flex-col gap-2",
@@ -1184,14 +1209,13 @@ def _footer_section() -> rx.Component:
             rx.el.div(
                 rx.el.div(
                     rx.el.p("TUWAYKIAPP \u00a9 2026. Todos los derechos reservados.", class_name="text-sm leading-relaxed text-slate-500"),
-                    rx.el.p("Hecho con foco en escalabilidad, operacion y crecimiento comercial.", class_name="text-sm leading-relaxed text-slate-500"),
+                    rx.el.p("Hecho con foco en escalabilidad, operación y crecimiento comercial.", class_name="text-sm leading-relaxed text-slate-500"),
                     class_name="space-y-1",
                 ),
                 rx.el.div(
                     rx.el.p("Creado por", class_name="text-xs text-slate-400 uppercase tracking-wider"),
                     rx.el.a(
-                        "Trebor Oscorima ",
-                        rx.el.span("\ud83e\uddc9\u26bd\ufe0f", class_name="ml-1"),
+                        "Trebor Oscorima",
                         href="https://www.facebook.com/trebor.oscorima/?locale=es_LA", target="_blank", rel="noopener noreferrer",
                         class_name="text-sm font-semibold text-slate-700 hover:text-indigo-600 transition-colors",
                     ),

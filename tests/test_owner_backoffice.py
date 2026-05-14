@@ -1216,11 +1216,12 @@ class TestEnhancedModals:
         state = OwnerState()
         assert hasattr(state, "owner_form_reason_preset")
         assert hasattr(state, "owner_form_notes")
-        assert hasattr(state, "owner_form_activate_now")
         assert hasattr(state, "owner_form_current_plan")
         assert hasattr(state, "owner_form_current_status")
         assert hasattr(state, "owner_form_trial_ends_at")
         assert hasattr(state, "owner_form_effective_date")
+        # activate_now fue eliminado — la activación siempre es inmediata (service)
+        assert not hasattr(state, "owner_form_activate_now")
 
     def test_new_state_fields_defaults(self):
         """Valores por defecto correctos."""
@@ -1228,7 +1229,6 @@ class TestEnhancedModals:
         state = OwnerState()
         assert state.owner_form_reason_preset == ""
         assert state.owner_form_notes == ""
-        assert state.owner_form_activate_now is True
         assert state.owner_form_current_plan == ""
         assert state.owner_form_current_status == ""
         assert state.owner_form_trial_ends_at == ""
@@ -1239,8 +1239,9 @@ class TestEnhancedModals:
         from app.states.owner_state import OwnerState
         assert hasattr(OwnerState, "owner_set_form_reason_preset")
         assert hasattr(OwnerState, "owner_set_form_notes")
-        assert hasattr(OwnerState, "owner_set_form_activate_now")
         assert hasattr(OwnerState, "owner_set_form_extra_days_preset")
+        # owner_set_form_activate_now eliminado (dead code — service siempre activa)
+        assert not hasattr(OwnerState, "owner_set_form_activate_now")
 
     def test_reason_presets_defined(self):
         """Los presets de motivos deben estar definidos para cada acción."""

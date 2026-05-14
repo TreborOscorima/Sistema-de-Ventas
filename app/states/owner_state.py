@@ -225,7 +225,6 @@ class OwnerState:
     owner_form_has_credits: bool = True
     owner_form_has_billing: bool = False
     owner_form_notes: str = ""  # Notas adicionales opcionales
-    owner_form_activate_now: bool = True  # Activar inmediatamente al cambiar plan
     owner_form_subscription_months: str = "12"  # Duración de suscripción en meses
 
     # Info de contexto pre-cargada (solo lectura en UI)
@@ -513,7 +512,6 @@ class OwnerState:
         self.owner_form_has_credits = True
         self.owner_form_has_billing = False
         self.owner_form_notes = ""
-        self.owner_form_activate_now = True
         self.owner_form_subscription_months = "12"
         self.owner_form_current_plan = ""
         self.owner_form_current_status = ""
@@ -601,10 +599,6 @@ class OwnerState:
     @rx.event
     def owner_set_form_subscription_months(self, value: str):
         self.owner_form_subscription_months = value
-
-    @rx.event
-    def owner_set_form_activate_now(self, value: bool):
-        self.owner_form_activate_now = value
 
     # ─── Ejecución de acciones ─────────────────────────
 
@@ -1144,18 +1138,34 @@ class OwnerState:
 
     @rx.event
     def owner_set_billing_serie_factura(self, value: str):
-        value = (value or "F001").strip().upper()
         import re
-        if not re.match(r'^[A-Z]\d{3}$', value):
-            return rx.toast("Formato inválido. Usar: F001, F002, etc.", duration=3000)
+        is_ar = self.owner_billing_country == "AR"
+        fallback = "0001" if is_ar else "F001"
+        value = (value or fallback).strip()
+        if not is_ar:
+            value = value.upper()
+        if is_ar:
+            if not re.match(r'^\d{4}$', value):
+                return rx.toast("Formato inválido para AFIP. Usar: 0001, 0002, etc.", duration=3000)
+        else:
+            if not re.match(r'^[A-Z]\d{3}$', value):
+                return rx.toast("Formato inválido. Usar: F001, F002, etc.", duration=3000)
         self.owner_billing_serie_factura = value
 
     @rx.event
     def owner_set_billing_serie_boleta(self, value: str):
-        value = (value or "B001").strip().upper()
         import re
-        if not re.match(r'^[A-Z]\d{3}$', value):
-            return rx.toast("Formato inválido. Usar: B001, B002, etc.", duration=3000)
+        is_ar = self.owner_billing_country == "AR"
+        fallback = "0001" if is_ar else "B001"
+        value = (value or fallback).strip()
+        if not is_ar:
+            value = value.upper()
+        if is_ar:
+            if not re.match(r'^\d{4}$', value):
+                return rx.toast("Formato inválido para AFIP. Usar: 0001, 0002, etc.", duration=3000)
+        else:
+            if not re.match(r'^[A-Z]\d{3}$', value):
+                return rx.toast("Formato inválido. Usar: B001, B002, etc.", duration=3000)
         self.owner_billing_serie_boleta = value
 
     @rx.event

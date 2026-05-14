@@ -734,23 +734,14 @@ def _form_change_plan() -> rx.Component:
             ),
             rx.fragment(),
         ),
-        # Activar inmediatamente
+        # Nota informativa (la activación siempre es inmediata al cambiar plan)
         rx.el.div(
-            rx.el.label(
-                rx.el.input(
-                    type="checkbox",
-                    checked=State.owner_form_activate_now,
-                    on_change=State.owner_set_form_activate_now,
-                    class_name="mr-2 accent-emerald-600",
-                ),
-                "Activar cuenta inmediatamente",
-                class_name="text-sm text-slate-700 flex items-center cursor-pointer",
-            ),
+            rx.icon("circle-check", class_name="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"),
             rx.el.p(
-                "La empresa quedará activa tras el cambio de plan.",
-                class_name="text-xs text-slate-400 ml-5",
+                "La empresa quedará activa inmediatamente tras el cambio de plan.",
+                class_name="text-xs text-slate-500",
             ),
-            class_name="flex flex-col gap-0.5",
+            class_name="flex items-start gap-1.5",
         ),
         # Fecha + Notas
         _date_and_notes_section(),
@@ -2016,7 +2007,9 @@ def _billing_modal() -> rx.Component:
                                     rx.el.input(
                                         value=State.owner_billing_serie_factura,
                                         on_change=State.owner_set_billing_serie_factura,
-                                        placeholder="F001",
+                                        placeholder=rx.cond(
+                                            State.owner_billing_country == "AR", "0001", "F001"
+                                        ),
                                         class_name=_input,
                                     ),
                                     class_name="flex flex-col gap-1",
@@ -2026,7 +2019,9 @@ def _billing_modal() -> rx.Component:
                                     rx.el.input(
                                         value=State.owner_billing_serie_boleta,
                                         on_change=State.owner_set_billing_serie_boleta,
-                                        placeholder="B001",
+                                        placeholder=rx.cond(
+                                            State.owner_billing_country == "AR", "0001", "B001"
+                                        ),
                                         class_name=_input,
                                     ),
                                     class_name="flex flex-col gap-1",
