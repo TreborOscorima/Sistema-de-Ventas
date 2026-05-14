@@ -8,7 +8,7 @@
 
 ## 1. Vision General
 
-**TUWAYKIAPP** es una plataforma SaaS multi-tenant de gestion empresarial (ERP) y Punto de Venta (POS) disenada para comercios, PYMES y centros deportivos en Latinoamerica.
+**TUWAYKIAPP** es una plataforma SaaS multi-tenant de gestion empresarial (ERP) y Punto de Venta (POS) diseñada para comercios, PYMES y centros deportivos en Latinoamerica.
 
 La version **v4.0** agrega un **Motor de Pricing completo** (Listas de Precios, Promociones avanzadas, Impuestos por empresa) y un sistema de **Presupuestos/Cotizaciones** convertibles a venta, sobre la base de la Facturacion Electronica multi-pais incorporada en v3.0.
 
