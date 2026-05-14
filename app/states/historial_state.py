@@ -805,7 +805,12 @@ class HistorialState(MixinState):
     def _fetch_sales_history(
         self, offset: int | None = None, limit: int | None = None
     ) -> list[dict]:
-        with rx.session() as session:
+        # tenant_bypass: evita que el listener aplique with_loader_criteria
+        # dos veces en los SELECTs secundarios de selectinload (payments, items,
+        # user, client). La query principal ya tiene WHERE explícito de tenant;
+        # los secundarios quedan aislados por sale_id IN (...).
+        with tenant_bypass():
+          with rx.session() as session:
             query = self._sales_query()
             if offset is not None:
                 query = query.offset(offset)

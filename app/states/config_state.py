@@ -12,6 +12,7 @@ from app.utils.db_seeds import (
     is_reserved_payment_method,
 )
 from app.utils.timezone import is_valid_timezone
+from app.utils.tenant import tenant_bypass
 from app.enums import PaymentMethodType
 from app.i18n import MSG
 from .types import CurrencyOption, PaymentMethodConfig
@@ -188,14 +189,17 @@ class ConfigState(MixinState):
             else:
                 self.available_currencies = [{"code": c.code, "name": c.name, "symbol": c.symbol} for c in currencies]
 
-            # Cargar unidades
+            # Cargar unidades — tenant_bypass porque los filtros explícitos ya garantizan
+            # el aislamiento; with_loader_criteria del middleware puede interferir al
+            # cambiar de sucursal si el ContextVar no se propagó al hilo del ORM.
             units_db = []
             if company_id and branch_id:
-                units_db = session.exec(
-                    select(Unit)
-                    .where(Unit.company_id == company_id)
-                    .where(Unit.branch_id == branch_id)
-                ).all()
+                with tenant_bypass():
+                    units_db = session.exec(
+                        select(Unit)
+                        .where(Unit.company_id == company_id)
+                        .where(Unit.branch_id == branch_id)
+                    ).all()
             self.units = [u.name for u in units_db]
             self.decimal_units = {u.name for u in units_db if u.allows_decimal}
             self.unit_rows = [
@@ -203,14 +207,15 @@ class ConfigState(MixinState):
                 for u in units_db
             ]
 
-            # Cargar metodos de pago
+            # Cargar metodos de pago — idem, tenant_bypass por la misma razón
             methods = []
             if company_id and branch_id:
-                methods = session.exec(
-                    select(PaymentMethod)
-                    .where(PaymentMethod.company_id == company_id)
-                    .where(PaymentMethod.branch_id == branch_id)
-                ).all()
+                with tenant_bypass():
+                    methods = session.exec(
+                        select(PaymentMethod)
+                        .where(PaymentMethod.company_id == company_id)
+                        .where(PaymentMethod.branch_id == branch_id)
+                    ).all()
             self.payment_methods = [
                 {
                     "id": m.method_id,

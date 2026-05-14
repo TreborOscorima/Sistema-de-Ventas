@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import Session, select
 
 from app.enums import PaymentMethodType
-from app.models import Category, PaymentMethod, Unit
+from app.models import Category, Currency, PaymentMethod, Unit
 from app.utils.tenant import set_tenant_context
 
 # ============================================================================
@@ -432,6 +432,41 @@ def get_payment_methods_for_country(country_code: str) -> list[dict]:
 # Por defecto: Perú (para compatibilidad con instalaciones existentes)
 DEFAULT_PAYMENT_METHODS = get_payment_methods_for_country("PE")
 
+# Monedas de todos los países del configurador de impuestos
+CURRENCY_CATALOG = [
+    {"code": "PEN", "name": "Sol peruano",           "symbol": "S/"},
+    {"code": "ARS", "name": "Peso argentino",         "symbol": "$"},
+    {"code": "COP", "name": "Peso colombiano",        "symbol": "$"},
+    {"code": "CLP", "name": "Peso chileno",           "symbol": "$"},
+    {"code": "USD", "name": "Dólar estadounidense",   "symbol": "$"},
+    {"code": "BOB", "name": "Boliviano",              "symbol": "Bs."},
+    {"code": "UYU", "name": "Peso uruguayo",          "symbol": "$U"},
+    {"code": "PYG", "name": "Guaraní",                "symbol": "₲"},
+    {"code": "MXN", "name": "Peso mexicano",          "symbol": "$"},
+    {"code": "VES", "name": "Bolívar venezolano",     "symbol": "Bs.S"},
+]
+
+# Métodos de pago que se crean por defecto al abrir una sucursal.
+# El cliente agrega los restantes según su necesidad.
+SEED_PAYMENT_METHODS = [
+    {
+        "name": "Efectivo",
+        "code": "cash",
+        "method_id": "cash",
+        "description": "Billetes, Monedas",
+        "kind": PaymentMethodType.cash,
+        "allows_change": True,
+    },
+    {
+        "name": "Transferencia",
+        "code": "transfer",
+        "method_id": "transfer",
+        "description": "Transferencia bancaria",
+        "kind": PaymentMethodType.transfer,
+        "allows_change": False,
+    },
+]
+
 def seed_new_branch_data(
     session: Session,
     company_id: int,
@@ -456,13 +491,35 @@ def seed_new_branch_data(
     stmt = mysql_insert(Category).values(category_rows)
     session.execute(stmt.on_duplicate_key_update(name=stmt.inserted.name))
 
-    # Unidades
+    # Monedas globales (sin scope de tenant) — idempotente por UNIQUE(code)
+    currency_rows = [
+        {"code": c["code"], "name": c["name"], "symbol": c["symbol"]}
+        for c in CURRENCY_CATALOG
+    ]
+    stmt = mysql_insert(Currency).values(currency_rows)
+    session.execute(
+        stmt.on_duplicate_key_update(
+            name=stmt.inserted.name,
+            symbol=stmt.inserted.symbol,
+        )
+    )
+
+    # Unidades de medida
     unit_defaults = [
-        ("unidad", False),
-        ("kg", True),
-        ("g", True),
-        ("l", True),
-        ("ml", True),
+        ("bolsa",   False),
+        ("botella", False),
+        ("caja",    False),
+        ("cm",      True),
+        ("docena",  False),
+        ("g",       True),
+        ("kg",      True),
+        ("l",       True),
+        ("lata",    False),
+        ("m",       True),
+        ("ml",      True),
+        ("paquete", False),
+        ("pieza",   False),
+        ("unidad",  False),
     ]
     unit_rows = [
         {
@@ -476,7 +533,7 @@ def seed_new_branch_data(
     stmt = mysql_insert(Unit).values(unit_rows)
     session.execute(stmt.on_duplicate_key_update(name=stmt.inserted.name))
 
-    # Métodos de pago
+    # Métodos de pago — sólo Efectivo y Transferencia por defecto
     pm_rows = [
         {
             "name": data["name"],
@@ -490,7 +547,7 @@ def seed_new_branch_data(
             "company_id": company_id,
             "branch_id": branch_id,
         }
-        for data in DEFAULT_PAYMENT_METHODS
+        for data in SEED_PAYMENT_METHODS
     ]
     if pm_rows:
         stmt = mysql_insert(PaymentMethod).values(pm_rows)

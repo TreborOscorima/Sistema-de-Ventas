@@ -5,6 +5,7 @@ from sqlmodel import select, desc
 from sqlalchemy.orm import selectinload
 from app.enums import PaymentMethodType, SaleStatus
 from app.utils.payment import payment_method_label as _canonical_payment_method_label
+from app.utils.tenant import tenant_bypass
 from app.models import CashboxLog as CashboxLogModel, User as UserModel, Sale, SaleItem
 from app.i18n import MSG
 from ..types import CashboxSale, CashboxLogEntry
@@ -482,14 +483,20 @@ class HistoryMixin:
     def _fetch_cashbox_sales(
         self, offset: int | None = None, limit: int | None = None
     ) -> list[CashboxSale]:
-        with rx.session() as session:
-            query = self._cashbox_sales_query()
-            if offset is not None:
-                query = query.offset(offset)
-            if limit is not None:
-                query = query.limit(limit)
-            sales_results = session.exec(query).all()
-            return [
-                self._cashbox_sale_row(sale, user)
-                for sale, user in sales_results
-            ]
+        # tenant_bypass: el middleware aplica with_loader_criteria al query
+        # principal Y también al SELECT secundario de selectinload, resultando
+        # en doble-filtrado. La query principal ya tiene WHERE explícito de
+        # company_id/branch_id; para los secundarios (payments, items) el
+        # sale_id IN (...) garantiza aislamiento sin necesitar el listener.
+        with tenant_bypass():
+            with rx.session() as session:
+                query = self._cashbox_sales_query()
+                if offset is not None:
+                    query = query.offset(offset)
+                if limit is not None:
+                    query = query.limit(limit)
+                sales_results = session.exec(query).all()
+                return [
+                    self._cashbox_sale_row(sale, user)
+                    for sale, user in sales_results
+                ]

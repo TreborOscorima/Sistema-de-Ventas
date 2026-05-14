@@ -183,6 +183,21 @@ class State(RootState):
         ):
             await self.ensure_payment_methods()
             self._refresh_payment_config_with_ttl(force=True)
+        elif (
+            tenant_changed
+            and not seeded_defaults
+            and hasattr(self, "_refresh_payment_config_with_ttl")
+        ):
+            # Al cambiar de sucursal, los datos de config son del branch anterior.
+            # Recargar explícitamente para el nuevo branch aunque payment_methods
+            # no esté vacío (condición que el bloque anterior no cubre).
+            self._refresh_payment_config_with_ttl(force=True)
+            # Después del reload, si el nuevo branch no tiene datos base en la DB,
+            # sembrarlos ahora. La condición en línea 163 se evaluó antes de que
+            # load_config_data actualizara self.units con el contexto del branch
+            # destino, por lo que no alcanzó a detectar el branch vacío.
+            if hasattr(self, "units") and not self.units and hasattr(self, "ensure_default_data"):
+                self.ensure_default_data()
 
     @rx.event
     async def refresh_runtime_context(self, force: bool = False):
@@ -819,6 +834,16 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Recargar datos de config para el branch activo en cada visita a la página.
+        # _do_runtime_refresh solo lo hace cuando payment_methods está vacío, lo que
+        # causa que al cambiar de sucursal la data no se refresque al re-navegar.
+        if hasattr(self, "load_config_data"):
+            self.load_config_data()
+        # Si el branch activo no tiene datos base en la BD (units/payment_methods
+        # vacíos), sembrarlos ahora. Cubre branches creados antes del seed automático
+        # y el caso donde _do_runtime_refresh saltó el seeding por TTL.
+        if hasattr(self, "units") and not self.units and hasattr(self, "ensure_default_data"):
+            self.ensure_default_data()
         yield
         yield State.bg_load_users
 
