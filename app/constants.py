@@ -244,7 +244,7 @@ PRICING_PLANS: list[dict] = [
     {
         "title": "PLAN STANDARD",
         "icon": "sparkles",
-        "limits": ["Hasta 5 sucursales", "10 usuarios"],
+        "limits": ["Hasta 2 sucursales", "5 usuarios"],
         "modules": [
             "Múltiples usuarios y roles",
             "Ventas rápidas con lector de código o teclado",
@@ -254,14 +254,14 @@ PRICING_PLANS: list[dict] = [
             "Clientes y cuentas corrientes",
         ],
         "action_label": "Elegir Standard",
-        "wa_text": "Hola,%20quiero%20el%20Plan%20Standard%20(USD%2045/mes)%20de%20TUWAYKIAPP.",
+        "wa_text": "Hola,%20quiero%20el%20Plan%20Standard%20(USD%2035/mes)%20de%20TUWAYKIAPP.",
         "highlight": False,
         "badge_text": None,
     },
     {
         "title": "PLAN PROFESSIONAL",
         "icon": "crown",
-        "limits": ["Hasta 10 sucursales", "Usuarios ilimitados"],
+        "limits": ["Hasta 5 sucursales", "10 usuarios"],
         "modules": [
             "Todo lo del Standard",
             "Multi-sucursal con control centralizado",
@@ -271,7 +271,7 @@ PRICING_PLANS: list[dict] = [
             "Integraciones personalizadas",
         ],
         "action_label": "Elegir Professional",
-        "wa_text": "Hola,%20quiero%20el%20Plan%20Professional%20(USD%2075/mes)%20de%20TUWAYKIAPP.",
+        "wa_text": "Hola,%20quiero%20el%20Plan%20Professional%20(USD%2055/mes)%20de%20TUWAYKIAPP.",
         "highlight": True,
         "badge_text": "Más popular",
     },

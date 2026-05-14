@@ -440,6 +440,9 @@ class MixinState:
                     settings_stmt.order_by(CompanySettings.branch_id, CompanySettings.id)
                 ).first()
                 if not settings and effective_bid:
+                    # Fallback intencional: si la sucursal activa no tiene
+                    # CompanySettings propio (p. ej. fue creada antes del seed),
+                    # usar los settings de la primera sucursal de la empresa.
                     settings = session.exec(
                         select(CompanySettings)
                         .where(CompanySettings.company_id == company_id)

@@ -360,8 +360,8 @@ STRENGTH_METRICS = [
 # ── Shared Links ─────────────────────────────────────────────
 _demo_link = _wa_link("Hola, quiero una demo en vivo de TUWAYKIAPP.")
 _local_link = _wa_link("Hola, me interesa TUWAYKIAPP en modalidad Local (pago anual). Quiero coordinar precio y detalles.")
-_standard_link = _wa_link("Hola, quiero el Plan Standard (USD 45/mes) de TUWAYKIAPP.")
-_professional_link = _wa_link("Hola, quiero el Plan Professional (USD 75/mes) de TUWAYKIAPP.")
+_standard_link = _wa_link("Hola, quiero el Plan Standard (USD 35/mes) de TUWAYKIAPP.")
+_professional_link = _wa_link("Hola, quiero el Plan Professional (USD 55/mes) de TUWAYKIAPP.")
 _enterprise_link = _wa_link("Hola, quiero el Plan Enterprise (USD 175/mes) de TUWAYKIAPP.")
 
 
@@ -928,11 +928,11 @@ def _cloud_panel() -> rx.Component:
         rx.el.div(
             rx.el.p("Planes disponibles", class_name="text-lg font-bold text-slate-900 mb-4"),
             rx.el.div(
-                _plan_card("Standard", "Ideal para negocios que quieren orden operativo desde el inicio.", "$45",
-                    ["Hasta 5 sucursales", "Hasta 10 usuarios", "Punto de venta + caja + inventario", "Reportes base y soporte comercial"],
+                _plan_card("Standard", "Ideal para negocios que quieren orden operativo desde el inicio.", "$35",
+                    ["Hasta 2 sucursales", "Hasta 5 usuarios", "Punto de venta + caja + inventario", "Reportes base y soporte comercial"],
                     "Elegir Standard", _standard_link, "click_plan_standard", tone="standard"),
-                _plan_card("Professional", "Para operaciones de mayor volumen y necesidad de control avanzado.", "$75",
-                    ["Hasta 10 sucursales", "Usuarios ilimitados", "Configuraciones avanzadas", "Prioridad de soporte", "Mayor profundidad de reportes"],
+                _plan_card("Professional", "Para operaciones de mayor volumen y necesidad de control avanzado.", "$55",
+                    ["Hasta 5 sucursales", "Hasta 10 usuarios", "Configuraciones avanzadas", "Prioridad de soporte", "Mayor profundidad de reportes"],
                     "Elegir Professional", _professional_link, "click_plan_professional", tone="professional", badge_text="Más elegido"),
                 _plan_card("Enterprise", "Para compañías con demanda de escala, personalización y SLA dedicado.", "$175",
                     ["Plan personalizable por operación", "Onboarding y arquitectura dedicada", "Integraciones y flujos a medida", "Acompañamiento prioritario", "Gobernanza enterprise"],

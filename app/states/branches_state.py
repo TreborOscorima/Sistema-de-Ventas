@@ -9,11 +9,12 @@ from app.models import (
     Branch, Company, User as UserModel, UserBranch,
     Sale, Purchase, CashboxSession, Product,
     Category, CashboxLog, Client,
+    PaymentMethod, Unit, CompanySettings,
 )
 from app.i18n import MSG
 from app.utils.db_seeds import seed_new_branch_data
 from app.utils.logger import get_logger
-from app.utils.tenant import set_tenant_context
+from app.utils.tenant import set_tenant_context, tenant_bypass
 from .mixin_state import MixinState
 
 logger = get_logger("BranchesState")
@@ -332,7 +333,7 @@ class BranchesState(MixinState):
             return
         branch_id_int = int(branch_id)
         current_branch = self._branch_id()
-        with rx.session() as session:
+        with tenant_bypass(), rx.session() as session:
             total_branches = session.exec(
                 select(func.count(Branch.id)).where(Branch.company_id == company_id)
             ).one()
@@ -380,22 +381,39 @@ class BranchesState(MixinState):
                 select(UserBranch).where(UserBranch.branch_id == branch_id_int)
             ).all():
                 session.delete(member)
-            # Eliminar categorías huérfanas (sin productos asociados)
-            # FIX 38b: add company_id filter for tenant isolation
             for cat in session.exec(
                 select(Category)
                 .where(Category.company_id == company_id)
                 .where(Category.branch_id == branch_id_int)
             ).all():
                 session.delete(cat)
+            for pm in session.exec(
+                select(PaymentMethod).where(PaymentMethod.branch_id == branch_id_int)
+            ).all():
+                session.delete(pm)
+            for unit in session.exec(
+                select(Unit).where(Unit.branch_id == branch_id_int)
+            ).all():
+                session.delete(unit)
+            for cs in session.exec(
+                select(CompanySettings).where(CompanySettings.branch_id == branch_id_int)
+            ).all():
+                session.delete(cs)
+            for user in session.exec(
+                select(UserModel).where(UserModel.branch_id == branch_id_int)
+            ).all():
+                user.branch_id = None
+                session.add(user)
+            session.flush()
             try:
                 session.delete(branch)
                 session.commit()
-            except IntegrityError:
+            except IntegrityError as exc:
                 session.rollback()
                 logger.warning(
-                    "IntegrityError al eliminar sucursal %s — tiene datos asociados",
+                    "IntegrityError al eliminar sucursal %s — %s",
                     branch_id_int,
+                    str(exc.orig) if exc.orig else str(exc),
                 )
                 return rx.toast(
                     "No se puede eliminar esta sucursal porque tiene datos asociados. "

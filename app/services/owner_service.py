@@ -64,7 +64,7 @@ PLAN_DEFAULTS: Dict[str, Dict[str, Any]] = {
     },
     PlanType.STANDARD: {
         "max_users": 5,
-        "max_branches": 3,
+        "max_branches": 2,
         "has_reservations_module": False,
         "has_services_module": False,
         "has_clients_module": False,
@@ -72,8 +72,8 @@ PLAN_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "has_electronic_billing": False,
     },
     PlanType.PROFESSIONAL: {
-        "max_users": 15,
-        "max_branches": 10,
+        "max_users": 10,
+        "max_branches": 5,
         "has_reservations_module": True,
         "has_services_module": True,
         "has_clients_module": True,

@@ -240,7 +240,7 @@ class Promotion(TenantMixin, SQLModel, table=True):
     )
 
 
-class PromotionProduct(SQLModel, table=True):
+class PromotionProduct(TenantMixin, SQLModel, table=True):
     """Asociación promoción ↔ producto para scope=PRODUCT multi-producto.
 
     Reemplaza la relación 1-a-1 de ``Promotion.product_id`` permitiendo
@@ -256,6 +256,9 @@ class PromotionProduct(SQLModel, table=True):
             name="uq_promotion_product_pair",
         ),
         sqlalchemy.Index("ix_promotion_product_promo", "promotion_id"),
+        sqlalchemy.Index(
+            "ix_promotion_product_company_branch", "company_id", "branch_id"
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)

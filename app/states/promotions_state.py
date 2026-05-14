@@ -649,6 +649,8 @@ class PromotionsState(MixinState):
                             session.add(PromotionProduct(
                                 promotion_id=promo.id,
                                 product_id=pid,
+                                company_id=company_id,
+                                branch_id=branch_id,
                             ))
                     session.commit()
                 else:
