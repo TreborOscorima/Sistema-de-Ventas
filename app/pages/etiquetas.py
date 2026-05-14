@@ -21,61 +21,73 @@ _BARCODE_PATTERN = (
 # ─── Componente: Etiqueta de muestra ─────────────────────────────────────────
 
 def _sample_label_card() -> rx.Component:
-    """Etiqueta de ejemplo que muestra el diseño real del PDF con datos de muestra."""
+    """Etiqueta de muestra estilo supermercado que refleja el diseño real del PDF."""
     return rx.el.div(
-        # Tarjeta de etiqueta ampliada
+        # ── Tarjeta de etiqueta ──────────────────────────────────────────
         rx.el.div(
-            # ── Nombre + Precio ──
+            # Nombre del producto
             rx.el.div(
                 rx.el.span(
-                    "Producto de Ejemplo",
-                    class_name="text-sm font-bold text-slate-800 truncate",
+                    "PRODUCTO DE EJEMPLO DESCRIPCIÓN",
+                    class_name="text-[11px] font-bold text-black leading-tight",
+                ),
+                class_name="flex flex-col justify-center px-3 py-2 min-h-[38px]",
+            ),
+            # Separador
+            rx.el.hr(class_name="border-t border-[#333] mx-0"),
+            # Precio grande
+            rx.el.div(
+                rx.el.div(
+                    rx.el.span("PRECIO X", class_name="text-[9px] font-bold text-black block leading-tight"),
+                    rx.el.span("UNIDAD",   class_name="text-[9px] font-bold text-black block leading-tight"),
+                    class_name="flex flex-col justify-center",
                 ),
                 rx.el.span(
-                    State.currency_symbol,
-                    " 12.50",
-                    class_name="text-base font-bold text-indigo-600 whitespace-nowrap shrink-0 ml-2",
+                    "$ 12.500",
+                    class_name="text-[28px] font-bold text-black ml-auto leading-none",
                 ),
-                class_name="flex items-start justify-between gap-1",
+                class_name="flex items-center gap-2 px-3 py-2",
             ),
-            # ── Categoría (medium / large) ──
+            # Separador + info pre-impuestos (medium / large)
             rx.cond(
                 State.label_size != "small",
-                rx.el.span(
-                    "Categoría Demo",
-                    class_name="text-[10px] text-slate-500 leading-none",
-                ),
-                rx.fragment(),
-            ),
-            # ── Precio de costo (large + show_purchase_price) ──
-            rx.cond(
-                (State.label_size == "large") & State.label_show_purchase_price,
                 rx.el.div(
-                    rx.el.span(
-                        "Costo: ",
-                        State.currency_symbol,
-                        " 8.00",
-                        class_name="text-[9px] text-slate-400",
+                    rx.el.hr(class_name="border-t border-[#333] mx-0"),
+                    rx.el.div(
+                        rx.el.span(
+                            "Precio x 1 Und.   $ 12.500,00",
+                            class_name="text-[9px] text-gray-700 block leading-snug",
+                        ),
+                        rx.cond(
+                            State.label_show_pretax,
+                            rx.el.span(
+                                "PRECIO SIN IMPUESTOS: $ 10.593,22",
+                                class_name="text-[9px] font-bold text-gray-700 block leading-snug",
+                            ),
+                            rx.fragment(),
+                        ),
+                        class_name="px-3 py-1.5",
                     ),
-                    class_name="w-full flex justify-end",
                 ),
                 rx.fragment(),
             ),
-            # ── Código de barras visual ──
+            # Separador
+            rx.el.hr(class_name="border-t border-[#333] mx-0"),
+            # Código de barras
             rx.el.div(
                 rx.el.div(
-                    style={"height": "36px", "background": _BARCODE_PATTERN},
-                    class_name="w-full rounded overflow-hidden",
+                    style={"height": "26px", "background": _BARCODE_PATTERN},
+                    class_name="w-full overflow-hidden",
                 ),
                 rx.el.span(
                     "1234567890123",
-                    class_name="text-[9px] font-mono text-slate-500 text-center",
+                    class_name="text-[8px] font-mono text-gray-500 text-center block mt-0.5",
                 ),
-                class_name="flex flex-col items-center gap-1 mt-auto pt-3",
+                class_name="flex flex-col items-center px-3 pb-2 pt-1.5",
             ),
             class_name=(
-                "border-2 border-dashed border-slate-300 rounded-xl p-4 bg-white "
-                "flex flex-col gap-1.5 shadow-sm w-72"
+                "border border-black rounded bg-white flex flex-col "
+                "shadow-sm w-64 overflow-hidden"
             ),
         ),
         # Sub-texto con tamaño real
@@ -370,6 +382,23 @@ def _config_card() -> rx.Component:
                 ),
                 rx.el.span(
                     "Incluir precio de compra en etiqueta",
+                    class_name="text-sm text-slate-700",
+                ),
+                class_name="flex items-center gap-2 cursor-pointer",
+            ),
+        ),
+
+        # Mostrar precio sin impuestos (checkbox)
+        rx.el.div(
+            rx.el.label(
+                rx.el.input(
+                    type="checkbox",
+                    default_checked=State.label_show_pretax,
+                    on_change=State.set_label_show_pretax,
+                    class_name="h-4 w-4 rounded border-slate-300 text-indigo-600",
+                ),
+                rx.el.span(
+                    "Mostrar precio sin impuestos",
                     class_name="text-sm text-slate-700",
                 ),
                 class_name="flex items-center gap-2 cursor-pointer",

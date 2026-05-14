@@ -883,7 +883,7 @@ class ProductMixin:
 
                     product.barcode = barcode
                     product.description = description
-                    product.category = product_data.get("category", "General")
+                    product.category = (product_data.get("category", "GENERAL") or "GENERAL").strip().upper()
                     product.stock = (
                         self.variants_stock_total
                         if self.show_variants
@@ -923,7 +923,7 @@ class ProductMixin:
                     new_product = Product(
                         barcode=barcode,
                         description=description,
-                        category=product_data.get("category", "General"),
+                        category=(product_data.get("category", "GENERAL") or "GENERAL").strip().upper(),
                         stock=(
                             self.variants_stock_total
                             if self.show_variants

@@ -357,7 +357,7 @@ class ExportMixin:
                 "row_num": idx,
                 "barcode": barcode,
                 "description": description,
-                "category": str(row.get("category", "General") or "General").strip(),
+                "category": str(row.get("category", "GENERAL") or "GENERAL").strip().upper(),
                 "stock": stock,
                 "unit": str(row.get("unit", "Unidad") or "Unidad").strip(),
                 "purchase_price": purchase_price,

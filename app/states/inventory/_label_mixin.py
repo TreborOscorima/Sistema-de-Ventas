@@ -27,6 +27,9 @@ class LabelMixin:
     # ── Formato de página ─────────────────────────────────────────────
     label_page_format: str = "a4"        # a4 | thermal_58 | thermal_80
 
+    # ── Opciones de contenido ─────────────────────────────────────────
+    label_show_pretax: bool = True        # muestra precio sin impuestos en etiqueta
+
     # ── Filtro por categoría ──────────────────────────────────────────
     label_category: str = ""
     label_available_categories: list[str] = []
@@ -52,6 +55,7 @@ class LabelMixin:
         self.label_copies = 1
         self.label_show_purchase_price = False
         self.label_page_format = "a4"
+        self.label_show_pretax = True
         self.label_category = ""
         self.label_preview_products = []
         self.label_preview_count = 0
@@ -101,6 +105,10 @@ class LabelMixin:
     @rx.event
     def set_label_page_format(self, v: str):
         self.label_page_format = v
+
+    @rx.event
+    def set_label_show_pretax(self, v: bool):
+        self.label_show_pretax = v
 
     @rx.event
     def set_label_category(self, v: str):
@@ -237,6 +245,8 @@ class LabelMixin:
                     "purchase_price": float(product.purchase_price or 0),
                     "category": product.category or "",
                     "unit": product.unit or "Unidad",
+                    "tax_rate": float(product.tax_rate or 0),
+                    "tax_included": bool(product.tax_included if product.tax_included is not None else True),
                 })
 
             for p in product_rows:
@@ -254,6 +264,8 @@ class LabelMixin:
                     "purchase_price": float(p.purchase_price or 0),
                     "category": p.category or "",
                     "unit": p.unit or "Unidad",
+                    "tax_rate": float(p.tax_rate or 0),
+                    "tax_included": bool(p.tax_included if p.tax_included is not None else True),
                 })
 
             self.label_search_results = results[:10]
@@ -333,6 +345,7 @@ class LabelMixin:
                 currency_symbol=self.currency_symbol,
                 category=self.label_category or None,
                 page_format=self.label_page_format,
+                show_pretax_price=self.label_show_pretax,
             )
             products = await LabelService.get_products_for_labels(
                 config, company_id, branch_id
@@ -369,6 +382,7 @@ class LabelMixin:
                 currency_symbol=self.currency_symbol,
                 category=self.label_category or None,
                 page_format=self.label_page_format,
+                show_pretax_price=self.label_show_pretax,
             )
 
             if self.label_filter == "specific":

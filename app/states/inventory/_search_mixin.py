@@ -3,7 +3,7 @@ import reflex as rx
 from typing import List, Dict, Any
 
 from sqlmodel import select
-from sqlalchemy import or_, func, exists, literal, union_all, case, and_
+from sqlalchemy import or_, func, exists, literal, union_all, case, and_, update as sa_update
 
 from app.models import (
     Product,
@@ -29,7 +29,7 @@ class SearchMixin:
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
-            self.categories = ["General"]
+            self.categories = ["GENERAL"]
             self._categories_loaded_once = True
             return
         with rx.session() as session:
@@ -39,7 +39,36 @@ class SearchMixin:
                 .where(Category.branch_id == branch_id)
                 .order_by(Category.name)
             ).all()
-            names = [c.name for c in cats]
+            # Normalize existing Category records to uppercase, merging duplicates
+            seen: dict[str, int] = {}  # uppercased name → first id seen
+            for c in cats:
+                upped = c.name.strip().upper()
+                if upped in seen:
+                    # Duplicate: reassign products and delete the extra row
+                    session.execute(
+                        sa_update(Product)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                        .where(Product.category == c.name)
+                        .values(category=upped)
+                    )
+                    session.delete(c)
+                else:
+                    seen[upped] = c.id
+                    if c.name != upped:
+                        c.name = upped
+                        session.add(c)
+            session.flush()
+            names = list(seen.keys())
+            # Normalize Product.category to uppercase in bulk
+            session.execute(
+                sa_update(Product)
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.category.is_not(None))
+                .values(category=func.upper(func.trim(Product.category)))
+            )
+            session.commit()
             # Include categories stored directly on products (may not be in Category table)
             product_cats = session.exec(
                 select(Product.category)
@@ -51,9 +80,9 @@ class SearchMixin:
             for cat in product_cats:
                 if cat and cat not in names:
                     names.append(cat)
-            names.sort()
-            if "General" not in names:
-                names.insert(0, "General")
+            names = sorted(set(names))
+            if "GENERAL" not in names:
+                names.insert(0, "GENERAL")
             self.categories = names
             self._categories_loaded_once = True
 
@@ -476,7 +505,7 @@ class SearchMixin:
 
     @rx.event
     def update_new_category_name(self, value: str):
-        self.new_category_name = value
+        self.new_category_name = value.upper()
 
     @rx.event
     def toggle_categories_panel(self):

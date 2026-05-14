@@ -36,6 +36,8 @@ def _make_product(
     purchase_price: str | Decimal = "60.00",
     unit: str = "Unidad",
     variants: list | None = None,
+    tax_rate: str | Decimal = "18.00",
+    tax_included: bool = True,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=pid,
@@ -46,6 +48,8 @@ def _make_product(
         purchase_price=Decimal(str(purchase_price)),
         unit=unit,
         variants=variants,
+        tax_rate=Decimal(str(tax_rate)),
+        tax_included=tax_included,
     )
 
 

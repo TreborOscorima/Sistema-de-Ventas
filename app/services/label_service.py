@@ -62,6 +62,7 @@ class LabelConfig:
     currency_symbol: str = "S/ "
     category: str | None = None          # None = todas las categorías
     page_format: LabelPageFormat = "a4"  # a4 | thermal_58 | thermal_80
+    show_pretax_price: bool = True        # muestra "PRECIO SIN IMPUESTOS" cuando tax_rate > 0
 
 
 class LabelService:
@@ -147,6 +148,8 @@ class LabelService:
                         "sale_price": float(p.sale_price or 0),
                         "purchase_price": float(p.purchase_price or 0),
                         "unit": p.unit or "Unidad",
+                        "tax_rate": float(getattr(p, "tax_rate", 0) or 0),
+                        "tax_included": bool(getattr(p, "tax_included", True)),
                     })
             else:
                 bc = LabelService.resolve_barcode(p)
@@ -161,6 +164,8 @@ class LabelService:
                     "sale_price": float(p.sale_price or 0),
                     "purchase_price": float(p.purchase_price or 0),
                     "unit": p.unit or "Unidad",
+                    "tax_rate": float(getattr(p, "tax_rate", 0) or 0),
+                    "tax_included": bool(getattr(p, "tax_included", True)),
                 })
         return result
 
@@ -186,14 +191,16 @@ class LabelService:
         buffer = io.BytesIO()
         page_w, page_h = A4
         margin = 10 * mm
+        gap_h = 2 * mm
+        gap_v = 2 * mm
 
-        label_w_mm, label_h_mm = _LABEL_DIMS[config.size]
-        label_w = label_w_mm * mm
+        _, label_h_mm = _LABEL_DIMS[config.size]
         label_h = label_h_mm * mm
         labels_per_row = _LABELS_PER_ROW[config.size]
 
-        gap_h = 2 * mm
-        gap_v = 2 * mm
+        # Calcular ancho dinámicamente para que las columnas quepan siempre en el área imprimible
+        available_w = page_w - 2 * margin
+        label_w = (available_w - (labels_per_row - 1) * gap_h) / labels_per_row
 
         c = rl_canvas.Canvas(buffer, pagesize=A4)
 
@@ -313,6 +320,18 @@ def _wrap_text(
     return lines or [""]
 
 
+def _fmt_thousands(
+    value: float,
+    decimals: int = 2,
+    thousands_sep: str = ".",
+    decimal_sep: str = ",",
+) -> str:
+    """Formatea número con separadores locales. Ej: 2179.5 → '2.179,50'"""
+    s = f"{value:,.{decimals}f}"          # Python: "2,179.50"
+    s = s.replace(",", "\x00").replace(".", decimal_sep).replace("\x00", thousands_sep)
+    return s
+
+
 def _draw_label(
     c: "rl_canvas.Canvas",
     x: float,
@@ -322,132 +341,172 @@ def _draw_label(
     product: dict,
     config: LabelConfig,
 ) -> None:
-    """Dibuja una etiqueta individual con marcas de corte y nombre con wrap."""
+    """Dibuja etiqueta estilo supermercado: nombre, precio grande, pre-tax, barcode."""
     from reportlab.lib.units import mm
     from reportlab.graphics.barcode import code128
     from reportlab.lib import colors
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
-    pad = 2 * mm
-    inner_x = x + pad
-    inner_w = w - 2 * pad
+    size = config.size
+    pad = 1.5 * mm
+    ix = x + pad          # inner left
+    iw = w - 2 * pad      # inner width
 
-    # ── Marcas de corte en las cuatro esquinas ────────────────────────
-    c.setStrokeColor(colors.HexColor("#94A3B8"))
+    # ── Borde exterior ────────────────────────────────────────────────
+    c.setStrokeColor(colors.black)
     c.setLineWidth(0.5)
-    cut = 3 * mm
-    # Inferior-izquierda
-    c.line(x, y, x + cut, y)
-    c.line(x, y, x, y + cut)
-    # Inferior-derecha
-    c.line(x + w - cut, y, x + w, y)
-    c.line(x + w, y, x + w, y + cut)
-    # Superior-izquierda
-    c.line(x, y + h, x + cut, y + h)
-    c.line(x, y + h, x, y + h - cut)
-    # Superior-derecha
-    c.line(x + w - cut, y + h, x + w, y + h)
-    c.line(x + w, y + h, x + w, y + h - cut)
+    c.rect(x, y, w, h, fill=0)
 
-    # ── Métricas de fuentes ───────────────────────────────────────────
-    name_font = "Helvetica-Bold"
-    name_size = 7 if config.size == "small" else 8
-    price_font = "Helvetica-Bold"
-    price_size = 9 if config.size == "small" else 11 if config.size == "medium" else 13
-    line_h = name_size * 1.3  # interlineado en puntos
+    # ── Tamaños de fuente ─────────────────────────────────────────────
+    name_fs  = {"small": 6.5, "medium": 7.5, "large": 9.5 }[size]
+    label_fs = {"small": 5.5, "medium": 6.0, "large": 7.5 }[size]
+    price_fs = {"small": 14,  "medium": 21,  "large": 30  }[size]
+    sub_fs   = {"small": 5.0, "medium": 5.5, "large": 6.5 }[size]
 
-    # ── Precio: calcular ancho antes de posicionar el nombre ──────────
-    price = product.get("sale_price", 0)
-    currency = config.currency_symbol.strip()
-    price_str = f"{currency} {float(price):.2f}"
-    c.setFont(price_font, price_size)
-    price_w = stringWidth(price_str, price_font, price_size)
+    # ── Proporciones de secciones (fracciones del inner height) ───────
+    inner_h = h - 2 * pad
+    show_info = size != "small" and config.show_pretax_price
 
-    # ── Nombre con word-wrap (reserva espacio para el precio) ─────────
-    name = product.get("description") or ""
-    name_avail_w = inner_w - price_w - 2 * mm
-    c.setFont(name_font, name_size)
-    name_lines = _wrap_text(name, name_font, name_size, name_avail_w)
+    if size == "small":
+        s_bc, s_price, s_info, s_name = 0.38, 0.35, 0.00, 0.27
+    elif size == "medium":
+        s_bc, s_price, s_info, s_name = 0.32, 0.27, 0.20, 0.21
+    else:
+        s_bc, s_price, s_info, s_name = 0.30, 0.27, 0.17, 0.26
 
-    max_lines = 2
-    if len(name_lines) > max_lines:
-        name_lines = name_lines[:max_lines]
+    if not show_info:
+        half = s_info / 2
+        s_name += half
+        s_price += half
+        s_info = 0.0
+
+    h_bc    = inner_h * s_bc
+    h_price = inner_h * s_price
+    h_info  = inner_h * s_info
+    h_name  = inner_h * s_name
+
+    # Coordenadas Y por sección (bottom-up)
+    y_bc_bot    = y + pad
+    y_bc_top    = y_bc_bot + h_bc
+    y_info_bot  = y_bc_top
+    y_info_top  = y_info_bot + h_info
+    y_price_bot = y_info_top
+    y_price_top = y_price_bot + h_price
+    y_name_bot  = y_price_top
+
+    # ── Separadores horizontales ──────────────────────────────────────
+    c.setStrokeColor(colors.HexColor("#333333"))
+    c.setLineWidth(0.4)
+    c.line(x, y_bc_top, x + w, y_bc_top)
+    if show_info and h_info > 0:
+        c.line(x, y_info_top, x + w, y_info_top)
+    c.line(x, y_price_top, x + w, y_price_top)
+
+    # ── Nombre (sección superior) ─────────────────────────────────────
+    name = (product.get("description") or "").upper()
+    c.setFont("Helvetica-Bold", name_fs)
+    name_lines = _wrap_text(name, "Helvetica-Bold", name_fs, iw)
+
+    max_name_lines = max(1, int(h_name / (name_fs * 1.25)))
+    if len(name_lines) > max_name_lines:
+        name_lines = name_lines[:max_name_lines]
         last = name_lines[-1]
-        while last and stringWidth(last + "…", name_font, name_size) > name_avail_w:
+        while last and stringWidth(last + "…", "Helvetica-Bold", name_fs) > iw:
             last = last[:-1]
         name_lines[-1] = last + "…"
 
-    # ── Baseline de la primera línea (anclada al borde superior) ──────
-    top_y = y + h - pad - name_size * 0.4 * mm
-
-    # ── Dibujar nombre línea a línea ──────────────────────────────────
     c.setFillColor(colors.black)
-    c.setFont(name_font, name_size)
+    name_lh = name_fs * 1.25
+    total_name_h = len(name_lines) * name_lh
+    name_start_y = y_name_bot + (h_name + total_name_h) / 2 - name_fs * 0.3
     for i, line in enumerate(name_lines):
-        c.drawString(inner_x, top_y - i * line_h, line)
+        c.drawString(ix, name_start_y - i * name_lh, line)
 
-    # ── Dibujar precio (alineado top-right al mismo baseline) ─────────
-    c.setFont(price_font, price_size)
-    c.setFillColor(colors.HexColor("#4F46E5"))
-    c.drawRightString(x + w - pad, top_y, price_str)
+    # ── Precio (sección central) ──────────────────────────────────────
+    price = float(product.get("sale_price", 0))
+    currency = config.currency_symbol.strip()
+    unit = (product.get("unit") or "Unidad").lower()
+    is_weight = any(k in unit for k in ("kg", "kilo", "k.", "gramo", "gr", "libra", "lb"))
+    unit_lbl = "KILO" if is_weight else "UNIDAD"
+
+    price_rounded = round(price, 2)
+    if price_rounded == int(price_rounded):
+        price_display = _fmt_thousands(price_rounded, decimals=0)
+    else:
+        price_display = _fmt_thousands(price_rounded, decimals=2)
+    price_big = f"$ {price_display}"
+
+    # Ajustar fuente si el número no cabe junto a "PRECIO X UNIDAD"
+    label_text_w = max(
+        stringWidth("PRECIO X", "Helvetica-Bold", label_fs),
+        stringWidth(unit_lbl,   "Helvetica-Bold", label_fs),
+    )
+    max_price_w = iw - label_text_w - 2 * mm
+    _price_fs = price_fs
+    while _price_fs > 8 and stringWidth(price_big, "Helvetica-Bold", _price_fs) > max_price_w:
+        _price_fs -= 1
+
+    price_cy = y_price_bot + h_price / 2
+    lh_lbl   = label_fs * 1.3
     c.setFillColor(colors.black)
+    c.setFont("Helvetica-Bold", label_fs)
+    c.drawString(ix, price_cy + lh_lbl * 0.45, "PRECIO X")
+    c.drawString(ix, price_cy - lh_lbl * 0.85, unit_lbl)
 
-    # Y después del bloque de nombre
-    after_name_y = top_y - len(name_lines) * line_h
+    c.setFont("Helvetica-Bold", _price_fs)
+    c.drawRightString(x + w - pad, price_cy - _price_fs * 0.3, price_big)
 
-    # ── Categoría (medium / large) ────────────────────────────────────
-    if config.size != "small":
-        cat = (product.get("category") or "").strip()
-        if cat:
-            if len(cat) > 30:
-                cat = cat[:29] + "…"
-            c.setFont("Helvetica", 6)
-            c.setFillColor(colors.HexColor("#64748B"))
-            c.drawString(inner_x, after_name_y - 1.5, cat)
-            c.setFillColor(colors.black)
+    # ── Info / pre-impuestos (medium + large) ─────────────────────────
+    if show_info and h_info > 0:
+        tax_rate_pct = float(product.get("tax_rate", 0) or 0)
+        tax_included = bool(product.get("tax_included", True))
+        per_lbl = "Kg." if is_weight else "Und."
+        price_sub = f"Precio x 1 {per_lbl}   $ {_fmt_thousands(price_rounded)}"
 
-    # ── Precio de compra (large + activado) ───────────────────────────
-    if config.size == "large" and config.show_purchase_price:
-        pp = product.get("purchase_price", 0)
-        c.setFont("Helvetica", 6)
-        c.setFillColor(colors.HexColor("#94A3B8"))
-        c.drawRightString(
-            x + w - pad,
-            after_name_y - 1.5,
-            f"Costo: {currency} {float(pp):.2f}",
-        )
+        c.setFillColor(colors.HexColor("#374151"))
+        info_lh = sub_fs * 1.35
+
+        if tax_rate_pct > 0 and tax_included:
+            pretax = price_rounded / (1 + tax_rate_pct / 100)
+            pretax_str = f"$ {_fmt_thousands(pretax)}"
+            tax_line = f"PRECIO SIN IMPUESTOS: {pretax_str}"
+            c.setFont("Helvetica", sub_fs)
+            c.drawString(ix, y_info_top - info_lh, price_sub)
+            c.setFont("Helvetica-Bold", sub_fs)
+            if stringWidth(tax_line, "Helvetica-Bold", sub_fs) > iw:
+                tax_line = f"SIN IMPUESTOS: {pretax_str}"
+            c.drawString(ix, y_info_top - info_lh * 2, tax_line)
+        else:
+            c.setFont("Helvetica", sub_fs)
+            line_y = y_info_bot + h_info / 2 - sub_fs * 0.3
+            c.drawString(ix, line_y, price_sub)
+
         c.setFillColor(colors.black)
 
-    # ── Código de barras ──────────────────────────────────────────────
+    # ── Código de barras (sección inferior) ───────────────────────────
     barcode_val = product.get("barcode") or ""
     if barcode_val:
+        bc_bar_h = h_bc * 0.70
         try:
-            bc_height = {
-                "small": 8 * mm,
-                "medium": 12 * mm,
-                "large": 16 * mm,
-            }[config.size]
             bc = code128.Code128(
                 barcode_val,
-                barHeight=bc_height,
+                barHeight=bc_bar_h,
                 barWidth=0.6,
                 humanReadable=True,
                 fontSize=6,
                 fontName="Helvetica",
             )
-            if bc.width > inner_w:
-                ratio = (inner_w * 0.92) / bc.width
+            if bc.width > iw:
+                ratio = iw * 0.90 / bc.width
                 bc = code128.Code128(
                     barcode_val,
-                    barHeight=bc_height,
+                    barHeight=bc_bar_h,
                     barWidth=max(0.22, 0.6 * ratio),
                     humanReadable=True,
                     fontSize=6,
                     fontName="Helvetica",
                 )
-            bc_x = x + (w - bc.width) / 2
-            bc_y = y + pad
-            bc.drawOn(c, bc_x, bc_y)
+            bc.drawOn(c, x + (w - bc.width) / 2, y_bc_bot + pad * 0.3)
         except Exception:
             c.setFont("Helvetica", 6)
-            c.drawCentredString(x + w / 2, y + pad + 3 * mm, barcode_val)
+            c.drawCentredString(x + w / 2, y_bc_bot + h_bc / 2, barcode_val)
