@@ -1716,7 +1716,7 @@ class CartMixin:
                     coupon_code=coupon,
                     cart_subtotal=cart_subtotal_pre_promo,
                 )
-                effective = resolution.final_price
+                effective = Decimal(str(resolution.final_price))
                 quot_price = item.get("quotation_price")
                 if quot_price:
                     quot_dec = Decimal(str(quot_price))
