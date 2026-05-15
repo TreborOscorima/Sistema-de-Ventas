@@ -852,9 +852,20 @@ class HistorialState(MixinState):
                     paid = sum(Decimal(str(getattr(p, "amount", 0) or 0)) for p in payments)
                     payment_details = f"Inicial: {self._format_currency(float(paid))}" if paid > 0 else "Crédito/Fiado"
                 fallback = log_payment_info.get(sale.id)
-                if fallback and payment_method == MSG.FALLBACK_NOT_SPECIFIED:
+                _all_other_no_id = bool(payments) and all(
+                    self._payment_method_key(getattr(p, "method_type", None)) == "other"
+                    and not getattr(p, "payment_method_id", None)
+                    for p in payments
+                )
+                if fallback and (payment_method == MSG.FALLBACK_NOT_SPECIFIED or _all_other_no_id):
                     payment_method = fallback.get("payment_method", payment_method)
-                    payment_details = fallback.get("payment_details", payment_details)
+                    if _all_other_no_id:
+                        _total_paid = sum(
+                            Decimal(str(getattr(p, "amount", 0) or 0)) for p in payments
+                        )
+                        payment_details = f"{payment_method}: {self._format_currency(float(_total_paid))}"
+                    else:
+                        payment_details = fallback.get("payment_details", payment_details)
                 client_name = (
                     sale.client.name if sale.client else MSG.FALLBACK_NO_CLIENT
                 )

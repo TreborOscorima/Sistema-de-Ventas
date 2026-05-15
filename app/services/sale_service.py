@@ -2130,6 +2130,13 @@ class SaleService:
             for method_type, amount in valid_allocations:
                 method_code = _payment_method_code(method_type)
                 method_id = resolve_payment_method_id(method_code)
+                if method_id is None and method_type == PaymentMethodType.other:
+                    _other_name = (payment_data.method or "").strip().lower()
+                    if _other_name:
+                        for _m in all_methods:
+                            if (_m.name or "").strip().lower() == _other_name:
+                                method_id = _m.id
+                                break
                 session.add(
                     SalePayment(
                         sale_id=new_sale.id,
