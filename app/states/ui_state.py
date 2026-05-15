@@ -334,32 +334,27 @@ class UIState(MixinState):
 
     def _navigation_items_config(self) -> List[Dict[str, str]]:
         return [
+            # Operaciones diarias
             {"label": "Dashboard", "icon": "layout-dashboard", "page": "Dashboard", "route": "/dashboard"},
-            {"label": "Ingreso", "icon": "arrow-down-to-line", "page": "Ingreso", "route": "/ingreso"},
-            {"label": "Compras", "icon": "file-text", "page": "Compras", "route": "/compras"},
             {"label": "Punto de Venta", "icon": "arrow-up-from-line", "page": "Punto de Venta", "route": "/venta"},
-            {
-                "label": "Gestion de Caja",
-                "icon": "wallet",
-                "page": "Gestion de Caja",
-                "route": "/caja",
-            },
+            {"label": "Ingreso de Mercancía", "icon": "arrow-down-to-line", "page": "Ingreso", "route": "/ingreso"},
+            {"label": "Compras", "icon": "file-text", "page": "Compras", "route": "/compras"},
+            {"label": "Caja", "icon": "wallet", "page": "Gestion de Caja", "route": "/caja"},
+            # Clientes y comercial
             {"label": "Clientes", "icon": "users", "page": "Clientes", "route": "/clientes"},
-            {"label": "Cuentas", "icon": "banknote", "page": "Cuentas Corrientes", "route": "/cuentas"},
-            {"label": "Inventario", "icon": "boxes", "page": "Inventario", "route": "/inventario"},
+            {"label": "Cuentas Corrientes", "icon": "banknote", "page": "Cuentas Corrientes", "route": "/cuentas"},
             {"label": "Presupuestos", "icon": "file-plus", "page": "Presupuestos", "route": "/presupuestos"},
+            {"label": "Servicios", "icon": "calendar-days", "page": "Servicios", "route": "/servicios"},
+            # Catálogo y stock
+            {"label": "Inventario", "icon": "boxes", "page": "Inventario", "route": "/inventario"},
             {"label": "Promociones", "icon": "tag", "page": "Promociones", "route": "/promociones"},
             {"label": "Listas de Precios", "icon": "list-ordered", "page": "Listas de Precios", "route": "/listas-precios"},
             {"label": "Etiquetas", "icon": "printer", "page": "Etiquetas", "route": "/etiquetas"},
-            {"label": "Historial", "icon": "history", "page": "Historial", "route": "/historial"},
+            # Análisis
+            {"label": "Historial de Ventas", "icon": "history", "page": "Historial", "route": "/historial"},
             {"label": "Reportes", "icon": "file-chart-column", "page": "Reportes", "route": "/reportes"},
-            {"label": "Servicios", "icon": "calendar-days", "page": "Servicios", "route": "/servicios"},
-            {
-                "label": "Fact. Electrónica",
-                "icon": "receipt",
-                "page": "Documentos Fiscales",
-                "route": "/documentos-fiscales",
-            },
+            # Administración
+            {"label": "Facturación", "icon": "receipt", "page": "Documentos Fiscales", "route": "/documentos-fiscales"},
             {"label": "Configuracion", "icon": "settings", "page": "Configuracion", "route": "/configuracion"},
         ]
 

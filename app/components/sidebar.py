@@ -84,7 +84,6 @@ def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
         ),
         href=target_route,
         underline="none",
-        title=rx.cond(State.sidebar_open, "", text),
         class_name="block w-full min-w-0 text-left",
     )
     return rx.cond(
@@ -276,6 +275,48 @@ def _rail_flyout(
                     "hidden md:block absolute left-full top-0 pl-2 z-[60] "
                     "opacity-0 invisible pointer-events-none "
                     "transition-opacity duration-150",
+                ),
+            ),
+        ),
+        rx.fragment(),
+    )
+
+
+def _rail_label_flyout(
+    item: rx.Var[dict],
+    item_idx: rx.Var[int],
+) -> rx.Component:
+    """Panel mínimo con el nombre del módulo para ítems sin submenú en el rail colapsado."""
+    has_submenu = (
+        (item["page"] == "Configuracion")
+        | (item["page"] == "Gestion de Caja")
+        | (item["page"] == "Servicios")
+    )
+    is_open = State.open_flyout == item["page"]
+    flip = item_idx >= (State.navigation_items.length() / 2)
+    return rx.cond(
+        ~has_submenu & ~State.sidebar_open,
+        rx.el.div(
+            rx.el.div(
+                rx.el.span(
+                    item["label"],
+                    class_name="text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap",
+                ),
+                class_name="px-3 py-2 bg-white border border-slate-200 rounded-xl shadow-xl",
+            ),
+            on_mouse_enter=State.open_rail_flyout(item["page"]),
+            on_mouse_leave=State.schedule_close_rail_flyout(item["page"]),
+            class_name=rx.cond(
+                flip,
+                rx.cond(
+                    is_open,
+                    "hidden md:block absolute left-full bottom-0 pl-2 z-[60] opacity-100 visible pointer-events-auto transition-opacity duration-150",
+                    "hidden md:block absolute left-full bottom-0 pl-2 z-[60] opacity-0 invisible pointer-events-none transition-opacity duration-150",
+                ),
+                rx.cond(
+                    is_open,
+                    "hidden md:block absolute left-full top-0 pl-2 z-[60] opacity-100 visible pointer-events-auto transition-opacity duration-150",
+                    "hidden md:block absolute left-full top-0 pl-2 z-[60] opacity-0 invisible pointer-events-none transition-opacity duration-150",
                 ),
             ),
         ),
@@ -503,6 +544,7 @@ def _sidebar_auth_content() -> rx.Component:
                                 State.service_tab,
                                 idx,
                             ),
+                            _rail_label_flyout(item, idx),
                             # `relative` en el wrapper colapsado mantiene el
                             # contexto de posicionamiento. La apertura del
                             # flyout es state-driven: `on_mouse_enter` abre
