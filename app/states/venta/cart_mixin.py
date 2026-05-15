@@ -113,39 +113,56 @@ class CartMixin:
                 "Empresa o sucursal no definida.",
                 duration=3000,
             )
-        product = await SaleService.get_product_by_barcode(
-            barcode,
-            int(company_id),
-            int(branch_id),
-        )
-        if product:
-            # Detectar kit: si tiene componentes, expandir en carrito
-            prod_id = product.get("product_id") or product.get("id")
-            if prod_id and not product.get("is_variant"):
-                async with get_async_session() as session:
-                    kit_exists = (
-                        await session.exec(
-                            sql_select(ProductKit.id)
-                            .where(
-                                ProductKit.kit_product_id == int(prod_id),
-                                ProductKit.company_id == int(company_id),
-                                ProductKit.branch_id == int(branch_id),
+        try:
+            product = await SaleService.get_product_by_barcode(
+                barcode,
+                int(company_id),
+                int(branch_id),
+            )
+            if product:
+                # Detectar kit: si tiene componentes, expandir en carrito
+                prod_id = product.get("product_id") or product.get("id")
+                kit_exists = False
+                if prod_id and not product.get("is_variant"):
+                    try:
+                        async with get_async_session() as session:
+                            kit_exists = bool(
+                                (
+                                    await session.exec(
+                                        sql_select(ProductKit.id)
+                                        .where(
+                                            ProductKit.kit_product_id == int(prod_id),
+                                            ProductKit.company_id == int(company_id),
+                                            ProductKit.branch_id == int(branch_id),
+                                        )
+                                        .limit(1)
+                                    )
+                                ).first()
                             )
-                            .limit(1)
+                    except Exception:
+                        logging.exception(
+                            "[POS] Error verificando kit para producto %s — se omite check",
+                            prod_id,
                         )
-                    ).first()
+                        kit_exists = False
                 if kit_exists:
                     return await self._add_kit_to_cart(
                         product, company_id, branch_id
                     )
-            if self.new_sale_item.get("quantity", 0) <= 0:
-                self.new_sale_item["quantity"] = 1
-            self._set_last_scanned_label(product)
-            return await self.add_item_to_sale(product_override=product)
-        return rx.toast(
-            "Producto no encontrado o sin stock disponible.",
-            duration=3000,
-        )
+                if self.new_sale_item.get("quantity", 0) <= 0:
+                    self.new_sale_item["quantity"] = 1
+                self._set_last_scanned_label(product)
+                return await self.add_item_to_sale(product_override=product)
+            return rx.toast(
+                "Producto no encontrado o sin stock disponible.",
+                duration=3000,
+            )
+        except Exception:
+            logging.exception("[POS] Error procesando código de barras '%s'", barcode)
+            return rx.toast(
+                "Error al buscar el producto. Intente nuevamente.",
+                duration=4000,
+            )
 
     @rx.event
     async def handle_barcode_form_submit(self, form_data: dict):
@@ -1327,7 +1344,10 @@ class CartMixin:
             items = list(self.new_sale_items)
             items[existing_index] = updated_item
             self.new_sale_items = items
-            await self._recompute_cart_prices()
+            try:
+                await self._recompute_cart_prices()
+            except Exception:
+                logging.exception("[POS] Error en _recompute_cart_prices al actualizar ítem")
             self._reset_sale_form()
             self._refresh_payment_feedback()
             return [
@@ -1344,7 +1364,10 @@ class CartMixin:
         item_copy["temp_id"] = str(uuid.uuid4())
         self._apply_item_rounding(item_copy)
         self.new_sale_items.append(item_copy)
-        await self._recompute_cart_prices()
+        try:
+            await self._recompute_cart_prices()
+        except Exception:
+            logging.exception("[POS] Error en _recompute_cart_prices al agregar ítem '%s'", item_copy.get("description", "?"))
         self._reset_sale_form()
         self._refresh_payment_feedback()
         return [
