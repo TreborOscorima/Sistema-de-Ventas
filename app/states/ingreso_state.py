@@ -416,6 +416,14 @@ class IngresoState(MixinState):
         self.variant_size = ""
         self.variant_color = ""
         self._entry_sale_price_manual = False
+        # Si el producto no tiene precio de venta en BD, auto-calcular desde margen
+        if not float(self.new_entry_item.get("sale_price") or 0) > 0:
+            purchase_price = float(self.new_entry_item.get("price") or 0)
+            margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+            if purchase_price > 0 and margin > 0:
+                self.new_entry_item["sale_price"] = self._round_currency(
+                    purchase_price * (1 + margin / 100)
+                )
         self.entry_sale_price_key += 1
         # Force remount of uncontrolled fields (qty, price) to reflect product data
         self.entry_form_key += 1
