@@ -28,6 +28,7 @@ from app.models import (
     Sale,
     SaleItem,
     SalePayment,
+    PaymentMethod,
 )
 from app.utils.exports import (
     create_excel_workbook,
@@ -1040,6 +1041,14 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                     )
                 ).first()
                 if sale:
+                    _pm_names: dict[int, str] = {}
+                    if company_id and branch_id:
+                        _methods = session.exec(
+                            select(PaymentMethod)
+                            .where(PaymentMethod.company_id == company_id)
+                            .where(PaymentMethod.branch_id == branch_id)
+                        ).all()
+                        _pm_names = {m.id: m.name for m in _methods if m.id is not None}
                     items_data = []
                     for item in sale.items:
                         items_data.append({
@@ -1054,10 +1063,10 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         "timestamp": self._format_event_timestamp(sale.timestamp),
                         "total": sale.total_amount,
                         "payment_details": self._payment_summary_from_payments(
-                            sale.payments or []
+                            sale.payments or [], _pm_names
                         ),
                         "payment_method": self._payment_method_display(
-                            sale.payments or []
+                            sale.payments or [], _pm_names
                         ),
                         "items": items_data,
                         "user": sale.user.username if sale.user else MSG.FALLBACK_UNKNOWN

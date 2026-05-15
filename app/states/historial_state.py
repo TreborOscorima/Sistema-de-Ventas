@@ -672,38 +672,54 @@ class HistorialState(MixinState):
                 ordered.append(key)
         return ordered
 
-    def _payment_summary_from_payments(self, payments: list[Any]) -> str:
+    def _payment_summary_from_payments(self, payments: list[Any], pm_names: dict[int, str] | None = None) -> str:
         if not payments:
             return "-"
         totals: dict[str, Decimal] = {}
+        labels: dict[str, str] = {}
         for payment in payments:
             key = self._payment_method_key(getattr(payment, "method_type", None))
             if not key:
                 continue
+            pm_id = getattr(payment, "payment_method_id", None)
+            if key == "other" and pm_id and pm_names:
+                custom_name = pm_names.get(pm_id)
+                if custom_name:
+                    key = f"other_{pm_id}"
+                    labels[key] = custom_name
             amount = Decimal(str(getattr(payment, "amount", 0) or 0))
             totals[key] = totals.get(key, Decimal("0.00")) + amount
         if not totals:
             return "-"
         parts = []
         for key in self._sorted_payment_keys(list(totals.keys())):
-            label = self._payment_method_label(key)
+            label = labels.get(key) or self._payment_method_label(key)
             parts.append(f"{label}: {self._format_currency(totals[key])}")
         return ", ".join(parts)
 
-    def _payment_method_display(self, payments: list[Any]) -> str:
+    def _payment_method_display(self, payments: list[Any], pm_names: dict[int, str] | None = None) -> str:
         if not payments:
             return "-"
         keys: list[str] = []
+        labels: dict[str, str] = {}
         for payment in payments:
             key = self._payment_method_key(getattr(payment, "method_type", None))
+            if not key:
+                continue
+            pm_id = getattr(payment, "payment_method_id", None)
+            if key == "other" and pm_id and pm_names:
+                custom_name = pm_names.get(pm_id)
+                if custom_name:
+                    key = f"other_{pm_id}"
+                    labels[key] = custom_name
             if key and key not in keys:
                 keys.append(key)
         if not keys:
             return "-"
         if len(keys) == 1:
-            return self._payment_method_label(keys[0])
+            return labels.get(keys[0]) or self._payment_method_label(keys[0])
         abbrevs = [
-            self._payment_method_abbrev(key)
+            labels.get(key) or self._payment_method_abbrev(key)
             for key in self._sorted_payment_keys(keys)
         ]
         return f"{self._payment_method_label('mixed')} ({'/'.join(abbrevs)})"
@@ -820,12 +836,13 @@ class HistorialState(MixinState):
             sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
             sale_user_lookup = self._build_sale_user_lookup(session, sales)
+            pm_names = self._load_pm_names(session, self._company_id(), self._branch_id())
 
             rows: list[dict] = []
             for sale in sales:
                 payments = sale.payments or []
-                payment_method = self._payment_method_display(payments)
-                payment_details = self._payment_summary_from_payments(payments)
+                payment_method = self._payment_method_display(payments, pm_names)
+                payment_details = self._payment_summary_from_payments(payments, pm_names)
                 if payment_method.strip() in {"", "-"}:
                     payment_method = MSG.FALLBACK_NOT_SPECIFIED
                 payment_method = self._sale_payment_method_label(
@@ -974,8 +991,16 @@ class HistorialState(MixinState):
             enabled_kinds.add(kind)
         return enabled_kinds
 
+    def _load_pm_names(self, session, company_id: int, branch_id: int) -> dict[int, str]:
+        methods = session.exec(
+            select(PaymentMethod)
+            .where(PaymentMethod.company_id == company_id)
+            .where(PaymentMethod.branch_id == branch_id)
+        ).all()
+        return {m.id: m.name for m in methods if m.id is not None}
+
     def _build_dynamic_payment_cards_from_stats(
-        self, stats: Dict[str, float], enabled_kinds: set[str]
+        self, stats: Dict[str, float], enabled_kinds: set[str], pm_names: dict[int, str] | None = None
     ) -> list[dict]:
         styles = {
             "cash": {"icon": "coins", "color": "blue"},
@@ -1023,6 +1048,27 @@ class HistorialState(MixinState):
         mixed_label = "Pago Mixto" if "mixed" in enabled_kinds else "Otros"
         if stats.get("mixto", 0) > 0:
             _add_card("mixed", mixed_label, "mixto")
+
+        if pm_names:
+            for stats_key, amount in stats.items():
+                if not stats_key.startswith("other_"):
+                    continue
+                try:
+                    pm_id = int(stats_key[6:])
+                except ValueError:
+                    continue
+                custom_name = pm_names.get(pm_id)
+                if not custom_name or not amount:
+                    continue
+                cards.append(
+                    {
+                        "name": custom_name,
+                        "amount": float(amount),
+                        "icon": "circle-dollar-sign",
+                        "color": "teal",
+                        "_sort_key": stats_key,
+                    }
+                )
 
         cards.sort(
             key=lambda card: (
@@ -1087,9 +1133,11 @@ class HistorialState(MixinState):
         pending_total = Decimal("0.00")
 
         with rx.session() as session:
+            pm_names = self._load_pm_names(session, company_id, branch_id)
             payment_query = (
                 select(
                     SalePayment.method_type,
+                    SalePayment.payment_method_id,
                     sa.func.sum(SalePayment.amount),
                 )
                 .join(Sale, SalePayment.sale_id == Sale.id)
@@ -1105,12 +1153,18 @@ class HistorialState(MixinState):
                 payment_query = payment_query.where(
                     SalePayment.created_at <= end_date
                 )
-            payment_query = payment_query.group_by(SalePayment.method_type)
-            for method_type, amount in session.exec(payment_query).all():
+            payment_query = payment_query.group_by(SalePayment.method_type, SalePayment.payment_method_id)
+            for method_type, pm_id, amount in session.exec(payment_query).all():
                 key = self._payment_method_key(method_type)
                 if not key:
                     continue
-                self._add_to_stats(stats, key, Decimal(str(amount or 0)))
+                if key == "other" and pm_id and pm_id in pm_names:
+                    custom_key = f"other_{pm_id}"
+                    if custom_key not in stats:
+                        stats[custom_key] = Decimal("0.00")
+                    stats[custom_key] += Decimal(str(amount or 0))
+                else:
+                    self._add_to_stats(stats, key, Decimal(str(amount or 0)))
 
             query_log = (
                 select(
@@ -1146,7 +1200,7 @@ class HistorialState(MixinState):
             sales = session.exec(credit_sales_query).all()
             for sale in sales:
                 payments = sale.payments or []
-                payment_method = self._payment_method_display(payments)
+                payment_method = self._payment_method_display(payments, pm_names)
                 if payment_method.strip() in {"", "-"}:
                     payment_method = MSG.FALLBACK_NOT_SPECIFIED
                 payment_method = self._sale_payment_method_label(
@@ -1216,7 +1270,7 @@ class HistorialState(MixinState):
         self.total_credit = self._round_currency(total_credit)
         self.credit_outstanding = self._round_currency(pending_total)
         self.dynamic_payment_cards = self._build_dynamic_payment_cards_from_stats(
-            rounded_stats, enabled_kinds
+            rounded_stats, enabled_kinds, pm_names
         )
         self.productos_mas_vendidos = [
             {"description": name, "cantidad_vendida": qty}
@@ -1464,8 +1518,9 @@ class HistorialState(MixinState):
             if not sale:
                 return rx.toast(MSG.SALE_NOT_FOUND, duration=3000)
             payments = sale.payments or []
-            payment_method = self._payment_method_display(payments)
-            payment_details = self._payment_summary_from_payments(payments)
+            pm_names = self._load_pm_names(session, company_id, branch_id)
+            payment_method = self._payment_method_display(payments, pm_names)
+            payment_details = self._payment_summary_from_payments(payments, pm_names)
             if payment_method.strip() in {"", "-"}:
                 payment_method = MSG.FALLBACK_NOT_SPECIFIED
             payment_method = self._sale_payment_method_label(
@@ -1604,6 +1659,7 @@ class HistorialState(MixinState):
             sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
             sale_user_lookup = self._build_sale_user_lookup(session, sales)
+            pm_names = self._load_pm_names(session, self._company_id(), self._branch_id())
 
             # Pre-cargar nombres de fuentes de descuento
             _hist_promo_ids = {
@@ -1636,8 +1692,8 @@ class HistorialState(MixinState):
             invalid_labels = {"", "-", "no especificado"}
             for sale in sales:
                 payments = sale.payments or []
-                payment_method = self._payment_method_display(payments)
-                payment_details = self._payment_summary_from_payments(payments)
+                payment_method = self._payment_method_display(payments, pm_names)
+                payment_details = self._payment_summary_from_payments(payments, pm_names)
                 if payment_method.strip() in {"", "-"}:
                     payment_method = MSG.FALLBACK_NOT_SPECIFIED
                 payment_method = self._sale_payment_method_label(

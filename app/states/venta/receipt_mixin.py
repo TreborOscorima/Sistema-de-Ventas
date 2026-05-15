@@ -6,7 +6,7 @@ import reflex as rx
 from sqlmodel import select
 from sqlalchemy.orm import selectinload
 
-from app.models import Sale
+from app.models import Sale, PaymentMethod
 from app.services.receipt_service import ReceiptService
 from app.utils.db import get_async_session
 from app.utils.payment import payment_method_label
@@ -60,21 +60,28 @@ class ReceiptMixin:
                 ordered.append(key)
         return ordered
 
-    def _payment_summary_from_payments(self, payments: list[Any]) -> str:
+    def _payment_summary_from_payments(self, payments: list[Any], pm_names: dict[int, str] | None = None) -> str:
         if not payments:
             return "No especificado"
         totals: dict[str, Decimal] = {}
+        labels: dict[str, str] = {}
         for payment in payments:
             key = self._payment_method_key(getattr(payment, "method_type", None))
             if not key:
                 continue
+            pm_id = getattr(payment, "payment_method_id", None)
+            if key == "other" and pm_id and pm_names:
+                custom_name = pm_names.get(pm_id)
+                if custom_name:
+                    key = f"other_{pm_id}"
+                    labels[key] = custom_name
             amount = Decimal(str(getattr(payment, "amount", 0) or 0))
             totals[key] = totals.get(key, Decimal("0.00")) + amount
         if not totals:
             return "No especificado"
         parts = []
         for key in self._sorted_payment_keys(list(totals.keys())):
-            label = self._payment_method_label(key)
+            label = labels.get(key) or self._payment_method_label(key)
             parts.append(f"{label}: {self._format_currency(totals[key])}")
         return ", ".join(parts)
 
@@ -140,6 +147,12 @@ class ReceiptMixin:
                         return rx.toast("Venta no encontrada.", duration=3000)
 
                     branch_id = sale.branch_id
+                    _pm_methods = session.exec(
+                        select(PaymentMethod)
+                        .where(PaymentMethod.company_id == int(company_id))
+                        .where(PaymentMethod.branch_id == int(branch_id))
+                    ).all()
+                    _pm_names = {m.id: m.name for m in _pm_methods if m.id is not None}
                     _rp_settings = self._company_settings_snapshot()
                     timestamp = format_local_datetime(
                         sale.timestamp,
@@ -149,7 +162,7 @@ class ReceiptMixin:
                     )
                     total = sale.total_amount
                     payment_summary = self._payment_summary_from_payments(
-                        sale.payments or []
+                        sale.payments or [], _pm_names
                     )
                     if not payment_summary or payment_summary == "No especificado":
                         payment_summary = self._legacy_payment_summary(
@@ -331,6 +344,7 @@ class ReceiptMixin:
 
             from app.utils.tenant import set_tenant_context
             set_tenant_context(int(company_id), int(branch_id))
+            _pm_names_async: dict[int, str] = {}
             async with get_async_session() as session:
                 sale = (
                     await session.exec(
@@ -345,6 +359,13 @@ class ReceiptMixin:
                         )
                     )
                 ).first()
+                if sale:
+                    _pm_rows = (await session.exec(
+                        select(PaymentMethod)
+                        .where(PaymentMethod.company_id == int(company_id))
+                        .where(PaymentMethod.branch_id == int(branch_id))
+                    )).all()
+                    _pm_names_async = {m.id: m.name for m in _pm_rows if m.id is not None}
 
             if not sale:
                 self._notify_error("Venta no encontrada.")
@@ -360,7 +381,7 @@ class ReceiptMixin:
             )
             total = sale.total_amount
             payment_summary = self._payment_summary_from_payments(
-                sale.payments or []
+                sale.payments or [], _pm_names_async
             )
             if not payment_summary or payment_summary == "No especificado":
                 payment_summary = self._legacy_payment_summary(

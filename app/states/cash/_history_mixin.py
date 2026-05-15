@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from app.enums import PaymentMethodType, SaleStatus
 from app.utils.payment import payment_method_label as _canonical_payment_method_label
 from app.utils.tenant import tenant_bypass
-from app.models import CashboxLog as CashboxLogModel, User as UserModel, Sale, SaleItem
+from app.models import CashboxLog as CashboxLogModel, User as UserModel, Sale, SaleItem, PaymentMethod
 from app.i18n import MSG
 from ..types import CashboxSale, CashboxLogEntry
 
@@ -352,55 +352,78 @@ class HistoryMixin:
                 ordered.append(key)
         return ordered
 
-    def _payment_summary_from_payments(self, payments: list[Any]) -> str:
+    def _payment_summary_from_payments(self, payments: list[Any], pm_names: dict[int, str] | None = None) -> str:
         if not payments:
             return "-"
         totals: dict[str, float] = {}
+        labels: dict[str, str] = {}
         for payment in payments:
             key = self._payment_method_key(getattr(payment, "method_type", None))
             if not key:
                 continue
+            pm_id = getattr(payment, "payment_method_id", None)
+            if key == "other" and pm_id and pm_names:
+                custom_name = pm_names.get(pm_id)
+                if custom_name:
+                    key = f"other_{pm_id}"
+                    labels[key] = custom_name
             amount = float(getattr(payment, "amount", 0) or 0)
             totals[key] = totals.get(key, 0.0) + amount
         if not totals:
             return "-"
         parts = []
         for key in self._sorted_payment_keys(list(totals.keys())):
-            label = self._payment_method_label(key)
+            label = labels.get(key) or self._payment_method_label(key)
             parts.append(f"{label}: {self._format_currency(totals[key])}")
         return ", ".join(parts)
 
-    def _payment_method_display(self, payments: list[Any]) -> str:
+    def _payment_method_display(self, payments: list[Any], pm_names: dict[int, str] | None = None) -> str:
         if not payments:
             return "-"
         keys: list[str] = []
+        labels: dict[str, str] = {}
         for payment in payments:
             key = self._payment_method_key(getattr(payment, "method_type", None))
+            if not key:
+                continue
+            pm_id = getattr(payment, "payment_method_id", None)
+            if key == "other" and pm_id and pm_names:
+                custom_name = pm_names.get(pm_id)
+                if custom_name:
+                    key = f"other_{pm_id}"
+                    labels[key] = custom_name
             if key and key not in keys:
                 keys.append(key)
         if not keys:
             return "-"
         if len(keys) == 1:
-            return self._payment_method_label(keys[0])
+            return labels.get(keys[0]) or self._payment_method_label(keys[0])
         abbrevs = [
-            self._payment_method_abbrev(key)
+            labels.get(key) or self._payment_method_abbrev(key)
             for key in self._sorted_payment_keys(keys)
         ]
         return f"{self._payment_method_label('mixed')} ({'/'.join(abbrevs)})"
 
-    def _payment_breakdown_from_payments(self, payments: list[Any]) -> list[dict[str, float]]:
+    def _payment_breakdown_from_payments(self, payments: list[Any], pm_names: dict[int, str] | None = None) -> list[dict[str, float]]:
         if not payments:
             return []
         totals: dict[str, float] = {}
+        labels: dict[str, str] = {}
         for payment in payments:
             key = self._payment_method_key(getattr(payment, "method_type", None))
             if not key:
                 continue
+            pm_id = getattr(payment, "payment_method_id", None)
+            if key == "other" and pm_id and pm_names:
+                custom_name = pm_names.get(pm_id)
+                if custom_name:
+                    key = f"other_{pm_id}"
+                    labels[key] = custom_name
             amount = float(getattr(payment, "amount", 0) or 0)
             totals[key] = totals.get(key, 0.0) + amount
         breakdown = []
         for key in self._sorted_payment_keys(list(totals.keys())):
-            label = self._payment_method_label(key)
+            label = labels.get(key) or self._payment_method_label(key)
             breakdown.append({"label": label, "amount": self._round_currency(totals[key])})
         return breakdown
 
@@ -416,11 +439,11 @@ class HistoryMixin:
             return next(iter(keys))
         return ""
 
-    def _cashbox_sale_row(self, sale: Sale, user: UserModel | None) -> CashboxSale:
+    def _cashbox_sale_row(self, sale: Sale, user: UserModel | None, pm_names: dict[int, str] | None = None) -> CashboxSale:
         payments = sale.payments or []
-        details_text = self._payment_summary_from_payments(payments)
-        method_label = self._payment_method_display(payments)
-        payment_breakdown = self._payment_breakdown_from_payments(payments)
+        details_text = self._payment_summary_from_payments(payments, pm_names)
+        method_label = self._payment_method_display(payments, pm_names)
+        payment_breakdown = self._payment_breakdown_from_payments(payments, pm_names)
         payment_kind = self._payment_kind_from_payments(payments)
         paid_total = sum(
             float(getattr(payment, "amount", 0) or 0) for payment in payments
@@ -496,7 +519,17 @@ class HistoryMixin:
                 if limit is not None:
                     query = query.limit(limit)
                 sales_results = session.exec(query).all()
+                company_id = self._company_id()
+                branch_id = self._branch_id()
+                pm_names: dict[int, str] = {}
+                if company_id and branch_id:
+                    methods = session.exec(
+                        select(PaymentMethod)
+                        .where(PaymentMethod.company_id == company_id)
+                        .where(PaymentMethod.branch_id == branch_id)
+                    ).all()
+                    pm_names = {m.id: m.name for m in methods if m.id is not None}
                 return [
-                    self._cashbox_sale_row(sale, user)
+                    self._cashbox_sale_row(sale, user, pm_names)
                     for sale, user in sales_results
                 ]
