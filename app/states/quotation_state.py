@@ -391,11 +391,18 @@ class QuotationState(MixinState):
     @rx.event
     @require_permission("create_ventas")
     async def save_quotation(self):
+        # Guard de re-entrada: bloquea doble-click y eventos encolados concurrentes.
+        if self.is_loading:
+            return
+        # Si el formulario ya fue cerrado por una ejecución previa, ignorar.
+        if not self.show_quotation_form:
+            return
         if not self.quot_cart:
             yield rx.toast("Agrega al menos un producto al presupuesto.", duration=3000)
             return
 
         self.is_loading = True
+        yield  # Deshabilita el botón en el frontend ANTES de iniciar operaciones DB.
         try:
             company_id = self._company_id()
             branch_id = self._branch_id()
@@ -782,7 +789,12 @@ class QuotationState(MixinState):
         if not self.new_sale_items:
             yield rx.toast("El carrito está vacío.", duration=3000)
             return
+        if self.is_loading:
+            return
+        if not self.show_quot_save_modal:
+            return
         self.is_loading = True
+        yield
         try:
             company_id = self._company_id()
             branch_id = self._branch_id()

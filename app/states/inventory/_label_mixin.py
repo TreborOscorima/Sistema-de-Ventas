@@ -333,8 +333,11 @@ class LabelMixin:
         if not company_id:
             return
 
+        if self.is_loading:
+            return
         self.is_loading = True
         self.label_preview_loaded = False
+        yield
         try:
             config = LabelConfig(
                 size=self.label_size,
@@ -369,7 +372,10 @@ class LabelMixin:
         if not company_id:
             return
 
+        if self.is_loading:
+            return
         self.is_loading = True
+        yield
         try:
             settings = self._company_settings_snapshot()
             config = LabelConfig(

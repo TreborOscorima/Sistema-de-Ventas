@@ -453,7 +453,12 @@ class PromotionsState(MixinState):
             yield rx.toast("El nombre es obligatorio.", duration=3000)
             return
 
+        if self.is_loading:
+            return
+        if not self.show_promotion_form:
+            return
         self.is_loading = True
+        yield
         try:
             company_id = self._company_id()
             branch_id = self._branch_id()
