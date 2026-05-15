@@ -1,7 +1,7 @@
 # TUWAYKIAPP: Sistema Integral de Gestion (ERP/POS)
 
-**Version:** 4.0 (Motor de Pricing + Facturacion Electronica Multi-Pais)
-**Tecnologia:** Python 3.11 / Reflex 0.9.2 / MySQL 8.0 / Docker
+**Version:** 4.1 (Auto-pricing + State Refactor)
+**Tecnologia:** Python 3.13 / Reflex 0.9.2 / MySQL 8.0 / Docker
 **Autor:** Trebor Oscorima
 
 ---
@@ -10,7 +10,7 @@
 
 **TUWAYKIAPP** es una plataforma SaaS multi-tenant de gestion empresarial (ERP) y Punto de Venta (POS) diseñada para comercios, PYMES y centros deportivos en Latinoamerica.
 
-La version **v4.0** agrega un **Motor de Pricing completo** (Listas de Precios, Promociones avanzadas, Impuestos por empresa) y un sistema de **Presupuestos/Cotizaciones** convertibles a venta, sobre la base de la Facturacion Electronica multi-pais incorporada en v3.0.
+La version **v4.1** incorpora auto-calculo de precio de venta desde margen efectivo y un refactor de states en paquetes por mixins. La **v4.0** agrego un **Motor de Pricing completo** (Listas de Precios, Promociones avanzadas, Impuestos por empresa) y un sistema de **Presupuestos/Cotizaciones** convertibles a venta, sobre la base de la Facturacion Electronica multi-pais incorporada en v3.0.
 
 ### Capacidades Principales
 
@@ -32,6 +32,17 @@ La version **v4.0** agrega un **Motor de Pricing completo** (Listas de Precios, 
 * **Owner Backoffice:** Panel independiente para gestion de empresas, planes y billing de plataforma.
 * **Despliegue Docker:** Arquitectura multi-stage de 5 contenedores con Nginx Proxy Manager.
 
+### Novedades v4.1 (2026)
+
+* **Auto-precio desde margen:** En el formulario de ingreso de productos, si el producto no tiene precio de venta configurado, el sistema calcula automaticamente `sale_price = cost × (1 + margen_efectivo)` al confirmar el ingreso.
+* **State refactor — paquetes por mixins:** Los tres states de mayor tamano se dividieron en subpaquetes para mejorar mantenibilidad:
+  * `app/states/cash/` — 6 mixins: `_session`, `_close`, `_delete`, `_petty_cash`, `_reports`, `_history`
+  * `app/states/inventory/` — 5 mixins: `_product`, `_search`, `_adjustment`, `_export`, `_label`
+  * `app/states/venta/` — 4 mixins: `cart`, `payment`, `receipt`, `recent_moves`
+  * Los archivos legacy `cash_state.py` e `inventory_state.py` se mantienen como alias de retrocompatibilidad.
+* **Multi-vertical:** `business_vertical` en `CompanySettings` permite adaptar la UI del POS segun el tipo de negocio (retail, deportivo, servicios).
+* **1024 tests** — 2 tests adicionales para auto-precio y validaciones de margen.
+
 ### Novedades v4.0 (2026)
 
 * **Motor de Pricing (single source of truth):** `app/services/pricing.py` — resolucion de precio en jerarquia Lista → Tier → Base, compartida entre POS y previsualizacion del carrito.
@@ -41,7 +52,7 @@ La version **v4.0** agrega un **Motor de Pricing completo** (Listas de Precios, 
 * **Presupuestos/Cotizaciones:** Ciclo completo draft→sent→accepted→converted; PDF; integracion POS con conversion directa a venta.
 * **Etiquetas PDF supermercado:** Tres tamanos (50x30, 70x40, 100x60mm); precio pre-impuesto; codigo de barras; soporte A4, termico 58mm y 80mm.
 * **Segmento de cliente:** Campo de segmento en ficha de cliente para campanas y listas de precio diferenciadas.
-* **1022 tests automatizados** — suite ampliada con pricing engine, promotion consumption, tax service, label service, quotations y variante picker.
+* **1024 tests automatizados** — suite ampliada con pricing engine, promotion consumption, tax service, label service, quotations y variante picker.
 
 ### Novedades v3.0 (2026)
 
@@ -77,7 +88,7 @@ La version **v4.0** agrega un **Motor de Pricing completo** (Listas de Precios, 
 | Capa | Tecnologia |
 |:-----|:-----------|
 | **Frontend** | React (compilado por Reflex desde Python) |
-| **Backend** | Python 3.11 + Reflex 0.9.2 |
+| **Backend** | Python 3.13 + Reflex 0.9.2 |
 | **Base de Datos** | MySQL 8.0 + SQLModel/SQLAlchemy 2.0 |
 | **Migraciones** | Alembic 1.18 |
 | **Cache / Rate Limiting** | Redis 7 |
@@ -209,6 +220,9 @@ Sistema-de-Ventas/
 |   |   |-- receipt_service.py           # Generacion de recibos PDF
 |   |   +-- ...              # sale_service, report_service, etc.
 |   |-- states/              # Logica de negocio (Reflex State)
+|   |   |-- cash/                  # Caja — 6 mixins (_session, _close, _delete, _petty_cash, _reports, _history)
+|   |   |-- inventory/             # Inventario — 5 mixins (_product, _search, _adjustment, _export, _label)
+|   |   |-- venta/                 # POS — 4 mixins (cart, payment, receipt, recent_moves)
 |   |   |-- price_list_state.py    # Listas de precios
 |   |   |-- promotions_state.py    # Gestion de promociones
 |   |   |-- quotation_state.py     # Presupuestos
@@ -217,8 +231,8 @@ Sistema-de-Ventas/
 |   |   |-- ui_state.py            # Estado de UI (flyout, modales)
 |   |   |-- billing_state.py       # Config fiscal del usuario
 |   |   |-- owner_state.py         # Backoffice del Owner
-|   |   |-- venta_state.py         # POS + seleccion Boleta/Factura
-|   |   +-- ...                    # auth, dashboard, inventory, caja, etc.
+|   |   |-- venta_state.py         # Alias legacy → venta/ package
+|   |   +-- ...                    # auth, dashboard, clientes, config, etc.
 |   |-- tasks/               # Workers en background
 |   |   +-- fiscal_retry_worker.py  # Reintentos de docs fiscales
 |   |-- utils/               # Utilidades
@@ -235,7 +249,7 @@ Sistema-de-Ventas/
 |   |   +-- ...                      # timezone, tenant, rate_limit, etc.
 |   |-- enums.py             # Enums: SaleStatus, ReturnReason, PaymentMethodType, etc.
 |   +-- app.py               # Punto de entrada y rutas
-|-- tests/                   # 1022 tests automatizados
+|-- tests/                   # 1024 tests automatizados
 |   |-- test_pricing_engine.py       # Motor de pricing y jerarquia
 |   |-- test_promotion_consumption.py# Consumo y cap de promociones
 |   |-- test_tax_service.py          # CRUD de tasas y presets
@@ -254,7 +268,7 @@ Sistema-de-Ventas/
 |-- docker-compose.local.yml     # Testing prod en Windows/local
 |-- docker-compose.prod.yml      # Despliegue produccion
 |-- docker-compose.rollback.yml  # Rollback de emergencia
-|-- Dockerfile                   # Multi-stage build (builder + runtime) Python 3.11-slim
+|-- Dockerfile                   # Multi-stage build (builder + runtime) python:3.11-slim base image
 |-- rxconfig.py                  # Configuracion Reflex + DB
 |-- requirements.txt             # Dependencias Python
 +-- .env.example                 # Template de variables de entorno
@@ -266,7 +280,7 @@ Sistema-de-Ventas/
 
 ### Prerrequisitos
 
-* Python 3.11 o superior
+* Python 3.13 o superior
 * MySQL 8.0
 * Redis 7 (produccion) o memoria (desarrollo)
 * Git
@@ -548,7 +562,7 @@ python -m app.tasks.fiscal_retry_worker --dry-run
 ### Ejecutar tests
 
 ```bash
-# Suite completa (1022 tests)
+# Suite completa (1024 tests)
 python -m pytest -q
 
 # Motor de pricing
@@ -596,7 +610,7 @@ python -m pytest tests/test_security_fixes.py -v
 | Seguridad (tenant isolation) | 20+ | FOR UPDATE, RBAC |
 | Ventas y creditos | 50+ | Flujos completos |
 | Otros modulos | 600+ | Inventario, caja, reportes |
-| **Total** | **1022** | |
+| **Total** | **1024** | |
 
 ### CI/CD
 
@@ -684,7 +698,7 @@ Eventos: `view_landing`, `click_trial_cta`. Solo se cargan con consentimiento de
 | Backend/Estado | 90/100 | Limpio |
 | Frontend/UX | 87/100 | Consistente |
 | Arquitectura | 93/100 | Bien estructurado |
-| Testing | 92/100 | 1022 tests |
+| Testing | 92/100 | 1024 tests |
 | Billing/Fiscal | 90/100 | Multi-pais |
 | Pricing/Comercial | 90/100 | Single source of truth |
 
