@@ -216,17 +216,17 @@ CONFIG_SUBSECTIONS: list[dict] = [
     {"key": "unidades", "label": "Unidades de Medida", "icon": "ruler"},
     {"key": "pagos", "label": "Metodos de Pago", "icon": "credit-card"},
     {"key": "impuestos", "label": "Impuestos", "icon": "percent"},
-    {"key": "facturacion", "label": "Facturacion Electronica", "icon": "file-text"},
+    {"key": "facturacion", "label": "Facturacion Electronica", "icon": "receipt"},
     {"key": "suscripcion", "label": "Suscripcion", "icon": "sparkles"},
 ]
 
 CASH_SUBSECTIONS: list[dict] = [
-    {"key": "resumen", "label": "Resumen de Caja", "icon": "layout-dashboard"},
+    {"key": "resumen", "label": "Resumen de Caja", "icon": "pie-chart"},
     {"key": "movimientos", "label": "Movimientos de Caja Chica", "icon": "arrow-left-right"},
 ]
 
 SERVICES_SUBSECTIONS: list[dict] = [
-    {"key": "campo", "label": "Alquiler de Campo", "icon": "trophy"},
+    {"key": "campo", "label": "Alquiler de Campo", "icon": "calendar-check"},
     {"key": "precios_campo", "label": "Precios de Campo", "icon": "tags"},
 ]
 
