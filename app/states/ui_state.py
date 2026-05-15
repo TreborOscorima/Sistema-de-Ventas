@@ -339,7 +339,7 @@ class UIState(MixinState):
             {"label": "Punto de Venta", "icon": "shopping-cart", "page": "Punto de Venta", "route": "/venta"},
             {"label": "Ingreso de Mercancía", "icon": "truck", "page": "Ingreso", "route": "/ingreso"},
             {"label": "Compras", "icon": "clipboard-list", "page": "Compras", "route": "/compras"},
-            {"label": "Caja", "icon": "vault", "page": "Gestion de Caja", "route": "/caja"},
+            {"label": "Caja", "icon": "banknote", "page": "Gestion de Caja", "route": "/caja"},
             # Clientes y comercial
             {"label": "Clientes", "icon": "users", "page": "Clientes", "route": "/clientes"},
             {"label": "Cuentas Corrientes", "icon": "credit-card", "page": "Cuentas Corrientes", "route": "/cuentas"},

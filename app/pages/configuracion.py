@@ -2175,7 +2175,7 @@ def _tax_rate_row(rate: rx.Var) -> rx.Component:
           class_name="p-1.5 rounded hover:bg-amber-50 text-slate-400 hover:text-amber-500 transition-colors",
           title="Marcar como default",
         ),
-        rx.fragment(),
+        rx.icon("star", class_name="h-3.5 w-3.5 fill-amber-400 text-amber-400 mx-1.5"),
       ),
       rx.el.button(
         rx.icon("pencil", class_name="h-3.5 w-3.5"),
@@ -2193,7 +2193,7 @@ def _tax_rate_row(rate: rx.Var) -> rx.Component:
     ),
     class_name=rx.cond(
       rate["is_default"],
-      "flex items-center justify-between px-3 py-2.5 rounded-md border border-indigo-200 bg-indigo-50 transition-colors",
+      "flex items-center justify-between px-3 py-2.5 rounded-md border border-indigo-300 bg-indigo-100 shadow-sm transition-colors",
       "flex items-center justify-between px-3 py-2.5 rounded-md border border-slate-100 bg-slate-50 hover:bg-white transition-colors",
     ),
   )
