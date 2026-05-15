@@ -13,7 +13,7 @@ from sqlmodel import select
 from app.models.sales import CompanySettings
 from app.models.taxes import CompanyTaxRate
 from app.services import tax_service
-from app.utils.tax_presets import get_presets_for_country
+from app.utils.tax_presets import COUNTRY_TAX_PRESETS, get_presets_for_country
 
 from .mixin_state import MixinState
 
@@ -90,6 +90,24 @@ class TaxConfigState(MixinState):
 
     # ── Carga ──────────────────────────────────────────────────────────────────
 
+    def _detect_preset_country(self, rates: list) -> str:
+        """Detecta qué preset de país coincide con las tasas actuales (por tax_name + rate)."""
+        for code, presets in COUNTRY_TAX_PRESETS.items():
+            if len(presets) != len(rates):
+                continue
+            try:
+                sorted_presets = sorted(presets, key=lambda x: float(x["rate"]), reverse=True)
+                sorted_rates = sorted(rates, key=lambda x: float(x["rate"]), reverse=True)
+                if all(
+                    str(p["tax_name"]).upper() == str(r["tax_name"]).upper()
+                    and Decimal(str(p["rate"])) == Decimal(str(r["rate"]))
+                    for p, r in zip(sorted_presets, sorted_rates)
+                ):
+                    return code
+            except Exception:
+                continue
+        return ""
+
     @rx.event
     def load_tax_config(self):
         """Carga tasas y show_tax_on_receipt desde DB."""
@@ -109,6 +127,7 @@ class TaxConfigState(MixinState):
                 }
                 for r in rates
             ]
+            self.active_preset_country = self._detect_preset_country(self.tax_rates)
             # Leer show_tax_on_receipt desde CompanySettings
             settings = session.exec(
                 select(CompanySettings).where(
