@@ -439,12 +439,25 @@ class HistoryMixin:
             return next(iter(keys))
         return ""
 
-    def _cashbox_sale_row(self, sale: Sale, user: UserModel | None, pm_names: dict[int, str] | None = None) -> CashboxSale:
+    def _cashbox_sale_row(self, sale: Sale, user: UserModel | None, pm_names: dict[int, str] | None = None, log_pm_names: dict[int, str] | None = None) -> CashboxSale:
         payments = sale.payments or []
         details_text = self._payment_summary_from_payments(payments, pm_names)
         method_label = self._payment_method_display(payments, pm_names)
         payment_breakdown = self._payment_breakdown_from_payments(payments, pm_names)
         payment_kind = self._payment_kind_from_payments(payments)
+        _all_other_no_id = bool(payments) and all(
+            self._payment_method_key(getattr(p, "method_type", None)) == "other"
+            and not getattr(p, "payment_method_id", None)
+            for p in payments
+        )
+        if _all_other_no_id and log_pm_names:
+            _custom_name = log_pm_names.get(sale.id)
+            if _custom_name:
+                _total = sum(float(getattr(p, "amount", 0) or 0) for p in payments)
+                method_label = _custom_name
+                details_text = f"{_custom_name}: {self._format_currency(_total)}"
+                payment_breakdown = [{"label": _custom_name, "amount": self._round_currency(_total)}]
+                payment_kind = "other"
         paid_total = sum(
             float(getattr(payment, "amount", 0) or 0) for payment in payments
         )
@@ -522,6 +535,7 @@ class HistoryMixin:
                 company_id = self._company_id()
                 branch_id = self._branch_id()
                 pm_names: dict[int, str] = {}
+                log_pm_names: dict[int, str] = {}
                 if company_id and branch_id:
                     methods = session.exec(
                         select(PaymentMethod)
@@ -529,7 +543,19 @@ class HistoryMixin:
                         .where(PaymentMethod.branch_id == branch_id)
                     ).all()
                     pm_names = {m.id: m.name for m in methods if m.id is not None}
+                    sale_ids = [sale.id for sale, _ in sales_results if sale.id is not None]
+                    if sale_ids:
+                        log_rows = session.exec(
+                            select(CashboxLogModel)
+                            .where(CashboxLogModel.action == "venta")
+                            .where(CashboxLogModel.sale_id.in_(sale_ids))
+                            .where(CashboxLogModel.company_id == company_id)
+                            .where(CashboxLogModel.branch_id == branch_id)
+                        ).all()
+                        for _log in log_rows:
+                            if _log.sale_id and _log.payment_method:
+                                log_pm_names[_log.sale_id] = _log.payment_method
                 return [
-                    self._cashbox_sale_row(sale, user, pm_names)
+                    self._cashbox_sale_row(sale, user, pm_names, log_pm_names)
                     for sale, user in sales_results
                 ]
