@@ -1005,6 +1005,7 @@ class HistorialState(MixinState):
     def _load_pm_names(self, session, company_id: int, branch_id: int) -> dict[int, str]:
         methods = session.exec(
             select(PaymentMethod)
+            .where(PaymentMethod.enabled == True)
             .where(PaymentMethod.company_id == company_id)
             .where(PaymentMethod.branch_id == branch_id)
         ).all()
@@ -1036,9 +1037,9 @@ class HistorialState(MixinState):
         cards: list[dict] = []
 
         def _add_card(kind: str, label: str, stats_key: str) -> None:
-            amount = stats.get(stats_key, 0.0)
-            if amount == 0 and kind not in enabled_kinds:
+            if kind not in enabled_kinds:
                 return
+            amount = stats.get(stats_key, 0.0)
             style = styles.get(kind, styles["other"])
             cards.append(
                 {
@@ -1056,9 +1057,8 @@ class HistorialState(MixinState):
         _add_card("credit", "T. Credito", "credito")
         _add_card("debit", "T. Debito", "debito")
         _add_card("transfer", "Transferencia", "transferencia")
-        mixed_label = "Pago Mixto" if "mixed" in enabled_kinds else "Otros"
-        if stats.get("mixto", 0) > 0:
-            _add_card("mixed", mixed_label, "mixto")
+        if "mixed" in enabled_kinds:
+            _add_card("mixed", "Pago Mixto", "mixto")
 
         if pm_names:
             for stats_key, amount in stats.items():
