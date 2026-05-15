@@ -661,10 +661,11 @@ def sidebar() -> rx.Component:
             class_name=rx.cond(
         State.sidebar_open,
         f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-[88vw] max-w-[320px] md:w-64 xl:w-72 {SHADOWS['lg']} md:shadow-none",
-        # En colapsado: overflow-visible en ambos ejes para que el flyout
-        # de submódulos no se recorte. El viewport mismo recorta cualquier
-        # overflow vertical inesperado (sidebar usa h-screen).
-        f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-visible bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-0 md:w-16",
+        # En colapsado: en móvil (w-0) overflow-hidden oculta los iconos
+        # que sangrarían fuera del contenedor de ancho cero. En desktop
+        # md:overflow-visible restaura el overflow para que el flyout
+        # absoluto no se recorte contra el rail de 64px.
+        f"fixed inset-y-0 left-0 z-50 flex flex-col h-screen overflow-hidden md:overflow-visible bg-gradient-to-b from-slate-50 to-white/95 backdrop-blur-xl border-r border-slate-200/50 {TRANSITIONS['slow']} w-0 md:w-16",
     ),
     style={"height": "100dvh"},
     key="sidebar-root",

@@ -655,21 +655,28 @@ def _header_section() -> rx.Component:
                     class_name="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white md:hidden",
                 ),
                 rx.el.div(
-                    _nav_link("Módulos", "#modulos", "click_nav_modulos_mobile", "mobile_menu"),
-                    _nav_link("Cómo funciona", "#como-funciona", "click_nav_como_funciona_mobile", "mobile_menu"),
-                    _nav_link("Planes", "#planes", "click_nav_planes_mobile", "mobile_menu"),
-                    _nav_link("FAQ", "#faq", "click_nav_faq_mobile", "mobile_menu"),
-                    rx.el.a(
-                        "Ingresar", href=_app_href("/"),
-                        on_click=rx.call_script(_track_event_script("click_nav_login_mobile", "mobile_menu")),
-                        class_name="inline-flex w-full items-center justify-center rounded-xl border-2 border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50",
+                    rx.el.div(
+                        _nav_link("Módulos", "#modulos", "click_nav_modulos_mobile", "mobile_menu"),
+                        _nav_link("Cómo funciona", "#como-funciona", "click_nav_como_funciona_mobile", "mobile_menu"),
+                        _nav_link("Planes", "#planes", "click_nav_planes_mobile", "mobile_menu"),
+                        _nav_link("FAQ", "#faq", "click_nav_faq_mobile", "mobile_menu"),
+                        class_name="flex flex-col gap-4 py-1",
                     ),
-                    rx.el.a(
-                        "Iniciar prueba gratis", href=_app_href("/registro"),
-                        on_click=rx.call_script(_track_event_script("click_trial_cta", "mobile_menu_primary_cta")),
-                        class_name="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700",
+                    rx.el.div(class_name="border-t border-slate-100"),
+                    rx.el.div(
+                        rx.el.a(
+                            "Ingresar", href=_app_href("/"),
+                            on_click=rx.call_script(_track_event_script("click_nav_login_mobile", "mobile_menu")),
+                            class_name="inline-flex w-full items-center justify-center rounded-xl border-2 border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50",
+                        ),
+                        rx.el.a(
+                            "Iniciar prueba gratis", href=_app_href("/registro"),
+                            on_click=rx.call_script(_track_event_script("click_trial_cta", "mobile_menu_primary_cta")),
+                            class_name="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700",
+                        ),
+                        class_name="flex flex-col gap-2",
                     ),
-                    class_name="absolute right-0 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-lg md:hidden",
+                    class_name="absolute right-0 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-4 shadow-lg md:hidden flex flex-col gap-3",
                 ),
                 class_name="relative md:hidden",
             ),
