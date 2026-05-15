@@ -329,6 +329,8 @@ class ReceiptMixin:
                 self._notify_error("ID de venta inválido.")
                 return
 
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 sale = (
                     await session.exec(

@@ -52,6 +52,8 @@ class RecentMovesMixin:
         timezone = None
         if hasattr(self, "_company_time_context"):
             country_code, timezone = self._company_time_context()
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(int(company_id) if company_id else None, int(branch_id))
         async with get_async_session() as session:
             rows = await SaleService.get_recent_activity(
                 session=session,

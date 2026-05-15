@@ -295,6 +295,8 @@ class CartMixin:
         qty_dec = Decimal(str(qty))
 
         try:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 orm_product = (
                     await session.exec(
@@ -336,6 +338,9 @@ class CartMixin:
         except Exception:
             logging.exception("Error resolving effective price for product %s", product_id)
             return None
+        finally:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
         price_from_list = resolution.source == PriceSource.PRICE_LIST
         price_from_tier = resolution.source == PriceSource.TIER
@@ -486,6 +491,8 @@ class CartMixin:
         kit_name = self._product_value(kit_product, "description", "Kit")
         kit_price = Decimal(str(self._product_value(kit_product, "sale_price", 0) or 0))
 
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(int(company_id), int(branch_id))
         async with get_async_session() as session:
             components = (
                 await session.exec(
@@ -771,6 +778,8 @@ class CartMixin:
 
         try:
             from app.models import Product as ProductModel
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 product = (
                     await session.exec(
@@ -860,6 +869,8 @@ class CartMixin:
             self.variant_picker_colors = []
         finally:
             self.variant_picker_loading = False
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
     @rx.event
     def close_variant_picker(self):
@@ -1436,6 +1447,8 @@ class CartMixin:
         try:
             from app.models import Product as ProductModel
             from app.utils.sanitization import escape_like as _esc
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 q = sql_select(ProductModel).where(
                     ProductModel.company_id == int(company_id),
@@ -1464,6 +1477,9 @@ class CartMixin:
         except Exception:
             logging.exception("Error cargando grid de productos")
             self.product_grid_items = []
+        finally:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
     @rx.event
     async def add_product_to_sale_by_id(self, product_id: int):
@@ -1482,6 +1498,8 @@ class CartMixin:
             return rx.toast("Empresa o sucursal no definida.", duration=3000)
         try:
             from app.models import Product as ProductModel
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 p = (
                     await session.exec(
@@ -1552,6 +1570,9 @@ class CartMixin:
         except Exception:
             logging.exception("Error agregando producto desde grid")
             return rx.toast("Error al agregar producto.", duration=3000)
+        finally:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
     @rx.event
     async def search_product_grid(self, value: str):
@@ -1687,6 +1708,8 @@ class CartMixin:
         coupon = self.cart_coupon_code if self.cart_coupon_status == "applied" else None
         local_now = self._display_now().replace(tzinfo=None)
 
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(int(company_id), int(branch_id))
         async with get_async_session() as session:
             # ── Pasada 1: precios base + subtotal pre-promo. ──
             # Se omite cart_subtotal a propósito (None) para que la pasada 1

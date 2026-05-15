@@ -423,6 +423,8 @@ class QuotationState(MixinState):
                 except (ValueError, TypeError):
                     continue
 
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             if self.quot_edit_id:
                 dto_update = UpdateQuotationDTO(
                     quotation_id=self.quot_edit_id,
@@ -468,6 +470,8 @@ class QuotationState(MixinState):
             yield rx.toast(f"Error: {exc}", duration=4000)
         finally:
             self.is_loading = False
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
     # ─── Detalle y cambio de estado ──────────────────────────────────
 
@@ -832,6 +836,8 @@ class QuotationState(MixinState):
                 idempotency_key=idem_key,
             )
 
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 quotation = await QuotationService.create_quotation(
                     dto, session=session
@@ -848,6 +854,8 @@ class QuotationState(MixinState):
             yield rx.toast(f"Error: {exc}", duration=4000)
         finally:
             self.is_loading = False
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
     # ─── POS: drawer de búsqueda/carga de presupuestos ───────────────
 

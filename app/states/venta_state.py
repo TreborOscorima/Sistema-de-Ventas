@@ -628,6 +628,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 reservation_id = self.reservation_payment_id
 
             result = None
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(self.current_user.get("company_id")), int(self._branch_id()))
             async with get_async_session() as session:
                 try:
                     result = await SaleService.process_sale(

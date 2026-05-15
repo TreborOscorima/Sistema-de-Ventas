@@ -321,6 +321,8 @@ class CuentasState(MixinState):
         self.debtors_page = 1
         self.installments_page = 1
         country_code, timezone = self._company_time_context()
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(int(company_id), int(branch_id))
         async with get_async_session() as session:
             result = await session.exec(
                 select(Client)
@@ -449,6 +451,8 @@ class CuentasState(MixinState):
         if not company_id or not branch_id:
             self.installments_rows = []
             return
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(int(company_id), int(branch_id))
         async with get_async_session() as session:
             await self._load_installments(session)
 
@@ -574,6 +578,8 @@ class CuentasState(MixinState):
         branch_id = self._branch_id()
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(int(company_id), int(branch_id))
         async with get_async_session() as session:
             query = (
                 select(SaleInstallment, Client)
@@ -781,6 +787,8 @@ class CuentasState(MixinState):
         if client_id is None:
             return
 
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(int(company_id), int(branch_id))
         async with get_async_session() as session:
             refreshed = await session.exec(
                 select(Client)
@@ -893,6 +901,8 @@ class CuentasState(MixinState):
         yield
 
         try:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 try:
                     await CreditService.pay_installment(
@@ -976,6 +986,8 @@ class CuentasState(MixinState):
                 await self._load_installments(session)
         finally:
             self.is_loading = False
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
         self.selected_installment_id = None
         self.payment_amount = ""
