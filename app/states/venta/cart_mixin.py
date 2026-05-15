@@ -125,6 +125,8 @@ class CartMixin:
                 kit_exists = False
                 if prod_id and not product.get("is_variant"):
                     try:
+                        from app.utils.tenant import set_tenant_context
+                        set_tenant_context(int(company_id), int(branch_id))
                         async with get_async_session() as session:
                             kit_exists = bool(
                                 (
@@ -145,6 +147,9 @@ class CartMixin:
                             prod_id,
                         )
                         kit_exists = False
+                    finally:
+                        from app.utils.tenant import set_tenant_context
+                        set_tenant_context(None, None)
                 if kit_exists:
                     return await self._add_kit_to_cart(
                         product, company_id, branch_id
@@ -419,6 +424,8 @@ class CartMixin:
             return
 
         try:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 # Verificar si la categoría requiere lote
                 cat_row = (
@@ -461,6 +468,9 @@ class CartMixin:
                     self.new_sale_item["batch_number"] = batch.batch_number or ""
         except Exception:
             logging.exception("Error resolviendo lote FEFO para item")
+        finally:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
     async def _add_kit_to_cart(self, kit_product, company_id, branch_id):
         """Expande un kit en sus componentes y los agrega al carrito.
@@ -629,6 +639,8 @@ class CartMixin:
         self.batch_picker_loading = True
         self.batch_picker_open = True
         try:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(int(company_id), int(branch_id))
             async with get_async_session() as session:
                 if variant_id:
                     batch_q = sql_select(ProductBatch).where(
@@ -671,6 +683,8 @@ class CartMixin:
             self.batch_picker_options = []
         finally:
             self.batch_picker_loading = False
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(None, None)
 
     @rx.event
     def close_batch_picker(self):
