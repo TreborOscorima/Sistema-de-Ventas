@@ -1298,7 +1298,7 @@ def inventory_adjustment_modal() -> rx.Component:
                 on_blur=lambda value: State.set_inventory_adjustment_notes(
                   value
                 ),
-                class_name="w-full mt-2 p-3 border rounded-lg h-32",
+                class_name="w-full mt-2 p-3 border border-slate-200 rounded-lg h-32 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
               ),
             ),
             class_name="mt-4 space-y-4",

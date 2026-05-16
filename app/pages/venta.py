@@ -52,7 +52,7 @@ def _fiscal_lookup_input() -> rx.Component:
                         max_length=11,
                         class_name=(
                             "w-full text-sm px-3 py-1.5 border border-slate-200 "
-                            "rounded-md focus:outline-none focus:ring-1 "
+                            "rounded-md placeholder-slate-400 focus:outline-none focus:ring-1 "
                             "focus:ring-indigo-400 focus:border-indigo-400"
                         ),
                     ),
@@ -172,8 +172,8 @@ def _coupon_input() -> rx.Component:
                 key=State.last_sale_id,
                 class_name=(
                     "flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm uppercase "
-                    "focus:outline-none focus:ring-2 focus:ring-fuchsia-300 disabled:bg-emerald-50 "
-                    "disabled:text-emerald-700 disabled:font-semibold"
+                    "placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-300 "
+                    "disabled:bg-emerald-50 disabled:text-emerald-700 disabled:font-semibold"
                 ),
             ),
             rx.cond(
@@ -948,7 +948,7 @@ def client_selector() -> rx.Component:
                             value=State.client_search_query,
                             on_change=State.search_client_change,
                             placeholder="Buscar cliente (DNI o nombre)...",
-                            class_name="flex-1 px-3 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500",
+                            class_name="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                         ),
                         debounce_timeout=600,
                     ),
@@ -1015,7 +1015,7 @@ def quick_add_bar() -> rx.Component:
                             key=State.sale_form_key.to_string(),
                             default_value=State.new_sale_item["barcode"],
                             placeholder="Código...",
-                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
+                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0 placeholder-slate-400",
                             type="text",
                             auto_complete="off",
                         ),
@@ -1045,7 +1045,7 @@ def quick_add_bar() -> rx.Component:
                             on_change=lambda val: State.handle_sale_change("description", val),
                             on_key_down=State.handle_autocomplete_keydown,
                             placeholder="Buscar producto...",
-                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0",
+                            class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0 placeholder-slate-400",
                         ),
                         debounce_timeout=600,
                     ),
@@ -1089,7 +1089,7 @@ def quick_add_bar() -> rx.Component:
                     key=State.sale_form_key.to_string() + "_qty",
                     default_value=State.new_sale_item["quantity"].to_string(),
                     on_blur=lambda val: State.handle_sale_change("quantity", val),
-                    class_name="w-full px-3 py-2 border rounded-lg text-sm text-center focus:ring-2 focus:ring-indigo-500",
+                    class_name="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-center placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                     placeholder="1",
                 ),
                 class_name="flex flex-col gap-1 w-[88px] sm:w-20",
@@ -1285,7 +1285,7 @@ def visual_product_grid() -> rx.Component:
                 on_change=State.search_product_grid,
                 class_name=(
                     "w-full text-sm px-3 py-2 border border-slate-200 "
-                    "rounded-lg focus:outline-none focus:ring-1 "
+                    "rounded-lg placeholder-slate-400 focus:outline-none focus:ring-1 "
                     "focus:ring-indigo-400 focus:border-indigo-400"
                 ),
             ),
@@ -2032,7 +2032,7 @@ def _payment_form_body(variant: str) -> rx.Component:
                         "",
                     ),
                     on_blur=lambda value: State.set_mixed_cash_amount(value),
-                    class_name="w-full px-3 py-2 border rounded-lg text-sm",
+                    class_name="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm placeholder-slate-400",
                     placeholder="0.00",
                 ),
                 class_name="flex flex-col gap-1",
@@ -2380,7 +2380,7 @@ def _quot_save_modal() -> rx.Component:
                             on_blur=State.set_quot_save_notes,
                             class_name=(
                                 "w-full border border-slate-200 rounded-lg px-3 py-2 "
-                                "text-sm resize-none h-20 focus:outline-none "
+                                "text-sm resize-none h-20 placeholder-slate-400 focus:outline-none "
                                 "focus:ring-2 focus:ring-indigo-300"
                             ),
                         ),
@@ -2524,7 +2524,7 @@ def _quot_load_drawer() -> rx.Component:
                             on_change=State.search_pos_quotations,
                             class_name=(
                                 "w-full border border-slate-200 rounded-lg px-3 py-2 "
-                                "text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                                "text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-300"
                             ),
                             auto_focus=True,
                         ),

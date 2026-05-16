@@ -7,6 +7,15 @@ html, body {
     overflow-x: hidden;
 }
 
+/* Placeholder unificado: slate-400 (#94a3b8) en todos los inputs y textareas.
+   Aplica tanto a rx.el.input como a rx.input (RadixUI), donde class_name
+   no llega al <input> real y Tailwind placeholder-* no tiene efecto. */
+input::placeholder,
+textarea::placeholder {
+    color: rgb(148 163 184);
+    opacity: 1;
+}
+
 * {
     -webkit-tap-highlight-color: transparent;
 }

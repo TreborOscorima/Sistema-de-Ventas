@@ -174,7 +174,7 @@ _INPUT_BASE = f"w-full h-10 px-3 text-sm bg-white border border-slate-200 {RADIU
 
 INPUT_STYLES = {
     "default": _INPUT_BASE,
-    "disabled": f"w-full h-10 px-3 text-sm border border-slate-200 {RADIUS['md']} bg-slate-50 text-slate-500 cursor-not-allowed",
+    "disabled": f"w-full h-10 px-3 text-sm border border-slate-200 {RADIUS['md']} bg-slate-50 text-slate-500 placeholder-slate-400 cursor-not-allowed",
     "search": f"{_INPUT_BASE} pl-10",  # Espacio para icono de búsqueda
     "error": f"w-full h-10 px-3 text-sm border-2 border-red-300 {RADIUS['md']} {TRANSITIONS['fast']} focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 bg-red-50",
 }
