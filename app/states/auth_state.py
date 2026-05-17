@@ -2154,6 +2154,9 @@ class AuthState(MixinState):
         self.token = ""
         self.refresh_token = ""
         self.is_login_loading = False
+        self.selected_branch_id = ""
+        self.available_branches = []
+        self.active_branch_name = ""
         self.password_change_error = ""
         self.invalidate_user_cache()
         if hasattr(self, "cashbox_is_open_cached"):

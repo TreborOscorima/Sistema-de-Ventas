@@ -516,6 +516,10 @@ class State(RootState):
             # Forzar sidebar abierto para mostrar contenido guest
             self.sidebar_open = True
             yield
+            # Race condition: on_load disparó antes de que LocalStorage sincronizara
+            # el token. Agenda un reintento diferido; si para entonces el token ya
+            # llegó al servidor, carga el runtime correctamente.
+            yield State.deferred_branch_refresh
             return
         await self._do_runtime_refresh()
         self.sync_page_from_route()
@@ -528,6 +532,25 @@ class State(RootState):
         # del on_mount del componente (frágil tras rx.redirect por branch switch).
         if hasattr(self, "load_dashboard_background"):
             yield State.load_dashboard_background
+
+    @rx.event
+    async def deferred_branch_refresh(self):
+        """Reintento de runtime cache para cubrir race condition de hidratación.
+
+        Se agenda desde page_init_default cuando on_load disparó antes de que
+        LocalStorage sincronizara el token. Si el token ya está disponible al
+        momento de ejecutar este evento, carga las sucursales y redirige
+        correctamente. Si no, no hace nada (usuario genuinamente no autenticado).
+        """
+        if not self.is_authenticated:
+            return
+        if getattr(self, "available_branches", None):
+            return  # ya cargadas por otro camino
+        await self._do_runtime_refresh(force=True)
+        self.sync_page_from_route()
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
 
     @rx.event
     async def page_init_ingreso(self):
