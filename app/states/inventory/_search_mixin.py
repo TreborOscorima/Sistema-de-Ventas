@@ -11,7 +11,7 @@ from app.models import (
     ProductKit,
     Category,
 )
-from app.utils.tenant import set_tenant_context
+from app.utils.tenant import set_tenant_context, tenant_bypass
 from app.utils.sanitization import escape_like
 
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -32,59 +32,61 @@ class SearchMixin:
             self.categories = ["GENERAL"]
             self._categories_loaded_once = True
             return
-        with rx.session() as session:
-            cats = session.exec(
-                select(Category)
-                .where(Category.company_id == company_id)
-                .where(Category.branch_id == branch_id)
-                .order_by(Category.name)
-            ).all()
-            # Normalize existing Category records to uppercase, merging duplicates
-            seen: dict[str, int] = {}  # uppercased name → first id seen
-            for c in cats:
-                upped = c.name.strip().upper()
-                if upped in seen:
-                    # Duplicate: reassign products and delete the extra row
-                    session.execute(
-                        sa_update(Product)
-                        .where(Product.company_id == company_id)
-                        .where(Product.branch_id == branch_id)
-                        .where(Product.category == c.name)
-                        .values(category=upped)
-                    )
-                    session.delete(c)
-                else:
-                    seen[upped] = c.id
-                    if c.name != upped:
-                        c.name = upped
-                        session.add(c)
-            session.flush()
-            names = list(seen.keys())
-            # Normalize Product.category to uppercase in bulk
-            session.execute(
-                sa_update(Product)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-                .where(Product.category.is_not(None))
-                .values(category=func.upper(func.trim(Product.category)))
-            )
-            session.commit()
-            # Include categories stored directly on products (may not be in Category table)
-            product_cats = session.exec(
-                select(Product.category)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-                .where(Product.category.is_not(None))
-                .distinct()
-            ).all()
-            for cat in product_cats:
-                if cat and cat not in names:
-                    names.append(cat)
-            names = sorted(set(names))
-            if "GENERAL" not in names:
-                names.insert(0, "GENERAL")
-            self.categories = names
-            self._categories_loaded_once = True
+        # tenant_bypass: los WHERE explícitos ya aíslan el tenant; evita race de ContextVar.
+        with tenant_bypass():
+            with rx.session() as session:
+                cats = session.exec(
+                    select(Category)
+                    .where(Category.company_id == company_id)
+                    .where(Category.branch_id == branch_id)
+                    .order_by(Category.name)
+                ).all()
+                # Normalize existing Category records to uppercase, merging duplicates
+                seen: dict[str, int] = {}  # uppercased name → first id seen
+                for c in cats:
+                    upped = c.name.strip().upper()
+                    if upped in seen:
+                        # Duplicate: reassign products and delete the extra row
+                        session.execute(
+                            sa_update(Product)
+                            .where(Product.company_id == company_id)
+                            .where(Product.branch_id == branch_id)
+                            .where(Product.category == c.name)
+                            .values(category=upped)
+                        )
+                        session.delete(c)
+                    else:
+                        seen[upped] = c.id
+                        if c.name != upped:
+                            c.name = upped
+                            session.add(c)
+                session.flush()
+                names = list(seen.keys())
+                # Normalize Product.category to uppercase in bulk
+                session.execute(
+                    sa_update(Product)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(Product.category.is_not(None))
+                    .values(category=func.upper(func.trim(Product.category)))
+                )
+                session.commit()
+                # Include categories stored directly on products (may not be in Category table)
+                product_cats = session.exec(
+                    select(Product.category)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(Product.category.is_not(None))
+                    .distinct()
+                ).all()
+                for cat in product_cats:
+                    if cat and cat not in names:
+                        names.append(cat)
+                names = sorted(set(names))
+                if "GENERAL" not in names:
+                    names.insert(0, "GENERAL")
+                self.categories = names
+                self._categories_loaded_once = True
 
     def _inventory_search_clause(self, search: str, company_id: int, branch_id: int):
         term = f"%{escape_like(search)}%"
@@ -372,6 +374,9 @@ class SearchMixin:
         page = max(self.inventory_current_page, 1)
 
         with rx.session() as session:
+            # tenant_bypass por sesión: WHERE explícitos garantizan aislamiento;
+            # evita race de ContextVar que aplica company_id de otro tenant.
+            session.info["tenant_bypass"] = True
             if search:
                 total_items = self._inventory_search_count(
                     session, search, company_id, branch_id

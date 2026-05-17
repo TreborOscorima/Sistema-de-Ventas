@@ -1038,32 +1038,34 @@ class AuthState(MixinState):
         if not company_id:
             self.users_list = []
             return
-        # Refuerza el contexto tenant para evitar errores en background/write queue.
         set_tenant_context(company_id, None)
-        with rx.session() as session:
-            users = session.exec(
-                select(UserModel)
-                .where(UserModel.company_id == company_id)
-                .where(UserModel.is_active == True)
-                .options(selectinload(UserModel.role).selectinload(Role.permissions))
-                .execution_options(tenant_company_id=company_id)
-            ).all()
-            self._load_roles_cache(session, company_id=company_id)
-            normalized_users = []
-            for user in users:
-                role_name = user.role.name if user.role else MSG.FALLBACK_NO_ROLE
-                normalized_users.append({
-                    "id": user.id,
-                    "company_id": getattr(user, "company_id", None),
-                    "username": user.username,
-                    "email": getattr(user, "email", "") or "",
-                    "role": role_name,
-                    "privileges": self._get_privileges_dict(user),
-                    "must_change_password": bool(
-                        getattr(user, "must_change_password", False)
-                    ),
-                })
-            self.users_list = sorted(normalized_users, key=lambda u: u["username"])
+        # tenant_bypass: los WHERE explícitos (company_id==company_id) ya aíslan el tenant.
+        # with_loader_criteria puede recibir el cid de otro cliente vía race de ContextVar.
+        with tenant_bypass():
+            with rx.session() as session:
+                users = session.exec(
+                    select(UserModel)
+                    .where(UserModel.company_id == company_id)
+                    .where(UserModel.is_active == True)
+                    .options(selectinload(UserModel.role).selectinload(Role.permissions))
+                ).all()
+                self._load_roles_cache(session, company_id=company_id)
+                # Leer atributos ORM mientras la sesión está abierta
+                normalized_users = []
+                for user in users:
+                    role_name = user.role.name if user.role else MSG.FALLBACK_NO_ROLE
+                    normalized_users.append({
+                        "id": user.id,
+                        "company_id": getattr(user, "company_id", None),
+                        "username": user.username,
+                        "email": getattr(user, "email", "") or "",
+                        "role": role_name,
+                        "privileges": self._get_privileges_dict(user),
+                        "must_change_password": bool(
+                            getattr(user, "must_change_password", False)
+                        ),
+                    })
+                self.users_list = sorted(normalized_users, key=lambda u: u["username"])
 
     def _guest_user(self) -> User:
         return {

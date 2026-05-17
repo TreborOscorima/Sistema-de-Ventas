@@ -86,6 +86,7 @@ class SessionMixin:
             return session_data
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True  # WHERE explícitos garantizan aislamiento
             cashbox_session = session.exec(
                 select(CashboxSessionModel)
                 .where(CashboxSessionModel.user_id == user_id)
