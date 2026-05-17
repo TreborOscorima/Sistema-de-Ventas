@@ -297,7 +297,7 @@ class ServicesState(MixinState):
         pm_name = (payment_label or "").strip().lower()
         if not pm_name:
             return None
-        for m in (self.payment_methods or []):
+        for m in (getattr(self, "payment_methods", None) or []):
             if (m.get("name") or "").strip().lower() == pm_name:
                 pk = m.get("pk")
                 return int(pk) if pk is not None else None
@@ -2056,7 +2056,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             allocations = self._build_reservation_payments(applied_amount)
             _pm_label_1 = (getattr(self, "payment_method", "") or "").strip()
             _pm_id_other_1 = self._resolve_pm_id_for_other(_pm_label_1)
-            if _pm_id_other_1 is None and _pm_label_1:
+            _needs_other_pm_1 = any(mt == PaymentMethodType.other for mt, _ in allocations)
+            if _pm_id_other_1 is None and _pm_label_1 and _needs_other_pm_1:
                 _pm_row_1 = session.exec(
                     select(PaymentMethod)
                     .where(PaymentMethod.company_id == company_id)
@@ -2219,7 +2220,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 
             _pm_label_2 = (getattr(self, "payment_method", "") or "").strip()
             _pm_id_other_2 = self._resolve_pm_id_for_other(_pm_label_2)
-            if _pm_id_other_2 is None and _pm_label_2:
+            if _pm_id_other_2 is None and _pm_label_2 and kind == "other":
                 _pm_row_2 = session.exec(
                     select(PaymentMethod)
                     .where(PaymentMethod.company_id == company_id)

@@ -77,6 +77,7 @@ def test_load_config_data_filters_legacy_credit_sale_method(monkeypatch):
             [],
             [
                 SimpleNamespace(
+                    id=1,
                     method_id="cash",
                     code="cash",
                     name="Efectivo",
@@ -85,6 +86,7 @@ def test_load_config_data_filters_legacy_credit_sale_method(monkeypatch):
                     enabled=True,
                 ),
                 SimpleNamespace(
+                    id=2,
                     method_id="credit_sale",
                     code="credit_sale",
                     name="Crédito / Fiado",
