@@ -123,6 +123,7 @@ class PettyCashMixin:
 
         with rx.session() as session:
 
+            session.info["tenant_bypass"] = True
             log = CashboxLogModel(
                 company_id=company_id,
                 branch_id=branch_id,
@@ -179,12 +180,14 @@ class PettyCashMixin:
         statement = statement.where(CashboxLogModel.company_id == company_id)
         statement = statement.where(CashboxLogModel.branch_id == branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             return session.exec(statement).one()
 
     def _fetch_petty_cash(
         self, offset: int | None = None, limit: int | None = None
     ) -> List[CashboxLogEntry]:
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             statement = self._petty_cash_query()
             if offset is not None:
                 statement = statement.offset(offset)

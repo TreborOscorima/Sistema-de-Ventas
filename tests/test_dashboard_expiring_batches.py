@@ -57,6 +57,7 @@ class _FakeSession:
 
     def __init__(self, results: list[_ExecResult]):
         self._results = list(results)
+        self.info = {}
         self._executed = 0
 
     def exec(self, statement):
@@ -304,6 +305,7 @@ class _AlertSession:
 
     def __init__(self, results):
         self._results = list(results)
+        self.info = {}
 
     def exec(self, statement):
         return self._results.pop(0) if self._results else _ExecResult(scalar=0)

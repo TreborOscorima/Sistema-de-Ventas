@@ -24,6 +24,7 @@ class ExecResult:
 class FakeSession:
     def __init__(self, exec_results):
         self.exec_results = exec_results
+        self.info = {}
         self.exec_calls = []
         self.added = []
         self.commit = Mock()

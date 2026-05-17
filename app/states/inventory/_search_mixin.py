@@ -35,6 +35,7 @@ class SearchMixin:
         # tenant_bypass: los WHERE explícitos ya aíslan el tenant; evita race de ContextVar.
         with tenant_bypass():
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 cats = session.exec(
                     select(Category)
                     .where(Category.company_id == company_id)
@@ -495,6 +496,7 @@ class SearchMixin:
         if not company_id or not branch_id:
             return self.add_notification("Empresa no definida.", "error")
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             product = session.exec(
                 select(Product)
                 .where(Product.id == product_id)
@@ -541,6 +543,7 @@ class SearchMixin:
 
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 existing = session.exec(
                     select(Category)
                     .where(Category.name == name)
@@ -588,6 +591,7 @@ class SearchMixin:
 
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 cat = session.exec(
                     select(Category)
                     .where(Category.name == category)

@@ -65,6 +65,7 @@ class _SequentialSession:
 
     def __init__(self, responses):
         self._responses = list(responses)
+        self.info = {}
 
     def exec(self, statement):
         if not self._responses:

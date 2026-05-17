@@ -296,6 +296,7 @@ class AdjustmentMixin:
         code = clean_barcode(term)
         if validate_barcode(code):
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 product, variant = self._find_adjustment_product(
                     session, code, "", None, None
                 )
@@ -314,6 +315,7 @@ class AdjustmentMixin:
             self.inventory_adjustment_suggestions = []
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             search = f"%{escape_like(search_term)}%"
             products = session.exec(
                 select(Product)
@@ -390,6 +392,7 @@ class AdjustmentMixin:
         code = clean_barcode(description)
         barcode = code if validate_barcode(code) else ""
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             product, variant = self._find_adjustment_product(
                 session,
                 barcode,
@@ -430,6 +433,7 @@ class AdjustmentMixin:
             return rx.toast("Empresa no definida.", duration=3000)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             if description and not barcode:
                 duplicate_count = session.exec(
                     select(func.count(Product.id))
@@ -561,6 +565,7 @@ class AdjustmentMixin:
                         return default
 
                 with rx.session() as session:
+                    session.info["tenant_bypass"] = True
                     products_to_recalculate: set[int] = set()
                     products_recalc_batches: set[int] = set()
                     variants_recalc_batches: set[int] = set()

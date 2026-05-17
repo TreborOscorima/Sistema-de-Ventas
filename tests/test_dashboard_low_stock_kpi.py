@@ -46,6 +46,7 @@ class _SequentialKpiSession:
 
     def __init__(self, scalars):
         self._scalars = list(scalars)
+        self.info = {}
 
     def exec(self, statement):
         if not self._scalars:
@@ -145,6 +146,8 @@ class TestLoadKpisLowStockCount:
         captured: list[str] = []
 
         class _CaptureSession:
+            info: dict = {}
+
             def exec(self, statement):
                 captured.append(str(statement))
                 return _ExecResult(scalar=0)

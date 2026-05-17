@@ -168,6 +168,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             return
         from app.models.price_lists import PriceList
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             clients = session.exec(
                 select(Client)
                 .where(
@@ -263,6 +264,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             config = None
             if company_id:
                 with rx.session() as session:
+                    session.info["tenant_bypass"] = True
                     config = session.exec(
                         select(CompanyBillingConfig)
                         .where(CompanyBillingConfig.company_id == company_id)
@@ -273,6 +275,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
 
             # ── Consultar caché local ────────────────────────────
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 cache_stmt = select(DocumentLookupCache).where(
                     DocumentLookupCache.doc_number == doc_number,
                     DocumentLookupCache.country == country_code,
@@ -357,6 +360,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 # ── Guardar en caché ─────────────────────────────
                 try:
                     with rx.session() as session:
+                        session.info["tenant_bypass"] = True
                         existing = session.exec(
                             select(DocumentLookupCache).where(
                                 DocumentLookupCache.doc_number == doc_number,
@@ -404,6 +408,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 # Cache negativo (not_found)
                 try:
                     with rx.session() as session:
+                        session.info["tenant_bypass"] = True
                         existing = session.exec(
                             select(DocumentLookupCache).where(
                                 DocumentLookupCache.doc_number == doc_number,
@@ -704,6 +709,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             if receipt_type and not _sale_receipt_type_db:
                 try:
                     with rx.session() as sess:
+                        sess.info["tenant_bypass"] = True
                         from sqlmodel import select as sel_
                         from app.models.sales import Sale as Sale_
                         sale_obj = sess.exec(

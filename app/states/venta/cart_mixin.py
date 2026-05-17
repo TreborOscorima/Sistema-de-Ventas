@@ -1611,6 +1611,7 @@ class CartMixin:
         now = self._display_now().replace(tzinfo=None)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             promo = session.exec(
                 select(Promotion)
                 .where(Promotion.company_id == company_id)

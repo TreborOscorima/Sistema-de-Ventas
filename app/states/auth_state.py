@@ -356,6 +356,7 @@ class AuthState(MixinState):
             user_id = None
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             user = None
             query = (
                 select(UserModel)
@@ -587,6 +588,7 @@ class AuthState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             company = session.exec(
                 select(Company).where(Company.id == company_id)
             ).first()
@@ -651,6 +653,7 @@ class AuthState(MixinState):
             self.payment_alert_info = default
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             company = session.exec(
                 select(Company).where(Company.id == company_id)
             ).first()
@@ -717,6 +720,7 @@ class AuthState(MixinState):
         # entre tasks asyncio) → usar bypass para esta lectura interna de confianza.
         with tenant_bypass():
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 user = session.exec(
                     select(UserModel)
                     .where(UserModel.id == user_id)
@@ -800,6 +804,7 @@ class AuthState(MixinState):
 
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 company = session.exec(
                     select(Company).where(Company.id == company_id)
                 ).first()
@@ -1043,6 +1048,7 @@ class AuthState(MixinState):
         # with_loader_criteria puede recibir el cid de otro cliente vía race de ContextVar.
         with tenant_bypass():
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 users = session.exec(
                     select(UserModel)
                     .where(UserModel.company_id == company_id)
@@ -1396,6 +1402,7 @@ class AuthState(MixinState):
         company_id = self._company_id()
         with tenant_bypass():
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 self._bootstrap_default_roles(session, company_id)
                 session.commit()
                 user_count = session.exec(select(func.count(UserModel.id))).one()
@@ -1596,6 +1603,7 @@ class AuthState(MixinState):
                 company_id = self.current_user.get("company_id")
                 if company_id:
                     with rx.session() as session:
+                        session.info["tenant_bypass"] = True
                         company = session.exec(
                             select(Company).where(Company.id == company_id)
                         ).first()
@@ -1619,6 +1627,7 @@ class AuthState(MixinState):
             company_id = self.current_user.get("company_id")
             if company_id:
                 with rx.session() as session:
+                    session.info["tenant_bypass"] = True
                     company = session.exec(
                         select(Company).where(Company.id == company_id)
                     ).first()
@@ -1691,6 +1700,7 @@ class AuthState(MixinState):
         except (TypeError, ValueError):
             return rx.toast(MSG.AUTH_BRANCH_INVALID, duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             allowed = session.exec(
                 select(UserBranch)
                 .join(Branch, Branch.id == UserBranch.branch_id)
@@ -1853,6 +1863,7 @@ class AuthState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             admin_user = session.exec(
                 select(UserModel)
                 .where(UserModel.username == "admin")
@@ -2126,6 +2137,7 @@ class AuthState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             user = session.exec(
                 select(UserModel)
                 .where(UserModel.id == user_id)
@@ -2160,6 +2172,7 @@ class AuthState(MixinState):
             try:
                 from app.models.sales import CashboxSession as _CashboxSession
                 with rx.session() as _sess:
+                    _sess.info["tenant_bypass"] = True
                     orphan = _sess.exec(
                         select(_CashboxSession).where(
                             _CashboxSession.user_id == user_id,
@@ -2240,6 +2253,7 @@ class AuthState(MixinState):
         set_tenant_context(company_id, None)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             user = session.exec(
                 select(UserModel)
                 .where(UserModel.username == key)
@@ -2330,6 +2344,7 @@ class AuthState(MixinState):
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
         set_tenant_context(company_id, None)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             if self._get_role_by_name(session, name, company_id=company_id):
                 return rx.toast("Ese rol ya existe.", duration=3000)
             self._ensure_role(
@@ -2366,6 +2381,7 @@ class AuthState(MixinState):
         privileges = self._normalize_privileges(self.new_user_data["privileges"])
         set_tenant_context(company_id, None)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             self._ensure_role(
                 session,
                 role,
@@ -2414,6 +2430,7 @@ class AuthState(MixinState):
         # Gestión de usuarios: alcance por empresa (sin filtrar por sucursal actual).
         set_tenant_context(company_id, None)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             role = self._get_role_by_name(
                 session,
                 role_name,
@@ -2606,6 +2623,7 @@ class AuthState(MixinState):
         # Eliminación de usuarios: alcance por empresa (sin filtrar por sucursal actual).
         set_tenant_context(company_id, None)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             user = session.exec(
                 select(UserModel)
                 .where(UserModel.username == username)

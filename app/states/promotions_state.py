@@ -125,6 +125,7 @@ class PromotionsState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             stmt = (
                 select(Promotion)
                 .where(Promotion.company_id == company_id)
@@ -229,6 +230,7 @@ class PromotionsState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             stmt = (
                 select(Product.category)
                 .where(Product.company_id == company_id)
@@ -250,6 +252,7 @@ class PromotionsState(MixinState):
         set_tenant_context(company_id, branch_id)
         products: list[dict[str, Any]] = []
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Productos base
             stmt = (
                 select(Product.id, Product.description, Product.barcode, Product.category)
@@ -500,6 +503,7 @@ class PromotionsState(MixinState):
             from app.utils.tenant import set_tenant_context
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 if self.promo_editing_id:
                     promo = session.exec(
                         select(Promotion).where(Promotion.id == self.promo_editing_id)
@@ -702,6 +706,7 @@ class PromotionsState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             promo = session.exec(select(Promotion).where(Promotion.id == promo_id)).first()
             if promo:
                 promo.is_active = new_active

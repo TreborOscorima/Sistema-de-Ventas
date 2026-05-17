@@ -76,6 +76,7 @@ class BillingState(MixinState):
             self.billing_is_active = False
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             config = session.exec(
                 select(CompanyBillingConfig.is_active)
                 .where(CompanyBillingConfig.company_id == company_id)
@@ -91,6 +92,7 @@ class BillingState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             config = session.exec(
                 select(CompanyBillingConfig)
                 .where(CompanyBillingConfig.company_id == company_id)
@@ -190,6 +192,7 @@ class BillingState(MixinState):
 
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 config = session.exec(
                     select(CompanyBillingConfig)
                     .where(CompanyBillingConfig.company_id == company_id)
@@ -241,6 +244,7 @@ class BillingState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             config = session.exec(
                 select(CompanyBillingConfig)
                 .where(CompanyBillingConfig.company_id == company_id)
@@ -310,6 +314,7 @@ class BillingState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             config = session.exec(
                 select(CompanyBillingConfig)
                 .where(CompanyBillingConfig.company_id == company_id)
@@ -359,6 +364,7 @@ class BillingState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             config = session.exec(
                 select(CompanyBillingConfig)
                 .where(CompanyBillingConfig.company_id == company_id)
@@ -397,6 +403,7 @@ class BillingState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             config = session.exec(
                 select(CompanyBillingConfig)
                 .where(CompanyBillingConfig.company_id == company_id)
@@ -439,6 +446,7 @@ class BillingState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             docs = session.exec(
                 select(FiscalDocument)
                 .where(FiscalDocument.company_id == company_id)
@@ -558,6 +566,7 @@ class BillingState(MixinState):
         self.fiscal_docs_loading = True
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 # ── Base query ────────────────────────────────────────
                 conditions = [FiscalDocument.company_id == company_id]
 
@@ -821,6 +830,7 @@ class BillingState(MixinState):
             orig_id: int | None = None
 
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 original = session.exec(
                     select(FiscalDocument).where(
                         FiscalDocument.id == int(fiscal_doc_id),

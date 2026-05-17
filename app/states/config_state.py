@@ -153,6 +153,7 @@ class ConfigState(MixinState):
         company_id = self._company_id()
         branch_id = self._branch_id()
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Cargar moneda y país activos desde CompanySettings (necesario para
             # que currency_symbol sea correcto en todos los módulos, no solo /configuracion)
             if company_id:
@@ -254,6 +255,7 @@ class ConfigState(MixinState):
             self.company_form_key += 1
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             settings = None
             settings_stmt = select(CompanySettings).where(
                 CompanySettings.company_id == company_id
@@ -397,6 +399,7 @@ class ConfigState(MixinState):
         new_currency = country_info["currency"]
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Actualizar CompanySettings
             settings_list = session.exec(
                 select(CompanySettings)
@@ -539,6 +542,7 @@ class ConfigState(MixinState):
         if not company_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             settings_list = session.exec(
                 select(CompanySettings)
                 .where(CompanySettings.company_id == company_id)
@@ -681,6 +685,7 @@ class ConfigState(MixinState):
         from app.models.inventory import Product
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             all_settings = session.exec(
                 select(CompanySettings)
                 .where(CompanySettings.company_id == company_id)
@@ -763,6 +768,7 @@ class ConfigState(MixinState):
             return rx.toast("Empresa no definida.", duration=3000)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             existing = session.exec(
                 select(Unit)
                 .where(Unit.name == name)
@@ -798,6 +804,7 @@ class ConfigState(MixinState):
         if not company_id or not branch_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             unit = session.exec(
                 select(Unit)
                 .where(Unit.name == unit_name)
@@ -820,6 +827,7 @@ class ConfigState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             unit = session.exec(
                 select(Unit)
                 .where(Unit.name == unit_name)
@@ -850,6 +858,7 @@ class ConfigState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # ── Unidades (universales) ──
             unit_defaults = ["unidad", "pieza", "kg", "g", "l", "ml", "m", "cm", "paquete", "caja", "docena", "bolsa", "botella", "lata"]
             decimals = {"kg", "g", "l", "ml", "m", "cm"}
@@ -966,6 +975,7 @@ class ConfigState(MixinState):
             return rx.toast("Empresa no definida.", duration=3000)
         # Persistir la moneda globalmente en todas las filas de la empresa
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             settings_list = session.exec(
                 select(CompanySettings)
                 .where(CompanySettings.company_id == company_id)
@@ -1017,6 +1027,7 @@ class ConfigState(MixinState):
             return rx.toast("La moneda ya existe.", duration=3000)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             new_currency = Currency(code=code, name=name, symbol=symbol)
             session.add(new_currency)
             session.commit()
@@ -1045,6 +1056,7 @@ class ConfigState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             currency_db = session.exec(select(Currency).where(Currency.code == code)).first()
             if currency_db:
                 session.delete(currency_db)
@@ -1094,6 +1106,7 @@ class ConfigState(MixinState):
             return rx.toast("Empresa no definida.", duration=3000)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             existing_unit = session.exec(
                 select(Unit)
                 .where(Unit.name == name)
@@ -1132,6 +1145,7 @@ class ConfigState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             unit_db = session.exec(
                 select(Unit)
                 .where(Unit.name == unit)
@@ -1249,6 +1263,7 @@ class ConfigState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             new_method = PaymentMethod(
                 method_id=method_id,
                 code=method_id,
@@ -1302,6 +1317,7 @@ class ConfigState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             method_db = session.exec(
                 select(PaymentMethod)
                 .where(PaymentMethod.method_id == method_id)
@@ -1333,6 +1349,7 @@ class ConfigState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             method_db = session.exec(
                 select(PaymentMethod)
                 .where(PaymentMethod.method_id == method_id)

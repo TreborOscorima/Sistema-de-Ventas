@@ -345,6 +345,7 @@ class OwnerState:
         # Buscar al platform owner en la BD para auditoría
         owner_user_id = 0
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             owner_user = session.exec(
                 select(UserModel)
                 .where(UserModel.is_platform_owner == True)  # noqa: E712

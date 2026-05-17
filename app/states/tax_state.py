@@ -115,6 +115,7 @@ class TaxConfigState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             rates = tax_service.get_company_tax_rates(company_id, session)
             self.tax_rates = [
                 {
@@ -148,6 +149,7 @@ class TaxConfigState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             settings_list = session.exec(
                 select(CompanySettings).where(
                     CompanySettings.company_id == company_id
@@ -228,6 +230,7 @@ class TaxConfigState(MixinState):
 
         rate_id = self.editing_rate_id if self.editing_rate_id != -1 else None
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             tax_service.upsert_tax_rate(
                 company_id=company_id,
                 tax_name=tax_name,
@@ -270,6 +273,7 @@ class TaxConfigState(MixinState):
                 "No se puede eliminar la última tasa activa.", duration=3500
             )
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             tax_service.delete_tax_rate(rate_id, company_id, session)
             session.commit()
         self.delete_confirm_open = False
@@ -288,6 +292,7 @@ class TaxConfigState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             tax_service.set_default_rate(rate_id, company_id, session)
             session.commit()
         self.load_tax_config()
@@ -304,6 +309,7 @@ class TaxConfigState(MixinState):
             return
         code = (country_code or "PE").upper()
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             tax_service.initialize_country_defaults(company_id, code, session)
             session.commit()
         self.load_tax_config()

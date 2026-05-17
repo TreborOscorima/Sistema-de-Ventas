@@ -68,12 +68,14 @@ class HistoryMixin:
         )
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             return session.exec(statement).one()
 
     def _fetch_cashbox_logs(
         self, offset: int | None = None, limit: int | None = None
     ) -> list[CashboxLogEntry]:
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             statement = self._cashbox_logs_query()
             if offset is not None:
                 statement = statement.offset(offset)
@@ -304,6 +306,7 @@ class HistoryMixin:
             query = query.where(~advance_exists)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             return session.exec(query).one()
 
     def _payment_method_key(self, method_type: Any) -> str:
@@ -526,6 +529,7 @@ class HistoryMixin:
         # sale_id IN (...) garantiza aislamiento sin necesitar el listener.
         with tenant_bypass():
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 query = self._cashbox_sales_query()
                 if offset is not None:
                     query = query.offset(offset)

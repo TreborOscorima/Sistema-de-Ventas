@@ -263,6 +263,7 @@ class DashboardState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Ventas de hoy
             today_result = session.exec(
                 select(
@@ -425,6 +426,7 @@ class DashboardState(MixinState):
             self.low_stock_count = 0
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Total de clientes
             self.total_clients = session.exec(
                 select(func.count())
@@ -539,6 +541,7 @@ class DashboardState(MixinState):
         end_date = self._company_local_datetime_to_utc_naive(end_local)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             results = session.exec(
                 select(
                     Sale.timestamp,
@@ -589,6 +592,7 @@ class DashboardState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             results = session.exec(
                 select(
                     Product.description,
@@ -645,6 +649,7 @@ class DashboardState(MixinState):
         threshold = now + timedelta(days=BATCH_EXPIRING_DAYS)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Lote + producto + variante (LEFT JOIN sobre variante porque
             # un lote puede pertenecer al producto raíz o a una variante).
             base_filters = and_(
@@ -759,6 +764,7 @@ class DashboardState(MixinState):
             return []
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             category_expr = func.coalesce(
                 func.nullif(func.trim(SaleItem.product_category_snapshot), ""),
                 Product.category,
@@ -814,6 +820,7 @@ class DashboardState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             results = session.exec(
                 select(
                     CashboxLog.action,
@@ -937,6 +944,7 @@ class DashboardState(MixinState):
         discount_by_cat: dict[str, float] = {}
         if company_id and branch_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 category_expr = func.coalesce(
                     func.nullif(func.trim(SaleItem.product_category_snapshot), ""),
                     Product.category,

@@ -266,6 +266,7 @@ class CloseMixin:
         user_id = self.current_user.get("id")
         if user_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 try:
                     # Cerrar sesion
                     cashbox_session = session.exec(
@@ -504,6 +505,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             return []
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             statement = (
                 select(CashboxLogModel, UserModel.username)
                 .join(UserModel, isouter=True)
@@ -596,6 +598,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         )
         summary: list[dict] = []
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             results = session.exec(statement).all()
         for method, count, amount in results:
             label = (method or MSG.FALLBACK_NOT_SPECIFIED).strip() or MSG.FALLBACK_NOT_SPECIFIED
@@ -670,6 +673,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             payment_label = self._payment_method_label(method_kind)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             timestamp = self._event_timestamp()
             # Crear venta por adelanto
             new_sale = Sale(

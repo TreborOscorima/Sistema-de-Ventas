@@ -93,6 +93,7 @@ class FakeSession:
     """Session mock async para tests del servicio."""
     def __init__(self):
         self.exec = AsyncMock()
+        self.info = {}
         self.get = AsyncMock()
         self.added = []
         self.add = Mock(side_effect=lambda obj: self.added.append(obj))

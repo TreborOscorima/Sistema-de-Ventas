@@ -21,6 +21,7 @@ class ExecResult:
 class FakeSession:
     def __init__(self, results):
         self.results = results
+        self.info = {}
         self.statement = None
 
     def exec(self, statement):

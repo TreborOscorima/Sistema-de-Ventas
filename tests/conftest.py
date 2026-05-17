@@ -67,6 +67,7 @@ class FakeAsyncSession:
         # StopAsyncIteration. Así los tests no se rompen cuando el código agrega
         # queries nuevas (ej. promociones, listas de precios por cliente).
         self.exec = _QueueingExecMock()
+        self.info = {}
         self.get = AsyncMock()
         self.added = []
         self.add = Mock(side_effect=self._add)

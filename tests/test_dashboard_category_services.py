@@ -17,6 +17,7 @@ class _ExecResult:
 class _FakeSession:
     def __init__(self, rows, capture: dict):
         self._rows = rows
+        self.info = {}
         self._capture = capture
 
     def exec(self, statement):

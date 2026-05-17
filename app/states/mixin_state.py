@@ -229,6 +229,7 @@ class MixinState:
         company_id, branch_id = self._tenant_ids()
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             yield session
 
     def _require_active_subscription(self):
@@ -429,6 +430,7 @@ class MixinState:
         try:
             from app.models.taxes import CompanyTaxRate
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 settings_stmt = select(CompanySettings).where(
                     CompanySettings.company_id == company_id
                 )

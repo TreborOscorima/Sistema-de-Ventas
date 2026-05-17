@@ -132,6 +132,7 @@ class PurchasesState(MixinState):
         page = max(self.purchase_current_page, 1)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             count_query = select(func.count(Purchase.id)).select_from(Purchase).join(
                 Supplier, isouter=True
             )
@@ -260,6 +261,7 @@ class PurchasesState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             purchase = session.exec(
                 select(Purchase)
                 .where(Purchase.id == purchase_id)
@@ -336,6 +338,7 @@ class PurchasesState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             purchase = session.exec(
                 select(Purchase)
                 .where(Purchase.id == purchase_id)
@@ -393,6 +396,7 @@ class PurchasesState(MixinState):
             self.purchase_edit_supplier_suggestions = []
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             suppliers = session.exec(
                 select(Supplier)
                 .where(
@@ -483,6 +487,7 @@ class PurchasesState(MixinState):
 
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 existing = session.exec(
                     select(Purchase).where(
                         Purchase.company_id == company_id,
@@ -542,6 +547,7 @@ class PurchasesState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             purchase = session.exec(
                 select(Purchase)
                 .where(Purchase.id == purchase_id)
@@ -588,6 +594,7 @@ class PurchasesState(MixinState):
             return rx.toast("Empresa no definida.", duration=3000)
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 purchase = session.exec(
                     select(Purchase)
                     .where(Purchase.id == purchase_id)

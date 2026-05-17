@@ -240,6 +240,7 @@ class ReportState(MixinState):
                 end_date = dates[1]
 
                 with rx.session() as session:
+                    session.info["tenant_bypass"] = True
                     country_code, timezone = self._company_time_context()
                     if MAX_REPORT_ROWS > 0:
                         if self.report_type == "ventas":

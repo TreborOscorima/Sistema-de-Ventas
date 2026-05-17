@@ -385,6 +385,7 @@ class ReportsMixin:
         except (TypeError, ValueError):
             return rx.toast(MSG.CASH_CLOSE_INVALID, duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             log = session.exec(
                 select(CashboxLogModel)
                 .where(CashboxLogModel.id == log_id_int)
@@ -405,6 +406,7 @@ class ReportsMixin:
         responsable = ""
         if user_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 user = session.exec(
                     select(UserModel)
                     .where(UserModel.id == user_id)
@@ -528,6 +530,7 @@ class ReportsMixin:
         except (TypeError, ValueError):
             return rx.toast(MSG.CASH_CLOSE_INVALID, duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             log = session.exec(
                 select(CashboxLogModel)
                 .where(CashboxLogModel.id == log_id_int)
@@ -548,6 +551,7 @@ class ReportsMixin:
         responsable = ""
         if user_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 user = session.exec(
                     select(UserModel)
                     .where(UserModel.id == user_id)
@@ -1027,6 +1031,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         sale_data = None
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             try:
                 sale_db_id = int(sale_id)
                 sale = session.exec(

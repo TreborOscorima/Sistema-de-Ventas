@@ -123,6 +123,7 @@ class ReceiptMixin:
         if receipt_id and not use_state:
             # Traer desde BD para reimpresion
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 try:
                     company_id = None
                     branch_id = None

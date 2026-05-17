@@ -34,6 +34,7 @@ class DeleteMixin:
         if not company_id or not branch_id:
             return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             log = session.exec(
                 select(CashboxLogModel)
                 .where(CashboxLogModel.id == int(log_id))
@@ -125,6 +126,7 @@ class DeleteMixin:
             return rx.toast(MSG.VAL_INVALID_SALE_ID, duration=3000)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             sale_db = session.exec(
                 select(Sale)
                 .where(Sale.id == sale_db_id)

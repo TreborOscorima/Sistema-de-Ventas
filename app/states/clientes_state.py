@@ -165,6 +165,7 @@ class ClientesState(MixinState):
             self.available_price_lists = []
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             query = (
                 select(Client)
                 .where(Client.company_id == company_id)
@@ -306,6 +307,7 @@ class ClientesState(MixinState):
         saved = None
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 existing = session.exec(
                     select(Client)
                     .where(Client.dni == dni)
@@ -431,6 +433,7 @@ class ClientesState(MixinState):
         yield
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 client = session.exec(
                     select(Client)
                     .where(Client.id == client_id)
@@ -489,6 +492,7 @@ class ClientesState(MixinState):
             return
         from app.enums import SaleStatus
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             rows = session.exec(
                 select(Sale)
                 .where(Sale.client_id == client_id)

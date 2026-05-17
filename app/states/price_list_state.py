@@ -71,6 +71,7 @@ class PriceListState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             stmt = (
                 select(PriceList)
                 .where(PriceList.company_id == company_id)
@@ -118,6 +119,7 @@ class PriceListState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             stmt = (
                 select(PriceListItem)
                 .where(PriceListItem.price_list_id == price_list_id)
@@ -225,6 +227,7 @@ class PriceListState(MixinState):
             from app.utils.tenant import set_tenant_context
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 if self.pl_editing_id:
                     pl = session.exec(
                         select(PriceList).where(PriceList.id == self.pl_editing_id)
@@ -303,6 +306,7 @@ class PriceListState(MixinState):
         q_lower = query.strip().lower()
         results: list[dict] = []
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Productos base
             stmt = (
                 select(Product)
@@ -394,6 +398,7 @@ class PriceListState(MixinState):
         set_tenant_context(company_id, branch_id)
         variant_id_int = int(self.pl_item_variant_id) if self.pl_item_variant_id else None
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Verificar si ya existe
             existing = session.exec(
                 select(PriceListItem)
@@ -452,6 +457,7 @@ class PriceListState(MixinState):
 
         updated = 0
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             items = session.exec(
                 select(PriceListItem)
                 .where(PriceListItem.price_list_id == pl_id)
@@ -484,6 +490,7 @@ class PriceListState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, self._branch_id())
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             item = session.exec(
                 select(PriceListItem).where(PriceListItem.id == item_id)
             ).first()

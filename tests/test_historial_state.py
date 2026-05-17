@@ -23,6 +23,7 @@ class ExecResult:
 class FakeSession:
     def __init__(self, logs):
         self.logs = logs
+        self.info = {}
         self.last_statement = None
 
     def exec(self, statement):
@@ -33,6 +34,7 @@ class FakeSession:
 class SequencedSession:
     def __init__(self, results):
         self.results = results
+        self.info = {}
         self.calls = 0
         self.statements = []
 

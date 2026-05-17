@@ -186,6 +186,7 @@ class HistorialState(MixinState):
             self.available_category_options = [["Todas", "Todas"]]
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             for name in session.exec(
                 select(Category.name)
                 .where(Category.company_id == company_id)
@@ -280,6 +281,7 @@ class HistorialState(MixinState):
             self.available_report_user_options = [["Todos", "Todos"]]
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             usernames = session.exec(
                 select(User.username).where(User.company_id == company_id)
             ).all()
@@ -383,6 +385,7 @@ class HistorialState(MixinState):
         if not company_id or not branch_id:
             return rows
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             if source_filter in {"Todos", "Ventas"}:
                 payment_query = (
                     select(SalePayment)
@@ -517,6 +520,7 @@ class HistorialState(MixinState):
         if not company_id or not branch_id:
             return rows
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             log_query = (
                 select(CashboxLog, User.username)
                 .join(User, User.id == CashboxLog.user_id, isouter=True)
@@ -894,6 +898,7 @@ class HistorialState(MixinState):
         if not company_id or not branch_id:
             return 0
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             count_query = (
                 select(sa.func.count())
                 .select_from(Sale)
@@ -1144,6 +1149,7 @@ class HistorialState(MixinState):
         pending_total = Decimal("0.00")
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             pm_names = self._load_pm_names(session, company_id, branch_id)
             payment_query = (
                 select(
@@ -1513,6 +1519,7 @@ class HistorialState(MixinState):
         if not company_id or not branch_id:
             return rx.toast(MSG.VAL_COMPANY_UNDEFINED, duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # FIX 38c: add branch_id filter for branch-level isolation
             sale = session.exec(
                 select(Sale)
@@ -1652,6 +1659,7 @@ class HistorialState(MixinState):
         row += 1
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             query = (
                 select(Sale)
                 .where(Sale.status != SaleStatus.cancelled)
@@ -2315,6 +2323,7 @@ class HistorialState(MixinState):
             return rx.toast("ID de venta inválido.", duration=3000)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             sale = session.exec(
                 select(Sale)
                 .options(selectinload(Sale.items))
@@ -2463,6 +2472,7 @@ class HistorialState(MixinState):
         reason = self.return_reason
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             try:
                 result = process_return(
                     session,
@@ -2523,6 +2533,7 @@ class HistorialState(MixinState):
         """
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 # 1. Verificar que la empresa tiene facturación electrónica activa
                 company = session.exec(
                     select(Company).where(Company.id == company_id)
@@ -2647,6 +2658,7 @@ class HistorialState(MixinState):
         start_dt, end_dt = self._returns_date_range()
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             query = (
                 select(SaleReturn)
                 .options(

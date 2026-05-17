@@ -162,6 +162,7 @@ class IngresoState(MixinState):
                         self.entry_autocomplete_active_index = -1
                         return
                     with rx.session() as session:
+                        session.info["tenant_bypass"] = True
                         products = session.exec(
                             select(Product)
                             .where(Product.description.contains(search))
@@ -220,6 +221,7 @@ class IngresoState(MixinState):
             self.purchase_supplier_active_index = -1
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             suppliers = session.exec(
                 select(Supplier)
                 .where(
@@ -376,6 +378,7 @@ class IngresoState(MixinState):
             self.selected_variant_id = ""
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             variants = session.exec(
                 select(ProductVariant)
                 .where(ProductVariant.product_id == product_id)
@@ -739,6 +742,7 @@ class IngresoState(MixinState):
             return rx.toast("Empresa no definida.", duration=3000)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             try:
                 existing_doc = session.exec(
                     select(Purchase).where(
@@ -1226,6 +1230,7 @@ class IngresoState(MixinState):
         if not company_id or not branch_id:
             return None
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             variant = session.exec(
                 select(ProductVariant)
                 .where(ProductVariant.sku == code)
@@ -1304,6 +1309,7 @@ class IngresoState(MixinState):
             self.entry_autocomplete_active_index = -1
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             product = session.exec(
                 select(Product)
                 .where(Product.description == description)

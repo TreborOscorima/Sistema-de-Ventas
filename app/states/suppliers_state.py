@@ -64,6 +64,7 @@ class SuppliersState(MixinState):
             self.suppliers = []
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             query = (
                 select(Supplier)
                 .where(Supplier.company_id == company_id)
@@ -149,6 +150,7 @@ class SuppliersState(MixinState):
             supplier_id = int(supplier_id) if supplier_id.isdigit() else None
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             existing = session.exec(
                 select(Supplier)
                 .where(Supplier.company_id == company_id)
@@ -205,6 +207,7 @@ class SuppliersState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             supplier = session.exec(
                 select(Supplier)
                 .where(Supplier.id == supplier_id)

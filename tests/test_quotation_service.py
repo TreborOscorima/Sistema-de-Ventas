@@ -56,6 +56,7 @@ class _FakeAsyncSession:
     def __init__(self):
         self.added: list = []
         self.add = Mock(side_effect=self._add)
+        self.info = {}
         self.flush = AsyncMock(side_effect=self._flush)
         self.commit = AsyncMock()
         self.rollback = AsyncMock()

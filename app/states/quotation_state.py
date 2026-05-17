@@ -147,6 +147,7 @@ class QuotationState(MixinState):
         set_tenant_context(company_id, branch_id)
         now = utc_now_naive()
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Auto-expirar presupuestos vencidos del tenant antes de listar.
             # Idempotente y barato (UPDATE WHERE status IN draft|sent AND expires_at < now);
             # garantiza que el filtro "Vencidos" muestre lo correcto sin job externo.
@@ -228,6 +229,7 @@ class QuotationState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             stmt = (
                 select(Client)
                 .where(Client.company_id == company_id)
@@ -273,6 +275,7 @@ class QuotationState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             q = session.exec(
                 select(Quotation)
                 .where(Quotation.id == quotation_id)
@@ -511,6 +514,7 @@ class QuotationState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             q = session.exec(select(Quotation).where(Quotation.id == quotation_id)).first()
             if not q:
                 return
@@ -586,6 +590,7 @@ class QuotationState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             q = session.exec(select(Quotation).where(Quotation.id == quotation_id)).first()
             if not q:
                 yield rx.toast("Presupuesto no encontrado.", duration=3000)
@@ -597,6 +602,7 @@ class QuotationState(MixinState):
         client_name = ""
         if q.client_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 cli = session.exec(select(Client).where(Client.id == q.client_id)).first()
                 if cli:
                     client_name = cli.name
@@ -670,6 +676,7 @@ class QuotationState(MixinState):
         set_tenant_context(company_id, branch_id)
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             q = session.exec(
                 select(Quotation).where(Quotation.id == quotation_id)
             ).first()
@@ -918,6 +925,7 @@ class QuotationState(MixinState):
             now = utc_now_naive()
 
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 stmt = (
                     select(Quotation)
                     .where(Quotation.company_id == company_id)
@@ -989,6 +997,7 @@ class QuotationState(MixinState):
         client_phone = ""
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             q = session.exec(
                 select(Quotation).where(Quotation.id == int(quotation_id))
             ).first()
@@ -1072,6 +1081,7 @@ class QuotationState(MixinState):
             set_tenant_context(company_id, branch_id)
 
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 q = session.exec(
                     select(Quotation).where(Quotation.id == quot_id)
                 ).first()
@@ -1122,6 +1132,7 @@ class QuotationState(MixinState):
             )
 
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 q_obj = session.exec(
                     select(Quotation).where(Quotation.id == quot_id)
                 ).first()
@@ -1177,6 +1188,7 @@ class QuotationState(MixinState):
                 from app.utils.tenant import set_tenant_context
                 set_tenant_context(company_id, branch_id)
                 with rx.session() as session:
+                    session.info["tenant_bypass"] = True
                     q_obj = session.exec(
                         select(Quotation).where(Quotation.id == quot_id)
                     ).first()
@@ -1203,6 +1215,7 @@ class QuotationState(MixinState):
             from app.utils.tenant import set_tenant_context
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 q_obj = session.exec(
                     select(Quotation).where(Quotation.id == int(quotation_id))
                 ).first()

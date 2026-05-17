@@ -21,6 +21,7 @@ class ExecResult:
 class FakeSession:
     def __init__(self, existing_category=None):
         self.existing_category = existing_category
+        self.info = {}
         self.added = []
         self.deleted = []
         self.commit = Mock()

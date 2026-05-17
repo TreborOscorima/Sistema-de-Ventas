@@ -314,6 +314,7 @@ class ServicesState(MixinState):
         except (TypeError, ValueError):
             return ""
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             sub = (
                 select(SaleItem.sale_id)
                 .where(SaleItem.product_barcode_snapshot == str(rid))
@@ -412,6 +413,7 @@ class ServicesState(MixinState):
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             user_id = self.current_user.get("id")
 
             # Crear venta para asociar el pago
@@ -536,6 +538,7 @@ class ServicesState(MixinState):
             self.reservation_total_count = 0
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             page = max(self.reservation_current_page, 1)
             per_page = max(self.reservation_items_per_page, 1)
 
@@ -634,6 +637,7 @@ class ServicesState(MixinState):
         if not self._company_id() or not self._branch_id():
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             data_query = (
                 select(FieldReservationModel)
                 .order_by(FieldReservationModel.start_datetime.desc())
@@ -820,6 +824,7 @@ class ServicesState(MixinState):
             self.field_prices = []
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             prices = session.exec(
                 select(FieldPriceModel)
                 .where(FieldPriceModel.company_id == company_id)
@@ -864,6 +869,7 @@ class ServicesState(MixinState):
                 if not company_id or not branch_id:
                     return rx.toast("Empresa no definida.", duration=3000)
                 with rx.session() as session:
+                    session.info["tenant_bypass"] = True
                     new_price = FieldPriceModel(
                         sport=self.new_field_price_sport.strip().lower(),
                         name=self.new_field_price_name,
@@ -897,6 +903,7 @@ class ServicesState(MixinState):
             if not company_id or not branch_id:
                 return rx.toast("Empresa no definida.", duration=3000)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 price = session.exec(
                     select(FieldPriceModel)
                     .where(FieldPriceModel.id == int(self.editing_field_price_id))
@@ -929,6 +936,7 @@ class ServicesState(MixinState):
             if not company_id or not branch_id:
                 return
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 price = session.exec(
                     select(FieldPriceModel)
                     .where(FieldPriceModel.id == int(price_id))
@@ -952,6 +960,7 @@ class ServicesState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             price = session.exec(
                 select(FieldPriceModel)
                 .where(FieldPriceModel.id == int(price_id))
@@ -976,6 +985,7 @@ class ServicesState(MixinState):
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             price = session.exec(
                 select(FieldPriceModel)
                 .where(FieldPriceModel.id == int(price_id))
@@ -1503,6 +1513,7 @@ class ServicesState(MixinState):
             start_dt = None
         if start_dt and company_id and branch_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 existing_row = session.exec(
                     select(FieldReservationModel)
                     .where(FieldReservationModel.sport == self.field_rental_sport)
@@ -1622,6 +1633,7 @@ class ServicesState(MixinState):
 
         lock_key = self._reservation_lock_key(date, self.field_rental_sport)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             if not self._acquire_named_lock(session, lock_key, timeout=5):
                 return rx.toast(
                     "Sistema ocupado. Intente nuevamente en unos segundos.",
@@ -1762,6 +1774,7 @@ class ServicesState(MixinState):
             if not company_id or not branch_id:
                 return rx.toast("Empresa no definida.", duration=3000)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 r = session.exec(
                     select(FieldReservationModel)
                     .where(FieldReservationModel.id == reservation_id)
@@ -2005,6 +2018,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             reservation_model = session.exec(
                 select(FieldReservationModel)
                 .where(FieldReservationModel.id == int(reservation["id"]))
@@ -2172,6 +2186,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             reservation_model = session.exec(
                 select(FieldReservationModel)
                 .where(FieldReservationModel.id == int(reservation["id"]))
@@ -2378,6 +2393,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not company_id or not branch_id:
             return rx.toast("Empresa no definida.", duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             reservation_model = session.exec(
                 select(FieldReservationModel)
                 .where(FieldReservationModel.id == self.reservation_cancel_selection)
@@ -2450,6 +2466,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not company_id or not branch_id:
             return []
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             query = (
                 select(FieldReservationModel.start_datetime, FieldReservationModel.end_datetime)
                 .where(FieldReservationModel.sport == sport)
@@ -2472,6 +2489,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not company_id or not branch_id:
             return False
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             conflict = session.exec(
                 select(FieldReservationModel.id)
                 .where(FieldReservationModel.sport == sport)
@@ -2552,6 +2570,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not company_id or not branch_id:
             return None
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             reservation = session.exec(
                 select(FieldReservationModel)
                 .where(FieldReservationModel.id == reservation_id)

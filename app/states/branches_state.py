@@ -60,6 +60,7 @@ class BranchesState(MixinState):
             self.branches_list = []
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             branches = session.exec(
                 select(Branch).where(Branch.company_id == company_id).order_by(Branch.name)
             ).all()
@@ -120,6 +121,7 @@ class BranchesState(MixinState):
             return rx.toast(MSG.BRANCH_NAME_REQUIRED, duration=2500)
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 company = session.exec(
                     select(Company).where(Company.id == company_id)
                 ).first()
@@ -246,6 +248,7 @@ class BranchesState(MixinState):
         if not company_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             branch = session.exec(
                 select(Branch)
                 .where(Branch.id == int(branch_id))
@@ -290,6 +293,7 @@ class BranchesState(MixinState):
             return rx.toast(MSG.BRANCH_NAME_REQUIRED, duration=2500)
         branch_id = int(self.editing_branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             existing = session.exec(
                 select(Branch)
                 .where(Branch.company_id == company_id)
@@ -440,6 +444,7 @@ class BranchesState(MixinState):
         set_tenant_context(company_id, None)
         branch_id_int = int(branch_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             branch = session.exec(
                 select(Branch)
                 .where(Branch.company_id == company_id)
@@ -516,6 +521,7 @@ class BranchesState(MixinState):
             int(row["id"]) for row in self.branch_users_rows if row.get("has_access")
         }
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             company_users = session.exec(
                 select(UserModel.id, UserModel.username)
                 .where(UserModel.company_id == company_id)

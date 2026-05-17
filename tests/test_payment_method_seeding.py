@@ -20,6 +20,7 @@ class FakeExecResult:
 class FakeSession:
     def __init__(self, responses):
         self._responses = list(responses)
+        self.info = {}
         self._index = 0
 
     def exec(self, statement):

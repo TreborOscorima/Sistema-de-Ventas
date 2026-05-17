@@ -87,6 +87,7 @@ def check_overdue_alerts(self):
     # Asegura contexto tenant antes de cualquier SELECT.
     set_tenant_context(company_id, branch_id)
     with rx.session() as session:
+        session.info["tenant_bypass"] = True
         settings = {}
         if hasattr(self, "_company_settings_snapshot"):
             settings = self._company_settings_snapshot()

@@ -78,6 +78,7 @@ class ExportMixin:
         ]
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             products = session.exec(
                 select(Product)
                 .where(Product.company_id == company_id)
@@ -312,6 +313,7 @@ class ExportMixin:
         # Cargar barcodes existentes para detectar nuevos vs actualizados
         existing_barcodes: set[str] = set()
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             products = session.exec(
                 select(Product.barcode)
                 .where(Product.company_id == company_id)
@@ -462,6 +464,7 @@ class ExportMixin:
         errors = []
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             # Pre-cargar productos existentes por barcode
             existing = session.exec(
                 select(Product)

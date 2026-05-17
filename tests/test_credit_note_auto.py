@@ -64,6 +64,7 @@ class _FakeSessionExec:
 
     def __init__(self, results_by_call: list):
         self._results = list(results_by_call)
+        self.info = {}
         self._call_idx = 0
 
     def __call__(self, query):

@@ -60,6 +60,7 @@ class ProductMixin:
             branch_id = self._branch_id()
             if company_id and branch_id:
                 with rx.session() as session:
+                    session.info["tenant_bypass"] = True
                     sups = session.exec(
                         select(Supplier)
                         .where(Supplier.company_id == company_id)
@@ -108,6 +109,7 @@ class ProductMixin:
         branch_id = self._branch_id()
         if company_id and branch_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 sups = session.exec(
                     select(Supplier)
                     .where(Supplier.company_id == company_id)
@@ -118,6 +120,7 @@ class ProductMixin:
                 self.inventory_suppliers = [{"id": s.id, "name": s.name} for s in sups]
         if company_id and branch_id and product_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 variants = session.exec(
                     select(ProductVariant)
                     .where(ProductVariant.product_id == product_id)
@@ -259,6 +262,7 @@ class ProductMixin:
         branch_id = self._branch_id()
         if company_id and branch_id:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 sups = session.exec(
                     select(Supplier)
                     .where(Supplier.company_id == company_id)
@@ -293,6 +297,7 @@ class ProductMixin:
         self.stock_details_mode = "simple"
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             variants = session.exec(
                 select(ProductVariant)
                 .where(ProductVariant.product_id == product_id)
@@ -702,6 +707,7 @@ class ProductMixin:
         if not company_id or not branch_id:
             return
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             p = session.exec(
                 select(Product)
                 .where(Product.barcode == code)
@@ -875,6 +881,7 @@ class ProductMixin:
         msg = ""
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 # Verificar codigo de barras duplicado
                 existing = session.exec(
                     select(Product)
@@ -1253,6 +1260,7 @@ class ProductMixin:
 
         try:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 product = session.exec(
                     select(Product)
                     .where(Product.id == product_id)

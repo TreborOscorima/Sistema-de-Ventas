@@ -141,6 +141,7 @@ class RegisterState(MixinState):
         user_id = None
         token_version = 0
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             try:
                 existing_email = session.exec(
                     select(UserModel)

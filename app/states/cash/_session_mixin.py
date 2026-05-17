@@ -119,6 +119,7 @@ class SessionMixin:
 
         opening_time = None
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             cashbox_session = session.exec(
                 select(CashboxSessionModel)
                 .where(CashboxSessionModel.user_id == user_id)
@@ -133,6 +134,7 @@ class SessionMixin:
             return opening_amount
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             expenses = session.exec(
                 select(sqlalchemy.func.sum(CashboxLogModel.amount)).where(
                     CashboxLogModel.user_id == user_id,
@@ -273,6 +275,7 @@ class SessionMixin:
             window_start = timestamp - datetime.timedelta(hours=4)
             window_end = timestamp + datetime.timedelta(hours=4)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 sessions = session.exec(
                     select(CashboxSessionModel)
                     .where(CashboxSessionModel.company_id == company_id)
@@ -306,6 +309,7 @@ class SessionMixin:
         user_id: int | None = None,
     ) -> float:
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             statement = (
                 select(CashboxLogModel)
                 .where(CashboxLogModel.action == "apertura")
@@ -332,6 +336,7 @@ class SessionMixin:
         user_id: int | None = None,
     ) -> float:
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             statement = (
                 select(sqlalchemy.func.sum(CashboxLogModel.amount))
                 .where(CashboxLogModel.action.in_(CASHBOX_EXPENSE_ACTIONS))
@@ -375,6 +380,7 @@ class SessionMixin:
         if user_id:
             statement = statement.where(CashboxLogModel.user_id == user_id)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             results = session.exec(statement).all()
         summary: list[dict] = []
         for method, count, amount in results:
@@ -398,6 +404,7 @@ class SessionMixin:
         user_id: int | None = None,
     ) -> list[CashboxSale]:
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             statement = (
                 select(CashboxLogModel, UserModel.username)
                 .join(UserModel, isouter=True)
@@ -463,6 +470,7 @@ class SessionMixin:
             return 0.0
         if session_info:
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 cashbox_session = session.exec(
                     select(CashboxSessionModel)
                     .where(CashboxSessionModel.user_id == session_info["user_id"])
@@ -474,6 +482,7 @@ class SessionMixin:
                     return float(cashbox_session.opening_amount or 0)
         start_dt, end_dt, session_info = self._cashbox_time_range(date)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             statement = (
                 select(CashboxLogModel)
                 .where(CashboxLogModel.action == "apertura")
@@ -500,6 +509,7 @@ class SessionMixin:
         if not company_id or not branch_id:
             return 0.0
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             statement = (
                 select(sqlalchemy.func.sum(CashboxLogModel.amount))
                 .where(CashboxLogModel.action.in_(CASHBOX_EXPENSE_ACTIONS))
@@ -545,6 +555,7 @@ class SessionMixin:
         if not company_id or not branch_id:
             return None
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             cashbox_session = session.exec(
                 select(CashboxSessionModel)
                 .where(CashboxSessionModel.user_id == user_id)
@@ -614,6 +625,7 @@ class SessionMixin:
         if not user_id:
             return rx.toast(MSG.VAL_USER_NOT_FOUND, duration=3000)
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             existing = session.exec(
                 select(CashboxSessionModel)
                 .where(CashboxSessionModel.user_id == user_id)
@@ -665,6 +677,7 @@ class SessionMixin:
             return
 
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             cashbox_session = session.exec(
                 select(CashboxSessionModel)
                 .where(CashboxSessionModel.user_id == user_id)

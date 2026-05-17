@@ -128,6 +128,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 groups = suggest_reorders_by_supplier(session, company_id, branch_id)
             self.reorder_groups = [g.to_dict() for g in groups]
             if not self.reorder_groups:
@@ -216,6 +217,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 po = create_draft_purchase_order(
                     session, company_id, branch_id, supplier_id, items,
                     user_id=user_id, notes=self.reorder_confirm_notes, auto_generated=True,
@@ -245,6 +247,7 @@ class ReorderState(MixinState):
         set_tenant_context(company_id, branch_id)
         status = None if self.po_status_filter == "all" else self.po_status_filter
         with rx.session() as session:
+            session.info["tenant_bypass"] = True
             pos = list_purchase_orders(session, company_id, branch_id, status=status)
             user_ids = list({po.user_id for po in pos if po.user_id})
             user_name_map: dict[int, str] = {}
@@ -292,6 +295,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 detail = get_purchase_order_detail(session, int(po_id), company_id, branch_id)
         except Exception as exc:
             logger.exception("open_po_detail failed")
@@ -325,6 +329,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 mark_purchase_order_received(session, int(po_id), company_id, branch_id)
                 session.commit()
         except ValueError as exc:
@@ -344,6 +349,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 cancel_purchase_order(session, int(po_id), company_id, branch_id)
                 session.commit()
         except ValueError as exc:
@@ -367,6 +373,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 info = get_po_for_send(session, int(po_id), company_id, branch_id)
         except Exception as exc:
             logger.exception("open_po_send_modal failed")
@@ -425,6 +432,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 detail = get_purchase_order_detail(session, po_id, company_id, branch_id)
                 supplier_info = get_supplier_full_info(session, po_id, company_id, branch_id)
 
@@ -473,6 +481,7 @@ class ReorderState(MixinState):
 
             # Marcar como enviada
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 mark_purchase_order_sent(session, po_id, company_id, branch_id)
                 session.commit()
 
@@ -521,6 +530,7 @@ class ReorderState(MixinState):
             try:
                 set_tenant_context(company_id, branch_id)
                 with rx.session() as session:
+                    session.info["tenant_bypass"] = True
                     mark_purchase_order_sent(session, po_id, company_id, branch_id)
                     session.commit()
             except Exception:
@@ -539,6 +549,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 mark_purchase_order_sent(session, int(po_id), company_id, branch_id)
                 session.commit()
         except ValueError as exc:
@@ -563,6 +574,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 po_data = get_po_for_edit(session, int(po_id), company_id, branch_id)
                 suppliers = list_active_suppliers(session, company_id, branch_id)
         except Exception as exc:
@@ -660,6 +672,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 update_draft_purchase_order(
                     session,
                     self.po_edit_id,
@@ -696,6 +709,7 @@ class ReorderState(MixinState):
         try:
             set_tenant_context(company_id, branch_id)
             with rx.session() as session:
+                session.info["tenant_bypass"] = True
                 detail = get_purchase_order_detail(session, int(po_id), company_id, branch_id)
                 supplier_info = get_supplier_full_info(session, int(po_id), company_id, branch_id)
         except Exception as exc:
