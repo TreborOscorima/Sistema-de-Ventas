@@ -41,6 +41,7 @@ def create_access_token(
     subject: str | Any,
     token_version: int | None = None,
     company_id: int | None = None,
+    branch_id: int | None = None,
 ) -> str:
     """Crea un token JWT de acceso con expiración configurable."""
     expire = datetime.datetime.now(tz=datetime.timezone.utc) + datetime.timedelta(hours=TOKEN_EXPIRY_HOURS)
@@ -52,6 +53,8 @@ def create_access_token(
         payload["ver"] = int(token_version)
     if company_id is not None:
         payload["cid"] = int(company_id)
+    if branch_id is not None:
+        payload["bid"] = int(branch_id)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_token(token: str) -> dict | None:

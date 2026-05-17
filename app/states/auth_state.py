@@ -391,6 +391,7 @@ class AuthState(MixinState):
                     self._cached_user = {
                         "id": user.id,
                         "company_id": getattr(user, "company_id", None),
+                        "branch_id": getattr(user, "branch_id", None),
                         "username": user.username,
                         "email": getattr(user, "email", "") or "",
                         "role": role_name,
@@ -737,7 +738,15 @@ class AuthState(MixinState):
 
         active_id = self.active_branch_id
         if not active_id and self.available_branches:
-            self.selected_branch_id = self.available_branches[0]["id"]
+            # Preferir el branch predeterminado del usuario (user.branch_id) sobre
+            # el primero alfabético. Evita que el usuario caiga en un branch vacío
+            # cuando selected_branch_id se pierde por el race condition de LocalStorage.
+            user_default_id = str(user.branch_id) if user and user.branch_id else None
+            default_branch = next(
+                (b for b in self.available_branches if b["id"] == user_default_id),
+                self.available_branches[0],
+            )
+            self.selected_branch_id = default_branch["id"]
             active_id = self.active_branch_id
 
         selected = next(
@@ -1885,8 +1894,9 @@ class AuthState(MixinState):
                     _clear_login_attempts(identifier, ip_address=client_ip)
                     _tv = getattr(admin_user, "token_version", 0)
                     _cid = getattr(admin_user, "company_id", None)
+                    _bid = getattr(admin_user, "branch_id", None)
                     self.token = create_access_token(
-                        admin_user.id, token_version=_tv, company_id=_cid,
+                        admin_user.id, token_version=_tv, company_id=_cid, branch_id=_bid,
                     )
                     self.refresh_token = create_refresh_token(
                         admin_user.id, token_version=_tv, company_id=_cid,
@@ -2020,8 +2030,9 @@ class AuthState(MixinState):
                 _clear_login_attempts(identifier, ip_address=client_ip)
                 _tv = getattr(user, "token_version", 0)
                 _cid = getattr(user, "company_id", None)
+                _bid = getattr(user, "branch_id", None)
                 self.token = create_access_token(
-                    user.id, token_version=_tv, company_id=_cid,
+                    user.id, token_version=_tv, company_id=_cid, branch_id=_bid,
                 )
                 self.refresh_token = create_refresh_token(
                     user.id, token_version=_tv, company_id=_cid,
