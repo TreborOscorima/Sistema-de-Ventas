@@ -3,6 +3,9 @@ import datetime
 
 import reflex as rx
 import time
+from app.utils.logger import get_logger as _get_logger
+
+_state_logger = _get_logger("State")
 from sqlmodel import select
 from sqlalchemy import func, or_
 from app.models import Supplier, FieldReservation as FieldReservationModel, User as UserModel
@@ -512,6 +515,12 @@ class State(RootState):
     @rx.event
     async def page_init_default(self):
         """on_load para / y /dashboard (sin restricción de privilegio)."""
+        _state_logger.info(
+            "[page_init] is_authenticated=%s token_prefix=%s branches=%s",
+            self.is_authenticated,
+            (getattr(self, "token", "") or "")[:12],
+            len(getattr(self, "available_branches", None) or []),
+        )
         if not self.is_authenticated:
             # Forzar sidebar abierto para mostrar contenido guest
             self.sidebar_open = True
@@ -542,6 +551,12 @@ class State(RootState):
         momento de ejecutar este evento, carga las sucursales y redirige
         correctamente. Si no, no hace nada (usuario genuinamente no autenticado).
         """
+        _state_logger.info(
+            "[deferred_refresh] is_authenticated=%s token_prefix=%s branches=%s",
+            self.is_authenticated,
+            (getattr(self, "token", "") or "")[:12],
+            len(getattr(self, "available_branches", None) or []),
+        )
         if not self.is_authenticated:
             return
         if getattr(self, "available_branches", None):

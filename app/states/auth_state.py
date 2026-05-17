@@ -701,47 +701,61 @@ class AuthState(MixinState):
         _ = self.branch_access_revision
         user_id = self.current_user.get("id")
         company_id = self.current_user.get("company_id")
+        logger.info(
+            "[branch_cache] user_id=%s company_id=%s token_prefix=%s",
+            user_id, company_id, (self.token or "")[:12],
+        )
         if not user_id or not company_id:
+            logger.warning("[branch_cache] EARLY RETURN: user_id=%s company_id=%s (guest user?)", user_id, company_id)
             self.available_branches = []
             self.active_branch_name = ""
             return
 
         set_tenant_context(company_id, None)
-        with rx.session() as session:
-            user = session.exec(
-                select(UserModel)
-                .where(UserModel.id == user_id)
-                .where(UserModel.company_id == company_id)
-            ).first()
-            if not user:
-                self.available_branches = []
-                self.active_branch_name = ""
-                return
+        # tenant_bypass: los WHERE explícitos (id+company_id) ya garantizan aislamiento.
+        # with_loader_criteria puede aplicar el company_id de otro cliente (race de ContextVar
+        # entre tasks asyncio) → usar bypass para esta lectura interna de confianza.
+        with tenant_bypass():
+            with rx.session() as session:
+                user = session.exec(
+                    select(UserModel)
+                    .where(UserModel.id == user_id)
+                    .where(UserModel.company_id == company_id)
+                ).first()
+                if not user:
+                    logger.warning("[branch_cache] EARLY RETURN: user not found id=%s cid=%s", user_id, company_id)
+                    self.available_branches = []
+                    self.active_branch_name = ""
+                    return
 
-            branch_ids = self._user_branch_ids(session, user_id)
-            if not branch_ids:
-                self.available_branches = []
-                self.active_branch_name = ""
-                return
+                branch_ids = self._user_branch_ids(session, user_id)
+                logger.info("[branch_cache] branch_ids=%s for user_id=%s", branch_ids, user_id)
+                if not branch_ids:
+                    logger.warning("[branch_cache] EARLY RETURN: no branch_ids for user_id=%s", user_id)
+                    self.available_branches = []
+                    self.active_branch_name = ""
+                    return
 
-            rows = session.exec(
-                select(Branch)
-                .where(Branch.id.in_(branch_ids))
-                .where(Branch.company_id == company_id)
-                .order_by(Branch.name)
-            ).all()
+                rows = session.exec(
+                    select(Branch)
+                    .where(Branch.id.in_(branch_ids))
+                    .where(Branch.company_id == company_id)
+                    .order_by(Branch.name)
+                ).all()
 
-        self.available_branches = [
-            {"id": str(branch.id), "name": branch.name}
-            for branch in rows
-        ]
+                # Leer atributos ORM mientras la sesión está abierta
+                self.available_branches = [
+                    {"id": str(branch.id), "name": branch.name}
+                    for branch in rows
+                ]
+                user_default_id = str(user.branch_id) if user.branch_id else None
+                logger.info("[branch_cache] rows=%s available=%s default_id=%s", len(rows), self.available_branches, user_default_id)
 
         active_id = self.active_branch_id
         if not active_id and self.available_branches:
             # Preferir el branch predeterminado del usuario (user.branch_id) sobre
             # el primero alfabético. Evita que el usuario caiga en un branch vacío
             # cuando selected_branch_id se pierde por el race condition de LocalStorage.
-            user_default_id = str(user.branch_id) if user and user.branch_id else None
             default_branch = next(
                 (b for b in self.available_branches if b["id"] == user_default_id),
                 self.available_branches[0],
@@ -758,11 +772,17 @@ class AuthState(MixinState):
             None,
         ) if active_id else None
         self.active_branch_name = selected["name"] if selected else ""
+        logger.info("[branch_cache] DONE active_id=%s active_name=%s", active_id, self.active_branch_name)
 
     @rx.event
     def refresh_auth_runtime_cache(self):
         self._refresh_subscription_and_payment_alert()
-        self.refresh_branch_access_cache()
+        try:
+            self.refresh_branch_access_cache()
+        except Exception:
+            logger.exception("refresh_branch_access_cache failed — branches cleared")
+            self.available_branches = []
+            self.active_branch_name = ""
 
     def _refresh_subscription_and_payment_alert(self):
         """Consolidar Company query: subscription + payment alert en una sola lectura."""
