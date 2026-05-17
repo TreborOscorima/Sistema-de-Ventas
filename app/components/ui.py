@@ -85,6 +85,7 @@ BADGE_STYLES = {
     "danger": f"{_BADGE_BASE} bg-red-100 text-red-700",
     "info": f"{_BADGE_BASE} bg-indigo-100 text-indigo-700",
     "neutral": f"{_BADGE_BASE} bg-slate-100 text-slate-700",
+    "violet": f"{_BADGE_BASE} bg-violet-100 text-violet-700",
     # Estados fiscales
     "authorized": f"{_BADGE_BASE} bg-emerald-100 text-emerald-700",
     "pending": f"{_BADGE_BASE} bg-amber-100 text-amber-700",

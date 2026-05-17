@@ -53,7 +53,7 @@ def _fiscal_lookup_input() -> rx.Component:
                         class_name=(
                             "w-full text-sm px-3 py-1.5 border border-slate-200 "
                             "rounded-md placeholder-slate-400 focus:outline-none focus:ring-1 "
-                            "focus:ring-indigo-400 focus:border-indigo-400"
+                            "focus:ring-indigo-500/20 focus:border-indigo-500"
                         ),
                     ),
                     # Spinner de carga
@@ -159,7 +159,7 @@ def _coupon_input() -> rx.Component:
     """Input para ingresar/aplicar un cupón de descuento al carrito."""
     return rx.el.div(
         rx.el.span(
-            rx.icon("ticket", class_name="h-3.5 w-3.5 inline mr-1 text-fuchsia-500"),
+            rx.icon("ticket", class_name="h-3.5 w-3.5 inline mr-1 text-violet-500"),
             "Cupón",
             class_name="text-xs font-medium text-slate-500",
         ),
@@ -172,7 +172,7 @@ def _coupon_input() -> rx.Component:
                 key=State.last_sale_id,
                 class_name=(
                     "flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm uppercase "
-                    "placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-fuchsia-300 "
+                    "placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 "
                     "disabled:bg-emerald-50 disabled:text-emerald-700 disabled:font-semibold"
                 ),
             ),
@@ -182,19 +182,19 @@ def _coupon_input() -> rx.Component:
                     rx.icon("x", class_name="h-4 w-4"),
                     on_click=State.clear_cart_coupon,
                     title="Quitar cupón",
-                    class_name="px-2 py-1.5 rounded-lg text-rose-600 hover:bg-rose-50",
+                    class_name="px-2 py-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors",
                 ),
                 rx.el.button(
                     "Aplicar",
                     on_click=State.apply_cart_coupon,
-                    class_name="px-3 py-1.5 rounded-lg bg-fuchsia-600 text-white text-sm font-medium hover:bg-fuchsia-700",
+                    class_name="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors",
                 ),
             ),
             class_name="flex items-center gap-1.5 mt-1",
         ),
         rx.cond(
             State.cart_coupon_status == "invalid",
-            rx.el.p(State.cart_coupon_message, class_name="text-xs text-rose-600 mt-1"),
+            rx.el.p(State.cart_coupon_message, class_name="text-xs text-red-600 mt-1"),
             rx.cond(
                 State.cart_coupon_status == "applied",
                 rx.el.p(State.cart_coupon_message, class_name="text-xs text-emerald-600 mt-1"),
@@ -342,7 +342,7 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
                 on_click=lambda: State.remove_item_from_sale(item["temp_id"]),
                 title="Quitar producto",
                 aria_label="Quitar producto",
-                class_name="p-1 text-red-500 hover:bg-red-50 rounded transition-colors",
+                class_name=BUTTON_STYLES["icon_danger"],
             ),
             class_name="py-2 px-2 text-center",
         ),
@@ -398,7 +398,7 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
                 on_click=lambda: State.remove_item_from_sale(item["temp_id"]),
                 title="Quitar producto",
                 aria_label="Quitar producto",
-                class_name="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-colors",
+                class_name=BUTTON_STYLES["icon_danger"],
             ),
             class_name="flex items-start justify-between gap-2",
         ),
@@ -513,7 +513,7 @@ def recent_moves_modal() -> rx.Component:
                         rx.el.button(
                             rx.icon("printer", class_name="h-4 w-4"),
                             on_click=State.reprint_recent_sale(entry["sale_id"]),
-                            class_name="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full",
+                            class_name=BUTTON_STYLES["icon_primary"],
                             title="Reimprimir comprobante",
                             aria_label="Reimprimir comprobante",
                         ),
@@ -926,7 +926,7 @@ def client_selector() -> rx.Component:
                         rx.el.span(class_name="w-px h-3.5 bg-slate-200 inline-block"),
                         rx.el.span(
                             State.active_price_list_name,
-                            class_name="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full leading-none",
+                            class_name="text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-full leading-none",
                         ),
                         class_name="inline-flex items-center gap-1",
                     ),
@@ -1102,7 +1102,7 @@ def quick_add_bar() -> rx.Component:
                         State.price_list_price_applied,
                         rx.el.span(
                             "Lista",
-                            class_name="text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded px-1.5 py-0.5 leading-none",
+                            class_name="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 rounded px-1.5 py-0.5 leading-none",
                         ),
                         rx.cond(
                             State.wholesale_price_applied,
@@ -1136,7 +1136,7 @@ def quick_add_bar() -> rx.Component:
                     ),
                     class_name=rx.cond(
                         State.price_list_price_applied,
-                        "flex items-center gap-1 px-3 py-2 border border-blue-300 rounded-lg bg-blue-50/50 focus-within:ring-2 focus-within:ring-blue-500",
+                        "flex items-center gap-1 px-3 py-2 border border-indigo-300 rounded-lg bg-indigo-50/50 focus-within:ring-2 focus-within:ring-indigo-500",
                         rx.cond(
                             State.wholesale_price_applied,
                             "flex items-center gap-1 px-3 py-2 border border-amber-300 rounded-lg bg-amber-50/50 focus-within:ring-2 focus-within:ring-amber-500",
@@ -1285,8 +1285,8 @@ def visual_product_grid() -> rx.Component:
                 on_change=State.search_product_grid,
                 class_name=(
                     "w-full text-sm px-3 py-2 border border-slate-200 "
-                    "rounded-lg placeholder-slate-400 focus:outline-none focus:ring-1 "
-                    "focus:ring-indigo-400 focus:border-indigo-400"
+                    "rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 "
+                    "focus:ring-indigo-500/20 focus:border-indigo-500"
                 ),
             ),
             class_name="px-3 pt-3 pb-1",
@@ -2267,10 +2267,14 @@ def _payment_form_body(variant: str) -> rx.Component:
         scrollable = rx.el.div(
             pm_section,
             rx.divider(class_name="mx-4"),
-            rx.el.div(
-                credit_header,
-                credit_fields,
-                class_name=credit_section_class,
+            rx.cond(
+                State.company_has_credits,
+                rx.el.div(
+                    credit_header,
+                    credit_fields,
+                    class_name=credit_section_class,
+                ),
+                rx.fragment(),
             ),
             rx.el.div(
                 card_option,
@@ -2284,10 +2288,14 @@ def _payment_form_body(variant: str) -> rx.Component:
     else:
         return (
             pm_section,
-            rx.el.div(
-                credit_header,
-                credit_fields,
-                class_name=credit_section_class,
+            rx.cond(
+                State.company_has_credits,
+                rx.el.div(
+                    credit_header,
+                    credit_fields,
+                    class_name=credit_section_class,
+                ),
+                rx.fragment(),
             ),
             card_option,
             wallet_option,
@@ -2742,7 +2750,7 @@ def venta_page() -> rx.Component:
                                 ("supermercado", rx.el.span(
                                     rx.icon("shopping-basket", class_name="w-3.5 h-3.5 inline mr-1"),
                                     "Modo Supermercado",
-                                    class_name="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5",
+                                    class_name="inline-flex items-center text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2.5 py-0.5",
                                 )),
                                 rx.el.span(
                                     "Realiza ventas directas, selecciona productos y gestiona el cobro.",
@@ -2772,9 +2780,10 @@ def venta_page() -> rx.Component:
             _presupuesto_banner(),
             # Desglose servicio + productos cuando ambos coexisten
             _reservation_products_breakdown(),
-            # Selector de cliente — oculto cuando la reserva ya provee el cliente
+            # Selector de cliente — oculto cuando la reserva ya provee el cliente,
+            # o cuando la empresa no tiene el módulo de clientes habilitado.
             rx.cond(
-                State.reservation_payment_id == "",
+                State.company_has_clients & (State.reservation_payment_id == ""),
                 client_selector(),
                 rx.fragment(),
             ),

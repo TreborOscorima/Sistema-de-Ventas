@@ -212,7 +212,7 @@ def _account_card(client: rx.Var) -> rx.Component:
                 rx.el.span("Deuda total", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
                 rx.el.span(
                     State.currency_symbol, " ", client["current_debt"].to_string(),
-                    class_name="font-semibold tabular-nums text-rose-600",
+                    class_name="font-semibold tabular-nums text-red-600",
                 ),
                 class_name="flex flex-col",
             ),
@@ -337,7 +337,7 @@ def debtor_row(client: rx.Var[dict]) -> rx.Component:
     rx.el.td(
       State.currency_symbol,
       client["current_debt"].to_string(),
-      class_name="py-3 px-4 text-right font-semibold text-rose-600",
+      class_name="py-3 px-4 text-right font-semibold text-red-600",
     ),
         rx.el.td(
             rx.el.div(
@@ -620,7 +620,7 @@ def cuentas_detail_modal() -> rx.Component:
                 rx.el.p(
                   State.currency_symbol,
                   State.selected_client["current_debt"].to_string(),
-                  class_name="text-3xl font-bold text-rose-600",
+                  class_name="text-3xl font-bold text-red-600",
                 ),
                 class_name="flex flex-col items-end",
               ),

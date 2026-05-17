@@ -219,6 +219,7 @@ class ConfigState(MixinState):
             self.payment_methods = [
                 {
                     "id": m.method_id,
+                    "pk": m.id,
                     "name": m.name,
                     "description": m.description,
                     "kind": m.kind,

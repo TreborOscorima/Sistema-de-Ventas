@@ -25,7 +25,7 @@ _STATUS_BADGE_BASE = "inline-flex items-center px-2 py-0.5 rounded-full text-xs 
 _STATUS_BADGE_CLASSES = {
     "active": f"{_STATUS_BADGE_BASE} bg-emerald-100 text-emerald-700",
     "paused": f"{_STATUS_BADGE_BASE} bg-slate-100 text-slate-500",
-    "scheduled": f"{_STATUS_BADGE_BASE} bg-blue-100 text-blue-700",
+    "scheduled": f"{_STATUS_BADGE_BASE} bg-indigo-100 text-indigo-700",
     "expired": f"{_STATUS_BADGE_BASE} bg-red-100 text-red-700",
     "exhausted": f"{_STATUS_BADGE_BASE} bg-amber-100 text-amber-700",
 }
@@ -89,7 +89,7 @@ def _promo_row(p: rx.Var) -> rx.Component:
                     rx.el.span(
                         rx.icon("ticket", class_name="h-3 w-3 mr-1"),
                         p["coupon_code"],
-                        class_name="inline-flex items-center text-xs font-mono font-semibold text-fuchsia-700 bg-fuchsia-50 px-1.5 py-0.5 rounded",
+                        class_name="inline-flex items-center text-xs font-mono font-semibold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded",
                     ),
                     rx.fragment(),
                 ),
@@ -152,6 +152,10 @@ def _promo_row(p: rx.Var) -> rx.Component:
                 class_name="flex flex-col items-start",
             ),
             class_name="py-3 px-4",
+        ),
+        rx.el.td(
+            p["created_by"],
+            class_name="py-3 px-4 text-sm text-slate-700 hidden lg:table-cell",
         ),
         rx.el.td(
             rx.el.div(
@@ -695,6 +699,7 @@ def promociones_page() -> rx.Component:
                             rx.el.th("Valor", class_name=TABLE_STYLES["header_cell"] + " text-right"),
                             rx.el.th("Vigencia", class_name=TABLE_STYLES["header_cell"]),
                             rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
+                            rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"] + " hidden lg:table-cell"),
                             rx.el.th("Acciones", class_name=TABLE_STYLES["header_cell"] + " text-right"),
                             class_name=TABLE_STYLES["header"],
                         ),

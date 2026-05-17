@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlmodel import Session, select
 
@@ -58,6 +58,7 @@ class ReorderSuggestion:
             "suggested_quantity": float(self.suggested_quantity),
             "unit": self.unit,
             "unit_cost": float(self.unit_cost),
+            "unit_cost_str": f"{float(self.unit_cost):.2f}",
             "default_supplier_id": self.default_supplier_id,
         }
 
@@ -82,6 +83,7 @@ class SupplierReorderGroup:
             "supplier_name": self.supplier_name,
             "item_count": len(self.items),
             "total_estimated": float(self.total_estimated),
+            "total_estimated_str": f"{float(self.total_estimated):.2f}",
             "items": [it.to_dict() for it in self.items],
         }
 
@@ -365,3 +367,308 @@ def cancel_purchase_order(
     session.add(po)
     session.flush()
     return po
+
+
+def mark_purchase_order_received(
+    session: Session,
+    purchase_order_id: int,
+    company_id: int,
+    branch_id: int,
+) -> PurchaseOrder:
+    """Transiciona draft/sent → received (confirmación de llegada de mercancía).
+
+    La PO es puramente informativa; el stock lo mueve Ingreso de Mercancía.
+    """
+    po = session.exec(
+        select(PurchaseOrder)
+        .where(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.company_id == company_id,
+            PurchaseOrder.branch_id == branch_id,
+        )
+        .with_for_update()
+    ).first()
+    if po is None:
+        raise ValueError("PO no encontrada en este tenant")
+    if po.status not in (PurchaseOrderStatus.DRAFT, PurchaseOrderStatus.SENT):
+        raise ValueError(
+            f"Solo se puede marcar como recibida una PO en estado 'draft' o 'sent' "
+            f"(estado actual: {po.status})"
+        )
+    po.status = PurchaseOrderStatus.RECEIVED
+    po.updated_at = utc_now_naive()
+    session.add(po)
+    session.flush()
+    logger.info("PO marcada recibida: id=%s", po.id)
+    return po
+
+
+def get_purchase_order_detail(
+    session: Session,
+    purchase_order_id: int,
+    company_id: int,
+    branch_id: int,
+) -> Optional[dict]:
+    """Carga una PO con sus ítems y devuelve un dict serializable para el frontend."""
+    po = session.exec(
+        select(PurchaseOrder).where(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.company_id == company_id,
+            PurchaseOrder.branch_id == branch_id,
+        )
+    ).first()
+    if po is None:
+        return None
+
+    items = []
+    for it in (po.items or []):
+        items.append({
+            "barcode": it.barcode_snapshot,
+            "description": it.description_snapshot,
+            "current_stock": f"{float(it.current_stock):g}",
+            "min_stock_alert": f"{float(it.min_stock_alert):g}",
+            "suggested_quantity": f"{float(it.suggested_quantity):g}",
+            "unit": it.unit,
+            "unit_cost": f"{float(it.unit_cost):.2f}",
+            "subtotal": f"{float(it.subtotal):.2f}",
+        })
+
+    return {
+        "id": po.id or 0,
+        "supplier_name": po.supplier.name if po.supplier else "-",
+        "status": po.status,
+        "total_amount_str": f"{float(po.total_amount or 0):.2f}",
+        "notes": po.notes or "",
+        "auto_generated": bool(po.auto_generated),
+        "created_at": po.created_at.strftime("%d/%m/%Y %H:%M") if po.created_at else "",
+        "items": items,
+    }
+
+
+def list_active_suppliers(
+    session: Session,
+    company_id: int,
+    branch_id: int,
+) -> List[Supplier]:
+    """Lista proveedores activos del tenant, ordenados por nombre."""
+    return list(session.exec(
+        select(Supplier).where(
+            Supplier.company_id == company_id,
+            Supplier.branch_id == branch_id,
+            Supplier.is_active == True,  # noqa: E712
+        ).order_by(Supplier.name)
+    ).all())
+
+
+def get_supplier_full_info(
+    session: Session,
+    purchase_order_id: int,
+    company_id: int,
+    branch_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Devuelve los datos completos del proveedor de una PO (para PDF y envío)."""
+    po = session.exec(
+        select(PurchaseOrder).where(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.company_id == company_id,
+            PurchaseOrder.branch_id == branch_id,
+        )
+    ).first()
+    if po is None or po.supplier is None:
+        return None
+    s = po.supplier
+    return {
+        "name": s.name,
+        "tax_id": s.tax_id,
+        "email": s.email or "",
+        "phone": s.phone or "",
+        "address": s.address or "",
+    }
+
+
+def get_po_for_edit(
+    session: Session,
+    purchase_order_id: int,
+    company_id: int,
+    branch_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Carga una PO en estado draft para edición completa.
+
+    Returns None si no existe o no está en borrador.
+    """
+    po = session.exec(
+        select(PurchaseOrder).where(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.company_id == company_id,
+            PurchaseOrder.branch_id == branch_id,
+        )
+    ).first()
+    if po is None or po.status != PurchaseOrderStatus.DRAFT:
+        return None
+
+    items = []
+    for it in (po.items or []):
+        items.append({
+            "product_id": it.product_id,
+            "barcode": it.barcode_snapshot,
+            "description": it.description_snapshot,
+            "current_stock": f"{float(it.current_stock):g}",
+            "min_stock_alert": f"{float(it.min_stock_alert):g}",
+            "suggested_quantity": float(it.suggested_quantity),
+            "unit": it.unit,
+            "unit_cost": float(it.unit_cost),
+            "unit_cost_str": f"{float(it.unit_cost):.2f}",
+            "subtotal": float(it.subtotal),
+            "subtotal_str": f"{float(it.subtotal):.2f}",
+        })
+
+    return {
+        "id": po.id,
+        "supplier_id": po.supplier_id,
+        "supplier_name": po.supplier.name if po.supplier else "",
+        "notes": po.notes or "",
+        "total_amount_str": f"{float(po.total_amount or 0):.2f}",
+        "items": items,
+    }
+
+
+def update_draft_purchase_order(
+    session: Session,
+    purchase_order_id: int,
+    company_id: int,
+    branch_id: int,
+    supplier_id: int,
+    items_data: List[Dict[str, Any]],
+    notes: str = "",
+) -> PurchaseOrder:
+    """Actualiza una PO en estado draft (proveedor, ítems, notas).
+
+    Reemplaza todos los ítems y recalcula el total desde BD autoritativa.
+    Solo opera sobre POs en estado 'draft'.
+
+    Raises:
+        ValueError en caso de validación fallida.
+    """
+    po = session.exec(
+        select(PurchaseOrder)
+        .where(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.company_id == company_id,
+            PurchaseOrder.branch_id == branch_id,
+        )
+        .with_for_update()
+    ).first()
+    if po is None:
+        raise ValueError("PO no encontrada en este tenant")
+    if po.status != PurchaseOrderStatus.DRAFT:
+        raise ValueError("Solo se pueden editar POs en estado 'draft'")
+    if not items_data:
+        raise ValueError("La PO debe tener al menos un ítem")
+
+    supplier = session.exec(
+        select(Supplier).where(
+            Supplier.id == supplier_id,
+            Supplier.company_id == company_id,
+            Supplier.branch_id == branch_id,
+        )
+    ).first()
+    if supplier is None:
+        raise ValueError(f"Proveedor {supplier_id} no existe en este tenant")
+
+    requested_ids = [int(it["product_id"]) for it in items_data if it.get("product_id")]
+    if not requested_ids:
+        raise ValueError("La PO debe tener al menos un ítem con product_id válido")
+
+    products_map: Dict[int, Any] = {
+        int(p.id): p
+        for p in session.exec(
+            select(Product).where(
+                Product.id.in_(requested_ids),
+                Product.company_id == company_id,
+                Product.branch_id == branch_id,
+            )
+        ).all()
+    }
+    missing = [pid for pid in requested_ids if pid not in products_map]
+    if missing:
+        raise ValueError(f"Producto(s) no pertenecen al tenant: {missing}")
+
+    # Eliminar ítems actuales
+    for old_item in list(po.items or []):
+        session.delete(old_item)
+    session.flush()
+
+    # Crear nuevos ítems re-validados desde BD
+    total = Decimal("0.00")
+    for item_data in items_data:
+        pid = int(item_data["product_id"])
+        product = products_map[pid]
+        qty = Decimal(str(item_data.get("suggested_quantity", 0)))
+        if qty <= 0:
+            raise ValueError(f"Cantidad inválida para producto {pid}: {qty}")
+        qty = qty.quantize(Decimal("0.0001"))
+        unit_cost = Decimal(str(product.purchase_price or 0))
+        subtotal = (qty * unit_cost).quantize(Decimal("0.01"))
+        total += subtotal
+        session.add(PurchaseOrderItem(
+            purchase_order_id=po.id,
+            product_id=pid,
+            company_id=company_id,
+            branch_id=branch_id,
+            description_snapshot=product.description,
+            barcode_snapshot=product.barcode,
+            current_stock=Decimal(str(product.stock or 0)),
+            min_stock_alert=Decimal(str(product.min_stock_alert or 0)),
+            suggested_quantity=qty,
+            unit=product.unit or "Unidad",
+            unit_cost=unit_cost,
+            subtotal=subtotal,
+        ))
+
+    po.supplier_id = supplier_id
+    po.notes = notes or None
+    po.total_amount = total
+    po.updated_at = utc_now_naive()
+    session.add(po)
+    session.flush()
+
+    logger.info(
+        "Draft PO actualizada: id=%s supplier=%s items=%d total=%s",
+        po.id, supplier_id, len(items_data), total,
+    )
+    return po
+
+
+def get_po_for_send(
+    session: Session,
+    purchase_order_id: int,
+    company_id: int,
+    branch_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Carga la info de una PO necesaria para el modal de envío."""
+    po = session.exec(
+        select(PurchaseOrder).where(
+            PurchaseOrder.id == purchase_order_id,
+            PurchaseOrder.company_id == company_id,
+            PurchaseOrder.branch_id == branch_id,
+        )
+    ).first()
+    if po is None:
+        return None
+
+    supplier = po.supplier
+    items_summary = [
+        f"• {it.description_snapshot} — {float(it.suggested_quantity):g} {it.unit}"
+        for it in (po.items or [])
+    ]
+    return {
+        "id": po.id,
+        "status": po.status,
+        "supplier_name": supplier.name if supplier else "-",
+        "supplier_email": supplier.email or "" if supplier else "",
+        "supplier_phone": supplier.phone or "" if supplier else "",
+        "total_amount_str": f"{float(po.total_amount or 0):.2f}",
+        "notes": po.notes or "",
+        "items_summary": items_summary,
+        "created_at": po.created_at.strftime("%d/%m/%Y") if po.created_at else "",
+    }

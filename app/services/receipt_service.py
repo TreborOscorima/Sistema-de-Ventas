@@ -504,6 +504,16 @@ class ReceiptService:
                     width,
                 )
             )
+            if reservation_context:
+                paid_before = float(reservation_context.get("paid_before", 0) or 0)
+                if paid_before > 0:
+                    receipt_lines.append(
+                        ReceiptService._row(
+                            "A CUENTA:",
+                            f"-{currency_formatter(paid_before, currency_symbol)}",
+                            width,
+                        )
+                    )
         receipt_lines.append(
             ReceiptService._row(
                 "TOTAL A PAGAR:",

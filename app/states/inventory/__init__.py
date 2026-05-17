@@ -53,7 +53,9 @@ class InventoryState(
         "purchase_price": 0,
         "sale_price": 0,
         "custom_profit_margin": "",
+        "default_supplier_id": None,
     }
+    inventory_suppliers: List[Dict[str, Any]] = []
     is_editing_product: bool = False
     show_variants: bool = False
     show_wholesale: bool = False

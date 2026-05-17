@@ -113,7 +113,7 @@ def import_modal() -> rx.Component:
               class_name="flex flex-col items-center",
             ),
             rx.el.div(
-              rx.el.span(State.import_stats["updated"].to_string(), class_name="text-lg font-bold text-blue-600"),
+              rx.el.span(State.import_stats["updated"].to_string(), class_name="text-lg font-bold text-indigo-600"),
               rx.el.span("Actualizar", class_name="text-xs text-slate-500"),
               class_name="flex flex-col items-center",
             ),
@@ -156,7 +156,7 @@ def import_modal() -> rx.Component:
                         class_name=rx.cond(
                           row["status"] == "Nuevo",
                           "text-xs px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium",
-                          "text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium",
+                          "text-xs px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-medium",
                         ),
                       ),
                       class_name="py-2 px-3",
@@ -354,6 +354,28 @@ def edit_product_modal() -> rx.Component:
               on_blur=lambda v: State.handle_edit_product_change("sale_price", v),
               class_name=INPUT_STYLES["default"],
             ),
+          ),
+          rx.el.div(
+            rx.el.label("Proveedor predeterminado", class_name=f"block {TYPOGRAPHY['label']}"),
+            rx.el.select(
+              rx.el.option("Sin proveedor", value=""),
+              rx.foreach(
+                State.inventory_suppliers,
+                lambda s: rx.el.option(s["name"], value=s["id"].to_string()),
+              ),
+              value=rx.cond(
+                State.editing_product["default_supplier_id"],
+                State.editing_product["default_supplier_id"].to_string(),
+                "",
+              ),
+              on_change=lambda v: State.handle_edit_product_change("default_supplier_id", v),
+              class_name=SELECT_STYLES["default"],
+            ),
+            rx.el.p(
+              "Agrupa este producto en Reposición Automática.",
+              class_name=TYPOGRAPHY["caption"],
+            ),
+            class_name="md:col-span-2",
           ),
           class_name="grid grid-cols-1 md:grid-cols-2 gap-4",
         ),

@@ -16,6 +16,7 @@ ROUTE_TO_PAGE = {
     "/dashboard": "Dashboard",
     "/ingreso": "Ingreso",
     "/compras": "Compras",
+    "/reposicion": "Reposicion",
     "/venta": "Punto de Venta",
     "/caja": "Gestion de Caja",
     "/clientes": "Clientes",
@@ -36,6 +37,7 @@ PAGE_TO_ROUTE = {
     "Dashboard": "/dashboard",
     "Ingreso": "/ingreso",
     "Compras": "/compras",
+    "Reposicion": "/reposicion",
     "Punto de Venta": "/venta",
     "Gestion de Caja": "/caja",
     "Clientes": "/clientes",
@@ -339,6 +341,7 @@ class UIState(MixinState):
             {"label": "Punto de Venta", "icon": "shopping-cart", "page": "Punto de Venta", "route": "/venta"},
             {"label": "Ingreso de Mercancía", "icon": "truck", "page": "Ingreso", "route": "/ingreso"},
             {"label": "Compras", "icon": "clipboard-list", "page": "Compras", "route": "/compras"},
+            {"label": "Órdenes de Compra", "icon": "package-search", "page": "Reposicion", "route": "/reposicion"},
             {"label": "Caja", "icon": "banknote", "page": "Gestion de Caja", "route": "/caja"},
             # Clientes y comercial
             {"label": "Clientes", "icon": "users", "page": "Clientes", "route": "/clientes"},
@@ -363,6 +366,7 @@ class UIState(MixinState):
             "Dashboard": "",  # Accesible para todos
             "Ingreso": "view_ingresos",
             "Compras": "view_compras",
+            "Reposicion": "view_compras",
             "Punto de Venta": "view_ventas",
             "Gestion de Caja": "view_cashbox",
             "Clientes": "view_clientes",
@@ -386,6 +390,14 @@ class UIState(MixinState):
             return bool(self.can_view_cuentas)
         if page == "Servicios":
             return bool(self.can_view_servicios)
+        if page == "Presupuestos":
+            return bool(self.can_view_presupuestos)
+        if page == "Promociones":
+            return bool(self.can_manage_promociones)
+        if page == "Listas de Precios":
+            return bool(self.can_manage_listas_precios)
+        if page == "Etiquetas":
+            return bool(self.can_view_etiquetas)
         # Documentos Fiscales: solo visible si facturación electrónica está activa
         if page == "Documentos Fiscales":
             billing_active = getattr(self, "billing_is_active", False)

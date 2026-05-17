@@ -1146,6 +1146,10 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
       class_name="py-3 px-4",
     ),
     rx.el.td(
+      reservation["created_by"],
+      class_name="py-3 px-4 text-sm text-slate-700 hidden lg:table-cell",
+    ),
+    rx.el.td(
       rx.el.div(
         rx.el.button(
           rx.icon("trash-2", class_name="h-4 w-4"),
@@ -1297,6 +1301,7 @@ def reservations_table() -> rx.Component:
             rx.el.th("Horario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[16%]"),
             rx.el.th("Monto", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[10%]"),
             rx.el.th("Estado", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[9%]"),
+            rx.el.th("Usuario", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[8%] hidden lg:table-cell"),
             rx.el.th("Acciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[32%]"),
             rx.el.th(
               "Saldo", scope="col", class_name=f"{TABLE_STYLES['header_cell']} w-[8%] text-right hidden md:table-cell"

@@ -213,12 +213,20 @@ class ReceiptMixin:
         paper_width_mm = self._receipt_paper_mm(branch_id=branch_id)
         _tax_rate_pct = float(company.get("default_tax_rate_pct", 0.0))
         _show_tax = bool(company.get("show_tax_on_receipt", False))
+        # Para reservas, el IVA se calcula sobre el total completo del servicio
+        # MÁS los productos extra cobrados ahora, para cumplimiento fiscal.
+        _tax_total = float(
+            reservation_context.get("total", 0)
+            + float(reservation_context.get("products_total", 0) or 0)
+            if reservation_context
+            else total
+        )
         if _show_tax and _tax_rate_pct > 0:
             _rate_f = _tax_rate_pct / 100.0
-            _base = float(total) / (1 + _rate_f)
-            _tax_amt = float(total) - _base
+            _base = _tax_total / (1 + _rate_f)
+            _tax_amt = _tax_total - _base
         else:
-            _base = float(total)
+            _base = _tax_total
             _tax_amt = 0.0
         receipt_data = {
             "items": receipt_items,
@@ -406,12 +414,18 @@ class ReceiptMixin:
         paper_width_mm = self._receipt_paper_mm(branch_id=branch_id)
         _tax_rate_pct = float(company.get("default_tax_rate_pct", 0.0))
         _show_tax = bool(company.get("show_tax_on_receipt", False))
+        _tax_total = float(
+            reservation_context.get("total", 0)
+            + float(reservation_context.get("products_total", 0) or 0)
+            if reservation_context
+            else total
+        )
         if _show_tax and _tax_rate_pct > 0:
             _rate_f = _tax_rate_pct / 100.0
-            _base = float(total) / (1 + _rate_f)
-            _tax_amt = float(total) - _base
+            _base = _tax_total / (1 + _rate_f)
+            _tax_amt = _tax_total - _base
         else:
-            _base = float(total)
+            _base = _tax_total
             _tax_amt = 0.0
         receipt_data = {
             "items": receipt_items,

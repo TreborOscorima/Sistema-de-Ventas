@@ -224,6 +224,10 @@ class OwnerState:
     owner_form_has_clients: bool = True
     owner_form_has_credits: bool = True
     owner_form_has_billing: bool = False
+    owner_form_has_presupuestos: bool = True
+    owner_form_has_promociones: bool = True
+    owner_form_has_listas_precios: bool = True
+    owner_form_has_etiquetas: bool = True
     owner_form_notes: str = ""  # Notas adicionales opcionales
     owner_form_subscription_months: str = "12"  # Duración de suscripción en meses
 
@@ -511,6 +515,10 @@ class OwnerState:
         self.owner_form_has_clients = True
         self.owner_form_has_credits = True
         self.owner_form_has_billing = False
+        self.owner_form_has_presupuestos = True
+        self.owner_form_has_promociones = True
+        self.owner_form_has_listas_precios = True
+        self.owner_form_has_etiquetas = True
         self.owner_form_notes = ""
         self.owner_form_subscription_months = "12"
         self.owner_form_current_plan = ""
@@ -531,6 +539,10 @@ class OwnerState:
                 self.owner_form_has_clients = c.get("has_clients_module", True)
                 self.owner_form_has_credits = c.get("has_credits_module", True)
                 self.owner_form_has_billing = c.get("has_electronic_billing", False)
+                self.owner_form_has_presupuestos = c.get("has_presupuestos_module", True)
+                self.owner_form_has_promociones = c.get("has_promociones_module", True)
+                self.owner_form_has_listas_precios = c.get("has_listas_precios_module", True)
+                self.owner_form_has_etiquetas = c.get("has_etiquetas_module", True)
                 self.owner_form_trial_ends_at = c.get("trial_ends_at", "") or ""
                 break
 
@@ -591,6 +603,22 @@ class OwnerState:
     @rx.event
     def owner_set_form_has_billing(self, value: bool):
         self.owner_form_has_billing = value
+
+    @rx.event
+    def owner_set_form_has_presupuestos(self, value: bool):
+        self.owner_form_has_presupuestos = value
+
+    @rx.event
+    def owner_set_form_has_promociones(self, value: bool):
+        self.owner_form_has_promociones = value
+
+    @rx.event
+    def owner_set_form_has_listas_precios(self, value: bool):
+        self.owner_form_has_listas_precios = value
+
+    @rx.event
+    def owner_set_form_has_etiquetas(self, value: bool):
+        self.owner_form_has_etiquetas = value
 
     @rx.event
     def owner_set_form_notes(self, value: str):
@@ -731,6 +759,10 @@ class OwnerState:
                         has_clients_module=self.owner_form_has_clients,
                         has_credits_module=self.owner_form_has_credits,
                         has_electronic_billing=self.owner_form_has_billing,
+                        has_presupuestos_module=self.owner_form_has_presupuestos,
+                        has_promociones_module=self.owner_form_has_promociones,
+                        has_listas_precios_module=self.owner_form_has_listas_precios,
+                        has_etiquetas_module=self.owner_form_has_etiquetas,
                         reason=full_reason,
                         **actor,
                     )

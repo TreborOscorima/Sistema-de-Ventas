@@ -23,10 +23,10 @@ _SEGMENT_LABELS: dict[str, str] = {
 }
 
 _SEGMENT_CLASSES: dict[str, str] = {
-  "nuevo":     "bg-blue-100 text-blue-700",
+  "nuevo":     "bg-indigo-100 text-indigo-700",
   "regular":   "bg-slate-100 text-slate-600",
   "vip":       "bg-amber-100 text-amber-700",
-  "mayorista": "bg-purple-100 text-purple-700",
+  "mayorista": "bg-violet-100 text-violet-700",
 }
 
 
@@ -48,10 +48,10 @@ def _segment_badge(segment: rx.Var[str]) -> rx.Component:
       segment == "vip",      "VIP",        rx.cond(
       segment == "mayorista","Mayorista",  segment)))),
       class_name=rx.cond(
-        segment == "nuevo",     "text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700",
+        segment == "nuevo",     "text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700",
         rx.cond(segment == "regular",  "text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600",
         rx.cond(segment == "vip",      "text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700",
-        rx.cond(segment == "mayorista","text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700",
+        rx.cond(segment == "mayorista","text-xs font-medium px-2 py-0.5 rounded-full bg-violet-100 text-violet-700",
                                        "text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500")))),
     ),
   )

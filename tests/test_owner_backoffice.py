@@ -247,9 +247,16 @@ class TestChangePlan:
             reason="Upgrade",
         )
 
-        assert company.max_users == PLAN_DEFAULTS[PlanType.PROFESSIONAL]["max_users"]
-        assert company.max_branches == PLAN_DEFAULTS[PlanType.PROFESSIONAL]["max_branches"]
-        assert company.has_electronic_billing is True
+        prof = PLAN_DEFAULTS[PlanType.PROFESSIONAL]
+        assert company.max_users == prof["max_users"]
+        assert company.max_branches == prof["max_branches"]
+        assert company.has_electronic_billing is False  # billing solo en Enterprise
+        assert company.has_clients_module is True
+        assert company.has_credits_module is True
+        assert company.has_presupuestos_module is True
+        assert company.has_promociones_module is True
+        assert company.has_listas_precios_module is True
+        assert company.has_etiquetas_module is True
 
     @pytest.mark.asyncio
     async def test_change_plan_invalid_plan(self, session, company):
@@ -636,6 +643,10 @@ class TestCompanySnapshot:
             "has_clients_module",
             "has_credits_module",
             "has_electronic_billing",
+            "has_presupuestos_module",
+            "has_promociones_module",
+            "has_listas_precios_module",
+            "has_etiquetas_module",
         }
         assert set(snap.keys()) == expected_keys
 
@@ -1356,9 +1367,9 @@ class TestModulesAndSubscription:
             assert "has_credits_module" in defaults, f"Falta has_credits_module en {plan}"
             assert "has_electronic_billing" in defaults, f"Falta has_electronic_billing en {plan}"
 
-    def test_professional_enterprise_include_billing(self):
-        """Professional y Enterprise deben incluir facturación electrónica."""
-        assert PLAN_DEFAULTS[PlanType.PROFESSIONAL]["has_electronic_billing"] is True
+    def test_enterprise_includes_billing(self):
+        """Solo Enterprise incluye facturación electrónica."""
+        assert PLAN_DEFAULTS[PlanType.PROFESSIONAL]["has_electronic_billing"] is False
         assert PLAN_DEFAULTS[PlanType.ENTERPRISE]["has_electronic_billing"] is True
 
     def test_trial_standard_exclude_billing(self):

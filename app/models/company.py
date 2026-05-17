@@ -71,6 +71,10 @@ class Company(SQLModel, table=True):
     has_clients_module: bool = Field(default=True)
     has_credits_module: bool = Field(default=True)
     has_electronic_billing: bool = Field(default=False)
+    has_presupuestos_module: bool = Field(default=True)
+    has_promociones_module: bool = Field(default=True)
+    has_listas_precios_module: bool = Field(default=True)
+    has_etiquetas_module: bool = Field(default=True)
     subscription_status: SubscriptionStatus = Field(
         default=SubscriptionStatus.ACTIVE,
         sa_column=sqlalchemy.Column(

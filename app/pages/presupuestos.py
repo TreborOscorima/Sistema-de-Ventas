@@ -56,6 +56,10 @@ def _quotation_row(q: rx.Var) -> rx.Component:
             class_name="py-3 px-4 text-sm text-right",
         ),
         rx.el.td(
+            q["created_by"],
+            class_name="py-3 px-4 text-sm text-slate-700 hidden lg:table-cell",
+        ),
+        rx.el.td(
             rx.el.div(
                 rx.el.button(
                     rx.icon("eye", class_name="h-4 w-4"),
@@ -68,6 +72,16 @@ def _quotation_row(q: rx.Var) -> rx.Component:
                     on_click=State.download_quotation_pdf(q["id"]),
                     class_name=f"{BUTTON_STYLES.get('ghost', 'p-2 rounded-lg text-slate-500 hover:bg-slate-100')} p-1.5",
                     title="Descargar PDF",
+                ),
+                rx.cond(
+                    q["status"] == "draft",
+                    rx.el.button(
+                        rx.icon("send", class_name="h-4 w-4"),
+                        on_click=State.open_quot_send_modal(q["id"]),
+                        class_name=f"{BUTTON_STYLES['icon_primary']} p-1.5",
+                        title="Enviar al cliente",
+                    ),
+                    rx.fragment(),
                 ),
                 class_name="flex items-center gap-1 justify-end",
             ),
@@ -154,6 +168,7 @@ def _quotation_detail_modal() -> rx.Component:
                     rx.el.p(rx.el.span("Estado: ", class_name="text-slate-500"), _status_badge(q["status_label"], q["status_color"]), class_name="text-sm flex items-center gap-1"),
                     rx.el.p(rx.el.span("Cliente: ", class_name="text-slate-500"), rx.el.span(q["client_name"], class_name="text-sm font-medium"), class_name="text-sm"),
                     rx.el.p(rx.el.span("Creado: ", class_name="text-slate-500"), rx.el.span(q["created_at"], class_name="text-sm")),
+                    rx.el.p(rx.el.span("Usuario: ", class_name="text-slate-500"), rx.el.span(q["created_by"], class_name="text-sm font-medium")),
                     rx.el.p(rx.el.span("Válido hasta: ", class_name="text-slate-500"), rx.el.span(q["expires_at"], class_name="text-sm font-medium text-amber-700")),
                     class_name="space-y-1",
                 ),
@@ -206,15 +221,6 @@ def _quotation_detail_modal() -> rx.Component:
                 rx.el.p("Cambiar estado:", class_name="text-xs text-slate-500 font-medium"),
                 rx.el.div(
                     rx.cond(
-                        q["status"] == QuotationStatus.DRAFT,
-                        rx.el.button(
-                            "Marcar Enviado",
-                            on_click=State.update_quotation_status(q["id"], QuotationStatus.SENT),
-                            class_name=f"{BUTTON_STYLES.get('secondary', 'px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50')}",
-                        ),
-                        rx.fragment(),
-                    ),
-                    rx.cond(
                         (q["status"] == QuotationStatus.SENT) | (q["status"] == QuotationStatus.DRAFT),
                         rx.el.button(
                             "Aceptado",
@@ -260,6 +266,16 @@ def _quotation_detail_modal() -> rx.Component:
                 ),
                 rx.fragment(),
             ),
+            rx.cond(
+                (q["status"] == QuotationStatus.SENT) | (q["status"] == QuotationStatus.ACCEPTED),
+                rx.el.button(
+                    rx.icon("send", class_name="h-4 w-4"),
+                    "Reenviar",
+                    on_click=State.open_quot_send_modal(q["id"]),
+                    class_name=f"flex items-center gap-2 {BUTTON_STYLES.get('secondary', 'px-3 py-1.5 text-sm border border-slate-200 rounded-lg hover:bg-slate-50')}",
+                ),
+                rx.fragment(),
+            ),
             rx.el.button(
                 rx.icon("download", class_name="h-4 w-4"),
                 "Descargar PDF",
@@ -273,6 +289,125 @@ def _quotation_detail_modal() -> rx.Component:
             ),
             class_name="flex gap-3 justify-end flex-wrap",
         ),
+    )
+
+
+# ─── Modal: Enviar Presupuesto ───────────────────────────────────────────────
+
+def _quotation_send_modal() -> rx.Component:
+    """Modal para enviar un presupuesto al cliente via email o WhatsApp."""
+    return modal_container(
+        is_open=State.quot_send_open,
+        on_close=State.close_quot_send_modal,
+        title="Enviar Presupuesto",
+        description=State.quot_send_client_name,
+        children=[
+            rx.el.div(
+                # Resumen
+                rx.el.div(
+                    rx.el.p(
+                        "Total: ",
+                        rx.el.span(
+                            State.currency_symbol, " ", State.quot_send_total_str,
+                            class_name="font-bold text-indigo-600",
+                        ),
+                        "  ·  Válido hasta: ",
+                        rx.el.span(State.quot_send_expires_at, class_name="font-medium text-amber-700"),
+                        class_name="text-sm text-slate-600",
+                    ),
+                    class_name="px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-lg",
+                ),
+
+                # ── Email ─────────────────────────────────────────────────────
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("mail", class_name="h-4 w-4 text-indigo-500"),
+                        rx.el.span("Enviar por Email", class_name="font-semibold text-slate-800 text-sm"),
+                        class_name="flex items-center gap-2",
+                    ),
+                    rx.el.p(
+                        "Se adjuntará el PDF completo del presupuesto.",
+                        class_name="text-xs text-slate-500 mt-0.5",
+                    ),
+                    rx.el.div(
+                        rx.el.input(
+                            default_value=State.quot_send_recipient_email,
+                            placeholder="email@cliente.com",
+                            type="email",
+                            on_change=State.set_quot_send_recipient,
+                            class_name=INPUT_STYLES["default"] + " flex-1",
+                        ),
+                        rx.el.button(
+                            rx.cond(
+                                State.quot_send_loading,
+                                rx.fragment(
+                                    rx.icon("loader-circle", class_name="h-4 w-4 animate-spin"),
+                                    "Enviando...",
+                                ),
+                                rx.fragment(
+                                    rx.icon("send", class_name="h-4 w-4"),
+                                    "Enviar",
+                                ),
+                            ),
+                            on_click=State.send_quotation_by_email,
+                            disabled=State.quot_send_loading,
+                            class_name=BUTTON_STYLES["primary_sm"],
+                        ),
+                        class_name="flex gap-2 mt-2",
+                    ),
+                    rx.cond(
+                        State.quot_send_error != "",
+                        rx.el.p(State.quot_send_error, class_name="text-xs text-red-600 mt-1"),
+                        rx.fragment(),
+                    ),
+                    class_name="flex flex-col gap-1 p-4 border border-slate-200 rounded-xl bg-white",
+                ),
+
+                # ── WhatsApp ──────────────────────────────────────────────────
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("message-circle", class_name="h-4 w-4 text-emerald-500"),
+                        rx.el.span("Enviar por WhatsApp", class_name="font-semibold text-slate-800 text-sm"),
+                        class_name="flex items-center gap-2",
+                    ),
+                    rx.el.p(
+                        "Abre WhatsApp con el resumen del presupuesto listo para enviar al cliente.",
+                        class_name="text-xs text-slate-500 mt-0.5",
+                    ),
+                    rx.el.button(
+                        rx.icon("message-circle", class_name="h-4 w-4"),
+                        "Abrir en WhatsApp",
+                        on_click=State.send_quotation_whatsapp,
+                        class_name="mt-2 flex items-center gap-2 h-9 px-4 text-sm font-medium rounded-lg"
+                                   " bg-emerald-500 hover:bg-emerald-600 text-white transition-colors",
+                    ),
+                    class_name="flex flex-col gap-1 p-4 border border-slate-200 rounded-xl bg-white",
+                ),
+
+                # ── Solo marcar ───────────────────────────────────────────────
+                rx.el.div(
+                    rx.el.p(
+                        "¿Ya contactaste al cliente por otro medio?",
+                        class_name="text-xs text-slate-500",
+                    ),
+                    rx.el.button(
+                        "Solo marcar como enviado",
+                        on_click=lambda _: State.mark_quotation_sent_only(State.quot_send_quot_id),
+                        class_name=BUTTON_STYLES["secondary_sm"],
+                    ),
+                    class_name="flex items-center justify-between gap-4 px-4 py-3"
+                               " border border-dashed border-slate-200 rounded-xl",
+                ),
+
+                class_name="flex flex-col gap-3",
+            ),
+        ],
+        footer=rx.el.button(
+            "Cancelar",
+            on_click=State.close_quot_send_modal,
+            class_name=BUTTON_STYLES.get("secondary", "px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50"),
+        ),
+        max_width="max-w-lg",
     )
 
 
@@ -525,6 +660,7 @@ def presupuestos_page() -> rx.Component:
                             rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
                             rx.el.th("Cliente", class_name=TABLE_STYLES["header_cell"]),
                             rx.el.th("Total", class_name=TABLE_STYLES["header_cell"] + " text-right"),
+                            rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"] + " hidden lg:table-cell"),
                             rx.el.th("Acciones", class_name=TABLE_STYLES["header_cell"] + " text-right"),
                             class_name=TABLE_STYLES["header"],
                         ),
@@ -558,6 +694,7 @@ def presupuestos_page() -> rx.Component:
         # Modales
         _new_quotation_modal(),
         _quotation_detail_modal(),
+        _quotation_send_modal(),
         # rx.fragment no soporta on_mount; la carga inicial la dispara
         # `app.add_page(on_load=State.page_init_presupuestos)` en app/app.py.
     )

@@ -1,6 +1,7 @@
 """Estado reactivo para Presupuestos / Cotizaciones."""
 from __future__ import annotations
 
+import urllib.parse
 import uuid
 import logging
 from decimal import Decimal, ROUND_HALF_UP
@@ -10,6 +11,7 @@ import reflex as rx
 from sqlmodel import select, func
 
 from app.models import Client, Product, ProductVariant, Quotation, QuotationItem
+from app.models.auth import User
 from app.models.quotations import QuotationStatus
 from app.services.quotation_service import (
     CreateQuotationDTO,
@@ -96,6 +98,20 @@ class QuotationState(MixinState):
     pos_quot_results: list[dict[str, Any]] = []
     pos_quot_loading: bool = False
 
+    # ── Modal de envío (email / WhatsApp) ────────────────────────────
+    quot_send_open: bool = False
+    quot_send_quot_id: int = 0
+    quot_send_client_name: str = ""
+    quot_send_client_email: str = ""
+    quot_send_client_phone: str = ""
+    quot_send_recipient_email: str = ""
+    quot_send_total_str: str = "0.00"
+    quot_send_expires_at: str = ""
+    quot_send_notes: str = ""
+    quot_send_items_summary: list[str] = []
+    quot_send_loading: bool = False
+    quot_send_error: str = ""
+
     # Presupuesto pre-cargado al POS pendiente de vincular tras confirmar venta
     _pending_quotation_id: int = rx.field(default=0, is_var=False)
 
@@ -175,6 +191,15 @@ class QuotationState(MixinState):
                 ).all()
                 client_name_map = {c.id: c.name for c in cli_rows}
 
+            # Bulk-load de usuarios creadores
+            user_ids = list({q.user_id for q in rows if q.user_id})
+            user_name_map: dict[int, str] = {}
+            if user_ids:
+                user_rows = session.exec(
+                    select(User).where(User.id.in_(user_ids))
+                ).all()
+                user_name_map = {u.id: u.username for u in user_rows}
+
         result = []
         for q in rows:
             result.append({
@@ -190,6 +215,7 @@ class QuotationState(MixinState):
                 "client_name": client_name_map.get(q.client_id, "Público en general") if q.client_id else "Público en general",
                 "notes": q.notes or "",
                 "converted_sale_id": q.converted_sale_id,
+                "created_by": user_name_map.get(q.user_id, "—") if q.user_id else "—",
             })
         self.quotations = result
 
@@ -495,6 +521,11 @@ class QuotationState(MixinState):
                 cli = session.exec(select(Client).where(Client.id == q.client_id)).first()
                 if cli:
                     client_name = cli.name
+            created_by = "—"
+            if q.user_id:
+                usr = session.exec(select(User).where(User.id == q.user_id)).first()
+                if usr:
+                    created_by = usr.username
 
         self.selected_quotation = {
             "id": q.id,
@@ -510,6 +541,7 @@ class QuotationState(MixinState):
             "client_name": client_name,
             "converted_sale_id": q.converted_sale_id,
             "validity_days": q.validity_days,
+            "created_by": created_by,
         }
         self.selected_quotation_items = [
             {
@@ -936,3 +968,251 @@ class QuotationState(MixinState):
             self.pos_quot_results = results
         finally:
             self.pos_quot_loading = False
+
+    # ─── Modal de envío: email / WhatsApp ────────────────────────────
+
+    @rx.event
+    async def open_quot_send_modal(self, quotation_id: int):
+        """Carga info del presupuesto y cliente, abre el modal de envío."""
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id:
+            return
+
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+
+        q = None
+        db_items = []
+        client_name = "Cliente"
+        client_email = ""
+        client_phone = ""
+
+        with rx.session() as session:
+            q = session.exec(
+                select(Quotation).where(Quotation.id == int(quotation_id))
+            ).first()
+            if not q:
+                yield rx.toast("Presupuesto no encontrado.", duration=3000)
+                return
+            db_items = list(
+                session.exec(
+                    select(QuotationItem).where(QuotationItem.quotation_id == int(quotation_id))
+                ).all()
+            )
+            if q.client_id:
+                cli = session.exec(
+                    select(Client).where(Client.id == q.client_id)
+                ).first()
+                if cli:
+                    client_name = cli.name or "Cliente"
+                    client_email = cli.email or ""
+                    client_phone = cli.phone or ""
+
+        items_summary = [
+            f"{float(qi.quantity or 0):.0f}x {qi.product_name_snapshot or '—'} — "
+            f"{self.currency_symbol}{float(qi.unit_price or 0):.2f}"
+            for qi in db_items
+        ]
+
+        self.quot_send_quot_id = int(quotation_id)
+        self.quot_send_client_name = client_name
+        self.quot_send_client_email = client_email
+        self.quot_send_client_phone = client_phone
+        self.quot_send_recipient_email = client_email
+        self.quot_send_total_str = f"{float(q.total_amount or 0):.2f}"
+        self.quot_send_expires_at = self._format_company_datetime(q.expires_at, "%d/%m/%Y")
+        self.quot_send_notes = q.notes or ""
+        self.quot_send_items_summary = items_summary
+        self.quot_send_loading = False
+        self.quot_send_error = ""
+        self.quot_send_open = True
+
+    @rx.event
+    def close_quot_send_modal(self):
+        self.quot_send_open = False
+        self.quot_send_quot_id = 0
+        self.quot_send_client_name = ""
+        self.quot_send_client_email = ""
+        self.quot_send_client_phone = ""
+        self.quot_send_recipient_email = ""
+        self.quot_send_items_summary = []
+        self.quot_send_error = ""
+        self.quot_send_loading = False
+
+    @rx.event
+    def set_quot_send_recipient(self, value: str):
+        self.quot_send_recipient_email = str(value or "")
+
+    @rx.event
+    async def send_quotation_by_email(self):
+        """Genera PDF, envía email al cliente y marca el presupuesto como enviado."""
+        from app.services import email_service
+        from app.services.email_service import EmailConfigError, build_quotation_email_body
+        from app.services.quotation_service import QuotationService
+
+        quot_id = self.quot_send_quot_id
+        recipient = (self.quot_send_recipient_email or "").strip()
+        if not recipient:
+            self.quot_send_error = "Ingresa un email de destino."
+            return
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id:
+            yield rx.toast("Empresa no definida.", duration=3000)
+            return
+
+        self.quot_send_loading = True
+        self.quot_send_error = ""
+        yield
+
+        try:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(company_id, branch_id)
+
+            with rx.session() as session:
+                q = session.exec(
+                    select(Quotation).where(Quotation.id == quot_id)
+                ).first()
+                if not q:
+                    self.quot_send_error = "Presupuesto no encontrado."
+                    return
+                db_items = list(
+                    session.exec(
+                        select(QuotationItem).where(QuotationItem.quotation_id == quot_id)
+                    ).all()
+                )
+
+            items_data = [
+                {
+                    "product_name_snapshot": qi.product_name_snapshot,
+                    "quantity": float(qi.quantity or 0),
+                    "unit_price": float(qi.unit_price or 0),
+                    "discount_percentage": float(qi.discount_percentage or 0),
+                    "subtotal": float(qi.subtotal or 0),
+                }
+                for qi in db_items
+            ]
+
+            snap = self._company_settings_snapshot()
+            currency = self.currency_symbol
+            settings = dict(snap)
+            settings["client_name"] = self.quot_send_client_name or "Cliente"
+            settings["currency_symbol"] = currency
+
+            pdf_bytes = QuotationService.generate_pdf(q, items_data, settings)
+            subject = f"Presupuesto #{quot_id:05d} — {snap.get('company_name', '')}"
+            body_html = build_quotation_email_body(
+                company_name=snap.get("company_name", ""),
+                quotation_id=quot_id,
+                client_name=self.quot_send_client_name or "Cliente",
+                items_summary=self.quot_send_items_summary,
+                total_str=self.quot_send_total_str,
+                currency=currency,
+                expires_at=self.quot_send_expires_at,
+                notes=self.quot_send_notes,
+            )
+            email_service.send_email_with_pdf(
+                to=recipient,
+                subject=subject,
+                body_html=body_html,
+                pdf_bytes=pdf_bytes,
+                pdf_filename=f"Presupuesto_{quot_id:05d}.pdf",
+            )
+
+            with rx.session() as session:
+                q_obj = session.exec(
+                    select(Quotation).where(Quotation.id == quot_id)
+                ).first()
+                if q_obj:
+                    q_obj.status = QuotationStatus.SENT
+                    session.add(q_obj)
+                    session.commit()
+
+        except EmailConfigError as exc:
+            self.quot_send_error = str(exc)
+            return
+        except Exception as exc:
+            logger.exception("send_quotation_by_email failed")
+            self.quot_send_error = f"Error al enviar: {exc}"
+            return
+        finally:
+            self.quot_send_loading = False
+
+        self.close_quot_send_modal()
+        await self._load_quotations()
+        yield rx.toast(f"Presupuesto #{quot_id} enviado por email.", duration=4000)
+
+    @rx.event
+    async def send_quotation_whatsapp(self):
+        """Genera link de WhatsApp con el resumen y lo abre en nueva pestaña."""
+        quot_id = self.quot_send_quot_id
+        currency = self.currency_symbol
+        items_text = "\n".join(self.quot_send_items_summary) if self.quot_send_items_summary else ""
+        notes_line = f"\nNotas: {self.quot_send_notes}" if self.quot_send_notes else ""
+        snap = self._company_settings_snapshot()
+        company_name = snap.get("company_name", "TUWAYKIAPP")
+
+        message = (
+            f"*PRESUPUESTO #{quot_id:05d}*\n"
+            f"Empresa: {company_name}\n\n"
+            f"*Cliente:* {self.quot_send_client_name}\n\n"
+            f"*Productos cotizados:*\n{items_text}{notes_line}\n\n"
+            f"*Total:* {currency} {self.quot_send_total_str}\n"
+            f"*Válido hasta:* {self.quot_send_expires_at}\n\n"
+            f"_Generado por TUWAYKIAPP_"
+        )
+        phone = "".join(c for c in (self.quot_send_client_phone or "") if c.isdigit())
+        encoded = urllib.parse.quote(message)
+        url = (
+            f"https://wa.me/{phone}?text={encoded}" if phone
+            else f"https://wa.me/?text={encoded}"
+        )
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if company_id and branch_id:
+            try:
+                from app.utils.tenant import set_tenant_context
+                set_tenant_context(company_id, branch_id)
+                with rx.session() as session:
+                    q_obj = session.exec(
+                        select(Quotation).where(Quotation.id == quot_id)
+                    ).first()
+                    if q_obj:
+                        q_obj.status = QuotationStatus.SENT
+                        session.add(q_obj)
+                        session.commit()
+            except Exception:
+                pass
+
+        self.close_quot_send_modal()
+        await self._load_quotations()
+        yield rx.call_script(f"window.open('{url}', '_blank')")
+
+    @rx.event
+    async def mark_quotation_sent_only(self, quotation_id: int):
+        """Solo cambia el estado a enviado sin enviar comunicación."""
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id:
+            yield rx.toast("Empresa no definida.", duration=3000)
+            return
+        try:
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(company_id, branch_id)
+            with rx.session() as session:
+                q_obj = session.exec(
+                    select(Quotation).where(Quotation.id == int(quotation_id))
+                ).first()
+                if q_obj:
+                    q_obj.status = QuotationStatus.SENT
+                    session.add(q_obj)
+                    session.commit()
+        except Exception as exc:
+            yield rx.toast(f"Error: {exc}", duration=4000)
+            return
+        self.close_quot_send_modal()
+        await self._load_quotations()
+        yield rx.toast(f"Presupuesto #{quotation_id} marcado como enviado.", duration=3000)

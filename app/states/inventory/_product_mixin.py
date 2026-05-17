@@ -20,6 +20,7 @@ from app.models import (
     ProductVariant,
     PriceTier,
     SaleItem,
+    Supplier,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ class ProductMixin:
                 "unit": "",
                 "purchase_price": 0,
                 "sale_price": 0,
+                "default_supplier_id": None,
             }
             self.show_variants = False
             self.show_wholesale = False
@@ -54,6 +56,18 @@ class ProductMixin:
             self.batches = []
             self.attributes = []
             self.kit_components = []
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            if company_id and branch_id:
+                with rx.session() as session:
+                    sups = session.exec(
+                        select(Supplier)
+                        .where(Supplier.company_id == company_id)
+                        .where(Supplier.branch_id == branch_id)
+                        .where(Supplier.is_active == True)
+                        .order_by(Supplier.name)
+                    ).all()
+                    self.inventory_suppliers = [{"id": s.id, "name": s.name} for s in sups]
             self.is_editing_product = True
             return
 
@@ -76,6 +90,7 @@ class ProductMixin:
             "purchase_price": _read_value("purchase_price", 0),
             "sale_price": _read_value("sale_price", 0),
             "custom_profit_margin": str(raw_margin) if raw_margin is not None else "",
+            "default_supplier_id": _read_value("default_supplier_id", None),
         }
 
         self.show_variants = False
@@ -91,6 +106,16 @@ class ProductMixin:
 
         company_id = self._company_id()
         branch_id = self._branch_id()
+        if company_id and branch_id:
+            with rx.session() as session:
+                sups = session.exec(
+                    select(Supplier)
+                    .where(Supplier.company_id == company_id)
+                    .where(Supplier.branch_id == branch_id)
+                    .where(Supplier.is_active == True)
+                    .order_by(Supplier.name)
+                ).all()
+                self.inventory_suppliers = [{"id": s.id, "name": s.name} for s in sups]
         if company_id and branch_id and product_id:
             with rx.session() as session:
                 variants = session.exec(
@@ -217,6 +242,7 @@ class ProductMixin:
             "unit": "",
             "purchase_price": 0,
             "sale_price": 0,
+            "default_supplier_id": None,
         }
         self.show_variants = False
         self.show_wholesale = False
@@ -229,6 +255,18 @@ class ProductMixin:
         self.batches = []
         self.attributes = []
         self.kit_components = []
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if company_id and branch_id:
+            with rx.session() as session:
+                sups = session.exec(
+                    select(Supplier)
+                    .where(Supplier.company_id == company_id)
+                    .where(Supplier.branch_id == branch_id)
+                    .where(Supplier.is_active == True)
+                    .order_by(Supplier.name)
+                ).all()
+                self.inventory_suppliers = [{"id": s.id, "name": s.name} for s in sups]
         self.is_editing_product = True
 
     @rx.event
@@ -317,6 +355,7 @@ class ProductMixin:
             "unit": "",
             "purchase_price": 0,
             "sale_price": 0,
+            "default_supplier_id": None,
         }
         self.show_variants = False
         self.show_wholesale = False
@@ -389,6 +428,12 @@ class ProductMixin:
                 self.editing_product[field] = float(value) if str(value).strip() else 0.0
             except ValueError:
                 pass
+
+        elif field == "default_supplier_id":
+            try:
+                self.editing_product["default_supplier_id"] = int(value) if value else None
+            except (ValueError, TypeError):
+                self.editing_product["default_supplier_id"] = None
 
         else:
             self.editing_product[field] = value
@@ -891,6 +936,7 @@ class ProductMixin:
                     )
                     product.unit = product_data.get("unit", "Unidad")
                     product.purchase_price = product_data.get("purchase_price", 0)
+                    product.default_supplier_id = product_data.get("default_supplier_id") or None
                     new_sale_price = product_data.get("sale_price", 0)
                     # Registrar timestamp si el precio de venta cambió
                     from decimal import Decimal, InvalidOperation
@@ -933,6 +979,7 @@ class ProductMixin:
                         purchase_price=product_data.get("purchase_price", 0),
                         sale_price=product_data.get("sale_price", 0),
                         custom_profit_margin=parsed_margin,
+                        default_supplier_id=product_data.get("default_supplier_id") or None,
                         company_id=company_id,
                         branch_id=branch_id,
                     )

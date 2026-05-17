@@ -56,6 +56,7 @@ class CurrencyOption(TypedDict):
 
 class PaymentMethodConfig(TypedDict):
     id: str
+    pk: int | None
     name: str
     description: str
     kind: str
@@ -88,6 +89,7 @@ class FieldReservation(TypedDict):
     created_at: str
     cancellation_reason: str
     delete_reason: str
+    created_by: str
 
 class ServiceLogEntry(TypedDict):
     id: str

@@ -5,7 +5,7 @@ import reflex as rx
 import time
 from sqlmodel import select
 from sqlalchemy import func, or_
-from app.models import Supplier, FieldReservation as FieldReservationModel
+from app.models import Supplier, FieldReservation as FieldReservationModel, User as UserModel
 from app.enums import ReservationStatus
 from app.utils.sanitization import escape_like
 from app.states.root_state import RootState
@@ -113,6 +113,10 @@ class State(RootState):
         now = time.time()
         # Forzar refresh si subscription_snapshot está vacío (plan no cargado)
         snapshot_empty = not (self.subscription_snapshot or {}).get("plan_type")
+        # Bypass si el usuario está autenticado pero no tiene sucursales cargadas.
+        # Cubre el race condition post STATE_RESET donde on_load disparó antes de
+        # que LocalStorage sincronizara el token → refresh saltó con is_authenticated=False.
+        branches_empty = not getattr(self, "available_branches", None)
         # Detectar cambio de tenant: si company/branch actual difiere del último
         # procesado, bypassamos el TTL. Esto cubre el caso de set_active_branch
         # + rx.redirect() donde el TTL aún no venció pero el tenant cambió.
@@ -130,6 +134,7 @@ class State(RootState):
         if (
             not force
             and not snapshot_empty
+            and not branches_empty
             and not tenant_changed
             and (now - self._last_runtime_refresh_ts) < self._runtime_refresh_ttl
         ):
@@ -377,6 +382,13 @@ class State(RootState):
                 page = total_pages
             data_q = data_q.offset((page - 1) * per_page).limit(per_page)
             reservations = (await session.exec(data_q)).all()
+            user_ids = list({r.user_id for r in reservations if r.user_id})
+            user_name_map: dict[int, str] = {}
+            if user_ids:
+                user_rows = (await session.exec(
+                    select(UserModel).where(UserModel.id.in_(user_ids))
+                )).all()
+                user_name_map = {u.id: u.username for u in user_rows}
 
         # 3° Formatear y actualizar estado
         formatted = []
@@ -406,6 +418,7 @@ class State(RootState):
                 "created_at": r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
                 "cancellation_reason": r.cancellation_reason or "",
                 "delete_reason": r.delete_reason or "",
+                "created_by": user_name_map.get(r.user_id, "—") if r.user_id else "—",
             })
 
         async with self:
@@ -561,6 +574,26 @@ class State(RootState):
             yield redirect
         yield
         yield State.bg_load_suppliers
+
+    @rx.event
+    async def page_init_reposicion(self):
+        """on_load para /reposicion. Verifica privilegio view_compras|view_ingresos."""
+        await self._do_runtime_refresh()
+        self.sync_page_from_route()
+        privileges = self.current_user["privileges"] if self.is_authenticated else {}
+        has_access = privileges.get("view_compras") or privileges.get("view_ingresos")
+        denied = self._page_guard(
+            extra_check=bool(has_access),
+            deny_msg="Acceso denegado: No tienes permiso para ver Reposición.",
+        )
+        if denied:
+            for ev in denied:
+                yield ev
+            return
+        redirect = self.run_common_guards()
+        if redirect:
+            yield redirect
+        yield
 
     @rx.event
     async def page_init_venta(self):

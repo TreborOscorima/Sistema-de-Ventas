@@ -688,6 +688,9 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 allocations = self._build_reservation_payments(amount)
             if not allocations:
                 allocations = [(PaymentMethodType.cash, amount)]
+            _pm_id_other = None
+            if hasattr(self, "_resolve_pm_id_for_other"):
+                _pm_id_other = self._resolve_pm_id_for_other(payment_label)
             for method_type, method_amount in allocations:
                 if method_amount <= 0:
                     continue
@@ -697,6 +700,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         company_id=company_id,
                         amount=method_amount,
                         method_type=method_type,
+                        payment_method_id=_pm_id_other if method_type == PaymentMethodType.other else None,
                         reference_code=None,
                         created_at=timestamp,
                         branch_id=branch_id,

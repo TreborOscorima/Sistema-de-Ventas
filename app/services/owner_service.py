@@ -61,6 +61,10 @@ PLAN_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "has_clients_module": True,
         "has_credits_module": True,
         "has_electronic_billing": False,
+        "has_presupuestos_module": True,
+        "has_promociones_module": True,
+        "has_listas_precios_module": True,
+        "has_etiquetas_module": True,
     },
     PlanType.STANDARD: {
         "max_users": 5,
@@ -70,6 +74,10 @@ PLAN_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "has_clients_module": False,
         "has_credits_module": False,
         "has_electronic_billing": False,
+        "has_presupuestos_module": False,
+        "has_promociones_module": False,
+        "has_listas_precios_module": False,
+        "has_etiquetas_module": False,
     },
     PlanType.PROFESSIONAL: {
         "max_users": 10,
@@ -78,7 +86,11 @@ PLAN_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "has_services_module": True,
         "has_clients_module": True,
         "has_credits_module": True,
-        "has_electronic_billing": True,
+        "has_electronic_billing": False,
+        "has_presupuestos_module": True,
+        "has_promociones_module": True,
+        "has_listas_precios_module": True,
+        "has_etiquetas_module": True,
     },
     PlanType.ENTERPRISE: {
         "max_users": 999,
@@ -88,6 +100,10 @@ PLAN_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "has_clients_module": True,
         "has_credits_module": True,
         "has_electronic_billing": True,
+        "has_presupuestos_module": True,
+        "has_promociones_module": True,
+        "has_listas_precios_module": True,
+        "has_etiquetas_module": True,
     },
 }
 
@@ -109,6 +125,10 @@ def _company_snapshot(company: Company) -> Dict[str, Any]:
         "has_clients_module": company.has_clients_module,
         "has_credits_module": company.has_credits_module,
         "has_electronic_billing": company.has_electronic_billing,
+        "has_presupuestos_module": company.has_presupuestos_module,
+        "has_promociones_module": company.has_promociones_module,
+        "has_listas_precios_module": company.has_listas_precios_module,
+        "has_etiquetas_module": company.has_etiquetas_module,
     }
 
 
@@ -445,6 +465,10 @@ class OwnerService:
             "has_clients_module": company.has_clients_module,
             "has_credits_module": company.has_credits_module,
             "has_electronic_billing": company.has_electronic_billing,
+            "has_presupuestos_module": company.has_presupuestos_module,
+            "has_promociones_module": company.has_promociones_module,
+            "has_listas_precios_module": company.has_listas_precios_module,
+            "has_etiquetas_module": company.has_etiquetas_module,
             "created_at": company.created_at.isoformat() if company.created_at else None,
         }
 
@@ -555,6 +579,18 @@ class OwnerService:
         )
         company.has_electronic_billing = defaults.get(
             "has_electronic_billing", company.has_electronic_billing
+        )
+        company.has_presupuestos_module = defaults.get(
+            "has_presupuestos_module", company.has_presupuestos_module
+        )
+        company.has_promociones_module = defaults.get(
+            "has_promociones_module", company.has_promociones_module
+        )
+        company.has_listas_precios_module = defaults.get(
+            "has_listas_precios_module", company.has_listas_precios_module
+        )
+        company.has_etiquetas_module = defaults.get(
+            "has_etiquetas_module", company.has_etiquetas_module
         )
 
         # Si sale de trial, limpiar trial_ends_at
@@ -754,6 +790,10 @@ class OwnerService:
         has_clients_module: Optional[bool] = None,
         has_credits_module: Optional[bool] = None,
         has_electronic_billing: Optional[bool] = None,
+        has_presupuestos_module: Optional[bool] = None,
+        has_promociones_module: Optional[bool] = None,
+        has_listas_precios_module: Optional[bool] = None,
+        has_etiquetas_module: Optional[bool] = None,
         actor_user_id: Optional[int],
         actor_email: str,
         reason: str,
@@ -793,6 +833,18 @@ class OwnerService:
 
         if has_electronic_billing is not None:
             company.has_electronic_billing = has_electronic_billing
+
+        if has_presupuestos_module is not None:
+            company.has_presupuestos_module = has_presupuestos_module
+
+        if has_promociones_module is not None:
+            company.has_promociones_module = has_promociones_module
+
+        if has_listas_precios_module is not None:
+            company.has_listas_precios_module = has_listas_precios_module
+
+        if has_etiquetas_module is not None:
+            company.has_etiquetas_module = has_etiquetas_module
 
         after = _company_snapshot(company)
 

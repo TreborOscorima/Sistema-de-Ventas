@@ -169,6 +169,10 @@ class RegisterState(MixinState):
                     has_clients_module=True,
                     has_credits_module=True,
                     has_electronic_billing=False,
+                    has_presupuestos_module=True,
+                    has_promociones_module=True,
+                    has_listas_precios_module=True,
+                    has_etiquetas_module=True,
                 )
                 session.add(company)
                 session.flush()

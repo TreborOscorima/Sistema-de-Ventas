@@ -1,4 +1,6 @@
 import os
+import logging
+import pathlib
 
 import reflex as rx
 import app.models  # Importar modelos para que Reflex detecte las tablas
@@ -8,6 +10,36 @@ import app.models  # Importar modelos para que Reflex detecte las tablas
 # import-order. Ahora es responsabilidad explícita del bootstrap.
 from app.utils.tenant import register_tenant_listeners
 register_tenant_listeners()
+
+
+def _run_migrations() -> None:
+    """Aplica migraciones de Alembic pendientes al arrancar la app.
+
+    - Idempotente: si ya están aplicadas, alembic no hace nada.
+    - Multi-worker seguro: alembic usa lock en la tabla alembic_version.
+    - Omite ejecución en tests para no interferir con fixtures de BD.
+    """
+    if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("SKIP_MIGRATIONS"):
+        return
+    _log = logging.getLogger("startup.migrations")
+    try:
+        import alembic.config
+        import alembic.command
+        alembic_ini = pathlib.Path(__file__).parent.parent / "alembic.ini"
+        if not alembic_ini.exists():
+            _log.warning("alembic.ini no encontrado en %s — migraciones omitidas.", alembic_ini)
+            return
+        cfg = alembic.config.Config(str(alembic_ini))
+        alembic.command.upgrade(cfg, "head")
+        _log.info("alembic upgrade head completado correctamente.")
+    except Exception:
+        _log.exception(
+            "Error al aplicar migraciones automáticas. "
+            "Ejecuta manualmente: alembic upgrade head"
+        )
+
+
+_run_migrations()
 
 from app.state import State
 from app.components.sidebar import sidebar
@@ -498,7 +530,8 @@ def _register_app_routes():
     _add_private_page(
         page_reposicion,
         route="/reposicion",
-        title="Reposición Automática - TUWAYKIAPP",
+        title="Órdenes de Compra - TUWAYKIAPP",
+        on_load=State.page_init_reposicion,
     )
     _add_private_page(
         page_venta,

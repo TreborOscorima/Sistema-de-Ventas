@@ -128,6 +128,8 @@ class SearchMixin:
             "unit": product.unit,
             "purchase_price": product.purchase_price,
             "sale_price": product.sale_price,
+            "custom_profit_margin": product.custom_profit_margin,
+            "default_supplier_id": product.default_supplier_id,
             "stock_total_display": f"{stock_total:.2f}",
         }
 
@@ -165,6 +167,8 @@ class SearchMixin:
             "unit": product.unit,
             "purchase_price": product.purchase_price,
             "sale_price": product.sale_price,
+            "custom_profit_margin": product.custom_profit_margin,
+            "default_supplier_id": product.default_supplier_id,
             "stock_total_display": f"{stock_total:.2f}",
         }
 

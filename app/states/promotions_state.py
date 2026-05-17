@@ -10,6 +10,7 @@ import reflex as rx
 from sqlmodel import select, func
 
 from app.models import Promotion
+from app.models.auth import User
 from app.models.promotions import PromotionType, PromotionScope
 from app.utils.timezone import utc_now_naive
 
@@ -148,6 +149,15 @@ class PromotionsState(MixinState):
                 for pp in pp_rows:
                     pp_map.setdefault(pp.promotion_id, []).append(pp.product_id)
 
+            # Bulk-load de usuarios creadores
+            user_ids = list({p.created_by_user_id for p in rows if p.created_by_user_id})
+            user_name_map: dict[int, str] = {}
+            if user_ids:
+                user_rows = session.exec(
+                    select(User).where(User.id.in_(user_ids))
+                ).all()
+                user_name_map = {u.id: u.username for u in user_rows}
+
         now = utc_now_naive()
         result = []
         for p in rows:
@@ -206,6 +216,7 @@ class PromotionsState(MixinState):
                 "min_cart_amount": float(p.min_cart_amount or 0),
                 "min_cart_amount_label": _format_min_cart(p.min_cart_amount or 0),
                 "max_units_per_transaction": p.max_units_per_transaction,
+                "created_by": user_name_map.get(p.created_by_user_id, "—") if p.created_by_user_id else "—",
             })
         self.promotions = result
 

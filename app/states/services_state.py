@@ -10,7 +10,7 @@ import calendar
 import io
 from sqlmodel import select
 from sqlalchemy import func, or_, text
-from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel, SalePayment, CashboxLog
+from app.models import Sale, SaleItem, FieldReservation as FieldReservationModel, FieldPrice as FieldPriceModel, User as UserModel, SalePayment, CashboxLog, PaymentMethod
 from app.enums import SaleStatus, ReservationStatus, PaymentMethodType
 from app.utils.payment import (
     normalize_payment_method_kind,
@@ -75,6 +75,7 @@ _EMPTY_RESERVATION: FieldReservation = {
     "field_name": "", "start_datetime": "", "end_datetime": "",
     "advance_amount": 0.0, "total_amount": 0.0, "paid_amount": 0.0,
     "status": "", "created_at": "", "cancellation_reason": "", "delete_reason": "",
+    "created_by": "",
 }
 
 
@@ -145,7 +146,7 @@ class ServicesState(MixinState):
         self._sync_calendar_state(datetime.date.today(), clear_selection=True)
         self.reservation_form = self._reservation_default_form()
 
-    def _reservation_to_dict(self, reservation: FieldReservationModel) -> FieldReservation:
+    def _reservation_to_dict(self, reservation: FieldReservationModel, user_name_map: dict = {}) -> FieldReservation:
         sport_value = (
             reservation.sport.value
             if hasattr(reservation.sport, "value")
@@ -172,6 +173,7 @@ class ServicesState(MixinState):
             ),
             "cancellation_reason": reservation.cancellation_reason or "",
             "delete_reason": reservation.delete_reason or "",
+            "created_by": user_name_map.get(reservation.user_id, "—") if reservation.user_id else "—",
         }
 
     def _reservation_status_to_ui(self, status: Any) -> str:
@@ -290,6 +292,55 @@ class ServicesState(MixinState):
             amount = total_value
         return [(method_type, self._round_currency(amount))]
 
+    def _resolve_pm_id_for_other(self, payment_label: str) -> int | None:
+        """Resuelve el payment_method_id (PK entero) para métodos 'other' buscando por nombre."""
+        pm_name = (payment_label or "").strip().lower()
+        if not pm_name:
+            return None
+        for m in (self.payment_methods or []):
+            if (m.get("name") or "").strip().lower() == pm_name:
+                pk = m.get("pk")
+                return int(pk) if pk is not None else None
+        return None
+
+    def _get_reservation_payment_label(self, reservation_id: str) -> str:
+        """Retorna el método de pago más reciente registrado para esta reserva."""
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return ""
+        try:
+            rid = int(reservation_id)
+        except (TypeError, ValueError):
+            return ""
+        with rx.session() as session:
+            sub = (
+                select(SaleItem.sale_id)
+                .where(SaleItem.product_barcode_snapshot == str(rid))
+                .where(SaleItem.company_id == company_id)
+                .where(SaleItem.branch_id == branch_id)
+            )
+            log = session.exec(
+                select(CashboxLog)
+                .where(CashboxLog.sale_id.in_(sub))
+                .where(CashboxLog.payment_method.isnot(None))
+                .order_by(CashboxLog.timestamp.desc())
+            ).first()
+            if not log:
+                # Fallback para registros donde barcode_snapshot se guardó como "RESERVA"
+                log = session.exec(
+                    select(CashboxLog)
+                    .where(CashboxLog.company_id == company_id)
+                    .where(CashboxLog.branch_id == branch_id)
+                    .where(CashboxLog.payment_method.isnot(None))
+                    .where(or_(
+                        CashboxLog.notes.like(f"%reserva {rid} %"),
+                        CashboxLog.notes.like(f"%reserva {rid}"),
+                    ))
+                    .order_by(CashboxLog.timestamp.desc())
+                ).first()
+        return (log.payment_method or "").strip() if log else ""
+
     def _reservation_lock_key(self, date_str: str, sport: str) -> str:
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -376,6 +427,15 @@ class ServicesState(MixinState):
             session.flush()
 
             # Registrar SalePayment con el método de pago seleccionado
+            pm_id_other = self._resolve_pm_id_for_other(payment_label)
+            if pm_id_other is None and payment_label:
+                pm_row = session.exec(
+                    select(PaymentMethod)
+                    .where(PaymentMethod.company_id == company_id)
+                    .where(PaymentMethod.branch_id == branch_id)
+                    .where(func.lower(func.trim(PaymentMethod.name)) == payment_label.strip().lower())
+                ).first()
+                pm_id_other = pm_row.id if pm_row else None
             for method_type, amount in payment_allocations:
                 if amount <= 0:
                     continue
@@ -385,6 +445,7 @@ class ServicesState(MixinState):
                         company_id=company_id,
                         amount=self._round_currency(amount),
                         method_type=method_type,
+                        payment_method_id=pm_id_other if method_type == PaymentMethodType.other else None,
                         reference_code=f"Reserva {reservation['id']}",
                         branch_id=branch_id,
                     )
@@ -399,7 +460,7 @@ class ServicesState(MixinState):
                     unit_price=self._round_currency(advance_amount),
                     subtotal=self._round_currency(advance_amount),
                     product_name_snapshot=f"Adelanto reserva: {reservation.get('field_name', 'Campo')}",
-                    product_barcode_snapshot="RESERVA",
+                    product_barcode_snapshot=str(reservation.get('id', '')),
                     product_category_snapshot="Servicios",
                     company_id=company_id,
                     branch_id=branch_id,
@@ -489,8 +550,15 @@ class ServicesState(MixinState):
             data_query = self._apply_reservation_filters(data_query)
             data_query = data_query.offset((page - 1) * per_page).limit(per_page)
             reservations = session.exec(data_query).all()
+            user_ids = list({r.user_id for r in reservations if r.user_id})
+            user_name_map: dict[int, str] = {}
+            if user_ids:
+                user_rows = session.exec(
+                    select(UserModel).where(UserModel.id.in_(user_ids))
+                ).all()
+                user_name_map = {u.id: u.username for u in user_rows}
             self.service_reservations = [
-                self._reservation_to_dict(reservation) for reservation in reservations
+                self._reservation_to_dict(r, user_name_map) for r in reservations
             ]
 
     @rx.var(cache=True)
@@ -1626,6 +1694,7 @@ class ServicesState(MixinState):
                     ),
                     "cancellation_reason": "",
                     "delete_reason": "",
+                    "created_by": self.current_user.get("username", "—") if self.current_user else "—",
                 }
             finally:
                 self._release_named_lock(session, lock_key)
@@ -1703,11 +1772,12 @@ class ServicesState(MixinState):
                     reservation = self._reservation_to_dict(r)
 
         if reservation:
-            return self._print_reservation_proof(reservation)
+            payment_label = self._get_reservation_payment_label(str(reservation_id))
+            return self._print_reservation_proof(reservation, payment_label)
 
         return rx.toast("Reserva no encontrada.", duration=3000)
 
-    def _print_reservation_proof(self, reservation: FieldReservation):
+    def _print_reservation_proof(self, reservation: FieldReservation, payment_label: str = ""):
         import html
         import json
 
@@ -1807,10 +1877,26 @@ class ServicesState(MixinState):
         receipt_lines.append("")
         receipt_lines.append(line())
         receipt_lines.append("")
+        _tax_rate_pct = float(company.get("default_tax_rate_pct", 0.0))
+        _show_tax = bool(company.get("show_tax_on_receipt", False))
+        _tax_name = (company.get("default_tax_name") or "IVA").strip()
+
         receipt_lines.append(row("TOTAL:", self._format_currency(total)))
+        if _show_tax and _tax_rate_pct > 0:
+            _rate_f = _tax_rate_pct / 100.0
+            _base = round(total / (1.0 + _rate_f), 2)
+            _tax_amt = round(total - _base, 2)
+            _rate_str = f"{_tax_rate_pct:.0f}" if _tax_rate_pct == int(_tax_rate_pct) else f"{_tax_rate_pct:g}"
+            receipt_lines.append(row(f"  Subtotal:", self._format_currency(_base)))
+            receipt_lines.append(row(f"  {_tax_name} ({_rate_str}%):", self._format_currency(_tax_amt)))
         receipt_lines.append("")
         receipt_lines.append(row("A CUENTA:", self._format_currency(paid)))
         receipt_lines.append("")
+        if payment_label:
+            receipt_lines.extend(
+                self._wrap_receipt_label_value("Metodo pago", payment_label, receipt_width)
+            )
+            receipt_lines.append("")
         receipt_lines.append(row("SALDO:", self._format_currency(saldo)))
         receipt_lines.append("")
         receipt_lines.append(line())
@@ -1968,6 +2054,16 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             session.flush()
 
             allocations = self._build_reservation_payments(applied_amount)
+            _pm_label_1 = (getattr(self, "payment_method", "") or "").strip()
+            _pm_id_other_1 = self._resolve_pm_id_for_other(_pm_label_1)
+            if _pm_id_other_1 is None and _pm_label_1:
+                _pm_row_1 = session.exec(
+                    select(PaymentMethod)
+                    .where(PaymentMethod.company_id == company_id)
+                    .where(PaymentMethod.branch_id == branch_id)
+                    .where(func.lower(func.trim(PaymentMethod.name)) == _pm_label_1.strip().lower())
+                ).first()
+                _pm_id_other_1 = _pm_row_1.id if _pm_row_1 else None
             for method_type, amount in allocations:
                 if amount <= 0:
                     continue
@@ -1977,6 +2073,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         company_id=company_id,
                         amount=amount,
                         method_type=method_type,
+                        payment_method_id=_pm_id_other_1 if method_type == PaymentMethodType.other else None,
                         reference_code=f"Reserva {reservation_model.id}",
                         branch_id=branch_id,
                     )
@@ -1990,7 +2087,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 unit_price=applied_amount,
                 subtotal=applied_amount,
                 product_name_snapshot=f"{entry_type.capitalize()} reserva: {reservation.get('field_name')}",
-                product_barcode_snapshot="RESERVA",
+                product_barcode_snapshot=str(reservation_model.id),
                 product_category_snapshot="Servicios",
                 company_id=company_id,
                 branch_id=branch_id,
@@ -2120,6 +2217,16 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             session.add(new_sale)
             session.flush()
 
+            _pm_label_2 = (getattr(self, "payment_method", "") or "").strip()
+            _pm_id_other_2 = self._resolve_pm_id_for_other(_pm_label_2)
+            if _pm_id_other_2 is None and _pm_label_2:
+                _pm_row_2 = session.exec(
+                    select(PaymentMethod)
+                    .where(PaymentMethod.company_id == company_id)
+                    .where(PaymentMethod.branch_id == branch_id)
+                    .where(func.lower(func.trim(PaymentMethod.name)) == _pm_label_2.strip().lower())
+                ).first()
+                _pm_id_other_2 = _pm_row_2.id if _pm_row_2 else None
             for method_type, amount in self._build_reservation_payments(applied_amount):
                 if amount <= 0:
                     continue
@@ -2129,6 +2236,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         company_id=company_id,
                         amount=amount,
                         method_type=method_type,
+                        payment_method_id=_pm_id_other_2 if method_type == PaymentMethodType.other else None,
                         reference_code=f"Reserva {reservation_model.id}",
                         branch_id=branch_id,
                     )
@@ -2143,7 +2251,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 product_name_snapshot=(
                     f"{entry_type.capitalize()} reserva: {reservation.get('field_name')}"
                 ),
-                product_barcode_snapshot="RESERVA",
+                product_barcode_snapshot=str(reservation_model.id),
                 product_category_snapshot="Servicios",
                 company_id=company_id,
                 branch_id=branch_id,

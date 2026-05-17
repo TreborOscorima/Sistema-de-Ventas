@@ -950,6 +950,7 @@ class IngresoState(MixinState):
                             unit=item["unit"],
                             purchase_price=unit_cost,
                             sale_price=Decimal(str(item["sale_price"])),
+                            default_supplier_id=supplier_id,
                         )
                         session.add(new_product)
                         session.flush()
@@ -1037,6 +1038,8 @@ class IngresoState(MixinState):
                         if item["sale_price"] > 0:
                             product.sale_price = Decimal(str(item["sale_price"]))
                         product.purchase_price = unit_cost
+                        if supplier_id:
+                            product.default_supplier_id = supplier_id
                         session.add(product)
 
                         if variant:

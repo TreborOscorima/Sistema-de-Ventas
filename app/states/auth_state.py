@@ -224,6 +224,10 @@ class AuthState(MixinState):
     company_has_services: bool = False
     company_has_clients: bool = False
     company_has_credits: bool = False
+    company_has_presupuestos: bool = False
+    company_has_promociones: bool = False
+    company_has_listas_precios: bool = False
+    company_has_etiquetas: bool = False
     subscription_snapshot: Dict[str, Any] = {
         "plan_type": "",
         "plan_display": "PLAN",
@@ -574,6 +578,10 @@ class AuthState(MixinState):
             self.company_has_services = False
             self.company_has_clients = False
             self.company_has_credits = False
+            self.company_has_presupuestos = False
+            self.company_has_promociones = False
+            self.company_has_listas_precios = False
+            self.company_has_etiquetas = False
             self.subscription_snapshot = self._default_subscription_snapshot()
             return
 
@@ -587,6 +595,10 @@ class AuthState(MixinState):
                 self.company_has_services = False
                 self.company_has_clients = False
                 self.company_has_credits = False
+                self.company_has_presupuestos = False
+                self.company_has_promociones = False
+                self.company_has_listas_precios = False
+                self.company_has_etiquetas = False
                 self.subscription_snapshot = self._default_subscription_snapshot()
                 return
 
@@ -616,6 +628,18 @@ class AuthState(MixinState):
         )
         self.company_has_credits = bool(
             getattr(company, "has_credits_module", False)
+        )
+        self.company_has_presupuestos = bool(
+            getattr(company, "has_presupuestos_module", False)
+        )
+        self.company_has_promociones = bool(
+            getattr(company, "has_promociones_module", False)
+        )
+        self.company_has_listas_precios = bool(
+            getattr(company, "has_listas_precios_module", False)
+        )
+        self.company_has_etiquetas = bool(
+            getattr(company, "has_etiquetas_module", False)
         )
 
     @rx.event
@@ -745,28 +769,40 @@ class AuthState(MixinState):
             self.payment_alert_info = default_alert
             return
 
-        with rx.session() as session:
-            company = session.exec(
-                select(Company).where(Company.id == company_id)
-            ).first()
-            if not company:
-                self.plan_actual = "unknown"
-                self.company_has_reservations = False
-                self.company_has_services = False
-                self.company_has_clients = False
-                self.company_has_credits = False
-                self.subscription_snapshot = self._default_subscription_snapshot()
-                self.payment_alert_info = default_alert
-                return
+        try:
+            with rx.session() as session:
+                company = session.exec(
+                    select(Company).where(Company.id == company_id)
+                ).first()
+                if not company:
+                    self.plan_actual = "unknown"
+                    self.company_has_reservations = False
+                    self.company_has_services = False
+                    self.company_has_clients = False
+                    self.company_has_credits = False
+                    self.subscription_snapshot = self._default_subscription_snapshot()
+                    self.payment_alert_info = default_alert
+                    return
 
-            branches_used = session.exec(
-                select(func.count(Branch.id)).where(Branch.company_id == company_id)
-            ).one()
-            users_used = session.exec(
-                select(func.count(UserModel.id))
-                .where(UserModel.company_id == company_id)
-                .where(UserModel.is_active == True)
-            ).one()
+                branches_used = session.exec(
+                    select(func.count(Branch.id)).where(Branch.company_id == company_id)
+                ).one()
+                users_used = session.exec(
+                    select(func.count(UserModel.id))
+                    .where(UserModel.company_id == company_id)
+                    .where(UserModel.is_active == True)
+                ).one()
+        except Exception as _schema_err:
+            import logging as _logging
+            _logging.getLogger(__name__).critical(
+                "SCHEMA DRIFT detectado al consultar Company (company_id=%s). "
+                "Ejecuta: alembic upgrade head\nError: %s",
+                company_id,
+                _schema_err,
+            )
+            self.subscription_snapshot = self._default_subscription_snapshot()
+            self.payment_alert_info = default_alert
+            return
 
         # --- Subscription snapshot ---
         self.subscription_snapshot = self._build_subscription_snapshot(
@@ -786,6 +822,18 @@ class AuthState(MixinState):
         )
         self.company_has_credits = bool(
             getattr(company, "has_credits_module", False)
+        )
+        self.company_has_presupuestos = bool(
+            getattr(company, "has_presupuestos_module", False)
+        )
+        self.company_has_promociones = bool(
+            getattr(company, "has_promociones_module", False)
+        )
+        self.company_has_listas_precios = bool(
+            getattr(company, "has_listas_precios_module", False)
+        )
+        self.company_has_etiquetas = bool(
+            getattr(company, "has_etiquetas_module", False)
         )
 
         # --- Payment alert (reutiliza el mismo company object) ---
@@ -877,19 +925,31 @@ class AuthState(MixinState):
 
     @rx.var(cache=True)
     def can_view_etiquetas(self) -> bool:
-        return bool(self.current_user["privileges"].get("view_etiquetas"))
+        return bool(
+            self.current_user["privileges"].get("view_etiquetas")
+            and self.company_has_etiquetas
+        )
 
     @rx.var(cache=True)
     def can_view_presupuestos(self) -> bool:
-        return bool(self.current_user["privileges"].get("view_presupuestos"))
+        return bool(
+            self.current_user["privileges"].get("view_presupuestos")
+            and self.company_has_presupuestos
+        )
 
     @rx.var(cache=True)
     def can_manage_promociones(self) -> bool:
-        return bool(self.current_user["privileges"].get("manage_promociones"))
+        return bool(
+            self.current_user["privileges"].get("manage_promociones")
+            and self.company_has_promociones
+        )
 
     @rx.var(cache=True)
     def can_manage_listas_precios(self) -> bool:
-        return bool(self.current_user["privileges"].get("manage_listas_precios"))
+        return bool(
+            self.current_user["privileges"].get("manage_listas_precios")
+            and self.company_has_listas_precios
+        )
 
     @rx.var(cache=True)
     def can_view_historial(self) -> bool:
