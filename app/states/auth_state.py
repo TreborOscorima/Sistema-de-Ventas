@@ -1908,6 +1908,7 @@ class AuthState(MixinState):
                     self.error_message = ""
                     self.password_change_error = ""
                     self.needs_initial_admin = False
+                    self.is_login_loading = False
                     if must_change_password:
                         return rx.redirect("/cambiar-clave")
                     return rx.redirect("/dashboard")
@@ -2061,6 +2062,7 @@ class AuthState(MixinState):
                 )
                 snapshot = self.subscription_snapshot or {}
                 status_label = str(snapshot.get("status_label", "") or "").strip().lower()
+                self.is_login_loading = False
                 if bool(snapshot.get("is_trial")) and status_label == "vencido":
                     return rx.redirect("/periodo-prueba-finalizado")
                 if (not bool(snapshot.get("is_trial"))) and status_label in ("suspendido", "pago vencido"):
@@ -2151,6 +2153,7 @@ class AuthState(MixinState):
                 pass  # non-critical: logout must always complete
         self.token = ""
         self.refresh_token = ""
+        self.is_login_loading = False
         self.password_change_error = ""
         self.invalidate_user_cache()
         if hasattr(self, "cashbox_is_open_cached"):
