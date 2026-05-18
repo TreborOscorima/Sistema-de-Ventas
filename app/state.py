@@ -894,6 +894,10 @@ class State(RootState):
         """on_load para /documentos-fiscales. Verifica privilegio view_ventas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
+        # Bloquear acceso si el plan no incluye facturación electrónica.
+        if not getattr(self, "company_has_electronic_billing", False):
+            yield rx.redirect("/")
+            return
         denied = self._page_guard(
             privilege_key="view_ventas",
             deny_msg="Acceso denegado: No tienes permiso para ver Documentos Fiscales.",

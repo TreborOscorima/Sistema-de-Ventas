@@ -75,6 +75,10 @@ class BillingState(MixinState):
         if not company_id:
             self.billing_is_active = False
             return
+        # Si el plan no incluye facturación electrónica, siempre inactivo.
+        if not getattr(self, "company_has_electronic_billing", False):
+            self.billing_is_active = False
+            return
         with rx.session() as session:
             session.info["tenant_bypass"] = True
             config = session.exec(
@@ -90,6 +94,11 @@ class BillingState(MixinState):
         """Carga la configuración de billing desde DB."""
         company_id = self._company_id()
         if not company_id:
+            return
+        # Si el plan no incluye facturación electrónica, limpiar estado y salir.
+        if not getattr(self, "company_has_electronic_billing", False):
+            self.billing_is_active = False
+            self.billing_config_exists = False
             return
         with rx.session() as session:
             session.info["tenant_bypass"] = True

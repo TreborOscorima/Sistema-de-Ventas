@@ -107,6 +107,18 @@ class UIState(MixinState):
         tab = self._safe_query_tab()
         return tab if tab in SERVICES_TABS else _SERVICES_DEFAULT
 
+    @rx.var(cache=True)
+    def visible_config_subsections(self) -> List[Dict[str, str]]:
+        """CONFIG_SUBSECTIONS filtrado según el plan de la empresa.
+
+        Oculta el tab 'facturacion' cuando el plan no incluye facturación
+        electrónica, evitando que aparezca en el sidebar de Configuración.
+        """
+        from app.constants import CONFIG_SUBSECTIONS
+        if getattr(self, "company_has_electronic_billing", False):
+            return list(CONFIG_SUBSECTIONS)
+        return [s for s in CONFIG_SUBSECTIONS if s["key"] != "facturacion"]
+
     def _safe_query_tab(self) -> str:
         """Lee el param 'tab' de la URL actual de forma segura."""
         try:

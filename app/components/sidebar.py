@@ -1,7 +1,7 @@
 import reflex as rx
 from app.state import State
 from app.components.ui import RADIUS, SHADOWS, TRANSITIONS
-from app.constants import CONFIG_SUBSECTIONS, CASH_SUBSECTIONS, SERVICES_SUBSECTIONS
+from app.constants import CASH_SUBSECTIONS, SERVICES_SUBSECTIONS
 
 
 def nav_item(text: str, icon: str, page: str, route: str) -> rx.Component:
@@ -498,7 +498,7 @@ def _sidebar_auth_content() -> rx.Component:
                                 item,
                                 "Configuracion",
                                 "/configuracion",
-                                CONFIG_SUBSECTIONS,
+                                State.visible_config_subsections,
                                 State.config_tab,
                             ),
                             _submenu_section(
@@ -524,7 +524,7 @@ def _sidebar_auth_content() -> rx.Component:
                                 item,
                                 "Configuracion",
                                 "/configuracion",
-                                CONFIG_SUBSECTIONS,
+                                State.visible_config_subsections,
                                 State.config_tab,
                                 idx,
                             ),
