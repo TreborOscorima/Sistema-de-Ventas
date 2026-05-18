@@ -928,6 +928,10 @@ class AuthState(MixinState):
         self.company_has_services = False
         self.company_has_clients = False
         self.company_has_credits = False
+        self.company_has_presupuestos = False
+        self.company_has_promociones = False
+        self.company_has_listas_precios = False
+        self.company_has_etiquetas = False
         self.company_has_electronic_billing = False
         self.subscription_snapshot = self._default_subscription_snapshot()
         self.payment_alert_info = self._default_payment_alert_info()

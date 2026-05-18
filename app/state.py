@@ -689,7 +689,7 @@ class State(RootState):
         self.sync_page_from_route()
         denied = self._page_guard(
             privilege_key="view_clientes",
-            plan_block="standard",
+            extra_check=bool(getattr(self, "company_has_clients", False)),
             deny_msg="Acceso denegado: No tienes permiso para ver Clientes.",
         )
         if denied:
@@ -711,7 +711,7 @@ class State(RootState):
         self.sync_page_from_route()
         denied = self._page_guard(
             privilege_key="view_cuentas",
-            plan_block="standard",
+            extra_check=bool(getattr(self, "company_has_credits", False)),
             deny_msg="Acceso denegado: No tienes permiso para ver Cuentas.",
         )
         if denied:
@@ -751,12 +751,13 @@ class State(RootState):
 
     @rx.event
     async def page_init_etiquetas(self):
-        """on_load para /etiquetas. Verifica privilegio view_etiquetas."""
+        """on_load para /etiquetas. Verifica plan y privilegio view_etiquetas."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        denied = self._check_auth_and_privilege(
-            "view_etiquetas",
-            "Acceso denegado: No tienes permiso para ver Etiquetas.",
+        denied = self._page_guard(
+            privilege_key="view_etiquetas",
+            extra_check=bool(getattr(self, "company_has_etiquetas", False)),
+            deny_msg="Acceso denegado: No tienes permiso para ver Etiquetas.",
         )
         if denied:
             for ev in denied:
@@ -810,13 +811,15 @@ class State(RootState):
 
     @rx.event
     async def page_init_servicios(self):
-        """on_load para /servicios. Verifica plan, privilegio view_servicios y reservas habilitadas."""
+        """on_load para /servicios. Verifica plan y privilegio view_servicios."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
+        has_module = bool(getattr(self, "company_has_services", False)) or bool(
+            getattr(self, "company_has_reservations", False)
+        )
         denied = self._page_guard(
             privilege_key="view_servicios",
-            plan_block="standard",
-            extra_check=bool(self.company_has_reservations),
+            extra_check=has_module,
             deny_msg="Acceso denegado: No tienes permiso para ver Servicios.",
         )
         if denied:
@@ -834,9 +837,10 @@ class State(RootState):
         """on_load para /presupuestos. Guard + carga de datos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        denied = self._check_auth_and_privilege(
-            "view_presupuestos",
-            "Acceso denegado: No tienes permiso para ver Presupuestos.",
+        denied = self._page_guard(
+            privilege_key="view_presupuestos",
+            extra_check=bool(getattr(self, "company_has_presupuestos", False)),
+            deny_msg="Acceso denegado: No tienes permiso para ver Presupuestos.",
         )
         if denied:
             for ev in denied:
@@ -854,9 +858,10 @@ class State(RootState):
         """on_load para /promociones. Guard + carga de datos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        denied = self._check_auth_and_privilege(
-            "manage_promociones",
-            "Acceso denegado: No tienes permiso para gestionar Promociones.",
+        denied = self._page_guard(
+            privilege_key="manage_promociones",
+            extra_check=bool(getattr(self, "company_has_promociones", False)),
+            deny_msg="Acceso denegado: No tienes permiso para gestionar Promociones.",
         )
         if denied:
             for ev in denied:
@@ -874,9 +879,10 @@ class State(RootState):
         """on_load para /listas-precios. Guard + carga de datos."""
         await self._do_runtime_refresh()
         self.sync_page_from_route()
-        denied = self._check_auth_and_privilege(
-            "manage_listas_precios",
-            "Acceso denegado: No tienes permiso para gestionar Listas de Precios.",
+        denied = self._page_guard(
+            privilege_key="manage_listas_precios",
+            extra_check=bool(getattr(self, "company_has_listas_precios", False)),
+            deny_msg="Acceso denegado: No tienes permiso para gestionar Listas de Precios.",
         )
         if denied:
             for ev in denied:
