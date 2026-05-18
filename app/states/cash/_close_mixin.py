@@ -651,8 +651,6 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         amount = self._round_currency(advance_amount)
         if amount <= 0:
             return
-        if not self.cashbox_is_open:
-            return
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
