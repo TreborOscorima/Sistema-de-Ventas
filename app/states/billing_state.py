@@ -530,33 +530,6 @@ class BillingState(MixinState):
     # ══════════════════════════════════════════════════════════
 
     @rx.event
-    async def page_init_documentos_fiscales(self):
-        """on_load para /documentos-fiscales. Verifica privilegio view_ventas."""
-        await self._do_runtime_refresh()
-        self.sync_page_from_route()
-        denied = self._page_guard(
-            privilege_key="view_ventas",
-            deny_msg="Acceso denegado: No tienes permiso para ver Documentos Fiscales.",
-        )
-        if denied:
-            for ev in denied:
-                yield ev
-            return
-        redirect = self.run_common_guards()
-        if redirect:
-            yield redirect
-        self.fiscal_docs_page = 0
-        self.fiscal_docs_status_filter = "todos"
-        self.fiscal_docs_receipt_filter = "todos"
-        self.fiscal_docs_search = ""
-        self.fiscal_docs_date_from = ""
-        self.fiscal_docs_date_to = ""
-        self.fiscal_doc_selected = {}
-        self.fiscal_doc_detail_open = False
-        self.load_fiscal_docs()
-        yield
-
-    @rx.event
     def load_fiscal_docs(self):
         """Carga documentos fiscales con filtros y paginación."""
         company_id = self._company_id()

@@ -228,6 +228,7 @@ class AuthState(MixinState):
     company_has_promociones: bool = False
     company_has_listas_precios: bool = False
     company_has_etiquetas: bool = False
+    company_has_electronic_billing: bool = False
     subscription_snapshot: Dict[str, Any] = {
         "plan_type": "",
         "plan_display": "PLAN",
@@ -644,6 +645,9 @@ class AuthState(MixinState):
         self.company_has_etiquetas = bool(
             getattr(company, "has_etiquetas_module", False)
         )
+        self.company_has_electronic_billing = bool(
+            getattr(company, "has_electronic_billing", False)
+        )
 
     @rx.event
     def refresh_payment_alert_info(self):
@@ -869,6 +873,9 @@ class AuthState(MixinState):
         self.company_has_etiquetas = bool(
             getattr(company, "has_etiquetas_module", False)
         )
+        self.company_has_electronic_billing = bool(
+            getattr(company, "has_electronic_billing", False)
+        )
 
         # --- Payment alert (reutiliza el mismo company object) ---
         plan_type = getattr(company, "plan_type", "")
@@ -921,6 +928,7 @@ class AuthState(MixinState):
         self.company_has_services = False
         self.company_has_clients = False
         self.company_has_credits = False
+        self.company_has_electronic_billing = False
         self.subscription_snapshot = self._default_subscription_snapshot()
         self.payment_alert_info = self._default_payment_alert_info()
 

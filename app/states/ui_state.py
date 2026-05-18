@@ -398,10 +398,12 @@ class UIState(MixinState):
             return bool(self.can_manage_listas_precios)
         if page == "Etiquetas":
             return bool(self.can_view_etiquetas)
-        # Documentos Fiscales: solo visible si facturación electrónica está activa
+        # Documentos Fiscales: requiere plan con facturación electrónica habilitada
+        # Y que la configuración de billing esté activa en la empresa.
         if page == "Documentos Fiscales":
+            plan_allows = getattr(self, "company_has_electronic_billing", False)
             billing_active = getattr(self, "billing_is_active", False)
-            if not billing_active:
+            if not plan_allows or not billing_active:
                 return False
         required = self._page_permission_map().get(page)
         if not required:
