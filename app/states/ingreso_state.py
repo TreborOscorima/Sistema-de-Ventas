@@ -1285,8 +1285,8 @@ class IngresoState(MixinState):
         self.new_entry_item["description"] = product.get("description", "")
         self.new_entry_item["category"] = product.get("category") or MSG.FALLBACK_GENERAL
         self.new_entry_item["unit"] = product.get("unit") or MSG.FALLBACK_UNIT
-        self.new_entry_item["price"] = product.get("purchase_price", 0)
-        self.new_entry_item["sale_price"] = product.get("sale_price", 0)
+        self.new_entry_item["price"] = float(product.get("purchase_price", 0) or 0)
+        self.new_entry_item["sale_price"] = float(product.get("sale_price", 0) or 0)
         self.new_entry_item["product_id"] = product.get("product_id") or product.get("id")
         self.new_entry_item["quantity"] = 1
         self.new_entry_item["subtotal"] = self._round_currency(
