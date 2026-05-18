@@ -512,14 +512,14 @@ class OwnerState:
         self.owner_form_extra_days = "7"
         self.owner_form_max_users = ""
         self.owner_form_max_branches = ""
-        self.owner_form_has_reservations = True
-        self.owner_form_has_clients = True
-        self.owner_form_has_credits = True
+        self.owner_form_has_reservations = False
+        self.owner_form_has_clients = False
+        self.owner_form_has_credits = False
         self.owner_form_has_billing = False
-        self.owner_form_has_presupuestos = True
-        self.owner_form_has_promociones = True
-        self.owner_form_has_listas_precios = True
-        self.owner_form_has_etiquetas = True
+        self.owner_form_has_presupuestos = False
+        self.owner_form_has_promociones = False
+        self.owner_form_has_listas_precios = False
+        self.owner_form_has_etiquetas = False
         self.owner_form_notes = ""
         self.owner_form_subscription_months = "12"
         self.owner_form_current_plan = ""
@@ -536,14 +536,14 @@ class OwnerState:
                 self.owner_form_current_status = c.get("effective_status", c.get("subscription_status", ""))
                 self.owner_form_max_users = str(c.get("max_users", ""))
                 self.owner_form_max_branches = str(c.get("max_branches", ""))
-                self.owner_form_has_reservations = c.get("has_reservations_module", True)
-                self.owner_form_has_clients = c.get("has_clients_module", True)
-                self.owner_form_has_credits = c.get("has_credits_module", True)
+                self.owner_form_has_reservations = c.get("has_reservations_module", False)
+                self.owner_form_has_clients = c.get("has_clients_module", False)
+                self.owner_form_has_credits = c.get("has_credits_module", False)
                 self.owner_form_has_billing = c.get("has_electronic_billing", False)
-                self.owner_form_has_presupuestos = c.get("has_presupuestos_module", True)
-                self.owner_form_has_promociones = c.get("has_promociones_module", True)
-                self.owner_form_has_listas_precios = c.get("has_listas_precios_module", True)
-                self.owner_form_has_etiquetas = c.get("has_etiquetas_module", True)
+                self.owner_form_has_presupuestos = c.get("has_presupuestos_module", False)
+                self.owner_form_has_promociones = c.get("has_promociones_module", False)
+                self.owner_form_has_listas_precios = c.get("has_listas_precios_module", False)
+                self.owner_form_has_etiquetas = c.get("has_etiquetas_module", False)
                 self.owner_form_trial_ends_at = c.get("trial_ends_at", "") or ""
                 break
 

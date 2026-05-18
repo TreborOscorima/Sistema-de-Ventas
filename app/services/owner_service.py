@@ -389,6 +389,10 @@ class OwnerService:
                     "has_clients_module": c.has_clients_module,
                     "has_credits_module": c.has_credits_module,
                     "has_electronic_billing": c.has_electronic_billing,
+                    "has_presupuestos_module": c.has_presupuestos_module,
+                    "has_promociones_module": c.has_promociones_module,
+                    "has_listas_precios_module": c.has_listas_precios_module,
+                    "has_etiquetas_module": c.has_etiquetas_module,
                     "created_at": c.created_at.isoformat() if c.created_at else None,
                 }
             )
