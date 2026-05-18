@@ -736,7 +736,7 @@ def documentos_fiscales_page() -> rx.Component:
     )
 
     return permission_guard(
-        has_permission=State.can_view_ventas,
+        has_permission=State.can_view_documentos_fiscales,
         content=content,
         redirect_message="Acceso denegado a Documentos Fiscales",
     )

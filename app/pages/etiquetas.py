@@ -1,7 +1,7 @@
 """Página dedicada al Generador Masivo de Etiquetas."""
 import reflex as rx
 from app.state import State
-from app.components.ui import page_header
+from app.components.ui import page_header, permission_guard
 
 # Patrón CSS que simula barras de código de barras en la vista previa
 _BARCODE_PATTERN = (
@@ -520,7 +520,7 @@ def _preview_card() -> rx.Component:
 
 def etiquetas_page() -> rx.Component:
     """Página dedicada al generador masivo de etiquetas con código de barras."""
-    return rx.el.div(
+    content = rx.el.div(
         page_header(
             "ETIQUETAS",
             "Genera PDFs de etiquetas con código de barras listos para imprimir.",
@@ -547,4 +547,9 @@ def etiquetas_page() -> rx.Component:
 
         class_name="flex flex-col gap-6",
         on_mount=State.load_label_categories,
+    )
+    return permission_guard(
+        has_permission=State.can_view_etiquetas,
+        content=content,
+        redirect_message="Acceso denegado a Etiquetas",
     )

@@ -13,6 +13,7 @@ from app.components.ui import (
     page_header,
     modal_container,
     empty_state,
+    permission_guard,
 )
 
 
@@ -377,7 +378,9 @@ def _price_list_detail_modal() -> rx.Component:
 # ─── Página principal ─────────────────────────────────────────────────────────
 
 def listas_precios_page() -> rx.Component:
-    return rx.fragment(
+    return permission_guard(
+        has_permission=State.can_manage_listas_precios,
+        content=rx.fragment(
         page_header(
             "LISTAS DE PRECIOS",
             "Define precios especiales por canal, cliente mayorista o grupo",
@@ -418,4 +421,6 @@ def listas_precios_page() -> rx.Component:
         _price_list_detail_modal(),
         # Nota: rx.fragment no soporta on_mount. La carga inicial la dispara
         # `app.add_page(on_load=State.page_init_listas_precios)` en app/app.py.
+        ),
+        redirect_message="Acceso denegado a Listas de Precios",
     )

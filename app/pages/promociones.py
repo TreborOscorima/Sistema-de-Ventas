@@ -14,6 +14,7 @@ from app.components.ui import (
     page_header,
     modal_container,
     empty_state,
+    permission_guard,
 )
 from app.models.promotions import PromotionType, PromotionScope
 
@@ -664,7 +665,9 @@ def _promo_form_modal() -> rx.Component:
 # ─── Página principal ─────────────────────────────────────────────────────────
 
 def promociones_page() -> rx.Component:
-    return rx.fragment(
+    return permission_guard(
+        has_permission=State.can_manage_promociones,
+        content=rx.fragment(
         page_header(
             "OFERTAS Y PROMOCIONES",
             "Configura descuentos automáticos para el punto de venta",
@@ -726,4 +729,6 @@ def promociones_page() -> rx.Component:
         _promo_form_modal(),
         # rx.fragment no soporta on_mount; la carga inicial la dispara
         # `app.add_page(on_load=State.page_init_promociones)` en app/app.py.
+        ),
+        redirect_message="Acceso denegado a Promociones",
     )

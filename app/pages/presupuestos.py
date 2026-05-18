@@ -16,6 +16,7 @@ from app.components.ui import (
     modal_container,
     pagination_controls,
     empty_state,
+    permission_guard,
 )
 from app.models.quotations import QuotationStatus
 
@@ -621,7 +622,9 @@ def _new_quotation_modal() -> rx.Component:
 # ─── Página principal ─────────────────────────────────────────────────────────
 
 def presupuestos_page() -> rx.Component:
-    return rx.fragment(
+    return permission_guard(
+        has_permission=State.can_view_presupuestos,
+        content=rx.fragment(
         page_header(
             "PRESUPUESTOS",
             "Crea y gestiona cotizaciones para tus clientes",
@@ -697,4 +700,6 @@ def presupuestos_page() -> rx.Component:
         _quotation_send_modal(),
         # rx.fragment no soporta on_mount; la carga inicial la dispara
         # `app.add_page(on_load=State.page_init_presupuestos)` en app/app.py.
+        ),
+        redirect_message="Acceso denegado a Presupuestos",
     )

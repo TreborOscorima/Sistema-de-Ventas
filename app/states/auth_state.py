@@ -1009,7 +1009,14 @@ class AuthState(MixinState):
     def can_view_servicios(self) -> bool:
         return bool(
             self.current_user["privileges"].get("view_servicios")
-            and self.company_has_reservations
+            and (self.company_has_services or self.company_has_reservations)
+        )
+
+    @rx.var(cache=True)
+    def can_view_documentos_fiscales(self) -> bool:
+        return bool(
+            self.current_user["privileges"].get("view_ventas")
+            and self.company_has_electronic_billing
         )
 
     @rx.var(cache=True)
