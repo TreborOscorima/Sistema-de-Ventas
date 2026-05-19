@@ -38,7 +38,6 @@ services:
       - --log-error-verbosity=3
       - --max_connections=200
       - --innodb_buffer_pool_size=256M
-      - --innodb_log_file_size=128M
       - --innodb_flush_log_at_trx_commit=1
     deploy:
       resources:
