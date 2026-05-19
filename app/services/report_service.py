@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User
 from app.models import Promotion
 from app.models import PriceList
+from app.models import PaymentMethod
 from app.enums import SaleStatus, PaymentMethodType
 from app.i18n import MSG
 from app.utils.tenant import set_tenant_context, tenant_bypass
@@ -460,6 +461,27 @@ def _translate_payment_method(method: str) -> str:
     return translations.get(method_lower, method.capitalize())
 
 
+def _load_pm_names(session, company_id: int | None, branch_id: int | None) -> dict[int, str]:
+    """Carga un dict {payment_method.id → name} para resolver métodos custom (kind=other)."""
+    filters = [PaymentMethod.enabled == True]
+    if company_id is not None:
+        filters.append(PaymentMethod.company_id == company_id)
+    if branch_id is not None:
+        filters.append(PaymentMethod.branch_id == branch_id)
+    methods = session.exec(select(PaymentMethod).where(*filters)).all()
+    return {m.id: m.name for m in methods if m.id is not None}
+
+
+def _resolve_payment_display(payment, pm_by_id: dict[int, str]) -> str:
+    """Devuelve el nombre de pantalla del método de pago, usando el nombre real para kind=other."""
+    method_type = getattr(payment, "method_type", None)
+    pm_id = getattr(payment, "payment_method_id", None)
+    method_val = (method_type.value if method_type else "") or "no especificado"
+    if method_val == "other" and pm_id and pm_id in pm_by_id:
+        return pm_by_id[pm_id]
+    return _translate_payment_method(method_val)
+
+
 def _auto_adjust_columns(ws: Worksheet, min_width: int = 12, max_width: int = 50) -> None:
     """Ajusta automáticamente el ancho de columnas."""
     for column in ws.columns:
@@ -540,6 +562,7 @@ def generate_sales_report(
         query = query.where(Sale.status != SaleStatus.cancelled)
 
     sales = session.exec(query).all()
+    pm_by_id = _load_pm_names(session, company_id, branch_id)
     # P1-03: Sale.user ya está prefetched (selectinload arriba) → evitar query redundante
     sale_user_lookup: dict[int, str] = {
         int(s.user_id): _safe_string(s.user.username)
@@ -688,7 +711,7 @@ def generate_sales_report(
 
         # Por método de pago
         for payment in (sale.payments or []):
-            method = payment.method_type.value if payment.method_type else "No especificado"
+            method = _resolve_payment_display(payment, pm_by_id)
             amount = Decimal(str(payment.amount or 0))
             if method not in by_payment:
                 by_payment[method] = {"count": 0, "total": Decimal("0")}
@@ -904,27 +927,26 @@ def generate_sales_report(
     sorted_payments = sorted(by_payment.items(), key=lambda x: x[1]["total"], reverse=True)
 
     for method, method_data in sorted_payments:
-        # Traducir métodos de pago a español
-        method_es = _translate_payment_method(method)
-        ws_payment.cell(row=row, column=1, value=_safe_string(method_es))
+        # method ya es el nombre de pantalla (ver _resolve_payment_display)
+        ws_payment.cell(row=row, column=1, value=_safe_string(method))
         ws_payment.cell(row=row, column=2, value=method_data["count"])
         ws_payment.cell(row=row, column=3, value=method_data["total"]).number_format = currency_format
         ws_payment.cell(row=row, column=4, value=method_data["total"]).number_format = currency_format  # Temporal
 
         # Observación según tipo
         method_lower = method.lower()
-        if method_lower == "cash":
+        if method_lower in {"cash", "efectivo"}:
             obs = "Verificar con arqueo de caja"
-        elif method_lower in {"debit", "credit", "card"}:
+        elif method_lower in {"debit", "credit", "card", "tarjeta de débito", "tarjeta de debito", "tarjeta de crédito", "tarjeta de credito"}:
             obs = "Verificar con POS/banco"
-        elif method_lower in {"yape", "plin", "wallet"}:
+        elif method_lower in {"yape", "plin", "wallet", "billetera digital"}:
             obs = "Verificar en app billetera"
-        elif method_lower == "transfer":
+        elif method_lower in {"transfer", "transferencia", "transferencia bancaria"}:
             obs = "Verificar en extracto bancario"
-        elif method_lower == "mixed":
+        elif method_lower in {"mixed", "mixto", "pago mixto"}:
             obs = "Combina múltiples métodos"
         else:
-            obs = ""
+            obs = "Verificar el medio de pago"
         ws_payment.cell(row=row, column=5, value=_safe_string(obs))
 
         for col in range(1, 6):
@@ -1110,7 +1132,7 @@ def generate_sales_report(
         payment_method = "No especificado"
         for payment in (sale.payments or []):
             if payment.method_type:
-                payment_method = _translate_payment_method(payment.method_type.value)
+                payment_method = _resolve_payment_display(payment, pm_by_id)
                 break
 
         is_credit = (
@@ -2405,6 +2427,7 @@ def generate_cashbox_report(
         sales_query = sales_query.where(Sale.branch_id == branch_id)
 
     sales = session.exec(sales_query).all()
+    pm_by_id = _load_pm_names(session, company_id, branch_id)
 
     # =========================================================================
     # NUEVO: Consultar cobros de cuotas/cobranzas para flujo de caja completo
@@ -2428,7 +2451,7 @@ def generate_cashbox_report(
     by_payment_sales_count: dict[str, int] = {}
     for sale in sales:
         for payment in (sale.payments or []):
-            method = payment.method_type.value if payment.method_type else "No especificado"
+            method = _resolve_payment_display(payment, pm_by_id)
             amount = _safe_decimal(payment.amount)
             by_payment_sales[method] = by_payment_sales.get(method, Decimal("0")) + amount
             by_payment_sales_count[method] = by_payment_sales_count.get(method, 0) + 1
@@ -2448,11 +2471,10 @@ def generate_cashbox_report(
     by_payment: dict[str, Decimal] = {}
     by_payment_count: dict[str, int] = {}
 
-    # Agregar ventas
+    # Agregar ventas (method ya es nombre de pantalla vía _resolve_payment_display)
     for method, amount in by_payment_sales.items():
-        method_es = _translate_payment_method(method)
-        by_payment[method_es] = by_payment.get(method_es, Decimal("0")) + amount
-        by_payment_count[method_es] = by_payment_count.get(method_es, 0) + by_payment_sales_count.get(method, 0)
+        by_payment[method] = by_payment.get(method, Decimal("0")) + amount
+        by_payment_count[method] = by_payment_count.get(method, 0) + by_payment_sales_count.get(method, 0)
 
     # Agregar cobranzas
     for method_es, amount in by_payment_collections.items():
@@ -2673,10 +2695,9 @@ def generate_cashbox_report(
 
     sorted_sales = sorted(by_payment_sales.items(), key=lambda x: x[1], reverse=True)
     for method, amount in sorted_sales:
-        method_es = _translate_payment_method(method)
         count = by_payment_sales_count.get(method, 0)
 
-        ws_origin.cell(row=row, column=1, value=_safe_string(method_es))
+        ws_origin.cell(row=row, column=1, value=_safe_string(method))
         ws_origin.cell(row=row, column=2, value=count)
         ws_origin.cell(row=row, column=3, value=amount).number_format = currency_format
         ws_origin.cell(row=row, column=4, value=amount).number_format = currency_format  # Temporal
