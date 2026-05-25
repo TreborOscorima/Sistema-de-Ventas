@@ -346,7 +346,9 @@ def _submenu_button(section: dict, active_key: rx.Var, on_click_handler) -> rx.C
 
 def _sidebar_guest_content() -> rx.Component:
     """Contenido del sidebar para visitantes no autenticados."""
-    return rx.el.div(
+    return rx.cond(
+        State.sidebar_open,
+        rx.el.div(
         # Separador
         rx.el.div(class_name="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mx-4"),
         # Mensaje de bienvenida
@@ -428,6 +430,8 @@ def _sidebar_guest_content() -> rx.Component:
             class_name="px-4 py-2",
         ),
         class_name="flex-1 flex flex-col",
+        ),
+        rx.fragment(),
     )
 
 
@@ -659,15 +663,19 @@ def sidebar() -> rx.Component:
                         ),
                         class_name="flex items-center gap-3 min-w-0 flex-1",
                     ),
-                    rx.el.button(
-                        rx.icon(
-                            rx.cond(State.sidebar_open, "panel-left-close", "panel-left-open"),
-                            class_name="h-5 w-5 text-slate-400",
+                    rx.cond(
+                        State.is_authenticated,
+                        rx.el.button(
+                            rx.icon(
+                                rx.cond(State.sidebar_open, "panel-left-close", "panel-left-open"),
+                                class_name="h-5 w-5 text-slate-400",
+                            ),
+                            on_click=State.toggle_sidebar,
+                            title=rx.cond(State.sidebar_open, "Ocultar menu lateral", "Mostrar menu lateral"),
+                            aria_label=rx.cond(State.sidebar_open, "Ocultar menu lateral", "Mostrar menu lateral"),
+                            class_name=f"p-2 shrink-0 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
                         ),
-                        on_click=State.toggle_sidebar,
-                        title=rx.cond(State.sidebar_open, "Ocultar menu lateral", "Mostrar menu lateral"),
-                        aria_label=rx.cond(State.sidebar_open, "Ocultar menu lateral", "Mostrar menu lateral"),
-                        class_name=f"p-2 shrink-0 {RADIUS['lg']} hover:bg-white/60 {TRANSITIONS['fast']}",
+                        rx.fragment(),
                     ),
                     class_name=rx.cond(
                         State.sidebar_open,

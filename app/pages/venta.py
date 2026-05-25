@@ -2203,6 +2203,7 @@ def _payment_form_body(variant: str) -> rx.Component:
                     on_click=State.confirm_sale,
                     disabled=State.is_loading,
                     loading=State.is_loading,
+                    data_venta_confirm_btn=True,
                     class_name=rx.cond(
                         State.is_loading,
                         confirm_loading_class,
@@ -2250,6 +2251,7 @@ def _payment_form_body(variant: str) -> rx.Component:
                     on_click=State.confirm_sale,
                     disabled=State.is_loading,
                     loading=State.is_loading,
+                    data_venta_confirm_btn=True,
                     class_name=rx.cond(
                         State.is_loading,
                         confirm_loading_class,
@@ -2629,8 +2631,9 @@ def payment_mobile_section() -> rx.Component:
 def _venta_keyboard_shortcuts() -> rx.Component:
     """Atajos de teclado para Punto de Venta.
 
-    F11         → Abrir modal Movimientos Recientes
-    Enter       → Añadir producto (solo si autocomplete cerrado)
+    F11           → Abrir modal Movimientos Recientes
+    Enter         → Añadir producto (quick-add-bar, autocomplete cerrado)
+                    o Confirmar Venta (desde campo numérico de monto, sin modal abierto)
     Arrow Up/Down → Navegar sugerencias de autocomplete (preventDefault + scrollIntoView)
     """
     return rx.script(
@@ -2674,24 +2677,47 @@ def _venta_keyboard_shortcuts() -> rx.Component:
                     return;
                 }
 
-                // Enter → añadir producto o seleccionar autocomplete
+                // Enter → añadir producto (quick-add-bar) o confirmar venta (área de pago)
                 if(e.key === 'Enter'){
                     var el = document.activeElement;
                     if(!el) return;
+
+                    // Rama 1: foco dentro de la barra de búsqueda rápida
                     var bar = el.closest('[data-quick-add-bar]');
-                    if(!bar) return;
-                    // No interferir con el form de barcode (tiene su propio on_submit)
-                    if(el.id === 'venta_barcode_input') return;
-                    // Si el autocomplete está abierto, dejar que Reflex on_key_down
-                    // maneje la selección — NO hacer click en añadir
-                    var searchDiv = el.closest('[data-product-search]');
-                    if(searchDiv){
-                        var dropdown = searchDiv.querySelector('[data-autocomplete-dropdown]');
-                        if(dropdown && dropdown.children.length > 0) return;
+                    if(bar){
+                        // No interferir con el form de barcode (tiene su propio on_submit)
+                        if(el.id === 'venta_barcode_input') return;
+                        // Si el autocomplete está abierto, dejar que Reflex on_key_down
+                        // maneje la selección — NO hacer click en añadir
+                        var searchDiv = el.closest('[data-product-search]');
+                        if(searchDiv){
+                            var dropdown = searchDiv.querySelector('[data-autocomplete-dropdown]');
+                            if(dropdown && dropdown.children.length > 0) return;
+                        }
+                        e.preventDefault();
+                        var addBtn = document.querySelector('[data-venta-add-btn]');
+                        if(addBtn) addBtn.click();
+                        return;
                     }
+
+                    // Rama 2: confirmar venta desde campo de monto (type=number) o sin foco en texto
+                    var tag = el.tagName.toLowerCase();
+                    var inputType = (el.type || '').toLowerCase();
+                    if(tag === 'textarea' || tag === 'select') return;
+                    if(tag === 'input' && inputType !== 'number') return;
+                    // No disparar si hay un modal abierto encima
+                    if(document.querySelector('.modal-overlay')) return;
+                    // Buscar el botón confirmar visible y habilitado
+                    var btns = document.querySelectorAll('[data-venta-confirm-btn]');
+                    var confirmBtn = null;
+                    for(var i = 0; i < btns.length; i++){
+                        if(!btns[i].disabled && btns[i].offsetParent !== null){
+                            confirmBtn = btns[i]; break;
+                        }
+                    }
+                    if(!confirmBtn) return;
                     e.preventDefault();
-                    var addBtn = document.querySelector('[data-venta-add-btn]');
-                    if(addBtn) addBtn.click();
+                    confirmBtn.click();
                 }
             });
         })();

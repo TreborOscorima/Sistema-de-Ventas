@@ -547,6 +547,25 @@ def page_title(title: str, subtitle: str = "") -> rx.Component:
     )
 
 
+def _modal_escape_script() -> rx.Component:
+    return rx.script(
+        """
+        (function(){
+            if(window.__modalEscapeAttached) return;
+            window.__modalEscapeAttached = true;
+            document.addEventListener('keydown', function(e){
+                if(e.key !== 'Escape') return;
+                var overlay = document.querySelector('.modal-overlay');
+                if(overlay) {
+                    e.preventDefault();
+                    overlay.click();
+                }
+            });
+        })();
+        """
+    )
+
+
 def modal_container(
     is_open: rx.Var,
     on_close: Callable,
@@ -605,6 +624,7 @@ def modal_container(
     return rx.cond(
         is_open,
         rx.el.div(
+            _modal_escape_script(),
             rx.el.div(
                 on_click=on_close,
                 class_name="fixed inset-0 bg-black/40 backdrop-blur-sm modal-overlay",
