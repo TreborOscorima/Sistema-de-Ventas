@@ -134,14 +134,24 @@ class PriceListState(MixinState):
                 barcode = ""
                 sale_price_val = 0.0
                 if item.product_id:
-                    p = session.exec(select(Product).where(Product.id == item.product_id)).first()
+                    p = session.exec(
+                        select(Product)
+                        .where(Product.id == item.product_id)
+                        .where(Product.company_id == company_id)
+                        .where(Product.branch_id == branch_id)
+                    ).first()
                     if p:
                         product_name = p.description or ""
                         barcode = p.barcode or ""
                         sale_price_val = float(p.sale_price or 0)
                 variant_desc = ""
                 if item.product_variant_id:
-                    v = session.exec(select(ProductVariant).where(ProductVariant.id == item.product_variant_id)).first()
+                    v = session.exec(
+                        select(ProductVariant)
+                        .where(ProductVariant.id == item.product_variant_id)
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                    ).first()
                     if v:
                         parts = [v.size, v.color]
                         variant_desc = " / ".join(x for x in parts if x)
@@ -230,7 +240,10 @@ class PriceListState(MixinState):
                 session.info["tenant_bypass"] = True
                 if self.pl_editing_id:
                     pl = session.exec(
-                        select(PriceList).where(PriceList.id == self.pl_editing_id)
+                        select(PriceList)
+                        .where(PriceList.id == self.pl_editing_id)
+                        .where(PriceList.company_id == company_id)
+                        .where(PriceList.branch_id == branch_id)
                     ).first()
                     if not pl:
                         yield rx.toast("Lista no encontrada.", duration=3000)
@@ -403,6 +416,8 @@ class PriceListState(MixinState):
             existing = session.exec(
                 select(PriceListItem)
                 .where(PriceListItem.price_list_id == pl_id)
+                .where(PriceListItem.company_id == company_id)
+                .where(PriceListItem.branch_id == branch_id)
                 .where(PriceListItem.product_id == int(self.pl_item_product_id))
                 .where(PriceListItem.product_variant_id == variant_id_int)
             ).first()
@@ -462,12 +477,16 @@ class PriceListState(MixinState):
                 select(PriceListItem)
                 .where(PriceListItem.price_list_id == pl_id)
                 .where(PriceListItem.company_id == company_id)
+                .where(PriceListItem.branch_id == branch_id)
             ).all()
             for item in items:
                 if not item.product_id:
                     continue
                 p = session.exec(
-                    select(Product).where(Product.id == item.product_id)
+                    select(Product)
+                    .where(Product.id == item.product_id)
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
                 ).first()
                 if p and p.sale_price:
                     factor = (Decimal("100") - pct) / Decimal("100")
@@ -492,7 +511,10 @@ class PriceListState(MixinState):
         with rx.session() as session:
             session.info["tenant_bypass"] = True
             item = session.exec(
-                select(PriceListItem).where(PriceListItem.id == item_id)
+                select(PriceListItem)
+                .where(PriceListItem.id == item_id)
+                .where(PriceListItem.company_id == company_id)
+                .where(PriceListItem.branch_id == self._branch_id())
             ).first()
             if item:
                 session.delete(item)

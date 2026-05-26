@@ -713,7 +713,10 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                         from sqlmodel import select as sel_
                         from app.models.sales import Sale as Sale_
                         sale_obj = sess.exec(
-                            sel_(Sale_).where(Sale_.id == fiscal_sale_id)
+                            sel_(Sale_)
+                            .where(Sale_.id == fiscal_sale_id)
+                            .where(Sale_.company_id == int(fiscal_company_id or 0))
+                            .where(Sale_.branch_id == int(fiscal_branch_id or 0))
                         ).first()
                         if sale_obj and hasattr(sale_obj, "receipt_type"):
                             sale_obj.receipt_type = receipt_type

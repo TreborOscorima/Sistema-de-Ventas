@@ -506,7 +506,10 @@ class PromotionsState(MixinState):
                 session.info["tenant_bypass"] = True
                 if self.promo_editing_id:
                     promo = session.exec(
-                        select(Promotion).where(Promotion.id == self.promo_editing_id)
+                        select(Promotion)
+                        .where(Promotion.id == self.promo_editing_id)
+                        .where(Promotion.company_id == company_id)
+                        .where(Promotion.branch_id == branch_id)
                     ).first()
                     if not promo:
                         yield rx.toast("Promoción no encontrada.", duration=3000)
@@ -707,7 +710,12 @@ class PromotionsState(MixinState):
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
             session.info["tenant_bypass"] = True
-            promo = session.exec(select(Promotion).where(Promotion.id == promo_id)).first()
+            promo = session.exec(
+                select(Promotion)
+                .where(Promotion.id == promo_id)
+                .where(Promotion.company_id == company_id)
+                .where(Promotion.branch_id == branch_id)
+            ).first()
             if promo:
                 promo.is_active = new_active
                 session.commit()

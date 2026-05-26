@@ -280,6 +280,7 @@ class QuotationState(MixinState):
                 select(Quotation)
                 .where(Quotation.id == quotation_id)
                 .where(Quotation.company_id == company_id)
+                .where(Quotation.branch_id == branch_id)
             ).first()
             if not q:
                 yield rx.toast("Presupuesto no encontrado.", duration=3000)
@@ -515,14 +516,24 @@ class QuotationState(MixinState):
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
             session.info["tenant_bypass"] = True
-            q = session.exec(select(Quotation).where(Quotation.id == quotation_id)).first()
+            q = session.exec(
+                select(Quotation)
+                .where(Quotation.id == quotation_id)
+                .where(Quotation.company_id == company_id)
+                .where(Quotation.branch_id == branch_id)
+            ).first()
             if not q:
                 return
             items_stmt = select(QuotationItem).where(QuotationItem.quotation_id == quotation_id)
             items = session.exec(items_stmt).all()
             client_name = "Público en general"
             if q.client_id:
-                cli = session.exec(select(Client).where(Client.id == q.client_id)).first()
+                cli = session.exec(
+                    select(Client)
+                    .where(Client.id == q.client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                ).first()
                 if cli:
                     client_name = cli.name
             created_by = "—"
@@ -591,7 +602,12 @@ class QuotationState(MixinState):
         set_tenant_context(company_id, branch_id)
         with rx.session() as session:
             session.info["tenant_bypass"] = True
-            q = session.exec(select(Quotation).where(Quotation.id == quotation_id)).first()
+            q = session.exec(
+                select(Quotation)
+                .where(Quotation.id == quotation_id)
+                .where(Quotation.company_id == company_id)
+                .where(Quotation.branch_id == branch_id)
+            ).first()
             if not q:
                 yield rx.toast("Presupuesto no encontrado.", duration=3000)
                 return
@@ -603,7 +619,12 @@ class QuotationState(MixinState):
         if q.client_id:
             with rx.session() as session:
                 session.info["tenant_bypass"] = True
-                cli = session.exec(select(Client).where(Client.id == q.client_id)).first()
+                cli = session.exec(
+                    select(Client)
+                    .where(Client.id == q.client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                ).first()
                 if cli:
                     client_name = cli.name
 
@@ -678,7 +699,10 @@ class QuotationState(MixinState):
         with rx.session() as session:
             session.info["tenant_bypass"] = True
             q = session.exec(
-                select(Quotation).where(Quotation.id == quotation_id)
+                select(Quotation)
+                .where(Quotation.id == quotation_id)
+                .where(Quotation.company_id == company_id)
+                .where(Quotation.branch_id == branch_id)
             ).first()
             if not q:
                 yield rx.toast("Presupuesto no encontrado.", duration=3000)
@@ -709,13 +733,21 @@ class QuotationState(MixinState):
             if product_ids:
                 from app.models import Product as ProductModel
                 prods = session.exec(
-                    select(ProductModel).where(ProductModel.id.in_(product_ids))
+                    select(ProductModel)
+                    .where(ProductModel.id.in_(product_ids))
+                    .where(ProductModel.company_id == company_id)
+                    .where(ProductModel.branch_id == branch_id)
                 ).all()
                 products_map = {p.id: p for p in prods}
 
             client_data: dict[str, Any] | None = None
             if q.client_id:
-                cli = session.exec(select(Client).where(Client.id == q.client_id)).first()
+                cli = session.exec(
+                    select(Client)
+                    .where(Client.id == q.client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                ).first()
                 if cli:
                     balance = float(max((cli.credit_limit or 0) - (cli.current_debt or 0), 0))
                     client_data = {
@@ -999,7 +1031,10 @@ class QuotationState(MixinState):
         with rx.session() as session:
             session.info["tenant_bypass"] = True
             q = session.exec(
-                select(Quotation).where(Quotation.id == int(quotation_id))
+                select(Quotation)
+                .where(Quotation.id == int(quotation_id))
+                .where(Quotation.company_id == company_id)
+                .where(Quotation.branch_id == branch_id)
             ).first()
             if not q:
                 yield rx.toast("Presupuesto no encontrado.", duration=3000)
@@ -1011,7 +1046,10 @@ class QuotationState(MixinState):
             )
             if q.client_id:
                 cli = session.exec(
-                    select(Client).where(Client.id == q.client_id)
+                    select(Client)
+                    .where(Client.id == q.client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
                 ).first()
                 if cli:
                     client_name = cli.name or "Cliente"
@@ -1083,7 +1121,10 @@ class QuotationState(MixinState):
             with rx.session() as session:
                 session.info["tenant_bypass"] = True
                 q = session.exec(
-                    select(Quotation).where(Quotation.id == quot_id)
+                    select(Quotation)
+                    .where(Quotation.id == quot_id)
+                    .where(Quotation.company_id == company_id)
+                    .where(Quotation.branch_id == branch_id)
                 ).first()
                 if not q:
                     self.quot_send_error = "Presupuesto no encontrado."
@@ -1134,7 +1175,10 @@ class QuotationState(MixinState):
             with rx.session() as session:
                 session.info["tenant_bypass"] = True
                 q_obj = session.exec(
-                    select(Quotation).where(Quotation.id == quot_id)
+                    select(Quotation)
+                    .where(Quotation.id == quot_id)
+                    .where(Quotation.company_id == company_id)
+                    .where(Quotation.branch_id == branch_id)
                 ).first()
                 if q_obj:
                     q_obj.status = QuotationStatus.SENT
@@ -1190,7 +1234,10 @@ class QuotationState(MixinState):
                 with rx.session() as session:
                     session.info["tenant_bypass"] = True
                     q_obj = session.exec(
-                        select(Quotation).where(Quotation.id == quot_id)
+                        select(Quotation)
+                        .where(Quotation.id == quot_id)
+                        .where(Quotation.company_id == company_id)
+                        .where(Quotation.branch_id == branch_id)
                     ).first()
                     if q_obj:
                         q_obj.status = QuotationStatus.SENT
@@ -1217,7 +1264,10 @@ class QuotationState(MixinState):
             with rx.session() as session:
                 session.info["tenant_bypass"] = True
                 q_obj = session.exec(
-                    select(Quotation).where(Quotation.id == int(quotation_id))
+                    select(Quotation)
+                    .where(Quotation.id == int(quotation_id))
+                    .where(Quotation.company_id == company_id)
+                    .where(Quotation.branch_id == branch_id)
                 ).first()
                 if q_obj:
                     q_obj.status = QuotationStatus.SENT

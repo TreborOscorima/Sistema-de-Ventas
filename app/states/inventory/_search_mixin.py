@@ -312,7 +312,10 @@ class SearchMixin:
         products_map = {
             p.id: p
             for p in session.exec(
-                select(Product).where(Product.id.in_(product_ids_needed))
+                select(Product)
+                .where(Product.id.in_(product_ids_needed))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
             ).all()
         }
         variants_map = {}
@@ -320,9 +323,10 @@ class SearchMixin:
             variants_map = {
                 v.id: v
                 for v in session.exec(
-                    select(ProductVariant).where(
-                        ProductVariant.id.in_(variant_ids_needed)
-                    )
+                    select(ProductVariant)
+                    .where(ProductVariant.id.in_(variant_ids_needed))
+                    .where(ProductVariant.company_id == company_id)
+                    .where(ProductVariant.branch_id == branch_id)
                 ).all()
             }
         kit_ids: set = set(

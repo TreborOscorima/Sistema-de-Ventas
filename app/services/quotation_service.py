@@ -292,18 +292,23 @@ class QuotationService:
         try:
             if session is None:
                 async with get_async_session() as s:
-                    await QuotationService._mark_converted_impl(s, quotation_id, sale_id)
+                    await QuotationService._mark_converted_impl(s, quotation_id, sale_id, company_id, branch_id)
                     await s.commit()
             else:
-                await QuotationService._mark_converted_impl(session, quotation_id, sale_id)
+                await QuotationService._mark_converted_impl(session, quotation_id, sale_id, company_id, branch_id)
         finally:
             set_tenant_context(None, None)
 
     @staticmethod
     async def _mark_converted_impl(
-        session: AsyncSession, quotation_id: int, sale_id: int
+        session: AsyncSession, quotation_id: int, sale_id: int, company_id: int, branch_id: int
     ) -> None:
-        stmt = select(Quotation).where(Quotation.id == quotation_id)
+        stmt = (
+            select(Quotation)
+            .where(Quotation.id == quotation_id)
+            .where(Quotation.company_id == company_id)
+            .where(Quotation.branch_id == branch_id)
+        )
         quotation = (await session.execute(stmt)).scalar_one_or_none()
         if quotation:
             quotation.status = QuotationStatus.CONVERTED
@@ -324,18 +329,23 @@ class QuotationService:
         try:
             if session is None:
                 async with get_async_session() as s:
-                    await QuotationService._update_status_impl(s, quotation_id, new_status)
+                    await QuotationService._update_status_impl(s, quotation_id, new_status, company_id, branch_id)
                     await s.commit()
             else:
-                await QuotationService._update_status_impl(session, quotation_id, new_status)
+                await QuotationService._update_status_impl(session, quotation_id, new_status, company_id, branch_id)
         finally:
             set_tenant_context(None, None)
 
     @staticmethod
     async def _update_status_impl(
-        session: AsyncSession, quotation_id: int, new_status: str
+        session: AsyncSession, quotation_id: int, new_status: str, company_id: int, branch_id: int
     ) -> None:
-        stmt = select(Quotation).where(Quotation.id == quotation_id)
+        stmt = (
+            select(Quotation)
+            .where(Quotation.id == quotation_id)
+            .where(Quotation.company_id == company_id)
+            .where(Quotation.branch_id == branch_id)
+        )
         q = (await session.execute(stmt)).scalar_one_or_none()
         if q:
             q.status = new_status
