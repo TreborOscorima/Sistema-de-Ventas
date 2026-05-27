@@ -974,10 +974,7 @@ class State(RootState):
     async def page_init_login(self):
         """on_load para /login. Redirige al dashboard si ya está autenticado."""
         if self.is_authenticated:
-            # Hard navigation: rompe el ciclo de WS inestable que pierde rx.redirect.
-            # window.location.replace recarga la página limpiando el estado WS y
-            # no deja entrada en el historial (el usuario no puede volver a /login).
-            yield rx.call_script("window.location.replace('/dashboard')")
+            yield rx.redirect("/dashboard")
             return
         # Forzar sidebar abierto para mostrar contenido guest en producción
         self.sidebar_open = True
