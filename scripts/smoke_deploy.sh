@@ -4,15 +4,14 @@
 #
 # Uso:
 #   bash scripts/smoke_deploy.sh                                    # Local
-#   bash scripts/smoke_deploy.sh http://3.19.234.12:8000            # Test server
+#   bash scripts/smoke_deploy.sh http://52.15.161.245:8000          # Test server
 #   bash scripts/smoke_deploy.sh https://tuwayki.app                # Producción
 #   bash scripts/smoke_deploy.sh --domain-split                     # 3 superficies
-#   bash scripts/smoke_deploy.sh http://3.19.234.12:8000 --backend-only  # Solo API
+#   bash scripts/smoke_deploy.sh http://52.15.161.245:8000 --backend-only  # Solo API
 #
 # Notas:
-#   - Reflex sin nginx: backend en :8000, frontend en :3000
-#   - Con nginx: todo pasa por :80/:443 (proxy a ambos puertos)
-#   - El script auto-detecta la URL del frontend a partir de la del backend
+#   - Reflex 0.9.3+ prod mode: frontend + API en el mismo puerto (:8000)
+#   - Con nginx: todo pasa por :80/:443 (proxy a :8000)
 # =============================================================================
 set -euo pipefail
 
@@ -38,13 +37,9 @@ done
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8000}"
 
-# Auto-detectar URL del frontend (Reflex: backend=8000, frontend=3000)
-# Con nginx (puertos 80/443) el frontend y backend comparten URL
-if [[ "$BASE_URL" =~ :8000$ ]]; then
-    FRONTEND_URL="${BASE_URL/:8000/:3000}"
-else
-    FRONTEND_URL="$BASE_URL"
-fi
+# Reflex 0.9.3 prod mode sirve frontend + API desde el mismo proceso/puerto.
+# Ya no existe servidor Next.js separado en :3000.
+FRONTEND_URL="$BASE_URL"
 
 info()  { echo -e "${CYAN}[TEST]${NC}  $*"; }
 pass()  { echo -e "${GREEN}[PASS]${NC}  $*"; PASS=$((PASS + 1)); }
