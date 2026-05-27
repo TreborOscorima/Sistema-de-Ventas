@@ -637,7 +637,7 @@ def _header_section() -> rx.Component:
             rx.el.div(
                 rx.el.a(
                     "Ingresar",
-                    href=_app_href("/"),
+                    href=_app_href("/login"),
                     on_click=rx.call_script(_track_event_script("click_nav_login", "header_nav")),
                     class_name="hidden items-center justify-center rounded-xl border-2 border-indigo-600 bg-white px-4 py-2 text-sm font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 md:inline-flex",
                 ),
@@ -665,7 +665,7 @@ def _header_section() -> rx.Component:
                     rx.el.div(class_name="border-t border-slate-100"),
                     rx.el.div(
                         rx.el.a(
-                            "Ingresar", href=_app_href("/"),
+                            "Ingresar", href=_app_href("/login"),
                             on_click=rx.call_script(_track_event_script("click_nav_login_mobile", "mobile_menu")),
                             class_name="inline-flex w-full items-center justify-center rounded-xl border-2 border-indigo-600 px-4 py-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50",
                         ),
@@ -1199,7 +1199,7 @@ def _footer_section() -> rx.Component:
                 ),
                 rx.el.div(
                     rx.el.h4("Accesos", class_name="text-sm font-bold text-slate-900"),
-                    _footer_link("Iniciar sesion", _app_href("/"), "click_footer_login", "footer_accesos"),
+                    _footer_link("Iniciar sesion", _app_href("/login"), "click_footer_login", "footer_accesos"),
                     _footer_link("Crear cuenta", _app_href("/registro"), "click_footer_signup", "footer_accesos"),
                     _footer_link("WhatsApp directo", f"https://wa.me/{WHATSAPP_NUMBER}", "click_footer_whatsapp", "footer_accesos", external=True),
                     class_name="flex flex-col gap-2",
