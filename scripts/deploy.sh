@@ -226,7 +226,7 @@ fi
 ok "Backend respondiendo en puerto $BACKEND_PORT"
 
 # ─── 9b. Esperar al frontend (solo en modo completo) ────────────────────────
-# Reflex 0.9.2 prod mode sirve frontend + API desde el mismo proceso (BACKEND_PORT).
+# Reflex 0.9.3 prod mode sirve frontend + API desde el mismo proceso (BACKEND_PORT).
 # Ya no existe un servidor Next.js separado en puerto 3000.
 if [[ "$BACKEND_ONLY" != "true" ]]; then
     FRONTEND_PORT=$BACKEND_PORT
