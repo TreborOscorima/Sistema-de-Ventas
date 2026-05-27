@@ -535,6 +535,7 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+            return
         # Delta parcial: renderiza la UI de inmediato
         yield
         # Carga explícita de datos del Dashboard en background: no depender
@@ -558,6 +559,21 @@ class State(RootState):
             len(getattr(self, "available_branches", None) or []),
         )
         if not self.is_authenticated:
+            # UPDATE_VARS_INTERNAL puede haber llegado con token vacío por race
+            # condition entre applyClientStorageDelta y onLoadInternalEvent.
+            # Si localStorage sí tiene un token válido, recargar fuerza un nuevo
+            # HYDRATE completo que lee localStorage correctamente.
+            _TOKEN_LS_KEY = (
+                "reflex___state____state"
+                ".app___states___root_state____root_state"
+                ".token_rx_state_"
+            )
+            yield rx.call_script(
+                f"(function(){{"
+                f"var t=localStorage.getItem('{_TOKEN_LS_KEY}');"
+                f"if(t&&t.length>20){{window.location.reload();}}"
+                f"}})();"
+            )
             return
         if getattr(self, "available_branches", None):
             return  # ya cargadas por otro camino
@@ -566,6 +582,10 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+            return
+        yield
+        if hasattr(self, "load_dashboard_background"):
+            yield State.load_dashboard_background
 
     @rx.event
     async def page_init_ingreso(self):
