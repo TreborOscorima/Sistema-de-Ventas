@@ -1963,10 +1963,11 @@ class AuthState(MixinState):
                     self.is_login_loading = False
                     if must_change_password:
                         return rx.redirect("/cambiar-clave")
-                    # Hard navigation: el token ya está en LocalStorage cuando
-                    # esta línea ejecuta (mismo batch WS). No depende de WS
-                    # para completar la navegación → robusto ante WS inestable.
-                    return rx.call_script("window.location.replace('/dashboard')")
+                    # setTimeout(300): espera a que React escriba el token en
+                    # localStorage (rx.LocalStorage usa useEffect asíncrono)
+                    # antes de navegar. Sin el delay, el nuevo token podría no
+                    # estar en localStorage al cargar /dashboard.
+                    return rx.call_script("setTimeout(()=>window.location.replace('/dashboard'),300)")
 
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
@@ -2124,10 +2125,11 @@ class AuthState(MixinState):
                     return rx.redirect("/cuenta-suspendida")
                 if getattr(user, "must_change_password", False):
                     return rx.redirect("/cambiar-clave")
-                # Hard navigation: el token ya está en LocalStorage cuando
-                # esta línea ejecuta (mismo batch WS). No depende de WS
-                # para completar la navegación → robusto ante WS inestable.
-                return rx.call_script("window.location.replace('/dashboard')")
+                # setTimeout(300): espera a que React escriba el token en
+                # localStorage (rx.LocalStorage usa useEffect asíncrono)
+                # antes de navegar. Sin el delay, el nuevo token podría no
+                # estar en localStorage al cargar /dashboard.
+                return rx.call_script("setTimeout(()=>window.location.replace('/dashboard'),300)")
 
         # Login fallido: registrar intento
         _record_failed_attempt(identifier, ip_address=client_ip)
@@ -2226,7 +2228,10 @@ class AuthState(MixinState):
             self.owner_session_active = False
             self.owner_session_email = ""
             self.owner_session_user_id = 0
-        return rx.redirect("/")
+        # Hard navigation con delay: garantiza que React limpió el token de
+        # localStorage antes de navegar. rx.redirect("/") via WS se pierde
+        # si el WS cae, dejando al usuario con sesión activa sin poder salir.
+        return rx.call_script("setTimeout(()=>window.location.replace('/'),300)")
 
     @rx.event
     def show_create_user_form(self):
