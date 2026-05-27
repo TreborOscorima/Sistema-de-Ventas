@@ -1963,10 +1963,7 @@ class AuthState(MixinState):
                     self.is_login_loading = False
                     if must_change_password:
                         return rx.redirect("/cambiar-clave")
-                    # Hard navigation: el token ya está en LocalStorage cuando
-                    # esta línea ejecuta (mismo batch WS). No depende de WS
-                    # para completar la navegación → robusto ante WS inestable.
-                    return rx.call_script("window.location.replace('/dashboard')")
+                    return rx.redirect("/dashboard")
 
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
@@ -2124,10 +2121,7 @@ class AuthState(MixinState):
                     return rx.redirect("/cuenta-suspendida")
                 if getattr(user, "must_change_password", False):
                     return rx.redirect("/cambiar-clave")
-                # Hard navigation: el token ya está en LocalStorage cuando
-                # esta línea ejecuta (mismo batch WS). No depende de WS
-                # para completar la navegación → robusto ante WS inestable.
-                return rx.call_script("window.location.replace('/dashboard')")
+                return rx.redirect("/dashboard")
 
         # Login fallido: registrar intento
         _record_failed_attempt(identifier, ip_address=client_ip)
