@@ -24,6 +24,31 @@ COPY requirements.txt .
 # --prefix=/install para que las deps queden en un árbol relocatable que copiamos al runtime.
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
+# Workaround: Rolldown (Vite 6) tiene un bug en su minificador que genera
+# código inválido en @emotion/styled (usada por recharts Tooltip) →
+# TypeError: t is not a function en producción. Fix: parchear el template
+# Python de reflex_base que genera vite.config.js para forzar esbuild como
+# minificador. Se hace aquí (build stage) para que el runtime lo herede.
+RUN python3 -c "
+import glob, sys
+files = glob.glob('/install/lib/python*/site-packages/reflex_base/compiler/templates.py')
+if not files:
+    print('WARNING: reflex_base/compiler/templates.py not found — skipping patch')
+    sys.exit(0)
+tmpl = files[0]
+content = open(tmpl).read()
+OLD = '    sourcemap: {\"true\" if sourcemap is True else \"false\" if sourcemap is False else repr(sourcemap)},'
+NEW = OLD + '\n    minify: \"esbuild\",'
+if 'minify: \"esbuild\"' in content:
+    print('[SKIP]  templates.py already patched')
+elif OLD in content:
+    open(tmpl, 'w').write(content.replace(OLD, NEW, 1))
+    print('[PATCH] reflex_base/compiler/templates.py: minify → esbuild')
+else:
+    print('ERROR: pattern not found in templates.py', file=sys.stderr)
+    sys.exit(1)
+"
+
 
 # =============================================================================
 # Stage 2: runtime — imagen final liviana
