@@ -96,5 +96,33 @@ SURFACE="${APP_SURFACE:-all}"
 info "Superficie: ${SURFACE}"
 info "Iniciando Reflex: $*"
 
+# ─── 4b. Pre-init + patch Rolldown minification bug ─────────────────────────
+# Rolldown (Vite 6) tiene un bug en su minificador: reutiliza nombres de
+# variables y genera código inválido en @emotion/styled (usada internamente
+# por recharts Tooltip) → TypeError: t is not a function en producción.
+# Fix: correr reflex init para generar vite.config.js, luego forzar esbuild
+# como minificador. reflex run encontrará el archivo parcheado y lo usará
+# sin regenerarlo (comportamiento idempotente de reflex init).
+info "Pre-inicializando frontend (workaround Rolldown bug)..."
+if reflex init 2>&1 | tail -3; then
+    ok "reflex init OK"
+else
+    warn "reflex init terminó con error — continuando de todos modos"
+fi
+if [[ -f ".web/vite.config.js" ]]; then
+    python3 -c "
+content = open('.web/vite.config.js').read()
+if 'minify' not in content:
+    patched = content.replace('sourcemap: false,', 'sourcemap: false,\n    minify: \"esbuild\",', 1)
+    open('.web/vite.config.js', 'w').write(patched)
+    print('[PATCH] vite.config.js: minify → esbuild (workaround Rolldown bug #emotion)')
+else:
+    print('[SKIP]  vite.config.js: minify ya configurado')
+"
+else
+    warn ".web/vite.config.js no encontrado — reflex run lo generará; parche omitido en este arranque"
+fi
+# ─────────────────────────────────────────────────────────────────────────────
+
 # ─── 5. Ejecutar CMD (reflex run ...) ───────────────────────────────────────
 exec "$@"

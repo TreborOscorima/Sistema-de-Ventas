@@ -211,6 +211,31 @@ else
     info "Inicializando directorio web (reflex init)..."
     $PYTHON -m reflex init
     ok "Reflex web directory listo"
+
+    # ── Workaround: Rolldown (Vite 6) minification bug ───────────────────────
+    # @emotion/styled (usada internamente por recharts Tooltip) falla en prod
+    # con el minificador por defecto de Rolldown: reutiliza nombres de
+    # variables y genera código inválido → TypeError: t is not a function
+    # en es6-DiH5z2NC.js:1:24637. Fix: esbuild como minificador (no tiene
+    # este bug). Se aplica DESPUÉS de reflex init para sobrevivir la
+    # regeneración del archivo.
+    if [[ -f ".web/vite.config.js" ]]; then
+        $PYTHON -c "
+content = open('.web/vite.config.js').read()
+if 'minify' not in content:
+    patched = content.replace(
+        'sourcemap: false,',
+        'sourcemap: false,\n    minify: \"esbuild\",',
+        1
+    )
+    open('.web/vite.config.js', 'w').write(patched)
+    print('[PATCH] vite.config.js: minify → esbuild (workaround Rolldown bug #emotion)')
+else:
+    print('[SKIP]  vite.config.js: minify ya configurado')
+"
+    fi
+    # ─────────────────────────────────────────────────────────────────────────
+
     info "Iniciando backend + frontend en puerto $BACKEND_PORT..."
     nohup $PYTHON -m reflex run \
         --env prod \
