@@ -158,6 +158,24 @@ else
     warn "Migraciones saltadas (SKIP_MIGRATE=true)"
 fi
 
+# ─── 6b. Sincronizar config de nginx (solo si ya está instalada) ────────────
+NGINX_CONF_SRC="$APP_DIR/ops/nginx/tuwayki-test-server.conf"
+NGINX_CONF_DST="/etc/nginx/sites-available/tuwayki"
+if [[ -f "$NGINX_CONF_SRC" && -f "$NGINX_CONF_DST" ]]; then
+    if ! diff -q "$NGINX_CONF_SRC" "$NGINX_CONF_DST" >/dev/null 2>&1; then
+        info "Config nginx desactualizada — sincronizando desde repo..."
+        sudo cp "$NGINX_CONF_SRC" "$NGINX_CONF_DST"
+        if sudo nginx -t >/dev/null 2>&1; then
+            sudo systemctl reload nginx
+            ok "Nginx config actualizada y recargada"
+        else
+            warn "nginx -t falló tras actualizar config — verificar manualmente"
+        fi
+    else
+        ok "Nginx config sin cambios"
+    fi
+fi
+
 # ─── 7. Matar procesos anteriores ───────────────────────────────────────────
 info "Deteniendo procesos anteriores..."
 fuser -k "$BACKEND_PORT/tcp" 2>/dev/null || true
