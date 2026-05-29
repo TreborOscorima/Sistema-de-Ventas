@@ -286,6 +286,10 @@ TMPATCH
         info "Pre-bundling recharts → vendor-recharts/ ..."
         mkdir -p .web/vendor-recharts
         $BUN_BIN build --target browser --format esm \
+            --external react \
+            --external react-dom \
+            --external react-is \
+            --external "react/jsx-runtime" \
             "$NM/recharts/es6/index.js" \
             --outfile .web/vendor-recharts/recharts.esm.js 2>/dev/null \
             && ok "vendor-recharts" || warn "vendor-recharts FAIL"
