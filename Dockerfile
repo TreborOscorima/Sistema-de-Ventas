@@ -24,30 +24,53 @@ COPY requirements.txt .
 # --prefix=/install para que las deps queden en un árbol relocatable que copiamos al runtime.
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Workaround: Rolldown (Vite 6) tiene un bug en su minificador que genera
-# código inválido en @emotion/styled (usada por recharts Tooltip) →
-# TypeError: t is not a function en producción. Fix: parchear el template
-# Python de reflex_base que genera vite.config.js para forzar esbuild como
-# minificador. Se hace aquí (build stage) para que el runtime lo herede.
-RUN python3 -c "
+# Fix Rolldown 1.x CJS circular-dep bug (Vite 8):
+# Rolldown renombra lazy-getters CJS a letras simples que quedan shadowed
+# dentro de closures factory → TypeError: r is not a function en prod.
+# Fix A: parchear templates.py (genera vite.config.js) con:
+#   - minify: esbuild (en lugar de Rolldown)
+#   - conditions: ["module","browser","import"] (preferir ESM)
+#   - aliases ESM para @emotion, socket.io-client y recharts
+# Fix B (vendor files): se aplica en docker-entrypoint.sh al arrancar,
+#   ya que .web/ es un volumen nombrado que no existe en la imagen.
+RUN python3 << 'PATCH_EOF'
 import glob, sys
 files = glob.glob('/install/lib/python*/site-packages/reflex_base/compiler/templates.py')
 if not files:
     print('WARNING: reflex_base/compiler/templates.py not found — skipping patch')
     sys.exit(0)
-tmpl = files[0]
-content = open(tmpl).read()
-OLD = '    sourcemap: {\"true\" if sourcemap is True else \"false\" if sourcemap is False else repr(sourcemap)},'
-NEW = OLD + '\n    minify: \"esbuild\",'
-if 'minify: \"esbuild\"' in content:
-    print('[SKIP]  templates.py already patched')
-elif OLD in content:
-    open(tmpl, 'w').write(content.replace(OLD, NEW, 1))
-    print('[PATCH] reflex_base/compiler/templates.py: minify → esbuild')
+path = files[0]
+c = open(path).read()
+changed = False
+def p(label, check, old, new):
+    global c, changed
+    if check not in c:
+        if old in c:
+            c = c.replace(old, new, 1); changed = True
+            print(f'[PATCH] {label}')
+        else:
+            print(f'[WARN]  {label}: anchor not found')
+    else:
+        print(f'[SKIP]  {label}')
+p('minify:esbuild', 'minify: "esbuild"',
+  'sourcemap: false,', 'sourcemap: false,\n    minify: "esbuild",')
+p('conditions', '"module", "browser", "import"',
+  'resolve: {{', 'resolve: {{\n    conditions: ["module", "browser", "import", "default"],\n    mainFields: ["browser", "module", "jsnext"],')
+p('@emotion alias', 'vendor-emotion',
+  'find: "@",',
+  'find: "@emotion/react",\n        replacement: fileURLToPath(new URL("./vendor-emotion/react/dist/emotion-react.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@emotion/cache",\n        replacement: fileURLToPath(new URL("./vendor-emotion/cache/dist/emotion-cache.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+p('socket.io alias', 'socket.io-client',
+  'find: "@",',
+  'find: "socket.io-client",\n        replacement: fileURLToPath(new URL("./node_modules/socket.io-client/dist/socket.io.esm.min.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+p('recharts alias', 'recharts',
+  'find: "@",',
+  'find: "recharts",\n        replacement: fileURLToPath(new URL("./vendor-recharts/recharts.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+if changed:
+    open(path, 'w').write(c)
+    print(f'[OK] templates.py patched: {path}')
 else:
-    print('ERROR: pattern not found in templates.py', file=sys.stderr)
-    sys.exit(1)
-"
+    print('[OK] templates.py already up to date')
+PATCH_EOF
 
 
 # =============================================================================

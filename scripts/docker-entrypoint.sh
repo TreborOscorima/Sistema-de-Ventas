@@ -4,7 +4,8 @@
 #
 # 1. Espera a que MySQL y Redis estén disponibles.
 # 2. Ejecuta migraciones Alembic (upgrade head).
-# 3. Arranca Reflex con los argumentos pasados por CMD.
+# 3. Aplica Rolldown CJS circular-dep fixes (Vite 8 / Rolldown 1.x).
+# 4. Arranca Reflex con los argumentos pasados por CMD.
 # =============================================================================
 set -euo pipefail
 
@@ -96,71 +97,125 @@ SURFACE="${APP_SURFACE:-all}"
 info "Superficie: ${SURFACE}"
 info "Iniciando Reflex: $*"
 
-# ─── 4b. Pre-init + patch Rolldown minification bug ─────────────────────────
-# Rolldown (Vite 6) tiene un bug en su minificador: reutiliza nombres de
-# variables y genera código inválido en @emotion/styled (usada internamente
-# por recharts Tooltip) → TypeError: t is not a function en producción.
-# Fix: correr reflex init para generar vite.config.js, luego forzar esbuild
-# como minificador. reflex run encontrará el archivo parcheado y lo usará
-# sin regenerarlo (comportamiento idempotente de reflex init).
-info "Pre-inicializando frontend (workaround Rolldown bug)..."
+# ─── 4b. Pre-init + Rolldown CJS circular-dep fixes (Vite 8 / Rolldown 1.x) ─
+# Rolldown renombra lazy-getters CJS a letras simples (r,t,n,i) que quedan
+# shadowed dentro de closures factory → TypeError: r is not a function.
+# Fix A: parchear templates.py (genera vite.config.js con aliases ESM).
+# Fix B: pre-bundlear librerías afectadas con bun como ESM puro.
+# NOTA: templates.py puede estar pre-parcheado desde el Dockerfile (minify+aliases).
+#       Este paso aplica lo que falte y crea los vendor files (que van en .web/,
+#       que es un volumen nombrado y no existe en la imagen).
+info "Pre-inicializando frontend (reflex init)..."
 if reflex init 2>&1 | tail -3; then
     ok "reflex init OK"
 else
     warn "reflex init terminó con error — continuando de todos modos"
 fi
-if [[ -f ".web/vite.config.js" ]]; then
-    python3 << 'VITEPATCH'
-content = open('.web/vite.config.js').read()
-changed = False
 
-if 'minify' not in content:
-    content = content.replace('sourcemap: false,', 'sourcemap: false,\n    minify: "esbuild",', 1)
-    changed = True
-    print('[PATCH] vite.config.js: minify → esbuild')
-else:
-    print('[SKIP]  vite.config.js: minify ya configurado')
+info "Aplicando Rolldown CJS fixes..."
 
-if 'conditions:' not in content:
-    content = content.replace(
-        '  resolve: {\n    mainFields:',
-        '  resolve: {\n    conditions: ["module", "browser", "import", "default"],\n    mainFields:',
-        1
-    )
-    changed = True
-    print('[PATCH] vite.config.js: resolve.conditions: module first')
-else:
-    print('[SKIP]  vite.config.js: resolve.conditions ya configurado')
+# Localizar bun (descargado por reflex init en $HOME/.local/share/reflex/bun/bin/)
+BUN_BIN=""
+for candidate in \
+    "$HOME/.local/share/reflex/bun/bin/bun" \
+    "/app/.local/share/reflex/bun/bin/bun" \
+    "/root/.local/share/reflex/bun/bin/bun" \
+    "$(command -v bun 2>/dev/null || true)"; do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+        BUN_BIN="$candidate"
+        break
+    fi
+done
 
-if '@emotion/styled' not in content:
-    emotion_block = (
-        '  optimizeDeps: {\n'
-        '    include: [\n'
-        '      "recharts",\n'
-        '      "@emotion/styled",\n'
-        '      "@emotion/react",\n'
-        '      "@emotion/cache",\n'
-        '      "@emotion/serialize",\n'
-        '      "@emotion/utils",\n'
-        '      "@emotion/sheet",\n'
-        '      "@emotion/hash",\n'
-        '      "@emotion/memoize",\n'
-        '      "@emotion/weak-memoize",\n'
-        '      "stylis",\n'
-        '    ],\n'
-        '  },\n'
-    )
-    content = content.replace('\n}));', '\n' + emotion_block + '}));', 1)
-    changed = True
-    print('[PATCH] vite.config.js: optimizeDeps + @emotion packages')
-else:
-    print('[SKIP]  vite.config.js: @emotion/styled ya en optimizeDeps')
-
-if changed:
-    open('.web/vite.config.js', 'w').write(content)
-VITEPATCH
+if [[ -z "$BUN_BIN" ]]; then
+    warn "bun no encontrado — vendor pre-bundles omitidos (Rolldown fixes pueden fallar en build)"
 else
-    warn ".web/vite.config.js no encontrado — reflex run lo generará; parche omitido en este arranque"
+    ok "bun: $BUN_BIN"
+    NM=".web/node_modules"
+
+    # Fix A: patch templates.py (el Dockerfile ya aplica minify+aliases en build stage;
+    #         este patch verifica y completa cualquier alias que falte).
+    TMPL=""
+    for tmpl_path in \
+        "/usr/local/lib/python3.11/site-packages/reflex_base/compiler/templates.py" \
+        "/usr/local/lib/python3.12/site-packages/reflex_base/compiler/templates.py" \
+        "/usr/local/lib/python3.13/site-packages/reflex_base/compiler/templates.py"; do
+        if [[ -f "$tmpl_path" ]]; then TMPL="$tmpl_path"; break; fi
+    done
+
+    if [[ -n "$TMPL" ]]; then
+        python3 - "$TMPL" <<'TMPATCH'
+import sys
+path = sys.argv[1]
+c = open(path).read()
+changed = False
+def p(label, check, old, new):
+    global c, changed
+    if check not in c:
+        if old in c:
+            c = c.replace(old, new, 1); changed = True
+            print(f'[PATCH] {label}')
+        else:
+            print(f'[WARN]  {label}: anchor not found — puede que templates.py cambió')
+    else:
+        print(f'[SKIP]  {label}')
+p('minify:esbuild', 'minify: "esbuild"',
+  'sourcemap: false,', 'sourcemap: false,\n    minify: "esbuild",')
+p('conditions', '"module", "browser", "import"',
+  'resolve: {{', 'resolve: {{\n    conditions: ["module", "browser", "import", "default"],\n    mainFields: ["browser", "module", "jsnext"],')
+p('@emotion alias', 'vendor-emotion',
+  'find: "@",',
+  'find: "@emotion/react",\n        replacement: fileURLToPath(new URL("./vendor-emotion/react/dist/emotion-react.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@emotion/cache",\n        replacement: fileURLToPath(new URL("./vendor-emotion/cache/dist/emotion-cache.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+p('socket.io alias', 'socket.io-client',
+  'find: "@",',
+  'find: "socket.io-client",\n        replacement: fileURLToPath(new URL("./node_modules/socket.io-client/dist/socket.io.esm.min.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+p('recharts alias', 'recharts',
+  'find: "@",',
+  'find: "recharts",\n        replacement: fileURLToPath(new URL("./vendor-recharts/recharts.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+if changed:
+    open(path, 'w').write(c)
+    print('[OK] templates.py actualizado')
+else:
+    print('[OK] templates.py ya estaba al día')
+TMPATCH
+        ok "templates.py verificado"
+    else
+        warn "templates.py no encontrado — Rolldown aliases omitidos"
+    fi
+
+    # Fix B: vendor-emotion → @emotion/react + @emotion/cache como ESM puro
+    if [[ ! -f ".web/vendor-emotion/react/dist/emotion-react.esm.js" ]]; then
+        info "Pre-bundling @emotion → vendor-emotion/ ..."
+        mkdir -p .web/vendor-emotion/react/dist .web/vendor-emotion/cache/dist
+        "$BUN_BIN" build --target node --format esm \
+            "$NM/@emotion/react/dist/emotion-react.cjs.dev.js" \
+            --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js 2>/dev/null \
+            && ok "vendor-emotion/react" || warn "vendor-emotion/react FAIL"
+        "$BUN_BIN" build --target node --format esm \
+            "$NM/@emotion/cache/dist/emotion-cache.cjs.dev.js" \
+            --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js 2>/dev/null \
+            && ok "vendor-emotion/cache" || warn "vendor-emotion/cache FAIL"
+    else
+        ok "vendor-emotion ya existe"
+    fi
+
+    # Fix B: vendor-recharts → recharts/es6 como ESM puro
+    # CRÍTICO: --external react/react-dom evita 2 instancias de React en el browser
+    # (sin esto: TypeError: Cannot read properties of null (reading 'useContext'))
+    if [[ ! -f ".web/vendor-recharts/recharts.esm.js" ]]; then
+        info "Pre-bundling recharts → vendor-recharts/ ..."
+        mkdir -p .web/vendor-recharts
+        "$BUN_BIN" build --target browser --format esm \
+            --external react \
+            --external react-dom \
+            --external react-is \
+            --external "react/jsx-runtime" \
+            "$NM/recharts/es6/index.js" \
+            --outfile .web/vendor-recharts/recharts.esm.js 2>/dev/null \
+            && ok "vendor-recharts" || warn "vendor-recharts FAIL"
+    else
+        ok "vendor-recharts ya existe"
+    fi
 fi
 # ─────────────────────────────────────────────────────────────────────────────
 
