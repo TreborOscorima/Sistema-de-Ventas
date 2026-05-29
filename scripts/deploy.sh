@@ -212,6 +212,17 @@ else
     $PYTHON -m reflex init
     ok "Reflex web directory listo"
 
+    # Instalar node_modules explícitamente ANTES de los vendor builds.
+    # reflex init crea .web/package.json pero NO corre bun install —
+    # eso ocurre dentro de reflex run, demasiado tarde para nuestros vendor builds.
+    info "Instalando dependencias npm (.web/node_modules)..."
+    if (cd .web && "$BUN_BIN" install --frozen-lockfile 2>/dev/null); then
+        ok "node_modules instalados"
+    else
+        warn "frozen-lockfile falló — reintentando sin lock..."
+        (cd .web && "$BUN_BIN" install) && ok "node_modules instalados"
+    fi
+
     # ── Rolldown CJS circular-dep fixes (Vite 8 / Rolldown 1.x) ─────────────
     # Rolldown renombra lazy-getters CJS a letras simples (r,t,n,i) que quedan
     # shadowed dentro de closures factory → TypeError: r is not a function.

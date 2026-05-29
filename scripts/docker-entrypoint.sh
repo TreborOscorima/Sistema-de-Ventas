@@ -112,6 +112,17 @@ else
     warn "reflex init terminó con error — continuando de todos modos"
 fi
 
+# Instalar node_modules explícitamente antes de los vendor builds.
+# reflex init crea .web/package.json pero NO instala node_modules.
+if [[ -n "$BUN_BIN" && -x "$BUN_BIN" && -f ".web/package.json" ]]; then
+    info "Instalando dependencias npm (.web/node_modules)..."
+    if (cd .web && "$BUN_BIN" install --frozen-lockfile 2>/dev/null); then
+        ok "node_modules instalados"
+    else
+        (cd .web && "$BUN_BIN" install) && ok "node_modules instalados (re-install)" || warn "bun install falló"
+    fi
+fi
+
 info "Aplicando Rolldown CJS fixes..."
 
 # Localizar bun (descargado por reflex init en $HOME/.local/share/reflex/bun/bin/)
