@@ -110,15 +110,55 @@ else
     warn "reflex init terminó con error — continuando de todos modos"
 fi
 if [[ -f ".web/vite.config.js" ]]; then
-    python3 -c "
+    python3 << 'VITEPATCH'
 content = open('.web/vite.config.js').read()
+changed = False
+
 if 'minify' not in content:
-    patched = content.replace('sourcemap: false,', 'sourcemap: false,\n    minify: \"esbuild\",', 1)
-    open('.web/vite.config.js', 'w').write(patched)
-    print('[PATCH] vite.config.js: minify → esbuild (workaround Rolldown bug #emotion)')
+    content = content.replace('sourcemap: false,', 'sourcemap: false,\n    minify: "esbuild",', 1)
+    changed = True
+    print('[PATCH] vite.config.js: minify → esbuild')
 else:
     print('[SKIP]  vite.config.js: minify ya configurado')
-"
+
+if 'conditions:' not in content:
+    content = content.replace(
+        '  resolve: {\n    mainFields:',
+        '  resolve: {\n    conditions: ["module", "browser", "import", "default"],\n    mainFields:',
+        1
+    )
+    changed = True
+    print('[PATCH] vite.config.js: resolve.conditions: module first')
+else:
+    print('[SKIP]  vite.config.js: resolve.conditions ya configurado')
+
+if '@emotion/styled' not in content:
+    emotion_block = (
+        '  optimizeDeps: {\n'
+        '    include: [\n'
+        '      "recharts",\n'
+        '      "@emotion/styled",\n'
+        '      "@emotion/react",\n'
+        '      "@emotion/cache",\n'
+        '      "@emotion/serialize",\n'
+        '      "@emotion/utils",\n'
+        '      "@emotion/sheet",\n'
+        '      "@emotion/hash",\n'
+        '      "@emotion/memoize",\n'
+        '      "@emotion/weak-memoize",\n'
+        '      "stylis",\n'
+        '    ],\n'
+        '  },\n'
+    )
+    content = content.replace('\n}));', '\n' + emotion_block + '}));', 1)
+    changed = True
+    print('[PATCH] vite.config.js: optimizeDeps + @emotion packages')
+else:
+    print('[SKIP]  vite.config.js: @emotion/styled ya en optimizeDeps')
+
+if changed:
+    open('.web/vite.config.js', 'w').write(content)
+VITEPATCH
 else
     warn ".web/vite.config.js no encontrado — reflex run lo generará; parche omitido en este arranque"
 fi

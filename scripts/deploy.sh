@@ -212,27 +212,85 @@ else
     $PYTHON -m reflex init
     ok "Reflex web directory listo"
 
-    # ── Workaround: Rolldown (Vite 6) minification bug ───────────────────────
-    # @emotion/styled (usada internamente por recharts Tooltip) falla en prod
-    # con el minificador por defecto de Rolldown: reutiliza nombres de
-    # variables y genera código inválido → TypeError: t is not a function
-    # en es6-DiH5z2NC.js:1:24637. Fix: esbuild como minificador (no tiene
-    # este bug). Se aplica DESPUÉS de reflex init para sobrevivir la
-    # regeneración del archivo.
-    if [[ -f ".web/vite.config.js" ]]; then
-        $PYTHON -c "
-content = open('.web/vite.config.js').read()
-if 'minify' not in content:
-    patched = content.replace(
-        'sourcemap: false,',
-        'sourcemap: false,\n    minify: \"esbuild\",',
-        1
-    )
-    open('.web/vite.config.js', 'w').write(patched)
-    print('[PATCH] vite.config.js: minify → esbuild (workaround Rolldown bug #emotion)')
-else:
-    print('[SKIP]  vite.config.js: minify ya configurado')
-"
+    # ── Rolldown CJS circular-dep fixes (Vite 8 / Rolldown 1.x) ─────────────
+    # Rolldown renombra lazy-getters CJS a letras simples (r,t,n,i) que quedan
+    # shadowed dentro de closures factory → TypeError: r is not a function.
+    # Librerías afectadas: @emotion (circular en CSS-in-JS), socket.io-client
+    # (circular en engine.io), recharts (circular en lodash interno).
+    #
+    # Fix A — templates.py: genera vite.config.js con aliases ESM + minify esbuild.
+    #          DEBE aplicarse ANTES de reflex run (que regenera vite.config.js).
+    # Fix B — bun pre-bundle: convierte CJS problemáticos a ESM puro antes del build.
+    BUN_BIN="$HOME/.local/share/reflex/bun/bin/bun"
+    NM=".web/node_modules"
+    TMPL=".venv/lib/python3.12/site-packages/reflex_base/compiler/templates.py"
+
+    # Fix A: patch templates.py (sobrevive reflex run porque ES el generador)
+    if [[ -f "$TMPL" ]]; then
+        $PYTHON "$TMPL" 2>/dev/null || true  # just test it exists and is parseable
+        $PYTHON - "$TMPL" <<'TMPATCH'
+import sys, re
+path = sys.argv[1]
+c = open(path).read()
+changed = False
+def p(label, check, old, new):
+    global c, changed
+    if check not in c:
+        if old in c:
+            c = c.replace(old, new, 1); changed = True
+            print(f'[PATCH] {label}')
+        else:
+            print(f'[WARN]  {label}: anchor not found')
+    else:
+        print(f'[SKIP]  {label}')
+p('minify:esbuild', 'minify: "esbuild"',
+  'sourcemap: false,', 'sourcemap: false,\n    minify: "esbuild",')
+p('conditions', '"module", "browser", "import"',
+  'resolve: {{', 'resolve: {{\n    conditions: ["module", "browser", "import", "default"],\n    mainFields: ["browser", "module", "jsnext"],')
+p('@emotion alias', 'vendor-emotion',
+  'find: "@",',
+  'find: "@emotion/react",\n        replacement: fileURLToPath(new URL("./vendor-emotion/react/dist/emotion-react.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@emotion/cache",\n        replacement: fileURLToPath(new URL("./vendor-emotion/cache/dist/emotion-cache.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+p('socket.io alias', 'socket.io-client',
+  'find: "@",',
+  'find: "socket.io-client",\n        replacement: fileURLToPath(new URL("./node_modules/socket.io-client/dist/socket.io.esm.min.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+p('recharts alias', 'recharts',
+  'find: "@",',
+  'find: "recharts",\n        replacement: fileURLToPath(new URL("./vendor-recharts/recharts.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@",')
+if changed:
+    open(path, 'w').write(c)
+    print('[OK] templates.py actualizado')
+TMPATCH
+        ok "templates.py patches OK"
+    else
+        warn "templates.py no encontrado en $TMPL"
+    fi
+
+    # Fix B: vendor-emotion → @emotion/react + @emotion/cache como ESM puro
+    if [[ ! -f ".web/vendor-emotion/react/dist/emotion-react.esm.js" ]]; then
+        info "Pre-bundling @emotion → vendor-emotion/ ..."
+        mkdir -p .web/vendor-emotion/react/dist .web/vendor-emotion/cache/dist
+        $BUN_BIN build --target node --format esm \
+            "$NM/@emotion/react/dist/emotion-react.cjs.dev.js" \
+            --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js 2>/dev/null \
+            && ok "vendor-emotion/react" || warn "vendor-emotion/react FAIL"
+        $BUN_BIN build --target node --format esm \
+            "$NM/@emotion/cache/dist/emotion-cache.cjs.dev.js" \
+            --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js 2>/dev/null \
+            && ok "vendor-emotion/cache" || warn "vendor-emotion/cache FAIL"
+    else
+        ok "vendor-emotion ya existe"
+    fi
+
+    # Fix B: vendor-recharts → recharts (lodash CJS tiene circular dep con Rolldown)
+    if [[ ! -f ".web/vendor-recharts/recharts.esm.js" ]]; then
+        info "Pre-bundling recharts → vendor-recharts/ ..."
+        mkdir -p .web/vendor-recharts
+        $BUN_BIN build --target browser --format esm \
+            "$NM/recharts/es6/index.js" \
+            --outfile .web/vendor-recharts/recharts.esm.js 2>/dev/null \
+            && ok "vendor-recharts" || warn "vendor-recharts FAIL"
+    else
+        ok "vendor-recharts ya existe"
     fi
     # ─────────────────────────────────────────────────────────────────────────
 
