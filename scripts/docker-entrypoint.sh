@@ -188,11 +188,12 @@ TMPATCH
         info "Pre-bundling @emotion → vendor-emotion/ ..."
         mkdir -p .web/vendor-emotion/react/dist .web/vendor-emotion/cache/dist
         "$BUN_BIN" build --target node --format esm \
-            "$NM/@emotion/react/dist/emotion-react.cjs.dev.js" \
+            --external react --external react-dom \
+            "$NM/@emotion/react/dist/emotion-react.esm.js" \
             --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js 2>/dev/null \
             && ok "vendor-emotion/react" || warn "vendor-emotion/react FAIL"
         "$BUN_BIN" build --target node --format esm \
-            "$NM/@emotion/cache/dist/emotion-cache.cjs.dev.js" \
+            "$NM/@emotion/cache/dist/emotion-cache.esm.js" \
             --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js 2>/dev/null \
             && ok "vendor-emotion/cache" || warn "vendor-emotion/cache FAIL"
     else
