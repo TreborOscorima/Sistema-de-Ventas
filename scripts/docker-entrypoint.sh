@@ -112,20 +112,10 @@ else
     warn "reflex init terminó con error — continuando de todos modos"
 fi
 
-# Instalar node_modules explícitamente antes de los vendor builds.
-# reflex init crea .web/package.json pero NO instala node_modules.
-if [[ -n "$BUN_BIN" && -x "$BUN_BIN" && -f ".web/package.json" ]]; then
-    info "Instalando dependencias npm (.web/node_modules)..."
-    if (cd .web && "$BUN_BIN" install --frozen-lockfile 2>/dev/null); then
-        ok "node_modules instalados"
-    else
-        (cd .web && "$BUN_BIN" install) && ok "node_modules instalados (re-install)" || warn "bun install falló"
-    fi
-fi
-
 info "Aplicando Rolldown CJS fixes..."
 
-# Localizar bun (descargado por reflex init en $HOME/.local/share/reflex/bun/bin/)
+# Localizar bun PRIMERO — debe estar antes del bloque bun install y de los vendor builds.
+# reflex init descarga bun en $HOME/.local/share/reflex/bun/bin/
 BUN_BIN=""
 for candidate in \
     "$HOME/.local/share/reflex/bun/bin/bun" \
@@ -138,14 +128,37 @@ for candidate in \
     fi
 done
 
+# Instalar node_modules explícitamente antes de los vendor builds.
+# reflex init crea .web/package.json pero NO instala node_modules.
+if [[ -n "$BUN_BIN" && -f ".web/package.json" ]]; then
+    info "Instalando dependencias npm (.web/node_modules)..."
+    if (cd .web && "$BUN_BIN" install --frozen-lockfile 2>/dev/null); then
+        ok "node_modules instalados"
+    else
+        (cd .web && "$BUN_BIN" install) && ok "node_modules instalados (re-install)" || warn "bun install falló"
+    fi
+fi
+
 if [[ -z "$BUN_BIN" ]]; then
     warn "bun no encontrado — vendor pre-bundles omitidos (Rolldown fixes pueden fallar en build)"
 else
     ok "bun: $BUN_BIN"
     NM=".web/node_modules"
 
+    # Helper: bun build con logging de errores visible en docker logs
+    bun_vendor() {
+        local label="$1"; shift
+        local log_file="/tmp/bun_vendor_${label//\//_}.log"
+        if "$BUN_BIN" "$@" > "$log_file" 2>&1; then
+            ok "$label ($(tail -1 "$log_file" | grep -oE '[0-9.]+ [KMG]B' || echo 'OK'))"
+        else
+            warn "$label FAIL — error:"
+            tail -5 "$log_file"
+        fi
+    }
+
     # Fix A: patch templates.py (el Dockerfile ya aplica minify+aliases en build stage;
-    #         este patch verifica y completa cualquier alias que falte).
+    #         este paso verifica y completa cualquier alias que falte).
     TMPL=""
     for tmpl_path in \
         "/usr/local/lib/python3.11/site-packages/reflex_base/compiler/templates.py" \
@@ -195,18 +208,17 @@ TMPATCH
     fi
 
     # Fix B: vendor-emotion → @emotion/react + @emotion/cache como ESM puro
+    # --target node: SSR-safe (evita ReferenceError: document is not defined en prerender)
     if [[ ! -f ".web/vendor-emotion/react/dist/emotion-react.esm.js" ]]; then
         info "Pre-bundling @emotion → vendor-emotion/ ..."
         mkdir -p .web/vendor-emotion/react/dist .web/vendor-emotion/cache/dist
-        "$BUN_BIN" build --target node --format esm \
+        bun_vendor "vendor-emotion/react" build --target node --format esm \
             --external react --external react-dom \
             "$NM/@emotion/react/dist/emotion-react.esm.js" \
-            --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js 2>/dev/null \
-            && ok "vendor-emotion/react" || warn "vendor-emotion/react FAIL"
-        "$BUN_BIN" build --target node --format esm \
+            --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js
+        bun_vendor "vendor-emotion/cache" build --target node --format esm \
             "$NM/@emotion/cache/dist/emotion-cache.esm.js" \
-            --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js 2>/dev/null \
-            && ok "vendor-emotion/cache" || warn "vendor-emotion/cache FAIL"
+            --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js
     else
         ok "vendor-emotion ya existe"
     fi
@@ -217,14 +229,11 @@ TMPATCH
     if [[ ! -f ".web/vendor-recharts/recharts.esm.js" ]]; then
         info "Pre-bundling recharts → vendor-recharts/ ..."
         mkdir -p .web/vendor-recharts
-        "$BUN_BIN" build --target browser --format esm \
-            --external react \
-            --external react-dom \
-            --external react-is \
-            --external "react/jsx-runtime" \
+        bun_vendor "vendor-recharts" build --target browser --format esm \
+            --external react --external react-dom \
+            --external react-is --external "react/jsx-runtime" \
             "$NM/recharts/es6/index.js" \
-            --outfile .web/vendor-recharts/recharts.esm.js 2>/dev/null \
-            && ok "vendor-recharts" || warn "vendor-recharts FAIL"
+            --outfile .web/vendor-recharts/recharts.esm.js
     else
         ok "vendor-recharts ya existe"
     fi
