@@ -243,6 +243,7 @@ TMPATCH
         done
 
         if [[ -n "$EMOTION_REACT_SRC" ]]; then
+            mkdir -p .web/vendor-emotion/react/dist
             bun_vendor "vendor-emotion/react" build \
                 --target node \
                 --format esm \
@@ -251,17 +252,50 @@ TMPATCH
                 "$EMOTION_REACT_SRC" \
                 --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js
         else
-            warn "@emotion/react source no encontrado"
+            warn "@emotion/react no encontrado — desactivando alias"
+            if [[ -n "$TMPL" ]]; then
+                python3 - "$TMPL" <<'PY'
+import sys
+
+p = sys.argv[1]
+c = open(p).read()
+
+c = c.replace(
+    'find: "@emotion/react",\n        replacement: fileURLToPath(new URL("./vendor-emotion/react/dist/emotion-react.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@emotion/cache",',
+    'find: "@emotion/cache",',
+    1,
+)
+
+open(p, 'w').write(c)
+PY
+            fi
         fi
 
         if [[ -n "$EMOTION_CACHE_SRC" ]]; then
+            mkdir -p .web/vendor-emotion/cache/dist
             bun_vendor "vendor-emotion/cache" build \
                 --target node \
                 --format esm \
                 "$EMOTION_CACHE_SRC" \
                 --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js
         else
-            warn "@emotion/cache source no encontrado"
+            warn "@emotion/cache no encontrado — desactivando alias"
+            if [[ -n "$TMPL" ]]; then
+                python3 - "$TMPL" <<'PY'
+import sys
+
+p = sys.argv[1]
+c = open(p).read()
+
+c = c.replace(
+    'find: "@emotion/cache",\n        replacement: fileURLToPath(new URL("./vendor-emotion/cache/dist/emotion-cache.esm.js", import.meta.url)),\n      }},\n      {{\n        find: "@",',
+    'find: "@",',
+    1,
+)
+
+open(p, 'w').write(c)
+PY
+            fi
         fi
     else
         ok "vendor-emotion ya existe"
@@ -288,7 +322,7 @@ TMPATCH
             "$RECHARTS_SRC" \
             --outfile .web/vendor-recharts/recharts.esm.js
     else
-        warn "recharts source no encontrado"
+        warn "recharts no encontrado — alias omitido"
     fi
 fi
 # ─────────────────────────────────────────────────────────────────────────────
