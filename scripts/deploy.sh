@@ -212,6 +212,58 @@ else
     $PYTHON -m reflex init
     ok "Reflex web directory listo"
 
+    # ── Vendor pre-builds (Rolldown CJS fix) ─────────────────────────────────
+    # vite.config.js tiene aliases vendor-emotion/vendor-recharts si templates.py
+    # fue parcheado. Si esos archivos no existen → react-router build falla con
+    # [UNLOADABLE_DEPENDENCY]. Crearlos con bun antes de lanzar reflex run.
+    BUN_BIN=""
+    for _c in \
+        "$HOME/.local/share/reflex/bun/bin/bun" \
+        "$(command -v bun 2>/dev/null || true)"; do
+        [[ -n "$_c" && -x "$_c" ]] && { BUN_BIN="$_c"; break; }
+    done
+
+    if [[ -n "$BUN_BIN" && -f ".web/package.json" ]]; then
+        info "Instalando node_modules (.web/)..."
+        (cd .web && "$BUN_BIN" install 2>/dev/null) \
+            && ok "node_modules OK" || warn "bun install falló — continuando"
+        NM=".web/node_modules"
+
+        if [[ ! -f ".web/vendor-emotion/react/dist/emotion-react.esm.js" \
+              && -f "$NM/@emotion/react/dist/emotion-react.esm.js" ]]; then
+            info "Creando vendor-emotion..."
+            mkdir -p .web/vendor-emotion/react/dist .web/vendor-emotion/cache/dist
+            "$BUN_BIN" build --target node --format esm \
+                --external react --external react-dom \
+                "$NM/@emotion/react/dist/emotion-react.esm.js" \
+                --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js \
+                2>/dev/null && ok "vendor-emotion/react OK" || warn "vendor-emotion/react FAIL"
+            "$BUN_BIN" build --target node --format esm \
+                "$NM/@emotion/cache/dist/emotion-cache.esm.js" \
+                --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js \
+                2>/dev/null && ok "vendor-emotion/cache OK" || warn "vendor-emotion/cache FAIL"
+        else
+            ok "vendor-emotion ya existe"
+        fi
+
+        if [[ ! -f ".web/vendor-recharts/recharts.esm.js" \
+              && -f "$NM/recharts/es6/index.js" ]]; then
+            info "Creando vendor-recharts..."
+            mkdir -p .web/vendor-recharts
+            "$BUN_BIN" build --target browser --format esm \
+                --external react --external react-dom \
+                --external react-is --external "react/jsx-runtime" \
+                "$NM/recharts/es6/index.js" \
+                --outfile .web/vendor-recharts/recharts.esm.js \
+                2>/dev/null && ok "vendor-recharts OK" || warn "vendor-recharts FAIL"
+        else
+            ok "vendor-recharts ya existe"
+        fi
+    else
+        warn "bun no encontrado o .web/package.json ausente — vendor pre-builds omitidos"
+    fi
+    # ─────────────────────────────────────────────────────────────────────────
+
     info "Iniciando backend + frontend en puerto $BACKEND_PORT..."
     nohup $PYTHON -m reflex run \
         --env prod \
