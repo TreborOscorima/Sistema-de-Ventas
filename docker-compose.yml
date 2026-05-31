@@ -8,6 +8,7 @@
 #
 # Uso normal: docker compose up -d
 # Con dominio: NPM en npm_network. Hostnames: tuwayki_landing, tuwayki_sys, tuwayki_admin (puerto 3000).
+# Reflex 0.9.x sirve frontend + API en un solo proceso en :3000 — NPM debe apuntar a :3000.
 # MySQL y Redis solo en red interna; no se exponen al host.
 # Solo landing ejecuta migraciones; sys y admin usan SKIP_MIGRATE=true.
 # Las apps conectan a MySQL/Redis por hostname (tuwayki_mysql / tuwayki_redis) vía alias en internal_net.
