@@ -105,15 +105,23 @@ info "Iniciando Reflex: $*"
 # NOTA: templates.py puede estar pre-parcheado desde el Dockerfile (minify+aliases).
 #       Este paso aplica lo que falte y crea los vendor files (que van en .web/,
 #       que es un volumen nombrado y no existe en la imagen).
-info "Pre-inicializando frontend..."
-mkdir -p .web
+if [[ ! -f ".web/reflex.json" ]]; then
+    info "Inicializando frontend..."
 
-if reflex export --frontend-only >/tmp/reflex_init.log 2>&1; then
-    ok "frontend generado"
+    if timeout 300 sh -c 'reflex init 2>&1 | tee /tmp/reflex-init.log'; then
+        ok "reflex init OK"
+    else
+        tail -50 /tmp/reflex-init.log || true
+        fail "reflex init falló"
+    fi
 else
-    warn "frontend init falló"
-    tail -20 /tmp/reflex_init.log
+    ok ".web ya inicializado"
 fi
+
+info "Estado .web:"
+du -sh .web || true
+du -sh .web/node_modules || true
+find .web -maxdepth 2 | head -50 || true
 
 info "Aplicando Rolldown CJS fixes..."
 
@@ -132,18 +140,18 @@ for candidate in \
 done
 
 # Instalar node_modules explícitamente antes de los vendor builds.
-if [[ -n "$BUN_BIN" ]]; then
-    info "Instalando dependencias frontend..."
+if [[ -n "$BUN_BIN" && -f ".web/package.json" ]]; then
+    info "Verificando dependencias frontend..."
 
-    cd .web || exit 1
-
-    rm -rf node_modules
-
-    "$BUN_BIN" install
-
-    cd - >/dev/null
-
-    ok "node_modules listos"
+    if [[ ! -f ".web/reflex.install_frontend_packages.cached" ]]; then
+        (
+            cd .web
+            "$BUN_BIN" install --frozen-lockfile || "$BUN_BIN" install
+        )
+        ok "node_modules instalados"
+    else
+        ok "node_modules ya presentes"
+    fi
 fi
 
 if [[ -z "$BUN_BIN" ]]; then
@@ -271,6 +279,7 @@ TMPATCH
     done
 
     if [[ -n "$RECHARTS_SRC" ]]; then
+        mkdir -p .web/vendor-recharts
         bun_vendor "vendor-recharts" build \
             --target browser \
             --format esm \
