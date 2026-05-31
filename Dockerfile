@@ -67,14 +67,13 @@ COPY --chown=app:app . .
 COPY --chown=app:app scripts/docker-entrypoint.sh /docker-entrypoint.sh
 RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
-# Reflex 0.9 prod: API + frontend en un solo proceso (puerto 8000 por defecto).
-EXPOSE 8000
+# Reflex 0.9 prod: API + frontend en un solo proceso (puerto 3000 por defecto).
+EXPOSE 3000
 
-# Liveness: /api/ping en el backend (puerto 8000), sin tocar DB/Redis.
-# Readiness con dependencias (DB + Redis) se mide con /api/health desde NPM.
+# Liveness: /api/ping (mismo puerto que App Running en reflex run --env prod).
 # start_period largo: primer arranque con volumen .web vacío compila frontend.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=300s --retries=5 \
-    CMD curl -fsS http://localhost:8000/api/ping || exit 1
+    CMD curl -fsS http://localhost:3000/api/ping || exit 1
 
 USER app
 

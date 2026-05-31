@@ -108,7 +108,7 @@ services:
     # /api/ping = liveness barato (no toca DB/Redis). /api/health es readiness
     # con validación de dependencias — eso lo consulta NPM/uptime monitor.
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/ping"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -149,7 +149,7 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/ping"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -190,7 +190,7 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/ping"]
       interval: 30s
       timeout: 5s
       retries: 5
