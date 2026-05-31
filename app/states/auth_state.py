@@ -208,6 +208,8 @@ class AuthState(MixinState):
     error_message: str = ""
     is_login_loading: bool = False
     password_change_error: str = ""
+    # Modal de advertencia al intentar cerrar sesión con caja abierta
+    show_cashbox_logout_warning: bool = False
     show_login_password: bool = False
     show_change_password: bool = False
     show_change_confirm_password: bool = False
@@ -2185,50 +2187,33 @@ class AuthState(MixinState):
         )
 
     @rx.event
+    def logout_check_cashbox(self):
+        """Punto de entrada de 'Cerrar Sesión' desde la UI.
+
+        Si hay una caja abierta muestra el modal de advertencia en lugar
+        de cerrar la sesión directamente. El modal ofrece tres opciones:
+          1. Ir a cerrar caja  → redirige a /caja (el cajero cierra bien)
+          2. Salir de todas formas → llama logout() sin tocar la caja
+          3. Cancelar → no hace nada
+        """
+        if getattr(self, "cashbox_is_open_cached", False):
+            self.show_cashbox_logout_warning = True
+            return
+        return self.logout()
+
+    @rx.event
+    def dismiss_cashbox_logout_warning(self):
+        """Cierra el modal sin hacer logout (opción Cancelar)."""
+        self.show_cashbox_logout_warning = False
+
+    @rx.event
     def logout(self):
-        user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
-        if user_id:
-            try:
-                from app.models.sales import (
-                    CashboxSession as _CashboxSession,
-                    CashboxLog as _CashboxLog,
-                )
-                company_id = self._company_id() if hasattr(self, "_company_id") else None
-                branch_id  = self._branch_id()  if hasattr(self, "_branch_id")  else None
-                with rx.session() as _sess:
-                    _sess.info["tenant_bypass"] = True
-                    stmt = select(_CashboxSession).where(
-                        _CashboxSession.user_id == user_id,
-                        _CashboxSession.is_open == True,
-                    )
-                    # Filtrar por tenant si está disponible (evita cerrar sesiones de
-                    # otras sucursales/empresas en sistemas multi-tenant).
-                    if company_id:
-                        stmt = stmt.where(_CashboxSession.company_id == company_id)
-                    if branch_id:
-                        stmt = stmt.where(_CashboxSession.branch_id == branch_id)
-                    orphan = _sess.exec(stmt).first()
-                    if orphan:
-                        now_ts = utc_now_naive()
-                        orphan.is_open = False
-                        orphan.closing_time = now_ts
-                        _sess.add(orphan)
-                        # Escribir CashboxLog "cierre" para que el historial de
-                        # Aperturas y Cierres sea consistente. Sin este registro,
-                        # cada deploy genera "aperturas huérfanas" en el log.
-                        cierre_log = _CashboxLog(
-                            company_id=orphan.company_id,
-                            branch_id=orphan.branch_id,
-                            user_id=orphan.user_id,
-                            action="cierre",
-                            amount=0,
-                            notes="Cierre automático por cierre de sesión",
-                            timestamp=now_ts,
-                        )
-                        _sess.add(cierre_log)
-                        _sess.commit()
-            except Exception:
-                pass  # non-critical: logout must always complete
+        """Cierra la sesión sin tocar el estado de la caja en la DB.
+
+        La caja es un estado de NEGOCIO independiente de la sesión del servidor.
+        No se cierra aquí para que sobreviva deploys y reconexiones.
+        El cajero debe cerrar la caja explícitamente desde /caja.
+        """
         self.token = ""
         self.refresh_token = ""
         self.is_login_loading = False

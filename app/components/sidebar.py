@@ -1,6 +1,6 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import RADIUS, SHADOWS, TRANSITIONS
+from app.components.ui import RADIUS, SHADOWS, TRANSITIONS, modal_container
 from app.constants import CASH_SUBSECTIONS, SERVICES_SUBSECTIONS
 
 
@@ -610,11 +610,11 @@ def _sidebar_auth_footer() -> rx.Component:
             ),
             class_name="p-4",
         ),
-        # Botón logout
+        # Botón logout — pasa por logout_check_cashbox para advertir si hay caja abierta
         rx.el.button(
             rx.icon("log-out", class_name="h-5 w-5"),
             rx.cond(State.sidebar_open, rx.el.span("Cerrar Sesión"), rx.fragment()),
-            on_click=State.logout,
+            on_click=State.logout_check_cashbox,
             title=rx.cond(State.sidebar_open, "", "Cerrar Sesión"),
             class_name=rx.cond(
                 State.sidebar_open,
@@ -625,9 +625,44 @@ def _sidebar_auth_footer() -> rx.Component:
     )
 
 
+def cashbox_logout_warning_modal() -> rx.Component:
+    """Modal que aparece cuando el usuario intenta cerrar sesión con caja abierta."""
+    return modal_container(
+        is_open=State.show_cashbox_logout_warning,
+        on_close=State.dismiss_cashbox_logout_warning,
+        title="Caja abierta",
+        description="Tenés una caja abierta. Si salís sin cerrarla, los movimientos quedan en el historial pero el cierre quedará sin monto.",
+        max_width="max-w-md",
+        footer=rx.el.div(
+            rx.el.button(
+                "Cancelar",
+                on_click=State.dismiss_cashbox_logout_warning,
+                class_name="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors",
+            ),
+            rx.el.button(
+                rx.icon("lock", class_name="h-4 w-4"),
+                "Ir a Cerrar Caja",
+                on_click=[
+                    State.dismiss_cashbox_logout_warning,
+                    rx.redirect("/caja"),
+                ],
+                class_name="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors",
+            ),
+            rx.el.button(
+                rx.icon("log-out", class_name="h-4 w-4"),
+                "Salir de todas formas",
+                on_click=State.logout,
+                class_name="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors",
+            ),
+            class_name="flex flex-wrap gap-2 justify-end",
+        ),
+    )
+
+
 def sidebar() -> rx.Component:
     """Componente principal del sidebar con navegación y contenido condicional."""
     return rx.fragment(
+        cashbox_logout_warning_modal(),
         # Sidebar principal
         rx.el.div(
             rx.el.div(
