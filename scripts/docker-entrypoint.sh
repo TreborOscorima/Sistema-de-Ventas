@@ -212,13 +212,42 @@ TMPATCH
     if [[ ! -f ".web/vendor-emotion/react/dist/emotion-react.esm.js" ]]; then
         info "Pre-bundling @emotion → vendor-emotion/ ..."
         mkdir -p .web/vendor-emotion/react/dist .web/vendor-emotion/cache/dist
-        bun_vendor "vendor-emotion/react" build --target node --format esm \
-            --external react --external react-dom \
+        # Reflex 0.9.x cambió nombres internos de emotion
+        EMOTION_REACT_SRC=""
+        for f in \
             "$NM/@emotion/react/dist/emotion-react.esm.js" \
-            --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js
-        bun_vendor "vendor-emotion/cache" build --target node --format esm \
+            "$NM/@emotion/react/dist/emotion-react.browser.esm.js"; do
+            [[ -f "$f" ]] && EMOTION_REACT_SRC="$f" && break
+        done
+
+        EMOTION_CACHE_SRC=""
+        for f in \
             "$NM/@emotion/cache/dist/emotion-cache.esm.js" \
-            --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js
+            "$NM/@emotion/cache/dist/emotion-cache.browser.esm.js"; do
+            [[ -f "$f" ]] && EMOTION_CACHE_SRC="$f" && break
+        done
+
+        if [[ -n "$EMOTION_REACT_SRC" ]]; then
+            bun_vendor "vendor-emotion/react" build \
+                --target node \
+                --format esm \
+                --external react \
+                --external react-dom \
+                "$EMOTION_REACT_SRC" \
+                --outfile .web/vendor-emotion/react/dist/emotion-react.esm.js
+        else
+            warn "@emotion/react source no encontrado"
+        fi
+
+        if [[ -n "$EMOTION_CACHE_SRC" ]]; then
+            bun_vendor "vendor-emotion/cache" build \
+                --target node \
+                --format esm \
+                "$EMOTION_CACHE_SRC" \
+                --outfile .web/vendor-emotion/cache/dist/emotion-cache.esm.js
+        else
+            warn "@emotion/cache source no encontrado"
+        fi
     else
         ok "vendor-emotion ya existe"
     fi
