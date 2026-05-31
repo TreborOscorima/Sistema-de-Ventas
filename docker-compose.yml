@@ -111,8 +111,8 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
       interval: 30s
       timeout: 5s
-      retries: 3
-      start_period: 90s
+      retries: 5
+      start_period: 300s
     volumes:
       - reflex_web_landing:/app/.web
     networks:
@@ -152,8 +152,8 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
       interval: 30s
       timeout: 5s
-      retries: 3
-      start_period: 90s
+      retries: 5
+      start_period: 300s
     volumes:
       - reflex_web_sys:/app/.web
     networks:
@@ -193,8 +193,8 @@ services:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
       interval: 30s
       timeout: 5s
-      retries: 3
-      start_period: 90s
+      retries: 5
+      start_period: 300s
     volumes:
       - reflex_web_admin:/app/.web
     networks:
