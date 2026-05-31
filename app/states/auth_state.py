@@ -2189,19 +2189,43 @@ class AuthState(MixinState):
         user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
         if user_id:
             try:
-                from app.models.sales import CashboxSession as _CashboxSession
+                from app.models.sales import (
+                    CashboxSession as _CashboxSession,
+                    CashboxLog as _CashboxLog,
+                )
+                company_id = self._company_id() if hasattr(self, "_company_id") else None
+                branch_id  = self._branch_id()  if hasattr(self, "_branch_id")  else None
                 with rx.session() as _sess:
                     _sess.info["tenant_bypass"] = True
-                    orphan = _sess.exec(
-                        select(_CashboxSession).where(
-                            _CashboxSession.user_id == user_id,
-                            _CashboxSession.is_open == True,
-                        )
-                    ).first()
+                    stmt = select(_CashboxSession).where(
+                        _CashboxSession.user_id == user_id,
+                        _CashboxSession.is_open == True,
+                    )
+                    # Filtrar por tenant si está disponible (evita cerrar sesiones de
+                    # otras sucursales/empresas en sistemas multi-tenant).
+                    if company_id:
+                        stmt = stmt.where(_CashboxSession.company_id == company_id)
+                    if branch_id:
+                        stmt = stmt.where(_CashboxSession.branch_id == branch_id)
+                    orphan = _sess.exec(stmt).first()
                     if orphan:
+                        now_ts = utc_now_naive()
                         orphan.is_open = False
-                        orphan.closing_time = utc_now_naive()
+                        orphan.closing_time = now_ts
                         _sess.add(orphan)
+                        # Escribir CashboxLog "cierre" para que el historial de
+                        # Aperturas y Cierres sea consistente. Sin este registro,
+                        # cada deploy genera "aperturas huérfanas" en el log.
+                        cierre_log = _CashboxLog(
+                            company_id=orphan.company_id,
+                            branch_id=orphan.branch_id,
+                            user_id=orphan.user_id,
+                            action="cierre",
+                            amount=0,
+                            notes="Cierre automático por cierre de sesión",
+                            timestamp=now_ts,
+                        )
+                        _sess.add(cierre_log)
                         _sess.commit()
             except Exception:
                 pass  # non-critical: logout must always complete
