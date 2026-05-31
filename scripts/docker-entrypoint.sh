@@ -105,11 +105,14 @@ info "Iniciando Reflex: $*"
 # NOTA: templates.py puede estar pre-parcheado desde el Dockerfile (minify+aliases).
 #       Este paso aplica lo que falte y crea los vendor files (que van en .web/,
 #       que es un volumen nombrado y no existe en la imagen).
-info "Pre-inicializando frontend (reflex init)..."
-if reflex init 2>&1 | tail -3; then
-    ok "reflex init OK"
+info "Pre-inicializando frontend..."
+mkdir -p .web
+
+if reflex export --frontend-only >/tmp/reflex_init.log 2>&1; then
+    ok "frontend generado"
 else
-    warn "reflex init terminó con error — continuando de todos modos"
+    warn "frontend init falló"
+    tail -20 /tmp/reflex_init.log
 fi
 
 info "Aplicando Rolldown CJS fixes..."
@@ -129,14 +132,18 @@ for candidate in \
 done
 
 # Instalar node_modules explícitamente antes de los vendor builds.
-# reflex init crea .web/package.json pero NO instala node_modules.
-if [[ -n "$BUN_BIN" && -f ".web/package.json" ]]; then
-    info "Instalando dependencias npm (.web/node_modules)..."
-    if (cd .web && "$BUN_BIN" install --frozen-lockfile 2>/dev/null); then
-        ok "node_modules instalados"
-    else
-        (cd .web && "$BUN_BIN" install) && ok "node_modules instalados (re-install)" || warn "bun install falló"
-    fi
+if [[ -n "$BUN_BIN" ]]; then
+    info "Instalando dependencias frontend..."
+
+    cd .web || exit 1
+
+    rm -rf node_modules
+
+    "$BUN_BIN" install
+
+    cd - >/dev/null
+
+    ok "node_modules listos"
 fi
 
 if [[ -z "$BUN_BIN" ]]; then
@@ -252,19 +259,27 @@ TMPATCH
         ok "vendor-emotion ya existe"
     fi
 
-    # Fix B: vendor-recharts → recharts/es6 como ESM puro
+    # Fix B: vendor-recharts → recharts como ESM puro
     # CRÍTICO: --external react/react-dom evita 2 instancias de React en el browser
     # (sin esto: TypeError: Cannot read properties of null (reading 'useContext'))
-    if [[ ! -f ".web/vendor-recharts/recharts.esm.js" ]]; then
-        info "Pre-bundling recharts → vendor-recharts/ ..."
-        mkdir -p .web/vendor-recharts
-        bun_vendor "vendor-recharts" build --target browser --format esm \
-            --external react --external react-dom \
-            --external react-is --external "react/jsx-runtime" \
-            "$NM/recharts/es6/index.js" \
+    RECHARTS_SRC=""
+    for f in \
+        "$NM/recharts/index.js" \
+        "$NM/recharts/es/index.js" \
+        "$NM/recharts/esm/index.js"; do
+        [[ -f "$f" ]] && RECHARTS_SRC="$f" && break
+    done
+
+    if [[ -n "$RECHARTS_SRC" ]]; then
+        bun_vendor "vendor-recharts" build \
+            --target browser \
+            --format esm \
+            --external react \
+            --external react-dom \
+            "$RECHARTS_SRC" \
             --outfile .web/vendor-recharts/recharts.esm.js
     else
-        ok "vendor-recharts ya existe"
+        warn "recharts source no encontrado"
     fi
 fi
 # ─────────────────────────────────────────────────────────────────────────────
