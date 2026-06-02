@@ -107,35 +107,48 @@ reflex init 2>&1 | tail -3 && ok "reflex init OK" || warn "reflex init con error
 
 if [[ -f ".web/vite.config.js" ]]; then
     python3 - <<'PYEOF'
-import re, shutil, os
+import shutil, os
 try:
     with open('.web/vite.config.js', 'r') as f:
         content = f.read()
     patched = False
-    # Inyectar optimizeDeps.include para recharts + deps CJS (lodash, eventemitter3)
-    # unstable_optimizeDeps:true en react-router.config hace que esbuild pre-bundle
-    # estos paquetes CJS como ESM puro, evitando el rolldown-runtime CJS interop.
-    if 'optimizeDeps' not in content:
-        content = content.replace(
-            'export default defineConfig((config) => ({',
-            'export default defineConfig((config) => ({\n'
-            '  optimizeDeps: {\n'
-            '    include: ["recharts", "lodash", "lodash.debounce", "eventemitter3"],\n'
-            '  },'
+
+    # Plugin: intercepta es-toolkit/compat/X y devuelve shim ESM
+    # recharts importa es-toolkit/compat/sortBy etc. — CJS sin exports.import.
+    # El plugin redirige a virtual module que re-exporta desde el barrel ESM
+    # (dist/compat/index.mjs), evitando el rolldown-runtime CJS interop.
+    if 'es-toolkit-esm' not in content:
+        plugin = (
+            '{\n'
+            '    name: "es-toolkit-esm",\n'
+            '    resolveId(id) {\n'
+            '      if (id.startsWith("es-toolkit/compat/") && !id.endsWith("/")) {\n'
+            '        return "\\0" + id + ".esm";\n'
+            '      }\n'
+            '    },\n'
+            '    load(id) {\n'
+            '      if (id.startsWith("\\0es-toolkit/compat/") && id.endsWith(".esm")) {\n'
+            '        var name = id.slice("\\0es-toolkit/compat/".length, -4);\n'
+            '        return "export { " + name + " as default } from \\"es-toolkit/compat\\"";\n'
+            '      }\n'
+            '    }\n'
+            '  }'
         )
+        content = content.replace('.concat([])', '.concat([' + plugin + '])')
         patched = True
+
     if patched:
         with open('.web/vite.config.js', 'w') as f:
             f.write(content)
-        print('vite.config.js parcheado: optimizeDeps recharts+lodash+eventemitter3')
+        print('vite.config.js parcheado: plugin es-toolkit-esm')
         for d in ['.web/build', '.web/.vite']:
             if os.path.exists(d):
                 shutil.rmtree(d)
-                print(f'{d} limpiado')
+                print(d + ' limpiado')
     else:
-        print('vite.config.js ya tiene optimizeDeps')
+        print('vite.config.js ya tiene plugin es-toolkit-esm')
 except Exception as e:
-    print(f'Patch fallo: {e}')
+    print('Patch fallo: ' + str(e))
 PYEOF
     ok "vite.config.js patch aplicado"
 fi
