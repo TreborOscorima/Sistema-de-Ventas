@@ -97,61 +97,93 @@ SURFACE="${APP_SURFACE:-all}"
 info "Superficie: ${SURFACE}"
 info "Iniciando Reflex: $*"
 
-# ─── 4b. Pre-init + patch vite.config.js (Rolldown CJS fix) ─────────────────
-# react-router.config.js tiene unstable_optimizeDeps:true → optimizeDeps aplica
-# en producción. Añadimos recharts a include para que esbuild lo pre-bundle como
-# ESM puro y evitar el TypeError del rolldown-runtime CJS interop.
-# Este patch se aplica SIEMPRE después de reflex init (que regenera vite.config.js).
+# ─── 4b. Pre-init + patch es-toolkit node_modules (Rolldown CJS fix) ─────────
+# DIAGNÓSTICO: reflex run regenera vite.config.js durante compile_app(), por lo
+# que parchear ese archivo en el entrypoint no sirve (se sobreescribe antes del
+# build Vite). La solución correcta es parchear es-toolkit/package.json en
+# node_modules añadiendo una "import" condition para ./compat/* que apunte a
+# shims ESM. Esto opera a nivel de resolución de módulos Node.js/Rolldown y
+# sobrevive cualquier regeneración de vite.config.js.
+#
+# Causa raíz: recharts importa es-toolkit/compat/sortBy (y ~10 subpaths más).
+# El export map sólo tiene "default" → ./compat/*.js (CJS). Rolldown envuelve
+# cada CJS con __commonJS factory; la naming collision en el factory
+# (var t=n((e=>{var t=t()...)) causa TypeError: t is not a function.
+#
+# Fix: compat-esm/X.mjs re-exporta X desde dist/compat/index.mjs (ESM barrel
+# confirmado). Rolldown resuelve con "import" condition → ESM puro → sin wrapper.
 info "Pre-inicializando frontend (reflex init)..."
 reflex init 2>&1 | tail -3 && ok "reflex init OK" || warn "reflex init con error — continuando"
 
-if [[ -f ".web/vite.config.js" ]]; then
-    python3 - <<'PYEOF'
-import shutil, os
+info "Parcheando es-toolkit compat → ESM shims (Rolldown CJS fix)..."
+python3 - <<'PYEOF'
+import os, json, shutil
+
+pkg_dir  = '/app/.web/node_modules/es-toolkit'
+pkg_path = pkg_dir + '/package.json'
+shim_dir = pkg_dir + '/compat-esm'
+mjs_barrel = pkg_dir + '/dist/compat/index.mjs'
+
 try:
-    with open('.web/vite.config.js', 'r') as f:
-        content = f.read()
-    patched = False
+    if not os.path.isdir(pkg_dir):
+        print('SKIP: es-toolkit no encontrado en node_modules')
+        raise SystemExit(0)
+    if not os.path.exists(mjs_barrel):
+        print('SKIP: dist/compat/index.mjs no existe — versión incompatible')
+        raise SystemExit(0)
 
-    # Plugin: intercepta es-toolkit/compat/X y devuelve shim ESM
-    # recharts importa es-toolkit/compat/sortBy etc. — CJS sin exports.import.
-    # El plugin redirige a virtual module que re-exporta desde el barrel ESM
-    # (dist/compat/index.mjs), evitando el rolldown-runtime CJS interop.
-    if 'es-toolkit-esm' not in content:
-        plugin = (
-            '{\n'
-            '    name: "es-toolkit-esm",\n'
-            '    resolveId(id) {\n'
-            '      if (id.startsWith("es-toolkit/compat/") && !id.endsWith("/")) {\n'
-            '        return "\\0" + id + ".esm";\n'
-            '      }\n'
-            '    },\n'
-            '    load(id) {\n'
-            '      if (id.startsWith("\\0es-toolkit/compat/") && id.endsWith(".esm")) {\n'
-            '        var name = id.slice("\\0es-toolkit/compat/".length, -4);\n'
-            '        return "export { " + name + " as default } from \\"es-toolkit/compat\\"";\n'
-            '      }\n'
-            '    }\n'
-            '  }'
-        )
-        content = content.replace('.concat([])', '.concat([' + plugin + '])')
-        patched = True
+    with open(pkg_path) as f:
+        pkg = json.load(f)
 
-    if patched:
-        with open('.web/vite.config.js', 'w') as f:
-            f.write(content)
-        print('vite.config.js parcheado: plugin es-toolkit-esm')
-        for d in ['.web/build', '.web/.vite']:
-            if os.path.exists(d):
-                shutil.rmtree(d)
-                print(d + ' limpiado')
-    else:
-        print('vite.config.js ya tiene plugin es-toolkit-esm')
+    exports    = pkg.get('exports', {})
+    compat_exp = exports.get('./compat/*', {})
+
+    # Idempotente: skip si ya parcheado
+    if isinstance(compat_exp, dict) and compat_exp.get('import', '').startswith('./compat-esm/'):
+        print('es-toolkit ya parcheado — OK')
+        raise SystemExit(0)
+
+    # Crear directorio de shims ESM
+    os.makedirs(shim_dir, exist_ok=True)
+
+    # Generar shim para cada compat/X.js
+    compat_dir = pkg_dir + '/compat'
+    shim_count = 0
+    if os.path.exists(compat_dir):
+        for fname in sorted(os.listdir(compat_dir)):
+            if fname.endswith('.js') and fname != 'index.js':
+                func = fname[:-3]
+                shim_path = shim_dir + '/' + func + '.mjs'
+                with open(shim_path, 'w') as f:
+                    # Re-exporta como default desde el barrel ESM confirmado
+                    f.write('export { ' + func + ' as default } from "../dist/compat/index.mjs";\n')
+                shim_count += 1
+
+    # Añadir "import" condition al exports map (preserva el "default" existente)
+    exports['./compat/*'] = {
+        'import':  './compat-esm/*.mjs',
+        'default': './compat/*.js'
+    }
+    pkg['exports'] = exports
+
+    with open(pkg_path, 'w') as f:
+        json.dump(pkg, f, indent=2)
+
+    print('es-toolkit parcheado: ' + str(shim_count) + ' shims ESM en compat-esm/')
+
+    # Limpiar caché de resolución Vite para forzar re-resolución
+    for d in ['/app/.web/.vite', '/app/.web/node_modules/.vite']:
+        if os.path.exists(d):
+            shutil.rmtree(d)
+            print(d + ' cache limpiado')
+
+except SystemExit:
+    pass
 except Exception as e:
     print('Patch fallo: ' + str(e))
+    import traceback; traceback.print_exc()
 PYEOF
-    ok "vite.config.js patch aplicado"
-fi
+ok "es-toolkit ESM patch OK"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─── 5. Ejecutar CMD (reflex run ...) ───────────────────────────────────────
