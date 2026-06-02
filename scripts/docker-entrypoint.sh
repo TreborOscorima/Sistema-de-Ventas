@@ -97,23 +97,65 @@ SURFACE="${APP_SURFACE:-all}"
 info "Superficie: ${SURFACE}"
 info "Iniciando Reflex: $*"
 
-# ─── 4b. Pre-init + patch es-toolkit node_modules (Rolldown CJS fix) ─────────
-# DIAGNÓSTICO: reflex run regenera vite.config.js durante compile_app(), por lo
-# que parchear ese archivo en el entrypoint no sirve (se sobreescribe antes del
-# build Vite). La solución correcta es parchear es-toolkit/package.json en
-# node_modules añadiendo una "import" condition para ./compat/* que apunte a
-# shims ESM. Esto opera a nivel de resolución de módulos Node.js/Rolldown y
-# sobrevive cualquier regeneración de vite.config.js.
+# ─── 4b. Pre-init + patch es-toolkit (Rolldown CJS fix) ──────────────────────
+# Reflex 0.9.3 genera vite.config.js con estoolkitAlias() que resuelve
+# 'es-toolkit/compat/X' → './es-toolkit-shims/X.js'. Esos archivos se crean
+# arriba (sección "Crear es-toolkit-shims"), DESPUÉS de reflex init que borra .web/.
+#
+# El patch de node_modules es un segundo nivel de defensa: además de los shims,
+# parchea es-toolkit/package.json añadiendo "import" condition para que Rolldown
+# resuelva vía ESM cuando los shims no están disponibles.
 #
 # Causa raíz: recharts importa es-toolkit/compat/sortBy (y ~10 subpaths más).
 # El export map sólo tiene "default" → ./compat/*.js (CJS). Rolldown envuelve
 # cada CJS con __commonJS factory; la naming collision en el factory
 # (var t=n((e=>{var t=t()...)) causa TypeError: t is not a function.
-#
-# Fix: compat-esm/X.mjs re-exporta X desde dist/compat/index.mjs (ESM barrel
-# confirmado). Rolldown resuelve con "import" condition → ESM puro → sin wrapper.
 info "Pre-inicializando frontend (reflex init)..."
 reflex init 2>&1 | tail -3 && ok "reflex init OK" || warn "reflex init con error — continuando"
+
+# ── Crear es-toolkit-shims DESPUÉS de reflex init ────────────────────────────
+# reflex init llama a copy_tree() que borra todo .web/ y copia la plantilla.
+# La plantilla de Reflex 0.9.3 genera un vite.config.js con estoolkitAlias()
+# que resuelve 'es-toolkit/compat/X' → './es-toolkit-shims/X.js'. Si esos
+# archivos no existen, Vite falla y los chunks quedan rotos (→ loop infinito).
+# Los creamos aquí, después de reflex init (que borra .web/), para que
+# sobrevivan hasta que vite build los consuma.
+info "Creando es-toolkit-shims para Vite..."
+mkdir -p /app/.web/es-toolkit-shims
+cat > /app/.web/es-toolkit-shims/get.js          << 'EOF'
+export { get as default } from '../node_modules/es-toolkit/dist/compat/object/get.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/sortBy.js       << 'EOF'
+export { sortBy as default } from '../node_modules/es-toolkit/dist/compat/array/sortBy.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/omit.js         << 'EOF'
+export { omit as default } from '../node_modules/es-toolkit/dist/compat/object/omit.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/range.js        << 'EOF'
+export { range as default } from '../node_modules/es-toolkit/dist/compat/math/range.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/throttle.js     << 'EOF'
+export { throttle as default } from '../node_modules/es-toolkit/dist/compat/function/throttle.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/maxBy.js        << 'EOF'
+export { maxBy as default } from '../node_modules/es-toolkit/dist/compat/math/maxBy.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/sumBy.js        << 'EOF'
+export { sumBy as default } from '../node_modules/es-toolkit/dist/compat/math/sumBy.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/isPlainObject.js << 'EOF'
+export { isPlainObject as default } from '../node_modules/es-toolkit/dist/compat/predicate/isPlainObject.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/minBy.js        << 'EOF'
+export { minBy as default } from '../node_modules/es-toolkit/dist/compat/math/minBy.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/last.js         << 'EOF'
+export { last as default } from '../node_modules/es-toolkit/dist/compat/array/last.mjs';
+EOF
+cat > /app/.web/es-toolkit-shims/uniqBy.js       << 'EOF'
+export { uniqBy as default } from '../node_modules/es-toolkit/dist/compat/array/uniqBy.mjs';
+EOF
+ok "es-toolkit-shims creados (11 archivos)"
 
 # ── Escribir patch script al volumen .web/ (persiste entre reinicios) ─────────
 # reflex run instala node_modules DESPUÉS de arrancar (bun install interno).

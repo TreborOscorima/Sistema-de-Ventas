@@ -994,7 +994,11 @@ class State(RootState):
     async def page_init_login(self):
         """on_load para /login. Redirige al dashboard si ya está autenticado."""
         if self.is_authenticated:
-            yield rx.redirect("/dashboard")
+            # window.location.assign fuerza full-page navigation (no React Router SPA).
+            # rx.redirect usa navigate() de React Router, que intenta lazy-load del chunk
+            # del destino; si el chunk falla, React Router hace window.location.reload()
+            # volviendo a /login → bucle infinito. assign() evita ese ciclo.
+            yield rx.call_script("window.location.assign('/dashboard')")
             return
         # Forzar sidebar abierto para mostrar contenido guest en producción
         self.sidebar_open = True

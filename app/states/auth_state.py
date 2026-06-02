@@ -1964,8 +1964,8 @@ class AuthState(MixinState):
                     self.needs_initial_admin = False
                     self.is_login_loading = False
                     if must_change_password:
-                        return rx.redirect("/cambiar-clave")
-                    return rx.redirect("/dashboard")
+                        return rx.call_script("window.location.assign('/cambiar-clave')")
+                    return rx.call_script("window.location.assign('/dashboard')")
 
                 _record_failed_attempt(identifier, ip_address=client_ip)
                 self.error_message = (
@@ -2118,12 +2118,12 @@ class AuthState(MixinState):
                 status_label = str(snapshot.get("status_label", "") or "").strip().lower()
                 self.is_login_loading = False
                 if bool(snapshot.get("is_trial")) and status_label == "vencido":
-                    return rx.redirect("/periodo-prueba-finalizado")
+                    return rx.call_script("window.location.assign('/periodo-prueba-finalizado')")
                 if (not bool(snapshot.get("is_trial"))) and status_label in ("suspendido", "pago vencido"):
-                    return rx.redirect("/cuenta-suspendida")
+                    return rx.call_script("window.location.assign('/cuenta-suspendida')")
                 if getattr(user, "must_change_password", False):
-                    return rx.redirect("/cambiar-clave")
-                return rx.redirect("/dashboard")
+                    return rx.call_script("window.location.assign('/cambiar-clave')")
+                return rx.call_script("window.location.assign('/dashboard')")
 
         # Login fallido: registrar intento
         _record_failed_attempt(identifier, ip_address=client_ip)
