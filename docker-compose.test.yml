@@ -1,0 +1,53 @@
+# =============================================================================
+# docker-compose.test.yml — Override para el SVR de Prueba en AWS (sin dominio)
+#
+# Uso — definir TEST_IP en .env o en el entorno antes de correr:
+#   echo 'TEST_IP=12.34.56.78' >> .env
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#
+# O inline:
+#   TEST_IP=12.34.56.78 docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
+#
+# Acceso desde el navegador (reemplazar con tu IP pública de EC2):
+#   Landing : http://<TEST_IP>:3001
+#   Sistema : http://<TEST_IP>:3000
+#   Admin   : http://<TEST_IP>:3002
+#
+# Prerrequisitos en AWS:
+#   - Security Group EC2: abrir puertos TCP 3000, 3001, 3002 para tu IP (o 0.0.0.0/0 en test)
+#   - .env con DB_PASSWORD, AUTH_SECRET_KEY, MYSQL_ROOT_PASSWORD definidos
+#
+# Este override NO usa NPM — los contenedores quedan expuestos directamente al host.
+# Para promover a producción, usar docker-compose.yml puro + NPM + dominio.
+# =============================================================================
+
+services:
+  tuwayki_landing:
+    ports:
+      - "3001:3000"
+    environment:
+      PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3001"
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+      ENV: prod
+
+  tuwayki_sys:
+    ports:
+      - "3000:3000"
+    environment:
+      PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3000"
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+      ENV: prod
+
+  tuwayki_admin:
+    ports:
+      - "3002:3000"
+    environment:
+      PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3002"
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
+      ENV: prod
+
+networks:
+  # Override: bridge local en lugar de external (no requiere NPM en el servidor de prueba).
+  npm_network:
+    driver: bridge
+    name: tuwayki_test_npm

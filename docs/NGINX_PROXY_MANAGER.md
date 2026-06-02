@@ -96,7 +96,7 @@ Para ver el nombre de la red de NPM: `docker network ls` y localizar la red del 
 
 ## 1. Proxy Host — Landing (tuwayki.app)
 
-Si el landing usa Reflex con backend (WebSocket), las rutas `/_event`, `/_upload`, `/ping` deben ir al puerto **8000** de `tuwayki_landing`. Si solo sirve estático, no hace falta el bloque `location`.
+Reflex 0.9.3 corre frontend + API en un único proceso en el puerto **3000**. Las rutas `/_event`, `/_upload`, `/ping` van al mismo puerto 3000 — no hay un servidor separado en 8000 dentro del contenedor.
 
 | Campo | Valor |
 |-------|--------|
@@ -118,7 +118,7 @@ Si el landing usa Reflex con backend (WebSocket), las rutas `/_event`, `/_upload
 
 ```nginx
 location /_event {
-    proxy_pass http://tuwayki_landing:8000;
+    proxy_pass http://tuwayki_landing:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -132,7 +132,7 @@ location /_event {
     proxy_cache off;
 }
 location /_upload {
-    proxy_pass http://tuwayki_landing:8000;
+    proxy_pass http://tuwayki_landing:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -145,7 +145,7 @@ location /_upload {
     proxy_buffering off;
 }
 location /ping {
-    proxy_pass http://tuwayki_landing:8000;
+    proxy_pass http://tuwayki_landing:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -160,7 +160,7 @@ Guardar y aplicar.
 
 ## 2. Proxy Host — Sistema de Ventas (sys.tuwayki.app)
 
-El frontend (HTML/JS) se sirve desde el puerto **3000**; el backend de Reflex (WebSocket `/_event`, `/_upload`, `/ping`) corre en el puerto **8000**. NPM debe enviar esas rutas al 8000 con soporte WebSocket; si no, verás "Cannot connect to server: timeout" en `wss://sys.tuwayki.app/_event`.
+Reflex 0.9.3 sirve frontend + backend en un único proceso en el puerto **3000**. NPM apunta todo (frontend y WebSocket `/_event`) a ese mismo puerto; si el bloque `/_event` apuntara al 8000 (vacío), obtendrías un loop infinito de recarga en el browser.
 
 | Campo | Valor |
 |-------|--------|
@@ -181,9 +181,9 @@ El frontend (HTML/JS) se sirve desde el puerto **3000**; el backend de Reflex (W
 **Advanced — Custom Nginx Configuration** (obligatorio para que el WebSocket y el backend funcionen):
 
 ```nginx
-# Backend Reflex (puerto 8000): WebSocket /_event y rutas de API
+# Reflex 0.9.3: todo (WebSocket /_event, uploads, API) corre en el puerto 3000
 location /_event {
-    proxy_pass http://tuwayki_sys:8000;
+    proxy_pass http://tuwayki_sys:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -197,7 +197,7 @@ location /_event {
     proxy_cache off;
 }
 location /_upload {
-    proxy_pass http://tuwayki_sys:8000;
+    proxy_pass http://tuwayki_sys:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -210,7 +210,7 @@ location /_upload {
     proxy_buffering off;
 }
 location /ping {
-    proxy_pass http://tuwayki_sys:8000;
+    proxy_pass http://tuwayki_sys:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -228,7 +228,7 @@ Guardar y aplicar.
 
 ## 3. Proxy Host — Admin / Gestión de plataforma (admin.tuwayki.app)
 
-Igual que sys: el backend (/_event, /_upload, /ping) debe ir al puerto **8000** de `tuwayki_admin`.
+Igual que sys: `/_event`, `/_upload`, `/ping` van al puerto **3000** de `tuwayki_admin`.
 
 | Campo | Valor |
 |-------|--------|
@@ -250,7 +250,7 @@ Igual que sys: el backend (/_event, /_upload, /ping) debe ir al puerto **8000** 
 
 ```nginx
 location /_event {
-    proxy_pass http://tuwayki_admin:8000;
+    proxy_pass http://tuwayki_admin:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -264,7 +264,7 @@ location /_event {
     proxy_cache off;
 }
 location /_upload {
-    proxy_pass http://tuwayki_admin:8000;
+    proxy_pass http://tuwayki_admin:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -277,7 +277,7 @@ location /_upload {
     proxy_buffering off;
 }
 location /ping {
-    proxy_pass http://tuwayki_admin:8000;
+    proxy_pass http://tuwayki_admin:3000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;

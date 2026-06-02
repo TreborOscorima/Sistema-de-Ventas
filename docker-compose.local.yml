@@ -1,45 +1,55 @@
 # =============================================================================
-# docker-compose.local.yml — Override para testing local en Windows/Mac
+# docker-compose.local.yml — Override para testing local (Windows/Mac)
 #
-# Uso (solo superficie app-sys contra MySQL local de Windows):
-#   docker compose -f docker-compose.prod.yml -f docker-compose.local.yml \
-#     up -d mysql redis app-sys
+# Uso:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
 #
-# Acceso: http://localhost:8000
+# Acceso desde el navegador:
+#   Landing : http://localhost:3001
+#   Sistema : http://localhost:3000
+#   Admin   : http://localhost:3002
 #
 # Lo que hace este override:
-#   - Reemplaza npm_network external → bridge local (sin nginx-proxy-manager)
-#   - Expone el puerto 8000 (backend Granian) al host
-#   - Apunta PUBLIC_API_URL a localhost:8000 (api_url bakeado en el frontend)
-#   - Solo necesitás tener en .env: DB_PASSWORD, AUTH_SECRET_KEY, MYSQL_ROOT_PASSWORD
+#   - Reemplaza npm_network (external) → bridge local (sin Nginx Proxy Manager)
+#   - Expone el puerto 3000 de cada contenedor en un puerto distinto del host
+#   - Establece PUBLIC_API_URL a localhost:PORT (bakeado en el frontend compilado)
+#   - Activa ALLOW_MEMORY_RATE_LIMIT_FALLBACK para poder omitir Redis local
+#
+# Mínimo en .env para este override:
+#   DB_PASSWORD, AUTH_SECRET_KEY, MYSQL_ROOT_PASSWORD
 # =============================================================================
 
 services:
-  app-sys:
+  tuwayki_landing:
     ports:
-      - "8000:8000"    # Backend Granian (API + WS) — url principal local
-      - "3000:3000"    # Frontend Next.js (opcional, para inspección directa)
-    environment:
-      PUBLIC_API_URL: "http://localhost:8000"
-      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"  # sin Redis externo puede fallar en local
-
-  app-landing:
-    ports:
-      - "8001:8000"
       - "3001:3000"
     environment:
-      PUBLIC_API_URL: "http://localhost:8001"
+      PUBLIC_API_URL: "http://localhost:3001"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
+      # Anular valores del .env local que romperían Docker:
+      DB_HOST: tuwayki_mysql
+      ENV: prod
 
-  app-admin:
+  tuwayki_sys:
     ports:
-      - "8002:8000"
+      - "3000:3000"
+    environment:
+      PUBLIC_API_URL: "http://localhost:3000"
+      ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
+      DB_HOST: tuwayki_mysql
+      ENV: prod
+
+  tuwayki_admin:
+    ports:
       - "3002:3000"
     environment:
-      PUBLIC_API_URL: "http://localhost:8002"
+      PUBLIC_API_URL: "http://localhost:3002"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
+      DB_HOST: tuwayki_mysql
+      ENV: prod
 
 networks:
+  # Override: bridge local en lugar de external (no requiere NPM instalado).
   npm_network:
-    driver: bridge    # Override: local bridge en lugar de external (no requiere NPM)
+    driver: bridge
     name: tuwayki_local_npm
