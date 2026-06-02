@@ -112,23 +112,26 @@ try:
     with open('.web/vite.config.js', 'r') as f:
         content = f.read()
     patched = False
-    # Inyectar optimizeDeps.include para recharts (pre-bundle ESM via esbuild)
+    # Inyectar optimizeDeps.include para recharts + deps CJS (lodash, eventemitter3)
+    # unstable_optimizeDeps:true en react-router.config hace que esbuild pre-bundle
+    # estos paquetes CJS como ESM puro, evitando el rolldown-runtime CJS interop.
     if 'optimizeDeps' not in content:
         content = content.replace(
             'export default defineConfig((config) => ({',
             'export default defineConfig((config) => ({\n'
             '  optimizeDeps: {\n'
-            '    include: ["recharts"],\n'
+            '    include: ["recharts", "lodash", "lodash.debounce", "eventemitter3"],\n'
             '  },'
         )
         patched = True
     if patched:
         with open('.web/vite.config.js', 'w') as f:
             f.write(content)
-        print('vite.config.js parcheado: optimizeDeps.include recharts')
-        if os.path.exists('.web/build'):
-            shutil.rmtree('.web/build')
-            print('.web/build limpiado — se recompilara con patch')
+        print('vite.config.js parcheado: optimizeDeps recharts+lodash+eventemitter3')
+        for d in ['.web/build', '.web/.vite']:
+            if os.path.exists(d):
+                shutil.rmtree(d)
+                print(f'{d} limpiado')
     else:
         print('vite.config.js ya tiene optimizeDeps')
 except Exception as e:
