@@ -115,75 +115,85 @@ info "Iniciando Reflex: $*"
 info "Pre-inicializando frontend (reflex init)..."
 reflex init 2>&1 | tail -3 && ok "reflex init OK" || warn "reflex init con error — continuando"
 
-info "Parcheando es-toolkit compat → ESM shims (Rolldown CJS fix)..."
-python3 - <<'PYEOF'
-import os, json, shutil
+# ── Escribir patch script al volumen .web/ (persiste entre reinicios) ─────────
+# reflex run instala node_modules DESPUÉS de arrancar (bun install interno).
+# El patch debe correr en background mientras reflex init+compile se ejecutan,
+# ANTES de que el Vite production build empiece (~60-90s de ventana).
+cat > /app/.web/.patch_estoolkit.py << 'PATCHEOF'
+import os, json, shutil, time, sys
 
 pkg_dir  = '/app/.web/node_modules/es-toolkit'
 pkg_path = pkg_dir + '/package.json'
 shim_dir = pkg_dir + '/compat-esm'
 mjs_barrel = pkg_dir + '/dist/compat/index.mjs'
 
-try:
-    if not os.path.isdir(pkg_dir):
-        print('SKIP: es-toolkit no encontrado en node_modules')
-        raise SystemExit(0)
-    if not os.path.exists(mjs_barrel):
-        print('SKIP: dist/compat/index.mjs no existe — versión incompatible')
-        raise SystemExit(0)
+# Esperar hasta 120s a que node_modules esté completamente disponible.
+# Verificamos pkg_dir + package.json + mjs_barrel para evitar race condition
+# con bun install (el dir puede existir antes que todos los archivos estén escritos).
+for i in range(60):
+    if (os.path.isdir(pkg_dir) and
+            os.path.exists(pkg_path) and
+            os.path.exists(mjs_barrel)):
+        # Grace period: esperar 3s más para que bun termine de escribir
+        time.sleep(3)
+        break
+    sys.stdout.write('[PATCH-BG] Esperando es-toolkit... ' + str(i*2) + 's\n')
+    sys.stdout.flush()
+    time.sleep(2)
 
+if not os.path.exists(pkg_path):
+    print('[PATCH-BG] SKIP: es-toolkit package.json no disponible tras 120s')
+    sys.exit(0)
+if not os.path.exists(mjs_barrel):
+    print('[PATCH-BG] SKIP: dist/compat/index.mjs no existe')
+    sys.exit(0)
+
+try:
     with open(pkg_path) as f:
         pkg = json.load(f)
 
-    exports    = pkg.get('exports', {})
-    compat_exp = exports.get('./compat/*', {})
-
-    # Idempotente: skip si ya parcheado
+    compat_exp = pkg.get('exports', {}).get('./compat/*', {})
     if isinstance(compat_exp, dict) and compat_exp.get('import', '').startswith('./compat-esm/'):
-        print('es-toolkit ya parcheado — OK')
-        raise SystemExit(0)
+        print('[PATCH-BG] es-toolkit ya parcheado — OK')
+        sys.exit(0)
 
-    # Crear directorio de shims ESM
     os.makedirs(shim_dir, exist_ok=True)
-
-    # Generar shim para cada compat/X.js
     compat_dir = pkg_dir + '/compat'
     shim_count = 0
     if os.path.exists(compat_dir):
         for fname in sorted(os.listdir(compat_dir)):
             if fname.endswith('.js') and fname != 'index.js':
                 func = fname[:-3]
-                shim_path = shim_dir + '/' + func + '.mjs'
-                with open(shim_path, 'w') as f:
-                    # Re-exporta como default desde el barrel ESM confirmado
+                with open(shim_dir + '/' + func + '.mjs', 'w') as f:
                     f.write('export { ' + func + ' as default } from "../dist/compat/index.mjs";\n')
                 shim_count += 1
 
-    # Añadir "import" condition al exports map (preserva el "default" existente)
-    exports['./compat/*'] = {
+    pkg['exports']['./compat/*'] = {
         'import':  './compat-esm/*.mjs',
         'default': './compat/*.js'
     }
-    pkg['exports'] = exports
-
     with open(pkg_path, 'w') as f:
         json.dump(pkg, f, indent=2)
 
-    print('es-toolkit parcheado: ' + str(shim_count) + ' shims ESM en compat-esm/')
+    print('[PATCH-BG] es-toolkit parcheado: ' + str(shim_count) + ' shims ESM')
 
-    # Limpiar caché de resolución Vite para forzar re-resolución
     for d in ['/app/.web/.vite', '/app/.web/node_modules/.vite']:
         if os.path.exists(d):
             shutil.rmtree(d)
-            print(d + ' cache limpiado')
+            print('[PATCH-BG] cache limpiado: ' + d)
 
-except SystemExit:
-    pass
 except Exception as e:
-    print('Patch fallo: ' + str(e))
+    print('[PATCH-BG] Patch fallo: ' + str(e))
     import traceback; traceback.print_exc()
-PYEOF
-ok "es-toolkit ESM patch OK"
+PATCHEOF
+chmod +x /app/.web/.patch_estoolkit.py
+
+# Lanzar watcher en background — corre mientras reflex run instala paquetes.
+# La ventana disponible: bun install (~20s) + Python compile (~60s) = ~80s
+# antes de que Vite production build empiece.
+python3 /app/.web/.patch_estoolkit.py &
+PATCH_PID=$!
+ok "es-toolkit patch watcher lanzado (PID $PATCH_PID)"
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─── 5. Ejecutar CMD (reflex run ...) ───────────────────────────────────────
