@@ -25,6 +25,9 @@ services:
       - "3000:3000"
     environment:
       PUBLIC_API_URL: "http://localhost:3000"
+      PUBLIC_SITE_URL: "http://localhost:3000"
+      PUBLIC_APP_URL: "http://localhost:3001"
+      PUBLIC_OWNER_URL: "http://localhost:3002"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
       # Anular valores del .env local que romperían Docker:
       DB_HOST: tuwayki_mysql
@@ -35,6 +38,9 @@ services:
       - "3001:3000"
     environment:
       PUBLIC_API_URL: "http://localhost:3001"
+      PUBLIC_SITE_URL: "http://localhost:3000"
+      PUBLIC_APP_URL: "http://localhost:3001"
+      PUBLIC_OWNER_URL: "http://localhost:3002"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
       DB_HOST: tuwayki_mysql
       ENV: prod
@@ -44,6 +50,9 @@ services:
       - "3002:3000"
     environment:
       PUBLIC_API_URL: "http://localhost:3002"
+      PUBLIC_SITE_URL: "http://localhost:3000"
+      PUBLIC_APP_URL: "http://localhost:3001"
+      PUBLIC_OWNER_URL: "http://localhost:3002"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
       DB_HOST: tuwayki_mysql
       ENV: prod

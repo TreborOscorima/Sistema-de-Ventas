@@ -38,6 +38,9 @@ services:
       - "3001:3000"
     environment:
       PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3001"
+      PUBLIC_SITE_URL: "http://${TEST_IP:-localhost}:3000"
+      PUBLIC_APP_URL: "http://${TEST_IP:-localhost}:3001"
+      PUBLIC_OWNER_URL: "http://${TEST_IP:-localhost}:3002"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       ENV: prod
 
@@ -46,6 +49,9 @@ services:
       - "3002:3000"
     environment:
       PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3002"
+      PUBLIC_SITE_URL: "http://${TEST_IP:-localhost}:3000"
+      PUBLIC_APP_URL: "http://${TEST_IP:-localhost}:3001"
+      PUBLIC_OWNER_URL: "http://${TEST_IP:-localhost}:3002"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       ENV: prod
 
