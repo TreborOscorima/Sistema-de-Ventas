@@ -2229,9 +2229,13 @@ class AuthState(MixinState):
             self.owner_session_active = False
             self.owner_session_email = ""
             self.owner_session_user_id = 0
-        # replace() sustituye la entrada actual del historial por /login.
-        # El usuario ve el formulario de login y "Atrás" vuelve a la página
-        # anterior al módulo donde cerró sesión (no acumula entradas app).
+        # Redirigir a la landing (PUBLIC_SITE_URL) en vez de /login.
+        # El usuario queda directamente en marketing tras cerrar sesión —
+        # no necesita usar "Atrás". replace() evita agregar una entrada extra
+        # al historial. Si PUBLIC_SITE_URL no está configurado, cae a /login.
+        public_site_url = (os.getenv("PUBLIC_SITE_URL") or "").strip().rstrip("/")
+        if public_site_url:
+            return rx.call_script(f"window.location.replace('{public_site_url}/')")
         return rx.call_script("window.location.replace('/login')")
 
     @rx.event
