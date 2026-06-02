@@ -149,6 +149,37 @@ if [[ -n "$BUN_BIN" && -f ".web/package.json" ]]; then
     else
         ok "vendor-recharts ya existe"
     fi
+
+    # ── Inyectar alias vendor-recharts en vite.config.js (Rolldown CJS fix) ──
+    # reflex init regenera vite.config.js sin alias; lo parcheamos aquí antes
+    # de que reflex run compile el frontend.
+    if [[ -f ".web/vendor-recharts/recharts.esm.js" && -f ".web/vite.config.js" ]]; then
+        python3 - <<'PYEOF'
+import re, shutil, os
+try:
+    with open('.web/vite.config.js', 'r') as f:
+        content = f.read()
+    if 'vendor-recharts' not in content:
+        alias_entry = (
+            '      {\n'
+            '        find: "recharts",\n'
+            '        replacement: fileURLToPath(new URL("./vendor-recharts/recharts.esm.js", import.meta.url)),\n'
+            '      },\n'
+        )
+        content = re.sub(r'(alias:\s*\[)', r'\g<1>\n' + alias_entry, content, count=1)
+        with open('.web/vite.config.js', 'w') as f:
+            f.write(content)
+        print('vite.config.js parcheado con alias vendor-recharts')
+        if os.path.exists('.web/build'):
+            shutil.rmtree('.web/build')
+            print('.web/build limpiado — se recompilará con alias')
+    else:
+        print('vite.config.js ya tiene alias vendor-recharts')
+except Exception as e:
+    print(f'Patch falló: {e}')
+PYEOF
+        ok "vite.config.js patch OK"
+    fi
 else
     warn "bun no encontrado o .web/package.json ausente — vendor pre-builds omitidos"
 fi
