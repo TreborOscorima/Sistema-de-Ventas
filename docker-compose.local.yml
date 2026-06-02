@@ -50,6 +50,8 @@ services:
 
 networks:
   # Override: bridge local en lugar de external (no requiere NPM instalado).
+  # external: false es obligatorio para sobreescribir el "external: true" del compose base.
   npm_network:
+    external: false
     driver: bridge
     name: tuwayki_local_npm

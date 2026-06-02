@@ -48,6 +48,8 @@ services:
 
 networks:
   # Override: bridge local en lugar de external (no requiere NPM en el servidor de prueba).
+  # external: false es obligatorio para sobreescribir el "external: true" del compose base.
   npm_network:
+    external: false
     driver: bridge
     name: tuwayki_test_npm
