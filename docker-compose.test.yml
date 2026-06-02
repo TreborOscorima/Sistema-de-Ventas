@@ -9,8 +9,8 @@
 #   TEST_IP=12.34.56.78 docker compose -f docker-compose.yml -f docker-compose.test.yml up -d
 #
 # Acceso desde el navegador (reemplazar con tu IP pública de EC2):
-#   Landing : http://<TEST_IP>:3001
-#   Sistema : http://<TEST_IP>:3000
+#   Landing : http://<TEST_IP>:3000
+#   Sistema : http://<TEST_IP>:3001
 #   Admin   : http://<TEST_IP>:3002
 #
 # Prerrequisitos en AWS:
@@ -24,17 +24,17 @@
 services:
   tuwayki_landing:
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
-      PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3001"
+      PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3000"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       ENV: prod
 
   tuwayki_sys:
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
-      PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3000"
+      PUBLIC_API_URL: "http://${TEST_IP:-localhost}:3001"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       ENV: prod
 

@@ -5,8 +5,8 @@
 #   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
 #
 # Acceso desde el navegador:
-#   Landing : http://localhost:3001
-#   Sistema : http://localhost:3000
+#   Landing : http://localhost:3000
+#   Sistema : http://localhost:3001
 #   Admin   : http://localhost:3002
 #
 # Lo que hace este override:
@@ -22,9 +22,9 @@
 services:
   tuwayki_landing:
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
-      PUBLIC_API_URL: "http://localhost:3001"
+      PUBLIC_API_URL: "http://localhost:3000"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
       # Anular valores del .env local que romperían Docker:
       DB_HOST: tuwayki_mysql
@@ -32,9 +32,9 @@ services:
 
   tuwayki_sys:
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
-      PUBLIC_API_URL: "http://localhost:3000"
+      PUBLIC_API_URL: "http://localhost:3001"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
       DB_HOST: tuwayki_mysql
       ENV: prod
