@@ -169,10 +169,11 @@ pkg_path = pkg_dir + '/package.json'
 shim_dir = pkg_dir + '/compat-esm'
 mjs_barrel = pkg_dir + '/dist/compat/index.mjs'
 
-# Esperar hasta 120s a que node_modules esté completamente disponible.
+# Esperar hasta 300s a que node_modules esté completamente disponible.
+# 120s era insuficiente cuando bun install corre en cold cache (~130s en AWS t3).
 # Verificamos pkg_dir + package.json + mjs_barrel para evitar race condition
 # con bun install (el dir puede existir antes que todos los archivos estén escritos).
-for i in range(60):
+for i in range(150):
     if (os.path.isdir(pkg_dir) and
             os.path.exists(pkg_path) and
             os.path.exists(mjs_barrel)):

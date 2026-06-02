@@ -116,6 +116,7 @@ services:
       start_period: 300s
     volumes:
       - reflex_web_landing:/app/.web
+      - bun_cache_landing:/app/.bun
     networks:
       - internal_net
       - npm_network
@@ -157,6 +158,7 @@ services:
       start_period: 300s
     volumes:
       - reflex_web_sys:/app/.web
+      - bun_cache_sys:/app/.bun
     networks:
       - internal_net
       - npm_network
@@ -198,6 +200,7 @@ services:
       start_period: 300s
     volumes:
       - reflex_web_admin:/app/.web
+      - bun_cache_admin:/app/.bun
     networks:
       - internal_net
       - npm_network
@@ -208,6 +211,9 @@ volumes:
   reflex_web_landing:
   reflex_web_sys:
   reflex_web_admin:
+  bun_cache_landing:
+  bun_cache_sys:
+  bun_cache_admin:
 
 networks:
   internal_net:
