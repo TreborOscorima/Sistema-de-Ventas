@@ -499,7 +499,7 @@ class State(RootState):
         - `extra_check`: condición adicional pre-evaluada por el caller (p.ej. feature flag).
         """
         if not self.is_authenticated:
-            return [rx.redirect("/")]
+            return [rx.call_script("window.location.replace('/login')")]
         if plan_block:
             plan = (self.plan_actual or "").strip().lower()
             if plan == plan_block:
@@ -994,13 +994,14 @@ class State(RootState):
     async def page_init_login(self):
         """on_load para /login. Redirige al dashboard si ya está autenticado."""
         if self.is_authenticated:
-            # window.location.assign fuerza full-page navigation (no React Router SPA).
-            # rx.redirect usa navigate() de React Router, que intenta lazy-load del chunk
-            # del destino; si el chunk falla, React Router hace window.location.reload()
-            # volviendo a /login → bucle infinito. assign() evita ese ciclo.
+            # assign(): full-page nav → evita React Router lazy-load del chunk del
+            # dashboard que, si falla, causa window.location.reload() → bucle infinito.
             yield rx.call_script("window.location.assign('/dashboard')")
             return
-        # Forzar sidebar abierto para mostrar contenido guest en producción
+        # No autenticado: reemplazar la entrada de historial actual con /login para que
+        # "Atrás" desde /login vuelva directamente a la landing en vez de atravesar
+        # páginas de la app que también muestran el formulario de login.
+        yield rx.call_script("window.history.replaceState(null, '', '/login')")
         self.sidebar_open = True
 
     @rx.event

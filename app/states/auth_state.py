@@ -2133,7 +2133,7 @@ class AuthState(MixinState):
     @rx.event
     def change_password(self, form_data: dict):
         if not self.is_authenticated:
-            return rx.redirect("/")
+            return rx.call_script("window.location.replace('/login')")
         new_password = (form_data.get("password") or "").strip()
         confirm_password = (form_data.get("confirm_password") or "").strip()
         username = (self.current_user.get("username") or "").strip()
@@ -2229,7 +2229,10 @@ class AuthState(MixinState):
             self.owner_session_active = False
             self.owner_session_email = ""
             self.owner_session_user_id = 0
-        return rx.redirect("/")
+        # replace() sustituye la entrada actual del historial por /login.
+        # El usuario ve el formulario de login y "Atrás" vuelve a la página
+        # anterior al módulo donde cerró sesión (no acumula entradas app).
+        return rx.call_script("window.location.replace('/login')")
 
     @rx.event
     def show_create_user_form(self):
