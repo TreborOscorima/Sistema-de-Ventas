@@ -1,7 +1,7 @@
 # TUWAYKIAPP: Sistema Integral de Gestion (ERP/POS)
 
-**Version:** 4.1 (Auto-pricing + State Refactor)
-**Tecnologia:** Python 3.13 / Reflex 0.9.2 / MySQL 8.0 / Docker
+**Version:** 4.2 (Mobile-first UX + Auth Stability + Docker Stability)
+**Tecnologia:** Python 3.13 / Reflex 0.9.3 / MySQL 8.0 / Docker
 **Autor:** Trebor Oscorima
 
 ---
@@ -10,7 +10,7 @@
 
 **TUWAYKIAPP** es una plataforma SaaS multi-tenant de gestion empresarial (ERP) y Punto de Venta (POS) diseñada para comercios, PYMES y centros deportivos en Latinoamerica.
 
-La version **v4.1** incorpora auto-calculo de precio de venta desde margen efectivo y un refactor de states en paquetes por mixins. La **v4.0** agrego un **Motor de Pricing completo** (Listas de Precios, Promociones avanzadas, Impuestos por empresa) y un sistema de **Presupuestos/Cotizaciones** convertibles a venta, sobre la base de la Facturacion Electronica multi-pais incorporada en v3.0.
+La version **v4.2** incorpora un rediseno **mobile-first** completo en las 3 superficies, atajos de teclado, sidebar rail renovado con flyout, plan guards en modulos Extra y estabilidad en auth/Docker/Rolldown. La **v4.1** incorpora auto-calculo de precio de venta desde margen efectivo y un refactor de states en paquetes por mixins. La **v4.0** agrego un **Motor de Pricing completo** (Listas de Precios, Promociones avanzadas, Impuestos por empresa) y un sistema de **Presupuestos/Cotizaciones** convertibles a venta, sobre la base de la Facturacion Electronica multi-pais incorporada en v3.0.
 
 ### Capacidades Principales
 
@@ -31,6 +31,18 @@ La version **v4.1** incorpora auto-calculo de precio de venta desde margen efect
 * **Reportes y Exportacion:** Consolidados por periodo con descarga Excel/PDF.
 * **Owner Backoffice:** Panel independiente para gestion de empresas, planes y billing de plataforma.
 * **Despliegue Docker:** Arquitectura multi-stage de 5 contenedores con Nginx Proxy Manager.
+
+### Novedades v4.2 (2026)
+
+* **Mobile-first responsive (todas las superficies):** Auditoria y optimizacion completa en landing, sys y owner/admin. Tablas complejas reemplazadas por cards apiladas en mobile (< 768 px) en Caja, Config Usuarios, Config Sucursales y Ordenes de Compra — sin scroll lateral. Headers de pagina sticky en POS, Historial y Reservas.
+* **Atajos de teclado:** Shortcuts globales en el POS (`/` foco en busqueda, `Esc` cerrar modal, `Enter` confirmar pago) y sidebar (`Ctrl+B` colapsar/expandir).
+* **Pantalla de acceso denegado:** Vista visual con mensaje personalizado al intentar acceder a un modulo Extra no incluido en el plan activo; elimina errores en blanco o redirects silenciosos.
+* **Sidebar rail renovado:** Iconos semanticos actualizados en todos los modulos y submodulos; flyout informativo al pasar el cursor sobre un item en modo rail colapsado.
+* **Plan guards en modulos Extra:** Flags comerciales por plan (`can_view_compras`, `can_view_presupuestos`, `can_view_billing`) aplicados en todos los `page_init` y guards de URL en Reposicion, Presupuestos y Facturacion Electronica.
+* **Auth y sesion estables:** Logout redirige a landing (`PUBLIC_SITE_URL`); sesion de caja sobrevive deploys sin dejar sesiones huerfanas; fix del loop infinito login→dashboard por race condition de localStorage.
+* **Docker/Vite 6/Rolldown 1.x estable:** Watcher en background (`es-toolkit patch watcher`) que parchea `node_modules/es-toolkit/package.json` con condicion `import` ESM — elimina el `TypeError: t is not a function` de Rolldown 1.x en produccion; shims pre-generados para los 11 subpaths de `recharts`.
+* **Upgrade Reflex 0.9.2 → 0.9.3:** Compatibilidad con la nueva plantilla `vite.config.js` con `estoolkitAlias()`.
+* **1024 tests** — Suite estable tras el refactor de states y el upgrade de Reflex.
 
 ### Novedades v4.1 (2026)
 
@@ -88,7 +100,7 @@ La version **v4.1** incorpora auto-calculo de precio de venta desde margen efect
 | Capa | Tecnologia |
 |:-----|:-----------|
 | **Frontend** | React (compilado por Reflex desde Python) |
-| **Backend** | Python 3.13 + Reflex 0.9.2 |
+| **Backend** | Python 3.13 + Reflex 0.9.3 |
 | **Base de Datos** | MySQL 8.0 + SQLModel/SQLAlchemy 2.0 |
 | **Migraciones** | Alembic 1.18 |
 | **Cache / Rate Limiting** | Redis 7 |
@@ -198,12 +210,16 @@ Sistema-de-Ventas/
 |   |   |-- sales.py         # Sale, SaleItem, SaleReturn, CashboxSession
 |   |   +-- ...              # auth, client, company, owner, etc.
 |   |-- pages/               # Vistas de la aplicacion
-|   |   |-- etiquetas.py          # Generador de etiquetas PDF
-|   |   |-- listas_precios.py     # CRUD de listas de precios
-|   |   |-- presupuestos.py       # Presupuestos/Cotizaciones
-|   |   |-- promociones.py        # CRUD de promociones
-|   |   |-- reposicion.py         # Reposicion automatica de inventario
-|   |   |-- documentos_fiscales.py# Listado de documentos fiscales
+|   |   |-- etiquetas.py               # Generador de etiquetas PDF
+|   |   |-- listas_precios.py          # CRUD de listas de precios
+|   |   |-- presupuestos.py            # Presupuestos/Cotizaciones
+|   |   |-- promociones.py             # CRUD de promociones
+|   |   |-- reposicion.py              # Reposicion automatica de inventario
+|   |   |-- documentos_fiscales.py     # Listado de documentos fiscales
+|   |   |-- cuenta_suspendida.py       # Pantalla empresa suspendida
+|   |   |-- periodo_prueba_finalizado.py # Pantalla plan trial expirado
+|   |   |-- cambiar_contrasena.py      # Cambio de contrasena autenticado
+|   |   |-- cookies.py                 # Politica de cookies (landing)
 |   |   +-- ...              # dashboard, venta, inventario, caja, etc.
 |   |-- services/            # Servicios de negocio
 |   |   |-- pricing.py                   # Motor de pricing (single source of truth)
@@ -223,14 +239,18 @@ Sistema-de-Ventas/
 |   |   |-- cash/                  # Caja — 6 mixins (_session, _close, _delete, _petty_cash, _reports, _history)
 |   |   |-- inventory/             # Inventario — 5 mixins (_product, _search, _adjustment, _export, _label)
 |   |   |-- venta/                 # POS — 4 mixins (cart, payment, receipt, recent_moves)
+|   |   |-- root_state.py          # State raiz con refresh-token y plan flags
+|   |   |-- mixin_state.py         # Mixins compartidos entre surfaces
+|   |   |-- branches_state.py      # Gestion de sucursales (CRUD + asignacion usuarios)
 |   |   |-- price_list_state.py    # Listas de precios
 |   |   |-- promotions_state.py    # Gestion de promociones
 |   |   |-- quotation_state.py     # Presupuestos
 |   |   |-- reorder_state.py       # Reposicion automatica
 |   |   |-- tax_state.py           # Configuracion de impuestos
-|   |   |-- ui_state.py            # Estado de UI (flyout, modales)
+|   |   |-- ui_state.py            # Estado de UI (flyout, modales, keyboard shortcuts)
 |   |   |-- billing_state.py       # Config fiscal del usuario
 |   |   |-- owner_state.py         # Backoffice del Owner
+|   |   |-- types.py               # TypedDicts y tipos compartidos entre states
 |   |   |-- venta_state.py         # Alias legacy → venta/ package
 |   |   +-- ...                    # auth, dashboard, clientes, config, etc.
 |   |-- tasks/               # Workers en background
@@ -389,6 +409,8 @@ ENV=prod
 * Emision automatica de documento fiscal al seleccionar Boleta o Factura.
 * Desglose de impuesto en ticket de venta.
 * Validacion de caja abierta antes de operar.
+* **Atajos de teclado:** `/` foco en busqueda, `Esc` cerrar modal, `Enter` confirmar pago, `Ctrl+B` colapsar sidebar.
+* **Header sticky en mobile:** navegacion y buscador siempre visibles en pantallas pequeñas.
 
 ### Motor de Pricing
 * `app/services/pricing.py` — unico punto de resolucion de precio.
@@ -512,6 +534,7 @@ ENV=prod
 * Tasas de impuesto por empresa con presets por pais.
 * Facturacion electronica (datos fiscales del usuario).
 * Suscripcion y plan.
+* **Diseño adaptativo:** tablas de Usuarios y Sucursales muestran cards apiladas en mobile (< 768 px) con badges de privilegios wrapping, sin scroll lateral.
 
 ### Owner Backoffice
 * Panel independiente para administracion de plataforma.
@@ -696,11 +719,12 @@ Eventos: `view_landing`, `click_trial_cta`. Solo se cargan con consentimiento de
 | Seguridad | 87/100 | Robusto |
 | Base de Datos | 91/100 | Optimizado |
 | Backend/Estado | 90/100 | Limpio |
-| Frontend/UX | 87/100 | Consistente |
+| Frontend/UX | 91/100 | Mobile-first + Keyboard shortcuts |
 | Arquitectura | 93/100 | Bien estructurado |
 | Testing | 92/100 | 1024 tests |
 | Billing/Fiscal | 90/100 | Multi-pais |
 | Pricing/Comercial | 90/100 | Single source of truth |
+| Deploy/Infra | 89/100 | Docker multi-stage + Rolldown fix |
 
 ---
 
