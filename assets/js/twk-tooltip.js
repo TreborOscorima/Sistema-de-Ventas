@@ -5,6 +5,10 @@
  */
 (function () {
     if (window.__twkGlobalIconTooltipInit) return;
+    // Tooltips son un patrón hover-only. En dispositivos touch (hover: none)
+    // no se inicializa: el tap simula mouseover pero nunca dispara mouseout,
+    // dejando el tooltip pegado hasta otra acción.
+    if (window.matchMedia("(hover: none)").matches) return;
     window.__twkGlobalIconTooltipInit = true;
 
     const TARGET_SELECTOR = "button, a, [role='button']";

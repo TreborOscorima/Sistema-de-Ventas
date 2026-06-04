@@ -166,7 +166,7 @@ PRIVILEGE_LABELS: list[tuple[str, str]] = [
 
 def privilege_switch(label: str, privilege: str) -> rx.Component:
   return rx.el.div(
-    rx.el.label(label, class_name=TYPOGRAPHY["label"]),
+    rx.el.label(label, class_name=f"{TYPOGRAPHY['label']} flex-1 min-w-0"),
     rx.el.div(
       toggle_switch(
         checked=State.new_user_data["privileges"][privilege],
@@ -1524,6 +1524,7 @@ def user_section() -> rx.Component:
           )
         ),
         rx.el.tbody(
+
           rx.foreach(
             State.users_list,
             lambda user: rx.el.tr(
@@ -1563,6 +1564,7 @@ def user_section() -> rx.Component:
             ),
           )
         ),
+        class_name="w-full min-w-[600px]",
       ),
       class_name=f"{CARD_STYLES['default']} overflow-x-auto",
     ),
@@ -1723,7 +1725,7 @@ def branch_section() -> rx.Component:
             State.branches_list,
             lambda branch: rx.el.tr(
               rx.el.td(branch["name"], class_name=TABLE_STYLES["cell"]),
-              rx.el.td(branch["address"], class_name=TABLE_STYLES["cell"]),
+              rx.el.td(branch["address"], class_name=f"{TABLE_STYLES['cell']} break-words"),
               rx.el.td(branch["users_count"].to_string(), class_name=TABLE_STYLES["cell"]),
               rx.el.td(
                 rx.el.div(
@@ -1757,7 +1759,7 @@ def branch_section() -> rx.Component:
             ),
           )
         ),
-        class_name="w-full table-fixed",
+        class_name="w-full min-w-[500px]",
       ),
       class_name=f"{CARD_STYLES['default']} overflow-x-auto",
     ),

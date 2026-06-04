@@ -407,7 +407,7 @@ def _cashbox_sale_card(sale: rx.Var[dict]) -> rx.Component:
       rx.el.span(
         State.currency_symbol,
         sale["amount"].to_string(),
-        class_name="text-base font-semibold tabular-nums text-slate-900",
+        class_name="text-base font-semibold tabular-nums text-slate-900 whitespace-nowrap",
       ),
       rx.el.div(
         rx.el.button(
@@ -436,7 +436,7 @@ def _cashbox_sale_card(sale: rx.Var[dict]) -> rx.Component:
             BUTTON_STYLES["link_danger"],
           ),
         ),
-        class_name="flex items-center gap-3",
+        class_name="flex items-center gap-3 flex-shrink-0",
       ),
       class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
     ),

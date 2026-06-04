@@ -496,7 +496,7 @@ def _new_quotation_modal() -> rx.Component:
                         on_blur=State.set_quot_validity,
                         class_name=INPUT_STYLES["default"],
                     ),
-                    class_name="w-36",
+                    class_name="w-full sm:w-36",
                 ),
                 rx.el.div(
                     rx.el.label("Descuento global %", class_name=TYPOGRAPHY["label"]),
@@ -507,7 +507,7 @@ def _new_quotation_modal() -> rx.Component:
                         on_blur=State.set_quot_global_discount,
                         class_name=INPUT_STYLES["default"],
                     ),
-                    class_name="w-36",
+                    class_name="w-full sm:w-36",
                 ),
                 class_name="flex flex-wrap gap-4",
             ),

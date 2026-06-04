@@ -634,7 +634,7 @@ def _promo_form_modal() -> rx.Component:
                     ),
                 ),
 
-                class_name="grid grid-cols-2 gap-4",
+                class_name="grid grid-cols-1 sm:grid-cols-2 gap-4",
             ),
         ],
         footer=rx.el.div(

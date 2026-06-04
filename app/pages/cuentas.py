@@ -552,7 +552,7 @@ def installment_row(installment: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       installment_action(installment),
-      class_name="py-3 px-4 min-w-[220px]",
+      class_name="py-3 px-4 min-w-[160px]",
     ),
     class_name=rx.cond(
       installment["is_overdue"],

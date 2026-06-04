@@ -268,11 +268,12 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
             style={"height": "100dvh"},
         ),
         # SIN 'flex' para preservar el block-model y auto-fill del ancho
-        class_name="text-slate-900 w-full h-screen",
+        class_name="notranslate text-slate-900 w-full h-screen",
         style={
             "fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif",
             "height": "100dvh",
         },
+        **{"translate": "no"},
     )
 
 

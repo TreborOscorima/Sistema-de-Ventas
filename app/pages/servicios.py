@@ -1310,7 +1310,7 @@ def reservations_table() -> rx.Component:
           )
         ),
         rx.el.tbody(rx.foreach(State.paginated_reservations, reservation_row)),
-        class_name="w-full table-fixed",
+        class_name="w-full min-w-[800px]",
       ),
       class_name="hidden md:block w-full overflow-x-auto rounded-lg border border-slate-200",
     ),

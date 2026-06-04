@@ -287,7 +287,7 @@ def _price_list_detail_modal() -> rx.Component:
                             on_change=State.set_pl_item_price,
                             type="text",
                             input_mode="decimal",
-                            class_name="h-10 w-40 px-3 text-sm bg-white border border-slate-200 rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                            class_name="h-10 flex-1 min-w-0 px-3 text-sm bg-white border border-slate-200 rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                         ),
                         rx.el.button(
                             rx.icon("plus", class_name="h-4 w-4"),

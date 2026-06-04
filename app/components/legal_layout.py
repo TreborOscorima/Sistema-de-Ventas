@@ -47,7 +47,7 @@ def legal_header() -> rx.Component:
                     href=_app_href("/registro"),
                     class_name=BUTTON_STYLES["success"],
                 ),
-                class_name="flex items-center gap-3",
+                class_name="hidden sm:flex items-center gap-3",
             ),
             class_name="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8",
         ),
@@ -137,5 +137,6 @@ def legal_page_shell(title: str, last_updated: str, *content: rx.Component) -> r
             class_name="min-h-screen bg-slate-50",
         ),
         legal_footer(),
-        class_name="min-h-screen bg-slate-50",
+        class_name="notranslate min-h-screen bg-slate-50",
+        **{"translate": "no"},
     )

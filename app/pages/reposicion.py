@@ -178,9 +178,9 @@ def _reorder_confirm_modal() -> rx.Component:
                         rx.el.tbody(
                             rx.foreach(State.reorder_confirm_items, _reorder_item_row),
                         ),
-                        class_name="w-full text-sm",
+                        class_name="w-full text-sm min-w-[500px]",
                     ),
-                    class_name="max-h-96 overflow-auto border border-slate-200 rounded-lg",
+                    class_name="max-h-96 overflow-x-auto overflow-y-auto border border-slate-200 rounded-lg",
                 ),
                 rx.el.div(
                     rx.el.label("Notas (opcional)", class_name="text-sm font-medium text-slate-700"),
@@ -277,9 +277,9 @@ def _po_detail_modal() -> rx.Component:
                         rx.el.tbody(
                             rx.foreach(State.po_detail_items, _po_detail_item_row),
                         ),
-                        class_name="w-full text-sm",
+                        class_name="w-full text-sm min-w-[640px]",
                     ),
-                    class_name="max-h-80 overflow-auto border border-slate-200 rounded-lg",
+                    class_name="max-h-80 overflow-x-auto overflow-y-auto border border-slate-200 rounded-lg",
                 ),
                 # Notes
                 rx.cond(
@@ -742,7 +742,7 @@ def reposicion_page() -> rx.Component:
             rx.el.div(
                 rx.el.label(
                     "Filtrar por estado:",
-                    class_name="text-sm text-slate-500 whitespace-nowrap",
+                    class_name="text-sm text-slate-500 whitespace-nowrap shrink-0",
                 ),
                 rx.el.select(
                     rx.el.option("Todas",     value="all"),
@@ -754,9 +754,9 @@ def reposicion_page() -> rx.Component:
                     on_change=State.set_po_status_filter,
                     class_name=SELECT_STYLES["default"],
                 ),
-                class_name="flex items-center gap-2",
+                class_name="flex flex-wrap items-center gap-2",
             ),
-            class_name="flex items-center justify-between",
+            class_name="flex flex-wrap items-center justify-between gap-2",
         ),
         # Tabla de POs
         rx.cond(
@@ -779,7 +779,7 @@ def reposicion_page() -> rx.Component:
                     rx.el.tbody(rx.foreach(State.purchase_orders_list, _po_row)),
                     class_name="w-full text-sm",
                 ),
-                class_name=TABLE_STYLES["wrapper"],
+                class_name="overflow-x-auto rounded-xl border border-slate-200",
             ),
             empty_state(
                 title="Sin órdenes",

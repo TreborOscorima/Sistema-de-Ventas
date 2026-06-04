@@ -243,7 +243,7 @@ def _receipt_type_selector() -> rx.Component:
                         BUTTON_STYLES["tab_inactive"],
                     ),
                 ),
-                class_name="flex gap-1",
+                class_name="flex gap-1 w-full",
             ),
             class_name="flex flex-col gap-1 px-3 py-2 bg-slate-50 rounded-lg",
         ),
@@ -1148,7 +1148,7 @@ def quick_add_bar() -> rx.Component:
                         ),
                     ),
                 ),
-                class_name="flex flex-col gap-1 w-[122px] sm:w-28",
+                class_name="flex flex-col gap-1 flex-1 min-w-[100px] sm:flex-none sm:w-28",
             ),
             # Subtotal
             rx.el.div(
@@ -1161,7 +1161,7 @@ def quick_add_bar() -> rx.Component:
                     ),
                     class_name="px-3 py-2 bg-slate-100 rounded-lg text-right h-[42px] flex items-center justify-end",
                 ),
-                class_name="flex flex-col gap-1 w-[122px] sm:w-28",
+                class_name="flex flex-col gap-1 flex-1 min-w-[100px] sm:flex-none sm:w-28",
             ),
             # Botón añadir
             rx.el.button(
@@ -1258,9 +1258,11 @@ def products_table(embedded: bool = False) -> rx.Component:
                     class_name="flex flex-col items-center justify-center py-8 sm:py-12 text-center",
                 ),
             ),
-            class_name="flex-1 overflow-y-auto px-3 py-2",
+            # En mobile: altura auto (crece con el contenido, la página scrollea).
+            # En desktop (lg+): flex-1 + overflow-y-auto para scroll interno del panel.
+            class_name="lg:flex-1 lg:overflow-y-auto px-3 py-2",
         ),
-        class_name="flex flex-col flex-1 min-h-[320px] sm:min-h-[360px]",
+        class_name="flex flex-col lg:flex-1",
     )
     if embedded:
         return content
@@ -1420,7 +1422,9 @@ def sale_products_card() -> rx.Component:
             # Tabla estándar para todos los demás rubros
             products_table(embedded=True),
         ),
-        class_name="flex flex-col bg-white rounded-xl border shadow-sm flex-1 min-h-[320px] sm:min-h-[360px]",
+        # lg:flex-1 solo en desktop (altura fija). En mobile flex-1 comprime la card
+        # a min-h y deja ~40px para items — el layout scrollea, no necesita flex-grow.
+        class_name="flex flex-col bg-white rounded-xl border shadow-sm lg:flex-1",
     )
 
 

@@ -375,10 +375,10 @@ def reportes_page() -> rx.Component:
                     class_name="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 shadow-sm",
                 ),
                 
-                class_name="w-full xl:w-80 2xl:w-96 shrink-0",
+                class_name="w-full lg:w-80 2xl:w-96 shrink-0",
             ),
             
-            class_name="flex flex-col xl:flex-row gap-4 lg:gap-6",
+            class_name="flex flex-col lg:flex-row gap-4 lg:gap-6",
         ),
         
         class_name="p-3 sm:p-4 lg:p-6",

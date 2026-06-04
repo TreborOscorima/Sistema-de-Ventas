@@ -306,7 +306,7 @@ def page_header(
                 title_section,
                 rx.el.div(
                     *actions,
-                    class_name="flex items-center gap-3",
+                    class_name="flex flex-wrap items-center gap-3",
                 ),
                 class_name="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4",
             )
@@ -316,7 +316,7 @@ def page_header(
 
     return rx.el.header(
         *content,
-        class_name="mb-6",
+        class_name="mb-6 pl-10 md:pl-0",
     )
 
 
@@ -543,7 +543,7 @@ def page_title(title: str, subtitle: str = "") -> rx.Component:
         rx.el.p(subtitle, class_name="text-sm sm:text-[15px] text-slate-500")
         if subtitle
         else rx.fragment(),
-        class_name="flex flex-col gap-1 mb-4 sm:mb-6",
+        class_name="flex flex-col gap-1 mb-4 sm:mb-6 pl-10 md:pl-0",
     )
 
 

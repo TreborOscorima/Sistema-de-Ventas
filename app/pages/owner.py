@@ -519,7 +519,7 @@ def _companies_table() -> rx.Component:
                 rx.el.tbody(
                     rx.foreach(State.owner_companies, _company_row),
                 ),
-                class_name="w-full table-auto min-w-full",
+                class_name="w-full min-w-[1000px]",
             ),
             class_name="hidden xl:block overflow-x-auto",
         ),
@@ -2237,8 +2237,9 @@ def owner_page() -> rx.Component:
                 ),
             ),
         ),
-        class_name="text-slate-900 w-full min-h-screen",
+        class_name="notranslate text-slate-900 w-full min-h-screen",
         style={"fontFamily": "'Plus Jakarta Sans', 'Inter', sans-serif"},
+        **{"translate": "no"},
     )
 
 

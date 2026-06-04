@@ -582,7 +582,7 @@ def returns_report_row(ret: rx.Var[dict]) -> rx.Component:
     rx.el.td(ret["reason"], class_name="py-3 px-4 text-sm text-slate-700"),
     rx.el.td(
       ret["items_summary"],
-      class_name="py-3 px-4 text-sm text-slate-500 max-w-[250px] truncate",
+      class_name="py-3 px-4 text-sm text-slate-500 max-w-[160px] md:max-w-[250px] truncate",
       title=ret["items_summary"],
     ),
     rx.el.td(

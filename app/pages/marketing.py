@@ -434,7 +434,10 @@ def _browser_frame(src: str, alt: str) -> rx.Component:
 def _hero_preview_card() -> rx.Component:
     return rx.el.aside(
         _browser_frame("/dashboard-hero-real.png?v=3", "Dashboard de TUWAYKIAPP"),
-        _browser_frame("/Punto-de-Venta.png?v=1", "Punto de Venta de TUWAYKIAPP"),
+        rx.el.div(
+            _browser_frame("/Punto-de-Venta.png?v=1", "Punto de Venta de TUWAYKIAPP"),
+            class_name="hidden sm:block",
+        ),
         class_name="reveal flex flex-col gap-6",
     )
 
@@ -1278,6 +1281,7 @@ def marketing_page() -> rx.Component:
         _footer_section(),
         _floating_whatsapp(),
         _cookie_consent_banner(),
-        class_name="relative min-h-screen bg-slate-50",
+        class_name="notranslate relative min-h-screen bg-slate-50",
         style={"fontFamily": "'Manrope', sans-serif"},
+        **{"translate": "no"},
     )

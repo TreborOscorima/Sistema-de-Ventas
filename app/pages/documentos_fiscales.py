@@ -183,7 +183,7 @@ def _fiscal_doc_row(doc: rx.Var) -> rx.Component:
             rx.el.div(
                 rx.el.span(
                     doc["buyer_name"],
-                    class_name="text-sm text-slate-800 font-medium block",
+                    class_name="text-sm text-slate-800 font-medium block truncate",
                 ),
                 rx.el.span(
                     doc["buyer_doc_number"],
@@ -191,7 +191,7 @@ def _fiscal_doc_row(doc: rx.Var) -> rx.Component:
                 ),
                 class_name="flex flex-col",
             ),
-            class_name="py-3 px-4 min-w-[180px]",
+            class_name="py-3 px-4 min-w-[140px] max-w-[200px]",
         ),
         # Total
         rx.el.td(
