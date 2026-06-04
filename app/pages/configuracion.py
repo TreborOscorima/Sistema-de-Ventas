@@ -1494,6 +1494,40 @@ def user_form() -> rx.Component:
 
 
 
+def _user_card(user: rx.Var[dict]) -> rx.Component:
+  """Card de usuario para vista móvil (visible solo < md)."""
+  return rx.el.div(
+    # Nombre + Rol
+    rx.el.div(
+      rx.el.span(user["username"], class_name="font-semibold text-slate-800 text-sm"),
+      rx.el.span(user["role"], class_name="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"),
+      class_name="flex items-center justify-between gap-2",
+    ),
+    # Privilegios
+    privilege_badges(user),
+    # Acciones
+    rx.el.div(
+      rx.el.button(
+        rx.icon("pencil", class_name="h-4 w-4"),
+        on_click=lambda _, username=user["username"]: State.show_edit_user_form_by_username(username),
+        title="Editar usuario",
+        aria_label="Editar usuario",
+        class_name=BUTTON_STYLES["icon_primary"],
+      ),
+      rx.el.button(
+        rx.icon("trash-2", class_name="h-4 w-4"),
+        on_click=lambda _, username=user["username"]: State.delete_user(username),
+        title="Eliminar usuario",
+        aria_label="Eliminar usuario",
+        class_name=BUTTON_STYLES["icon_danger"],
+      ),
+      class_name="flex gap-2 pt-2 border-t border-slate-100",
+    ),
+    class_name="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3",
+    key=user["username"],
+  )
+
+
 def user_section() -> rx.Component:
   return rx.el.div(
     rx.el.div(
@@ -1510,6 +1544,12 @@ def user_section() -> rx.Component:
       user_form(),
       class_name="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2",
     ),
+    # Vista móvil: cards (visible solo < md)
+    rx.el.div(
+      rx.foreach(State.users_list, _user_card),
+      class_name="flex flex-col gap-3 md:hidden",
+    ),
+    # Vista escritorio: tabla (visible solo >= md)
     rx.el.div(
       rx.el.table(
         rx.el.thead(
@@ -1566,7 +1606,7 @@ def user_section() -> rx.Component:
         ),
         class_name="w-full min-w-[600px]",
       ),
-      class_name=f"{CARD_STYLES['default']} overflow-x-auto",
+      class_name=f"hidden md:block {CARD_STYLES['default']} overflow-x-auto",
     ),
     class_name="space-y-4",
   )
@@ -1646,6 +1686,53 @@ def branch_users_modal() -> rx.Component:
   )
 
 
+def _branch_card(branch: rx.Var[dict]) -> rx.Component:
+  """Card de sucursal para vista móvil (visible solo < md)."""
+  return rx.el.div(
+    # Nombre + contador de usuarios
+    rx.el.div(
+      rx.el.span(branch["name"], class_name="font-semibold text-slate-800 text-sm"),
+      rx.el.span(
+        branch["users_count"].to_string(), " usuario(s)",
+        class_name="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap",
+      ),
+      class_name="flex items-center justify-between gap-2",
+    ),
+    # Dirección
+    rx.el.p(
+      branch["address"],
+      class_name="text-xs text-slate-500",
+    ),
+    # Acciones
+    rx.el.div(
+      rx.el.button(
+        rx.icon("users", class_name="h-4 w-4"),
+        on_click=lambda _, bid=branch["id"]: State.open_branch_users(bid),
+        title="Gestionar usuarios por sucursal",
+        aria_label="Gestionar usuarios por sucursal",
+        class_name=BUTTON_STYLES["icon_primary"],
+      ),
+      rx.el.button(
+        rx.icon("pencil", class_name="h-4 w-4"),
+        on_click=lambda _, bid=branch["id"]: State.start_edit_branch(bid),
+        title="Editar sucursal",
+        aria_label="Editar sucursal",
+        class_name=BUTTON_STYLES["icon_primary"],
+      ),
+      rx.el.button(
+        rx.icon("trash-2", class_name="h-4 w-4"),
+        on_click=lambda _, bid=branch["id"]: State.delete_branch(bid),
+        title="Eliminar sucursal",
+        aria_label="Eliminar sucursal",
+        class_name=BUTTON_STYLES["icon_danger"],
+      ),
+      class_name="flex gap-2 pt-2 border-t border-slate-100",
+    ),
+    class_name="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3",
+    key=branch["id"],
+  )
+
+
 def branch_section() -> rx.Component:
   return rx.el.div(
     rx.el.div(
@@ -1709,6 +1796,12 @@ def branch_section() -> rx.Component:
       ),
       class_name=f"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 {CARD_STYLES['compact']}",
     ),
+    # Vista móvil: cards (visible solo < md)
+    rx.el.div(
+      rx.foreach(State.branches_list, _branch_card),
+      class_name="flex flex-col gap-3 md:hidden",
+    ),
+    # Vista escritorio: tabla (visible solo >= md)
     rx.el.div(
       rx.el.table(
         rx.el.thead(
@@ -1761,7 +1854,7 @@ def branch_section() -> rx.Component:
         ),
         class_name="w-full min-w-[500px]",
       ),
-      class_name=f"{CARD_STYLES['default']} overflow-x-auto",
+      class_name=f"hidden md:block {CARD_STYLES['default']} overflow-x-auto",
     ),
     class_name="space-y-4",
   )

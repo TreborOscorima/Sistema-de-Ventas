@@ -325,6 +325,100 @@ def _po_detail_modal() -> rx.Component:
     )
 
 
+def _po_card(po: rx.Var[dict]) -> rx.Component:
+    """Card de orden de compra para vista móvil (visible solo < md)."""
+    return rx.el.div(
+        # Encabezado: ID + badges de tipo y estado
+        rx.el.div(
+            rx.el.span(
+                "#", po["id"].to_string(),
+                class_name="font-mono text-xs text-slate-500 font-medium",
+            ),
+            rx.cond(
+                po["auto_generated"],
+                rx.el.span("Auto", class_name=BADGE_STYLES["info"]),
+                rx.el.span("Manual", class_name=BADGE_STYLES["neutral"]),
+            ),
+            _status_badge(po["status"]),
+            class_name="flex items-center gap-2 flex-wrap",
+        ),
+        # Proveedor
+        rx.el.p(
+            po["supplier_name"],
+            class_name="font-semibold text-slate-800 text-sm",
+        ),
+        # Ítems + Total
+        rx.el.div(
+            rx.el.span(
+                po["item_count"].to_string(), " ítem(s)",
+                class_name="text-xs text-slate-500",
+            ),
+            rx.el.span(
+                State.currency_symbol, " ", po["total_amount_str"].to(str),
+                class_name="font-semibold tabular-nums text-slate-800 text-sm",
+            ),
+            class_name="flex items-center justify-between",
+        ),
+        # Acciones
+        rx.el.div(
+            rx.el.button(
+                rx.icon("printer", class_name="h-4 w-4"),
+                on_click=lambda _: State.download_po_pdf(po["id"]),
+                title="Descargar PDF",
+                class_name=BUTTON_STYLES["icon_primary"],
+            ),
+            rx.el.button(
+                rx.icon("eye", class_name="h-4 w-4"),
+                on_click=lambda _: State.open_po_detail(po["id"]),
+                title="Ver detalle",
+                class_name=BUTTON_STYLES["icon_primary"],
+            ),
+            rx.cond(
+                po["status"] == "draft",
+                rx.el.button(
+                    rx.icon("pencil", class_name="h-4 w-4"),
+                    on_click=lambda _: State.open_po_edit(po["id"]),
+                    title="Editar borrador",
+                    class_name="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                po["status"] == "draft",
+                rx.el.button(
+                    rx.icon("send", class_name="h-4 w-4"),
+                    on_click=lambda _: State.open_po_send_modal(po["id"]),
+                    title="Enviar al proveedor",
+                    class_name=BUTTON_STYLES["icon_primary"],
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                po["status"] == "sent",
+                rx.el.button(
+                    rx.icon("package-check", class_name="h-4 w-4"),
+                    on_click=lambda _: State.mark_po_received(po["id"]),
+                    title="Marcar como recibida",
+                    class_name="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                (po["status"] != "received") & (po["status"] != "cancelled"),
+                rx.el.button(
+                    rx.icon("x", class_name="h-4 w-4"),
+                    on_click=lambda _: State.cancel_po(po["id"]),
+                    title="Cancelar orden",
+                    class_name=BUTTON_STYLES["icon_danger"],
+                ),
+                rx.fragment(),
+            ),
+            class_name="flex items-center gap-2 pt-2 border-t border-slate-100",
+        ),
+        class_name="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-2",
+    )
+
+
 def _po_row(po: rx.Var[dict]) -> rx.Component:
     return rx.el.tr(
         rx.el.td(
@@ -736,7 +830,7 @@ def reposicion_page() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.icon("clipboard-list", class_name="h-5 w-5 text-slate-400"),
-                rx.el.h2("Órdenes de compra", class_name=TYPOGRAPHY["section_title"]),
+                rx.el.h2("ÓRDENES DE COMPRA", class_name=TYPOGRAPHY["section_title"]),
                 class_name="flex items-center gap-2",
             ),
             rx.el.div(
@@ -762,24 +856,33 @@ def reposicion_page() -> rx.Component:
         rx.cond(
             State.purchase_orders_list.length() > 0,
             rx.el.div(
-                rx.el.table(
-                    rx.el.thead(
-                        rx.el.tr(
-                            rx.el.th("ID",         class_name=TABLE_STYLES["header_cell"]),
-                            rx.el.th("Proveedor",  class_name=TABLE_STYLES["header_cell"]),
-                            rx.el.th("Estado",     class_name=TABLE_STYLES["header_cell"]),
-                            rx.el.th("Ítems",      class_name=TABLE_STYLES["header_cell"] + " text-center"),
-                            rx.el.th("Total",      class_name=TABLE_STYLES["header_cell"] + " text-right"),
-                            rx.el.th("Creada",     class_name=TABLE_STYLES["header_cell"] + " hidden md:table-cell"),
-                            rx.el.th("Usuario", class_name=TABLE_STYLES["header_cell"] + " hidden lg:table-cell"),
-                            rx.el.th("Acciones",   class_name=TABLE_STYLES["header_cell"] + " text-center"),
-                        ),
-                        class_name=TABLE_STYLES["header"],
-                    ),
-                    rx.el.tbody(rx.foreach(State.purchase_orders_list, _po_row)),
-                    class_name="w-full text-sm",
+                # Vista móvil: cards (visible solo < md)
+                rx.el.div(
+                    rx.foreach(State.purchase_orders_list, _po_card),
+                    class_name="flex flex-col gap-3 md:hidden",
                 ),
-                class_name="overflow-x-auto rounded-xl border border-slate-200",
+                # Vista escritorio: tabla (visible solo >= md)
+                rx.el.div(
+                    rx.el.table(
+                        rx.el.thead(
+                            rx.el.tr(
+                                rx.el.th("ID",         class_name=TABLE_STYLES["header_cell"]),
+                                rx.el.th("Proveedor",  class_name=TABLE_STYLES["header_cell"]),
+                                rx.el.th("Estado",     class_name=TABLE_STYLES["header_cell"]),
+                                rx.el.th("Ítems",      class_name=TABLE_STYLES["header_cell"] + " text-center"),
+                                rx.el.th("Total",      class_name=TABLE_STYLES["header_cell"] + " text-right"),
+                                rx.el.th("Creada",     class_name=TABLE_STYLES["header_cell"] + " hidden md:table-cell"),
+                                rx.el.th("Usuario",    class_name=TABLE_STYLES["header_cell"] + " hidden lg:table-cell"),
+                                rx.el.th("Acciones",   class_name=TABLE_STYLES["header_cell"] + " text-center"),
+                            ),
+                            class_name=TABLE_STYLES["header"],
+                        ),
+                        rx.el.tbody(rx.foreach(State.purchase_orders_list, _po_row)),
+                        class_name="w-full text-sm",
+                    ),
+                    class_name="hidden md:block overflow-x-auto rounded-xl border border-slate-200",
+                ),
+                class_name="flex flex-col gap-3",
             ),
             empty_state(
                 title="Sin órdenes",
@@ -792,7 +895,7 @@ def reposicion_page() -> rx.Component:
 
     content = rx.el.div(
         page_title(
-            "Órdenes de Compra",
+            "ÓRDENES DE COMPRA",
             "Detecta productos con stock bajo y genera órdenes de compra sugeridas por proveedor.",
         ),
         suggestions_section,

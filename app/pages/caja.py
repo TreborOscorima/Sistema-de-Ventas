@@ -436,9 +436,9 @@ def _cashbox_sale_card(sale: rx.Var[dict]) -> rx.Component:
             BUTTON_STYLES["link_danger"],
           ),
         ),
-        class_name="flex items-center gap-3 flex-shrink-0",
+        class_name="flex items-center gap-3",
       ),
-      class_name="flex items-center justify-between mt-3 pt-2 border-t border-slate-100",
+      class_name="flex flex-col gap-2 mt-3 pt-2 border-t border-slate-100",
     ),
     class_name="bg-white border border-slate-200 rounded-xl p-4 shadow-sm",
   )
