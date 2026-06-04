@@ -6,6 +6,7 @@ assets/exports/
 .web
 .web/
 .states/
+reflex.lock/
 __pycache__/
 /app/__pycache__/
 .env
