@@ -208,7 +208,7 @@ def authenticated_layout(page_content: rx.Component) -> rx.Component:
             custom_attrs={
                 "data-twk-runtime-sync": "1",
                 "aria-hidden": "true",
-                "tabindex": "-1",
+                "tabIndex": "-1",
             },
             type="button",
             class_name="hidden",

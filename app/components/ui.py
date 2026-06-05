@@ -284,7 +284,7 @@ def page_header(
     # Seccion de titulo y subtitulo (consistente con page_title)
     title_section = rx.el.div(
         rx.el.h1(title, class_name="text-2xl font-bold text-slate-900 tracking-tight"),
-        rx.el.p(subtitle, class_name="text-sm text-slate-500") if subtitle else rx.fragment(),
+        rx.el.div(subtitle, class_name="text-sm text-slate-500") if subtitle else rx.fragment(),
         class_name="flex flex-col gap-1",
     )
 
