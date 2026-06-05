@@ -181,10 +181,8 @@ class CloseMixin:
         breakdown = self._build_cashbox_close_breakdown(today)
         day_sales = self._get_day_sales(today)
         summary = breakdown["summary"]
-        if not day_sales and not summary and breakdown["opening_amount"] == 0:
-            self.cashbox_close_modal_open = False
-            yield rx.toast(MSG.CASH_NO_MOVEMENTS_TODAY, duration=3000)
-            return
+        # No bloqueamos el cierre aunque no haya movimientos: una caja abierta con
+        # $0 y cero ventas es válida de cerrar (_cashbox_guard ya verificó is_open).
         self.summary_by_method = summary
         self.cashbox_close_summary_sales = day_sales
         self.cashbox_close_summary_date = today
@@ -220,12 +218,6 @@ class CloseMixin:
         breakdown = self._build_cashbox_close_breakdown(date)
         summary = breakdown["summary"]
         day_sales = self.cashbox_close_summary_sales or self._get_day_sales(date)
-        if (
-            not day_sales
-            and not summary
-            and breakdown["opening_amount"] == 0
-        ):
-            return rx.toast(MSG.CASH_NO_MOVEMENTS_TODAY, duration=3000)
         closing_timestamp = self._display_now().strftime("%Y-%m-%d %H:%M:%S")
         totals_list = [
             {

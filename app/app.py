@@ -389,6 +389,26 @@ def page_owner_backoffice() -> rx.Component:
     return owner_page()
 
 
+# PWA: manifest y banner se incluyen en landing y app, no en owner (admin interno).
+# El manifest correcto depende de la superficie: cada dominio tiene su propio start_url.
+_PWA_MANIFEST = (
+    "/manifest-sys.json" if APP_SURFACE == "app"
+    else "/manifest.json"  # landing y all
+)
+_pwa_components: list = (
+    [
+        rx.el.link(rel="manifest", href=_PWA_MANIFEST),
+        rx.el.meta(name="theme-color", content="#4f46e5"),
+        rx.el.meta(name="apple-mobile-web-app-capable", content="yes"),
+        rx.el.meta(name="apple-mobile-web-app-status-bar-style", content="default"),
+        rx.el.meta(name="apple-mobile-web-app-title", content="TUWAYKIAPP"),
+        rx.el.link(rel="apple-touch-icon", href="/icon-192.png"),
+        rx.script(src="/js/twk-pwa.js", defer=True),
+    ]
+    if APP_SURFACE != "owner"
+    else []
+)
+
 app = rx.App(
     api_transformer=health_app,
     head_components=[
@@ -402,6 +422,8 @@ app = rx.App(
             href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap",
             rel="stylesheet",
         ),
+        # PWA — manifest + banner (condicional por superficie).
+        *_pwa_components,
         # Scripts globales (defer → no bloquean render). Contenido idempotente.
         rx.script(src="/js/twk-sidebar-scroll.js", defer=True),
         rx.script(src="/js/twk-keyboard-shortcuts.js", defer=True),
