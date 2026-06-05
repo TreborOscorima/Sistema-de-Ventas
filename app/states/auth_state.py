@@ -2234,8 +2234,16 @@ class AuthState(MixinState):
         # no necesita usar "Atrás". replace() evita agregar una entrada extra
         # al historial. Si PUBLIC_SITE_URL no está configurado, cae a /login.
         public_site_url = (os.getenv("PUBLIC_SITE_URL") or "").strip().rstrip("/")
+        # En modo standalone (PWA instalada) quedamos en /login dentro de la app.
+        # En el browser normal redirigimos a la landing de marketing.
         if public_site_url:
-            return rx.call_script(f"window.location.replace('{public_site_url}/')")
+            return rx.call_script(f"""
+                if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {{
+                    window.location.replace('/login');
+                }} else {{
+                    window.location.replace('{public_site_url}/');
+                }}
+            """)
         return rx.call_script("window.location.replace('/login')")
 
     @rx.event
