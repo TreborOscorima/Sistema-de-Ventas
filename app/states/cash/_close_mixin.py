@@ -234,7 +234,7 @@ class CloseMixin:
 
         # Arqueo por denominación
         counted_amount = None
-        denomination_json = None
+        denom_detail: list = []
         discrepancy = 0.0
         has_counted = self.cashbox_close_has_counted
         if has_counted:
@@ -253,7 +253,6 @@ class CloseMixin:
                         "count": count,
                         "subtotal": self._round_currency(denom["value"] * count),
                     })
-            denomination_json = json.dumps(denom_detail, ensure_ascii=False)
 
         user_id = self.current_user.get("id")
         if user_id:
@@ -275,7 +274,7 @@ class CloseMixin:
                         cashbox_session.closing_amount = closing_total
                         if has_counted:
                             cashbox_session.counted_amount = counted_amount
-                            cashbox_session.denomination_detail = denomination_json
+                            cashbox_session.denomination_detail = denom_detail
                         session.add(cashbox_session)
 
                     # Crear log
@@ -391,7 +390,6 @@ class CloseMixin:
             receipt_lines.append("")
             receipt_lines.append("ARQUEO DE EFECTIVO")
             receipt_lines.append("")
-            denom_detail = json.loads(denomination_json) if denomination_json else []
             for d in denom_detail:
                 label = d["label"]
                 count = d["count"]

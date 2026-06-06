@@ -48,6 +48,19 @@ def _round_money(value: Any) -> Decimal:
     return calculate_total([{"subtotal": value}], key="subtotal")
 
 
+class DuplicatePaymentError(ValueError):
+    """Se intentó registrar un pago con un ``idempotency_key`` ya usado.
+
+    El atributo ``installment_id`` apunta a la cuota cuyo pago ya fue
+    registrado, permitiendo al caller mostrar "pago ya registrado" en vez
+    de reintentar ciegamente.
+    """
+
+    def __init__(self, installment_id: int):
+        super().__init__(f"Duplicate payment (installment_id={installment_id})")
+        self.installment_id = installment_id
+
+
 class CreditService:
     """Servicio para gestión de créditos y cobranzas.
     
@@ -118,6 +131,7 @@ class CreditService:
         user_id: int | None = None,
         company_id: int | None = None,
         branch_id: int | None = None,
+        idempotency_key: str | None = None,
     ) -> SaleInstallment:
         """Registra el pago de una cuota de crédito.
         
@@ -173,6 +187,17 @@ class CreditService:
             method_label = (payment_method or "").strip()
             if not method_label:
                 raise ValueError("Metodo de pago requerido.")
+
+            # Idempotency check: rechazar doble-pago por mismo token
+            idem_key = (idempotency_key or "").strip() or None
+            if idem_key and company_id:
+                existing = (await session.exec(
+                    select(SaleInstallment)
+                    .where(SaleInstallment.company_id == company_id)
+                    .where(SaleInstallment.idempotency_key == idem_key)
+                )).first()
+                if existing:
+                    raise DuplicatePaymentError(existing.id)
 
             installment_query = (
                 select(SaleInstallment)
@@ -231,6 +256,8 @@ class CreditService:
                 installment.payment_date = utc_now_naive()
             else:
                 installment.status = "partial"
+            if idem_key:
+                installment.idempotency_key = idem_key
 
             client.current_debt = _round_money(
                 client.current_debt - payment_amount

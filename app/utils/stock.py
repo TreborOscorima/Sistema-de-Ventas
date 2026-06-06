@@ -77,72 +77,104 @@ def recalculate_stock_totals(
     products_from_batches = products_from_batches or set()
     updated_products: set[int] = set()
 
-    # ── Fase 1: Recalcular variantes desde batches ──
+    # ── Fase 1: Recalcular variantes desde batches (bulk) ──
     if variants_from_batches:
-        for variant_id in variants_from_batches:
-            total_stock = _extract_total(session.exec(
-                select(func.coalesce(func.sum(ProductBatch.stock), 0))
-                .where(ProductBatch.product_variant_id == variant_id)
+        ids = list(variants_from_batches)
+        sums_f1 = {
+            row[0]: (row[1] or 0)
+            for row in session.exec(
+                select(
+                    ProductBatch.product_variant_id,
+                    func.coalesce(func.sum(ProductBatch.stock), 0),
+                )
+                .where(ProductBatch.product_variant_id.in_(ids))
                 .where(ProductBatch.company_id == company_id)
                 .where(ProductBatch.branch_id == branch_id)
-            ).first())
-            variant_row = session.exec(
+                .group_by(ProductBatch.product_variant_id)
+            ).all()
+        }
+        variants_map = {
+            v.id: v
+            for v in session.exec(
                 select(ProductVariant)
-                .where(ProductVariant.id == variant_id)
+                .where(ProductVariant.id.in_(ids))
                 .where(ProductVariant.company_id == company_id)
                 .where(ProductVariant.branch_id == branch_id)
-            ).first()
-            if variant_row:
-                variant_row.stock = total_stock
-                session.add(variant_row)
-                products_from_variants.add(variant_row.product_id)
+            ).all()
+        }
+        for vid in variants_from_batches:
+            v = variants_map.get(vid)
+            if v:
+                v.stock = sums_f1.get(vid, 0)
+                session.add(v)
+                products_from_variants.add(v.product_id)
 
-    # ── Fase 2: Recalcular productos desde variantes ──
+    # ── Fase 2: Recalcular productos desde variantes (bulk) ──
     if products_from_variants:
-        for product_id in products_from_variants:
-            total_stock = _extract_total(session.exec(
-                select(func.coalesce(func.sum(ProductVariant.stock), 0))
-                .where(ProductVariant.product_id == product_id)
+        ids = list(products_from_variants)
+        sums_f2 = {
+            row[0]: (row[1] or 0)
+            for row in session.exec(
+                select(
+                    ProductVariant.product_id,
+                    func.coalesce(func.sum(ProductVariant.stock), 0),
+                )
+                .where(ProductVariant.product_id.in_(ids))
                 .where(ProductVariant.company_id == company_id)
                 .where(ProductVariant.branch_id == branch_id)
-            ).first())
-            product = session.exec(
+                .group_by(ProductVariant.product_id)
+            ).all()
+        }
+        products_map = {
+            p.id: p
+            for p in session.exec(
                 select(Product)
-                .where(Product.id == product_id)
+                .where(Product.id.in_(ids))
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
-            ).first()
-            if product:
-                if normalize_fn:
-                    product.stock = normalize_fn(total_stock, product)
-                else:
-                    product.stock = total_stock
-                session.add(product)
-                updated_products.add(product_id)
+            ).all()
+        }
+        for pid in products_from_variants:
+            p = products_map.get(pid)
+            if p:
+                total = sums_f2.get(pid, 0)
+                p.stock = normalize_fn(total, p) if normalize_fn else total
+                session.add(p)
+                updated_products.add(pid)
 
-    # ── Fase 3: Recalcular productos desde batches directos ──
+    # ── Fase 3: Recalcular productos desde batches directos (bulk) ──
     remaining = products_from_batches - products_from_variants
     if remaining:
-        for product_id in remaining:
-            total_stock = _extract_total(session.exec(
-                select(func.coalesce(func.sum(ProductBatch.stock), 0))
-                .where(ProductBatch.product_id == product_id)
+        ids = list(remaining)
+        sums_f3 = {
+            row[0]: (row[1] or 0)
+            for row in session.exec(
+                select(
+                    ProductBatch.product_id,
+                    func.coalesce(func.sum(ProductBatch.stock), 0),
+                )
+                .where(ProductBatch.product_id.in_(ids))
                 .where(ProductBatch.product_variant_id.is_(None))
                 .where(ProductBatch.company_id == company_id)
                 .where(ProductBatch.branch_id == branch_id)
-            ).first())
-            product = session.exec(
+                .group_by(ProductBatch.product_id)
+            ).all()
+        }
+        products_map3 = {
+            p.id: p
+            for p in session.exec(
                 select(Product)
-                .where(Product.id == product_id)
+                .where(Product.id.in_(ids))
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
-            ).first()
-            if product:
-                if normalize_fn:
-                    product.stock = normalize_fn(total_stock, product)
-                else:
-                    product.stock = total_stock
-                session.add(product)
-                updated_products.add(product_id)
+            ).all()
+        }
+        for pid in remaining:
+            p = products_map3.get(pid)
+            if p:
+                total = sums_f3.get(pid, 0)
+                p.stock = normalize_fn(total, p) if normalize_fn else total
+                session.add(p)
+                updated_products.add(pid)
 
     return updated_products

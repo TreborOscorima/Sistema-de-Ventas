@@ -316,6 +316,13 @@ class SaleInstallment(TenantMixin, SQLModel, table=True):
         CheckConstraint(
             "paid_amount >= 0", name="ck_installment_paid_amount_nonneg"
         ),
+        # Dedup idempotente por tenant. MySQL permite múltiples NULL en UNIQUE
+        # → pagos legacy sin token coexisten sin colisión.
+        sqlalchemy.UniqueConstraint(
+            "company_id",
+            "idempotency_key",
+            name="uq_saleinstallment_company_idempotency_key",
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -346,6 +353,14 @@ class SaleInstallment(TenantMixin, SQLModel, table=True):
     payment_date: Optional[datetime] = Field(
         default=None,
         sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+    idempotency_key: Optional[str] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.String(64),
+            nullable=True,
+            index=False,
+        ),
     )
 
     sale: Optional["Sale"] = Relationship(back_populates="installments")
@@ -387,9 +402,9 @@ class CashboxSession(TenantMixin, SQLModel, table=True):
         default=None,
         sa_column=sqlalchemy.Column(Numeric(10, 2), nullable=True),
     )
-    denomination_detail: Optional[str] = Field(
+    denomination_detail: Optional[list] = Field(
         default=None,
-        sa_column=sqlalchemy.Column(sqlalchemy.Text, nullable=True),
+        sa_column=sqlalchemy.Column(sqlalchemy.JSON, nullable=True),
     )
     is_open: bool = Field(default=True)
 

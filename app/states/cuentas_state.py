@@ -24,6 +24,7 @@ Clases:
 """
 import io
 import logging
+import uuid
 from decimal import Decimal
 import datetime
 
@@ -913,6 +914,7 @@ class CuentasState(MixinState):
                         user_id=user_id,
                         company_id=company_id,
                         branch_id=branch_id,
+                        idempotency_key=uuid.uuid4().hex,
                     )
                     await session.commit()
                 except Exception as exc:

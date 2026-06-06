@@ -18,7 +18,14 @@ class FakeExecResult:
         self._value = value
 
     def first(self):
+        if isinstance(self._value, list):
+            return self._value[0] if self._value else None
         return self._value
+
+    def all(self):
+        if isinstance(self._value, list):
+            return self._value
+        return [self._value] if self._value is not None else []
 
 
 class TestExtractTotal:
@@ -71,8 +78,8 @@ class TestRecalculateStockTotals:
         product = Product(id=10, stock=Decimal("0"))
 
         session = self._make_session([
-            Decimal("25"),  # SUM query result
-            product,        # Product SELECT result
+            [(10, Decimal("25"))],  # SUM GROUP BY query: list of (product_id, sum)
+            [product],              # Product SELECT IN: list of products
         ])
 
         result = recalculate_stock_totals(
@@ -91,8 +98,8 @@ class TestRecalculateStockTotals:
         product = Product(id=20, stock=Decimal("0"))
 
         session = self._make_session([
-            Decimal("50"),  # SUM query result
-            product,        # Product SELECT result
+            [(20, Decimal("50"))],  # SUM GROUP BY query
+            [product],              # Product SELECT IN
         ])
 
         result = recalculate_stock_totals(
@@ -110,8 +117,8 @@ class TestRecalculateStockTotals:
         product = Product(id=10, stock=Decimal("0"))
 
         session = self._make_session([
-            Decimal("25"),  # Phase 2: SUM variants
-            product,        # Phase 2: Product SELECT
+            [(10, Decimal("25"))],  # Phase 2: SUM variants GROUP BY
+            [product],              # Phase 2: Product SELECT IN
         ])
 
         result = recalculate_stock_totals(
@@ -131,8 +138,8 @@ class TestRecalculateStockTotals:
         product = Product(id=10, stock=Decimal("0"))
 
         session = self._make_session([
-            Decimal("10.7"),  # SUM result
-            product,
+            [(10, Decimal("10.7"))],  # SUM GROUP BY
+            [product],
         ])
 
         def my_normalizer(stock, prod):
@@ -154,10 +161,10 @@ class TestRecalculateStockTotals:
         product = Product(id=10, stock=Decimal("0"))
 
         session = self._make_session([
-            Decimal("15"),  # Phase 1: SUM batches for variant
-            variant,        # Phase 1: Variant SELECT
-            Decimal("15"),  # Phase 2: SUM variants for product (auto-added)
-            product,        # Phase 2: Product SELECT
+            [(5, Decimal("15"))],   # Phase 1: SUM batches GROUP BY variant_id
+            [variant],              # Phase 1: Variant SELECT IN
+            [(10, Decimal("15"))],  # Phase 2: SUM variants GROUP BY product_id
+            [product],              # Phase 2: Product SELECT IN
         ])
 
         result = recalculate_stock_totals(
@@ -172,10 +179,10 @@ class TestRecalculateStockTotals:
         assert result == {10}
 
     def test_product_not_found_no_crash(self):
-        """If product SELECT returns None, no crash — just skip."""
+        """If product SELECT returns empty list, no crash — just skip."""
         session = self._make_session([
-            Decimal("10"),  # SUM result
-            None,           # Product not found
+            [(999, Decimal("10"))],  # SUM GROUP BY
+            [],                      # Product not found
         ])
 
         result = recalculate_stock_totals(
