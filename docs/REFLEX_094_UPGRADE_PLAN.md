@@ -37,6 +37,7 @@ Este documento es la única fuente de verdad para este upgrade. Marca cada paso 
 |---|---|---|
 | `UNSAFE_componentWillMount` en `SideEffect(NullComponent)` | `react-helmet` (dependencia interna de Reflex) | Requiere que Reflex actualice su dependencia |
 | `TextField.Root` con `value` + `defaultValue` | `rx.debounce_input` de Reflex | Comportamiento interno del wrapper de debounce |
+| React error #418 `args[]=text&args[]=` en cada navegación | Reflex SSR prod (`--env prod`) — hydration mismatch entre HTML estático inicial y estado cliente | Solo ocurre en prod/Docker; en dev server no. React regenera el subtree en cliente — UI funciona correctamente. No corregible sin cambios internos en Reflex. |
 
 ### Deployment: TODO corre con Docker
 
