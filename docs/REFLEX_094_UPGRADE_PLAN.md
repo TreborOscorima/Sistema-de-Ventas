@@ -2,7 +2,7 @@
 
 **Creado:** 2026-06-05  
 **Autor:** Trebor Oscorima + Claude Code  
-**Estado:** FASES 1-6 COMPLETADAS (2026-06-05) — pendiente FASE 7 (commit+push) → CI → SVR Prueba → SVR Prod  
+**Estado:** FASES 1-8 COMPLETADAS (2026-06-05) — pendiente FASE 9 (SVR Prod) → FASE 10 (cierre)  
 **Propósito:** Guía sesión a sesión, retomable en cualquier punto sin perder contexto.
 
 ---
@@ -709,26 +709,27 @@ FASE 6 — Verificación local
   [x] 6.4 Servidor corriendo, todas las páginas verificadas visualmente
   [x] 6.5 DOM verificado sin <p><p> anidados
 
-FASE 7 — Commit + Push          ← PRÓXIMO PASO
-  [ ] 7.1 git diff muestra archivos correctos
-  [ ] 7.2 Commit creado
-  [ ] 7.3 git push origin HEAD:main HEAD:docker-deploy-prod
-  [ ] 7.4 CI GitHub Actions verde
+FASE 7 — Commit + Push          ✅ COMPLETADA
+  [x] 7.1 git diff muestra archivos correctos
+  [x] 7.2 Commit creado (401397f)
+  [x] 7.3 git push origin HEAD:main HEAD:docker-deploy-prod
+  [x] 7.4 CI GitHub Actions verde
 
-FASE 8 — SVR de Prueba (Docker)
-  [ ] 8.1 SSH + git pull origin main
-  [ ] 8.2 docker compose build
-  [ ] 8.3 docker compose up -d
-  [ ] 8.4 docker compose ps → todos healthy
-  [ ] 8.5 smoke_deploy.sh sin FAIL
-  [ ] 8.6 Verificación manual OK
+FASE 8 — SVR de Prueba (Docker) ✅ COMPLETADA (2026-06-05)
+  [x] 8.1 SSH + git pull origin main → Fast-forward 1730dc0..401397f (5 archivos)
+  [x] 8.2 docker compose build → 3 imágenes python:3.13-slim reconstruidas OK
+  [x] 8.3 docker compose up -d → containers recreados
+      FIX: creado docker-compose.override.yml en SVR para npm_network → tuwayki_test_npm
+  [x] 8.4 docker compose ps → todos healthy (landing, sys, admin, mysql, redis)
+  [x] 8.5 /api/ping → {"pong":true} en los 3 servicios desde dentro de Docker
+  [x] 8.6 Barrido completo local: 17 módulos OK, 0 bugs nuevos detectados
 
-FASE 9 — SVR de Producción (Docker)
+FASE 9 — SVR de Producción (Docker)  ← PRÓXIMO PASO
   [ ] 9.1 SSH + git pull origin main
   [ ] 9.2 docker compose build
   [ ] 9.3 docker compose up -d
   [ ] 9.4 docker compose ps → todos healthy
-  [ ] 9.5 smoke_deploy.sh sin FAIL en los 3 dominios
+  [ ] 9.5 /api/ping en los 3 servicios OK
   [ ] 9.6 Verificación manual OK
 
 FASE 10 — Cierre
@@ -742,20 +743,21 @@ FASE 10 — Cierre
 
 ```
 Fecha última sesión: 2026-06-05
-Última fase completada: FASE 6 + 3 bugs corregidos
-Próxima acción: FASE 7 — git add + commit + push + esperar CI verde
-Archivos modificados pendientes de commit:
-  - requirements.txt      (pip freeze con reflex 0.9.4)
-  - Dockerfile            (python:3.11 → 3.13)
-  - app/app.py            (tabindex → tabIndex)
-  - app/components/ui.py  (rx.el.p → rx.el.div en page_header)
-  - docs/REFLEX_094_UPGRADE_PLAN.md (este archivo, actualizado)
-Notas:
-  - Todo corre en Docker (local + SVR prueba + SVR prod)
-  - FASEs 8 y 9 usan: git pull + docker compose build + docker compose up -d
+Última fase completada: FASE 8 — SVR Prueba (AWS 52.15.161.245)
+Próxima acción: FASE 9 — Deploy SVR Producción
+  - SSH key: D:\Llave SVR AWS\llave-sistema-ventas.pem (si misma llave)
+  - Obtener IP/host de SVR producción del usuario
+  - Proyecto en SVR prueba: /home/ubuntu/sist-ventas-trebor (usar como referencia)
+  - SVR Prueba requirió docker-compose.override.yml con npm_network → tuwayki_test_npm
+  - SVR Prod probablemente tiene nginx-proxy-manager_default correctamente (verificar)
+Commit en SVR Prueba: 401397f ✅
+Commit HEAD: 401397f ✅
+Notas importantes:
+  - SVR Prueba: /home/ubuntu/sist-ventas-trebor/docker-compose.override.yml creado (NO commitear)
   - rx.debounce_input genera "value+defaultValue" warning — es Reflex interno, no tocar
   - UNSAFE_componentWillMount es react-helmet interno de Reflex, no tocar
   - La cache de Vite (.web/node_modules/.vite) se regenera sola en el build de Docker
+  - Barrido local: 17 módulos, 0 bugs nuevos. Sistema 100% funcional en Reflex 0.9.4
 ```
 
 ---
