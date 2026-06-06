@@ -688,15 +688,15 @@ FASE 2 — Upgrade de dependencias
 FASE 3 — Dockerfile
   [x] 3.1 python:3.11-slim → python:3.13-slim (líneas 8 y 31)
 
-FASE 4 — bare except (OPCIONAL)
-  [ ] 4.1 report_service.py:289 (pendiente — baja prioridad)
-  [ ] 4.2 report_service.py:494 (pendiente — baja prioridad)
-  [ ] 4.3 exports.py:79 (pendiente — baja prioridad)
-  [ ] 4.4 exports.py:296 (pendiente — baja prioridad)
+FASE 4 — bare except (OPCIONAL)  ✅ COMPLETADA (2026-06-06)
+  [x] 4.1 report_service.py:289 → except (ValueError, TypeError, AttributeError)
+  [x] 4.2 report_service.py:494 → except (ValueError, TypeError, AttributeError)
+  [x] 4.3 exports.py:79 → except (ValueError, TypeError)
+  [x] 4.4 exports.py:296 → except (ValueError, TypeError, AttributeError)
 
-FASE 5 — docker-compose.yml (OPCIONAL)
-  [ ] 5.1 tuwayki_sys: service_started → service_healthy (pendiente)
-  [ ] 5.2 tuwayki_admin: service_started → service_healthy (pendiente)
+FASE 5 — docker-compose.yml (OPCIONAL)  ✅ COMPLETADA (2026-06-06)
+  [x] 5.1 tuwayki_sys: service_started → service_healthy
+  [x] 5.2 tuwayki_admin: service_started → service_healthy
 
 BUGS ADICIONALES CORREGIDOS EN SESIÓN (no planeados)
   [x] BUG-1: app/app.py:211 tabindex → tabIndex
@@ -743,16 +743,15 @@ FASE 10 — Cierre
 ## Dónde quedamos (actualizar al finalizar cada sesión)
 
 ```
-Fecha última sesión: 2026-06-05
-Última fase completada: FASE 8 — SVR Prueba (AWS 52.15.161.245)
-Próxima acción: FASE 9 — Deploy SVR Producción
+Fecha última sesión: 2026-06-06
+Última fase completada: FASE 5 (opcionales FASE 4 + 5 completados, 2026-06-06)
+Próxima acción: FASE 9 — Deploy SVR Producción (en espera del configurador de SVR)
   - SSH key: D:\Llave SVR AWS\llave-sistema-ventas.pem (si misma llave)
-  - Obtener IP/host de SVR producción del usuario
   - Proyecto en SVR prueba: /home/ubuntu/sist-ventas-trebor (usar como referencia)
   - SVR Prueba requirió docker-compose.override.yml con npm_network → tuwayki_test_npm
   - SVR Prod probablemente tiene nginx-proxy-manager_default correctamente (verificar)
 Commit en SVR Prueba: 401397f ✅
-Commit HEAD: 401397f ✅
+Commit HEAD: pendiente de push con FASE 4+5
 Notas importantes:
   - SVR Prueba: /home/ubuntu/sist-ventas-trebor/docker-compose.override.yml creado (NO commitear)
   - rx.debounce_input genera "value+defaultValue" warning — es Reflex interno, no tocar

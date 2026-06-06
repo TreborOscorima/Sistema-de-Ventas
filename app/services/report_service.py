@@ -286,7 +286,7 @@ def _safe_string(value: Any, default: str = "") -> str:
     try:
         raw = str(value).strip()
         return str(_sanitize_excel_value(raw))
-    except:
+    except (ValueError, TypeError, AttributeError):
         return default
 
 
@@ -491,7 +491,7 @@ def _auto_adjust_columns(ws: Worksheet, min_width: int = 12, max_width: int = 50
             try:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            except:
+            except (ValueError, TypeError, AttributeError):
                 pass
         adjusted_width = min(max(max_length + 2, min_width), max_width)
         ws.column_dimensions[column_letter].width = adjusted_width

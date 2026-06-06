@@ -131,7 +131,7 @@ services:
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
-      tuwayki_landing: { condition: service_started }
+      tuwayki_landing: { condition: service_healthy }
     environment:
       APP_SURFACE: app
       SKIP_MIGRATE: "true"
@@ -173,7 +173,7 @@ services:
     depends_on:
       mysql: { condition: service_healthy }
       redis: { condition: service_healthy }
-      tuwayki_landing: { condition: service_started }
+      tuwayki_landing: { condition: service_healthy }
     environment:
       APP_SURFACE: owner
       SKIP_MIGRATE: "true"

@@ -76,7 +76,7 @@ def _safe_float(value: Any) -> float:
         return 0.0
     try:
         return float(value)
-    except:
+    except (ValueError, TypeError):
         return 0.0
 
 
@@ -293,7 +293,7 @@ def auto_adjust_column_widths(ws: Worksheet, min_width: int = 10, max_width: int
                 cell_value = str(cell.value) if cell.value is not None else ""
                 if len(cell_value) > max_length:
                     max_length = len(cell_value)
-            except:
+            except (ValueError, TypeError, AttributeError):
                 pass
 
         adjusted_width = (max_length + 2)
