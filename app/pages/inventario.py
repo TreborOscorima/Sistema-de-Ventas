@@ -34,35 +34,44 @@ def import_modal() -> rx.Component:
       # Zona de upload
       rx.cond(
         State.import_file_name == "",
-        rx.upload(
-          rx.el.div(
-            rx.icon("cloud-upload", class_name="h-10 w-10 text-slate-400 mx-auto mb-2"),
-            rx.el.p(
-              "Arrastre un archivo aquí",
-              class_name="text-sm text-slate-500 text-center",
-            ),
-            rx.el.p(
-              "Formatos: .csv, .xlsx",
-              class_name="text-xs text-slate-400 text-center mt-1",
-            ),
-            rx.el.span(
-              rx.icon("folder-open", class_name="h-4 w-4 pointer-events-none"),
-              "Seleccionar archivo",
-              class_name=(
-                "mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium "
-                "text-slate-700 bg-white border border-slate-300 rounded-lg "
-                "hover:bg-slate-50 cursor-pointer pointer-events-none"
+        rx.el.div(
+          rx.upload(
+            rx.el.div(
+              rx.icon("cloud-upload", class_name="h-10 w-10 text-slate-400 mx-auto mb-2"),
+              rx.el.p(
+                "Arrastre un archivo aquí",
+                class_name="text-sm text-slate-500 text-center",
               ),
+              rx.el.p(
+                "Formatos: .csv, .xlsx",
+                class_name="text-xs text-slate-400 text-center mt-1",
+              ),
+              class_name="flex flex-col items-center justify-center py-8",
             ),
-            class_name="flex flex-col items-center justify-center py-8",
+            id="import_upload",
+            accept={
+              ".csv": ["text/csv", "text/plain", "application/csv"],
+              ".xlsx": [
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "application/vnd.ms-excel",
+              ],
+            },
+            max_files=1,
+            border="2px dashed #cbd5e1",
+            border_radius="0.75rem",
+            class_name="cursor-pointer hover:border-indigo-400 transition-colors",
+            on_drop=State.handle_import_upload(rx.upload_files(upload_id="import_upload")),  # type: ignore
           ),
-          id="import_upload",
-          accept={".csv": ["text/csv"], ".xlsx": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]},
-          max_files=1,
-          border="2px dashed #cbd5e1",
-          border_radius="0.75rem",
-          class_name="cursor-pointer hover:border-indigo-400 transition-colors",
-          on_drop=State.handle_import_upload(rx.upload_files(upload_id="import_upload")),  # type: ignore
+          # Fallback para browsers sin soporte de drag & drop (mobile/Firefox/Safari)
+          rx.el.div(
+            rx.el.button(
+              rx.icon("folder-open", class_name="h-4 w-4"),
+              "Seleccionar archivo",
+              on_click=rx.call_script("document.getElementById('import_upload').click()"),
+              class_name=BUTTON_STYLES["ghost"],
+            ),
+            class_name="flex justify-center mt-2",
+          ),
         ),
         # Archivo seleccionado - mostrar nombre
         rx.el.div(
