@@ -237,6 +237,8 @@ def _global_styles() -> str:
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   border-radius: 8px;
 }
+.twk-tab-panel { display: none !important; }
+.twk-tab-panel.active { display: grid !important; }
 @media (prefers-reduced-motion: no-preference) {
   .reveal {
     opacity: 0; transform: translateY(12px);
@@ -280,56 +282,89 @@ def _global_styles() -> str:
 
 # ── Static Data ──────────────────────────────────────────────
 TRUST_BADGES = [
-    ("building-2", "Multiempresa real"),
-    ("shield-check", "Permisos granulares"),
-    ("wallet", "Cobros y caja unificados"),
-    ("bar-chart-3", "Reportes accionables"),
+    ("zap", "Sin Excel ni papel"),
+    ("building-2", "Multi-sucursal real"),
+    ("wallet", "Caja y stock en tiempo real"),
+    ("monitor", "Accede desde cualquier dispositivo"),
 ]
 
-LOGOS = [
-    ("RM", "Rivera Market", "Retail multi-caja"),
-    ("NS", "Nova Sports", "Reservas deportivas"),
-    ("AB", "Alfa Bodega", "Inventario intensivo"),
-    ("CN", "Centro Nexus", "Multi-sucursal"),
-    ("SP", "ServiPlus", "Servicios y cobranzas"),
+INDUSTRIES = [
+    ("store",          "Tiendas y retail",      "POS + stock + caja"),
+    ("dumbbell",       "Canchas deportivas",     "Reservas + cobros"),
+    ("wrench",         "Talleres y servicios",   "Órdenes + historial"),
+    ("truck",          "Distribuidoras",         "Inventario intensivo"),
+    ("utensils",       "Gastronomía",            "Ventas + caja rápida"),
+    ("scissors",       "Salones y estética",     "Turnos + facturación"),
+    ("building-2",     "Multi-sucursal",         "Control centralizado"),
+    ("package",        "Bodegas",                "Stock + Kardex"),
 ]
 
 MODULES = [
     {
         "icon": "shopping-cart",
         "title": "Punto de venta",
-        "description": "Cobra rápido, genera tickets y mantén trazabilidad por usuario.",
-        "bullets": ["Efectivo, tarjeta y transferencia", "Descuento de stock automático", "Historial por sucursal"],
+        "description": "Cobra en segundos con cualquier método de pago. Cada venta queda registrada con usuario, hora y sucursal — sin carga manual.",
+        "bullets": [
+            "Búsqueda por nombre, código o código de barras",
+            "Efectivo, tarjeta y transferencia en un mismo ticket",
+            "Stock descontado automáticamente por sucursal",
+            "Historial completo por cajero, turno y fecha",
+        ],
     },
     {
         "icon": "package",
         "title": "Inventario inteligente",
-        "description": "Stock por sucursal con alertas, movimientos auditables y Kardex.",
-        "bullets": ["Categorías, unidades y valorización", "Stock mínimo con alertas", "Kardex con trazabilidad"],
+        "description": "Control de stock en tiempo real por sucursal y bodega, con Kardex auditable y alertas antes de quedarte sin mercadería.",
+        "bullets": [
+            "Movimientos auditables con usuario y motivo",
+            "Alertas de stock mínimo configurables por producto",
+            "Kardex completo con cada entrada y salida",
+            "Valorización por costo y precio de venta",
+        ],
     },
     {
         "icon": "calendar-plus",
         "title": "Reservas y servicios",
-        "description": "Agenda operativa con adelantos y cobro final unificado.",
-        "bullets": ["Reservas por horario y estado", "Cobro parcial y total", "Menos huecos en agenda"],
+        "description": "Agenda operativa para canchas, espacios y servicios. Cobra adelantos y cobros finales desde el mismo sistema.",
+        "bullets": [
+            "Reservas por horario, estado y responsable",
+            "Cobro parcial y cobro final unificados",
+            "Vista de disponibilidad por espacio y día",
+            "Historial de clientes recurrentes",
+        ],
     },
     {
         "icon": "wallet",
         "title": "Gestión de caja",
-        "description": "Apertura, cierre y auditoría diaria con evidencia de movimientos.",
-        "bullets": ["Arqueo y diferencias visibles", "Ingresos/egresos con motivo", "Control por turno y responsable"],
+        "description": "Apertura y cierre de caja por turno con evidencia total. El arqueo muestra diferencias al instante — sin sorpresas al final del día.",
+        "bullets": [
+            "Apertura y cierre por turno y responsable",
+            "Ingresos y egresos con motivo registrado",
+            "Arqueo visual con diferencias inmediatas",
+            "Historial por día, usuario y sucursal",
+        ],
     },
     {
         "icon": "users",
         "title": "Usuarios y permisos",
-        "description": "Multi-tenant con roles claros por empresa y sucursal.",
-        "bullets": ["Perfiles por función", "Acceso por módulo", "Escala sin perder seguridad"],
+        "description": "Multi-tenant real: cada empresa y sucursal opera con aislamiento total. Asigna roles exactos a cada integrante del equipo.",
+        "bullets": [
+            "Roles por función: cajero, supervisor, admin",
+            "Acceso granular por módulo y sucursal",
+            "Trazabilidad de quién hizo qué y cuándo",
+            "Escala sin comprometer la seguridad",
+        ],
     },
     {
         "icon": "pie-chart",
-        "title": "Reportes ejecutivos",
-        "description": "Indicadores por período y categoría para decidir con datos.",
-        "bullets": ["Dashboards por sucursal", "Top productos y categorías", "Lectura rápida de rentabilidad"],
+        "title": "Reportes y análisis",
+        "description": "Indicadores en tiempo real para tomar decisiones con datos. Filtra por período, producto, categoría o sucursal y exporta a Excel.",
+        "bullets": [
+            "Ventas y rentabilidad por período y categoría",
+            "Top productos y rotación de inventario",
+            "Comparativo entre sucursales",
+            "Exportación a Excel con un clic",
+        ],
     },
 ]
 
@@ -355,6 +390,121 @@ STRENGTH_METRICS = [
     {"icon": "database", "title": "Trazabilidad completa", "detail": "Cada movimiento de caja, venta y ajuste queda registrado con usuario, timestamp y sucursal."},
     {"icon": "git-branch", "title": "Arquitectura escalable", "detail": "Agrega sucursales, usuarios y módulos sin migrar datos ni detener operaciones."},
     {"icon": "lock", "title": "Permisos granulares", "detail": "Control de acceso por rol, módulo y sucursal. Define exactamente quién ve y hace qué."},
+]
+
+USE_CASES = [
+    {
+        "icon": "store",
+        "title": "Tiendas y Bodegas",
+        "description": "Venta al detalle con múltiples cajas, control de stock en tiempo real y precios por lista personalizada.",
+        "features": ["POS con código de barras", "Stock por sucursal y bodega", "Listas de precios y descuentos"],
+        "accent": "indigo",
+    },
+    {
+        "icon": "calendar-check",
+        "title": "Canchas y Deportes",
+        "description": "Agenda de canchas y espacios por horario con cobro de adelantos y gestión de reservas sin papeles.",
+        "features": ["Reservas por horario y estado", "Cobro parcial integrado", "Control de disponibilidad"],
+        "accent": "emerald",
+    },
+    {
+        "icon": "wrench",
+        "title": "Servicios y Talleres",
+        "description": "Órdenes de trabajo, cobro por servicio finalizado y seguimiento de clientes recurrentes con historial.",
+        "features": ["Órdenes de servicio", "Cobro parcial y final", "Historial de clientes"],
+        "accent": "amber",
+    },
+    {
+        "icon": "building-2",
+        "title": "Multi-sucursal y Cadenas",
+        "description": "Operación centralizada con aislamiento completo por empresa y reportes consolidados entre sedes.",
+        "features": ["Múltiples empresas y sedes", "Permisos granulares por sede", "Reportes cruzados"],
+        "accent": "violet",
+    },
+]
+
+EXTRA_CAPABILITIES = [
+    ("shopping-bag", "Compras y Proveedores", "Registro de compras con actualización automática de stock."),
+    ("file-text", "Presupuestos", "Genera cotizaciones y conviértelas en ventas con un clic."),
+    ("receipt", "Documentos Fiscales", "Facturas, boletas y comprobantes listos para imprimir."),
+    ("tag", "Etiquetas de Productos", "Imprime etiquetas con código de barras desde el inventario."),
+    ("percent", "Promociones y Descuentos", "Reglas de precio automáticas por cliente, cantidad o fecha."),
+    ("users", "Gestión de Clientes", "Fichas de clientes con historial, cuentas corrientes y saldo."),
+    ("bar-chart-2", "Dashboard en Tiempo Real", "Métricas del día: ventas, caja, stock crítico y más."),
+    ("mail", "Campañas de Marketing", "Segmenta clientes y envía comunicaciones comerciales."),
+]
+
+SCREENSHOT_TABS = [
+    {
+        "id": "dashboard",
+        "label": "Dashboard",
+        "icon": "layout-dashboard",
+        "src": "/dashboard-screenshot.webp",
+        "alt": "Dashboard principal de TUWAYKIAPP",
+        "headline": "El estado de tu negocio en una sola pantalla",
+        "bullets": [
+            "Ventas del día, semana y mes en tiempo real",
+            "Alertas de stock crítico antes de que se agote",
+            "Movimientos de caja por turno y responsable",
+            "Top productos y categorías con mayor rotación",
+        ],
+    },
+    {
+        "id": "venta",
+        "label": "Punto de Venta",
+        "icon": "shopping-cart",
+        "src": "/venta-screenshot.webp",
+        "alt": "Punto de venta de TUWAYKIAPP",
+        "headline": "Cobra en segundos, registra todo automáticamente",
+        "bullets": [
+            "Busca por nombre, código interno o código de barras",
+            "Efectivo, tarjeta y transferencia en el mismo ticket",
+            "Stock descontado al instante por sucursal",
+            "Historial de ventas por cajero, turno y fecha",
+        ],
+    },
+    {
+        "id": "inventario",
+        "label": "Inventario",
+        "icon": "package",
+        "src": "/inventario-screenshot.webp",
+        "alt": "Gestión de inventario de TUWAYKIAPP",
+        "headline": "Stock auditado, Kardex completo, cero sorpresas",
+        "bullets": [
+            "Cada movimiento registrado con usuario y motivo",
+            "Alertas configurables de stock mínimo por producto",
+            "Valorización por costo y precio de venta",
+            "Categorías, unidades y múltiples bodegas",
+        ],
+    },
+    {
+        "id": "caja",
+        "label": "Caja",
+        "icon": "wallet",
+        "src": "/caja-screenshot.webp",
+        "alt": "Gestión de caja de TUWAYKIAPP",
+        "headline": "Cierra caja con evidencia. Sin diferencias ocultas.",
+        "bullets": [
+            "Apertura y cierre de turno con monto inicial registrado",
+            "Ingresos y egresos con motivo y responsable",
+            "Arqueo visual: diferencias calculadas al instante",
+            "Historial completo por día, turno y sucursal",
+        ],
+    },
+    {
+        "id": "reportes",
+        "label": "Reportes",
+        "icon": "bar-chart-3",
+        "src": "/reportes-screenshot.webp",
+        "alt": "Reportes y analítica de TUWAYKIAPP",
+        "headline": "Datos reales para decisiones que generan resultado",
+        "bullets": [
+            "Rentabilidad por período, categoría y producto",
+            "Comparativo entre sucursales y rangos de fechas",
+            "Rotación de inventario y productos sin movimiento",
+            "Exportación a Excel con un clic",
+        ],
+    },
 ]
 
 # ── Shared Links ─────────────────────────────────────────────
@@ -395,15 +545,18 @@ def _trust_pill(icon: str, label: str) -> rx.Component:
     )
 
 
-def _logo_chip(mark: str, name: str, segment: str) -> rx.Component:
+def _industry_chip(icon: str, name: str, detail: str) -> rx.Component:
     return rx.el.div(
-        rx.el.span(mark, class_name="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white"),
+        rx.el.div(
+            rx.icon(icon, class_name="h-5 w-5 text-slate-700"),
+            class_name="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100",
+        ),
         rx.el.div(
             rx.el.p(name, class_name="text-sm font-semibold text-slate-800"),
-            rx.el.p(segment, class_name="text-xs text-slate-500"),
+            rx.el.p(detail, class_name="text-xs text-slate-500"),
             class_name="leading-tight",
         ),
-        class_name="inline-flex min-w-[210px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm",
+        class_name="inline-flex min-w-[200px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm",
     )
 
 
@@ -431,14 +584,41 @@ def _browser_frame(src: str, alt: str) -> rx.Component:
     )
 
 
+def _hero_annotation_badge(icon: str, label: str, pos_cls: str, color_cls: str) -> rx.Component:
+    return rx.el.div(
+        rx.icon(icon, class_name="h-3.5 w-3.5 shrink-0"),
+        rx.el.span(label, class_name="text-xs font-semibold whitespace-nowrap"),
+        class_name=f"absolute {pos_cls} hidden lg:inline-flex items-center gap-1.5 {color_cls} rounded-full px-3 py-1.5 shadow-lg ring-1 ring-white/20 pointer-events-none",
+    )
+
+
 def _hero_preview_card() -> rx.Component:
     return rx.el.aside(
-        _browser_frame("/dashboard-hero-real.png?v=3", "Dashboard de TUWAYKIAPP"),
         rx.el.div(
-            _browser_frame("/Punto-de-Venta.png?v=1", "Punto de Venta de TUWAYKIAPP"),
-            class_name="hidden sm:block",
+            _browser_frame("/dashboard-screenshot.webp", "Dashboard de TUWAYKIAPP"),
+            _hero_annotation_badge(
+                "trending-up", "Ventas del día",
+                "top-[12%] -left-[12%]",
+                "bg-emerald-500 text-white",
+            ),
+            _hero_annotation_badge(
+                "triangle-alert", "Alerta de stock",
+                "top-[38%] -right-[14%]",
+                "bg-amber-500 text-white",
+            ),
+            _hero_annotation_badge(
+                "wallet", "Caja abierta",
+                "bottom-[30%] -left-[12%]",
+                "bg-indigo-500 text-white",
+            ),
+            _hero_annotation_badge(
+                "bar-chart-3", "Reportes live",
+                "bottom-[10%] -right-[12%]",
+                "bg-violet-500 text-white",
+            ),
+            class_name="reveal relative",
         ),
-        class_name="reveal flex flex-col gap-6",
+        class_name="w-full",
     )
 
 
@@ -490,6 +670,57 @@ def _timeline_step(step: str, title: str, detail: str) -> rx.Component:
             class_name="flex-1",
         ),
         class_name="flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5",
+    )
+
+
+def _use_case_card(icon: str, title: str, description: str, features: list[str], accent: str = "indigo") -> rx.Component:
+    accent_icon_cls = {
+        "indigo": "bg-indigo-50 text-indigo-600",
+        "emerald": "bg-emerald-50 text-emerald-600",
+        "amber": "bg-amber-50 text-amber-600",
+        "violet": "bg-violet-50 text-violet-600",
+    }.get(accent, "bg-indigo-50 text-indigo-600")
+    accent_bullet_cls = {
+        "indigo": "text-indigo-600",
+        "emerald": "text-emerald-600",
+        "amber": "text-amber-600",
+        "violet": "text-violet-600",
+    }.get(accent, "text-indigo-600")
+    accent_border_hover = {
+        "indigo": "hover:border-indigo-200",
+        "emerald": "hover:border-emerald-200",
+        "amber": "hover:border-amber-200",
+        "violet": "hover:border-violet-200",
+    }.get(accent, "hover:border-indigo-200")
+    rows = [
+        rx.el.li(
+            rx.icon("check", class_name=f"h-3.5 w-3.5 mt-0.5 shrink-0 {accent_bullet_cls}"),
+            rx.el.span(feat, class_name="text-xs text-slate-600"),
+            class_name="flex items-start gap-2",
+        )
+        for feat in features
+    ]
+    return rx.el.article(
+        rx.el.div(
+            rx.icon(icon, class_name="h-6 w-6"),
+            class_name=f"inline-flex items-center justify-center rounded-xl p-3 {accent_icon_cls}",
+        ),
+        rx.el.h3(title, class_name="mt-4 text-base font-bold text-slate-900"),
+        rx.el.p(description, class_name="mt-2 text-sm leading-relaxed text-slate-600"),
+        rx.el.ul(*rows, class_name="mt-4 space-y-1.5"),
+        class_name=f"rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md {accent_border_hover}",
+    )
+
+
+def _extra_capability_chip(icon: str, title: str, description: str) -> rx.Component:
+    return rx.el.div(
+        rx.icon(icon, class_name="h-4 w-4 text-slate-500 shrink-0"),
+        rx.el.div(
+            rx.el.p(title, class_name="text-sm font-semibold text-slate-800"),
+            rx.el.p(description, class_name="text-xs text-slate-500 leading-relaxed"),
+            class_name="flex flex-col gap-0.5",
+        ),
+        class_name="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:border-slate-300 hover:shadow-sm",
     )
 
 
@@ -603,8 +834,8 @@ def _announcement_banner() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.el.p(
-                    rx.el.span("Nuevo", class_name="mr-2 rounded bg-emerald-500 px-1.5 py-0.5 text-xs font-bold uppercase text-white"),
-                    "Módulo de Reservas con cobro parcial integrado",
+                    rx.el.span("Disponible", class_name="mr-2 rounded bg-emerald-500 px-1.5 py-0.5 text-xs font-bold uppercase text-white"),
+                    "Presupuestos · Documentos Fiscales · Etiquetas · Promociones · Marketing · Cuentas corrientes",
                     class_name="text-sm font-medium text-white",
                 ),
                 rx.el.button(
@@ -632,6 +863,7 @@ def _header_section() -> rx.Component:
             ),
             rx.el.nav(
                 _nav_link("Módulos", "#modulos", "click_nav_modulos", "header_nav"),
+                _nav_link("Ver el sistema", "#capturas", "click_nav_capturas", "header_nav"),
                 _nav_link("Cómo funciona", "#como-funciona", "click_nav_como_funciona", "header_nav"),
                 _nav_link("Planes", "#planes", "click_nav_planes", "header_nav"),
                 _nav_link("FAQ", "#faq", "click_nav_faq", "header_nav"),
@@ -660,6 +892,7 @@ def _header_section() -> rx.Component:
                 rx.el.div(
                     rx.el.div(
                         _nav_link("Módulos", "#modulos", "click_nav_modulos_mobile", "mobile_menu"),
+                        _nav_link("Ver el sistema", "#capturas", "click_nav_capturas_mobile", "mobile_menu"),
                         _nav_link("Cómo funciona", "#como-funciona", "click_nav_como_funciona_mobile", "mobile_menu"),
                         _nav_link("Planes", "#planes", "click_nav_planes_mobile", "mobile_menu"),
                         _nav_link("FAQ", "#faq", "click_nav_faq_mobile", "mobile_menu"),
@@ -693,18 +926,26 @@ def _hero_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
             rx.el.div(
-                rx.el.span(
-                    "Plataforma SaaS multi-sucursal",
-                    class_name="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm",
+                rx.el.div(
+                    rx.el.span(
+                        "Sistema de gestión todo-en-uno",
+                        class_name="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm",
+                    ),
+                    rx.el.span(
+                        "Tiendas · canchas · servicios · multi-sucursal",
+                        class_name="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 shadow-sm",
+                    ),
+                    class_name="flex flex-wrap items-center gap-2",
                 ),
                 rx.el.h1(
-                    "Deja de cruzar planillas. Controla ventas, stock y caja desde un solo lugar.",
+                    "Vende, controla tu stock y cierra caja — todo en un solo sistema.",
                     class_name="mt-5 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-5xl sm:leading-tight",
                     style={"fontFamily": "'Space Grotesk', sans-serif"},
                 ),
                 rx.el.p(
-                    "Operaciones multi-sucursal centralizadas: punto de venta, inventario, "
-                    "reservas y cierre de caja con trazabilidad completa por usuario y sede.",
+                    "TUWAYKIAPP reemplaza las planillas, los cuadernos y los sistemas sueltos. "
+                    "Punto de venta, inventario, reservas, caja y reportes conectados — "
+                    "con trazabilidad completa de cada peso, cada producto y cada usuario.",
                     class_name="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg",
                 ),
                 rx.el.div(
@@ -728,6 +969,10 @@ def _hero_section() -> rx.Component:
                     ),
                     class_name="mt-8 flex flex-col gap-3 sm:flex-row",
                 ),
+                rx.el.p(
+                    "Sin tarjeta de crédito · Sin compromiso · Cancela cuando quieras",
+                    class_name="mt-3 text-xs text-slate-400",
+                ),
                 class_name="reveal max-w-2xl",
             ),
             _hero_preview_card(),
@@ -744,22 +989,22 @@ def _hero_section() -> rx.Component:
 def _metrics_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
-            _metric_card("1 sola", "plataforma integrada", "Ventas, caja, stock y reservas unificados"),
-            _metric_card("Multi-sucursal", "desde el día 1", "Aislamiento total entre empresas y sedes"),
-            _metric_card("15 días", "prueba gratuita", "Sin tarjeta, sin compromiso"),
-            _metric_card("24/7", "acceso cloud", "Desktop, tablet y mobile"),
+            _metric_card("< 30 seg", "por venta registrada", "Desde escanear el producto hasta imprimir el ticket"),
+            _metric_card("3 min", "para cerrar caja", "Arqueo automático con diferencias al instante"),
+            _metric_card("0 planillas", "que cruzar a mano", "Caja, stock y ventas conectados en un solo flujo"),
+            _metric_card("15 días", "de prueba gratuita", "Sin tarjeta de crédito, sin compromiso"),
             class_name="reveal-stagger grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4",
         ),
         class_name="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8",
     )
 
 
-def _logos_section() -> rx.Component:
-    ticker_nodes = [_logo_chip(m, n, s) for _ in range(2) for m, n, s in LOGOS]
+def _industries_section() -> rx.Component:
+    ticker_nodes = [_industry_chip(icon, name, detail) for _ in range(2) for icon, name, detail in INDUSTRIES]
     return rx.el.section(
         rx.el.div(
             rx.el.p(
-                "Operaciones que ya centralizan su gestión con TUWAYKIAPP",
+                "Pensado para tu industria — sin configuraciones complejas",
                 class_name="reveal text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
             ),
             rx.el.div(
@@ -877,6 +1122,247 @@ def _strength_section() -> rx.Component:
             ),
             class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
         ),
+    )
+
+
+def _use_cases_section() -> rx.Component:
+    return rx.el.section(
+        rx.el.div(
+            rx.el.p(
+                "¿Para qué tipo de negocio?",
+                class_name="reveal text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
+            ),
+            rx.el.h2(
+                "Funciona para tu operación, sea cual sea",
+                class_name="reveal mt-2 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
+                style={"fontFamily": "'Space Grotesk', sans-serif"},
+            ),
+            rx.el.p(
+                "Desde tiendas y bodegas hasta canchas deportivas y negocios de servicios. "
+                "Un solo sistema que se adapta a tu industria sin configuraciones complejas.",
+                class_name="reveal mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
+            ),
+            rx.el.div(
+                *[
+                    _use_case_card(uc["icon"], uc["title"], uc["description"], uc["features"], uc["accent"])
+                    for uc in USE_CASES
+                ],
+                class_name="reveal-stagger mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4",
+            ),
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
+            id="casos-de-uso",
+        ),
+        class_name="bg-slate-50",
+    )
+
+
+def _extra_capabilities_section() -> rx.Component:
+    return rx.el.section(
+        rx.el.div(
+            rx.el.h2(
+                "Mucho más que ventas",
+                class_name="reveal text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
+                style={"fontFamily": "'Space Grotesk', sans-serif"},
+            ),
+            rx.el.p(
+                "TUWAYKIAPP no es solo un punto de venta. Es un ecosistema completo para operar, "
+                "crecer y mantener el control de cada área de tu negocio.",
+                class_name="reveal mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
+            ),
+            rx.el.div(
+                *[_extra_capability_chip(icon, title, desc) for icon, title, desc in EXTRA_CAPABILITIES],
+                class_name="reveal-stagger mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4",
+            ),
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
+        ),
+    )
+
+
+def _demo_flow_step(num: int, icon: str, title: str, desc: str, color: str) -> rx.Component:
+    palettes = {
+        "emerald": ("bg-emerald-50", "text-emerald-600", "bg-emerald-600", "border-emerald-100"),
+        "blue":    ("bg-blue-50",    "text-blue-600",    "bg-blue-600",    "border-blue-100"),
+        "violet":  ("bg-violet-50",  "text-violet-600",  "bg-violet-600",  "border-violet-100"),
+        "amber":   ("bg-amber-50",   "text-amber-600",   "bg-amber-600",   "border-amber-100"),
+    }
+    icon_bg, icon_text, num_bg, border = palettes.get(color, palettes["emerald"])
+    return rx.el.article(
+        rx.el.div(
+            rx.el.span(
+                str(num),
+                class_name=f"inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full {num_bg} text-xs font-bold text-white",
+            ),
+            rx.el.div(
+                rx.icon(icon, class_name=f"h-5 w-5 {icon_text}"),
+                class_name=f"inline-flex items-center justify-center rounded-xl {icon_bg} p-2.5",
+            ),
+            class_name="flex items-center gap-3",
+        ),
+        rx.el.h3(title, class_name="mt-4 text-base font-bold text-slate-900"),
+        rx.el.p(desc, class_name="mt-2 text-sm leading-relaxed text-slate-500"),
+        class_name=f"rounded-2xl border {border} bg-white p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+    )
+
+
+def _demo_flow_section() -> rx.Component:
+    """Flujo visual de una operación completa — reemplaza la necesidad de un video."""
+    flow_steps = [
+        ("shopping-cart", "Busca y cobra en segundos",
+         "El cajero agrega productos al carrito por nombre o código de barras y cobra en efectivo, tarjeta o transferencia. Ticket listo en menos de 30 segundos.",
+         "emerald"),
+        ("package", "Stock se actualiza solo",
+         "Cada venta descuenta el inventario de la sucursal en tiempo real. Sin carga manual, sin diferencias al hacer el conteo físico.",
+         "blue"),
+        ("wallet", "Caja cuadra al cierre",
+         "El sistema registra cada ingreso y egreso con motivo, usuario y hora. Al cerrar el turno, el arqueo calcula las diferencias al instante.",
+         "violet"),
+        ("bar-chart-3", "Reportes listos para decidir",
+         "Las ventas del día se consolidan en reportes de rentabilidad y rotación. Filtra por período, producto o sucursal y exporta en un clic.",
+         "amber"),
+    ]
+    return rx.el.section(
+        rx.el.div(
+            rx.el.p(
+                "Así funciona por dentro",
+                class_name="reveal text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
+            ),
+            rx.el.h2(
+                "De la venta al reporte en un solo flujo",
+                class_name="reveal mt-2 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
+                style={"fontFamily": "'Space Grotesk', sans-serif"},
+            ),
+            rx.el.p(
+                "Cada módulo alimenta al siguiente. Cobra, descuenta stock, registra en caja y analiza — "
+                "todo conectado, todo en tiempo real, sin que nadie tenga que hacer doble trabajo.",
+                class_name="reveal mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
+            ),
+            rx.el.div(
+                *[_demo_flow_step(i + 1, icon, title, desc, color)
+                  for i, (icon, title, desc, color) in enumerate(flow_steps)],
+                class_name="reveal-stagger mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4",
+            ),
+            rx.el.div(
+                rx.el.a(
+                    rx.icon("circle-play", class_name="h-4 w-4"),
+                    "Ver demo en vivo por WhatsApp",
+                    href=_demo_link,
+                    target="_blank", rel="noopener noreferrer",
+                    on_click=rx.call_script(_track_event_script("click_demo_flow_cta", "demo_flow_section")),
+                    class_name="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800 shadow-sm",
+                ),
+                class_name="reveal mt-10 flex justify-center",
+            ),
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
+        ),
+        class_name="bg-slate-50",
+    )
+
+
+def _screenshots_section() -> rx.Component:
+    """Galería de screenshots con tabs por módulo — navegación JS puro."""
+    tab_buttons = []
+    for idx, tab in enumerate(SCREENSHOT_TABS):
+        base_cls = "twk-tab-btn tab-btn inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all cursor-pointer"
+        btn_cls = f"{base_cls} active" if idx == 0 else base_cls
+        tab_id = tab["id"]
+        tab_buttons.append(
+            rx.el.button(
+                rx.icon(tab["icon"], class_name="h-4 w-4 shrink-0"),
+                rx.el.span(tab["label"], class_name="hidden sm:inline"),
+                id=f"tab-btn-{tab_id}",
+                on_click=rx.call_script(
+                    f"(function(){{"
+                    f"document.querySelectorAll('.twk-tab-btn').forEach(function(b){{b.classList.remove('active');}});"
+                    f"document.querySelectorAll('.twk-tab-panel').forEach(function(p){{p.classList.remove('active');}});"
+                    f"document.getElementById('tab-btn-{tab_id}').classList.add('active');"
+                    f"document.getElementById('tab-panel-{tab_id}').classList.add('active');"
+                    f"}})();"
+                ),
+                class_name=btn_cls,
+            )
+        )
+
+    panels = []
+    for i, tab in enumerate(SCREENSHOT_TABS):
+        panel_cls = "twk-tab-panel" + (" active" if i == 0 else "") + " grid-cols-1 items-center gap-8 lg:grid-cols-2"
+        panels.append(
+            rx.el.div(
+                rx.el.div(
+                    rx.el.h3(
+                        tab["headline"],
+                        class_name="text-xl font-extrabold text-slate-900 sm:text-2xl",
+                        style={"fontFamily": "'Space Grotesk', sans-serif"},
+                    ),
+                    rx.el.ul(
+                        *[
+                            rx.el.li(
+                                rx.icon("check", class_name="h-4 w-4 text-emerald-600 mt-0.5 shrink-0"),
+                                rx.el.span(b, class_name="text-sm text-slate-700"),
+                                class_name="flex items-start gap-2",
+                            )
+                            for b in tab["bullets"]
+                        ],
+                        class_name="mt-5 space-y-2.5",
+                    ),
+                    class_name="flex flex-col",
+                ),
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.div(
+                            rx.el.span(class_name="h-2.5 w-2.5 rounded-full bg-red-400"),
+                            rx.el.span(class_name="h-2.5 w-2.5 rounded-full bg-yellow-400"),
+                            rx.el.span(class_name="h-2.5 w-2.5 rounded-full bg-green-400"),
+                            class_name="flex items-center gap-1.5",
+                        ),
+                        rx.el.div(
+                            rx.el.span(
+                                "tuwaykiapp.com",
+                                class_name="text-xs text-slate-400 font-mono",
+                            ),
+                            class_name="flex-1 mx-3 bg-white rounded-md px-3 py-1 text-center border border-slate-200",
+                        ),
+                        class_name="flex items-center bg-slate-50 border-b border-slate-200 px-4 py-3 gap-3",
+                    ),
+                    rx.el.img(
+                        src=tab["src"],
+                        alt=tab["alt"],
+                        class_name="w-full h-auto object-cover",
+                        loading="lazy",
+                    ),
+                    class_name="overflow-hidden rounded-2xl border border-slate-200 shadow-xl shadow-slate-200/60 ring-1 ring-slate-900/5",
+                ),
+                id=f"tab-panel-{tab['id']}",
+                class_name=panel_cls,
+            )
+        )
+
+    return rx.el.section(
+        rx.el.div(
+            rx.el.p(
+                "El sistema en acción",
+                class_name="reveal text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
+            ),
+            rx.el.h2(
+                "Mira cómo se ve por dentro",
+                class_name="reveal mt-2 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
+                style={"fontFamily": "'Space Grotesk', sans-serif"},
+            ),
+            rx.el.p(
+                "Una interfaz limpia y rápida pensada para que tu equipo opere sin curva de aprendizaje.",
+                class_name="reveal mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
+            ),
+            rx.el.div(
+                *tab_buttons,
+                class_name="reveal mt-8 flex flex-wrap gap-1.5 rounded-xl bg-slate-100 p-1.5",
+            ),
+            rx.el.div(
+                *panels,
+                class_name="mt-6",
+            ),
+            class_name="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 lg:px-8",
+            id="capturas",
+        ),
+        class_name="bg-white",
     )
 
 
@@ -1268,12 +1754,16 @@ def marketing_page() -> rx.Component:
         rx.el.main(
             _hero_section(),
             _metrics_section(),
-            _logos_section(),
+            _industries_section(),
             _comparison_section(),
             _modules_section(),
+            _demo_flow_section(),
+            _screenshots_section(),
+            _pricing_section(),
+            _use_cases_section(),
+            _extra_capabilities_section(),
             _timeline_section(),
             _strength_section(),
-            _pricing_section(),
             _faq_section(),
             _cta_section(),
             class_name="relative",
