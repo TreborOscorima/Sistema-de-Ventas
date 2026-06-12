@@ -389,11 +389,12 @@ def page_owner_backoffice() -> rx.Component:
     return owner_page()
 
 
-# PWA: manifest y banner se incluyen en landing y app, no en owner (admin interno).
-# El manifest correcto depende de la superficie: cada dominio tiene su propio start_url.
+# PWA: manifest y meta tags en landing + app; SW (twk-pwa.js) solo en app.
+# Landing es marketing puro — sin offline need. El SW en landing causaba páginas
+# rancias post-deploy (HTML servido desde cache stale del SW).
 _PWA_MANIFEST = (
     "/manifest-sys.json" if APP_SURFACE == "app"
-    else "/manifest.json"  # landing y all
+    else "/manifest.json"
 )
 _pwa_components: list = (
     [
@@ -403,7 +404,12 @@ _pwa_components: list = (
         rx.el.meta(name="apple-mobile-web-app-status-bar-style", content="default"),
         rx.el.meta(name="apple-mobile-web-app-title", content="TUWAYKIAPP"),
         rx.el.link(rel="apple-touch-icon", href="/icon-192.png"),
-        rx.script(src="/js/twk-pwa.js", defer=True),
+        # SW + install banner solo en la superficie app (sys.tuwayki.app).
+        *(
+            [rx.script(src="/js/twk-pwa.js", defer=True)]
+            if APP_SURFACE == "app"
+            else []
+        ),
     ]
     if APP_SURFACE != "owner"
     else []

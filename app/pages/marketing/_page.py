@@ -8,6 +8,7 @@ from ._scripts import (
     _cookie_consent_script,
     _reveal_script,
     _cookie_consent_banner,
+    _sw_cleanup_script,
 )
 from ._sections import (
     _announcement_banner,
@@ -35,6 +36,7 @@ def marketing_page() -> rx.Component:
     """Pagina de marketing y landing page publica."""
     return rx.el.div(
         rx.el.style(_global_styles()),
+        rx.script(_sw_cleanup_script()),
         rx.script(_analytics_bootstrap_script()),
         rx.script(_cookie_consent_script()),
         rx.script(_reveal_script()),

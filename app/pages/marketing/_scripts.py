@@ -5,6 +5,20 @@ import reflex as rx
 from ._state import GA4_MEASUREMENT_ID, META_PIXEL_ID
 
 
+def _sw_cleanup_script() -> str:
+    """Unregister any service worker on the landing page.
+    Landing is marketing-only — no offline need. A stale SW causes
+    unstyled pages after deploys (cache-first HTML served from old cache).
+    This runs once and is a no-op if no SW is registered.
+    """
+    return (
+        "if('serviceWorker' in navigator){"
+        "navigator.serviceWorker.getRegistrations().then(function(regs){"
+        "regs.forEach(function(r){r.unregister();});"
+        "});}"
+    )
+
+
 def _analytics_bootstrap_script() -> str:
     ga4_id = GA4_MEASUREMENT_ID.replace("'", "\\'")
     pixel_id = META_PIXEL_ID.replace("'", "\\'")
