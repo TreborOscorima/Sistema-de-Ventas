@@ -631,7 +631,7 @@ def cashbox_logout_warning_modal() -> rx.Component:
         is_open=State.show_cashbox_logout_warning,
         on_close=State.dismiss_cashbox_logout_warning,
         title="Caja abierta",
-        description="Tenés una caja abierta. Si salís sin cerrarla, los movimientos quedan en el historial pero el cierre quedará sin monto.",
+        description="Tienes una caja abierta. Si sales sin cerrarla, los movimientos quedan en el historial pero el cierre quedará sin monto.",
         max_width="max-w-md",
         footer=rx.el.div(
             rx.el.button(
