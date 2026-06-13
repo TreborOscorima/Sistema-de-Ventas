@@ -8,11 +8,13 @@ from ._state import (
     MarketingState,
     _site_href,
     _app_href,
+    _food_href,
     _demo_link,
     _local_link,
     _standard_link,
     _professional_link,
     _enterprise_link,
+    _food_demo_link,
     TRUST_BADGES,
     INDUSTRIES,
     MODULES,
@@ -22,6 +24,7 @@ from ._state import (
     USE_CASES,
     EXTRA_CAPABILITIES,
     SCREENSHOT_TABS,
+    FOOD_FEATURES,
 )
 from ._scripts import _track_event_script
 from ._components import (
@@ -833,6 +836,80 @@ def _faq_section() -> rx.Component:
             id="faq",
         ),
         class_name="bg-slate-50",
+    )
+
+
+def _tuwaykifood_section() -> rx.Component:
+    """Sección presentando TUWAYKIFOOD — sistema para restaurantes y restobares."""
+    feature_cards = [
+        rx.el.article(
+            rx.el.div(
+                rx.icon(feat[0], class_name="h-5 w-5 text-orange-600"),
+                class_name="inline-flex items-center justify-center rounded-xl bg-orange-50 p-2.5",
+            ),
+            rx.el.h3(feat[1], class_name="mt-4 text-base font-bold text-slate-900"),
+            rx.el.p(feat[2], class_name="mt-2 text-sm leading-relaxed text-slate-600"),
+            class_name="reveal rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        )
+        for feat in FOOD_FEATURES
+    ]
+
+    return rx.el.section(
+        rx.el.div(
+            # Header de sección
+            rx.el.div(
+                rx.el.div(
+                    rx.icon("utensils", class_name="h-4 w-4 text-orange-600"),
+                    rx.el.span("TUWAYKIFOOD", class_name="text-xs font-bold text-orange-600 uppercase tracking-widest"),
+                    class_name="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-4 py-1.5",
+                ),
+                rx.el.h2(
+                    "Sistema para restaurantes y restobares",
+                    class_name="mt-6 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl",
+                    style={"fontFamily": "'Space Grotesk', sans-serif"},
+                ),
+                rx.el.p(
+                    "Carta digital con QR, gestión de mesas, pedidos por tablet y comanda automática en cocina. "
+                    "Todo conectado con la caja del turno.",
+                    class_name="mt-4 max-w-2xl text-base leading-relaxed text-slate-600",
+                ),
+                class_name="flex flex-col items-center text-center",
+            ),
+            # Grid de features
+            rx.el.div(
+                *feature_cards,
+                class_name="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3",
+            ),
+            # CTA
+            rx.el.div(
+                rx.el.div(
+                    rx.el.p(
+                        "Próximamente disponible",
+                        class_name="text-sm font-semibold text-orange-700 uppercase tracking-wide",
+                    ),
+                    rx.el.p(
+                        "TUWAYKIFOOD estará disponible en ",
+                        rx.el.strong("food.tuwayki.com", class_name="font-bold"),
+                        ". Mientras tanto, agendá una demo con nosotros.",
+                        class_name="mt-1 text-sm text-slate-600",
+                    ),
+                    class_name="flex flex-col",
+                ),
+                rx.el.a(
+                    rx.icon("message-circle", class_name="h-4 w-4 mr-2"),
+                    "Quiero saber más",
+                    href=_food_demo_link,
+                    target="_blank",
+                    rel="noopener noreferrer",
+                    on_click=rx.call_script(_track_event_script("click_food_cta", "food_section")),
+                    class_name="inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600 whitespace-nowrap",
+                ),
+                class_name="reveal mt-12 flex flex-col items-center gap-5 rounded-2xl border border-orange-100 bg-orange-50 p-8 sm:flex-row sm:justify-between",
+            ),
+            class_name="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8",
+        ),
+        id="tuwaykifood",
+        class_name="py-20 sm:py-24 bg-white",
     )
 
 

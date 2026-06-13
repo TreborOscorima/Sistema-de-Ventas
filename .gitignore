@@ -18,3 +18,6 @@ mysql_data/
 redis_data/
 .claude/
 .clone/
+
+# Vendor local para builds Docker (tuwayki-core se instala desde _vendor/)
+_vendor/

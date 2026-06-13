@@ -1,5 +1,5 @@
 from .auth import Permission, Role, RolePermission, User, UserBranch
-from .company import Branch, Company
+from .company import Branch, Company, ProductType
 from .owner import OwnerAuditLog
 from .inventory import (
     Category,
@@ -57,6 +57,7 @@ __all__ = [
     "UserBranch",
     "Company",
     "Branch",
+    "ProductType",
     "Category",
     "FieldPrice",
     "PriceTier",

@@ -4,6 +4,7 @@ Utilidades de exportacion a Excel.
 Funciones para simplificar la creacion y el formato de archivos Excel.
 """
 import io
+import logging
 import datetime
 import openpyxl
 from openpyxl.workbook import Workbook

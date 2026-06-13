@@ -10,7 +10,7 @@ from app.components.ui import (
     TYPOGRAPHY,
 )
 from ._shared import _app_href, OWNER_LOGIN_PATH
-from ._companies_section import _search_bar, _companies_table, _pagination
+from ._companies_section import _product_tabs, _search_bar, _companies_table, _pagination
 from ._action_modal import _action_modal, _reset_password_modal
 from ._audit_section import _audit_section
 from ._billing_section import _platform_billing_section, _billing_modal
@@ -136,7 +136,7 @@ def _owner_content() -> rx.Component:
                     class_name="text-xl sm:text-2xl font-bold text-slate-800",
                 ),
                 rx.el.p(
-                    "Administra empresas, planes, suscripciones y activaciones",
+                    "Administra clientes de Sistema de Ventas y TUWAYKIFOOD — planes, suscripciones y activaciones",
                     class_name=f"{TYPOGRAPHY['body_secondary']} mt-1",
                 ),
                 class_name="flex flex-col text-center sm:text-left",
@@ -144,6 +144,7 @@ def _owner_content() -> rx.Component:
             class_name="mb-5 sm:mb-6",
         ),
         _platform_billing_section(),
+        _product_tabs(),
         _search_bar(),
         rx.cond(
             State.owner_loading,

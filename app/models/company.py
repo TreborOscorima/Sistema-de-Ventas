@@ -12,6 +12,11 @@ if TYPE_CHECKING:
     from .auth import User
 
 
+class ProductType(str, Enum):
+    VENTAS = "ventas"
+    FOOD = "food"
+
+
 class PlanType(str, Enum):
     TRIAL = "trial"
     STANDARD = "standard"
@@ -75,6 +80,20 @@ class Company(SQLModel, table=True):
     has_promociones_module: bool = Field(default=True)
     has_listas_precios_module: bool = Field(default=True)
     has_etiquetas_module: bool = Field(default=True)
+    product_type: ProductType = Field(
+        default=ProductType.VENTAS,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Enum(
+                ProductType,
+                native_enum=False,
+                length=20,
+                validate_strings=True,
+                values_callable=lambda enum_cls: [m.value for m in enum_cls],
+            ),
+            nullable=False,
+            server_default=ProductType.VENTAS.value,
+        ),
+    )
     subscription_status: SubscriptionStatus = Field(
         default=SubscriptionStatus.ACTIVE,
         sa_column=sqlalchemy.Column(

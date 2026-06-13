@@ -12,6 +12,7 @@ GA4_MEASUREMENT_ID = (os.getenv("GA4_MEASUREMENT_ID") or "").strip()
 META_PIXEL_ID = (os.getenv("META_PIXEL_ID") or "").strip()
 PUBLIC_SITE_URL = (os.getenv("PUBLIC_SITE_URL") or "").strip().rstrip("/")
 PUBLIC_APP_URL = (os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
+PUBLIC_FOOD_URL = (os.getenv("PUBLIC_FOOD_URL") or "").strip().rstrip("/")
 
 
 # ── State ────────────────────────────────────────────────────
@@ -44,6 +45,13 @@ def _app_href(path: str = "/") -> str:
     if PUBLIC_APP_URL:
         return f"{PUBLIC_APP_URL}{normalized}"
     return normalized
+
+
+def _food_href(path: str = "/") -> str:
+    normalized = path if path.startswith("/") else f"/{path}"
+    if PUBLIC_FOOD_URL:
+        return f"{PUBLIC_FOOD_URL}{normalized}"
+    return f"#tuwaykifood"
 
 
 def _wa_link(message: str) -> str:
@@ -283,3 +291,14 @@ _local_link = _wa_link("Hola, me interesa TUWAYKIAPP en modalidad Local (pago an
 _standard_link = _wa_link("Hola, quiero el Plan Standard (USD 35/mes) de TUWAYKIAPP.")
 _professional_link = _wa_link("Hola, quiero el Plan Professional (USD 55/mes) de TUWAYKIAPP.")
 _enterprise_link = _wa_link("Hola, quiero el Plan Enterprise (USD 175/mes) de TUWAYKIAPP.")
+_food_demo_link = _wa_link("Hola, me interesa conocer TUWAYKIFOOD para mi restaurante. Quiero coordinar una demo.")
+
+# ── TUWAYKIFOOD Static Data ───────────────────────────────────
+FOOD_FEATURES = [
+    ("utensils", "Carta Digital", "Administra tu menú con categorías, platos y precios. Activá o desactivá platos en tiempo real."),
+    ("qr-code", "QR para clientes", "Tus clientes ven la carta actualizada desde su celular escaneando el QR de la mesa."),
+    ("layout-grid", "Gestión de Mesas", "Mapa visual de tu salón. Cada mesa muestra su estado: libre, ocupada o cuenta pedida."),
+    ("clipboard-list", "Pedidos por Tablet", "El mozo toma el pedido en tablet mesa por mesa. El pedido llega directo a cocina."),
+    ("printer", "Comanda automática", "Al confirmar el pedido se imprime la comanda en cocina automáticamente. Sin confusiones."),
+    ("wallet", "Caja Integrada", "Los pedidos cerrados se registran en caja con diferenciador. Arqueo al cierre del turno."),
+]

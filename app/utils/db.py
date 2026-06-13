@@ -45,7 +45,6 @@ ASYNC_DATABASE_URL = (
     f"@{_DB_HOST}:{_DB_PORT}/{_DB_NAME}?charset=utf8mb4"
 )
 
-# Pool tuning — alineado con rxconfig para NO duplicar conexiones a MySQL.
 _POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "15"))
 _MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
 _POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "10"))
@@ -58,32 +57,21 @@ async_engine: AsyncEngine = create_async_engine(
     max_overflow=_MAX_OVERFLOW,
     pool_timeout=_POOL_TIMEOUT,
     pool_recycle=_POOL_RECYCLE,
-    pool_use_lifo=True,  # reutiliza conexiones calientes -> menos round-trip SSL
+    pool_use_lifo=True,
     isolation_level="READ COMMITTED",
-    connect_args={
-        "init_command": "SET time_zone='+00:00'",
-    },
-    # query_cache_size por defecto (500) es OK; subir solo si se valida con perfiles.
+    connect_args={"init_command": "SET time_zone='+00:00'"},
 )
 
 AsyncSessionLocal = async_sessionmaker(
     async_engine,
     class_=AsyncSession,
     expire_on_commit=False,
-    autoflush=False,  # el caller decide cuándo flushear; evita before_flush en SELECTs.
+    autoflush=False,
 )
 
 
 @asynccontextmanager
 async def get_async_session(*, commit: bool = False) -> AsyncIterator[AsyncSession]:
-    """
-    Sesión asíncrona.
-
-    - Por default el caller decide cuándo commitear (comportamiento histórico).
-    - `commit=True`: helper para scripts/tareas cortas que quieren auto-commit
-      al salir sin excepción.
-    - Cualquier excepción dispara rollback y se re-lanza.
-    """
     session = AsyncSessionLocal()
     try:
         yield session
@@ -98,5 +86,4 @@ async def get_async_session(*, commit: bool = False) -> AsyncIterator[AsyncSessi
 
 
 async def dispose_engine() -> None:
-    """Cerrar pool al bajar el proceso (hook de shutdown de Reflex/FastAPI)."""
     await async_engine.dispose()

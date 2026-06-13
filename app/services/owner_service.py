@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.auth import User
-from app.models.company import Branch, Company, PlanType, SubscriptionStatus
+from app.models.company import Branch, Company, PlanType, ProductType, SubscriptionStatus
 from app.models.owner import OwnerAuditLog
 from app.models.sales import CompanySettings
 from app.utils.logger import get_logger
@@ -203,6 +203,7 @@ class OwnerService:
         search: str = "",
         page: int = 1,
         per_page: int = 20,
+        product_type: str = "",
     ) -> Tuple[List[Dict[str, Any]], int]:
         """Lista empresas con búsqueda, paginación y conteos de uso."""
         def _row_values(row: Any) -> List[Any]:
@@ -243,6 +244,8 @@ class OwnerService:
 
         # Conteo total
         count_stmt = select(func.count()).select_from(Company)
+        if product_type and product_type in (ProductType.VENTAS, ProductType.FOOD):
+            count_stmt = count_stmt.where(Company.product_type == product_type)
         if search:
             like = f"%{escape_like(search)}%"
             count_stmt = count_stmt.where(
@@ -253,6 +256,8 @@ class OwnerService:
 
         # Datos paginados
         stmt = select(Company).order_by(Company.id.desc())  # type: ignore[union-attr]
+        if product_type and product_type in (ProductType.VENTAS, ProductType.FOOD):
+            stmt = stmt.where(Company.product_type == product_type)
         if search:
             like = f"%{escape_like(search)}%"
             stmt = stmt.where(
@@ -393,6 +398,7 @@ class OwnerService:
                     "has_promociones_module": c.has_promociones_module,
                     "has_listas_precios_module": c.has_listas_precios_module,
                     "has_etiquetas_module": c.has_etiquetas_module,
+                    "product_type": c.product_type or ProductType.VENTAS,
                     "created_at": c.created_at.isoformat() if c.created_at else None,
                 }
             )

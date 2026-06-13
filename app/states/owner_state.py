@@ -18,7 +18,7 @@ from sqlmodel import select
 
 from app.models.auth import User as UserModel
 from app.models.billing import CompanyBillingConfig
-from app.models.company import PlanType, SubscriptionStatus
+from app.models.company import PlanType, ProductType, SubscriptionStatus
 from app.services.owner_service import OwnerService, OwnerServiceError
 from app.utils.crypto import encrypt_credential, encrypt_text
 from app.utils.fiscal_validators import (
@@ -168,6 +168,13 @@ PLAN_OPTIONS = [
     {"value": PlanType.ENTERPRISE, "label": "Enterprise"},
 ]
 
+FOOD_PLAN_OPTIONS = [
+    {"value": PlanType.TRIAL, "label": "Trial"},
+    {"value": PlanType.STANDARD, "label": "Básico"},
+    {"value": PlanType.PROFESSIONAL, "label": "Profesional"},
+    {"value": PlanType.ENTERPRISE, "label": "Enterprise"},
+]
+
 STATUS_OPTIONS = [
     {"value": SubscriptionStatus.ACTIVE, "label": "Activo"},
     {"value": SubscriptionStatus.WARNING, "label": "Advertencia"},
@@ -195,6 +202,9 @@ class OwnerState:
     owner_login_password: str = ""
     owner_login_error: str = ""
     owner_login_loading: bool = False
+
+    # ─── Tab activo (ventas / food) ────────────────────
+    owner_active_product_tab: str = ProductType.VENTAS
 
     # ─── Datos de listado ──────────────────────────────
     owner_companies: list[dict] = []
@@ -396,6 +406,16 @@ class OwnerState:
     # ─── Eventos de carga ──────────────────────────────
 
     @rx.event
+    async def owner_set_product_tab(self, tab: str):
+        """Cambia entre clientes de Sistema de Ventas y TUWAYKIFOOD."""
+        if tab not in (ProductType.VENTAS, ProductType.FOOD):
+            return
+        self.owner_active_product_tab = tab
+        self.owner_page = 1
+        self.owner_search = ""
+        yield type(self).owner_load_companies
+
+    @rx.event
     async def owner_load_companies(self):
         """Carga lista de empresas para el backoffice."""
         if not self.is_owner_authenticated:
@@ -412,6 +432,7 @@ class OwnerState:
                         search=self.owner_search.strip(),
                         page=self.owner_page,
                         per_page=self.owner_per_page,
+                        product_type=self.owner_active_product_tab,
                     )
                 # Ignorar respuestas viejas (evita sobrescribir con datos stale).
                 if seq != self._owner_companies_load_seq:

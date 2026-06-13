@@ -12,6 +12,42 @@ from app.components.ui import (
 from ._shared import _plan_badge, _status_badge, _owner_action_icon_button, _owner_module_icon_badge
 
 
+# ─── Tabs de producto ───────────────────────────────────
+
+def _product_tabs() -> rx.Component:
+    """Tabs para alternar entre clientes de Sistema de Ventas y TUWAYKIFOOD."""
+    active_cls = "border-b-2 border-slate-800 text-slate-800 font-semibold"
+    inactive_cls = "border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+    base_cls = "inline-flex items-center gap-2 px-4 py-2.5 text-sm transition-colors cursor-pointer"
+
+    return rx.el.div(
+        rx.el.div(
+            rx.el.button(
+                rx.icon("shopping-bag", class_name="h-4 w-4"),
+                "Sistema de Ventas",
+                on_click=State.owner_set_product_tab("ventas"),
+                class_name=rx.cond(
+                    State.owner_active_product_tab == "ventas",
+                    f"{base_cls} {active_cls}",
+                    f"{base_cls} {inactive_cls}",
+                ),
+            ),
+            rx.el.button(
+                rx.icon("utensils", class_name="h-4 w-4"),
+                "TUWAYKIFOOD",
+                on_click=State.owner_set_product_tab("food"),
+                class_name=rx.cond(
+                    State.owner_active_product_tab == "food",
+                    f"{base_cls} {active_cls}",
+                    f"{base_cls} {inactive_cls}",
+                ),
+            ),
+            class_name="flex",
+        ),
+        class_name="border-b border-slate-200 mb-5",
+    )
+
+
 # ─── Barra de búsqueda ──────────────────────────────────
 
 def _search_bar() -> rx.Component:

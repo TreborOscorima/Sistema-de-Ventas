@@ -21,8 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 COPY requirements.txt .
-# --prefix=/install para que las deps queden en un árbol relocatable que copiamos al runtime.
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+COPY _vendor/ _vendor/
+# tuwayki-core se instala desde vendor local (paquete privado sin PyPI).
+# El resto de deps pinneadas van desde requirements.txt.
+RUN pip install --no-cache-dir --prefix=/install /build/_vendor/tuwayki-core && \
+    pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 
 # =============================================================================
