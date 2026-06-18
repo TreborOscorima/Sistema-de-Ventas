@@ -110,6 +110,7 @@ class State(RootState):
         Al no hacer yield, todo el delta se envía junto al final del
         evento page_init_*, eliminando un roundtrip WS adicional.
         """
+        self._resolve_current_user()
         if not self.is_authenticated:
             return
 
@@ -516,6 +517,7 @@ class State(RootState):
     @rx.event
     async def page_init_default(self):
         """on_load para / y /dashboard (sin restricción de privilegio)."""
+        self._resolve_current_user()
         _state_logger.info(
             "[page_init] is_authenticated=%s token_prefix=%s branches=%s",
             self.is_authenticated,
@@ -553,6 +555,7 @@ class State(RootState):
         momento de ejecutar este evento, carga las sucursales y redirige
         correctamente. Si no, no hace nada (usuario genuinamente no autenticado).
         """
+        self._resolve_current_user()
         _state_logger.info(
             "[deferred_refresh] is_authenticated=%s token_prefix=%s branches=%s",
             self.is_authenticated,

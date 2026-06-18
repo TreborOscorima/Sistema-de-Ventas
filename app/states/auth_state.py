@@ -306,21 +306,22 @@ class AuthState(MixinState):
         user = self.current_user
         return bool(user and user.get("username") != MSG.ROLE_GUEST)
 
-    @rx.var(cache=True)
-    def current_user(self) -> User:
-        # Verificar cache válido
+    def _resolve_current_user(self) -> None:
+        """Rellena _cached_user desde JWT + DB. Seguro llamar múltiples veces (TTL interno).
+
+        Debe llamarse desde event handlers antes de leer current_user.
+        No debe llamarse desde computed vars (@rx.var).
+        """
         now = time.time()
         if (
             self._cached_user is not None
             and self._cached_user_token == self.token
             and (now - self._cached_user_time) < self._USER_CACHE_TTL
         ):
-            return self._cached_user
+            return
 
-        # Cache inválido, recargar
         payload = decode_token(self.token)
         if not payload:
-            # Access token expirado/inválido — intentar refresh
             new_tokens = _refresh_access_token(self.refresh_token) if self.refresh_token else None
             if new_tokens:
                 self.token, self.refresh_token = new_tokens
@@ -330,21 +331,21 @@ class AuthState(MixinState):
                 self._cached_user = self._guest_user()
                 self._cached_user_token = self.token
                 self._cached_user_time = now
-                return self._cached_user
+                return
 
         subject = payload.get("sub")
         if subject is None:
             self._cached_user = self._guest_user()
             self._cached_user_token = self.token
             self._cached_user_time = now
-            return self._cached_user
+            return
 
         subject_str = str(subject).strip()
         if not subject_str:
             self._cached_user = self._guest_user()
             self._cached_user_token = self.token
             self._cached_user_time = now
-            return self._cached_user
+            return
 
         token_version = payload.get("ver", 0)
         try:
@@ -412,7 +413,11 @@ class AuthState(MixinState):
 
         self._cached_user_token = self.token
         self._cached_user_time = now
-        return self._cached_user
+
+    @rx.var(cache=True)
+    def current_user(self) -> User:
+        _ = self.token  # dependencia reactiva: cache se invalida en login/logout
+        return self._cached_user if self._cached_user is not None else self._guest_user()
 
     @rx.var(cache=True)
     def active_branch_id(self) -> int | None:
@@ -1956,6 +1961,7 @@ class AuthState(MixinState):
                         admin_user.id, token_version=_tv, company_id=_cid,
                     )
                     self.selected_branch_id = str(branch.id)
+                    self._resolve_current_user()
                     self.refresh_auth_runtime_cache()
                     if hasattr(self, "refresh_cashbox_status"):
                         self.refresh_cashbox_status()
@@ -2101,6 +2107,7 @@ class AuthState(MixinState):
                 self.selected_branch_id = (
                     str(selected_branch) if selected_branch else ""
                 )
+                self._resolve_current_user()
                 self.refresh_auth_runtime_cache()
                 if hasattr(self, "refresh_cashbox_status"):
                     self.refresh_cashbox_status()
