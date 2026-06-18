@@ -841,7 +841,6 @@ def historial_page() -> rx.Component:
     ),
     sale_detail_modal(),
     return_modal(),
-    on_mount=State.reload_history_background,
   )
   return permission_guard(
     has_permission=State.can_view_historial,

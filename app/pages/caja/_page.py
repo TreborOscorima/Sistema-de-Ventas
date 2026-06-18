@@ -213,7 +213,6 @@ def cashbox_page() -> rx.Component:
         class_name="flex flex-col gap-6",
       ),
     ),
-    on_mount=State.refresh_cashbox_data,
     class_name="flex flex-col gap-6 p-4 sm:p-6 w-full",
   )
   return permission_guard(

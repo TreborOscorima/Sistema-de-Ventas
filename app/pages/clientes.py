@@ -504,7 +504,6 @@ def clientes_page() -> rx.Component:
     ),
     client_form_modal(),
     historial_modal(),
-    on_mount=State.load_clients,
   )
   return permission_guard(
     has_permission=State.can_view_clientes,

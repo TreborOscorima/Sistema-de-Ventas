@@ -769,6 +769,5 @@ def dashboard_page() -> rx.Component:
       class_name="mt-6",
     ),
 
-    on_mount=State.load_dashboard_background,
     class_name="p-4 sm:p-6",
   )

@@ -914,7 +914,6 @@ def cuentas_page() -> rx.Component:
       class_name="flex flex-col gap-6 p-4 sm:p-6 w-full",
     ),
     cuentas_detail_modal(),
-    on_mount=State.load_debtors_background,
   )
   return permission_guard(
     has_permission=State.can_view_cuentas,

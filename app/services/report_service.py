@@ -1460,6 +1460,7 @@ def generate_sales_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    set_tenant_context(None, None)
     return output
 
 
@@ -1884,6 +1885,7 @@ def generate_inventory_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    set_tenant_context(None, None)
     return output
 
 
@@ -2298,6 +2300,7 @@ def generate_receivables_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    set_tenant_context(None, None)
     return output
 
 
@@ -2973,6 +2976,7 @@ def generate_cashbox_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    set_tenant_context(None, None)
     return output
 
 
@@ -3303,6 +3307,7 @@ def generate_promotions_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    set_tenant_context(None, None)
     return output
 
 
@@ -3595,4 +3600,5 @@ def generate_price_lists_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
+    set_tenant_context(None, None)
     return output

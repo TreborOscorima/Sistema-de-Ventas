@@ -125,7 +125,7 @@ class HistorialState(MixinState):
     filtered_history: list[dict] = []
     total_pages: int = 1
     report_method_summary: list[dict] = []
-    _report_detail_rows: list[dict] = []
+    _report_detail_rows: list[dict] = rx.field(default_factory=list, is_var=False)
     report_closing_rows: list[dict] = []
     payment_stats: Dict[str, float] = {
         "efectivo": 0.0,

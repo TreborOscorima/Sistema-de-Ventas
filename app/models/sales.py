@@ -104,12 +104,13 @@ class Sale(TenantMixin, SQLModel, table=True):
     )
     installments: List["SaleInstallment"] = Relationship(
         back_populates="sale",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "lazy": "noload"},
     )
     returns: List["SaleReturn"] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "[SaleReturn.original_sale_id]",
             "cascade": "all, delete-orphan",
+            "lazy": "noload",
         },
     )
 

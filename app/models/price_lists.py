@@ -85,7 +85,7 @@ class PriceList(TenantMixin, SQLModel, table=True):
     )
     clients: List["Client"] = Relationship(
         back_populates="price_list",
-        sa_relationship_kwargs={"lazy": "select"},
+        sa_relationship_kwargs={"lazy": "noload"},
     )
 
 
