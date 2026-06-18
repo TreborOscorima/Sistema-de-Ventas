@@ -106,7 +106,7 @@ services:
     environment:
       APP_SURFACE: landing
       ENV: ${ENV:-prod}
-      DB_HOST: ${DB_HOST:-tuwayki_mysql}
+      DB_HOST: tuwayki_mysql
       DB_PORT: 3306
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
@@ -163,7 +163,7 @@ services:
       APP_SURFACE: app
       SKIP_MIGRATE: "true"
       ENV: ${ENV:-prod}
-      DB_HOST: ${DB_HOST:-tuwayki_mysql}
+      DB_HOST: tuwayki_mysql
       DB_PORT: 3306
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
@@ -215,7 +215,7 @@ services:
       APP_SURFACE: owner
       SKIP_MIGRATE: "true"
       ENV: ${ENV:-prod}
-      DB_HOST: ${DB_HOST:-tuwayki_mysql}
+      DB_HOST: tuwayki_mysql
       DB_PORT: 3306
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
