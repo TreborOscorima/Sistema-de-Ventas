@@ -1715,11 +1715,13 @@ class AuthState(MixinState):
         user_id = self.current_user.get("id")
         company_id = self.current_user.get("company_id")
         if not user_id or not company_id:
-            return rx.toast("Usuario no encontrado.", duration=3000)
+            yield rx.toast("Usuario no encontrado.", duration=3000)
+            return
         try:
             branch_id_int = int(branch_id)
         except (TypeError, ValueError):
-            return rx.toast(MSG.AUTH_BRANCH_INVALID, duration=3000)
+            yield rx.toast(MSG.AUTH_BRANCH_INVALID, duration=3000)
+            return
         with rx.session() as session:
             session.info["tenant_bypass"] = True
             allowed = session.exec(
@@ -1730,7 +1732,8 @@ class AuthState(MixinState):
                 .where(Branch.company_id == company_id)
             ).first()
             if not allowed:
-                return rx.toast(MSG.AUTH_BRANCH_NO_ACCESS, duration=3000)
+                yield rx.toast(MSG.AUTH_BRANCH_NO_ACCESS, duration=3000)
+                return
         self.selected_branch_id = str(branch_id_int)
         self.refresh_auth_runtime_cache()
         if hasattr(self, "refresh_cashbox_status"):
@@ -1833,10 +1836,8 @@ class AuthState(MixinState):
             current_path = (self.router.url.path or "/") if hasattr(self, "router") else "/"
         except Exception:
             current_path = "/"
-        return [
-            rx.toast(MSG.AUTH_BRANCH_UPDATED, duration=2000),
-            rx.redirect(current_path),
-        ]
+        yield rx.toast(MSG.AUTH_BRANCH_UPDATED, duration=2000)
+        yield rx.redirect(current_path)
 
     @rx.event
     def login(self, form_data: dict):
