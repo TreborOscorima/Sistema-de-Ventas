@@ -1512,8 +1512,6 @@ def generate_inventory_report(
     if not include_zero_stock:
         query = query.where(Product.stock > 0)
 
-    products = session.exec(query).all()
-
     def _variant_label(variant: Any) -> str:
         parts: list[str] = []
         if getattr(variant, "size", None):
@@ -1523,7 +1521,7 @@ def generate_inventory_report(
         return " ".join([p for p in parts if p]).strip()
 
     inventory_rows: list[dict[str, Any]] = []
-    for product in products:
+    for product in session.exec(query.execution_options(yield_per=500)):
         variants = list(product.variants or [])
         if variants:
             for variant in variants:

@@ -126,10 +126,17 @@ class Quotation(TenantMixin, SQLModel, table=True):
         ),
     )
 
-    client: Optional["Client"] = Relationship()
-    user: Optional["User"] = Relationship()
+    client: Optional["Client"] = Relationship(
+        sa_relationship_kwargs={"lazy": "noload"}
+    )
+    user: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"lazy": "noload"}
+    )
     converted_sale: Optional["Sale"] = Relationship(
-        sa_relationship_kwargs={"foreign_keys": "[Quotation.converted_sale_id]"}
+        sa_relationship_kwargs={
+            "foreign_keys": "[Quotation.converted_sale_id]",
+            "lazy": "noload",
+        }
     )
     items: List["QuotationItem"] = Relationship(
         back_populates="quotation",

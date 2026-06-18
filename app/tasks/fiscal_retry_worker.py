@@ -111,7 +111,7 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
                     )
                 )
                 .where(FiscalDocument.retry_count < MAX_RETRY_ATTEMPTS)
-                .order_by(FiscalDocument.created_at.desc())  # type: ignore[union-attr]
+                .order_by(FiscalDocument.created_at.asc())  # type: ignore[union-attr]
                 .limit(_BATCH_LIMIT)
             )
             rows = (await session.exec(docs_stmt)).all()

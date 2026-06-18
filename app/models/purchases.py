@@ -231,7 +231,10 @@ class PurchaseOrder(TenantMixin, SQLModel, table=True):
     )
     updated_at: datetime = Field(
         default_factory=utc_now_naive,
-        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.DateTime(timezone=False),
+            onupdate=utc_now_naive,
+        ),
     )
 
     supplier: "Supplier" = Relationship()
