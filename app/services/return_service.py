@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Sale,
@@ -27,7 +27,7 @@ from app.models import (
     ProductBatch,
 )
 from app.enums import SaleStatus
-from app.utils.stock import recalculate_stock_totals
+from app.utils.stock import async_recalculate_stock_totals
 from app.utils.tenant import set_tenant_context
 from app.utils.timezone import utc_now_naive
 
@@ -64,8 +64,8 @@ class ReturnResult:
     items_returned: int = 0
 
 
-def process_return(
-    session: Session,
+async def process_return(
+    session: AsyncSession,
     *,
     sale_id: int,
     company_id: int,
@@ -81,7 +81,7 @@ def process_return(
     """Procesa una devolución parcial o total.
 
     Args:
-        session: Sesión de DB activa (caller maneja commit/rollback)
+        session: AsyncSession activa (caller maneja commit/rollback)
         sale_id: ID de la venta original
         company_id, branch_id: Tenant
         user_id: Usuario que procesa la devolución
@@ -89,9 +89,8 @@ def process_return(
         notes: Notas adicionales
         items: Lista de ítems a devolver con cantidades
         timestamp: Timestamp del evento (default: utc_now_naive)
-        refund_method: Medio de pago del reembolso (efectivo/tarjeta/…); se
-            registra como ``CashboxLog.payment_method`` cuando la UI lo
-            provee. ``None`` = no informado (casos legacy).
+        refund_method: Medio de pago del reembolso; se registra como
+            ``CashboxLog.payment_method`` cuando la UI lo provee.
         idempotency_key: Token opaco del frontend para deduplicar doble-click
             y retries. Si existe una devolución previa con la misma clave en
             este tenant, se eleva ``DuplicateReturnError`` con el id original.
@@ -104,7 +103,7 @@ def process_return(
     """
     set_tenant_context(company_id, branch_id)
     try:
-        return _process_return_impl(
+        return await _process_return_impl(
             session,
             sale_id=sale_id,
             company_id=company_id,
@@ -121,8 +120,8 @@ def process_return(
         set_tenant_context(None, None)
 
 
-def _process_return_impl(
-    session: Session,
+async def _process_return_impl(
+    session: AsyncSession,
     *,
     sale_id: int,
     company_id: int,
@@ -142,23 +141,23 @@ def _process_return_impl(
     # no crea un duplicado.
     idem_key = (idempotency_key or "").strip() or None
     if idem_key:
-        existing = session.exec(
+        existing = (await session.exec(
             select(SaleReturn)
             .where(SaleReturn.company_id == company_id)
             .where(SaleReturn.idempotency_key == idem_key)
-        ).first()
+        )).first()
         if existing:
             raise DuplicateReturnError(existing.id)
 
     # R1-02: FOR UPDATE para serializar devoluciones concurrentes sobre la
     # misma venta (evita doble reembolso / stock revertido dos veces).
-    sale = session.exec(
+    sale = (await session.exec(
         select(Sale)
         .where(Sale.id == sale_id)
         .where(Sale.company_id == company_id)
         .where(Sale.branch_id == branch_id)
         .with_for_update()
-    ).first()
+    )).first()
 
     if not sale:
         return ReturnResult(success=False, error="Venta no encontrada.")
@@ -180,12 +179,12 @@ def _process_return_impl(
         sale_items_map[item.id] = item
 
     # Cargar devoluciones previas para validar cantidades
-    existing_returns = session.exec(
+    existing_returns = (await session.exec(
         select(SaleReturnItem)
         .join(SaleReturn)
         .where(SaleReturn.original_sale_id == sale_id)
         .where(SaleReturn.company_id == company_id)
-    ).all()
+    )).all()
     already_returned: dict[int, Decimal] = {}
     for er in existing_returns:
         already_returned[er.sale_item_id] = (
@@ -238,17 +237,17 @@ def _process_return_impl(
     )
     session.add(sale_return)
     try:
-        session.flush()  # Obtener ID
+        await session.flush()  # Obtener ID
     except IntegrityError:
         # Race: otro request insertó la misma idempotency_key entre nuestro
         # lookup y el flush. Rollback y re-lookup para devolver el id ganador.
-        session.rollback()
+        await session.rollback()
         if idem_key:
-            winner = session.exec(
+            winner = (await session.exec(
                 select(SaleReturn)
                 .where(SaleReturn.company_id == company_id)
                 .where(SaleReturn.idempotency_key == idem_key)
-            ).first()
+            )).first()
             if winner:
                 raise DuplicateReturnError(winner.id)
         raise
@@ -268,35 +267,35 @@ def _process_return_impl(
     # Pre-cargar entidades con FOR UPDATE
     variants_map: dict[int, ProductVariant] = {}
     if needed_variant_ids:
-        rows = session.exec(
+        rows = (await session.exec(
             select(ProductVariant)
             .where(ProductVariant.id.in_(needed_variant_ids))
             .where(ProductVariant.company_id == company_id)
             .where(ProductVariant.branch_id == branch_id)
             .with_for_update()
-        ).all()
+        )).all()
         variants_map = {v.id: v for v in rows}
 
     products_map: dict[int, Product] = {}
     if needed_product_ids:
-        rows = session.exec(
+        rows = (await session.exec(
             select(Product)
             .where(Product.id.in_(needed_product_ids))
             .where(Product.company_id == company_id)
             .where(Product.branch_id == branch_id)
             .with_for_update()
-        ).all()
+        )).all()
         products_map = {p.id: p for p in rows}
 
     batches_map: dict[int, ProductBatch] = {}
     if needed_batch_ids:
-        rows = session.exec(
+        rows = (await session.exec(
             select(ProductBatch)
             .where(ProductBatch.id.in_(needed_batch_ids))
             .where(ProductBatch.company_id == company_id)
             .where(ProductBatch.branch_id == branch_id)
             .with_for_update()
-        ).all()
+        )).all()
         batches_map = {b.id: b for b in rows}
 
     # Procesar cada ítem: crear SaleReturnItem + revertir stock
@@ -372,7 +371,7 @@ def _process_return_impl(
         session.add(movement)
 
     # Recalcular totales de stock
-    recalculate_stock_totals(
+    await async_recalculate_stock_totals(
         session=session,
         company_id=company_id,
         branch_id=branch_id,
@@ -399,40 +398,34 @@ def _process_return_impl(
         session.add(sale)
 
     # R1-06: en ventas a crédito, el reembolso reduce la deuda del cliente
-    # y cancela cuotas pendientes (top-down: número mayor primero, ya que
-    # las próximas a vencer son las más urgentes de mantener activas si la
-    # devolución es parcial).
+    # y cancela cuotas pendientes (top-down: número mayor primero).
     if (
         (sale.payment_condition or "").strip().lower() == "credito"
         and sale.client_id
         and refund_total > 0
     ):
-        client = session.exec(
+        client = (await session.exec(
             select(Client)
             .where(Client.id == sale.client_id)
             .where(Client.company_id == company_id)
             .with_for_update()
-        ).first()
+        )).first()
         if client:
             current = client.current_debt or Decimal("0.00")
             new_debt = current - refund_total
-            # Respeta CheckConstraint current_debt >= 0 y evita dejar saldo
-            # negativo aunque el refund supere la deuda (caso de pagos
-            # parciales previos ya descontados).
             if new_debt < 0:
                 new_debt = Decimal("0.00")
             client.current_debt = new_debt.quantize(Decimal("0.01"))
             session.add(client)
 
-        # Cancelar cuotas pendientes absorbiendo el refund de mayor a menor.
-        pending_installments = session.exec(
+        pending_installments = (await session.exec(
             select(SaleInstallment)
             .where(SaleInstallment.sale_id == sale_id)
             .where(SaleInstallment.company_id == company_id)
             .where(SaleInstallment.status.in_(["pending", "partial"]))
             .order_by(SaleInstallment.number.desc())
             .with_for_update()
-        ).all()
+        )).all()
         remaining_refund = refund_total
         for inst in pending_installments:
             if remaining_refund <= 0:
@@ -452,7 +445,7 @@ def _process_return_impl(
                 remaining_refund = Decimal("0.00")
             session.add(inst)
 
-    # Registrar egreso en CashboxLog (R1-07: payment_method si el UI lo pasa)
+    # Registrar egreso en CashboxLog (R1-07)
     log = CashboxLog(
         company_id=company_id,
         branch_id=branch_id,

@@ -32,6 +32,121 @@ from sqlmodel import select
 from app.models import Product, ProductBatch, ProductVariant
 
 
+async def async_recalculate_stock_totals(
+    session,
+    company_id: int,
+    branch_id: int,
+    variants_from_batches: set[int] | None = None,
+    products_from_variants: set[int] | None = None,
+    products_from_batches: set[int] | None = None,
+    normalize_fn: Callable | None = None,
+) -> set[int]:
+    """Versión async de recalculate_stock_totals para AsyncSession."""
+    variants_from_batches = variants_from_batches or set()
+    products_from_variants = products_from_variants or set()
+    products_from_batches = products_from_batches or set()
+    updated_products: set[int] = set()
+
+    if variants_from_batches:
+        ids = list(variants_from_batches)
+        sums_f1 = {
+            row[0]: (row[1] or 0)
+            for row in (await session.exec(
+                select(
+                    ProductBatch.product_variant_id,
+                    func.coalesce(func.sum(ProductBatch.stock), 0),
+                )
+                .where(ProductBatch.product_variant_id.in_(ids))
+                .where(ProductBatch.company_id == company_id)
+                .where(ProductBatch.branch_id == branch_id)
+                .group_by(ProductBatch.product_variant_id)
+            )).all()
+        }
+        variants_map = {
+            v.id: v
+            for v in (await session.exec(
+                select(ProductVariant)
+                .where(ProductVariant.id.in_(ids))
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+            )).all()
+        }
+        for vid in variants_from_batches:
+            v = variants_map.get(vid)
+            if v:
+                v.stock = sums_f1.get(vid, 0)
+                session.add(v)
+                products_from_variants.add(v.product_id)
+
+    if products_from_variants:
+        ids = list(products_from_variants)
+        sums_f2 = {
+            row[0]: (row[1] or 0)
+            for row in (await session.exec(
+                select(
+                    ProductVariant.product_id,
+                    func.coalesce(func.sum(ProductVariant.stock), 0),
+                )
+                .where(ProductVariant.product_id.in_(ids))
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+                .group_by(ProductVariant.product_id)
+            )).all()
+        }
+        products_map = {
+            p.id: p
+            for p in (await session.exec(
+                select(Product)
+                .where(Product.id.in_(ids))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            )).all()
+        }
+        for pid in products_from_variants:
+            p = products_map.get(pid)
+            if p:
+                total = sums_f2.get(pid, 0)
+                p.stock = normalize_fn(total, p) if normalize_fn else total
+                session.add(p)
+                updated_products.add(pid)
+
+    remaining = products_from_batches - products_from_variants
+    if remaining:
+        ids = list(remaining)
+        sums_f3 = {
+            row[0]: (row[1] or 0)
+            for row in (await session.exec(
+                select(
+                    ProductBatch.product_id,
+                    func.coalesce(func.sum(ProductBatch.stock), 0),
+                )
+                .where(ProductBatch.product_id.in_(ids))
+                .where(ProductBatch.product_variant_id.is_(None))
+                .where(ProductBatch.company_id == company_id)
+                .where(ProductBatch.branch_id == branch_id)
+                .group_by(ProductBatch.product_id)
+            )).all()
+        }
+        products_map3 = {
+            p.id: p
+            for p in (await session.exec(
+                select(Product)
+                .where(Product.id.in_(ids))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+            )).all()
+        }
+        for pid in remaining:
+            p = products_map3.get(pid)
+            if p:
+                total = sums_f3.get(pid, 0)
+                p.stock = normalize_fn(total, p) if normalize_fn else total
+                session.add(p)
+                updated_products.add(pid)
+
+    return updated_products
+
+
 def _extract_total(row: Any) -> Any:
     """Extrae valor escalar de un resultado de SUM/COALESCE.
 

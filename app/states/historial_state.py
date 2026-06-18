@@ -2457,6 +2457,7 @@ class HistorialState(MixinState):
             return
 
         from app.services.return_service import process_return, ReturnItemRequest
+        from app.utils.db import get_async_session
 
         items_to_return = []
         for item in self.return_items:
@@ -2475,10 +2476,10 @@ class HistorialState(MixinState):
         sale_id = self.return_sale_id
         reason = self.return_reason
 
-        with rx.session() as session:
+        async with get_async_session() as session:
             session.info["tenant_bypass"] = True
             try:
-                result = process_return(
+                result = await process_return(
                     session,
                     sale_id=sale_id,
                     company_id=company_id,
@@ -2492,9 +2493,9 @@ class HistorialState(MixinState):
                 if not result.success:
                     yield rx.toast(result.error, duration=4000)
                     return
-                session.commit()
+                await session.commit()
             except Exception:
-                session.rollback()
+                await session.rollback()
                 logger.exception("Error al procesar devolución venta #%s", sale_id)
                 yield rx.toast(
                     "Error al procesar la devolución. Intente nuevamente.",
