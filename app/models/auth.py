@@ -64,8 +64,8 @@ class Role(SQLModel, table=True):
         index=True,
         nullable=False,
     )
-    name: str = Field(nullable=False)
-    description: str = Field(default="")
+    name: str = Field(nullable=False, max_length=150)
+    description: str = Field(default="", max_length=500)
 
     company: "Company" = Relationship()
     users: List["User"] = Relationship(back_populates="role")
@@ -81,8 +81,8 @@ class Permission(SQLModel, table=True):
     __tablename__ = "permission"
 
     id: int | None = Field(default=None, primary_key=True)
-    codename: str = Field(unique=True, index=True, nullable=False)
-    description: str = Field(default="")
+    codename: str = Field(unique=True, index=True, nullable=False, max_length=100)
+    description: str = Field(default="", max_length=500)
 
     roles: List["Role"] = Relationship(
         back_populates="permissions",
@@ -139,7 +139,7 @@ class User(SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    username: str = Field(index=True, nullable=False)
+    username: str = Field(index=True, nullable=False, max_length=150)
     # Unicidad por (company_id, email) — un mismo email puede administrar
     # distintas empresas (owner contable, etc.). Ver migración Layer 1.
     email: Optional[str] = Field(default=None, index=True)

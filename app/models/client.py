@@ -29,8 +29,8 @@ class Client(TenantMixin, SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(index=True, nullable=False)
-    dni: str = Field(index=True, nullable=False)
+    name: str = Field(index=True, nullable=False, max_length=200)
+    dni: str = Field(index=True, nullable=False, max_length=30)
     phone: Optional[str] = Field(default=None)
     email: Optional[str] = Field(default=None, max_length=255)
     address: Optional[str] = Field(default=None)

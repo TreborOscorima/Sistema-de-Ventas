@@ -50,9 +50,9 @@ class Product(TenantMixin, SQLModel, table=True):
     __mapper_args__ = {"eager_defaults": True}
 
     id: int | None = Field(default=None, primary_key=True)
-    barcode: str = Field(index=True, nullable=False)
-    description: str = Field(nullable=False, index=True)
-    category: str = Field(default="General", index=True)
+    barcode: str = Field(index=True, nullable=False, max_length=100)
+    description: str = Field(nullable=False, index=True, max_length=500)
+    category: str = Field(default="General", index=True, max_length=100)
     stock: Decimal = Field(
         default=Decimal("0.0000"),
         sa_column=sqlalchemy.Column(Numeric(10, 4)),
@@ -395,7 +395,7 @@ class Category(TenantMixin, SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(nullable=False)
+    name: str = Field(nullable=False, max_length=100)
     requires_batch: bool = Field(default=False)
 
 
@@ -472,7 +472,7 @@ class Unit(TenantMixin, SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(index=True, nullable=False)
+    name: str = Field(index=True, nullable=False, max_length=100)
     allows_decimal: bool = Field(default=False)
 
 

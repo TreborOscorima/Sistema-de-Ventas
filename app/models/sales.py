@@ -446,7 +446,7 @@ class CashboxLog(TenantMixin, SQLModel, table=True):
             sqlalchemy.DateTime(timezone=False),
         ),
     )
-    action: str = Field(nullable=False, index=True)
+    action: str = Field(nullable=False, index=True, max_length=100)
     amount: Decimal = Field(
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
@@ -575,9 +575,9 @@ class Currency(SQLModel, table=True):
     __tablename__ = "currency"
 
     id: int | None = Field(default=None, primary_key=True)
-    code: str = Field(unique=True, index=True, nullable=False)
-    name: str = Field(nullable=False)
-    symbol: str = Field(nullable=False)
+    code: str = Field(unique=True, index=True, nullable=False, max_length=10)
+    name: str = Field(nullable=False, max_length=100)
+    symbol: str = Field(nullable=False, max_length=10)
 
 
 class CompanySettings(TenantMixin, SQLModel, table=True):

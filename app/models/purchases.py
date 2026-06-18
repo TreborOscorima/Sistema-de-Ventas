@@ -31,8 +31,8 @@ class Supplier(TenantMixin, SQLModel, table=True):
     __mapper_args__ = {"eager_defaults": True}
 
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(nullable=False, index=True)
-    tax_id: str = Field(nullable=False, index=True)
+    name: str = Field(nullable=False, index=True, max_length=200)
+    tax_id: str = Field(nullable=False, index=True, max_length=30)
     email: Optional[str] = Field(default=None)
     phone: Optional[str] = Field(default=None)
     address: Optional[str] = Field(default=None)

@@ -48,8 +48,8 @@ class Company(SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(nullable=False, index=True)
-    ruc: str = Field(nullable=False, index=True, unique=True)
+    name: str = Field(nullable=False, index=True, max_length=200)
+    ruc: str = Field(nullable=False, index=True, unique=True, max_length=30)
     is_active: bool = Field(default=True)
     trial_ends_at: Optional[datetime] = Field(
         default=None,
@@ -134,8 +134,8 @@ class Branch(SQLModel, table=True):
         index=True,
         nullable=False,
     )
-    name: str = Field(nullable=False, index=True)
-    address: str = Field(default="", nullable=False)
+    name: str = Field(nullable=False, index=True, max_length=150)
+    address: str = Field(default="", nullable=False, max_length=500)
 
     company: "Company" = Relationship(back_populates="branches")
     users: List["User"] = Relationship(back_populates="branch")
