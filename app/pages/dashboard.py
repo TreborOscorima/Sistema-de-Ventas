@@ -268,7 +268,7 @@ def _top_products_list() -> rx.Component:
           rx.el.div(
             rx.el.p(p["name"], class_name="font-medium text-slate-900 truncate"),
             rx.el.p(
-              rx.text(f"{p['quantity']} vendidos"),
+              rx.text(p["quantity"], " vendidos"),
               class_name=TYPOGRAPHY["body_secondary"],
             ),
             class_name="flex-1 min-w-0",
@@ -276,7 +276,7 @@ def _top_products_list() -> rx.Component:
           rx.el.p(
             rx.el.span(
               State.currency_symbol,
-              rx.text(f"{p['revenue']:.2f}"),
+              rx.text(p["revenue_fmt"]),
               class_name="inline-flex items-baseline gap-1 whitespace-nowrap",
             ),
             class_name="font-semibold text-slate-900 tabular-nums",
@@ -294,7 +294,7 @@ def _top_products_list() -> rx.Component:
   )
   return rx.el.div(
     rx.el.h3(
-      rx.text(f"TOP PRODUCTOS - {State.period_label}"),
+      rx.text("TOP PRODUCTOS - ", State.period_label),
       class_name=f"{TYPOGRAPHY['section_title']} mb-4",
     ),
     rx.el.div(
@@ -311,7 +311,7 @@ def _category_chart() -> rx.Component:
     # Header con título y botón exportar
     rx.el.div(
       rx.el.h3(
-        rx.text(f"VENTAS POR CATEGORÍA - {State.period_label}"),
+        rx.text("VENTAS POR CATEGORÍA - ", State.period_label),
         class_name=TYPOGRAPHY["section_title"],
       ),
       rx.el.button(
@@ -364,11 +364,11 @@ def _category_chart() -> rx.Component:
                 rx.el.span(cat["category"], class_name="flex-1 text-sm text-slate-900 truncate"),
                 rx.el.span(
                   State.currency_symbol,
-                  rx.text(f"{cat['total']:.2f}"),
+                  rx.text(cat["total_fmt"]),
                   class_name="w-28 text-sm text-slate-900 font-medium text-right tabular-nums inline-flex items-baseline justify-end gap-1 whitespace-nowrap",
                 ),
                 rx.el.span(
-                  rx.text(f"{cat['percentage']}%"),
+                  rx.text(cat["percentage"], "%"),
                   class_name="w-16 text-sm text-slate-500 text-right tabular-nums",
                 ),
                 class_name=f"flex items-center py-2.5 px-3 border-b border-slate-100 {TRANSITIONS['fast']} hover:bg-slate-50",
@@ -447,7 +447,7 @@ def _expiring_batch_row(batch: dict) -> rx.Component:
           class_name="text-[10px] font-semibold text-red-700 tracking-wide",
         ),
         rx.el.p(
-          rx.text(f"{batch['days_left']} días"),
+          rx.text(batch["days_left"], " días"),
           class_name="text-[10px] font-semibold text-amber-700 tracking-wide",
         ),
       ),
@@ -479,7 +479,7 @@ def _expiring_batches_panel() -> rx.Component:
         rx.cond(
           State.expired_batches_count > 0,
           rx.el.span(
-            rx.text(f"{State.expired_batches_count} vencido(s)"),
+            rx.text(State.expired_batches_count, " vencido(s)"),
             class_name=(
               f"ml-auto px-2 py-0.5 text-xs font-semibold "
               f"bg-red-100 text-red-800 {RADIUS['full']}"
@@ -490,7 +490,7 @@ def _expiring_batches_panel() -> rx.Component:
         rx.cond(
           State.expiring_batches_count > 0,
           rx.el.span(
-            rx.text(f"{State.expiring_batches_count} por vencer"),
+            rx.text(State.expiring_batches_count, " por vencer"),
             class_name=(
               f"ml-2 px-2 py-0.5 text-xs font-semibold "
               f"bg-amber-100 text-amber-800 {RADIUS['full']}"
@@ -706,7 +706,7 @@ def dashboard_page() -> rx.Component:
       "DASHBOARD",
       rx.cond(
         State.last_refresh != "",
-        rx.text(f"Última actualización: {State.last_refresh}"),
+        rx.text("Última actualización: ", State.last_refresh),
         rx.text("Cargando..."),
       ),
       actions=[

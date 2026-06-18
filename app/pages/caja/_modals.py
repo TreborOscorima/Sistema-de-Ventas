@@ -50,7 +50,7 @@ def close_cashbox_modal() -> rx.Component:
     is_open=State.cashbox_close_modal_open,
     on_close=State.close_cashbox_close_modal,
     title="Resumen de Caja",
-    description=f"Cierre de caja para {State.current_user['username']}",
+    description="Cierre de caja para " + State.current_user["username"],
     max_width="max-w-4xl",
     children=[
       rx.el.div(

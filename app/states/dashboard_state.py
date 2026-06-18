@@ -13,7 +13,7 @@ from decimal import Decimal
 
 import reflex as rx
 from sqlmodel import select, func
-from sqlalchemy import and_
+from sqlalchemy import and_, case, literal
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class DashboardState(MixinState):
     dashboard_loading: bool = False
     last_refresh: str = ""
     _last_dashboard_load_ts: float = rx.field(default=0.0, is_var=False)
-    _DASHBOARD_TTL: float = rx.field(default=30.0, is_var=False)
+    _DASHBOARD_TTL: float = rx.field(default=120.0, is_var=False)
 
     def set_loading(self, loading: bool):
         """Establece el estado de carga."""
@@ -525,7 +525,12 @@ class DashboardState(MixinState):
         self.alert_count = summary.get("total", 0)
 
     def _load_sales_by_day(self):
-        """Carga ventas de los últimos 7 días para gráfico."""
+        """Carga ventas de los últimos 7 días para gráfico.
+
+        Usa una sola query con CASE WHEN por día (UTC boundaries) en lugar
+        de cargar N filas individuales y agrupar en Python.
+        La diferencia timezone sólo afecta ventas en la hora de medianoche UTC.
+        """
         today_local = self._display_now().replace(hour=0, minute=0, second=0, microsecond=0)
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -533,53 +538,54 @@ class DashboardState(MixinState):
             self.dash_sales_by_day = []
             return
 
-        days_data = []
         day_names = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-        start_local = today_local - timedelta(days=6)
-        end_local = today_local + timedelta(days=1)
-        start_date = self._company_local_datetime_to_utc_naive(start_local)
-        end_date = self._company_local_datetime_to_utc_naive(end_local)
+
+        # Calcular límites UTC para cada uno de los 7 días (del más antiguo al más reciente)
+        day_ranges: list[tuple] = []
+        for i in range(6, -1, -1):
+            day_local = today_local - timedelta(days=i)
+            d_start = self._company_local_datetime_to_utc_naive(day_local)
+            d_end = self._company_local_datetime_to_utc_naive(day_local + timedelta(days=1))
+            day_ranges.append((day_local, d_start, d_end))
+
+        oldest_start = day_ranges[0][1]
+        newest_end = day_ranges[-1][2]
 
         with rx.session() as session:
             session.info["tenant_bypass"] = True
-            results = session.exec(
-                select(
-                    Sale.timestamp,
-                    Sale.total_amount,
-                )
-                .where(
+            # Una sola query: 7 sumas condicionales → 1 fila de resultado
+            cols = [
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (and_(Sale.timestamp >= d_start, Sale.timestamp < d_end), Sale.total_amount),
+                            else_=literal(0),
+                        )
+                    ),
+                    0,
+                ).label(f"d{idx}")
+                for idx, (_, d_start, d_end) in enumerate(day_ranges)
+            ]
+            row = session.exec(
+                select(*cols).where(
                     and_(
-                        Sale.timestamp >= start_date,
-                        Sale.timestamp < end_date,
+                        Sale.timestamp >= oldest_start,
+                        Sale.timestamp < newest_end,
                         Sale.status != SaleStatus.cancelled,
                         Sale.company_id == company_id,
                         Sale.branch_id == branch_id,
                     )
                 )
-            ).all()
+            ).one()
 
-            totals_by_day: dict[datetime.date, float] = {}
-            for row in results:
-                timestamp = row[0]
-                if not timestamp:
-                    continue
-                local_value = self._to_company_datetime(timestamp)
-                if not local_value:
-                    continue
-                day_value = local_value.date()
-                totals_by_day[day_value] = totals_by_day.get(day_value, 0.0) + float(
-                    row[1] or 0
-                )
-
-            for i in range(6, -1, -1):
-                day_start = today_local - timedelta(days=i)
-                day_key = day_start.date()
-                days_data.append({
-                    "day": day_names[day_start.weekday()],
-                    "date": day_start.strftime("%d/%m"),
-                    "total": float(totals_by_day.get(day_key, 0)),
-                })
-
+        days_data = [
+            {
+                "day": day_names[day_local.weekday()],
+                "date": day_local.strftime("%d/%m"),
+                "total": float(row[idx] or 0),
+            }
+            for idx, (day_local, _, _) in enumerate(day_ranges)
+        ]
         self.dash_sales_by_day = days_data
 
     def _load_top_products(self):
@@ -623,6 +629,7 @@ class DashboardState(MixinState):
                     "name": r[0][:25] + "..." if len(r[0]) > 25 else r[0],
                     "quantity": int(r[1] or 0),
                     "revenue": float(r[2] or 0),
+                    "revenue_fmt": f"{float(r[2] or 0):.2f}",
                 }
                 for r in results
             ]
@@ -801,6 +808,7 @@ class DashboardState(MixinState):
             {
                 "category": row[0] or MSG.FALLBACK_NO_CATEGORY,
                 "total": float(row[1] or 0),
+                "total_fmt": f"{float(row[1] or 0):.2f}",
                 "percentage": (
                     round((float(row[1] or 0) / total_sales * 100), 1)
                     if total_sales > 0

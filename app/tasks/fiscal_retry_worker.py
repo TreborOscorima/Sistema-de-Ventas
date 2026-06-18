@@ -45,7 +45,7 @@ from app.models.billing import FiscalDocument
 from app.services.billing_service import retry_fiscal_document, MAX_RETRY_ATTEMPTS
 from app.utils.db import get_async_session
 from app.utils.logger import get_logger
-from app.utils.tenant import set_tenant_context
+from app.utils.tenant import tenant_context
 
 logger = get_logger("FiscalRetryWorker")
 
@@ -81,6 +81,25 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
         dry_run,
         _BATCH_LIMIT,
     )
+
+    # S-C2: lock distribuido para evitar ejecuciones solapadas
+    _redis_lock_client = None
+    _lock_acquired = False
+    try:
+        import redis as _redis_lib
+        _redis_url = os.getenv("REDIS_URL", "").strip()
+        if _redis_url:
+            _redis_lock_client = _redis_lib.from_url(
+                _redis_url, socket_connect_timeout=2, socket_timeout=2
+            )
+            _lock_acquired = bool(
+                _redis_lock_client.set("fiscal_retry_worker:lock", "1", nx=True, ex=600)
+            )
+            if not _lock_acquired:
+                logger.info("Worker ya en ejecución (lock Redis activo) — saltando.")
+                return stats
+    except Exception as _lock_err:
+        logger.warning("Lock Redis no disponible: %s — continuando sin lock", str(_lock_err)[:80])
 
     try:
         async with get_async_session() as session:
@@ -146,12 +165,13 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
                 await asyncio.sleep(backoff)
 
             try:
-                set_tenant_context(company_id, branch_id)
-                result = await retry_fiscal_document(
-                    fiscal_doc_id=doc_id,
-                    company_id=company_id,
-                    branch_id=branch_id,
-                )
+                # S-C3: tenant_context limpia el contexto en finally aunque haya excepción
+                with tenant_context(company_id, branch_id):
+                    result = await retry_fiscal_document(
+                        fiscal_doc_id=doc_id,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
 
                 if result is None:
                     logger.warning("retry_fiscal_document retornó None para doc_id=%d", doc_id)
@@ -187,6 +207,13 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
     except Exception as exc:
         logger.exception("Error crítico en FiscalRetryWorker: %s", exc)
         stats["crashed"] = True
+    finally:
+        # S-C2: liberar lock al terminar (o si crashea)
+        if _lock_acquired and _redis_lock_client:
+            try:
+                _redis_lock_client.delete("fiscal_retry_worker:lock")
+            except Exception:
+                pass
 
     stats["skipped"] = stats["processed"] - stats["authorized"] - stats["still_error"]
 

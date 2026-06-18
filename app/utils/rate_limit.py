@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import logging
 from datetime import datetime, timedelta
-from collections import defaultdict
+from collections import OrderedDict
 from typing import Dict, List
 
 # Intentar importar Redis, fallback a memoria si no está disponible
@@ -28,7 +28,9 @@ logger = logging.getLogger("RateLimit")
 # =============================================================================
 
 _redis_client: "redis.Redis | None" = None
-_memory_store: Dict[str, List[datetime]] = defaultdict(list)
+_MEMORY_STORE_MAX = 2000
+# OrderedDict como LRU: evita crecimiento ilimitado con IPs/usuarios únicos en dev
+_memory_store: "OrderedDict[str, List[datetime]]" = OrderedDict()
 
 
 def _get_environment() -> str:
@@ -165,6 +167,17 @@ def is_rate_limited(
     return _is_rate_limited_memory(key, max_attempts, window_minutes)
 
 
+def _memory_touch(key: str) -> List[datetime]:
+    """Devuelve la lista de timestamps para key, moviéndolo al frente del LRU."""
+    if key in _memory_store:
+        _memory_store.move_to_end(key)
+        return _memory_store[key]
+    _memory_store[key] = []
+    if len(_memory_store) > _MEMORY_STORE_MAX:
+        _memory_store.popitem(last=False)
+    return _memory_store[key]
+
+
 def _is_rate_limited_memory(
     username: str,
     max_attempts: int,
@@ -174,10 +187,8 @@ def _is_rate_limited_memory(
     now = datetime.now()
     cutoff = now - timedelta(minutes=window_minutes)
 
-    # Limpiar intentos antiguos
-    _memory_store[username] = [
-        t for t in _memory_store[username] if t > cutoff
-    ]
+    attempts = _memory_touch(username)
+    _memory_store[username] = [t for t in attempts if t > cutoff]
 
     return len(_memory_store[username]) >= max_attempts
 
@@ -217,7 +228,7 @@ def record_failed_attempt(
             logger.error("Error Redis record_failed_attempt: %s", e)
 
     # Fallback a memoria
-    _memory_store[key].append(datetime.now())
+    _memory_touch(key).append(datetime.now())
 
 
 def clear_login_attempts(username: str, ip_address: str | None = None) -> None:

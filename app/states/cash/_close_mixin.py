@@ -143,7 +143,9 @@ class CloseMixin:
                 count = 0
         except (ValueError, TypeError):
             count = 0
-        self.denomination_counts[key] = count
+        counts = dict(self.denomination_counts)
+        counts[key] = count
+        self.denomination_counts = counts
         # Recalcular total contado
         total = 0.0
         for denom in self.cashbox_denominations_config:

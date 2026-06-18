@@ -380,7 +380,7 @@ def _fiscal_docs_table() -> rx.Component:
                 ),
                 # Estado vacío
                 empty_state(
-                    message="Cambiá los filtros o el rango de fechas para ver resultados.",
+                    message="Cambia los filtros o el rango de fechas para ver resultados.",
                     title="Sin documentos fiscales",
                     icon="file-x",
                 ),
@@ -558,6 +558,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                 ),
                                 class_name="border-t border-slate-200 pt-3",
                             ),
+                            rx.fragment(),
                         ),
 
                         # Hash SUNAT
@@ -571,6 +572,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                 ),
                                 class_name="border-t border-slate-200 pt-3",
                             ),
+                            rx.fragment(),
                         ),
 
                         # Errores
@@ -591,6 +593,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                 ),
                                 class_name="border-t border-slate-200 pt-3",
                             ),
+                            rx.fragment(),
                         ),
 
                         class_name="flex flex-col gap-4 py-4 max-h-[60vh] sm:max-h-[65vh] overflow-y-auto pr-1",
@@ -612,6 +615,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                 disabled=State.fiscal_docs_loading,
                                 class_name=BUTTON_STYLES["warning"],
                             ),
+                            rx.fragment(),
                         ),
                         # NC (solo en authorized + boleta/factura)
                         rx.cond(
@@ -631,6 +635,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                 disabled=State.nota_credito_loading,
                                 class_name=BUTTON_STYLES["danger"],
                             ),
+                            rx.fragment(),
                         ),
                         rx.el.button(
                             "Cerrar",

@@ -749,8 +749,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             self.cart_coupon_message = ""
             self._refresh_payment_feedback()
 
-            if hasattr(self, "reload_history"):
-                self.reload_history()
+            if hasattr(self, "_history_update_trigger"):
+                self._history_update_trigger += 1
             if hasattr(self, "_cashbox_update_trigger"):
                 self._cashbox_update_trigger += 1
 

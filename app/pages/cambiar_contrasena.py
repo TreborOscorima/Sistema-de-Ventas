@@ -105,18 +105,6 @@ def cambiar_contrasena_page() -> rx.Component:
                 ),
             ),
             rx.el.div(
-                rx.el.div(
-                    rx.el.span("Creado por", class_name="text-slate-500"),
-                    rx.el.a(
-                        "Trebor Oscorima",
-                        href="https://www.facebook.com/trebor.oscorima/?locale=es_LA",
-                        target="_blank",
-                        rel="noopener noreferrer",
-                        class_name="text-indigo-600 hover:text-indigo-700 transition-colors",
-                    ),
-                    rx.el.span("-", class_name="text-slate-500"),
-                    class_name="flex items-center gap-1",
-                ),
                 rx.el.a(
                     f"WhatsApp +{WHATSAPP_NUMBER}",
                     href=f"https://wa.me/{WHATSAPP_NUMBER}",

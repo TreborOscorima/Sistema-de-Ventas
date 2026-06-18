@@ -301,7 +301,7 @@ def reservation_modal() -> rx.Component:
             rx.el.button(
               rx.icon("printer", class_name="h-4 w-4"),
               "Imprimir Comprobante",
-              on_click=lambda: State.print_reservation_receipt(State.reservation_modal_reservation_id),
+              on_click=State.print_reservation_receipt(State.reservation_modal_reservation_id),
               class_name=f"{BUTTON_STYLES['secondary']} min-h-[42px]",
             ),
             rx.fragment(),

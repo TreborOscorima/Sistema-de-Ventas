@@ -397,7 +397,7 @@ def _promo_form_modal() -> rx.Component:
                         rx.cond(
                             State.promo_product_ids.length() == 0,
                             rx.el.p(
-                                "Seleccioná al menos un producto.",
+                                "Selecciona al menos un producto.",
                                 class_name="text-xs text-rose-500 mt-1",
                             ),
                             rx.fragment(),
@@ -571,7 +571,7 @@ def _promo_form_modal() -> rx.Component:
                     ),
                 ),
                 rx.el.p(
-                    "Dejá ambas horas vacías para aplicar todo el día. Si la hora 'desde' es mayor que 'hasta', el rango cruza medianoche (ej: 22:00 → 02:00).",
+                    "Deja ambas horas vacías para aplicar todo el día. Si la hora 'desde' es mayor que 'hasta', el rango cruza medianoche (ej: 22:00 → 02:00).",
                     class_name="col-span-2 text-xs text-slate-400 -mt-2",
                 ),
 

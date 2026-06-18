@@ -92,14 +92,14 @@ class Sale(TenantMixin, SQLModel, table=True):
         back_populates="sale",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
-            "lazy": "selectin",
+            "lazy": "noload",
         },
     )
     payments: List["SalePayment"] = Relationship(
         back_populates="sale",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
-            "lazy": "selectin",
+            "lazy": "noload",
         },
     )
     installments: List["SaleInstallment"] = Relationship(

@@ -803,7 +803,7 @@ def pricing_modal(
         is_open=is_open,
         on_close=on_close,
         title="Elige el plan ideal para tu crecimiento",
-        description="Compará opciones y elegí el plan que mejor se adapta a tu negocio.",
+        description="Compara opciones y elige el plan que mejor se adapta a tu negocio.",
         children=[content],
         footer=rx.el.div(
             action_button("Cerrar", on_close, variant="secondary"),

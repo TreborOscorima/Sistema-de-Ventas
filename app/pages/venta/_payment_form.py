@@ -286,7 +286,7 @@ def _quot_load_drawer() -> rx.Component:
     )
 
 
-def _payment_form_body(variant: str) -> rx.Component:
+def _payment_form_body(variant: str) -> tuple:
     """Shared inner form content for payment sidebar and mobile section.
 
     Args:

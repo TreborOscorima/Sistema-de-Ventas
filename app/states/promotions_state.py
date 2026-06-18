@@ -489,13 +489,13 @@ class PromotionsState(MixinState):
 
             if self.promo_scope == PromotionScope.PRODUCT and not self.promo_product_ids:
                 yield rx.toast(
-                    "Seleccioná al menos un producto para el ámbito 'Producto específico'.",
+                    "Selecciona al menos un producto para el ámbito 'Producto específico'.",
                     duration=3500,
                 )
                 return
             if self.promo_scope == PromotionScope.CATEGORY and not self.promo_category.strip():
                 yield rx.toast(
-                    "Seleccioná una categoría para el ámbito 'Por categoría'.",
+                    "Selecciona una categoría para el ámbito 'Por categoría'.",
                     duration=3500,
                 )
                 return
@@ -571,7 +571,7 @@ class PromotionsState(MixinState):
                 mask = self._weekdays_to_mask()
                 if mask == 0:
                     yield rx.toast(
-                        "Seleccioná al menos un día de la semana.",
+                        "Selecciona al menos un día de la semana.",
                         duration=3500,
                     )
                     return

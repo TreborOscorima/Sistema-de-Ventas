@@ -475,8 +475,11 @@ class SearchMixin:
 
     @rx.event
     def refresh_inventory_cache(self):
+        self.is_loading = True
+        yield
         self.load_categories()
         self._refresh_inventory_cache()
+        self.is_loading = False
 
     @rx.event
     def toggle_show_inactive_products(self, value: bool):

@@ -114,14 +114,14 @@ def _entry_card(item: rx.Var) -> rx.Component:
             rx.el.div(
                 rx.el.button(
                     rx.icon("pencil", class_name="h-4 w-4"),
-                    on_click=lambda: State.edit_item_from_entry(item["temp_id"]),
+                    on_click=lambda tid=item["temp_id"]: State.edit_item_from_entry(tid),
                     title="Editar",
                     aria_label="Editar",
                     class_name=BUTTON_STYLES["icon_primary"],
                 ),
                 rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
-                    on_click=lambda: State.remove_item_from_entry(item["temp_id"]),
+                    on_click=lambda tid=item["temp_id"]: State.remove_item_from_entry(tid),
                     title="Eliminar",
                     aria_label="Eliminar",
                     class_name=BUTTON_STYLES["icon_danger"],
@@ -172,14 +172,14 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
                 ),
                 rx.el.button(
                     rx.icon("pencil", class_name="h-4 w-4"),
-                    on_click=lambda: State.edit_item_from_entry(item["temp_id"]),
+                    on_click=lambda tid=item["temp_id"]: State.edit_item_from_entry(tid),
                     title="Editar",
                     aria_label="Editar",
                     class_name=BUTTON_STYLES["icon_primary"],
                 ),
                 rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
-                    on_click=lambda: State.remove_item_from_entry(item["temp_id"]),
+                    on_click=lambda tid=item["temp_id"]: State.remove_item_from_entry(tid),
                     title="Eliminar",
                     aria_label="Eliminar",
                     class_name=BUTTON_STYLES["icon_danger"],

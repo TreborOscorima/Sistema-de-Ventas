@@ -632,6 +632,7 @@ class SessionMixin:
                 .where(CashboxSessionModel.company_id == company_id)
                 .where(CashboxSessionModel.branch_id == branch_id)
                 .where(CashboxSessionModel.is_open == True)
+                .with_for_update()
             ).first()
 
             if existing:

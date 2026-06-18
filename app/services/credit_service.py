@@ -182,11 +182,11 @@ class CreditService:
         with tenant_context(company_id, branch_id):
             payment_amount = _round_money(amount)
             if payment_amount <= 0:
-                raise ValueError("Monto de pago invalido.")
+                raise ValueError("Monto de pago inválido.")
 
             method_label = (payment_method or "").strip()
             if not method_label:
-                raise ValueError("Metodo de pago requerido.")
+                raise ValueError("Método de pago requerido.")
 
             # Idempotency check: rechazar doble-pago por mismo token
             idem_key = (idempotency_key or "").strip() or None

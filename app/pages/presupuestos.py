@@ -39,7 +39,7 @@ def _status_badge(status_label: rx.Var, status_color: rx.Var) -> rx.Component:
 def _quotation_row(q: rx.Var) -> rx.Component:
     return rx.el.tr(
         rx.el.td(
-            rx.el.span(f"#{q['id']}", class_name="font-mono text-xs text-slate-500"),
+            rx.el.span("#", q["id"], class_name="font-mono text-xs text-slate-500"),
             class_name="py-3 px-4 text-sm",
         ),
         rx.el.td(q["created_at"], class_name="py-3 px-4 text-sm text-slate-700"),
@@ -98,7 +98,7 @@ def _quotation_card(q: rx.Var) -> rx.Component:
     return rx.el.div(
         rx.el.div(
             rx.el.div(
-                rx.el.span(f"#{q['id']}", class_name="font-mono text-xs text-slate-500"),
+                rx.el.span("#", q["id"], class_name="font-mono text-xs text-slate-500"),
                 _status_badge(q["status_label"], q["status_color"]),
                 class_name="flex items-center gap-2",
             ),
@@ -109,8 +109,8 @@ def _quotation_card(q: rx.Var) -> rx.Component:
             class_name="flex items-center justify-between",
         ),
         rx.el.div(
-            rx.el.span(f"Creado: {q['created_at']}", class_name="text-xs text-slate-500"),
-            rx.el.span(f"Vence: {q['expires_at']}", class_name="text-xs text-slate-400"),
+            rx.el.span("Creado: ", q["created_at"], class_name="text-xs text-slate-500"),
+            rx.el.span("Vence: ", q["expires_at"], class_name="text-xs text-slate-400"),
             class_name="flex gap-3 mt-1",
         ),
         rx.el.p(q["client_name"], class_name="text-xs text-slate-500 mt-0.5 truncate"),
