@@ -252,19 +252,19 @@ class AuthState(MixinState):
         "users_unlimited": False,
         "branches_unlimited": False,
     }
-    payment_alert_info: Dict[str, Any] = {
+    payment_alert_info: Dict[str, Any] = rx.field(default_factory=lambda: {
         "show": False,
         "color": "yellow",
         "message": "",
-    }
-    new_user_data: NewUser = {
+    })
+    new_user_data: NewUser = rx.field(default_factory=lambda: {
         "username": "",
         "email": "",
         "password": "",
         "confirm_password": "",
         "role": "Usuario",
         "privileges": DEFAULT_USER_PRIVILEGES.copy(),
-    }
+    })
     editing_user: Optional[Dict[str, Any]] = None
     new_role_name: str = ""
     show_user_limit_modal: bool = False
@@ -1803,8 +1803,7 @@ class AuthState(MixinState):
         elif current == "Clientes" and hasattr(self, "load_clients"):
             self.load_clients()
         elif current == "Cuentas Corrientes" and hasattr(self, "load_debtors"):
-            import asyncio
-            asyncio.ensure_future(self.load_debtors())
+            yield type(self).load_debtors
 
         # Reset paginación de caja
         if hasattr(self, "cashbox_current_page"):

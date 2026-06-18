@@ -104,8 +104,20 @@ class UserBranch(SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")
-    branch_id: int = Field(foreign_key="branch.id")
+    user_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("user.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    branch_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("branch.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
 
 
 class User(SQLModel, table=True):
@@ -147,7 +159,13 @@ class User(SQLModel, table=True):
         foreign_key="branch.id",
         index=True,
     )
-    role_id: int = Field(foreign_key="role.id")
+    role_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("role.id", ondelete="RESTRICT"),
+            nullable=False,
+        )
+    )
 
     company: "Company" = Relationship(back_populates="users")
     branch: Optional["Branch"] = Relationship(back_populates="users")

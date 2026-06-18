@@ -955,6 +955,7 @@ class CartMixin:
         self.promotion_applied = False
         self.promotion_name = ""
 
+    @rx.event
     async def handle_sale_change(self, field: str, value: Union[str, float]):
         try:
             if field in ["quantity", "price"]:

@@ -136,6 +136,11 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
     volumes:
       - reflex_web_landing:/app/.web
       - bun_cache_landing:/app/.bun
@@ -183,6 +188,11 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
     volumes:
       - reflex_web_sys:/app/.web
       - bun_cache_sys:/app/.bun
@@ -230,6 +240,11 @@ services:
       options:
         max-size: "100m"
         max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
     volumes:
       - reflex_web_admin:/app/.web
       - bun_cache_admin:/app/.bun

@@ -302,10 +302,21 @@ class PriceTier(TenantMixin, SQLModel, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
-    product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    product_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="CASCADE"),
+            nullable=True,
+        ),
+    )
     product_variant_id: Optional[int] = Field(
         default=None,
-        foreign_key="productvariant.id",
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("productvariant.id", ondelete="CASCADE"),
+            nullable=True,
+        ),
     )
 
     product: Optional["Product"] = Relationship(back_populates="price_tiers")
@@ -349,7 +360,14 @@ class ProductAttribute(TenantMixin, SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    product_id: int = Field(foreign_key="product.id", index=True, nullable=False)
+    product_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="CASCADE"),
+            index=True,
+            nullable=False,
+        )
+    )
     attribute_name: str = Field(max_length=100, index=True, nullable=False)
     attribute_value: str = Field(max_length=500, nullable=False, default="")
 

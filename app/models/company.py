@@ -37,8 +37,14 @@ class Company(SQLModel, table=True):
     __tablename__ = "company"
 
     __table_args__ = (
-        CheckConstraint("max_branches >= 1", name="ck_company_max_branches_min"),
-        CheckConstraint("max_users >= 1", name="ck_company_max_users_min"),
+        CheckConstraint(
+            "max_branches = -1 OR max_branches >= 1",
+            name="ck_company_max_branches_min",
+        ),
+        CheckConstraint(
+            "max_users = -1 OR max_users >= 1",
+            name="ck_company_max_users_min",
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)

@@ -762,17 +762,14 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             # Solo emitir si el tipo de comprobante NO es nota_venta (ticket
             # interno). Las notas de venta no requieren emisión fiscal.
             if receipt_type and receipt_type != ReceiptType.nota_venta:
-                import asyncio
-                asyncio.ensure_future(
-                    self._fire_fiscal_emission(
-                        fiscal_sale_id,
-                        fiscal_company_id or 0,
-                        fiscal_branch_id or 0,
-                        receipt_type,
-                        buyer_doc_type,
-                        buyer_doc_number,
-                        buyer_name,
-                    )
+                yield type(self)._fire_fiscal_emission(
+                    fiscal_sale_id,
+                    fiscal_company_id or 0,
+                    fiscal_branch_id or 0,
+                    receipt_type,
+                    buyer_doc_type,
+                    buyer_doc_number,
+                    buyer_name,
                 )
             return
         finally:
@@ -858,6 +855,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             doc_type = "0"
         return doc_type, dni, name or None
 
+    @rx.event(background=True)
     async def _fire_fiscal_emission(
         self,
         sale_id: int,
@@ -870,7 +868,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
     ):
         """Emite el documento fiscal de forma fire-and-forget.
 
-        Se invoca via ``asyncio.ensure_future`` desde ``confirm_sale``
+        Se despacha como background event desde ``confirm_sale``
         para no bloquear la UI. Si billing no está configurado, retorna
         silenciosamente. Si falla, el FiscalDocument queda en estado
         ``error`` para reintento manual posterior.
