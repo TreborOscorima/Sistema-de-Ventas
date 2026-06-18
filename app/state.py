@@ -294,7 +294,7 @@ class State(RootState):
             if (now - self._last_cashbox_data_ts) < self._PAGE_DATA_TTL:
                 return
             self._last_cashbox_data_ts = now
-        yield type(self).refresh_cashbox_data
+            self._refresh_cashbox_caches()
 
     @rx.event(background=True)
     async def bg_load_reservations(self):
