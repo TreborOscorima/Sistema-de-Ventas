@@ -102,6 +102,7 @@ config = rx.Config(
     app_name="app",
     db_url=DB_URL,
     api_url=API_URL,
+    vite_allowed_hosts=True,
     plugins=[
         rx.plugins.RadixThemesPlugin(
             theme=rx.theme(
