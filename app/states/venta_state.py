@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 from sqlmodel import select
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 
 from app.constants import (
     CLIENT_SUGGESTIONS_LIMIT,
@@ -173,7 +173,9 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 select(Client)
                 .where(
                     or_(
-                        Client.name.ilike(like_search),
+                        text("MATCH(name) AGAINST(:ft_term IN BOOLEAN MODE)").bindparams(
+                            ft_term=f"{term}*"
+                        ),
                         Client.dni.ilike(like_search),
                     )
                 )
