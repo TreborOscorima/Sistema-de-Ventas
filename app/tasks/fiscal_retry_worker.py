@@ -86,14 +86,14 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
     _redis_lock_client = None
     _lock_acquired = False
     try:
-        import redis as _redis_lib
+        import redis.asyncio as _aioredis
         _redis_url = os.getenv("REDIS_URL", "").strip()
         if _redis_url:
-            _redis_lock_client = _redis_lib.from_url(
+            _redis_lock_client = _aioredis.from_url(
                 _redis_url, socket_connect_timeout=2, socket_timeout=2
             )
             _lock_acquired = bool(
-                _redis_lock_client.set("fiscal_retry_worker:lock", "1", nx=True, ex=600)
+                await _redis_lock_client.set("fiscal_retry_worker:lock", "1", nx=True, ex=600)
             )
             if not _lock_acquired:
                 logger.info("Worker ya en ejecución (lock Redis activo) — saltando.")
@@ -211,7 +211,8 @@ async def run_auto_retry(dry_run: bool = False) -> dict:
         # S-C2: liberar lock al terminar (o si crashea)
         if _lock_acquired and _redis_lock_client:
             try:
-                _redis_lock_client.delete("fiscal_retry_worker:lock")
+                await _redis_lock_client.delete("fiscal_retry_worker:lock")
+                await _redis_lock_client.aclose()
             except Exception:
                 pass
 

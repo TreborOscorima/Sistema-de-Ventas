@@ -39,10 +39,17 @@ services:
     image: redis:7-alpine
     container_name: tuwayki_redis
     restart: unless-stopped
+    command:
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD requerido}
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -68,7 +75,7 @@ services:
       DB_USER: ${DB_USER:-app}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
@@ -78,7 +85,7 @@ services:
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/ping"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/ping"]
       interval: 30s
       timeout: 5s
       retries: 3

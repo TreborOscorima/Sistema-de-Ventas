@@ -77,7 +77,7 @@ def edit_product_modal() -> rx.Component:
                 rx.el.input(
                   type="number",
                   value=State.variants_stock_total.to_string(),
-                  is_disabled=True,
+                  disabled=True,
                   class_name=INPUT_STYLES["disabled"],
                 ),
               ),

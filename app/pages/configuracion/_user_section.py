@@ -160,7 +160,7 @@ def user_form() -> rx.Component:
               on_blur=lambda v: State.handle_new_user_change(
                 "username", v
               ),
-              is_disabled=rx.cond(State.editing_user, True, False),
+              disabled=rx.cond(State.editing_user, True, False),
               class_name=f"{INPUT_STYLES['default']} mt-1",
             ),
             class_name="mb-4",

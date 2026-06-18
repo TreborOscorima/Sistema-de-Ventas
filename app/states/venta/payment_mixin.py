@@ -124,7 +124,7 @@ class PaymentMixin:
             "kind": kind,
             "enabled": True,
         }
-        self.payment_methods.append(method)
+        self.payment_methods = [*self.payment_methods, method]
         self.new_payment_method_name = ""
         self.new_payment_method_description = ""
         self.new_payment_method_kind = "other"

@@ -118,7 +118,7 @@ def _variant_picker_row(row: rx.Var[dict]) -> rx.Component:
             rx.foreach(row["cells"], _variant_picker_cell),
             class_name="grid gap-1.5 flex-1",
             style={
-                "gridTemplateColumns": f"repeat({State.variant_picker_colors.length()}, minmax(0, 1fr))",
+                "gridTemplateColumns": "repeat(auto-fit, minmax(2.5rem, 1fr))",
             },
         ),
         class_name="flex items-stretch gap-1.5",
@@ -166,7 +166,7 @@ def variant_picker_modal() -> rx.Component:
                             ),
                             class_name="grid gap-1.5 flex-1",
                             style={
-                                "gridTemplateColumns": f"repeat({State.variant_picker_colors.length()}, minmax(0, 1fr))",
+                                "gridTemplateColumns": "repeat(auto-fit, minmax(2.5rem, 1fr))",
                             },
                         ),
                         class_name="flex items-stretch gap-1.5 mb-1",

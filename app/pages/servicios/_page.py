@@ -83,7 +83,7 @@ def field_prices_tab() -> rx.Component:
           rx.icon("refresh-ccw", class_name="h-4 w-4"),
           "Actualizar",
           on_click=State.update_field_price,
-          is_disabled=rx.cond(State.editing_field_price_id == "", True, False),
+          disabled=rx.cond(State.editing_field_price_id == "", True, False),
           class_name=rx.cond(
             State.editing_field_price_id == "",
             BUTTON_STYLES["disabled"],

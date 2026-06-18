@@ -806,7 +806,7 @@ def _payment_form_body(variant: str) -> tuple:
                     rx.el.input(
                         type="number",
                         value=State.payment_mixed_complement,
-                        is_disabled=True,
+                        disabled=True,
                         class_name="flex-1 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
                     ),
                     class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-slate-50",

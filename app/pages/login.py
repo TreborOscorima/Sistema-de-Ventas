@@ -131,6 +131,7 @@ def login_page() -> rx.Component:
                     role="alert",
                     class_name=f"flex items-center gap-3 mt-5 bg-red-50 p-4 {RADIUS['lg']} border border-red-200",
                 ),
+                rx.fragment(),
             ),
             # Enlace a registro
             rx.el.div(

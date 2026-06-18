@@ -1391,7 +1391,7 @@ class CartMixin:
         item_copy = self.new_sale_item.copy()
         item_copy["temp_id"] = str(uuid.uuid4())
         self._apply_item_rounding(item_copy)
-        self.new_sale_items.append(item_copy)
+        self.new_sale_items = [*self.new_sale_items, item_copy]
         try:
             await self._recompute_cart_prices()
         except Exception:

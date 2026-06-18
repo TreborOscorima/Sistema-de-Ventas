@@ -588,7 +588,7 @@ def _sidebar_auth_footer() -> rx.Component:
         rx.el.div(
             rx.el.div(
                 rx.image(
-                    src=f"https://api.dicebear.com/9.x/initials/svg?seed={State.current_user['username']}&backgroundColor=6366f1&textColor=ffffff",
+                    src="https://api.dicebear.com/9.x/initials/svg?seed=" + State.current_user["username"] + "&backgroundColor=6366f1&textColor=ffffff",
                     class_name=f"h-10 w-10 {RADIUS['full']} ring-2 ring-indigo-100",
                 ),
                 rx.cond(

@@ -229,7 +229,7 @@ def unit_section() -> rx.Component:
                 rx.icon("trash-2", class_name="h-4 w-4"),
                 on_click=lambda _,
                 name=unit["name"]: State.remove_unit(name),
-                is_disabled=rx.cond(
+                disabled=rx.cond(
                   unit["name"] == "Unidad", True, False
                 ),
                 title="Eliminar unidad",

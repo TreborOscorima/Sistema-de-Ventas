@@ -50,6 +50,11 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     networks:
       internal_net:
         aliases:
@@ -70,10 +75,15 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping"]
       interval: 10s
       timeout: 3s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     networks:
       internal_net:
         aliases:
@@ -121,6 +131,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 300s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     volumes:
       - reflex_web_landing:/app/.web
       - bun_cache_landing:/app/.bun
@@ -163,6 +178,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 300s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     volumes:
       - reflex_web_sys:/app/.web
       - bun_cache_sys:/app/.bun
@@ -205,6 +225,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 300s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     volumes:
       - reflex_web_admin:/app/.web
       - bun_cache_admin:/app/.bun

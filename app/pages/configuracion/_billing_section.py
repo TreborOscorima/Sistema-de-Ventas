@@ -347,11 +347,14 @@ def billing_config_section() -> rx.Component:
                           State.billing_cert_days_remaining <= 30,
                           rx.el.span(
                             rx.icon("triangle-alert", class_name="h-3 w-3 inline mr-0.5"),
-                            f"Expira en {State.billing_cert_days_remaining} días",
+                            "Expira en ",
+                            State.billing_cert_days_remaining,
+                            " días",
                             class_name="text-xs text-amber-600 font-medium ml-2",
                           ),
                           rx.el.span(
-                            f"Válido hasta {State.billing_cert_not_after}",
+                            "Válido hasta ",
+                            State.billing_cert_not_after,
                             class_name="text-xs text-slate-400 ml-2",
                           ),
                         ),

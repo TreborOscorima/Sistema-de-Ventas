@@ -93,7 +93,7 @@ def _owner_header() -> rx.Component:
                 # Usuario actual (sesión propia del owner, no del sistema de ventas)
                 rx.el.div(
                     rx.image(
-                        src=f"https://api.dicebear.com/9.x/initials/svg?seed={State.owner_session_email}&backgroundColor=1e293b&textColor=ffffff",
+                        src="https://api.dicebear.com/9.x/initials/svg?seed=" + State.owner_session_email + "&backgroundColor=1e293b&textColor=ffffff",
                         class_name=f"h-8 w-8 {RADIUS['full']} ring-2 ring-slate-200",
                     ),
                     rx.el.div(

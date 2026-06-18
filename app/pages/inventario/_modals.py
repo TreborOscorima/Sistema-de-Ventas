@@ -430,7 +430,7 @@ def inventory_adjustment_modal() -> rx.Component:
                 ),
                 rx.el.input(
                   value=State.inventory_adjustment_item["barcode"],
-                  is_disabled=True,
+                  disabled=True,
                   class_name=INPUT_STYLES["disabled"],
                 ),
               ),
@@ -441,7 +441,7 @@ def inventory_adjustment_modal() -> rx.Component:
                 ),
                 rx.el.input(
                   value=State.inventory_adjustment_item["category"],
-                  is_disabled=True,
+                  disabled=True,
                   class_name=INPUT_STYLES["disabled"],
                 ),
               ),
@@ -452,7 +452,7 @@ def inventory_adjustment_modal() -> rx.Component:
                 ),
                 rx.el.input(
                   value=State.inventory_adjustment_item["unit"],
-                  is_disabled=True,
+                  disabled=True,
                   class_name=INPUT_STYLES["disabled"],
                 ),
               ),
@@ -465,7 +465,7 @@ def inventory_adjustment_modal() -> rx.Component:
                   value=State.inventory_adjustment_item[
                     "current_stock"
                   ].to_string(),
-                  is_disabled=True,
+                  disabled=True,
                   class_name=INPUT_STYLES["disabled"],
                 ),
               ),
