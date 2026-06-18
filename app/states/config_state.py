@@ -325,10 +325,13 @@ class ConfigState(MixinState):
 
     @rx.event
     def load_config_page(self):
-        """Carga datos necesarios para la pantalla de configuración."""
+        """Carga datos necesarios para la pantalla de configuración.
+
+        Nota: load_config_data() es omitido aquí porque page_init_configuracion
+        ya lo llama en la fase on_load (que siempre precede al on_mount que
+        dispara este handler). Llamarlo aquí causaba una doble query innecesaria.
+        """
         self.load_settings()
-        if hasattr(self, "load_config_data"):
-            self.load_config_data()
         if hasattr(self, "load_users"):
             self.load_users()
         if hasattr(self, "load_branches"):
