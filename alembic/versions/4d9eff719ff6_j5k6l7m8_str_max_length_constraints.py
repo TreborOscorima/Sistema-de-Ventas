@@ -93,13 +93,13 @@ def upgrade() -> None:
                     existing_type=sa.String(255), type_=sa.String(100),
                     existing_nullable=False)
 
-    # ── inventory.productcategory ────────────────────────────────────────────
-    op.alter_column('productcategory', 'name',
+    # ── inventory.category (ProductCategory) ────────────────────────────────
+    op.alter_column('category', 'name',
                     existing_type=sa.String(255), type_=sa.String(100),
                     existing_nullable=False)
 
-    # ── inventory.unittype ───────────────────────────────────────────────────
-    op.alter_column('unittype', 'name',
+    # ── inventory.unit (UnitType/Unit) ───────────────────────────────────────
+    op.alter_column('unit', 'name',
                     existing_type=sa.String(255), type_=sa.String(100),
                     existing_nullable=False)
 
@@ -131,8 +131,8 @@ def downgrade() -> None:
         ('client', 'name'), ('client', 'dni'),
         ('supplier', 'name'), ('supplier', 'tax_id'),
         ('product', 'barcode'), ('product', 'description'), ('product', 'category'),
-        ('productcategory', 'name'),
-        ('unittype', 'name'),
+        ('category', 'name'),
+        ('unit', 'name'),
         ('cashboxlog', 'action'),
         ('currency', 'code'), ('currency', 'name'), ('currency', 'symbol'),
     ]
