@@ -22,6 +22,7 @@ from app.models import (
     CashboxLog,
     PaymentMethod,
     SalePayment,
+    SaleInstallment,
     User,
     Company,
     CompanyBillingConfig,
@@ -1202,48 +1203,51 @@ class HistorialState(MixinState):
                 method_key = self._method_key_from_label(payment_label or "")
                 self._add_to_stats(stats, method_key, Decimal(str(amount or 0)))
 
-            credit_sales_query = (
-                select(Sale)
+            paid_initial_subq = (
+                select(
+                    SalePayment.sale_id,
+                    sa.func.coalesce(sa.func.sum(SalePayment.amount), 0).label("paid_initial"),
+                )
+                .group_by(SalePayment.sale_id)
+                .subquery()
+            )
+            paid_installments_subq = (
+                select(
+                    SaleInstallment.sale_id,
+                    sa.func.coalesce(sa.func.sum(SaleInstallment.paid_amount), 0).label("paid_inst"),
+                )
+                .group_by(SaleInstallment.sale_id)
+                .subquery()
+            )
+            credit_stmt = (
+                select(
+                    sa.func.coalesce(sa.func.sum(Sale.total_amount), 0).label("total_credit"),
+                    sa.func.coalesce(
+                        sa.func.sum(
+                            sa.func.greatest(
+                                Sale.total_amount
+                                - sa.func.coalesce(paid_initial_subq.c.paid_initial, 0)
+                                - sa.func.coalesce(paid_installments_subq.c.paid_inst, 0),
+                                0,
+                            )
+                        ),
+                        0,
+                    ).label("credit_outstanding"),
+                )
+                .outerjoin(paid_initial_subq, paid_initial_subq.c.sale_id == Sale.id)
+                .outerjoin(paid_installments_subq, paid_installments_subq.c.sale_id == Sale.id)
                 .where(Sale.status != SaleStatus.cancelled)
+                .where(Sale.payment_condition == "credito")
                 .where(Sale.company_id == company_id)
                 .where(Sale.branch_id == branch_id)
-                .options(selectinload(Sale.payments), selectinload(Sale.installments))
             )
             if start_date:
-                credit_sales_query = credit_sales_query.where(Sale.timestamp >= start_date)
+                credit_stmt = credit_stmt.where(Sale.timestamp >= start_date)
             if end_date:
-                credit_sales_query = credit_sales_query.where(Sale.timestamp <= end_date)
-
-            sales = session.exec(credit_sales_query).all()
-            for sale in sales:
-                payments = sale.payments or []
-                payment_method = self._payment_method_display(payments, pm_names)
-                if payment_method.strip() in {"", "-"}:
-                    payment_method = MSG.FALLBACK_NOT_SPECIFIED
-                payment_method = self._sale_payment_method_label(
-                    sale, payments, payment_method
-                )
-                if self._is_credit_label(payment_method):
-                    total_credit += Decimal(str(sale.total_amount or 0))
-
-                payment_condition = (sale.payment_condition or "").strip().lower()
-                is_credit = payment_condition == "credito" or self._is_credit_label(
-                    payment_method
-                )
-                if not is_credit:
-                    continue
-                total_amount = Decimal(str(sale.total_amount or 0))
-                paid_initial = sum(
-                    Decimal(str(getattr(payment, "amount", 0) or 0))
-                    for payment in payments
-                )
-                paid_installments = sum(
-                    Decimal(str(getattr(installment, "paid_amount", 0) or 0))
-                    for installment in (sale.installments or [])
-                )
-                pending = total_amount - paid_initial - paid_installments
-                if pending > 0:
-                    pending_total += pending
+                credit_stmt = credit_stmt.where(Sale.timestamp <= end_date)
+            credit_row = session.exec(credit_stmt).one()
+            total_credit = Decimal(str(credit_row[0] or 0))
+            pending_total = Decimal(str(credit_row[1] or 0))
 
             enabled_kinds = self._enabled_payment_kinds(session, company_id, branch_id)
 
