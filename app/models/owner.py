@@ -18,6 +18,7 @@ class OwnerAuditLog(SQLModel, table=True):
         sqlalchemy.Index("ix_owner_audit_log_actor", "actor_user_id"),
         sqlalchemy.Index("ix_owner_audit_log_company", "target_company_id"),
         sqlalchemy.Index("ix_owner_audit_log_action", "action"),
+        sqlalchemy.Index("ix_owner_audit_log_created_at", "created_at"),
     )
 
     id: int | None = Field(default=None, primary_key=True)

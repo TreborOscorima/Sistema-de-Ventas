@@ -307,6 +307,11 @@ class FiscalDocument(SQLModel, table=True):
             "company_id",
             "sent_at",
         ),
+        sqlalchemy.Index(
+            "ix_fiscaldocument_tenant_branch",
+            "company_id",
+            "branch_id",
+        ),
         CheckConstraint(
             "taxable_amount >= 0", name="ck_fiscaldoc_taxable_nonneg"
         ),

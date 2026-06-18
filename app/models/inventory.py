@@ -202,6 +202,12 @@ class ProductBatch(TenantMixin, SQLModel, table=True):
             "branch_id",
             "product_id",
         ),
+        sqlalchemy.Index(
+            "ix_productbatch_fefo",
+            "company_id",
+            "branch_id",
+            "expiration_date",
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)
