@@ -125,7 +125,7 @@ class HistorialState(MixinState):
     filtered_history: list[dict] = []
     total_pages: int = 1
     report_method_summary: list[dict] = []
-    report_detail_rows: list[dict] = []
+    _report_detail_rows: list[dict] = []
     report_closing_rows: list[dict] = []
     payment_stats: Dict[str, float] = {
         "efectivo": 0.0,
@@ -930,7 +930,7 @@ class HistorialState(MixinState):
     def _refresh_report_cache(self):
         if not self.current_user["privileges"]["view_historial"]:
             self.report_method_summary = []
-            self.report_detail_rows = []
+            self._report_detail_rows = []
             self.report_closing_rows = []
             return
 
@@ -970,7 +970,7 @@ class HistorialState(MixinState):
 
         closings = self._build_report_closings()
         self.report_method_summary = summary
-        self.report_detail_rows = entries
+        self._report_detail_rows = entries
         self.report_closing_rows = closings
 
         detail_total_pages = (
@@ -1324,7 +1324,7 @@ class HistorialState(MixinState):
     @rx.var(cache=True)
     def report_detail_total_pages(self) -> int:
         _ = self._report_update_trigger
-        total_items = len(self.report_detail_rows)
+        total_items = len(self._report_detail_rows)
         if total_items == 0:
             return 1
         return (
@@ -1332,7 +1332,7 @@ class HistorialState(MixinState):
         ) // self.report_detail_items_per_page
 
     @rx.var(cache=True)
-    def paginated_report_detail_rows(self) -> list[dict]:
+    def paginated__report_detail_rows(self) -> list[dict]:
         _ = self._report_update_trigger
         if not self.current_user["privileges"]["view_historial"]:
             return []
@@ -1342,7 +1342,7 @@ class HistorialState(MixinState):
         )
         per_page = max(self.report_detail_items_per_page, 1)
         offset = (page - 1) * per_page
-        return self.report_detail_rows[offset : offset + per_page]
+        return self._report_detail_rows[offset : offset + per_page]
 
     @rx.var(cache=True)
     def report_closing_total_pages(self) -> int:
