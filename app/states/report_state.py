@@ -4,6 +4,7 @@ Estado para la gestión de reportes contables y financieros.
 Proporciona funcionalidades para generar reportes profesionales
 para evaluaciones administrativas, contables y financieras.
 """
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -23,10 +24,179 @@ from app.services.report_service import (
     generate_promotions_report,
     generate_price_lists_report,
 )
-from app.utils.tenant import set_tenant_context
 from .mixin_state import MixinState
 
 logger = logging.getLogger(__name__)
+
+
+class _ReportTooLargeError(Exception):
+    """Lanzado cuando el rango de datos supera MAX_REPORT_ROWS."""
+
+
+def _run_report_sync(params: dict):
+    """Ejecuta la generación del reporte en un hilo separado (no bloquea el event loop).
+
+    Abre su propia sesión sync y llama a la función de report_service correspondiente.
+    Devuelve (bytes_del_excel, nombre_archivo).
+    """
+    report_type = params["report_type"]
+    company_id = params["company_id"]
+    branch_id = params["branch_id"]
+    start_date = params["start_date"]
+    end_date = params["end_date"]
+
+    with rx.session() as session:
+        session.info["tenant_bypass"] = True
+
+        if MAX_REPORT_ROWS > 0:
+            if report_type == "ventas":
+                count_query = (
+                    select(func.count(Sale.id))
+                    .where(Sale.timestamp >= start_date)
+                    .where(Sale.timestamp <= end_date)
+                    .where(Sale.company_id == company_id)
+                    .where(Sale.branch_id == branch_id)
+                )
+                if not params["include_cancelled"]:
+                    count_query = count_query.where(
+                        Sale.status != SaleStatus.cancelled
+                    )
+                total = session.exec(count_query).one()
+                if isinstance(total, tuple):
+                    total = total[0]
+                if int(total or 0) > MAX_REPORT_ROWS:
+                    raise _ReportTooLargeError("Rango demasiado grande.")
+
+            elif report_type == "inventario":
+                pw = session.exec(
+                    select(func.count(Product.id))
+                    .where(Product.company_id == company_id)
+                    .where(Product.branch_id == branch_id)
+                    .where(
+                        ~exists()
+                        .where(ProductVariant.product_id == Product.id)
+                        .where(ProductVariant.company_id == company_id)
+                        .where(ProductVariant.branch_id == branch_id)
+                    )
+                ).one()
+                if isinstance(pw, tuple):
+                    pw = pw[0]
+                vc = session.exec(
+                    select(func.count(ProductVariant.id))
+                    .where(ProductVariant.company_id == company_id)
+                    .where(ProductVariant.branch_id == branch_id)
+                ).one()
+                if isinstance(vc, tuple):
+                    vc = vc[0]
+                if (int(pw or 0) + int(vc or 0)) > MAX_REPORT_ROWS:
+                    raise _ReportTooLargeError("Inventario demasiado grande.")
+
+            elif report_type == "cuentas":
+                total = session.exec(
+                    select(func.count(SaleInstallment.id))
+                    .where(SaleInstallment.status != "paid")
+                    .where(SaleInstallment.company_id == company_id)
+                    .where(SaleInstallment.branch_id == branch_id)
+                ).one()
+                if isinstance(total, tuple):
+                    total = total[0]
+                if int(total or 0) > MAX_REPORT_ROWS:
+                    raise _ReportTooLargeError("Cuentas por cobrar demasiado grandes.")
+
+            elif report_type == "caja":
+                total = session.exec(
+                    select(func.count(CashboxLog.id))
+                    .where(CashboxLog.timestamp >= start_date)
+                    .where(CashboxLog.timestamp <= end_date)
+                    .where(CashboxLog.company_id == company_id)
+                    .where(CashboxLog.branch_id == branch_id)
+                ).one()
+                if isinstance(total, tuple):
+                    total = total[0]
+                if int(total or 0) > MAX_REPORT_ROWS:
+                    raise _ReportTooLargeError("Reporte de caja demasiado grande.")
+
+            elif report_type == "promociones":
+                total = session.exec(
+                    select(func.count(SaleItem.id))
+                    .join(Sale, Sale.id == SaleItem.sale_id)
+                    .where(SaleItem.applied_promotion_id.is_not(None))
+                    .where(Sale.timestamp >= start_date)
+                    .where(Sale.timestamp <= end_date)
+                    .where(Sale.status != SaleStatus.cancelled)
+                    .where(SaleItem.company_id == company_id)
+                    .where(SaleItem.branch_id == branch_id)
+                ).one()
+                if isinstance(total, tuple):
+                    total = total[0]
+                if int(total or 0) > MAX_REPORT_ROWS:
+                    raise _ReportTooLargeError("Reporte de promociones demasiado grande.")
+
+            elif report_type == "listas_precios":
+                total = session.exec(
+                    select(func.count(SaleItem.id))
+                    .join(Sale, Sale.id == SaleItem.sale_id)
+                    .where(Sale.timestamp >= start_date)
+                    .where(Sale.timestamp <= end_date)
+                    .where(Sale.status != SaleStatus.cancelled)
+                    .where(SaleItem.company_id == company_id)
+                    .where(SaleItem.branch_id == branch_id)
+                ).one()
+                if isinstance(total, tuple):
+                    total = total[0]
+                if int(total or 0) > MAX_REPORT_ROWS:
+                    raise _ReportTooLargeError(
+                        "Reporte de listas de precios demasiado grande."
+                    )
+
+        kw = {
+            "company_name": params["company_name"],
+            "currency_symbol": params["currency_symbol"],
+            "company_id": company_id,
+            "branch_id": branch_id,
+            "country_code": params["country_code"],
+            "timezone": params["timezone"],
+            "generated_at": params["generated_at"],
+        }
+
+        if report_type == "ventas":
+            output = generate_sales_report(
+                session, start_date, end_date,
+                include_cancelled=params["include_cancelled"], **kw
+            )
+            filename = (
+                f"Reporte_Ventas_{params['start_str']}_{params['end_str']}.xlsx"
+            )
+        elif report_type == "inventario":
+            output = generate_inventory_report(
+                session,
+                include_zero_stock=params["include_zero_stock"], **kw
+            )
+            filename = f"Inventario_Valorizado_{params['now_str']}.xlsx"
+        elif report_type == "cuentas":
+            output = generate_receivables_report(session, **kw)
+            filename = f"Cuentas_por_Cobrar_{params['now_str']}.xlsx"
+        elif report_type == "caja":
+            output = generate_cashbox_report(session, start_date, end_date, **kw)
+            filename = (
+                f"Reporte_Caja_{params['start_str']}_{params['end_str']}.xlsx"
+            )
+        elif report_type == "promociones":
+            output = generate_promotions_report(session, start_date, end_date, **kw)
+            filename = (
+                f"Reporte_Promociones_{params['start_str']}_{params['end_str']}.xlsx"
+            )
+        elif report_type == "listas_precios":
+            output = generate_price_lists_report(
+                session, start_date, end_date, **kw
+            )
+            filename = (
+                f"Reporte_ListasPrecios_{params['start_str']}_{params['end_str']}.xlsx"
+            )
+        else:
+            raise ValueError(f"Tipo de reporte no válido: {report_type!r}")
+
+    return output.getvalue(), filename
 
 
 class ReportState(MixinState):
@@ -214,7 +384,12 @@ class ReportState(MixinState):
 
     @rx.event(background=True)
     async def generate_report(self):
-        """Genera el reporte seleccionado."""
+        """Genera el reporte seleccionado.
+
+        Patrón lock/work/lock: el state lock se libera durante la generación del Excel
+        (CPU + IO síncrono) para no bloquear interacciones del usuario mientras trabaja.
+        """
+        # ── Paso 1: lock corto — validar y capturar parámetros ──────────────
         async with self:
             if not self.current_user["privileges"].get("export_data"):
                 self.report_error = "No tiene permisos para exportar reportes."
@@ -226,265 +401,63 @@ class ReportState(MixinState):
             self._report_download_data = b""
             self._report_download_filename = ""
 
-            try:
-                company_id = self._company_id()
-                branch_id = self._branch_id()
-                if not company_id or not branch_id:
-                    self.report_loading = False
-                    self.report_error = "Empresa o sucursal no definida."
-                    return
-                set_tenant_context(company_id, branch_id)
-                # Calcular fechas directamente
-                dates = self._calculate_period_dates()
-                start_date = dates[0]
-                end_date = dates[1]
-
-                with rx.session() as session:
-                    session.info["tenant_bypass"] = True
-                    country_code, timezone = self._company_time_context()
-                    if MAX_REPORT_ROWS > 0:
-                        if self.report_type == "ventas":
-                            count_query = (
-                                select(func.count(Sale.id))
-                                .where(Sale.timestamp >= start_date)
-                                .where(Sale.timestamp <= end_date)
-                                .where(Sale.company_id == company_id)
-                                .where(Sale.branch_id == branch_id)
-                            )
-                            if not self.include_cancelled:
-                                count_query = count_query.where(
-                                    Sale.status != SaleStatus.cancelled
-                                )
-                            total_sales = session.exec(count_query).one()
-                            if isinstance(total_sales, tuple):
-                                total_sales = total_sales[0]
-                            if int(total_sales or 0) > MAX_REPORT_ROWS:
-                                self.report_loading = False
-                                self.report_error = "Rango demasiado grande."
-                                return
-
-                        elif self.report_type == "inventario":
-                            products_without_variants = session.exec(
-                                select(func.count(Product.id))
-                                .where(Product.company_id == company_id)
-                                .where(Product.branch_id == branch_id)
-                                .where(
-                                    ~exists()
-                                    .where(ProductVariant.product_id == Product.id)
-                                    .where(ProductVariant.company_id == company_id)
-                                    .where(ProductVariant.branch_id == branch_id)
-                                )
-                            ).one()
-                            if isinstance(products_without_variants, tuple):
-                                products_without_variants = products_without_variants[0]
-                            variant_count = session.exec(
-                                select(func.count(ProductVariant.id))
-                                .where(ProductVariant.company_id == company_id)
-                                .where(ProductVariant.branch_id == branch_id)
-                            ).one()
-                            if isinstance(variant_count, tuple):
-                                variant_count = variant_count[0]
-                            estimated_rows = int(products_without_variants or 0) + int(
-                                variant_count or 0
-                            )
-                            if estimated_rows > MAX_REPORT_ROWS:
-                                self.report_loading = False
-                                self.report_error = "Inventario demasiado grande."
-                                return
-
-                        elif self.report_type == "cuentas":
-                            count_query = (
-                                select(func.count(SaleInstallment.id))
-                                .where(SaleInstallment.status != "paid")
-                                .where(SaleInstallment.company_id == company_id)
-                                .where(SaleInstallment.branch_id == branch_id)
-                            )
-                            total_installments = session.exec(count_query).one()
-                            if isinstance(total_installments, tuple):
-                                total_installments = total_installments[0]
-                            if int(total_installments or 0) > MAX_REPORT_ROWS:
-                                self.report_loading = False
-                                self.report_error = "Cuentas por cobrar demasiado grandes."
-                                return
-
-                        elif self.report_type == "caja":
-                            count_query = (
-                                select(func.count(CashboxLog.id))
-                                .where(CashboxLog.timestamp >= start_date)
-                                .where(CashboxLog.timestamp <= end_date)
-                                .where(CashboxLog.company_id == company_id)
-                                .where(CashboxLog.branch_id == branch_id)
-                            )
-                            total_logs = session.exec(count_query).one()
-                            if isinstance(total_logs, tuple):
-                                total_logs = total_logs[0]
-                            if int(total_logs or 0) > MAX_REPORT_ROWS:
-                                self.report_loading = False
-                                self.report_error = "Reporte de caja demasiado grande."
-                                return
-
-                        elif self.report_type == "promociones":
-                            count_query = (
-                                select(func.count(SaleItem.id))
-                                .join(Sale, Sale.id == SaleItem.sale_id)
-                                .where(SaleItem.applied_promotion_id.is_not(None))
-                                .where(Sale.timestamp >= start_date)
-                                .where(Sale.timestamp <= end_date)
-                                .where(Sale.status != SaleStatus.cancelled)
-                                .where(SaleItem.company_id == company_id)
-                                .where(SaleItem.branch_id == branch_id)
-                            )
-                            total_promo_items = session.exec(count_query).one()
-                            if isinstance(total_promo_items, tuple):
-                                total_promo_items = total_promo_items[0]
-                            if int(total_promo_items or 0) > MAX_REPORT_ROWS:
-                                self.report_loading = False
-                                self.report_error = "Reporte de promociones demasiado grande."
-                                return
-
-                        elif self.report_type == "listas_precios":
-                            count_query = (
-                                select(func.count(SaleItem.id))
-                                .join(Sale, Sale.id == SaleItem.sale_id)
-                                .where(Sale.timestamp >= start_date)
-                                .where(Sale.timestamp <= end_date)
-                                .where(Sale.status != SaleStatus.cancelled)
-                                .where(SaleItem.company_id == company_id)
-                                .where(SaleItem.branch_id == branch_id)
-                            )
-                            total_pl_items = session.exec(count_query).one()
-                            if isinstance(total_pl_items, tuple):
-                                total_pl_items = total_pl_items[0]
-                            if int(total_pl_items or 0) > MAX_REPORT_ROWS:
-                                self.report_loading = False
-                                self.report_error = "Reporte de listas de precios demasiado grande."
-                                return
-
-                    if self.report_type == "ventas":
-                        output = generate_sales_report(
-                            session,
-                            start_date,
-                            end_date,
-                            company_name=self.company_name,
-                            include_cancelled=self.include_cancelled,
-                            currency_symbol=self.currency_symbol,
-                            company_id=company_id,
-                            branch_id=branch_id,
-                            country_code=country_code,
-                            timezone=timezone,
-                            generated_at=self._display_now(),
-                        )
-                        filename = (
-                            "Reporte_Ventas_"
-                            f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
-                            f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
-                        )
-
-                    elif self.report_type == "inventario":
-                        output = generate_inventory_report(
-                            session,
-                            company_name=self.company_name,
-                            include_zero_stock=self.include_zero_stock,
-                            currency_symbol=self.currency_symbol,
-                            company_id=company_id,
-                            branch_id=branch_id,
-                            country_code=country_code,
-                            timezone=timezone,
-                            generated_at=self._display_now(),
-                        )
-                        filename = (
-                            f"Inventario_Valorizado_"
-                            f"{self._display_now().strftime('%Y%m%d')}.xlsx"
-                        )
-
-                    elif self.report_type == "cuentas":
-                        output = generate_receivables_report(
-                            session,
-                            company_name=self.company_name,
-                            currency_symbol=self.currency_symbol,
-                            company_id=company_id,
-                            branch_id=branch_id,
-                            country_code=country_code,
-                            timezone=timezone,
-                            generated_at=self._display_now(),
-                        )
-                        filename = (
-                            f"Cuentas_por_Cobrar_"
-                            f"{self._display_now().strftime('%Y%m%d')}.xlsx"
-                        )
-
-                    elif self.report_type == "caja":
-                        output = generate_cashbox_report(
-                            session,
-                            start_date,
-                            end_date,
-                            company_name=self.company_name,
-                            currency_symbol=self.currency_symbol,
-                            company_id=company_id,
-                            branch_id=branch_id,
-                            country_code=country_code,
-                            timezone=timezone,
-                            generated_at=self._display_now(),
-                        )
-                        filename = (
-                            "Reporte_Caja_"
-                            f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
-                            f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
-                        )
-
-                    elif self.report_type == "promociones":
-                        output = generate_promotions_report(
-                            session,
-                            start_date,
-                            end_date,
-                            company_name=self.company_name,
-                            currency_symbol=self.currency_symbol,
-                            company_id=company_id,
-                            branch_id=branch_id,
-                            country_code=country_code,
-                            timezone=timezone,
-                            generated_at=self._display_now(),
-                        )
-                        filename = (
-                            "Reporte_Promociones_"
-                            f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
-                            f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
-                        )
-
-                    elif self.report_type == "listas_precios":
-                        output = generate_price_lists_report(
-                            session,
-                            start_date,
-                            end_date,
-                            company_name=self.company_name,
-                            currency_symbol=self.currency_symbol,
-                            company_id=company_id,
-                            branch_id=branch_id,
-                            country_code=country_code,
-                            timezone=timezone,
-                            generated_at=self._display_now(),
-                        )
-                        filename = (
-                            "Reporte_ListasPrecios_"
-                            f"{self._to_company_datetime(start_date).strftime('%Y%m%d')}_"
-                            f"{self._to_company_datetime(end_date).strftime('%Y%m%d')}.xlsx"
-                        )
-
-                    else:
-                        self.report_loading = False
-                        self.report_error = "Tipo de reporte no válido."
-                        return
-
-                self._report_download_data = output.getvalue()
-                self._report_download_filename = filename
-                self.report_ready = True
-            except Exception as e:
-                # FIX 40b: log full traceback + show short detail for diagnosis
-                detail = str(e) or type(e).__name__
-                self.report_error = f"Error al generar el reporte: {detail}"
-                logger.exception("Error al generar reporte: %s", detail)
-            finally:
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            if not company_id or not branch_id:
                 self.report_loading = False
+                self.report_error = "Empresa o sucursal no definida."
+                return
+
+            report_type = self.report_type
+            dates = self._calculate_period_dates()
+            start_date, end_date = dates[0], dates[1]
+            country_code, timezone = self._company_time_context()
+            generated_at = self._display_now()
+            start_str = self._to_company_datetime(start_date).strftime("%Y%m%d")
+            end_str = self._to_company_datetime(end_date).strftime("%Y%m%d")
+            now_str = generated_at.strftime("%Y%m%d")
+
+            params = {
+                "report_type": report_type,
+                "company_id": company_id,
+                "branch_id": branch_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "company_name": self.company_name,
+                "include_cancelled": self.include_cancelled,
+                "include_zero_stock": self.include_zero_stock,
+                "currency_symbol": self.currency_symbol,
+                "country_code": country_code,
+                "timezone": timezone,
+                "generated_at": generated_at,
+                "start_str": start_str,
+                "end_str": end_str,
+                "now_str": now_str,
+            }
+
+        # ── Paso 2: trabajo síncrono sin lock — DB queries + Excel ──────────
+        try:
+            output_bytes, filename = await asyncio.to_thread(_run_report_sync, params)
+        except _ReportTooLargeError as e:
+            msg = e.args[0] if e.args else "El rango de datos es demasiado grande."
+            async with self:
+                self.report_loading = False
+                self.report_error = msg
+            return
+        except Exception as e:
+            detail = str(e) or type(e).__name__
+            logger.exception("Error al generar reporte: %s", detail)
+            async with self:
+                self.report_loading = False
+                self.report_error = f"Error al generar el reporte: {detail}"
+            return
+
+        # ── Paso 3: lock corto — guardar resultado ───────────────────────────
+        async with self:
+            self._report_download_data = output_bytes
+            self._report_download_filename = filename
+            self.report_ready = True
+            self.report_loading = False
 
     @rx.event
     def download_report(self):
