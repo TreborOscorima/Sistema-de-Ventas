@@ -92,6 +92,20 @@ def _make_kit_component(*, kit_id: int, component_id: int, quantity):
     return c
 
 
+def _mock_bulk_stock_uniform(value: Decimal):
+    """Devuelve un side_effect para get_available_stock_bulk que asigna `value` a cada par."""
+    async def _inner(pairs, cid, bid, session=None):
+        return {p: value for p in pairs}
+    return _inner
+
+
+def _mock_bulk_stock_per_product(stock_returns: dict):
+    """Devuelve un side_effect para get_available_stock_bulk con stock por product_id."""
+    async def _inner(pairs, cid, bid, session=None):
+        return {(pid, vid): stock_returns.get(pid, Decimal("0")) for pid, vid in pairs}
+    return _inner
+
+
 def _patch_async_session_multi(calls_sequence):
     """Crea un context manager mock que devuelve resultados por llamada secuencial.
 
@@ -147,7 +161,7 @@ class TestKitExpansion:
         session_mock = _patch_async_session_multi([components, [cuaderno, lapicera]])
 
         with patch("app.states.venta.cart_mixin.get_async_session", return_value=session_mock), \
-             patch("app.states.venta.cart_mixin.SaleService.get_available_stock", new_callable=AsyncMock, return_value=Decimal("100")):
+             patch("app.states.venta.cart_mixin.SaleService.get_available_stock_bulk", side_effect=_mock_bulk_stock_uniform(Decimal("100"))):
             result = await state._add_kit_to_cart(kit_payload, 1, 1)
 
         assert len(state.new_sale_items) == 2
@@ -183,7 +197,7 @@ class TestKitExpansion:
         session_mock = _patch_async_session_multi([components, [cuaderno, lapicera]])
 
         with patch("app.states.venta.cart_mixin.get_async_session", return_value=session_mock), \
-             patch("app.states.venta.cart_mixin.SaleService.get_available_stock", new_callable=AsyncMock, return_value=Decimal("100")):
+             patch("app.states.venta.cart_mixin.SaleService.get_available_stock_bulk", side_effect=_mock_bulk_stock_uniform(Decimal("100"))):
             await state._add_kit_to_cart(kit_payload, 1, 1)
 
         # sum(subtotal) debe ser igual al precio del kit
@@ -208,7 +222,7 @@ class TestKitExpansion:
         session_mock = _patch_async_session_multi([components, [a, b]])
 
         with patch("app.states.venta.cart_mixin.get_async_session", return_value=session_mock), \
-             patch("app.states.venta.cart_mixin.SaleService.get_available_stock", new_callable=AsyncMock, return_value=Decimal("50")):
+             patch("app.states.venta.cart_mixin.SaleService.get_available_stock_bulk", side_effect=_mock_bulk_stock_uniform(Decimal("50"))):
             await state._add_kit_to_cart(kit_payload, 1, 1)
 
         total = sum(i["subtotal"] for i in state.new_sale_items)
@@ -241,11 +255,8 @@ class TestKitStockValidation:
 
         stock_returns = {10: Decimal("2"), 20: Decimal("100")}
 
-        async def _get_stock(pid, vid, cid, bid):
-            return stock_returns.get(pid, Decimal("0"))
-
         with patch("app.states.venta.cart_mixin.get_async_session", return_value=session_mock), \
-             patch("app.states.venta.cart_mixin.SaleService.get_available_stock", side_effect=_get_stock):
+             patch("app.states.venta.cart_mixin.SaleService.get_available_stock_bulk", side_effect=_mock_bulk_stock_per_product(stock_returns)):
             result = await state._add_kit_to_cart(kit_payload, 1, 1)
 
         # No se agrega ningún componente al carrito
@@ -274,11 +285,8 @@ class TestKitStockValidation:
 
         stock_returns = {10: Decimal("5"), 20: Decimal("100")}
 
-        async def _get_stock(pid, vid, cid, bid):
-            return stock_returns.get(pid, Decimal("0"))
-
         with patch("app.states.venta.cart_mixin.get_async_session", return_value=session_mock), \
-             patch("app.states.venta.cart_mixin.SaleService.get_available_stock", side_effect=_get_stock):
+             patch("app.states.venta.cart_mixin.SaleService.get_available_stock_bulk", side_effect=_mock_bulk_stock_per_product(stock_returns)):
             result = await state._add_kit_to_cart(kit_payload, 1, 1)
 
         # Solo el ítem original sigue en el carrito, el kit no se agregó
@@ -361,7 +369,7 @@ class TestKitComponentesPrecioCero:
         session_mock = _patch_async_session_multi([components, [a, b]])
 
         with patch("app.states.venta.cart_mixin.get_async_session", return_value=session_mock), \
-             patch("app.states.venta.cart_mixin.SaleService.get_available_stock", new_callable=AsyncMock, return_value=Decimal("50")):
+             patch("app.states.venta.cart_mixin.SaleService.get_available_stock_bulk", side_effect=_mock_bulk_stock_uniform(Decimal("50"))):
             await state._add_kit_to_cart(kit_payload, 1, 1)
 
         total = sum(i["subtotal"] for i in state.new_sale_items)

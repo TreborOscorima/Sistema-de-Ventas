@@ -262,91 +262,59 @@ class DashboardState(MixinState):
             self.avg_ticket = 0.0
             return
 
+        period_start, period_end, prev_start, prev_end = self._get_period_dates()
+        reservation_start, _, _, _ = self._local_period_dates()
+
         with rx.session() as session:
             session.info["tenant_bypass"] = True
-            # Ventas de hoy
-            today_result = session.exec(
+            # Una sola pasada sobre Sale para today/week/month/period/prev con CASE WHEN.
+            # Sustituye 5 queries independientes por un único GROUP-BY vacío con sumas
+            # condicionales → de 5 round-trips a 1.
+            now_utc = self._company_local_datetime_to_utc_naive(self._display_now())
+            earliest = min(today_start, week_start, month_start, period_start, prev_start)
+            latest = max(now_utc, period_end)
+            agg = session.exec(
                 select(
-                    func.count(Sale.id),
-                    func.coalesce(func.sum(Sale.total_amount), 0)
+                    func.count(case((Sale.timestamp >= today_start, Sale.id))).label("t_cnt"),
+                    func.coalesce(func.sum(case((Sale.timestamp >= today_start, Sale.total_amount))), 0).label("t_amt"),
+                    func.count(case((Sale.timestamp >= week_start, Sale.id))).label("w_cnt"),
+                    func.coalesce(func.sum(case((Sale.timestamp >= week_start, Sale.total_amount))), 0).label("w_amt"),
+                    func.count(case((Sale.timestamp >= month_start, Sale.id))).label("m_cnt"),
+                    func.coalesce(func.sum(case((Sale.timestamp >= month_start, Sale.total_amount))), 0).label("m_amt"),
+                    func.count(case((and_(Sale.timestamp >= period_start, Sale.timestamp <= period_end), Sale.id))).label("p_cnt"),
+                    func.coalesce(func.sum(case((and_(Sale.timestamp >= period_start, Sale.timestamp <= period_end), Sale.total_amount))), 0).label("p_amt"),
+                    func.coalesce(func.sum(case((and_(Sale.timestamp >= prev_start, Sale.timestamp < prev_end), Sale.total_amount))), 0).label("prev_amt"),
                 )
                 .where(
                     and_(
-                        Sale.timestamp >= today_start,
+                        Sale.timestamp >= earliest,
+                        Sale.timestamp <= latest,
                         Sale.status != SaleStatus.cancelled,
                         Sale.company_id == company_id,
                         Sale.branch_id == branch_id,
                     )
                 )
             ).one()
-            self.today_sales_count = today_result[0] or 0
-            self.today_sales = float(today_result[1] or 0)
+            self.today_sales_count = int(agg[0] or 0)
+            self.today_sales = float(agg[1] or 0)
+            self.week_sales_count = int(agg[2] or 0)
+            self.week_sales = float(agg[3] or 0)
+            self.month_sales_count = int(agg[4] or 0)
+            self.month_sales = float(agg[5] or 0)
+            self.period_sales_count = int(agg[6] or 0)
+            self.period_sales = float(agg[7] or 0)
+            self.period_prev_sales = float(agg[8] or 0)
 
-            # Ventas de la semana
-            week_result = session.exec(
-                select(
-                    func.count(Sale.id),
-                    func.coalesce(func.sum(Sale.total_amount), 0)
-                )
-                .where(
-                    and_(
-                        Sale.timestamp >= week_start,
-                        Sale.status != SaleStatus.cancelled,
-                        Sale.company_id == company_id,
-                        Sale.branch_id == branch_id,
-                    )
-                )
-            ).one()
-            self.week_sales_count = week_result[0] or 0
-            self.week_sales = float(week_result[1] or 0)
-
-            # Ventas del mes
-            month_result = session.exec(
-                select(
-                    func.count(Sale.id),
-                    func.coalesce(func.sum(Sale.total_amount), 0)
-                )
-                .where(
-                    and_(
-                        Sale.timestamp >= month_start,
-                        Sale.status != SaleStatus.cancelled,
-                        Sale.company_id == company_id,
-                        Sale.branch_id == branch_id,
-                    )
-                )
-            ).one()
-            self.month_sales_count = month_result[0] or 0
-            self.month_sales = float(month_result[1] or 0)
-
-            # Ventas del período seleccionado y período anterior
-            period_start, period_end, prev_start, prev_end = self._get_period_dates()
-            reservation_start, _, _, _ = self._local_period_dates()
-
-            period_result = session.exec(
-                select(
-                    func.count(Sale.id),
-                    func.coalesce(func.sum(Sale.total_amount), 0)
-                )
-                .where(
-                    and_(
-                        Sale.timestamp >= period_start,
-                        Sale.timestamp <= period_end,
-                        Sale.status != SaleStatus.cancelled,
-                        Sale.company_id == company_id,
-                        Sale.branch_id == branch_id,
-                    )
-                )
-            ).one()
-            self.period_sales_count = period_result[0] or 0
-            self.period_sales = float(period_result[1] or 0)
+            if self.period_sales_count > 0:
+                self.avg_ticket = self.period_sales / self.period_sales_count
+            else:
+                self.avg_ticket = 0.0
 
             # Reservas del período seleccionado (agenda operativa).
             # Se usa end-of-day para incluir reservas futuras del día actual,
             # ya que start_datetime es la hora agendada (no la hora de creación).
             # Excluye estados cancelled y refunded.
-            reservation_end = self._get_reservation_period_end(
-                today_start_local
-            )
+            reservation_end = self._get_reservation_period_end(today_start_local)
             reservation_result = session.exec(
                 select(func.count(FieldReservation.id))
                 .where(
@@ -362,12 +330,6 @@ class DashboardState(MixinState):
                 )
             ).one()
             self.period_reservations_count = int(reservation_result or 0)
-
-            # Ticket promedio del período seleccionado
-            if self.period_sales_count > 0:
-                self.avg_ticket = self.period_sales / self.period_sales_count
-            else:
-                self.avg_ticket = 0.0
 
             # Margen bruto del período: ingresos - costo
             margin_result = session.exec(
@@ -399,21 +361,6 @@ class DashboardState(MixinState):
             self.period_margin_percent = (
                 ((revenue - cost) / revenue * 100) if revenue > 0 else 0.0
             )
-
-            # Período anterior para comparación
-            prev_result = session.exec(
-                select(func.coalesce(func.sum(Sale.total_amount), 0))
-                .where(
-                    and_(
-                        Sale.timestamp >= prev_start,
-                        Sale.timestamp < prev_end,
-                        Sale.status != SaleStatus.cancelled,
-                        Sale.company_id == company_id,
-                        Sale.branch_id == branch_id,
-                    )
-                )
-            ).one()
-            self.period_prev_sales = float(prev_result or 0)
 
     def _load_kpis(self):
         """Carga KPIs principales."""

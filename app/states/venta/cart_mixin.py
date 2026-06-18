@@ -525,12 +525,15 @@ class CartMixin:
                         duration=3000,
                     )
 
-            # Validar stock de cada componente (considerando lo ya en carrito)
+            # Validar stock de todos los componentes en un solo round-trip (bulk).
+            stock_map = await SaleService.get_available_stock_bulk(
+                [(int(p.id), None) for p in product_map.values()],
+                int(company_id), int(branch_id),
+                session=session,
+            )
             for comp in components:
                 p = product_map[comp.component_product_id]
-                available = await SaleService.get_available_stock(
-                    int(p.id), None, int(company_id), int(branch_id),
-                )
+                available = stock_map.get((int(p.id), None), Decimal("0"))
                 needed = float(comp.quantity)
                 in_cart = sum(
                     float(item.get("quantity", 0))

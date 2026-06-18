@@ -430,6 +430,12 @@ class CashboxLog(TenantMixin, SQLModel, table=True):
             "timestamp",
             "action",
         ),
+        sqlalchemy.Index(
+            "ix_cashboxlog_company_branch_action",
+            "company_id",
+            "branch_id",
+            "action",
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)

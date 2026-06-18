@@ -661,6 +661,142 @@ async def get_available_stock(
         set_tenant_context(None, None)
 
 
+async def get_available_stock_bulk(
+    pairs: list[tuple[int | None, int | None]],
+    company_id: int,
+    branch_id: int,
+    session: AsyncSession | None = None,
+) -> dict[tuple[int | None, int | None], Decimal]:
+    """Versión bulk de get_available_stock — 4-5 queries totales en vez de N×5.
+
+    Carga productos, variantes, units y lotes de todos los pares en paralelo
+    (una query IN por tabla). Útil para validar stock de kits con múltiples
+    componentes antes de agregarlos al carrito.
+
+    Retorna {(product_id, variant_id): stock_disponible}.
+    """
+    if not pairs:
+        return {}
+    set_tenant_context(company_id, branch_id)
+    try:
+        async def _run(s: AsyncSession) -> dict[tuple[int | None, int | None], Decimal]:
+            product_ids = list({pid for pid, vid in pairs if pid is not None})
+            variant_ids = list({vid for pid, vid in pairs if vid is not None})
+
+            # 1. Productos
+            products_by_id: dict[int, Product] = {}
+            if product_ids:
+                rows = (await s.exec(
+                    _apply_tenant_filters(
+                        select(Product).where(Product.id.in_(product_ids)),
+                        Product, company_id, branch_id,
+                    )
+                )).all()
+                products_by_id = {p.id: p for p in rows}
+
+            # 2. Variantes
+            variants_by_id: dict[int, ProductVariant] = {}
+            if variant_ids:
+                rows = (await s.exec(
+                    _apply_tenant_filters(
+                        select(ProductVariant).where(ProductVariant.id.in_(variant_ids)),
+                        ProductVariant, company_id, branch_id,
+                    )
+                )).all()
+                variants_by_id = {v.id: v for v in rows}
+
+            # 3. Units (allows_decimal)
+            unit_names = {p.unit for p in products_by_id.values() if p.unit}
+            units_by_name: dict[str, Unit] = {}
+            if unit_names:
+                rows = (await s.exec(
+                    _apply_tenant_filters(
+                        select(Unit).where(Unit.name.in_(list(unit_names))),
+                        Unit, company_id, branch_id,
+                    )
+                )).all()
+                units_by_name = {u.name: u for u in rows}
+
+            # 4. Lotes activos (product_id IN (...) OR product_variant_id IN (...))
+            batches_by_variant: dict[int, list[ProductBatch]] = {}
+            batches_by_product: dict[int, list[ProductBatch]] = {}
+            batch_conds = []
+            if variant_ids:
+                batch_conds.append(ProductBatch.product_variant_id.in_(variant_ids))
+            if product_ids:
+                batch_conds.append(ProductBatch.product_id.in_(product_ids))
+            if batch_conds:
+                all_batches = (await s.exec(
+                    _apply_tenant_filters(
+                        select(ProductBatch)
+                        .where(or_(*batch_conds))
+                        .where(ProductBatch.stock > 0)
+                        .order_by(
+                            ProductBatch.expiration_date.asc(),
+                            ProductBatch.id.asc(),
+                        ),
+                        ProductBatch, company_id, branch_id,
+                    )
+                )).all()
+                for b in all_batches:
+                    if b.product_variant_id is not None:
+                        batches_by_variant.setdefault(b.product_variant_id, []).append(b)
+                    elif b.product_id is not None:
+                        batches_by_product.setdefault(b.product_id, []).append(b)
+
+            # 5. Suma de variantes por producto (solo los pids sin lotes directos)
+            pids_need_variant_sum = {
+                pid for pid, vid in pairs
+                if vid is None and pid is not None and pid not in batches_by_product
+            }
+            variant_sum_by_product: dict[int, Decimal] = {}
+            if pids_need_variant_sum:
+                rows = (await s.exec(
+                    _apply_tenant_filters(
+                        select(
+                            ProductVariant.product_id,
+                            func.coalesce(func.sum(ProductVariant.stock), 0),
+                        )
+                        .where(ProductVariant.product_id.in_(list(pids_need_variant_sum)))
+                        .group_by(ProductVariant.product_id),
+                        ProductVariant, company_id, branch_id,
+                    )
+                )).all()
+                variant_sum_by_product = {r[0]: Decimal(str(r[1] or 0)) for r in rows}
+
+            result: dict[tuple[int | None, int | None], Decimal] = {}
+            for pid, vid in pairs:
+                product = products_by_id.get(pid) if pid else None
+                variant = variants_by_id.get(vid) if vid else None
+                unit_name = product.unit if product else None
+                unit = units_by_name.get(unit_name) if unit_name else None
+                allows_decimal = bool(unit.allows_decimal) if unit else False
+
+                if vid is not None and vid in batches_by_variant:
+                    result[(pid, vid)] = _sum_batch_stock(batches_by_variant[vid], allows_decimal)
+                elif vid is None and pid is not None and pid in batches_by_product:
+                    result[(pid, vid)] = _sum_batch_stock(batches_by_product[pid], allows_decimal)
+                elif vid is not None and variant is not None:
+                    result[(pid, vid)] = _round_quantity(variant.stock, allows_decimal)
+                elif pid is not None and product is not None:
+                    vt = variant_sum_by_product.get(pid, Decimal("0"))
+                    if vt > 0:
+                        result[(pid, vid)] = _round_quantity(vt, allows_decimal)
+                    else:
+                        result[(pid, vid)] = _round_quantity(product.stock, allows_decimal)
+                else:
+                    result[(pid, vid)] = Decimal("0")
+
+            return result
+
+        if session is not None:
+            return await _run(session)
+        async with get_session() as s:
+            return await _run(s)
+    finally:
+        set_tenant_context(None, None)
+
+
 async def _get_price_tier(
     session: AsyncSession,
     *,
@@ -1272,6 +1408,20 @@ class SaleService:
         return await get_available_stock(
             product_id,
             variant_id,
+            company_id,
+            branch_id,
+            session=session,
+        )
+
+    @staticmethod
+    async def get_available_stock_bulk(
+        pairs: list[tuple[int | None, int | None]],
+        company_id: int,
+        branch_id: int,
+        session: AsyncSession | None = None,
+    ) -> dict[tuple[int | None, int | None], Decimal]:
+        return await get_available_stock_bulk(
+            pairs,
             company_id,
             branch_id,
             session=session,

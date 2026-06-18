@@ -62,6 +62,9 @@ RUN groupadd --system --gid 1000 app \
 
 # Copiar codigo de la aplicacion con ownership correcto.
 COPY --chown=app:app . .
+# _vendor/ se usó en el builder para pip install; en runtime el paquete ya está
+# en site-packages. Limpiar fuente para reducir imagen (~5-10 MB menos).
+RUN rm -rf /app/_vendor
 
 # Script de entrada:
 # - espera MySQL/Redis (fail-fast)
