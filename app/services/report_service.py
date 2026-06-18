@@ -535,66 +535,202 @@ def generate_sales_report(
         "timezone": timezone,
     }
 
-    # Consultar ventas del período
-    query = (
-        select(Sale)
-        .where(
-            and_(
-                Sale.timestamp >= start_date,
-                Sale.timestamp <= end_date,
-            )
-        )
-        .options(
-            selectinload(Sale.items).selectinload(SaleItem.product),
-            selectinload(Sale.items).selectinload(SaleItem.product_variant),
-            selectinload(Sale.payments),
-            selectinload(Sale.user),
-            selectinload(Sale.client),
-        )
-        .order_by(Sale.timestamp.desc())
-    )
-    if company_id:
-        query = query.where(Sale.company_id == company_id)
-    if branch_id:
-        query = query.where(Sale.branch_id == branch_id)
-
-    if not include_cancelled:
-        query = query.where(Sale.status != SaleStatus.cancelled)
-
-    sales = session.exec(query).all()
     pm_by_id = _load_pm_names(session, company_id, branch_id)
-    # P1-03: Sale.user ya está prefetched (selectinload arriba) → evitar query redundante
-    sale_user_lookup: dict[int, str] = {
-        int(s.user_id): _safe_string(s.user.username)
-        for s in sales
-        if s.user_id is not None and s.user is not None and getattr(s.user, "username", None)
-    }
 
-    # Pre-cargar nombres de Promoción y Lista de Precios para hoja Detalle
+    # Filtros base reutilizables en todas las queries del reporte
+    _base: list = [Sale.timestamp >= start_date, Sale.timestamp <= end_date]
+    if company_id:
+        _base.append(Sale.company_id == company_id)
+    if branch_id:
+        _base.append(Sale.branch_id == branch_id)
+    if not include_cancelled:
+        _base.append(Sale.status != SaleStatus.cancelled)
+
+    # ── 1. Stream liviano: totales + by_day + by_user + by_hour ─────────────
+    # Solo 5 columnas escalares, 2000 filas a la vez. Sin cargar relaciones.
+    total_ventas = Decimal("0")
+    ventas_count = 0
+    ventas_credito = 0
+    monto_credito = Decimal("0")
+    by_day: dict[str, dict] = {}
+    by_user: dict[str, dict] = {}
+    by_hour: dict[int, dict] = {}
+    _sale_day_map: dict[int, str] = {}
+
+    for _sid, _ts, _amt, _cond, _uname in session.execute(
+        select(Sale.id, Sale.timestamp, Sale.total_amount, Sale.payment_condition, User.username)
+        .outerjoin(User, Sale.user_id == User.id)
+        .where(*_base)
+        .execution_options(yield_per=2000)
+    ):
+        _t = _safe_decimal(_amt)
+        total_ventas += _t
+        ventas_count += 1
+        if (_cond or "").lower() in {"credito", "credit"}:
+            ventas_credito += 1
+            monto_credito += _t
+        _day = _format_report_datetime(_ts, "%Y-%m-%d", country_code, timezone) if _ts else "Sin fecha"
+        _sale_day_map[_sid] = _day
+        if _day not in by_day:
+            by_day[_day] = {"count": 0, "total": Decimal("0"), "cost": Decimal("0")}
+        by_day[_day]["count"] += 1
+        by_day[_day]["total"] += _t
+        _un = _safe_string(_uname, MSG.REPORT_UNKNOWN)
+        if _un not in by_user:
+            by_user[_un] = {"count": 0, "total": Decimal("0")}
+        by_user[_un]["count"] += 1
+        by_user[_un]["total"] += _t
+        if _ts:
+            _lts = to_local_datetime(_ts, country_code, timezone=timezone) or _ts
+            _hr = _lts.hour
+            if _hr not in by_hour:
+                by_hour[_hr] = {"count": 0, "total": Decimal("0")}
+            by_hour[_hr]["count"] += 1
+            by_hour[_hr]["total"] += _t
+
+    ventas_contado = ventas_count - ventas_credito
+    monto_contado = total_ventas - monto_credito
+
+    # ── 2. Costo total + descuentos (SQL GROUP BY sobre SaleItem + Product) ──
+    _cd = session.execute(
+        select(
+            func.coalesce(func.sum(func.coalesce(Product.purchase_price, 0) * SaleItem.quantity), 0),
+            func.coalesce(func.sum(func.greatest(
+                func.coalesce((SaleItem.unit_price_base - SaleItem.unit_price) * SaleItem.quantity, 0), 0
+            )), 0),
+        )
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .outerjoin(Product, SaleItem.product_id == Product.id)
+        .where(*_base)
+    ).one()
+    total_costo = Decimal(str(_cd[0] or 0))
+    total_descuentos = Decimal(str(_cd[1] or 0))
+
+    # ── 3. Costo por día (GROUP BY sale_id → mapear con _sale_day_map) ───────
+    for _sid_c, _dcost in session.execute(
+        select(
+            SaleItem.sale_id,
+            func.coalesce(func.sum(func.coalesce(Product.purchase_price, 0) * SaleItem.quantity), 0),
+        )
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .outerjoin(Product, SaleItem.product_id == Product.id)
+        .where(*_base)
+        .group_by(SaleItem.sale_id)
+    ):
+        _d = _sale_day_map.get(_sid_c)
+        if _d:
+            by_day[_d]["cost"] += _safe_decimal(_dcost)
+
+    # ── 4. Por categoría (SQL GROUP BY, con costo de SaleItem JOIN Product) ──
+    by_category: dict[str, dict] = {}
+    for _cat, _cnt, _ct, _cc, _cd_disc, _qty in session.execute(
+        select(
+            func.coalesce(SaleItem.product_category_snapshot, "Sin categoría"),
+            func.count(func.distinct(SaleItem.sale_id)),
+            func.coalesce(func.sum(SaleItem.subtotal), 0),
+            func.coalesce(func.sum(func.coalesce(Product.purchase_price, 0) * SaleItem.quantity), 0),
+            func.coalesce(func.sum(func.greatest(
+                func.coalesce((SaleItem.unit_price_base - SaleItem.unit_price) * SaleItem.quantity, 0), 0
+            )), 0),
+            func.coalesce(func.sum(SaleItem.quantity), 0),
+        )
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .outerjoin(Product, SaleItem.product_id == Product.id)
+        .where(*_base)
+        .group_by(func.coalesce(SaleItem.product_category_snapshot, "Sin categoría"))
+    ):
+        by_category[_cat] = {
+            "count": _cnt,
+            "total": Decimal(str(_ct or 0)),
+            "cost": Decimal(str(_cc or 0)),
+            "discount": Decimal(str(_cd_disc or 0)),
+            "qty": int(_qty or 0),
+        }
+
+    # ── 5. Por método de pago (SQL GROUP BY sobre SalePayment JOIN Sale) ─────
+    by_payment: dict[str, dict] = {}
+
+    class _PM:
+        __slots__ = ("method_type", "payment_method_id")
+        def __init__(self, mt, pid): self.method_type = mt; self.payment_method_id = pid
+
+    for _mt, _pm_id, _pcnt, _ptot in session.execute(
+        select(
+            SalePayment.method_type, SalePayment.payment_method_id,
+            func.count(SalePayment.id),
+            func.coalesce(func.sum(SalePayment.amount), 0),
+        )
+        .join(Sale, SalePayment.sale_id == Sale.id)
+        .where(*_base)
+        .group_by(SalePayment.method_type, SalePayment.payment_method_id)
+    ):
+        _method = _resolve_payment_display(_PM(_mt, _pm_id), pm_by_id)
+        _pa = Decimal(str(_ptot or 0))
+        if _method not in by_payment:
+            by_payment[_method] = {"count": 0, "total": Decimal("0")}
+        by_payment[_method]["count"] += _pcnt
+        by_payment[_method]["total"] += _pa
+
+    # ── 6. Top 20 productos (SQL GROUP BY, con costo de Product) ─────────────
+    sorted_products = [
+        {
+            "name": _r[0] or "Producto sin nombre",
+            "category": _r[1],
+            "qty": int(_r[2] or 0),
+            "total": Decimal(str(_r[3] or 0)),
+            "cost": Decimal(str(_r[4] or 0)),
+            "transactions": _r[5] or 0,
+        }
+        for _r in session.execute(
+            select(
+                SaleItem.product_name_snapshot,
+                func.coalesce(SaleItem.product_category_snapshot, "Sin categoría"),
+                func.coalesce(func.sum(SaleItem.quantity), 0),
+                func.coalesce(func.sum(SaleItem.subtotal), 0),
+                func.coalesce(func.sum(func.coalesce(Product.purchase_price, 0) * SaleItem.quantity), 0),
+                func.count(func.distinct(SaleItem.sale_id)),
+            )
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .outerjoin(Product, SaleItem.product_id == Product.id)
+            .where(*_base)
+            .group_by(
+                SaleItem.product_name_snapshot,
+                func.coalesce(SaleItem.product_category_snapshot, "Sin categoría"),
+            )
+            .order_by(func.sum(SaleItem.subtotal).desc())
+            .limit(20)
+        )
+    ]
+
+    # ── 7. Promo/PriceList names para hoja Detalle ────────────────────────────
     _promo_ids = {
-        item.applied_promotion_id
-        for s in sales
-        for item in (s.items or [])
-        if getattr(item, "applied_promotion_id", None)
+        row[0]
+        for row in session.execute(
+            select(SaleItem.applied_promotion_id.distinct())
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(SaleItem.applied_promotion_id.is_not(None))
+            .where(*_base)
+        ).all()
+        if row[0]
     }
     _pl_ids = {
-        item.applied_price_list_id
-        for s in sales
-        for item in (s.items or [])
-        if getattr(item, "applied_price_list_id", None)
+        row[0]
+        for row in session.execute(
+            select(SaleItem.applied_price_list_id.distinct())
+            .join(Sale, SaleItem.sale_id == Sale.id)
+            .where(SaleItem.applied_price_list_id.is_not(None))
+            .where(*_base)
+        ).all()
+        if row[0]
     }
-    _promos_by_id: dict[int, str] = {}
-    _pls_by_id: dict[int, str] = {}
-    if _promo_ids:
-        _promos_by_id = {
-            p.id: (p.name or "Promoción")
-            for p in session.exec(select(Promotion).where(Promotion.id.in_(_promo_ids))).all()
-        }
-    if _pl_ids:
-        _pls_by_id = {
-            pl.id: (pl.name or "Lista de precios")
-            for pl in session.exec(select(PriceList).where(PriceList.id.in_(_pl_ids))).all()
-        }
+    _promos_by_id: dict[int, str] = {
+        p.id: (p.name or "Promoción")
+        for p in session.exec(select(Promotion).where(Promotion.id.in_(_promo_ids))).all()
+    } if _promo_ids else {}
+    _pls_by_id: dict[int, str] = {
+        pl.id: (pl.name or "Lista de precios")
+        for pl in session.exec(select(PriceList).where(PriceList.id.in_(_pl_ids))).all()
+    } if _pl_ids else {}
 
     period_str = (
         f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
@@ -616,107 +752,6 @@ def generate_sales_report(
         country_code=country_code,
         timezone=timezone,
     )
-
-    # Calcular métricas
-    total_ventas = Decimal("0")
-    total_costo = Decimal("0")
-    total_descuentos = Decimal("0")
-    ventas_count = 0
-    ventas_credito = 0
-    ventas_contado = 0
-    monto_credito = Decimal("0")
-    monto_contado = Decimal("0")
-
-    by_category: dict[str, dict] = {}
-    by_payment: dict[str, dict] = {}
-    by_day: dict[str, dict] = {}
-    by_user: dict[str, dict] = {}
-
-    for sale in sales:
-        if sale.status == SaleStatus.cancelled:
-            continue
-
-        ventas_count += 1
-        sale_total = Decimal(str(sale.total_amount or 0))
-        total_ventas += sale_total
-
-        # Clasificar por tipo
-        is_credit = (
-            bool(getattr(sale, "is_credit", False)) or
-            (sale.payment_condition or "").lower() in {"credito", "credit"}
-        )
-
-        if is_credit:
-            ventas_credito += 1
-            monto_credito += sale_total
-        else:
-            ventas_contado += 1
-            monto_contado += sale_total
-
-        # Por día
-        day_key = (
-            _format_report_datetime(
-                sale.timestamp,
-                "%Y-%m-%d",
-                country_code,
-                timezone,
-            )
-            if sale.timestamp
-            else "Sin fecha"
-        )
-        if day_key not in by_day:
-            by_day[day_key] = {"count": 0, "total": Decimal("0"), "cost": Decimal("0")}
-        by_day[day_key]["count"] += 1
-        by_day[day_key]["total"] += sale_total
-
-        # Por usuario
-        user_name = _resolve_sale_username(sale, sale_user_lookup, MSG.REPORT_UNKNOWN)
-        if user_name not in by_user:
-            by_user[user_name] = {"count": 0, "total": Decimal("0")}
-        by_user[user_name]["count"] += 1
-        by_user[user_name]["total"] += sale_total
-
-        # Por categoría y calcular costo
-        for item in (sale.items or []):
-            item_total = Decimal(str(item.subtotal or 0))
-            # Obtener costo del producto relacionado
-            cost_price = Decimal(str(item.product.purchase_price or 0)) if item.product else Decimal("0")
-            item_cost = cost_price * Decimal(str(item.quantity or 0))
-            total_costo += item_cost
-
-            # Descuento real = (base − final) × qty. Para items pre-migración el
-            # back-fill dejó base = final → descuento histórico = 0.
-            unit_base = Decimal(str(getattr(item, "unit_price_base", None) or item.unit_price or 0))
-            unit_final = Decimal(str(item.unit_price or 0))
-            qty_dec = Decimal(str(item.quantity or 0))
-            line_discount = (unit_base - unit_final) * qty_dec
-            if line_discount > 0:
-                total_descuentos += line_discount
-
-            category = item.product_category_snapshot or "Sin categoría"
-            if category not in by_category:
-                by_category[category] = {
-                    "count": 0,
-                    "total": Decimal("0"),
-                    "cost": Decimal("0"),
-                    "qty": 0,
-                    "discount": Decimal("0"),
-                }
-            by_category[category]["count"] += 1
-            by_category[category]["total"] += item_total
-            by_category[category]["cost"] += item_cost
-            by_category[category]["qty"] += int(item.quantity or 0)
-            if line_discount > 0:
-                by_category[category]["discount"] += line_discount
-
-        # Por método de pago
-        for payment in (sale.payments or []):
-            method = _resolve_payment_display(payment, pm_by_id)
-            amount = Decimal(str(payment.amount or 0))
-            if method not in by_payment:
-                by_payment[method] = {"count": 0, "total": Decimal("0")}
-            by_payment[method]["count"] += 1
-            by_payment[method]["total"] += amount
 
     utilidad_bruta = total_ventas - total_costo
     margen_bruto = (utilidad_bruta / total_ventas * 100) if total_ventas > 0 else Decimal("0")
@@ -1127,7 +1162,19 @@ def generate_sales_report(
     detail_data_start = row + 1
     row += 1
 
-    for sale in sales:
+    for sale in session.execute(
+        select(Sale)
+        .where(*_base)
+        .options(
+            selectinload(Sale.items).selectinload(SaleItem.product),
+            selectinload(Sale.items).selectinload(SaleItem.product_variant),
+            selectinload(Sale.payments),
+            selectinload(Sale.user),
+            selectinload(Sale.client),
+        )
+        .order_by(Sale.timestamp.desc())
+        .execution_options(yield_per=100)
+    ).scalars():
         # Método de pago
         payment_method = "No especificado"
         for payment in (sale.payments or []):
@@ -1226,7 +1273,7 @@ def generate_sales_report(
                 row=row,
                 column=4,
                 value=_safe_string(
-                    _resolve_sale_username(sale, sale_user_lookup, "Sistema"),
+                    _resolve_sale_username(sale, {}, "Sistema"),
                     "Sistema",
                 ),
             )
@@ -1302,34 +1349,6 @@ def generate_sales_report(
         **header_kwargs,
     )
 
-    # Calcular productos más vendidos
-    by_product: dict[str, dict] = {}
-    for sale in sales:
-        if sale.status == SaleStatus.cancelled:
-            continue
-        for item in (sale.items or []):
-            product_name = item.product_name_snapshot or "Producto sin nombre"
-            product_id = item.product_id or 0
-            key = f"{product_id}|{product_name}"
-            qty = _safe_int(item.quantity)
-            subtotal = _safe_decimal(item.subtotal)
-            cost_price = _safe_decimal(item.product.purchase_price) if item.product else Decimal("0")
-            item_cost = cost_price * Decimal(str(qty))
-
-            if key not in by_product:
-                by_product[key] = {
-                    "name": product_name,
-                    "category": item.product_category_snapshot or "Sin categoría",
-                    "qty": 0,
-                    "total": Decimal("0"),
-                    "cost": Decimal("0"),
-                    "transactions": 0,
-                }
-            by_product[key]["qty"] += qty
-            by_product[key]["total"] += subtotal
-            by_product[key]["cost"] += item_cost
-            by_product[key]["transactions"] += 1
-
     headers = [
         "Producto", "Categoría", "Unidades Vendidas", "Nº Ventas",
         f"Ingresos ({currency_label})", f"Costo ({currency_label})", f"Utilidad ({currency_label})", "Margen (%)"
@@ -1337,9 +1356,6 @@ def generate_sales_report(
     _style_header_row(ws_top_products, row, headers)
     top_data_start = row + 1
     row += 1
-
-    # Ordenar por total de venta (mayor primero) y limitar a top 20
-    sorted_products = sorted(by_product.values(), key=lambda x: x["total"], reverse=True)[:20]
 
     for prod in sorted_products:
         ws_top_products.cell(row=row, column=1, value=_safe_string(prod["name"][:50]))
@@ -1391,22 +1407,6 @@ def generate_sales_report(
         columns=5,
         **header_kwargs,
     )
-
-    by_hour: dict[int, dict] = {}
-    for sale in sales:
-        if sale.status == SaleStatus.cancelled:
-            continue
-        if sale.timestamp:
-            local_timestamp = to_local_datetime(
-                sale.timestamp,
-                country_code,
-                timezone=timezone,
-            ) or sale.timestamp
-            hour = local_timestamp.hour
-            if hour not in by_hour:
-                by_hour[hour] = {"count": 0, "total": Decimal("0")}
-            by_hour[hour]["count"] += 1
-            by_hour[hour]["total"] += _safe_decimal(sale.total_amount)
 
     headers = [
         "Franja Horaria",
