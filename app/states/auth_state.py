@@ -231,7 +231,7 @@ class AuthState(MixinState):
     company_has_listas_precios: bool = False
     company_has_etiquetas: bool = False
     company_has_electronic_billing: bool = False
-    subscription_snapshot: Dict[str, Any] = {
+    subscription_snapshot: Dict[str, Any] = rx.field(default_factory=lambda: {
         "plan_type": "",
         "plan_display": "PLAN",
         "status_label": MSG.STATUS_ACTIVE,
@@ -251,7 +251,7 @@ class AuthState(MixinState):
         "users_limit_label": "0",
         "users_unlimited": False,
         "branches_unlimited": False,
-    }
+    })
     payment_alert_info: Dict[str, Any] = rx.field(default_factory=lambda: {
         "show": False,
         "color": "yellow",

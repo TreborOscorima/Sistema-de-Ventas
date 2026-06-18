@@ -75,7 +75,7 @@ services:
       DB_USER: ${DB_USER:-app}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      REDIS_HOST: redis
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app

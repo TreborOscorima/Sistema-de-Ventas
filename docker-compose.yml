@@ -111,7 +111,7 @@ services:
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@tuwayki_redis:6379/0
+      REDIS_HOST: tuwayki_redis
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
@@ -168,7 +168,7 @@ services:
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@tuwayki_redis:6379/0
+      REDIS_HOST: tuwayki_redis
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
@@ -220,7 +220,7 @@ services:
       DB_USER: app
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD requerido en .env}
       DB_NAME: ${DB_NAME:-sistema_ventas}
-      REDIS_URL: redis://:${REDIS_PASSWORD}@tuwayki_redis:6379/0
+      REDIS_HOST: tuwayki_redis
       PUBLIC_SITE_URL: https://tuwayki.app
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app

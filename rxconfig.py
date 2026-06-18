@@ -39,7 +39,29 @@ def _require_env(var_name: str, *, default: str | None = None, dev_default: str 
 
 
 # Redis requerido en prod (sesiones distribuidas + caché L2).
-REDIS_URL = _require_env("REDIS_URL", dev_default="")
+# Construimos la URL desde partes para que la contraseña no quede embebida en una
+# variable visible en `docker inspect`. Si REDIS_URL está seteado directamente
+# (compatibilidad hacia atrás) se usa tal cual.
+def _build_redis_url() -> str:
+    direct = os.getenv("REDIS_URL", "").strip()
+    if direct:
+        return direct
+    host = os.getenv("REDIS_HOST", "").strip()
+    password = os.getenv("REDIS_PASSWORD", "").strip()
+    port = os.getenv("REDIS_PORT", "6379").strip()
+    if host and password:
+        return f"redis://:{quote_plus(password)}@{host}:{port}/0"
+    if host:
+        return f"redis://{host}:{port}/0"
+    if IS_PROD:
+        raise RuntimeError(
+            "[rxconfig] Producción requiere REDIS_URL o REDIS_HOST+REDIS_PASSWORD en .env"
+        )
+    return ""
+
+REDIS_URL = _build_redis_url()
+if REDIS_URL:
+    os.environ["REDIS_URL"] = REDIS_URL
 
 # ---------------------------------------------------------------------------
 # DB
