@@ -4,6 +4,7 @@ Servicio de Reportes Contables y Financieros.
 Genera reportes profesionales para evaluaciones administrativas,
 contables y financieras con el nivel de detalle requerido.
 """
+import functools
 import io
 import re
 from datetime import datetime, timedelta
@@ -25,9 +26,23 @@ from app.models import PriceList
 from app.models import PaymentMethod
 from app.enums import SaleStatus, PaymentMethodType
 from app.i18n import MSG
-from app.utils.tenant import set_tenant_context, tenant_bypass
+from app.utils.tenant import tenant_bypass, tenant_context
 from app.utils.exports import _safe_decimal, _sanitize_excel_value
 from app.utils.timezone import format_local_datetime, to_local_datetime, utc_now_naive
+
+
+def _with_tenant_reset(fn):
+    """Gestiona tenant context para funciones de reporte: set al entrar, reset al salir.
+
+    Extrae company_id y branch_id de kwargs. El context manager tenant_context()
+    usa ContextVar.reset() para restaurar el token anterior en lugar de solo
+    hacer set(None, None), lo que evita leaks en caso de excepciones.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with tenant_context(kwargs.get("company_id"), kwargs.get("branch_id")):
+            return fn(*args, **kwargs)
+    return wrapper
 
 
 # =============================================================================
@@ -501,6 +516,7 @@ def _auto_adjust_columns(ws: Worksheet, min_width: int = 12, max_width: int = 50
 # REPORTE DE VENTAS CONSOLIDADO
 # =============================================================================
 
+@_with_tenant_reset
 def generate_sales_report(
     session,
     start_date: datetime,
@@ -525,7 +541,6 @@ def generate_sales_report(
     - Análisis de utilidad bruta
     - Listado detallado de transacciones
     """
-    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -1460,7 +1475,6 @@ def generate_sales_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    set_tenant_context(None, None)
     return output
 
 
@@ -1468,6 +1482,7 @@ def generate_sales_report(
 # REPORTE DE INVENTARIO VALORIZADO
 # =============================================================================
 
+@_with_tenant_reset
 def generate_inventory_report(
     session,
     company_name: str = "TUWAYKIAPP",
@@ -1489,7 +1504,6 @@ def generate_inventory_report(
     - Productos con stock crítico
     - Rotación estimada
     """
-    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -1883,7 +1897,6 @@ def generate_inventory_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    set_tenant_context(None, None)
     return output
 
 
@@ -1891,6 +1904,7 @@ def generate_inventory_report(
 # REPORTE DE CUENTAS POR COBRAR (ANTIGÜEDAD DE DEUDA)
 # =============================================================================
 
+@_with_tenant_reset
 def generate_receivables_report(
     session,
     company_name: str = "TUWAYKIAPP",
@@ -1910,7 +1924,6 @@ def generate_receivables_report(
     - Detalle por cliente
     - Provisión sugerida para cobranza dudosa
     """
-    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -2298,7 +2311,6 @@ def generate_receivables_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    set_tenant_context(None, None)
     return output
 
 
@@ -2354,6 +2366,7 @@ def _normalize_payment_method(method_label: str) -> str:
     return "other"
 
 
+@_with_tenant_reset
 def generate_cashbox_report(
     session,
     start_date: datetime,
@@ -2376,7 +2389,6 @@ def generate_cashbox_report(
     - Diferencias detectadas
     - Desglose de ingresos por origen (Ventas vs Cobranzas)
     """
-    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -2974,7 +2986,6 @@ def generate_cashbox_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    set_tenant_context(None, None)
     return output
 
 
@@ -2983,6 +2994,7 @@ def generate_cashbox_report(
 # =============================================================================
 
 
+@_with_tenant_reset
 def generate_promotions_report(
     session,
     start_date: datetime,
@@ -3007,7 +3019,6 @@ def generate_promotions_report(
     Las ventas anuladas se excluyen para que el reporte refleje impacto
     comercial efectivo. Las promos sin uso en el período no aparecen.
     """
-    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -3305,10 +3316,10 @@ def generate_promotions_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    set_tenant_context(None, None)
     return output
 
 
+@_with_tenant_reset
 def generate_price_lists_report(
     session,
     start_date: datetime,
@@ -3329,7 +3340,6 @@ def generate_price_lists_report(
     Los ítems sin lista asignada se agrupan bajo "Precio base / Sin lista".
     Las ventas anuladas se excluyen.
     """
-    set_tenant_context(company_id, branch_id)
     wb = Workbook()
     currency_label = _currency_label(currency_symbol)
     currency_format = _currency_format(currency_symbol)
@@ -3598,5 +3608,4 @@ def generate_price_lists_report(
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    set_tenant_context(None, None)
     return output
