@@ -387,6 +387,7 @@ def form_field(
     label: str,
     input_component: rx.Component,
     label_style: str = "text-sm font-medium text-slate-700",
+    html_for: str = "",
 ) -> rx.Component:
     """
     Crea un wrapper de campo con etiqueta.
@@ -395,12 +396,18 @@ def form_field(
         label: Texto de la etiqueta
         input_component: Componente input/select/textarea
         label_style: Clase CSS para la etiqueta
+        html_for: id del input asociado para accesibilidad (atributo for del label)
 
     Retorna:
         Div con la etiqueta y el input
     """
+    label_el = (
+        rx.el.label(label, html_for=html_for, class_name=label_style)
+        if html_for
+        else rx.el.label(label, class_name=label_style)
+    )
     return rx.el.div(
-        rx.el.label(label, class_name=label_style),
+        label_el,
         input_component,
         class_name="flex flex-col gap-1",
     )
@@ -891,20 +898,24 @@ def date_range_filter(
         form_field(
             start_label,
             rx.el.input(
+                id="date_range_start",
                 type="date",
                 value=start_value,
                 on_change=on_start_change,
                 class_name=INPUT_STYLES["default"],
             ),
+            html_for="date_range_start",
         ),
         form_field(
             end_label,
             rx.el.input(
+                id="date_range_end",
                 type="date",
                 value=end_value,
                 on_change=on_end_change,
                 class_name=INPUT_STYLES["default"],
             ),
+            html_for="date_range_end",
         ),
     )
 
