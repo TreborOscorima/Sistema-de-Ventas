@@ -47,5 +47,7 @@ jobs:
           TEST_MODE: "1"
           AUTH_SECRET_KEY: test_secret_key_for_ci_only_32_chars_minimum
           REDIS_PASSWORD: ci_redis_password_placeholder
-        # cov-fail-under refleja cobertura actual (~34%) — subir gradualmente al agregar tests.
-        run: python -m pytest -q --cov=app --cov-report=term-missing --cov-fail-under=34
+        # Los tests E2E requieren un servidor Reflex en ejecución y navegadores Playwright.
+        # Se excluyen del CI unitario; se ejecutan localmente o en un job dedicado.
+        # cov-fail-under refleja cobertura actual (~35%) — subir gradualmente al agregar tests.
+        run: python -m pytest -q --tb=short --cov=app --cov-report=term-missing --cov-fail-under=34 --ignore=tests/test_e2e.py
