@@ -37,6 +37,17 @@ jobs:
         run: python -m pip check
       - name: Compile source
         run: python -m compileall -q app scripts
+      - name: Check test collection (diagnóstico)
+        env:
+          DB_USER: test
+          DB_PASSWORD: test
+          DB_HOST: 127.0.0.1
+          DB_NAME: test_db
+          DB_PORT: 3306
+          TEST_MODE: "1"
+          AUTH_SECRET_KEY: test_secret_key_for_ci_only_32_chars_minimum
+          REDIS_PASSWORD: ci_redis_password_placeholder
+        run: python -m pytest --collect-only -q --ignore=tests/test_e2e.py 2>&1 | tail -20
       - name: Run tests with coverage
         env:
           DB_USER: test
@@ -52,9 +63,14 @@ jobs:
         # cov-fail-under refleja cobertura actual (~35%) — subir gradualmente al agregar tests.
         run: |
           python -m pytest -v --tb=long --cov=app --cov-report=term-missing \
-            --cov-fail-under=34 --ignore=tests/test_e2e.py \
-            2>&1 | tee pytest-output.txt
-          exit ${PIPESTATUS[0]}
+            --cov-fail-under=34 --ignore=tests/test_e2e.py 2>&1 | tee pytest-output.txt; \
+          STATUS=${PIPESTATUS[0]}; \
+          echo "=== PYTEST EXIT CODE: $STATUS ==="; \
+          exit $STATUS
+
+      - name: Show pytest output on failure
+        if: failure()
+        run: cat pytest-output.txt || true
 
       - name: Upload pytest output on failure
         if: failure()
