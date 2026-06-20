@@ -90,7 +90,17 @@ jobs:
 
       - name: Show pytest output on failure
         if: failure()
-        run: cat pytest-output.txt || true
+        run: |
+          echo "### Collection output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat collection-output.txt >> $GITHUB_STEP_SUMMARY || echo "(no collection-output.txt)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "### Test output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat pytest-output.txt >> $GITHUB_STEP_SUMMARY || echo "(no pytest-output.txt)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat collection-output.txt || true
+          cat pytest-output.txt || true
 
       - name: Upload pytest output on failure
         if: failure()
