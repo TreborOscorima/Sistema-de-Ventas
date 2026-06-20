@@ -163,7 +163,7 @@ class PriceListState(MixinState):
                 if sale_price_val > 0 and unit_price_f != sale_price_val:
                     diff_pct = ((unit_price_f - sale_price_val) / sale_price_val) * 100
                     diff_sign = "+" if diff_pct > 0 else ""
-                    diff_display = f"{diff_sign}{diff_pct:.1f}%"
+                    diff_display = f"{diff_sign}{fmt_input_num(diff_pct)}%"
                     diff_is_discount = diff_pct < 0
 
                 result.append({

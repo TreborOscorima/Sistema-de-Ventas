@@ -28,6 +28,7 @@ from app.enums import SaleStatus, PaymentMethodType
 from app.i18n import MSG
 from app.utils.tenant import tenant_bypass, tenant_context
 from app.utils.exports import _safe_decimal, _sanitize_excel_value
+from app.utils.formatting import fmt_input_num
 from app.utils.timezone import format_local_datetime, to_local_datetime, utc_now_naive
 
 
@@ -781,7 +782,7 @@ def generate_sales_report(
         (MSG.REPORT_KPI_GROSS_SALES, _format_currency(total_ventas, currency_symbol)),
         ("(-) Costo de Ventas:", _format_currency(total_costo, currency_symbol)),
         ("(=) Utilidad Bruta:", _format_currency(utilidad_bruta, currency_symbol)),
-        (MSG.REPORT_KPI_MARGIN, f"{margen_bruto:.2f}%"),
+        (MSG.REPORT_KPI_MARGIN, f"{fmt_input_num(float(margen_bruto))}%"),
         ("(-) Descuentos otorgados:", _format_currency(total_descuentos, currency_symbol)),
         ("", ""),
         (MSG.REPORT_KPI_TRANSACTIONS, ventas_count),

@@ -13,6 +13,7 @@ from app.utils.db_seeds import (
 )
 from app.utils.timezone import is_valid_timezone
 from app.utils.tenant import tenant_bypass
+from app.utils.formatting import fmt_input_num
 from app.enums import PaymentMethodType
 from app.i18n import MSG
 from .types import CurrencyOption, PaymentMethodConfig
@@ -305,7 +306,7 @@ class ConfigState(MixinState):
             if all_settings:
                 company_row = all_settings[0]
                 self.company_profit_margin = (
-                    str(company_row.default_profit_margin)
+                    fmt_input_num(float(company_row.default_profit_margin))
                     if company_row.default_profit_margin is not None
                     else ""
                 )
@@ -320,7 +321,7 @@ class ConfigState(MixinState):
                     # Solo mostrar override si es distinto del margen de empresa
                     company_margin = all_settings[0].default_profit_margin if all_settings else None
                     if branch_row.branch_id != all_settings[0].branch_id:
-                        self.branch_profit_margin = str(branch_row.default_profit_margin)
+                        self.branch_profit_margin = fmt_input_num(float(branch_row.default_profit_margin))
         self.company_form_key += 1
 
     @rx.event

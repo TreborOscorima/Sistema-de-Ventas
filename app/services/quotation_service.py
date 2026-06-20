@@ -34,6 +34,7 @@ from app.models import (
 from app.models.quotations import QuotationStatus
 from app.utils.db import get_async_session
 from app.utils.tenant import set_tenant_context
+from app.utils.formatting import fmt_input_num
 from app.utils.timezone import utc_now_naive
 
 logger = logging.getLogger(__name__)
@@ -521,7 +522,7 @@ class QuotationService:
             c.drawString(cx["desc"],          ry, desc)
             c.drawRightString(cx["qty_r"],    ry, f"{qty:.2f}")
             c.drawRightString(cx["prc_r"],    ry, fmt(price))
-            c.drawRightString(cx["dsc_r"],    ry, f"{disc_pct:.1f}%")
+            c.drawRightString(cx["dsc_r"],    ry, f"{fmt_input_num(disc_pct)}%")
             c.setFont("Helvetica-Bold", 8)
             c.drawRightString(cx["sub_r"],    ry, fmt(sub))
             y -= row_h
@@ -549,7 +550,7 @@ class QuotationService:
             tot_line("Descuentos por ítem:", f"- {fmt(descuentos_items)}")
         if disc_global_pct > 0:
             disc_global_amt = subtotal_bruto - descuentos_items - total_final
-            tot_line(f"Descuento global ({disc_global_pct:.1f}%):", f"- {fmt(disc_global_amt)}")
+            tot_line(f"Descuento global ({fmt_input_num(disc_global_pct)}%):", f"- {fmt(disc_global_amt)}")
 
         # Línea y total final
         c.setStrokeColor(GRAY_800)
