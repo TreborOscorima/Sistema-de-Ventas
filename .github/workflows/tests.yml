@@ -48,8 +48,8 @@ jobs:
           AUTH_SECRET_KEY: test_secret_key_for_ci_only_32_chars_minimum
           REDIS_PASSWORD: ci_redis_password_placeholder
         run: |
-          python3 << 'PYEOF' 2>&1 | tee import-diag.txt
-          import sys, traceback
+          cat > /tmp/diag.py << 'PYEOF'
+          import sys, traceback, io
           sys.path.insert(0, '.')
           mods = [
               'app.utils.formatting',
@@ -66,13 +66,22 @@ jobs:
                   __import__(m)
                   print(f'OK: {m}', flush=True)
               except Exception as e:
+                  buf = io.StringIO()
+                  traceback.print_exc(file=buf)
+                  tb = buf.getvalue()
                   print(f'FAIL: {m}: {type(e).__name__}: {e}', flush=True)
-                  traceback.print_exc()
+                  print(tb, flush=True)
                   failed = True
                   break
           if not failed:
               print('All imports OK', flush=True)
+          sys.exit(1 if failed else 0)
           PYEOF
+          python3 /tmp/diag.py 2>&1 | tee import-diag.txt
+          echo "### Import Diagnostic" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat import-diag.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
           grep -q "FAIL:" import-diag.txt && exit 1 || true
       - name: Check test collection (diagnóstico)
         env:
