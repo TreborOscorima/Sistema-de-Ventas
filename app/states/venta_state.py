@@ -54,6 +54,7 @@ from app.i18n import MSG
 from app.utils.db import get_async_session
 from app.utils.logger import get_logger
 from app.utils.sanitization import escape_like
+from app.utils.formatting import fmt_price
 from app.utils.timezone import format_local_datetime
 from .mixin_state import MixinState
 from .venta import CartMixin, PaymentMixin, ReceiptMixin, RecentMovesMixin
@@ -133,6 +134,10 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             available = 0
         return self._round_currency(available)
 
+    @rx.var(cache=False)
+    def credit_available_display(self) -> str:
+        return fmt_price(self.selected_client_credit_available)
+
     @rx.var(cache=True)
     def credit_financed_amount(self) -> float:
         if not self.is_credit_mode:
@@ -146,6 +151,10 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
         if financed < 0:
             financed = Decimal("0")
         return self._round_currency(financed)
+
+    @rx.var(cache=False)
+    def credit_financed_display(self) -> str:
+        return fmt_price(self.credit_financed_amount)
 
     @rx.var(cache=True)
     def credit_installment_amount(self) -> float:
@@ -741,6 +750,11 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
             )
             self.last_payment_summary = result.payment_summary
             self.last_sale_id = str(result.sale.id)
+            self.last_client_name = (
+                self.selected_client.get("name", "")
+                if isinstance(self.selected_client, dict)
+                else ""
+            )
             self.sale_receipt_ready = True
             self.show_sale_receipt_modal = True
             self.new_sale_items = []

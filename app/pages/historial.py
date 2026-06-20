@@ -127,7 +127,7 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
     rx.el.td(
       State.currency_symbol,
       " ",
-      movement["total"].to_string(),
+      movement["total"],
       class_name="py-3 px-4 text-right font-semibold tabular-nums text-slate-900 whitespace-nowrap",
     ),
     rx.el.td(
@@ -154,7 +154,7 @@ def _sale_card(sale: rx.Var) -> rx.Component:
       rx.el.span(
         State.currency_symbol,
         " ",
-        sale["total"].to_string(),
+        sale["total"],
         class_name="text-base font-bold text-slate-900 tabular-nums",
       ),
       class_name="flex items-center justify-between gap-2",
@@ -243,7 +243,7 @@ def sale_detail_modal() -> rx.Component:
                 rx.el.span("Total", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 rx.el.span(
                   State.currency_symbol,
-                  State.selected_sale_summary["total"].to_string(),
+                  State.selected_sale_summary["total"],
                   class_name="text-lg font-semibold text-slate-900",
                 ),
                 class_name="flex flex-col gap-1",
@@ -283,15 +283,15 @@ def sale_detail_modal() -> rx.Component:
                         State.selected_sale_items_view,
                         lambda item: rx.el.tr(
                           rx.el.td(item["description"], class_name="py-2 px-3 text-sm"),
-                          rx.el.td(item["quantity"].to_string(), class_name="py-2 px-3 text-right text-sm"),
+                          rx.el.td(item["quantity"], class_name="py-2 px-3 text-right text-sm"),
                           rx.el.td(
                             State.currency_symbol,
-                            item["unit_price"].to_string(),
+                            item["unit_price"],
                             class_name="py-2 px-3 text-right text-sm",
                           ),
                           rx.el.td(
                             State.currency_symbol,
-                            item["subtotal"].to_string(),
+                            item["subtotal"],
                             class_name="py-2 px-3 text-right text-sm font-semibold",
                           ),
                           class_name="border-b border-slate-100",
@@ -428,7 +428,7 @@ def return_modal() -> rx.Component:
                   ),
                   rx.el.td(
                     State.currency_symbol,
-                    item["refund_line"].to_string(),
+                    item["refund_line"],
                     class_name="py-2 px-3 text-right text-sm font-mono",
                   ),
                   class_name="border-b",
@@ -502,7 +502,7 @@ def credit_sales_card() -> rx.Component:
         ),
         rx.el.p(
           rx.el.span(
-            State.currency_symbol, State.credit_outstanding.to_string()
+            State.currency_symbol, State.credit_outstanding_display
           ),
           class_name="text-2xl font-bold text-slate-800",
         ),
@@ -559,7 +559,7 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
         rx.el.p(card["name"], class_name=TYPOGRAPHY["body_secondary"]),
         rx.el.p(
           rx.el.span(
-            State.currency_symbol, card["amount"].to_string()
+            State.currency_symbol, card["amount"]
           ),
           class_name="text-2xl font-bold text-slate-800",
         ),
@@ -588,7 +588,7 @@ def returns_report_row(ret: rx.Var[dict]) -> rx.Component:
     rx.el.td(
       State.currency_symbol,
       " ",
-      ret["refund_amount"].to_string(),
+      ret["refund_amount"],
       class_name="py-3 px-4 text-right font-semibold tabular-nums text-red-600 whitespace-nowrap",
     ),
     rx.el.td(ret["user"], class_name="py-3 px-4 text-sm text-slate-500 hidden xl:table-cell"),
@@ -602,7 +602,7 @@ def _return_card(ret: rx.Var[dict]) -> rx.Component:
     rx.el.div(
       rx.el.span(ret["timestamp"], class_name="font-mono font-medium text-slate-900 text-sm"),
       rx.el.span(
-        State.currency_symbol, " ", ret["refund_amount"].to_string(),
+        State.currency_symbol, " ", ret["refund_amount"],
         class_name="text-base font-bold text-red-600 tabular-nums",
       ),
       class_name="flex items-center justify-between gap-2",

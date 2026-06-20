@@ -23,6 +23,7 @@ from app.models import (
 from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
 from app.i18n import MSG
 from ..types import CashboxSale
+from app.utils.formatting import fmt_price
 
 logger = logging.getLogger(__name__)
 
@@ -99,22 +100,10 @@ class CloseMixin:
 
     @rx.var(cache=True)
     def cashbox_denominations_config(self) -> list[dict]:
-        """Denominaciones del país actual para la UI."""
-        from app.utils.db_seeds import get_country_config
-        country = getattr(self, "selected_country_code", "PE")
-        config = get_country_config(country)
-        denoms = config.get("denominations", [])
-        # Reemplazar el símbolo hardcodeado con el símbolo de moneda configurado.
-        # Acceder a self.currency_symbol registra la dependencia reactiva en Reflex.
-        live_symbol = (self.currency_symbol or "").strip()
-        country_symbol = config.get("currency_symbol", "").strip()
-        if live_symbol and live_symbol != country_symbol:
-            return [
-                {**d, "label": live_symbol + d["label"][len(country_symbol):]}
-                if d["label"].startswith(country_symbol) else d
-                for d in denoms
-            ]
-        return denoms
+        """Denominaciones según la moneda configurada de la empresa."""
+        from app.utils.db_seeds import get_country_config_by_currency
+        config = get_country_config_by_currency(self.selected_currency_code or "PEN")
+        return config.get("denominations", [])
 
     @rx.var(cache=True)
     def denomination_rows(self) -> list[dict]:
@@ -224,7 +213,7 @@ class CloseMixin:
         totals_list = [
             {
                 "method": item.get("method", MSG.FALLBACK_NOT_SPECIFIED),
-                "amount": self._round_currency(item.get("total", 0)),
+                "amount": fmt_price(self._round_currency(item.get("total", 0))),
             }
             for item in summary
             if item.get("total", 0) > 0
@@ -543,13 +532,13 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                         "payment_label": method_label,
                         "payment_details": payment_detail,
                         "concept": concept,
-                        "amount": self._round_currency(log.amount or 0),
-                        "total": log.amount,
+                        "amount": fmt_price(self._round_currency(log.amount or 0)),
+                        "total": fmt_price(float(log.amount or 0)),
                         "is_deleted": False,
                         "payment_breakdown": [
                             {
                                 "label": method_label,
-                                "amount": self._round_currency(log.amount or 0),
+                                "amount": fmt_price(self._round_currency(log.amount or 0)),
                             }
                         ],
                         "payment_kind": "",

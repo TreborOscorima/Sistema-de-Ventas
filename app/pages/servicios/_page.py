@@ -121,7 +121,7 @@ def field_prices_tab() -> rx.Component:
           rx.el.div(
             rx.el.span("Precio/hora", class_name=TYPOGRAPHY["caption"]),
             rx.el.span(
-              price["price"].to_string(),
+              price["price"],
               class_name=TYPOGRAPHY["mono_value"],
             ),
             class_name="flex items-center justify-between",
@@ -193,7 +193,7 @@ def field_prices_tab() -> rx.Component:
                       on_click=lambda _, pid=price["id"]: State.edit_field_price(pid),
                       title="Editar",
                       aria_label="Editar",
-                      class_name=BUTTON_STYLES["icon_primary"],
+                      class_name=BUTTON_STYLES["icon_warning"],
                     ),
                     rx.el.button(
                       rx.icon("trash-2", class_name="h-4 w-4"),

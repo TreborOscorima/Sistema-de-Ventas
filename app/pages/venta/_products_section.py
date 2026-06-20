@@ -33,7 +33,7 @@ def client_selector() -> rx.Component:
                 rx.badge(
                     "Crédito: ",
                     State.currency_symbol,
-                    State.selected_client_credit_available.to_string(),
+                    State.credit_available_display,
                     color_scheme="green",
                     variant="soft",
                     size="1",
@@ -275,7 +275,7 @@ def quick_add_bar() -> rx.Component:
                 rx.el.div(
                     rx.el.span(
                         State.currency_symbol,
-                        State.sale_subtotal.to_string(),
+                        State.sale_subtotal_display,
                         class_name="text-sm font-semibold text-indigo-600",
                     ),
                     class_name="px-3 py-2 bg-slate-100 rounded-lg text-right h-[42px] flex items-center justify-end",
@@ -400,15 +400,18 @@ def visual_product_grid() -> rx.Component:
     return rx.el.div(
         # Barra de búsqueda del grid
         rx.el.div(
-            rx.el.input(
-                placeholder="Buscar producto en catálogo...",
-                value=State.product_grid_search,
-                on_change=State.search_product_grid,
-                class_name=(
-                    "w-full text-sm px-3 py-2 border border-slate-200 "
-                    "rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 "
-                    "focus:ring-indigo-500/20 focus:border-indigo-500"
+            rx.debounce_input(
+                rx.el.input(
+                    placeholder="Buscar producto en catálogo...",
+                    value=State.product_grid_search,
+                    on_change=State.search_product_grid,
+                    class_name=(
+                        "w-full text-sm px-3 py-2 border border-slate-200 "
+                        "rounded-lg placeholder-slate-400 focus:outline-none focus:ring-2 "
+                        "focus:ring-indigo-500/20 focus:border-indigo-500"
+                    ),
                 ),
+                debounce_timeout=300,
             ),
             class_name="px-3 pt-3 pb-1",
         ),
@@ -433,7 +436,7 @@ def visual_product_grid() -> rx.Component:
                             rx.el.div(
                                 rx.el.span(
                                     State.currency_symbol,
-                                    p["sale_price"].to_string(),
+                                    p["sale_price"],
                                     class_name="text-sm font-bold text-indigo-600",
                                 ),
                                 rx.el.span(

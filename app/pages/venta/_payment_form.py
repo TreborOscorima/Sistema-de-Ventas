@@ -617,7 +617,7 @@ def _payment_form_body(variant: str) -> tuple:
                 rx.el.span(
                     "Saldo a financiar: ",
                     State.currency_symbol,
-                    State.credit_financed_amount.to_string(),
+                    State.credit_financed_display,
                     " en ",
                     State.credit_installments.to_string(),
                     " cuotas",
@@ -889,7 +889,7 @@ def _payment_form_body(variant: str) -> tuple:
                     rx.el.div(
                         rx.el.span(State.currency_symbol, class_name="text-base text-indigo-600"),
                         rx.el.span(
-                            State.sale_total.to_string(),
+                            State.sale_total_display,
                             class_name=total_amount_class,
                         ),
                         class_name=total_row_class,

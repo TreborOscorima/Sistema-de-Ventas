@@ -1,5 +1,6 @@
 """Estado de Compras - Registro de documentos de ingreso."""
 import datetime
+import io
 import logging
 from decimal import Decimal
 from typing import Any
@@ -10,7 +11,16 @@ from sqlalchemy import or_, func
 from sqlalchemy.orm import selectinload
 
 from app.models import Purchase, Supplier, Product, PurchaseItem, StockMovement
+from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import escape_like, sanitize_text
+from app.utils.exports import (
+    create_excel_workbook,
+    style_header_row,
+    auto_adjust_column_widths,
+    add_totals_row_with_formulas,
+    add_notes_section,
+    add_company_header,
+)
 from .mixin_state import MixinState
 
 logger = logging.getLogger(__name__)
@@ -182,7 +192,7 @@ class PurchasesState(MixinState):
                     "doc_label": doc_label,
                     "supplier_name": supplier.name if supplier else "",
                     "supplier_tax_id": supplier.tax_id if supplier else "",
-                    "total_amount": float(purchase.total_amount or 0),
+                    "total_amount": fmt_price(float(purchase.total_amount or 0)),
                     "currency_code": purchase.currency_code or "",
                     "user": user.username if user else "Sistema",
                     "items_count": len(purchase.items or []),
@@ -294,10 +304,10 @@ class PurchasesState(MixinState):
                         "description": item.description_snapshot,
                         "barcode": item.barcode_snapshot,
                         "category": item.category_snapshot,
-                        "quantity": float(item.quantity or 0),
+                        "quantity": fmt_input_num(item.quantity or 0),
                         "unit": item.unit,
-                        "unit_cost": float(item.unit_cost or 0),
-                        "subtotal": float(item.subtotal or 0),
+                        "unit_cost": fmt_price(item.unit_cost or 0),
+                        "subtotal": fmt_price(item.subtotal or 0),
                     }
                 )
 
@@ -315,12 +325,25 @@ class PurchasesState(MixinState):
                 else "",
                 "supplier_name": supplier.name if supplier else "",
                 "supplier_tax_id": supplier.tax_id if supplier else "",
-                "total_amount": float(purchase.total_amount or 0),
+                "total_amount": fmt_price(float(purchase.total_amount or 0)),
                 "currency_code": purchase.currency_code or "",
                 "user": user.username if user else "Sistema",
                 "items_count": len(items),
                 "notes": purchase.notes or "",
                 "items": items,
+            }
+            self.purchase_edit_form = {
+                "id": purchase.id,
+                "doc_type": purchase.doc_type or "boleta",
+                "series": purchase.series or "",
+                "number": purchase.number or "",
+                "issue_date": purchase.issue_date.strftime("%Y-%m-%d")
+                if purchase.issue_date
+                else "",
+                "notes": purchase.notes or "",
+                "supplier_id": supplier.id if supplier else None,
+                "supplier_name": supplier.name if supplier else "",
+                "supplier_tax_id": supplier.tax_id if supplier else "",
             }
             self.purchase_detail_modal_open = True
 
@@ -328,6 +351,7 @@ class PurchasesState(MixinState):
     def close_purchase_detail(self):
         self.purchase_detail_modal_open = False
         self.purchase_detail = None
+        self.purchase_edit_form = self._empty_purchase_edit_form()
 
     @rx.event
     def open_purchase_edit_modal(self, purchase_id: int):
@@ -535,6 +559,8 @@ class PurchasesState(MixinState):
 
         self._purchase_update_trigger += 1
         self._refresh_purchase_cache()
+        self.purchase_detail_modal_open = False
+        self.purchase_detail = None
         self.close_purchase_edit_modal()
         return rx.toast("Compra actualizada.", duration=3000)
 
@@ -689,6 +715,108 @@ class PurchasesState(MixinState):
             self._inventory_update_trigger += 1
         self.close_purchase_delete_modal()
         return rx.toast("Compra eliminada.", duration=3000)
+
+    @rx.event
+    def export_purchases_excel(self):
+        """Exporta el registro de compras filtrado a Excel."""
+        if not self.current_user["privileges"].get("export_data"):
+            return rx.toast("No tiene permisos para exportar datos.", duration=3000)
+
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+
+        currency_label = self._currency_symbol_clean()
+        currency_format = self._currency_excel_format()
+        company_name = getattr(self, "company_name", "") or "EMPRESA"
+        period_start = self.purchase_start_date or "Inicio"
+        period_end = self.purchase_end_date or "Actual"
+        period_label = f"Período: {period_start} a {period_end}"
+
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            records = session.exec(self._purchase_query()).all()
+
+        if not records:
+            return rx.toast("No hay compras para exportar.", duration=3000)
+
+        wb, ws = create_excel_workbook("Registro de Compras")
+
+        row = add_company_header(
+            ws,
+            company_name,
+            "REGISTRO DE COMPRAS",
+            period_label,
+            columns=9,
+            generated_at=self._display_now(),
+        )
+
+        headers = [
+            "Fecha Emisión",
+            "Tipo Doc.",
+            "Serie",
+            "Número",
+            "Proveedor",
+            "N° Registro Empresa",
+            "Usuario",
+            "Ítems",
+            f"Total ({currency_label})",
+        ]
+        style_header_row(ws, row, headers)
+        data_start = row + 1
+        row += 1
+
+        total_compras = 0.0
+        for purchase in records:
+            supplier = purchase.supplier
+            user = purchase.user
+            doc_type = (purchase.doc_type or "").upper() or "-"
+            issue_date = (
+                purchase.issue_date.strftime("%Y-%m-%d") if purchase.issue_date else ""
+            )
+            total_amount = float(purchase.total_amount or 0)
+            total_compras += total_amount
+
+            ws.cell(row=row, column=1, value=issue_date)
+            ws.cell(row=row, column=2, value=doc_type)
+            ws.cell(row=row, column=3, value=purchase.series or "")
+            ws.cell(row=row, column=4, value=purchase.number or "")
+            ws.cell(row=row, column=5, value=supplier.name if supplier else "")
+            ws.cell(row=row, column=6, value=supplier.tax_id if supplier else "")
+            ws.cell(row=row, column=7, value=user.username if user else "Sistema")
+            ws.cell(row=row, column=8, value=len(purchase.items or []))
+            ws.cell(row=row, column=9, value=total_amount).number_format = currency_format
+            row += 1
+
+        totals_row = row
+        add_totals_row_with_formulas(ws, totals_row, data_start, [
+            {"type": "label", "value": "TOTAL"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "count", "col_letter": "H"},
+            {"type": "sum", "col_letter": "I", "number_format": currency_format},
+        ])
+        row += 1
+
+        add_notes_section(ws, row, [
+            f"Total de documentos: {len(records)}",
+            f"Total invertido ({currency_label}): {total_compras:,.2f}",
+            "Filtros aplicados: " + (
+                f"Búsqueda='{self.purchase_search_term}'" if self.purchase_search_term else "Ninguno"
+            ),
+        ], columns=9)
+
+        auto_adjust_column_widths(ws)
+
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        return rx.download(data=output.getvalue(), filename="registro_compras.xlsx")
 
     @rx.var(cache=True)
     def purchase_detail_items(self) -> list[dict[str, Any]]:

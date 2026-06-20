@@ -12,14 +12,14 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
       on_click=lambda _: State.open_purchase_detail(purchase["id"]),
       title="Ver detalle",
       aria_label="Ver detalle",
-      class_name=BUTTON_STYLES["primary_sm"],
+      class_name=BUTTON_STYLES["icon_primary"],
     ),
     rx.cond(
       State.can_manage_compras,
       rx.el.button(
         rx.icon("pencil", class_name="h-4 w-4"),
         on_click=lambda _: State.open_purchase_edit_modal(purchase["id"]),
-        class_name=BUTTON_STYLES["icon_primary"],
+        class_name=BUTTON_STYLES["icon_warning"],
         title="Editar",
         aria_label="Editar",
       ),
@@ -73,7 +73,7 @@ def purchase_row(purchase: rx.Var[dict]) -> rx.Component:
     rx.el.td(
       rx.el.div(
         State.currency_symbol,
-        purchase["total_amount"].to_string(),
+        purchase["total_amount"],
         class_name="text-right font-semibold",
       ),
       rx.el.div(
@@ -113,7 +113,7 @@ def _purchase_card(purchase: rx.Var) -> rx.Component:
         rx.el.span(
           State.currency_symbol,
           " ",
-          purchase["total_amount"].to_string(),
+          purchase["total_amount"],
           class_name="font-semibold tabular-nums text-slate-900",
         ),
         rx.el.span(purchase["currency_code"], class_name=TYPOGRAPHY["caption"]),
@@ -155,7 +155,7 @@ def _purchase_card(purchase: rx.Var) -> rx.Component:
           rx.el.button(
             rx.icon("pencil", class_name="h-4 w-4"),
             on_click=lambda _: State.open_purchase_edit_modal(purchase["id"]),
-            class_name=BUTTON_STYLES["icon_primary"],
+            class_name=BUTTON_STYLES["icon_warning"],
             title="Editar",
             aria_label="Editar",
           ),
@@ -188,7 +188,7 @@ def _supplier_card(supplier: rx.Var) -> rx.Component:
       on_click=lambda _: State.open_supplier_modal(supplier),
       title="Editar proveedor",
       aria_label="Editar proveedor",
-      class_name=BUTTON_STYLES["icon_primary"],
+      class_name=BUTTON_STYLES["icon_warning"],
     ),
     rx.el.button(
       rx.icon("trash-2", class_name="h-4 w-4"),
@@ -256,7 +256,7 @@ def supplier_row(supplier: rx.Var[dict]) -> rx.Component:
       on_click=lambda _: State.open_supplier_modal(supplier),
       title="Editar proveedor",
       aria_label="Editar proveedor",
-      class_name=BUTTON_STYLES["icon_primary"],
+      class_name=BUTTON_STYLES["icon_warning"],
     ),
     rx.el.button(
       rx.icon("trash-2", class_name="h-4 w-4"),

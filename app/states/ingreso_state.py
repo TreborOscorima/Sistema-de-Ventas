@@ -20,6 +20,7 @@ from app.i18n import MSG
 from .types import TransactionItem
 from .mixin_state import MixinState
 from app.utils.barcode import clean_barcode, validate_barcode
+from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import escape_like, sanitize_text
 from app.utils.stock import recalculate_stock_totals
 
@@ -92,13 +93,21 @@ class IngresoState(MixinState):
 
     @rx.var(cache=True)
     def entry_subtotal(self) -> float:
-        return self.new_entry_item["subtotal"]
+        return float(self.new_entry_item.get("subtotal") or 0)
+
+    @rx.var(cache=True)
+    def entry_subtotal_display(self) -> str:
+        return f"{float(self.new_entry_item.get('subtotal') or 0):.2f}"
 
     @rx.var(cache=True)
     def entry_total(self) -> float:
         return self._round_currency(
-            sum((item["subtotal"] for item in self.new_entry_items))
+            sum(float(item.get("subtotal") or 0) for item in self.new_entry_items)
         )
+
+    @rx.var(cache=False)
+    def entry_total_display(self) -> str:
+        return fmt_price(self.entry_total)
 
     @rx.var(cache=True)
     def purchase_supplier_rows(self) -> List[Dict[str, Any]]:
@@ -581,6 +590,9 @@ class IngresoState(MixinState):
             display_description = item_copy["description"]
         item_copy["display_description"] = display_description
         self._apply_item_rounding(item_copy)
+        item_copy["subtotal"] = fmt_price(float(item_copy.get("subtotal") or 0))
+        item_copy["price"] = fmt_price(float(item_copy.get("price") or 0))
+        item_copy["sale_price"] = fmt_price(float(item_copy.get("sale_price") or 0))
         self.new_entry_items.append(item_copy)
         self._reset_entry_form()
         return rx.call_script(

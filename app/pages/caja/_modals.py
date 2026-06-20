@@ -190,7 +190,7 @@ def close_cashbox_modal() -> rx.Component:
                   ),
                   rx.el.td(
                     State.currency_symbol,
-                    sale["total"].to_string(),
+                    sale["total"],
                     class_name="py-2 px-3 text-right text-sm font-semibold",
                   ),
                   class_name="border-b",
@@ -375,12 +375,12 @@ def cashbox_log_modal() -> rx.Component:
           rx.el.div(
             rx.el.div(
               rx.el.span("Monto apertura", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
-              rx.el.p(State.currency_symbol, State.cashbox_log_selected["opening_amount"].to_string(), class_name="text-lg font-semibold text-slate-900"),
+              rx.el.p(State.currency_symbol, State.cashbox_log_selected["opening_amount"], class_name="text-lg font-semibold text-slate-900"),
               class_name="flex flex-col gap-1",
             ),
             rx.el.div(
               rx.el.span("Monto cierre", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
-              rx.el.p(State.currency_symbol, State.cashbox_log_selected["closing_total"].to_string(), class_name="text-lg font-semibold text-slate-900"),
+              rx.el.p(State.currency_symbol, State.cashbox_log_selected["closing_total"], class_name="text-lg font-semibold text-slate-900"),
               class_name="flex flex-col gap-1",
             ),
             class_name="grid grid-cols-1 sm:grid-cols-2 gap-3",
@@ -399,7 +399,7 @@ def cashbox_log_modal() -> rx.Component:
                   State.cashbox_log_selected["totals_by_method"],
                   lambda item: rx.el.li(
                     rx.el.span(item["method"], class_name=TYPOGRAPHY["body"]),
-                    rx.el.span(State.currency_symbol, item["amount"].to_string(), class_name=TYPOGRAPHY["mono_value"]),
+                    rx.el.span(State.currency_symbol, item["amount"], class_name=TYPOGRAPHY["mono_value"]),
                     class_name="flex items-center justify-between",
                   ),
                 ),
@@ -439,16 +439,78 @@ def petty_cash_modal() -> rx.Component:
   return modal_container(
     is_open=State.petty_cash_modal_open,
     on_close=State.close_petty_cash_modal,
-    title="Registrar Movimiento",
-    description="Ingrese los detalles del gasto o salida de dinero.",
+    title=rx.cond(
+      State.petty_cash_type == "egreso",
+      "Registrar Egreso",
+      "Registrar Ingreso",
+    ),
+    description=rx.cond(
+      State.petty_cash_type == "egreso",
+      "Detalle del gasto o salida de dinero de la caja chica.",
+      "Detalle del ingreso o entrada de dinero a la caja chica.",
+    ),
     children=[
       rx.el.div(
+        # ── Tipo de movimiento ─────────────────────────────────────────
+        rx.el.div(
+          rx.el.label("Tipo de movimiento", class_name=TYPOGRAPHY["label"]),
+          rx.el.div(
+            rx.el.button(
+              rx.icon("arrow-down-circle", class_name="w-4 h-4 shrink-0"),
+              "Egreso",
+              on_click=State.set_petty_cash_type("egreso"),
+              class_name=rx.cond(
+                State.petty_cash_type == "egreso",
+                "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold bg-red-600 text-white shadow-sm transition-colors",
+                "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium bg-white text-slate-600 hover:bg-slate-100 transition-colors border border-slate-200",
+              ),
+            ),
+            rx.el.button(
+              rx.icon("arrow-up-circle", class_name="w-4 h-4 shrink-0"),
+              "Ingreso",
+              on_click=State.set_petty_cash_type("ingreso"),
+              class_name=rx.cond(
+                State.petty_cash_type == "ingreso",
+                "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold bg-green-600 text-white shadow-sm transition-colors",
+                "flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium bg-white text-slate-600 hover:bg-slate-100 transition-colors border border-slate-200",
+              ),
+            ),
+            class_name="flex gap-2 p-1 bg-slate-50 rounded-xl border border-slate-200",
+          ),
+          class_name="flex flex-col gap-2",
+        ),
+        # ── Categoría ──────────────────────────────────────────────────
+        rx.el.div(
+          rx.el.label("Categoría", class_name=TYPOGRAPHY["label"]),
+          rx.el.select(
+            rx.el.option("Limpieza",            value="Limpieza"),
+            rx.el.option("Mantenimiento",       value="Mantenimiento"),
+            rx.el.option("Viáticos",            value="Viáticos"),
+            rx.el.option("Alimentación",        value="Alimentación"),
+            rx.el.option("Transporte",          value="Transporte"),
+            rx.el.option("Material de Oficina", value="Material de Oficina"),
+            rx.el.option("Servicios",           value="Servicios"),
+            rx.el.option("Reposición de Caja",  value="Reposición de Caja"),
+            rx.el.option("Devolución",          value="Devolución"),
+            rx.el.option("Otro",                value="Otro"),
+            default_value=State.petty_cash_category,
+            on_change=State.set_petty_cash_category,
+            class_name=INPUT_STYLES["default"],
+          ),
+          class_name="flex flex-col gap-2",
+        ),
+        # ── Motivo ─────────────────────────────────────────────────────
         form_textarea(
           label="Motivo / Descripción",
           default_value=State.petty_cash_reason,
           on_blur=State.set_petty_cash_reason,
-          placeholder="Ej: Compra de útiles de limpieza",
+          placeholder=rx.cond(
+            State.petty_cash_type == "egreso",
+            "Ej: Compra de útiles de limpieza",
+            "Ej: Reposición de fondo de caja chica",
+          ),
         ),
+        # ── Cantidad + Unidad ──────────────────────────────────────────
         rx.el.div(
           rx.el.div(
             rx.el.label("Cantidad", class_name=TYPOGRAPHY["label"]),
@@ -464,12 +526,12 @@ def petty_cash_modal() -> rx.Component:
           rx.el.div(
             rx.el.label("Unidad", class_name=TYPOGRAPHY["label"]),
             rx.el.select(
-              rx.el.option("Unidad", value="Unidad"),
-              rx.el.option("Kg", value="Kg"),
-              rx.el.option("Lt", value="Lt"),
-              rx.el.option("Paquete", value="Paquete"),
-              rx.el.option("Caja", value="Caja"),
-              rx.el.option("Otro", value="Otro"),
+              rx.el.option("Unidad",   value="Unidad"),
+              rx.el.option("Kg",       value="Kg"),
+              rx.el.option("Lt",       value="Lt"),
+              rx.el.option("Paquete",  value="Paquete"),
+              rx.el.option("Caja",     value="Caja"),
+              rx.el.option("Otro",     value="Otro"),
               default_value=State.petty_cash_unit,
               on_change=State.set_petty_cash_unit,
               class_name=INPUT_STYLES["default"],
@@ -478,6 +540,7 @@ def petty_cash_modal() -> rx.Component:
           ),
           class_name="grid grid-cols-1 sm:grid-cols-2 gap-4"
         ),
+        # ── Costo unitario + Total ─────────────────────────────────────
         rx.el.div(
           rx.el.div(
             rx.el.label("Costo Unitario", class_name=TYPOGRAPHY["label"]),
@@ -523,11 +586,178 @@ def petty_cash_modal() -> rx.Component:
         class_name=BUTTON_STYLES["secondary"],
       ),
       rx.el.button(
-        rx.icon("plus", class_name="h-4 w-4"),
-        "Registrar",
+        rx.cond(
+          State.petty_cash_type == "egreso",
+          rx.icon("arrow-down-circle", class_name="h-4 w-4"),
+          rx.icon("arrow-up-circle", class_name="h-4 w-4"),
+        ),
+        rx.cond(
+          State.petty_cash_type == "egreso",
+          "Registrar Egreso",
+          "Registrar Ingreso",
+        ),
         on_click=State.add_petty_cash_movement,
-        class_name=BUTTON_STYLES["primary"],
+        class_name=rx.cond(
+          State.petty_cash_type == "egreso",
+          "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 hover:bg-red-700 text-white transition-colors shadow-sm",
+          "inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 hover:bg-green-700 text-white transition-colors shadow-sm",
+        ),
       ),
       class_name="flex justify-end gap-3 pt-2",
     )
+  )
+
+
+def petty_cash_edit_modal() -> rx.Component:
+  """Modal para editar un movimiento de caja chica existente."""
+  return modal_container(
+    is_open=State.petty_cash_edit_modal_open,
+    on_close=State.close_petty_cash_edit_modal,
+    title=rx.cond(
+      State.petty_cash_edit_type == "egreso",
+      "Editar Egreso",
+      "Editar Ingreso",
+    ),
+    description="Corregí el concepto, categoría, cantidad o costo del movimiento.",
+    children=[
+      # key=edit_id fuerza remount completo al abrir un item diferente,
+      # lo que garantiza que default_value se inicialice con los valores correctos.
+      rx.el.div(
+        # ── Tipo (solo visual, no editable) ───────────────────────────
+        rx.el.div(
+          rx.cond(
+            State.petty_cash_edit_type == "egreso",
+            rx.el.span(
+              rx.icon("arrow-down-circle", class_name="w-4 h-4"),
+              "Egreso",
+              class_name="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-100 text-red-700 border border-red-200",
+            ),
+            rx.el.span(
+              rx.icon("arrow-up-circle", class_name="w-4 h-4"),
+              "Ingreso",
+              class_name="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700 border border-green-200",
+            ),
+          ),
+          rx.el.span(
+            "El tipo no se puede cambiar.",
+            class_name="text-xs text-slate-400 ml-2",
+          ),
+          class_name="flex items-center",
+        ),
+        # ── Categoría ──────────────────────────────────────────────────
+        rx.el.div(
+          rx.el.label("Categoría", class_name="text-sm font-medium text-slate-700"),
+          rx.el.select(
+            rx.el.option("Limpieza",            value="Limpieza"),
+            rx.el.option("Mantenimiento",       value="Mantenimiento"),
+            rx.el.option("Viáticos",            value="Viáticos"),
+            rx.el.option("Alimentación",        value="Alimentación"),
+            rx.el.option("Transporte",          value="Transporte"),
+            rx.el.option("Material de Oficina", value="Material de Oficina"),
+            rx.el.option("Servicios",           value="Servicios"),
+            rx.el.option("Reposición de Caja",  value="Reposición de Caja"),
+            rx.el.option("Devolución",          value="Devolución"),
+            rx.el.option("Otro",                value="Otro"),
+            default_value=State.petty_cash_edit_category,
+            on_change=State.set_petty_cash_edit_category,
+            class_name=INPUT_STYLES["default"],
+          ),
+          class_name="flex flex-col gap-2",
+        ),
+        # ── Motivo — on_blur para evitar que el cursor salte al final ─
+        rx.el.div(
+          rx.el.label("Motivo / Descripción", class_name="text-sm font-medium text-slate-700"),
+          rx.el.textarea(
+            default_value=State.petty_cash_edit_reason,
+            on_blur=State.set_petty_cash_edit_reason,
+            placeholder="Ej: Compra de útiles de limpieza",
+            rows=3,
+            class_name=f"{INPUT_STYLES['default']} resize-none",
+          ),
+          class_name="flex flex-col gap-2",
+        ),
+        # ── Cantidad + Unidad ──────────────────────────────────────────
+        rx.el.div(
+          rx.el.div(
+            rx.el.label("Cantidad", class_name="text-sm font-medium text-slate-700"),
+            rx.el.input(
+              type="number",
+              step="0.01",
+              default_value=State.petty_cash_edit_quantity,
+              on_blur=State.set_petty_cash_edit_quantity,
+              class_name=INPUT_STYLES["default"],
+            ),
+            class_name="flex flex-col gap-2",
+          ),
+          rx.el.div(
+            rx.el.label("Unidad", class_name="text-sm font-medium text-slate-700"),
+            rx.el.select(
+              rx.el.option("Unidad",  value="Unidad"),
+              rx.el.option("Kg",      value="Kg"),
+              rx.el.option("Lt",      value="Lt"),
+              rx.el.option("Paquete", value="Paquete"),
+              rx.el.option("Caja",    value="Caja"),
+              rx.el.option("Otro",    value="Otro"),
+              default_value=State.petty_cash_edit_unit,
+              on_change=State.set_petty_cash_edit_unit,
+              class_name=INPUT_STYLES["default"],
+            ),
+            class_name="flex flex-col gap-2",
+          ),
+          class_name="grid grid-cols-2 gap-4",
+        ),
+        # ── Costo Unitario + Total ─────────────────────────────────────
+        rx.el.div(
+          rx.el.div(
+            rx.el.label("Costo Unitario", class_name="text-sm font-medium text-slate-700"),
+            rx.el.div(
+              rx.el.span(State.currency_symbol, class_name="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium"),
+              rx.el.input(
+                type="number",
+                step="0.01",
+                default_value=State.petty_cash_edit_cost,
+                on_blur=State.set_petty_cash_edit_cost,
+                placeholder="0.00",
+                class_name=f"{INPUT_STYLES['default']} pl-8 pr-4",
+              ),
+              class_name="relative",
+            ),
+            class_name="flex flex-col gap-2",
+          ),
+          rx.el.div(
+            rx.el.label("Total", class_name="text-sm font-medium text-slate-700"),
+            rx.el.div(
+              rx.el.span(State.currency_symbol, class_name="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-medium"),
+              rx.el.input(
+                type="number",
+                step="0.01",
+                value=State.petty_cash_edit_amount,
+                read_only=True,
+                placeholder="0.00",
+                class_name=f"{INPUT_STYLES['disabled']} pl-8 pr-4",
+              ),
+              class_name="relative",
+            ),
+            class_name="flex flex-col gap-2",
+          ),
+          class_name="grid grid-cols-2 gap-4",
+        ),
+        key=State.petty_cash_edit_id,
+        class_name="flex flex-col gap-4 py-4",
+      )
+    ],
+    footer=rx.el.div(
+      rx.el.button(
+        "Cancelar",
+        on_click=State.close_petty_cash_edit_modal,
+        class_name=BUTTON_STYLES["secondary"],
+      ),
+      rx.el.button(
+        rx.icon("save", class_name="h-4 w-4"),
+        "Guardar Cambios",
+        on_click=State.save_petty_cash_edit,
+        class_name=BUTTON_STYLES["primary"],
+      ),
+      class_name="flex justify-end gap-3 pt-2",
+    ),
   )

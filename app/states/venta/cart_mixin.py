@@ -14,6 +14,7 @@ from app.services.sale_service import SaleService
 from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.db import get_async_session
 from ..types import SaleItemDict, TransactionItem
+from app.utils.formatting import fmt_input_num, fmt_price
 
 
 class _VariantPickerCell(TypedDict):
@@ -193,6 +194,14 @@ class CartMixin:
     def products_cart_subtotal(self) -> float:
         return self._round_currency(sum(item["subtotal"] for item in self.new_sale_items))
 
+    @rx.var(cache=False)
+    def sale_subtotal_display(self) -> str:
+        return fmt_price(self.sale_subtotal)
+
+    @rx.var(cache=False)
+    def products_cart_subtotal_display(self) -> str:
+        return fmt_price(self.products_cart_subtotal)
+
     @rx.var(cache=True)
     def sale_total(self) -> float:
         # Evita lecturas a BD durante render reactivo. Usa estado ya cargado.
@@ -214,6 +223,10 @@ class CartMixin:
 
         products_total = sum((item["subtotal"] for item in self.new_sale_items))
         return self._round_currency(products_total + reservation_balance)
+
+    @rx.var(cache=False)
+    def sale_total_display(self) -> str:
+        return fmt_price(self.sale_total)
 
     def _apply_item_rounding(self, item: TransactionItem):
         unit = item.get("unit", "")
@@ -1471,7 +1484,7 @@ class CartMixin:
                         "product_id": p.id,
                         "barcode": p.barcode or "",
                         "description": p.description or "",
-                        "sale_price": float(p.sale_price or 0),
+                        "sale_price": fmt_price(p.sale_price or 0),
                         "stock": float(p.stock or 0),
                         "sin_stock": float(p.stock or 0) <= 0,
                         "category": p.category or "General",

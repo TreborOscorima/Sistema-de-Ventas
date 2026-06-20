@@ -37,6 +37,7 @@ from app.models import Client, Sale, SaleInstallment
 from app.services.credit_service import CreditService
 from app.services.alert_service import get_overdue_count
 from app.utils.db import get_async_session
+from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -157,8 +158,8 @@ class CuentasState(MixinState):
             "id": installment.id,
             "number": installment.number,
             "status": installment.status,
-            "amount": installment.amount,
-            "paid_amount": installment.paid_amount,
+            "amount": fmt_price(float(installment.amount or 0)),
+            "paid_amount": fmt_price(float(installment.paid_amount or 0)),
             "due_date": installment.due_date,
             "payment_date": installment.payment_date,
         }
@@ -172,7 +173,7 @@ class CuentasState(MixinState):
             "name": client.name,
             "dni": client.dni,
             "phone": client.phone,
-            "current_debt": current_debt,
+            "current_debt": fmt_price(float(current_debt or 0)),
         }
 
     def _sanitize_report_name(self, value: str) -> str:
@@ -282,9 +283,9 @@ class CuentasState(MixinState):
                     "id": installment.get("id"),
                     "number": installment.get("number"),
                     "due_date": due_date_display,
-                    "amount": amount,
-                    "paid_amount": paid_amount,
-                    "pending_amount": pending_amount,
+                    "amount": fmt_price(float(amount)),
+                    "paid_amount": fmt_price(float(paid_amount)),
+                    "pending_amount": fmt_price(float(pending_amount)),
                     "has_pending": pending_amount > 0,
                     "status": status,
                     "status_label": self._installment_status_label(status),
@@ -424,7 +425,7 @@ class CuentasState(MixinState):
                     "name": client.name,
                     "dni": client.dni,
                     "phone": client.phone,
-                    "current_debt": client.current_debt,
+                    "current_debt": fmt_price(float(client.current_debt or 0)),
                 }
             rows.append(
                 {
@@ -433,9 +434,9 @@ class CuentasState(MixinState):
                     "client_name": client.name if client else MSG.FALLBACK_CLIENT_NOT_REGISTERED,
                     "client_dni": client.dni if client else "-",
                     "due_date": due_date_display,
-                    "amount": float(amount),
-                    "paid_amount": float(paid_amount),
-                    "pending_amount": float(pending_amount),
+                    "amount": fmt_price(float(amount)),
+                    "paid_amount": fmt_price(float(paid_amount)),
+                    "pending_amount": fmt_price(float(pending_amount)),
                     "has_pending": pending_amount > 0,
                     "status": status_raw,
                     "status_label": self._installment_status_label(status_raw),
@@ -837,7 +838,7 @@ class CuentasState(MixinState):
             value = Decimal("0")
         if value < 0:
             value = Decimal("0")
-        self.payment_amount = f"{value:.2f}"
+        self.payment_amount = fmt_price(value)
 
     @rx.event
     def set_payment_amount(self, value: float | str):

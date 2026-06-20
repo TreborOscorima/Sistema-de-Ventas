@@ -29,6 +29,7 @@ from app.utils.sanitization import (
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice
 from .mixin_state import MixinState
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
+from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -163,9 +164,9 @@ class ServicesState(MixinState):
             "field_name": reservation.field_name,
             "start_datetime": reservation.start_datetime.strftime("%Y-%m-%d %H:%M"),
             "end_datetime": reservation.end_datetime.strftime("%Y-%m-%d %H:%M"),
-            "advance_amount": reservation.paid_amount,
-            "total_amount": reservation.total_amount,
-            "paid_amount": reservation.paid_amount,
+            "advance_amount": fmt_price(float(reservation.paid_amount or 0)),
+            "total_amount": fmt_price(float(reservation.total_amount or 0)),
+            "paid_amount": fmt_price(float(reservation.paid_amount or 0)),
             "status": status_ui,
             "created_at": self._format_company_datetime(
                 reservation.created_at,
@@ -479,6 +480,10 @@ class ServicesState(MixinState):
             return 0.0
         return float(self.reservation_selected_for_payment["total_amount"]) - float(self.reservation_selected_for_payment["advance_amount"])
 
+    @rx.var(cache=False)
+    def selected_reservation_balance_display(self) -> str:
+        return fmt_price(self.selected_reservation_balance)
+
     reservation_payment_amount: str = ""
     reservation_cancel_selection: str = ""
     reservation_cancel_reason: str = ""
@@ -737,7 +742,7 @@ class ServicesState(MixinState):
                     "id": str(p.id),
                     "sport": p.sport.value if hasattr(p.sport, "value") else str(p.sport).strip().lower(),
                     "name": str(p.name),
-                    "price": float(p.price) if p.price else 0.0,
+                    "price": fmt_price(p.price) if p.price else "0.00",
                 }
                 for p in prices
             ]

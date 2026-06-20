@@ -48,6 +48,7 @@ from app.utils.exports import (
     WARNING_FILL,
 )
 from app.utils.tenant import tenant_bypass
+from app.utils.formatting import fmt_input_num, fmt_price
 
 REPORT_METHOD_KEYS = [
     "cash",
@@ -451,7 +452,7 @@ class HistorialState(MixinState):
                             "source": "Venta",
                             "method_key": method_key,
                             "method_label": self._normalize_wallet_label(method_key),
-                            "amount": self._round_currency(amount),
+                            "amount": fmt_price(self._round_currency(amount)),
                             "user": user_name,
                             "reference": reference,
                         }
@@ -498,7 +499,7 @@ class HistorialState(MixinState):
                             "method_label": self._normalize_wallet_label(
                                 getattr(log, "payment_method", "") or method_key
                             ),
-                            "amount": self._round_currency(amount),
+                            "amount": fmt_price(self._round_currency(amount)),
                             "user": user_name,
                             "reference": (log.notes or "").strip()
                             or "Cobranza registrada",
@@ -885,7 +886,7 @@ class HistorialState(MixinState):
                         if sale.timestamp
                         else "",
                         "client_name": client_name,
-                        "total": total_amount,
+                        "total": fmt_price(total_amount),
                         "payment_method": payment_method,
                         "payment_details": self._payment_details_text(payment_details),
                         "user": user_name,
@@ -955,7 +956,7 @@ class HistorialState(MixinState):
                     {
                         "method_label": item["method_label"],
                         "count": item["count"],
-                        "total": self._round_currency(item["total"]),
+                        "total": fmt_price(self._round_currency(item["total"])),
                     }
                 )
         for key, value in totals.items():
@@ -964,7 +965,7 @@ class HistorialState(MixinState):
                     {
                         "method_label": value["method_label"],
                         "count": value["count"],
-                        "total": self._round_currency(value["total"]),
+                        "total": fmt_price(self._round_currency(value["total"])),
                     }
                 )
 
@@ -1050,7 +1051,7 @@ class HistorialState(MixinState):
             cards.append(
                 {
                     "name": label,
-                    "amount": amount,
+                    "amount": fmt_price(amount),
                     "icon": style["icon"],
                     "color": style["color"],
                     "_sort_key": kind,
@@ -1080,7 +1081,7 @@ class HistorialState(MixinState):
                 cards.append(
                     {
                         "name": custom_name,
-                        "amount": float(amount),
+                        "amount": fmt_price(float(amount)),
                         "icon": "circle-dollar-sign",
                         "color": "teal",
                         "_sort_key": stats_key,
@@ -1311,7 +1312,7 @@ class HistorialState(MixinState):
                 "date": day.strftime("%Y-%m-%d")
                 if hasattr(day, "strftime")
                 else str(day or ""),
-                "total": self._round_currency(total or 0),
+                "total": fmt_price(self._round_currency(total or 0)),
             }
             for day, total in sales_day_rows
         ]
@@ -1564,9 +1565,9 @@ class HistorialState(MixinState):
             self.selected_sale_items = [
                 {
                     "description": item.product_name_snapshot,
-                    "quantity": float(item.quantity or 0),
-                    "unit_price": self._round_currency(item.unit_price or 0),
-                    "subtotal": self._round_currency(item.subtotal or 0),
+                    "quantity": fmt_input_num(item.quantity or 0),
+                    "unit_price": fmt_price(self._round_currency(item.unit_price or 0)),
+                    "subtotal": fmt_price(self._round_currency(item.subtotal or 0)),
                 }
                 for item in (sale.items or [])
             ]
@@ -1582,7 +1583,7 @@ class HistorialState(MixinState):
                 ),
                 "payment_method": payment_method,
                 "payment_details": self._payment_details_text(payment_details),
-                "total": self._round_currency(sale.total_amount or 0),
+                "total": fmt_price(self._round_currency(sale.total_amount or 0)),
             }
         self.sale_detail_modal_open = True
 
@@ -1603,6 +1604,14 @@ class HistorialState(MixinState):
     @rx.var(cache=True)
     def selected_sale_items_view(self) -> list[dict]:
         return list(self.selected_sale_items or [])
+
+    @rx.var(cache=False)
+    def credit_outstanding_display(self) -> str:
+        return fmt_price(self.credit_outstanding)
+
+    @rx.var(cache=False)
+    def total_credit_display(self) -> str:
+        return fmt_price(self.total_credit)
 
     @rx.event
     def export_to_excel(self):
@@ -2379,7 +2388,7 @@ class HistorialState(MixinState):
                     "already_returned": prev_returned,
                     "available_qty": available,
                     "return_qty": available,
-                    "refund_line": round(available * unit_price, 2),
+                    "refund_line": fmt_price(round(available * unit_price, 2)),
                 })
             if not items:
                 return rx.toast("Todos los ítems ya fueron devueltos.", duration=3000)
@@ -2753,7 +2762,7 @@ class HistorialState(MixinState):
                     "notes": ret.notes or "",
                     "items_summary": ", ".join(items_detail) if items_detail else "Sin ítems",
                     "items_count": len(items_detail),
-                    "refund_amount": refund_amt,
+                    "refund_amount": fmt_price(refund_amt),
                     "user": user_lookup.get(int(ret.user_id), "Desconocido") if ret.user_id else "Desconocido",
                 })
 

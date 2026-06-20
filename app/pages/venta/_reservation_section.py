@@ -52,7 +52,7 @@ def reservation_info_card() -> rx.Component:
                     rx.el.span("Total Reserva", class_name="text-xs text-slate-500"),
                     rx.el.span(
                         State.currency_symbol,
-                        State.reservation_selected_for_payment["total_amount"].to_string(),
+                        State.reservation_selected_for_payment["total_amount"],
                         class_name="text-base font-bold text-slate-700",
                     ),
                     class_name="flex flex-col items-center py-1.5 px-2 bg-slate-50 rounded-lg",
@@ -61,7 +61,7 @@ def reservation_info_card() -> rx.Component:
                     rx.el.span("Adelanto Pagado", class_name="text-xs text-slate-500"),
                     rx.el.span(
                         State.currency_symbol,
-                        State.reservation_selected_for_payment["advance_amount"].to_string(),
+                        State.reservation_selected_for_payment["advance_amount"],
                         class_name="text-base font-bold text-emerald-600",
                     ),
                     class_name="flex flex-col items-center py-1.5 px-2 bg-emerald-50 rounded-lg",
@@ -70,7 +70,7 @@ def reservation_info_card() -> rx.Component:
                     rx.el.span("Saldo a Cobrar", class_name="text-xs text-slate-500"),
                     rx.el.span(
                         State.currency_symbol,
-                        State.selected_reservation_balance.to_string(),
+                        State.selected_reservation_balance_display,
                         class_name="text-xl font-bold text-indigo-600",
                     ),
                     class_name="flex flex-col items-center py-1.5 px-2 bg-indigo-50 rounded-lg border-2 border-indigo-200",
@@ -130,7 +130,7 @@ def _reservation_products_breakdown() -> rx.Component:
                 rx.el.span("Productos", class_name="text-xs text-slate-500"),
                 rx.el.span(
                     State.currency_symbol,
-                    State.products_cart_subtotal.to_string(),
+                    State.products_cart_subtotal_display,
                     class_name="text-sm font-semibold text-slate-700",
                 ),
                 class_name="flex flex-col items-center",
@@ -140,7 +140,7 @@ def _reservation_products_breakdown() -> rx.Component:
                 rx.el.span("Total a Cobrar", class_name="text-xs font-medium text-indigo-600"),
                 rx.el.span(
                     State.currency_symbol,
-                    State.sale_total.to_string(),
+                    State.sale_total_display,
                     class_name="text-base font-bold text-indigo-700",
                 ),
                 class_name="flex flex-col items-center",

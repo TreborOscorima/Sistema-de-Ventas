@@ -88,7 +88,7 @@ def _entry_card(item: rx.Var) -> rx.Component:
                 rx.el.div(
                     rx.el.span("P. Compra", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
                     rx.el.span(
-                        State.currency_symbol, item["price"].to_string(),
+                        State.currency_symbol, item["price"],
                         class_name="text-sm text-slate-800",
                     ),
                     class_name="flex flex-col",
@@ -96,7 +96,7 @@ def _entry_card(item: rx.Var) -> rx.Component:
                 rx.el.div(
                     rx.el.span("P. Venta", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
                     rx.el.span(
-                        State.currency_symbol, item["sale_price"].to_string(),
+                        State.currency_symbol, item["sale_price"],
                         class_name="text-sm text-green-600",
                     ),
                     class_name="flex flex-col",
@@ -108,7 +108,7 @@ def _entry_card(item: rx.Var) -> rx.Component:
         # Footer: Subtotal + Acciones
         rx.el.div(
             rx.el.span(
-                State.currency_symbol, " ", item["subtotal"].to_string(),
+                State.currency_symbol, " ", item["subtotal"],
                 class_name="font-semibold tabular-nums text-slate-900",
             ),
             rx.el.div(
@@ -117,7 +117,7 @@ def _entry_card(item: rx.Var) -> rx.Component:
                     on_click=lambda tid=item["temp_id"]: State.edit_item_from_entry(tid),
                     title="Editar",
                     aria_label="Editar",
-                    class_name=BUTTON_STYLES["icon_primary"],
+                    class_name=BUTTON_STYLES["icon_warning"],
                 ),
                 rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
@@ -153,7 +153,7 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
         ),
         rx.el.td(
             State.currency_symbol,
-            item["subtotal"].to_string(),
+            item["subtotal"],
             class_name="py-3 px-4 text-right font-semibold",
         ),
         rx.el.td(
@@ -175,7 +175,7 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
                     on_click=lambda tid=item["temp_id"]: State.edit_item_from_entry(tid),
                     title="Editar",
                     aria_label="Editar",
-                    class_name=BUTTON_STYLES["icon_primary"],
+                    class_name=BUTTON_STYLES["icon_warning"],
                 ),
                 rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
@@ -679,7 +679,7 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.el.div(
                     State.currency_symbol,
-                    State.entry_subtotal.to_string(),
+                    State.entry_subtotal_display,
                     class_name="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-200 rounded-md text-right font-semibold flex items-center justify-end",
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
@@ -782,7 +782,7 @@ def ingreso_page() -> rx.Component:
                     rx.el.span("Total General:", class_name="text-xl font-bold"),
                     rx.el.span(
                         State.currency_symbol,
-                        State.entry_total.to_string(),
+                        State.entry_total_display,
                         class_name="text-xl font-bold text-indigo-700",
                     ),
                     class_name="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4",

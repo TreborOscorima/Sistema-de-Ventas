@@ -18,6 +18,7 @@ from app.models import (
 from app.i18n import MSG
 from app.utils.sanitization import sanitize_reason, sanitize_reason_preserve_spaces
 from app.utils.stock import recalculate_stock_totals
+from app.utils.formatting import fmt_price
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,8 @@ class DeleteMixin:
                 "action": log.action,
                 "timestamp": self._format_event_timestamp(log.timestamp),
                 "user": username,
-                "opening_amount": log.amount if log.action == "apertura" else 0.0,
-                "closing_total": log.amount if log.action == "cierre" else 0.0,
+                "opening_amount": fmt_price(float(log.amount or 0)) if log.action == "apertura" else "0.00",
+                "closing_total": fmt_price(float(log.amount or 0)) if log.action == "cierre" else "0.00",
                 "totals_by_method": [],
                 "notes": log.notes or "",
                 "amount": log.amount or 0.0,

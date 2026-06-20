@@ -211,7 +211,7 @@ def _account_card(client: rx.Var) -> rx.Component:
             rx.el.div(
                 rx.el.span("Deuda total", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
                 rx.el.span(
-                    State.currency_symbol, " ", client["current_debt"].to_string(),
+                    State.currency_symbol, " ", client["current_debt"],
                     class_name="font-semibold tabular-nums text-red-600",
                 ),
                 class_name="flex flex-col",
@@ -269,7 +269,7 @@ def _installment_card(installment: rx.Var) -> rx.Component:
                 rx.el.div(
                     rx.el.span("Monto", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
                     rx.el.span(
-                        State.currency_symbol, installment["amount"].to_string(),
+                        State.currency_symbol, installment["amount"],
                         class_name="text-sm text-slate-800",
                     ),
                     class_name="flex flex-col",
@@ -277,7 +277,7 @@ def _installment_card(installment: rx.Var) -> rx.Component:
                 rx.el.div(
                     rx.el.span("Pagado", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
                     rx.el.span(
-                        State.currency_symbol, installment["paid_amount"].to_string(),
+                        State.currency_symbol, installment["paid_amount"],
                         class_name="text-sm text-emerald-700",
                     ),
                     class_name="flex flex-col",
@@ -285,7 +285,7 @@ def _installment_card(installment: rx.Var) -> rx.Component:
                 rx.el.div(
                     rx.el.span("Pendiente", class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide"),
                     rx.el.span(
-                        State.currency_symbol, installment["pending_amount"].to_string(),
+                        State.currency_symbol, installment["pending_amount"],
                         class_name=rx.cond(
                             installment["has_pending"],
                             "text-sm font-semibold text-amber-700",
@@ -336,7 +336,7 @@ def debtor_row(client: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       State.currency_symbol,
-      client["current_debt"].to_string(),
+      client["current_debt"],
       class_name="py-3 px-4 text-right font-semibold text-red-600",
     ),
         rx.el.td(
@@ -378,17 +378,17 @@ def installment_overview_row(installment: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       State.currency_symbol,
-      installment["amount"].to_string(),
+      installment["amount"],
       class_name="py-3 px-4 text-right",
     ),
     rx.el.td(
       State.currency_symbol,
-      installment["paid_amount"].to_string(),
+      installment["paid_amount"],
       class_name="py-3 px-4 text-right text-emerald-700",
     ),
     rx.el.td(
       State.currency_symbol,
-      installment["pending_amount"].to_string(),
+      installment["pending_amount"],
       class_name=rx.cond(
         installment["has_pending"],
         "py-3 px-4 text-right font-semibold text-amber-700",
@@ -520,17 +520,17 @@ def installment_row(installment: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       State.currency_symbol,
-      installment["amount"].to_string(),
+      installment["amount"],
       class_name="py-3 px-4 text-right",
     ),
     rx.el.td(
       State.currency_symbol,
-      installment["paid_amount"].to_string(),
+      installment["paid_amount"],
       class_name="py-3 px-4 text-right text-emerald-700",
     ),
     rx.el.td(
       State.currency_symbol,
-      installment["pending_amount"].to_string(),
+      installment["pending_amount"],
       class_name=rx.cond(
         installment["has_pending"],
         "py-3 px-4 text-right font-semibold text-amber-700",
@@ -619,7 +619,7 @@ def cuentas_detail_modal() -> rx.Component:
                 ),
                 rx.el.p(
                   State.currency_symbol,
-                  State.selected_client["current_debt"].to_string(),
+                  State.selected_client["current_debt"],
                   class_name="text-3xl font-bold text-red-600",
                 ),
                 class_name="flex flex-col items-end",

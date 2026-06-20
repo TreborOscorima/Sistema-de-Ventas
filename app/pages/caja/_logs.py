@@ -59,7 +59,7 @@ def _cashbox_log_card(log: rx.Var[dict]) -> rx.Component:
       rx.el.div(
         rx.el.span("Apertura", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
-          State.currency_symbol, " ", log["opening_amount"].to_string(),
+          State.currency_symbol, " ", log["opening_amount"],
           class_name="text-sm font-semibold tabular-nums text-slate-700",
         ),
         class_name="flex flex-col gap-0.5",
@@ -67,7 +67,7 @@ def _cashbox_log_card(log: rx.Var[dict]) -> rx.Component:
       rx.el.div(
         rx.el.span("Cierre", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
-          State.currency_symbol, " ", log["closing_total"].to_string(),
+          State.currency_symbol, " ", log["closing_total"],
           class_name="text-sm font-semibold tabular-nums text-slate-900",
         ),
         class_name="flex flex-col gap-0.5",
@@ -89,7 +89,7 @@ def _cashbox_log_card(log: rx.Var[dict]) -> rx.Component:
             rx.icon("file-text", class_name="h-4 w-4"),
             on_click=State.export_cashbox_close_pdf_for_log(log["id"]),
             title="Descargar PDF",
-            class_name=BUTTON_STYLES["icon_danger"],
+            class_name=BUTTON_STYLES["icon_success"],
           ),
           rx.el.button(
             rx.icon("printer", class_name="h-4 w-4"),
@@ -121,12 +121,12 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
     rx.el.td(log["user"], class_name="py-3 px-4 text-sm hidden md:table-cell"),
     rx.el.td(
       State.currency_symbol,
-      log["opening_amount"].to_string(),
+      log["opening_amount"],
       class_name="py-3 px-4 text-sm text-right font-medium hidden md:table-cell tabular-nums",
     ),
     rx.el.td(
       State.currency_symbol,
-      log["closing_total"].to_string(),
+      log["closing_total"],
       class_name="py-3 px-4 text-sm text-right font-semibold tabular-nums",
     ),
     rx.el.td(
@@ -145,7 +145,7 @@ def cashbox_log_row(log: rx.Var[dict]) -> rx.Component:
             on_click=lambda _, log_id=log["id"]: State.export_cashbox_close_pdf_for_log(log_id),
             title="Descargar PDF",
             aria_label="Descargar PDF",
-            class_name=BUTTON_STYLES["icon_danger"],
+            class_name=BUTTON_STYLES["icon_success"],
           ),
           rx.fragment(),
         ),

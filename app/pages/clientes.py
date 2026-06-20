@@ -88,7 +88,7 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       State.currency_symbol,
-      client["credit_available"].to_string(),
+      client["credit_available"],
       class_name="py-3 px-4 text-right font-semibold text-emerald-700",
     ),
     rx.el.td(
@@ -103,7 +103,7 @@ def client_row(client: rx.Var[dict]) -> rx.Component:
         rx.el.button(
           rx.icon("pencil", class_name="h-4 w-4"),
           on_click=lambda _, c=client: State.open_modal(c),
-          class_name=BUTTON_STYLES["icon_primary"],
+          class_name=BUTTON_STYLES["icon_warning"],
           title="Editar",
           aria_label="Editar",
         ),
@@ -165,7 +165,7 @@ def _client_card(client: rx.Var) -> rx.Component:
     ),
     rx.el.div(
       rx.el.span(
-        State.currency_symbol, " ", client["credit_available"].to_string(),
+        State.currency_symbol, " ", client["credit_available"],
         class_name="font-semibold tabular-nums text-emerald-700",
       ),
       rx.el.div(
@@ -179,7 +179,7 @@ def _client_card(client: rx.Var) -> rx.Component:
         rx.el.button(
           rx.icon("pencil", class_name="h-4 w-4"),
           on_click=lambda _, c=client: State.open_modal(c),
-          class_name=BUTTON_STYLES["icon_primary"],
+          class_name=BUTTON_STYLES["icon_warning"],
           title="Editar",
           aria_label="Editar cliente",
         ),
@@ -429,6 +429,125 @@ def historial_modal() -> rx.Component:
   )
 
 
+# ── Modal de confirmación de eliminación ────────────────────────────────────
+
+def client_delete_modal() -> rx.Component:
+  """Modal de confirmación para eliminar un cliente, con aviso contextual."""
+  # Bloque de advertencia contextual
+  debt_block = rx.el.div(
+    rx.el.div(
+      rx.icon("circle-x", class_name="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5"),
+      rx.el.div(
+        rx.el.p(
+          "No se puede eliminar: deuda activa",
+          class_name="text-sm font-semibold text-red-700",
+        ),
+        rx.el.p(
+          "Este cliente tiene una deuda pendiente de ",
+          rx.el.span(
+            State.currency_symbol, " ",
+            State.client_delete_target["current_debt"],
+            class_name="font-bold",
+          ),
+          ". Primero saldá la deuda desde Cuentas Corrientes.",
+          class_name="text-sm text-red-600 mt-0.5",
+        ),
+        class_name="flex flex-col",
+      ),
+      class_name="flex items-start gap-3",
+    ),
+    class_name="bg-red-50 border border-red-200 rounded-xl p-4",
+  )
+
+  sales_block = rx.el.div(
+    rx.el.div(
+      rx.icon("triangle-alert", class_name="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5"),
+      rx.el.div(
+        rx.el.p(
+          "El cliente tiene ventas registradas",
+          class_name="text-sm font-semibold text-amber-700",
+        ),
+        rx.el.p(
+          "Tiene ",
+          rx.el.span(
+            State.client_delete_target["sale_count"].to_string(),
+            class_name="font-bold",
+          ),
+          " venta(s) en el sistema. Al eliminarlo, esas ventas quedarán "
+          "sin cliente asociado (aparecerán como anónimas). "
+          "Esta acción no se puede deshacer.",
+          class_name="text-sm text-amber-600 mt-0.5",
+        ),
+        class_name="flex flex-col",
+      ),
+      class_name="flex items-start gap-3",
+    ),
+    class_name="bg-amber-50 border border-amber-200 rounded-xl p-4",
+  )
+
+  clean_block = rx.el.div(
+    rx.el.div(
+      rx.icon("info", class_name="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5"),
+      rx.el.p(
+        "Este cliente no tiene ventas ni deudas. La eliminación es permanente.",
+        class_name="text-sm text-slate-600",
+      ),
+      class_name="flex items-start gap-3",
+    ),
+    class_name="bg-slate-50 border border-slate-200 rounded-xl p-4",
+  )
+
+  return modal_container(
+    is_open=State.client_delete_modal_open,
+    on_close=State.close_delete_client_modal,
+    title="Eliminar Cliente",
+    description=rx.el.span(
+      "Estás por eliminar a ",
+      rx.el.span(
+        State.client_delete_target["name"],
+        class_name="font-semibold text-slate-800",
+      ),
+    ),
+    children=[
+      rx.cond(
+        State.client_delete_has_debt,
+        debt_block,
+        rx.cond(
+          State.client_delete_has_sales,
+          sales_block,
+          clean_block,
+        ),
+      ),
+    ],
+    footer=rx.el.div(
+      rx.el.button(
+        "Cancelar",
+        on_click=State.close_delete_client_modal,
+        class_name=BUTTON_STYLES["secondary"],
+      ),
+      rx.cond(
+        State.client_delete_can_delete,
+        rx.el.button(
+          rx.icon("trash-2", class_name="w-4 h-4"),
+          "Eliminar",
+          on_click=State.confirm_delete_client,
+          disabled=State.is_loading,
+          loading=State.is_loading,
+          class_name=BUTTON_STYLES["danger"],
+        ),
+        rx.el.button(
+          rx.icon("lock", class_name="w-4 h-4"),
+          "No se puede eliminar",
+          disabled=True,
+          class_name=f"{BUTTON_STYLES['secondary']} opacity-40 cursor-not-allowed",
+        ),
+      ),
+      class_name="flex justify-end gap-2",
+    ),
+    max_width="max-w-lg",
+  )
+
+
 # ── Página principal ─────────────────────────────────────────────────────────
 
 def clientes_page() -> rx.Component:
@@ -504,6 +623,7 @@ def clientes_page() -> rx.Component:
     ),
     client_form_modal(),
     historial_modal(),
+    client_delete_modal(),
   )
   return permission_guard(
     has_permission=State.can_view_clientes,

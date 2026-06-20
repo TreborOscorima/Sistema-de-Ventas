@@ -9,6 +9,7 @@ from app.utils.tenant import tenant_bypass
 from app.models import CashboxLog as CashboxLogModel, User as UserModel, Sale, SaleItem, PaymentMethod
 from app.i18n import MSG
 from ..types import CashboxSale, CashboxLogEntry
+from app.utils.formatting import fmt_price
 
 
 class HistoryMixin:
@@ -90,11 +91,19 @@ class HistoryMixin:
                     "action": log.action,
                     "timestamp": self._format_event_timestamp(log.timestamp),
                     "user": username,
-                    "opening_amount": log.amount if log.action == "apertura" else 0.0,
-                    "closing_total": log.amount if log.action == "cierre" else 0.0,
+                    "opening_amount": fmt_price(float(log.amount or 0)) if log.action == "apertura" else "0.00",
+                    "closing_total": fmt_price(float(log.amount or 0)) if log.action == "cierre" else "0.00",
                     "totals_by_method": [],
                     "notes": log.notes,
                     "amount": log.amount,
+                    "quantity": 1.0,
+                    "unit": "",
+                    "cost": log.amount,
+                    "formatted_amount": f"{log.amount:.2f}",
+                    "formatted_cost": f"{log.amount:.2f}",
+                    "formatted_quantity": "1",
+                    "category": "",
+                    "movement_type": "",
                 }
                 filtered.append(entry)
 
@@ -487,9 +496,9 @@ class HistoryMixin:
                     "description": item.product_name_snapshot,
                     "quantity": item.quantity,
                     "unit": MSG.FALLBACK_UNIT,
-                    "price": item.unit_price,
-                    "sale_price": item.unit_price,
-                    "subtotal": item.subtotal,
+                    "price": fmt_price(float(item.unit_price or 0)),
+                    "sale_price": fmt_price(float(item.unit_price or 0)),
+                    "subtotal": fmt_price(float(item.subtotal or 0)),
                 }
             )
             items_total += item.subtotal or 0
@@ -507,7 +516,7 @@ class HistoryMixin:
             "is_credit": (sale.payment_condition or "").strip().lower() == "credito",
             "amount_paid": total_paid,
             "amount": paid_total,
-            "total": total_amount,
+            "total": fmt_price(float(total_amount or 0)),
             "is_deleted": sale.status == SaleStatus.cancelled,
             "delete_reason": sale.delete_reason,
             "items": items,

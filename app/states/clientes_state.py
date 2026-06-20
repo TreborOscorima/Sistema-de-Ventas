@@ -37,6 +37,7 @@ from app.utils.sanitization import (
     sanitize_text,
 )
 from .mixin_state import MixinState
+from app.utils.formatting import fmt_price
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,16 @@ class ClientesState(MixinState):
     historial_sale_count: int = 0
     historial_total_spent: str = "0.00"
 
+    # ── Modal de confirmación de eliminación ─────────────────────
+    client_delete_modal_open: bool = False
+    client_delete_target: dict = {
+        "id": 0,
+        "name": "",
+        "sale_count": 0,
+        "current_debt": 0.0,
+        "can_delete": False,
+    }
+
     _VALID_SEGMENTS: list[str] = ["nuevo", "regular", "vip", "mayorista"]
 
     def _empty_client_form(self) -> dict:
@@ -109,6 +120,18 @@ class ClientesState(MixinState):
         company_id, branch_id = self._tenant_ids()
         set_tenant_context(company_id, branch_id)
         return company_id
+
+    @rx.var(cache=False)
+    def client_delete_has_debt(self) -> bool:
+        return float(self.client_delete_target.get("current_debt", 0)) > 0
+
+    @rx.var(cache=False)
+    def client_delete_has_sales(self) -> bool:
+        return int(self.client_delete_target.get("sale_count", 0)) > 0
+
+    @rx.var(cache=False)
+    def client_delete_can_delete(self) -> bool:
+        return bool(self.client_delete_target.get("can_delete", False))
 
     @rx.var(cache=True)
     def clients_view(self) -> list[dict]:
@@ -147,9 +170,9 @@ class ClientesState(MixinState):
                     "dni": dni,
                     "phone": phone,
                     "address": address,
-                    "credit_limit": credit_limit,
-                    "current_debt": current_debt,
-                    "credit_available": available,
+                    "credit_limit": fmt_price(float(credit_limit or 0)),
+                    "current_debt": fmt_price(float(current_debt or 0)),
+                    "credit_available": fmt_price(float(available or 0)),
                     "segment": segment,
                 }
             )
@@ -419,11 +442,66 @@ class ClientesState(MixinState):
         return self.add_notification("Cliente guardado.", "success")
 
     @rx.event
-    def delete_client(self, client_id: int):
+    @rx.event
+    def open_delete_client_modal(self, client_id: int):
         if not self.current_user["privileges"].get("manage_clientes"):
-            return self.add_notification(
-                "No tiene permisos para gestionar clientes.", "error"
-            )
+            return self.add_notification("No tiene permisos para gestionar clientes.", "error")
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return self.add_notification("Empresa no definida.", "error")
+
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            client = session.exec(
+                select(Client)
+                .where(Client.id == client_id)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+            ).first()
+            if not client:
+                return self.add_notification("Cliente no encontrado.", "error")
+
+            sale_count = len(session.exec(
+                select(Sale)
+                .where(Sale.client_id == client_id)
+                .where(Sale.company_id == company_id)
+                .where(Sale.branch_id == branch_id)
+            ).all())
+
+            current_debt = float(client.current_debt or 0)
+            # Solo se puede eliminar si no tiene deuda
+            can_delete = current_debt == 0
+
+            self.client_delete_target = {
+                "id": client.id,
+                "name": client.name,
+                "sale_count": sale_count,
+                "current_debt": fmt_price(current_debt),
+                "can_delete": can_delete,
+            }
+        self.client_delete_modal_open = True
+
+    @rx.event
+    def close_delete_client_modal(self):
+        self.client_delete_modal_open = False
+        self.client_delete_target = {
+            "id": 0, "name": "", "sale_count": 0,
+            "current_debt": 0.0, "can_delete": False,
+        }
+
+    @rx.event
+    def confirm_delete_client(self):
+        if not self.current_user["privileges"].get("manage_clientes"):
+            return self.add_notification("No tiene permisos para gestionar clientes.", "error")
+
+        client_id = self.client_delete_target.get("id")
+        if not client_id:
+            return self.add_notification("Cliente no definido.", "error")
+
+        if not self.client_delete_target.get("can_delete"):
+            return self.add_notification("No se puede eliminar: cliente con deuda activa.", "error")
+
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -431,6 +509,7 @@ class ClientesState(MixinState):
 
         self.is_loading = True
         yield
+
         try:
             with rx.session() as session:
                 session.info["tenant_bypass"] = True
@@ -443,34 +522,38 @@ class ClientesState(MixinState):
                 if not client:
                     return self.add_notification("Cliente no encontrado.", "error")
                 if client.current_debt and client.current_debt > 0:
-                    return self.add_notification(
-                        "No se puede eliminar: cliente con deuda.", "error"
-                    )
-                has_sales = session.exec(
+                    return self.add_notification("No se puede eliminar: cliente con deuda activa.", "error")
+
+                # Desvincular ventas (SET NULL) para liberar la FK antes de eliminar
+                sales = session.exec(
                     select(Sale)
                     .where(Sale.client_id == client_id)
                     .where(Sale.company_id == company_id)
                     .where(Sale.branch_id == branch_id)
-                ).first()
-                if has_sales:
-                    return self.add_notification(
-                        "No se puede eliminar: cliente con ventas.", "error"
-                    )
+                ).all()
+                for sale in sales:
+                    sale.client_id = None
+                    session.add(sale)
+
                 session.delete(client)
                 session.commit()
         except Exception:
-            logger.exception(
-                "delete_client failed | company=%s",
-                self._company_id(),
-            )
-            return self.add_notification(
-                "No se pudo eliminar el cliente.", "error"
-            )
+            logger.exception("confirm_delete_client failed | company=%s client=%s", company_id, client_id)
+            return self.add_notification("No se pudo eliminar el cliente.", "error")
         finally:
             self.is_loading = False
 
+        self.client_delete_modal_open = False
+        self.client_delete_target = {
+            "id": 0, "name": "", "sale_count": 0,
+            "current_debt": 0.0, "can_delete": False,
+        }
         self.load_clients()
         return self.add_notification("Cliente eliminado.", "success")
+
+    def delete_client(self, client_id: int):
+        """Compat: abre el modal de confirmación."""
+        return self.open_delete_client_modal(client_id)
 
     # ── Historial de ventas por cliente ──────────────────────────────────────
 
