@@ -58,7 +58,10 @@ jobs:
           TEST_MODE: "1"
           AUTH_SECRET_KEY: test_secret_key_for_ci_only_32_chars_minimum
           REDIS_PASSWORD: ci_redis_password_placeholder
-        run: python -m pytest --no-cov -x --tb=short --ignore=tests/test_e2e.py -q
+        run: |
+          python -m pytest --no-cov -x --tb=long --ignore=tests/test_e2e.py -q \
+            2>&1 | tee pytest-output.txt
+          exit ${PIPESTATUS[0]}
 
       - name: Run tests with coverage
         env:
