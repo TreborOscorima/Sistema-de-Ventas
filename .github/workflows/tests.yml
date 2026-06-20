@@ -47,7 +47,16 @@ jobs:
           TEST_MODE: "1"
           AUTH_SECRET_KEY: test_secret_key_for_ci_only_32_chars_minimum
           REDIS_PASSWORD: ci_redis_password_placeholder
-        run: python -m pytest --collect-only -q --ignore=tests/test_e2e.py 2>&1 | tail -20
+        run: |
+          set -o pipefail
+          python -m pytest --collect-only -q --ignore=tests/test_e2e.py \
+            2>&1 | tee collection-output.txt
+      - name: Upload collection output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collection-output
+          path: collection-output.txt
       - name: Run tests (sin cobertura — aislar fallos)
         env:
           DB_USER: test
@@ -59,9 +68,9 @@ jobs:
           AUTH_SECRET_KEY: test_secret_key_for_ci_only_32_chars_minimum
           REDIS_PASSWORD: ci_redis_password_placeholder
         run: |
-          python -m pytest --no-cov -x --tb=long --ignore=tests/test_e2e.py -q \
-            2>&1 | tee pytest-output.txt
-          exit ${PIPESTATUS[0]}
+          set -o pipefail
+          python -m pytest --no-cov -x --tb=long --ignore=tests/test_e2e.py \
+            -v 2>&1 | tee pytest-output.txt
 
       - name: Run tests with coverage
         env:
