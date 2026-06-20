@@ -181,6 +181,12 @@ def _promo_row(p: rx.Var) -> rx.Component:
                         title="Encender",
                     ),
                 ),
+                rx.el.button(
+                    rx.icon("trash-2", class_name="h-4 w-4"),
+                    on_click=State.confirm_delete_promotion(p["id"], p["name"]),
+                    class_name=BUTTON_STYLES["icon_danger"],
+                    title="Eliminar",
+                ),
                 class_name="flex items-center gap-1 justify-end",
             ),
             class_name="py-3 px-4",
@@ -247,9 +253,62 @@ def _promo_card(p: rx.Var) -> rx.Component:
                     class_name="flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800",
                 ),
             ),
+            rx.el.button(
+                rx.icon("trash-2", class_name="h-4 w-4"),
+                "Eliminar",
+                on_click=State.confirm_delete_promotion(p["id"], p["name"]),
+                class_name="flex items-center gap-1 text-xs text-red-500 hover:text-red-700",
+            ),
             class_name="flex gap-4 mt-2",
         ),
         class_name=f"bg-white border border-slate-200 {RADIUS['lg']} p-4 {SHADOWS['sm']}",
+    )
+
+
+# ─── Modal: Confirmar eliminación ────────────────────────────────────────────
+
+def _delete_confirm_modal() -> rx.Component:
+    return rx.cond(
+        State.show_delete_confirm,
+        rx.el.div(
+            rx.el.div(
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("trash-2", class_name="h-6 w-6 text-red-500"),
+                        class_name="flex items-center justify-center w-12 h-12 bg-red-50 rounded-full mx-auto mb-4",
+                    ),
+                    rx.el.h3(
+                        "Eliminar promoción",
+                        class_name="text-lg font-semibold text-slate-900 text-center",
+                    ),
+                    rx.el.p(
+                        "¿Estás seguro de que querés eliminar «",
+                        rx.el.span(State.promo_delete_name, class_name="font-semibold"),
+                        "»? Esta acción no se puede deshacer.",
+                        class_name="text-sm text-slate-600 text-center mt-2",
+                    ),
+                    rx.el.div(
+                        rx.el.button(
+                            "Cancelar",
+                            on_click=State.cancel_delete_promotion,
+                            class_name=BUTTON_STYLES["secondary"],
+                        ),
+                        rx.el.button(
+                            rx.icon("trash-2", class_name="h-4 w-4"),
+                            "Eliminar",
+                            on_click=State.delete_promotion,
+                            class_name=BUTTON_STYLES["danger"],
+                        ),
+                        class_name="flex gap-3 justify-center mt-6",
+                    ),
+                    class_name="p-6",
+                ),
+                class_name="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4",
+            ),
+            class_name="fixed inset-0 z-50 flex items-center justify-center bg-black/40",
+            on_click=State.cancel_delete_promotion,
+        ),
+        rx.fragment(),
     )
 
 
@@ -725,7 +784,8 @@ def promociones_page() -> rx.Component:
             class_name="flex flex-col gap-3 md:hidden",
         ),
 
-        # Modal
+        # Modales
+        _delete_confirm_modal(),
         _promo_form_modal(),
         # rx.fragment no soporta on_mount; la carga inicial la dispara
         # `app.add_page(on_load=State.page_init_promociones)` en app/app.py.

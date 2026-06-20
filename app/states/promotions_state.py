@@ -78,6 +78,11 @@ class PromotionsState(MixinState):
     # Umbral de subtotal del carrito. "" o "0" = sin umbral.
     promo_min_cart_amount: str = ""
 
+    # Confirmación de eliminación
+    promo_delete_id: int = 0
+    promo_delete_name: str = ""
+    show_delete_confirm: bool = False
+
     # Límite de unidades por transacción que reciben el descuento. "" = sin límite.
     promo_max_units_per_transaction: str = ""
 
@@ -729,6 +734,63 @@ class PromotionsState(MixinState):
     async def set_promotions_filter(self, value: str):
         self.promotions_filter_active = value
         await self._load_promotions()
+
+    # ─── Eliminar ────────────────────────────────────────────────────
+
+    @rx.event
+    @require_permission("manage_config")
+    def confirm_delete_promotion(self, promo_id: int, promo_name: str):
+        self.promo_delete_id = promo_id
+        self.promo_delete_name = promo_name
+        self.show_delete_confirm = True
+
+    @rx.event
+    def cancel_delete_promotion(self):
+        self.promo_delete_id = 0
+        self.promo_delete_name = ""
+        self.show_delete_confirm = False
+
+    @rx.event
+    @require_permission("manage_config")
+    async def delete_promotion(self):
+        if not self.promo_delete_id:
+            return
+        promo_id = self.promo_delete_id
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        self.show_delete_confirm = False
+        self.promo_delete_id = 0
+        self.promo_delete_name = ""
+        try:
+            from app.models.promotions import PromotionProduct
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(company_id, branch_id)
+            with rx.session() as session:
+                session.info["tenant_bypass"] = True
+                promo = session.exec(
+                    select(Promotion)
+                    .where(Promotion.id == promo_id)
+                    .where(Promotion.company_id == company_id)
+                    .where(Promotion.branch_id == branch_id)
+                ).first()
+                if not promo:
+                    yield rx.toast("Promoción no encontrada.", duration=3000)
+                    return
+                # Limpiar join-table antes de eliminar el padre
+                pp_rows = session.exec(
+                    select(PromotionProduct).where(
+                        PromotionProduct.promotion_id == promo_id
+                    )
+                ).all()
+                for pp in pp_rows:
+                    session.delete(pp)
+                session.delete(promo)
+                session.commit()
+            await self._load_promotions()
+            yield rx.toast("Promoción eliminada.", duration=3000)
+        except Exception as exc:
+            logger.exception("Error al eliminar promoción: %s", exc)
+            yield rx.toast(f"Error al eliminar: {exc}", duration=4000)
 
 
 def _parse_date(value: str) -> datetime | None:
