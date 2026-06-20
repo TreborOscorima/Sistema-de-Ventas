@@ -48,8 +48,8 @@ jobs:
           AUTH_SECRET_KEY: test_secret_key_for_ci_only_32_chars_minimum
           REDIS_PASSWORD: ci_redis_password_placeholder
         run: |
-          python3 -c "
-          import sys
+          python3 << 'PYEOF' 2>&1 | tee import-diag.txt
+          import sys, traceback
           sys.path.insert(0, '.')
           mods = [
               'app.utils.formatting',
@@ -60,18 +60,20 @@ jobs:
               'app.states.root_state',
               'app.state',
           ]
+          failed = False
           for m in mods:
               try:
                   __import__(m)
-                  print(f'OK: {m}')
-                  sys.stdout.flush()
+                  print(f'OK: {m}', flush=True)
               except Exception as e:
-                  print(f'FAIL: {m}: {type(e).__name__}: {e}', file=sys.stderr)
-                  import traceback
-                  traceback.print_exc(file=sys.stderr)
-                  sys.exit(1)
-          print('All imports OK')
-          "
+                  print(f'FAIL: {m}: {type(e).__name__}: {e}', flush=True)
+                  traceback.print_exc()
+                  failed = True
+                  break
+          if not failed:
+              print('All imports OK', flush=True)
+          PYEOF
+          grep -q "FAIL:" import-diag.txt && exit 1 || true
       - name: Check test collection (diagnóstico)
         env:
           DB_USER: test
@@ -86,12 +88,14 @@ jobs:
           set -o pipefail
           python -m pytest --collect-only -q --ignore=tests/test_e2e.py \
             2>&1 | tee collection-output.txt
-      - name: Upload collection output
+      - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: collection-output
-          path: collection-output.txt
+          name: diagnostics
+          path: |
+            import-diag.txt
+            collection-output.txt
       - name: Run tests (sin cobertura — aislar fallos)
         env:
           DB_USER: test
