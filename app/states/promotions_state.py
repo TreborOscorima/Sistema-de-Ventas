@@ -12,6 +12,7 @@ from sqlmodel import select, func
 from app.models import Promotion
 from app.models.auth import User
 from app.models.promotions import PromotionType, PromotionScope
+from app.utils.formatting import fmt_price
 from app.utils.timezone import utc_now_naive
 
 from .mixin_state import MixinState, require_permission
@@ -193,6 +194,13 @@ class PromotionsState(MixinState):
                 "scope": p.scope,
                 "scope_label": scope_label,
                 "discount_value": float(p.discount_value or 0),
+                "discount_value_display": (
+                    fmt_price(float(p.discount_value or 0))
+                    if p.promotion_type == PromotionType.FIXED_AMOUNT
+                    else str(int(float(p.discount_value or 0)))
+                    if float(p.discount_value or 0) == int(float(p.discount_value or 0))
+                    else str(float(p.discount_value or 0))
+                ),
                 "min_quantity": p.min_quantity,
                 "free_quantity": p.free_quantity,
                 "starts_at": p.starts_at.strftime("%d/%m/%Y") if p.starts_at else "",
