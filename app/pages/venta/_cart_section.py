@@ -66,24 +66,24 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
                 rx.el.div(
                     rx.el.span(
                         State.currency_symbol,
-                        item["base_price"].to_string(),
+                        item["base_price"],
                         class_name="text-slate-400 line-through text-xs leading-none",
                     ),
                     rx.el.span(
                         State.currency_symbol,
-                        item["sale_price"].to_string(),
+                        item["sale_price"],
                         class_name="text-emerald-600 font-semibold",
                     ),
                     class_name="flex flex-col items-end gap-0.5",
                 ),
-                rx.el.span(State.currency_symbol, item["sale_price"].to_string()),
+                rx.el.span(State.currency_symbol, item["sale_price"]),
             ),
             class_name="py-2 px-3 text-right text-sm hidden sm:table-cell",
         ),
         rx.el.td(
             rx.el.span(
                 State.currency_symbol,
-                item["subtotal"].to_string(),
+                item["subtotal"],
                 class_name="font-semibold text-indigo-600",
             ),
             class_name="py-2 px-3 text-right text-sm",
@@ -167,24 +167,24 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
                     rx.el.div(
                         rx.el.span(
                             State.currency_symbol,
-                            item["base_price"].to_string(),
+                            item["base_price"],
                             class_name="text-slate-400 line-through text-xs",
                         ),
                         rx.el.span(
                             State.currency_symbol,
-                            item["sale_price"].to_string(),
+                            item["sale_price"],
                             class_name="font-semibold text-emerald-600",
                         ),
                         class_name="flex flex-col items-start leading-tight",
                     ),
-                    rx.el.span(State.currency_symbol, item["sale_price"].to_string(), class_name="font-medium"),
+                    rx.el.span(State.currency_symbol, item["sale_price"], class_name="font-medium"),
                 ),
                 class_name="flex items-center gap-1",
             ),
             rx.el.div(
                 rx.el.span(
                     State.currency_symbol,
-                    item["subtotal"].to_string(),
+                    item["subtotal"],
                     class_name="text-lg font-bold text-indigo-600",
                 ),
                 class_name="ml-auto",

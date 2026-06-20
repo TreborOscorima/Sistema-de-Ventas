@@ -192,7 +192,7 @@ class CartMixin:
 
     @rx.var(cache=True)
     def products_cart_subtotal(self) -> float:
-        return self._round_currency(sum(item["subtotal"] for item in self.new_sale_items))
+        return self._round_currency(sum(float(item.get("subtotal", 0)) for item in self.new_sale_items))
 
     @rx.var(cache=False)
     def sale_subtotal_display(self) -> str:
@@ -221,7 +221,7 @@ class CartMixin:
             if reservation_balance < 0:
                 reservation_balance = 0.0
 
-        products_total = sum((item["subtotal"] for item in self.new_sale_items))
+        products_total = sum(float(item.get("subtotal", 0)) for item in self.new_sale_items)
         return self._round_currency(products_total + reservation_balance)
 
     @rx.var(cache=False)
@@ -232,8 +232,10 @@ class CartMixin:
         unit = item.get("unit", "")
         item["quantity"] = self._normalize_quantity_value(item.get("quantity", 0), unit)
         if "sale_price" in item:
-            item["sale_price"] = self._round_currency(item.get("sale_price", 0))
-        item["subtotal"] = self._round_currency(item["quantity"] * item.get("price", 0))
+            item["sale_price"] = fmt_price(self._round_currency(item.get("sale_price", 0)))
+        if "base_price" in item:
+            item["base_price"] = fmt_price(self._round_currency(item.get("base_price", 0)))
+        item["subtotal"] = fmt_price(self._round_currency(item["quantity"] * item.get("price", 0)))
 
     def _product_value(self, product: Any, key: str, default: Any = None) -> Any:
         if isinstance(product, dict):
@@ -597,9 +599,9 @@ class CartMixin:
                     "quantity": self._normalize_quantity_value(qty, p.unit or "Unidad"),
                     "unit": p.unit or "Unidad",
                     "price": float(unit_price),
-                    "sale_price": float(unit_price),
-                    "base_price": float(unit_price),
-                    "subtotal": float(component_subtotal),
+                    "sale_price": fmt_price(float(unit_price)),
+                    "base_price": fmt_price(float(unit_price)),
+                    "subtotal": fmt_price(float(component_subtotal)),
                     "product_id": p.id,
                     "variant_id": None,
                     "batch_id": None,
@@ -1376,9 +1378,9 @@ class CartMixin:
             updated_item["price"] = self.new_sale_item.get(
                 "price", updated_item.get("price", 0)
             )
-            updated_item["subtotal"] = self._round_currency(
+            updated_item["subtotal"] = fmt_price(self._round_currency(
                 updated_item["quantity"] * updated_item["price"]
-            )
+            ))
             # Preservar info de lote del ítem original
             for k in ("batch_id", "batch_number", "requires_batch"):
                 if k not in updated_item:
@@ -1434,7 +1436,7 @@ class CartMixin:
         # que el operador ingrese un valor coherente antes de confirmar.
         if getattr(self, "is_credit_mode", False) and hasattr(self, "payment_cash_amount"):
             new_total = self._round_currency(
-                sum(item["subtotal"] for item in self.new_sale_items)
+                sum(float(item.get("subtotal", 0)) for item in self.new_sale_items)
             )
             if self._round_currency(self.payment_cash_amount) > new_total + 0.005:
                 self.payment_cash_amount = 0
@@ -1801,9 +1803,9 @@ class CartMixin:
                     if quot_dec < effective:
                         effective = quot_dec
                 item["price"] = round(float(effective), 4)
-                item["sale_price"] = self._round_currency(effective)
-                item["base_price"] = self._round_currency(resolution.base_price)
-                item["subtotal"] = self._round_currency(qty * effective)
+                item["sale_price"] = fmt_price(self._round_currency(effective))
+                item["base_price"] = fmt_price(self._round_currency(resolution.base_price))
+                item["subtotal"] = fmt_price(self._round_currency(qty * effective))
                 applied_promo = resolution.applied_promotion
                 item["promotion_name"] = applied_promo.name if applied_promo else ""
                 item["applied_promotion_id"] = applied_promo.id if applied_promo else None

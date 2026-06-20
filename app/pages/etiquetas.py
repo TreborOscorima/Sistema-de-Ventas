@@ -184,14 +184,17 @@ def _specific_products_section() -> rx.Component:
                 "Buscar productos",
                 class_name="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-1",
             ),
-            rx.el.input(
-                placeholder="Nombre o código de barras…",
-                value=State.label_search_query,
-                on_change=State.set_label_search_query,
-                class_name=(
-                    "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm "
-                    "focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            rx.debounce_input(
+                rx.el.input(
+                    placeholder="Nombre o código de barras…",
+                    value=State.label_search_query,
+                    on_change=State.set_label_search_query,
+                    class_name=(
+                        "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm "
+                        "focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                    ),
                 ),
+                debounce_timeout=400,
             ),
             class_name="flex flex-col gap-1",
         ),

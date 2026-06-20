@@ -12,6 +12,7 @@ from app.models import (
     Category,
 )
 from app.utils.tenant import set_tenant_context, tenant_bypass
+from app.utils.formatting import fmt_input_num
 from app.utils.sanitization import escape_like
 
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -133,7 +134,7 @@ class SearchMixin:
             "sale_price": product.sale_price,
             "custom_profit_margin": product.custom_profit_margin,
             "default_supplier_id": product.default_supplier_id,
-            "stock_total_display": f"{stock_total:.2f}",
+            "stock_total_display": fmt_input_num(stock_total),
         }
 
     def _inventory_row_from_variant(
@@ -172,7 +173,7 @@ class SearchMixin:
             "sale_price": product.sale_price,
             "custom_profit_margin": product.custom_profit_margin,
             "default_supplier_id": product.default_supplier_id,
-            "stock_total_display": f"{stock_total:.2f}",
+            "stock_total_display": fmt_input_num(stock_total),
         }
 
     def _inventory_search_count(

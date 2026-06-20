@@ -20,6 +20,7 @@ from app.services.quotation_service import (
     UpdateQuotationDTO,
 )
 from app.utils.db import get_async_session
+from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.timezone import utc_now_naive
 
 from .mixin_state import MixinState, require_permission
@@ -298,17 +299,17 @@ class QuotationState(MixinState):
         self.quot_client_id = str(q.client_id) if q.client_id else ""
         self.quot_validity_days = str(q.validity_days or 15)
         self.quot_notes = q.notes or ""
-        self.quot_global_discount = str(float(q.discount_percentage or 0))
+        self.quot_global_discount = fmt_input_num(q.discount_percentage or 0)
         self.quot_idempotency_key = ""  # No se usa en update
         self.quot_cart = [
             {
                 "product_id": str(qi.product_id) if qi.product_id else "",
                 "description": qi.product_name_snapshot or "",
                 "barcode": qi.product_barcode_snapshot or "",
-                "quantity": str(float(qi.quantity or 1)),
-                "unit_price": str(float(qi.unit_price or 0)),
-                "discount_percentage": str(float(qi.discount_percentage or 0)),
-                "subtotal": self._round_currency(float(qi.subtotal or 0)),
+                "quantity": fmt_input_num(qi.quantity or 1),
+                "unit_price": fmt_price(qi.unit_price or 0),
+                "discount_percentage": fmt_input_num(qi.discount_percentage or 0),
+                "subtotal": fmt_price(self._round_currency(float(qi.subtotal or 0))),
             }
             for qi in db_items
         ]
@@ -364,11 +365,11 @@ class QuotationState(MixinState):
         for item in self.quot_cart:
             if (item["product_id"] == product_data.get("id") and
                     item.get("variant_id") == product_data.get("variant_id")):
-                item["quantity"] = str(float(item["quantity"]) + 1)
-                item["subtotal"] = self._round_currency(
+                item["quantity"] = fmt_input_num(float(item["quantity"]) + 1)
+                item["subtotal"] = fmt_price(self._round_currency(
                     float(item["quantity"]) * float(item["unit_price"])
                     * (1 - float(item["discount_percentage"]) / 100)
-                )
+                ))
                 self.quot_cart = list(self.quot_cart)
                 return
 
@@ -378,9 +379,9 @@ class QuotationState(MixinState):
             "description": product_data.get("description", ""),
             "barcode": product_data.get("barcode", ""),
             "quantity": "1",
-            "unit_price": str(product_data.get("sale_price", 0)),
+            "unit_price": fmt_price(product_data.get("sale_price", 0)),
             "discount_percentage": "0",
-            "subtotal": self._round_currency(float(product_data.get("sale_price", 0))),
+            "subtotal": fmt_price(self._round_currency(float(product_data.get("sale_price", 0)))),
         })
 
     @rx.event
@@ -399,22 +400,48 @@ class QuotationState(MixinState):
             self.quot_cart[idx]["discount_percentage"] = value
             self._recalc_quot_item(idx)
 
+    @rx.event
+    def quot_update_item_price(self, idx: int, value: str):
+        if 0 <= idx < len(self.quot_cart):
+            self.quot_cart[idx]["unit_price"] = value
+            self._recalc_quot_item(idx)
+
     def _recalc_quot_item(self, idx: int):
         item = self.quot_cart[idx]
         try:
             qty = float(item["quantity"] or 0)
             price = float(item["unit_price"] or 0)
             disc = float(item["discount_percentage"] or 0)
-            item["subtotal"] = self._round_currency(qty * price * (1 - disc / 100))
+            item["subtotal"] = fmt_price(self._round_currency(qty * price * (1 - disc / 100)))
         except (ValueError, TypeError):
-            item["subtotal"] = 0.0
+            item["subtotal"] = "0.00"
         self.quot_cart = list(self.quot_cart)
 
     @rx.var(cache=False)
-    def quot_cart_total(self) -> float:
-        total = sum(float(item.get("subtotal", 0)) for item in self.quot_cart)
+    def quot_items_subtotal(self) -> float:
+        return self._round_currency(sum(float(item.get("subtotal", 0)) for item in self.quot_cart))
+
+    @rx.var(cache=False)
+    def quot_items_subtotal_str(self) -> str:
+        return fmt_price(self.quot_items_subtotal)
+
+    @rx.var(cache=False)
+    def quot_discount_amount(self) -> float:
         disc = float(self.quot_global_discount or 0)
-        return self._round_currency(total * (1 - disc / 100))
+        return self._round_currency(self.quot_items_subtotal * disc / 100)
+
+    @rx.var(cache=False)
+    def quot_discount_amount_str(self) -> str:
+        return fmt_price(self.quot_discount_amount)
+
+    @rx.var(cache=False)
+    def quot_cart_total(self) -> float:
+        disc = float(self.quot_global_discount or 0)
+        return self._round_currency(self.quot_items_subtotal * (1 - disc / 100))
+
+    @rx.var(cache=False)
+    def quot_cart_total_str(self) -> str:
+        return fmt_price(self.quot_cart_total)
 
     # ─── Guardar presupuesto ─────────────────────────────────────────
 
@@ -550,7 +577,7 @@ class QuotationState(MixinState):
             "created_at": self._format_company_datetime(q.created_at, "%d/%m/%Y %H:%M"),
             "expires_at": self._format_company_datetime(q.expires_at, "%d/%m/%Y"),
             "total_amount": self._format_currency(float(q.total_amount or 0)),
-            "discount_percentage": float(q.discount_percentage or 0),
+            "discount_percentage": fmt_input_num(q.discount_percentage or 0),
             "notes": q.notes or "",
             "client_id": q.client_id,
             "client_name": client_name,
@@ -562,9 +589,9 @@ class QuotationState(MixinState):
             {
                 "description": qi.product_name_snapshot or "",
                 "barcode": qi.product_barcode_snapshot or "",
-                "quantity": float(qi.quantity or 0),
+                "quantity": fmt_input_num(qi.quantity or 0),
                 "unit_price": self._format_currency(float(qi.unit_price or 0)),
-                "discount_percentage": float(qi.discount_percentage or 0),
+                "discount_percentage": fmt_input_num(qi.discount_percentage or 0),
                 "subtotal": self._format_currency(float(qi.subtotal or 0)),
             }
             for qi in items
@@ -783,9 +810,9 @@ class QuotationState(MixinState):
                     "quantity": qty,
                     "unit": unit,
                     "price": effective_price,
-                    "sale_price": unit_price_base,
-                    "base_price": unit_price_base,
-                    "subtotal": self._round_currency(qty * effective_price),
+                    "sale_price": fmt_price(effective_price),
+                    "base_price": fmt_price(unit_price_base),
+                    "subtotal": fmt_price(self._round_currency(qty * effective_price)),
                     "product_id": qi.product_id,
                     "variant_id": qi.product_variant_id,
                     "batch_id": None,
@@ -816,7 +843,7 @@ class QuotationState(MixinState):
         # Pre-fill monto en efectivo para que el cajero no tenga que re-ingresarlo.
         # Solo aplica cuando el método activo es efectivo; otros métodos no lo necesitan.
         if getattr(self, "payment_method_kind", "cash") in {"cash", ""}:
-            quot_total = self._round_currency(sum(item["subtotal"] for item in cart_items))
+            quot_total = self._round_currency(sum(float(item.get("subtotal", 0)) for item in cart_items))
             self.payment_cash_amount = quot_total
             self._update_cash_feedback()
 
@@ -959,7 +986,8 @@ class QuotationState(MixinState):
             with rx.session() as session:
                 session.info["tenant_bypass"] = True
                 stmt = (
-                    select(Quotation)
+                    select(Quotation, Client)
+                    .outerjoin(Client, Client.id == Quotation.client_id)
                     .where(Quotation.company_id == company_id)
                     .where(Quotation.branch_id == branch_id)
                     .where(
@@ -978,16 +1006,18 @@ class QuotationState(MixinState):
                     except ValueError:
                         stmt = stmt.where(
                             func.lower(Quotation.notes).contains(stripped.lower())
+                            | func.lower(Client.name).contains(stripped.lower())
                         )
                 stmt = stmt.order_by(Quotation.created_at.desc()).limit(20)
                 rows = session.exec(stmt).all()
 
             results = []
-            for q in rows:
+            for q, client in rows:
                 is_expired = q.expires_at is not None and q.expires_at < now
                 status = QuotationStatus.EXPIRED if is_expired else q.status
                 results.append({
                     "id": q.id,
+                    "client_name": client.name if client else "Público en general",
                     "created_at": self._format_company_datetime(
                         q.created_at, "%d/%m/%Y"
                     ),

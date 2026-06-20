@@ -172,7 +172,7 @@ class PaymentMixin:
         }
         if kind == "cash":
             detail = f"Monto {self._format_currency(self.payment_cash_amount)}"
-            if self.payment_cash_message:
+            if self.payment_cash_message and self.payment_cash_status in ("change", "exact"):
                 detail += f" ({self.payment_cash_message})"
             return f"{method} - {detail}"
         if kind in ["debit", "credit", "yape", "plin", "transfer"]:

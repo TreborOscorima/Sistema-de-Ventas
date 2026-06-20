@@ -22,6 +22,7 @@ from app.models import (
     SaleItem,
     Supplier,
 )
+from app.utils.formatting import fmt_input_num, fmt_price
 
 logger = logging.getLogger(__name__)
 
@@ -88,8 +89,8 @@ class ProductMixin:
             "category": _read_value("category", ""),
             "stock": _read_value("stock", 0),
             "unit": _read_value("unit", ""),
-            "purchase_price": _read_value("purchase_price", 0),
-            "sale_price": _read_value("sale_price", 0),
+            "purchase_price": fmt_price(float(_read_value("purchase_price", 0) or 0)),
+            "sale_price": fmt_price(float(_read_value("sale_price", 0) or 0)),
             "custom_profit_margin": str(raw_margin) if raw_margin is not None else "",
             "default_supplier_id": _read_value("default_supplier_id", None),
         }
@@ -155,7 +156,7 @@ class ProductMixin:
                     self.price_tiers = [
                         {
                             "min_qty": tier.min_quantity,
-                            "price": float(tier.unit_price or 0),
+                            "price": fmt_input_num(tier.unit_price or 0),
                         }
                         for tier in tiers
                     ]
@@ -224,7 +225,7 @@ class ProductMixin:
                             "component_barcode": (comp_map[c.component_product_id].barcode or "") if c.component_product_id in comp_map else "",
                             "component_name": (comp_map[c.component_product_id].description or "") if c.component_product_id in comp_map else "",
                             "component_product_id": c.component_product_id,
-                            "quantity": float(c.quantity or 1),
+                            "quantity": fmt_input_num(c.quantity or 1),
                         }
                         for c in kit_comps
                     ]
@@ -391,14 +392,14 @@ class ProductMixin:
                 margin = float(value_str) if value_str.strip() else 0.0
                 purchase = float(self.editing_product.get("purchase_price") or 0)
                 if purchase > 0:
-                    self.editing_product["sale_price"] = _q(purchase * (1 + margin / 100))
+                    self.editing_product["sale_price"] = fmt_price(_q(purchase * (1 + margin / 100)))
             except (ValueError, TypeError):
                 pass
 
         elif field == "sale_price":
             try:
                 sale = float(str(value)) if str(value).strip() else 0.0
-                self.editing_product["sale_price"] = sale
+                self.editing_product["sale_price"] = fmt_price(sale)
                 purchase = float(self.editing_product.get("purchase_price") or 0)
                 if purchase > 0 and sale > 0:
                     self.editing_product["custom_profit_margin"] = str(
@@ -412,12 +413,12 @@ class ProductMixin:
         elif field == "purchase_price":
             try:
                 purchase = float(str(value)) if str(value).strip() else 0.0
-                self.editing_product["purchase_price"] = purchase
+                self.editing_product["purchase_price"] = fmt_price(purchase)
                 raw_margin = str(self.editing_product.get("custom_profit_margin") or "").strip()
                 if raw_margin and purchase > 0:
                     # Hay margen explícito → mantenerlo y recalcular sale_price
                     margin = float(raw_margin)
-                    self.editing_product["sale_price"] = _q(purchase * (1 + margin / 100))
+                    self.editing_product["sale_price"] = fmt_price(_q(purchase * (1 + margin / 100)))
                 elif purchase > 0:
                     # No hay margen → recalcular el % implícito desde el sale_price actual
                     sale = float(self.editing_product.get("sale_price") or 0)

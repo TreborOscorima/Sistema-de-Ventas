@@ -70,7 +70,11 @@ class FieldPrice(TypedDict):
     id: str
     sport: str
     name: str
-    price: float
+    price: str
+
+class FieldPriceGroup(TypedDict):
+    sport: str
+    items: list[FieldPrice]
 
 class FieldReservation(TypedDict):
     id: str
@@ -82,9 +86,10 @@ class FieldReservation(TypedDict):
     field_name: str
     start_datetime: str
     end_datetime: str
-    advance_amount: float
-    total_amount: float
-    paid_amount: float
+    advance_amount: str
+    total_amount: str
+    paid_amount: str
+    balance_display: str
     status: str
     created_at: str
     cancellation_reason: str
@@ -155,6 +160,8 @@ class CashboxLogEntry(TypedDict):
     formatted_amount: str
     formatted_cost: str
     formatted_quantity: str
+    category: str
+    movement_type: str
 
 class SaleItemDict(TypedDict):
     temp_id: str

@@ -110,12 +110,25 @@ def compras_page() -> rx.Component:
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.span("Resultados:", class_name=TYPOGRAPHY["body_secondary"]),
-        rx.el.span(
-          State.purchase_records.length().to_string(),
-          class_name="text-sm font-semibold text-slate-700",
+        rx.el.div(
+          rx.el.span("Resultados:", class_name=TYPOGRAPHY["body_secondary"]),
+          rx.el.span(
+            State.purchase_records.length().to_string(),
+            class_name="text-sm font-semibold text-slate-700",
+          ),
+          class_name="flex items-center gap-2",
         ),
-        class_name="flex items-center gap-2",
+        rx.cond(
+          State.current_user["privileges"]["export_data"],
+          rx.el.button(
+            rx.icon("download", class_name="h-4 w-4"),
+            "Exportar",
+            on_click=State.export_purchases_excel,
+            class_name=BUTTON_STYLES["success"],
+          ),
+          rx.fragment(),
+        ),
+        class_name="flex items-center gap-3",
       ),
       class_name="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3",
     ),

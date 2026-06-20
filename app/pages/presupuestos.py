@@ -65,13 +65,13 @@ def _quotation_row(q: rx.Var) -> rx.Component:
                 rx.el.button(
                     rx.icon("eye", class_name="h-4 w-4"),
                     on_click=State.open_quotation_detail(q["id"]),
-                    class_name=f"{BUTTON_STYLES.get('ghost', 'p-2 rounded-lg text-slate-500 hover:bg-slate-100')} p-1.5",
+                    class_name=BUTTON_STYLES["icon_primary"],
                     title="Ver detalle",
                 ),
                 rx.el.button(
                     rx.icon("download", class_name="h-4 w-4"),
                     on_click=State.download_quotation_pdf(q["id"]),
-                    class_name=f"{BUTTON_STYLES.get('ghost', 'p-2 rounded-lg text-slate-500 hover:bg-slate-100')} p-1.5",
+                    class_name=BUTTON_STYLES["icon_success"],
                     title="Descargar PDF",
                 ),
                 rx.cond(
@@ -79,7 +79,7 @@ def _quotation_row(q: rx.Var) -> rx.Component:
                     rx.el.button(
                         rx.icon("send", class_name="h-4 w-4"),
                         on_click=State.open_quot_send_modal(q["id"]),
-                        class_name=f"{BUTTON_STYLES['icon_primary']} p-1.5",
+                        class_name=BUTTON_STYLES["icon_primary"],
                         title="Enviar al cliente",
                     ),
                     rx.fragment(),
@@ -434,7 +434,18 @@ def _new_quotation_modal() -> rx.Component:
                 class_name="py-2 px-3",
             ),
             rx.el.td(
-                rx.el.span(item["unit_price"], class_name="tabular-nums text-sm text-right block w-24"),
+                rx.el.div(
+                    rx.el.span(State.currency_symbol, class_name="text-xs text-slate-400 shrink-0"),
+                    rx.el.input(
+                        default_value=item["unit_price"],
+                        type="number",
+                        min="0",
+                        step="0.01",
+                        on_blur=lambda v: State.quot_update_item_price(idx, v),
+                        class_name=INPUT_STYLES["default"] + " text-right",
+                    ),
+                    class_name="flex items-center gap-1",
+                ),
                 class_name="py-2 px-3",
             ),
             rx.el.td(
@@ -450,7 +461,11 @@ def _new_quotation_modal() -> rx.Component:
                 class_name="py-2 px-3",
             ),
             rx.el.td(
-                rx.el.span(item["subtotal"], class_name="font-semibold tabular-nums text-sm"),
+                rx.el.span(
+                    State.currency_symbol,
+                    item["subtotal"],
+                    class_name="font-semibold tabular-nums text-sm",
+                ),
                 class_name="py-2 px-3 text-right",
             ),
             rx.el.td(
@@ -531,10 +546,26 @@ def _new_quotation_modal() -> rx.Component:
                             rx.foreach(
                                 State.quot_search_results,
                                 lambda p: rx.el.div(
-                                    rx.el.p(p["description"], class_name="text-sm font-medium"),
-                                    rx.el.p(p["barcode"], class_name="text-xs text-slate-400 font-mono"),
+                                    rx.el.div(
+                                        rx.el.p(p["description"], class_name="text-sm font-medium text-slate-900"),
+                                        rx.el.p(p["barcode"], class_name="text-xs text-slate-400 font-mono"),
+                                        class_name="flex flex-col min-w-0",
+                                    ),
+                                    rx.el.div(
+                                        rx.el.p(
+                                            State.currency_symbol,
+                                            rx.el.span(p["sale_price"].to_string(), class_name="tabular-nums"),
+                                            class_name="text-sm font-semibold text-indigo-700 text-right",
+                                        ),
+                                        rx.el.p(
+                                            "Stock: ",
+                                            rx.el.span(p["stock"].to_string()),
+                                            class_name="text-xs text-slate-400 text-right",
+                                        ),
+                                        class_name="flex flex-col items-end shrink-0",
+                                    ),
                                     on_click=lambda: State.quot_add_product(p),
-                                    class_name="px-3 py-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-100",
+                                    class_name="flex items-center justify-between gap-3 px-3 py-2 hover:bg-indigo-50 cursor-pointer border-b border-slate-100",
                                 ),
                             ),
                             class_name="absolute z-50 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto",
@@ -571,12 +602,42 @@ def _new_quotation_modal() -> rx.Component:
                         class_name="w-full",
                     ),
                     rx.el.div(
-                        rx.el.span("Total del Presupuesto:", class_name="text-sm text-slate-500 font-medium"),
-                        rx.el.span(
-                            State.currency_symbol + State.quot_cart_total.to_string(),
-                            class_name="text-xl font-bold text-indigo-700 tabular-nums",
+                        rx.cond(
+                            State.quot_global_discount != "0",
+                            rx.el.div(
+                                rx.el.div(
+                                    rx.el.span("Subtotal", class_name="text-sm text-slate-500"),
+                                    rx.el.span(
+                                        State.currency_symbol + State.quot_items_subtotal_str,
+                                        class_name="text-sm text-slate-700 tabular-nums",
+                                    ),
+                                    class_name="flex justify-between gap-8",
+                                ),
+                                rx.el.div(
+                                    rx.el.span(
+                                        "Descuento (" + State.quot_global_discount + "%)",
+                                        class_name="text-sm text-green-600",
+                                    ),
+                                    rx.el.span(
+                                        "− " + State.currency_symbol + State.quot_discount_amount_str,
+                                        class_name="text-sm text-green-600 tabular-nums",
+                                    ),
+                                    class_name="flex justify-between gap-8",
+                                ),
+                                rx.el.div(class_name="border-t border-slate-200 my-1"),
+                                class_name="flex flex-col gap-1 mb-2 min-w-[220px]",
+                            ),
+                            rx.fragment(),
                         ),
-                        class_name="flex justify-end items-center gap-3 mt-3",
+                        rx.el.div(
+                            rx.el.span("Total del Presupuesto:", class_name="text-sm text-slate-500 font-medium"),
+                            rx.el.span(
+                                State.currency_symbol + State.quot_cart_total_str,
+                                class_name="text-xl font-bold text-indigo-700 tabular-nums",
+                            ),
+                            class_name="flex items-center gap-3",
+                        ),
+                        class_name="flex flex-col items-end mt-3",
                     ),
                     class_name="overflow-x-auto",
                 ),

@@ -45,7 +45,7 @@ def reservation_mobile_card(reservation: rx.Var[dict]) -> rx.Component:
       rx.el.div(
         rx.el.span("Total", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
-          State.currency_symbol, reservation["total_amount"].to_string(),
+          State.currency_symbol, reservation["total_amount"],
           class_name=TYPOGRAPHY["mono_value"],
         ),
         class_name="flex flex-col",
@@ -53,7 +53,7 @@ def reservation_mobile_card(reservation: rx.Var[dict]) -> rx.Component:
       rx.el.div(
         rx.el.span("Pagado", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
-          State.currency_symbol, reservation["paid_amount"].to_string(),
+          State.currency_symbol, reservation["paid_amount"],
           class_name=TYPOGRAPHY["mono_value"],
         ),
         class_name="flex flex-col",
@@ -62,7 +62,7 @@ def reservation_mobile_card(reservation: rx.Var[dict]) -> rx.Component:
         rx.el.span("Saldo", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
           State.currency_symbol,
-          (reservation["total_amount"] - reservation["advance_amount"]).to_string(),
+          reservation["balance_display"],
           class_name=TYPOGRAPHY["mono_value"],
         ),
         class_name="flex flex-col",
@@ -152,11 +152,11 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       rx.el.div(
-        rx.el.span(State.currency_symbol, reservation["total_amount"].to_string(), class_name="font-semibold"),
+        rx.el.span(State.currency_symbol, reservation["total_amount"], class_name="font-semibold"),
         rx.el.span(
           "Pagado ",
           State.currency_symbol,
-          reservation["paid_amount"].to_string(),
+          reservation["paid_amount"],
           class_name="text-xs text-slate-600",
         ),
         class_name="flex flex-col gap-1",
@@ -243,7 +243,7 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
     rx.el.td(
       rx.el.span(
         State.currency_symbol,
-        (reservation["total_amount"] - reservation["advance_amount"]).to_string(),
+        reservation["balance_display"],
         class_name="font-semibold",
       ),
       class_name="py-3 px-4 text-right hidden md:table-cell",
@@ -441,7 +441,7 @@ def payments_card() -> rx.Component:
           rx.el.span("Saldo pendiente", class_name="text-xs uppercase text-slate-500"),
           rx.el.span(
             State.currency_symbol,
-            State.selected_reservation_balance.to_string(),
+            State.selected_reservation_balance_display,
             class_name="text-lg font-semibold text-slate-900",
           ),
           class_name="flex items-center justify-between",

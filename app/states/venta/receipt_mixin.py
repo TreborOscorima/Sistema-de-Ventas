@@ -6,7 +6,7 @@ import reflex as rx
 from sqlmodel import select
 from sqlalchemy.orm import selectinload
 
-from app.models import Sale, PaymentMethod
+from app.models import Sale, PaymentMethod, Client
 from app.services.receipt_service import ReceiptService
 from app.utils.db import get_async_session
 from app.utils.payment import payment_method_label
@@ -27,6 +27,7 @@ class ReceiptMixin:
     sale_receipt_ready: bool = False
     last_sale_reservation_context: Dict | None = None
     last_payment_summary: str = ""
+    last_client_name: str = ""
     show_sale_receipt_modal: bool = False
 
     def _payment_method_key(self, method_type: Any) -> str:
@@ -142,6 +143,7 @@ class ReceiptMixin:
                             selectinload(Sale.payments),
                             selectinload(Sale.items),
                             selectinload(Sale.user),
+                            selectinload(Sale.client),
                         )
                     ).first()
                     if not sale:
@@ -171,6 +173,7 @@ class ReceiptMixin:
                             getattr(sale, "payment_method", None),
                         )
                     user_name = sale.user.username if sale.user else "Desconocido"
+                    client_name = sale.client.name if sale.client else ""
 
                     for item in sale.items:
                         receipt_items.append(
@@ -200,6 +203,7 @@ class ReceiptMixin:
             )
             timestamp = self.last_sale_timestamp
             user_name = self.current_user.get("username", "Desconocido")
+            client_name = self.last_client_name
             if hasattr(self, "_branch_id"):
                 branch_id = self._branch_id()
             payment_summary = self.last_payment_summary
@@ -234,6 +238,7 @@ class ReceiptMixin:
             "total": total,
             "timestamp": timestamp,
             "user_name": user_name,
+            "client_name": client_name,
             "payment_summary": payment_summary,
             "reservation_context": reservation_context,
             "currency_symbol": self.currency_symbol,
@@ -312,6 +317,7 @@ class ReceiptMixin:
         total = 0.0
         timestamp = ""
         user_name = ""
+        client_name = ""
         payment_summary = ""
         reservation_context = None
         branch_id = None
@@ -327,6 +333,7 @@ class ReceiptMixin:
             )
             timestamp = self.last_sale_timestamp
             user_name = self.current_user.get("username", "Desconocido")
+            client_name = self.last_client_name
             if hasattr(self, "_branch_id"):
                 branch_id = self._branch_id()
             payment_summary = self.last_payment_summary
@@ -365,6 +372,7 @@ class ReceiptMixin:
                             selectinload(Sale.payments),
                             selectinload(Sale.items),
                             selectinload(Sale.user),
+                            selectinload(Sale.client),
                         )
                     )
                 ).first()
@@ -398,6 +406,7 @@ class ReceiptMixin:
                     getattr(sale, "payment_method", None),
                 )
             user_name = sale.user.username if sale.user else "Desconocido"
+            client_name = sale.client.name if sale.client else ""
 
             for item in sale.items:
                 receipt_items.append(
@@ -433,6 +442,7 @@ class ReceiptMixin:
             "total": total,
             "timestamp": timestamp,
             "user_name": user_name,
+            "client_name": client_name,
             "payment_summary": payment_summary,
             "reservation_context": reservation_context,
             "currency_symbol": self.currency_symbol,

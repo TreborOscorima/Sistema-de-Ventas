@@ -82,7 +82,7 @@ class RecentMovesMixin:
                         symbol,
                     )
                     subtotal_display = format_currency(
-                        round_currency(item.get("subtotal", 0)),
+                        round_currency(float(item.get("subtotal", 0))),
                         symbol,
                     )
                     detail_lines.append(

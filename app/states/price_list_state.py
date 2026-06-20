@@ -11,6 +11,7 @@ from sqlmodel import select, func
 from app.models import Client, Product, ProductVariant
 from app.models.price_lists import PriceList, PriceListItem
 from app.utils.timezone import utc_now_naive
+from app.utils.formatting import fmt_input_num, fmt_price
 
 from .mixin_state import MixinState, require_permission
 
@@ -338,7 +339,7 @@ class PriceListState(MixinState):
                     "variant_id": "",
                     "description": p.description,
                     "barcode": p.barcode or "",
-                    "sale_price": float(p.sale_price or 0),
+                    "sale_price": fmt_price(p.sale_price or 0),
                 })
 
             # Variantes
@@ -375,7 +376,7 @@ class PriceListState(MixinState):
                     "variant_id": str(v.id),
                     "description": f"{parent.description} — {variant_label}",
                     "barcode": v.sku,
-                    "sale_price": float(parent.sale_price or 0),
+                    "sale_price": fmt_input_num(parent.sale_price or 0),
                 })
 
         self.pl_item_product_results = results

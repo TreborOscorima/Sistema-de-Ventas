@@ -320,7 +320,7 @@ def inventario_page() -> rx.Component:
                     rx.el.button(
                       rx.icon("pencil", class_name="h-4 w-4"),
                       on_click=lambda: State.open_edit_product(product),
-                      class_name=BUTTON_STYLES["icon_primary"],
+                      class_name=BUTTON_STYLES["icon_warning"],
                       title="Editar",
                       aria_label="Editar",
                     ),
@@ -346,7 +346,7 @@ def inventario_page() -> rx.Component:
                           class_name=rx.cond(
                             product["is_active"],
                             BUTTON_STYLES["icon_ghost"],
-                            "inline-flex items-center justify-center rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 transition-colors",
+                            BUTTON_STYLES["icon_success"],
                           ),
                           title=rx.cond(product["is_active"], "Desactivar", "Activar"),
                           aria_label=rx.cond(product["is_active"], "Desactivar", "Activar"),

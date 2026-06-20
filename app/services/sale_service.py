@@ -2243,6 +2243,8 @@ class SaleService:
             )
             if hasattr(Sale, "payment_method"):
                 new_sale.payment_method = sale_payment_label
+            if payment_data.client_id:
+                new_sale.client_id = payment_data.client_id
             if is_credit:
                 new_sale.payment_condition = "credito"
                 new_sale.client_id = client.id
@@ -2494,7 +2496,7 @@ class SaleService:
                     quantity=item["quantity"],
                     unit_price=item["price"],
                     unit_price_base=item.get("unit_price_base") or item["price"],
-                    subtotal=item["subtotal"],
+                    subtotal=float(item["subtotal"]),
                     product_name_snapshot=name_snapshot,
                     product_barcode_snapshot=barcode_snapshot,
                     product_category_snapshot=product.category or "General",

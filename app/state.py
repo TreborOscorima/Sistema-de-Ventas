@@ -701,6 +701,9 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Sincronizar moneda/país desde DB (garantiza denominaciones correctas en el arqueo)
+        if hasattr(self, "load_config_data"):
+            self.load_config_data()
         # Enviar delta parcial (UI renderiza estructura de caja)
         yield
         # Cargar datos de caja en background (no bloquea event loop)

@@ -215,7 +215,7 @@ class ReportsMixin:
                     unit_price = item.get("sale_price")
                 if unit_price is None:
                     unit_price = item.get("subtotal")
-                price_display = self._format_currency(unit_price or 0)
+                price_display = self._format_currency(float(unit_price or 0))
                 item_parts.append(f"{name} (x{quantity}) - {price_display}")
             details = "\n".join(item_parts) if item_parts else "Sin detalle"
 
@@ -897,7 +897,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         if not self.current_user["privileges"]["export_data"]:
             return rx.toast(MSG.PERM_EXPORT, duration=3000)
 
-        movements = self.petty_cash_movements
+        # Exportar TODOS los registros filtrados (no solo la página actual)
+        movements = self._fetch_all_petty_cash_filtered()
         if not movements:
             return rx.toast(MSG.CASH_NO_MOVEMENTS_GENERIC, duration=3000)
 
@@ -910,7 +911,6 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             if value is None:
                 return 0.0
             raw = str(value)
-            # Extrae el primer número del string, ignorando símbolos
             match = re.search(r"([0-9]+(?:[.,][0-9]{3})*(?:[.,][0-9]+)?)", raw)
             if not match:
                 return 0.0
@@ -924,91 +924,107 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             except ValueError:
                 return 0.0
 
-        total_movements = len(movements)
-        total_units = sum(
-            _parse_numeric(item.get("formatted_quantity", "0"))
-            for item in movements
-        )
-        total_expense = sum(
-            _parse_numeric(item.get("formatted_total", "0"))
-            for item in movements
-        )
+        egresos = [m for m in movements if m.get("movement_type") == "egreso"]
+        ingresos = [m for m in movements if m.get("movement_type") == "ingreso"]
+        total_egreso = sum(m.get("amount", 0.0) for m in egresos)
+        total_ingreso = sum(m.get("amount", 0.0) for m in ingresos)
+
+        # Filtros aplicados en el encabezado
+        subtitulo = "Corte: " + today
+        filtros = []
+        if self.petty_cash_filter_type == "egreso":
+            filtros.append("Solo Egresos")
+        elif self.petty_cash_filter_type == "ingreso":
+            filtros.append("Solo Ingresos")
+        if self.petty_cash_filter_date_from:
+            filtros.append(f"Desde: {self.petty_cash_filter_date_from}")
+        if self.petty_cash_filter_date_to:
+            filtros.append(f"Hasta: {self.petty_cash_filter_date_to}")
+        if filtros:
+            subtitulo += "  |  Filtros: " + ", ".join(filtros)
 
         wb, ws = create_excel_workbook("Caja Chica")
 
-        # Encabezado profesional
+        # Encabezado — 9 columnas: Fecha, Tipo, Categoría, Responsable, Motivo, Cant, Unidad, C.Unit, Total
+        NCOLS = 9
         row = add_company_header(
             ws,
             company_name,
             "MOVIMIENTOS DE CAJA CHICA",
-            f"Corte: {today}",
-            columns=7,
+            subtitulo,
+            columns=NCOLS,
             generated_at=self._display_now(),
         )
 
         row += 1
-        ws.cell(row=row, column=1, value="RESUMEN DE EGRESOS")
+        ws.cell(row=row, column=1, value="RESUMEN")
         row += 1
-        ws.cell(row=row, column=1, value="Movimientos registrados:")
-        ws.cell(row=row, column=2, value=total_movements)
+        ws.cell(row=row, column=1, value="Total movimientos:")
+        ws.cell(row=row, column=2, value=len(movements))
         row += 1
-        ws.cell(row=row, column=1, value="Unidades egresadas:")
-        ws.cell(row=row, column=2, value=total_units)
+        ws.cell(row=row, column=1, value=f"Total egresos ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_egreso).number_format = currency_format
         row += 1
-        ws.cell(row=row, column=1, value=f"Total egresado ({currency_label}):")
-        ws.cell(row=row, column=2, value=total_expense).number_format = currency_format
+        ws.cell(row=row, column=1, value=f"Total ingresos ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_ingreso).number_format = currency_format
+        row += 1
+        ws.cell(row=row, column=1, value=f"Neto ({currency_label}):")
+        ws.cell(row=row, column=2, value=total_ingreso - total_egreso).number_format = currency_format
         row += 2
 
         headers = [
             "Fecha y Hora",
+            "Tipo",
+            "Categoría",
             "Responsable",
             "Concepto/Motivo",
             "Cantidad",
-            MSG.FALLBACK_UNIT,
-            f"Costo Unitario ({currency_label})",
-            f"Total Egreso ({currency_label})",
+            "Unidad",
+            f"Costo Unit. ({currency_label})",
+            f"Total ({currency_label})",
         ]
         style_header_row(ws, row, headers)
         data_start = row + 1
         row += 1
 
         for item in movements:
-            # Extraer valores numéricos para las fórmulas
             quantity = _parse_numeric(item.get("formatted_quantity", "0"))
             cost = _parse_numeric(item.get("formatted_cost", "0"))
+            tipo = "Ingreso" if item.get("movement_type") == "ingreso" else "Egreso"
 
             ws.cell(row=row, column=1, value=item.get("timestamp", ""))
-            ws.cell(row=row, column=2, value=item.get("user", MSG.FALLBACK_UNKNOWN))
-            ws.cell(row=row, column=3, value=item.get("notes", "") or "Sin motivo especificado")
-            ws.cell(row=row, column=4, value=quantity)
-            ws.cell(row=row, column=5, value=item.get("unit", "Unid."))
-            ws.cell(row=row, column=6, value=cost).number_format = currency_format
-            # Total = Fórmula: Cantidad × Costo Unitario
-            ws.cell(row=row, column=7, value=f"=D{row}*F{row}").number_format = currency_format
+            ws.cell(row=row, column=2, value=tipo)
+            ws.cell(row=row, column=3, value=item.get("category", "") or "—")
+            ws.cell(row=row, column=4, value=item.get("user", MSG.FALLBACK_UNKNOWN))
+            ws.cell(row=row, column=5, value=item.get("notes", "") or "Sin motivo especificado")
+            ws.cell(row=row, column=6, value=quantity)
+            ws.cell(row=row, column=7, value=item.get("unit", "Unid."))
+            ws.cell(row=row, column=8, value=cost).number_format = currency_format
+            ws.cell(row=row, column=9, value=f"=F{row}*H{row}").number_format = currency_format
 
-            for col in range(1, 8):
+            for col in range(1, NCOLS + 1):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
 
-        # Fila de totales
         totals_row = row
         add_totals_row_with_formulas(ws, totals_row, data_start, [
-            {"type": "label", "value": "TOTAL EGRESOS"},
+            {"type": "label", "value": "TOTALES"},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "D"},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "G", "number_format": currency_format},
+            {"type": "sum", "col_letter": "F"},
+            {"type": "text", "value": ""},
+            {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "I", "number_format": currency_format},
         ])
 
-        # Notas explicativas
         add_notes_section(ws, totals_row, [
-            "Caja Chica: Fondo destinado a gastos menores del día a día.",
-            "Cada movimiento representa un egreso (salida de dinero).",
-            "Total Egreso = Cantidad × Costo Unitario (fórmula verificable).",
-            "Este monto se descuenta del efectivo al momento del cierre de caja.",
-        ], columns=7)
+            "Caja Chica: Fondo destinado a gastos e ingresos menores del día a día.",
+            "Total = Cantidad × Costo Unitario (fórmula verificable en Excel).",
+            "Los egresos reducen el fondo; los ingresos lo reponen.",
+            "Neto = Total Ingresos − Total Egresos.",
+        ], columns=NCOLS)
 
         auto_adjust_column_widths(ws)
 
@@ -1155,7 +1171,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 f"{item.get('quantity', 0)} {item.get('unit', '')} x "
                 f"{self._format_currency(item.get('price', 0))}"
             )
-            right_text = self._format_currency(item.get("subtotal", 0))
+            right_text = self._format_currency(float(item.get("subtotal", 0)))
             available = max(receipt_width - len(right_text) - 1, 1)
             left_lines = self._wrap_receipt_lines(left_text, available)
             if left_lines:

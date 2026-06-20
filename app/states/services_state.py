@@ -26,7 +26,7 @@ from app.utils.sanitization import (
     sanitize_reason_preserve_spaces,
     sanitize_text,
 )
-from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice
+from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice, FieldPriceGroup
 from .mixin_state import MixinState
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
 from app.utils.formatting import fmt_input_num, fmt_price
@@ -74,7 +74,8 @@ DAY_NAMES_ES = [
 _EMPTY_RESERVATION: FieldReservation = {
     "id": "", "client_name": "", "dni": "", "phone": "", "sport": "", "sport_label": "",
     "field_name": "", "start_datetime": "", "end_datetime": "",
-    "advance_amount": 0.0, "total_amount": 0.0, "paid_amount": 0.0,
+    "advance_amount": "0.00", "total_amount": "0.00", "paid_amount": "0.00",
+    "balance_display": "0.00",
     "status": "", "created_at": "", "cancellation_reason": "", "delete_reason": "",
     "created_by": "",
 }
@@ -167,6 +168,9 @@ class ServicesState(MixinState):
             "advance_amount": fmt_price(float(reservation.paid_amount or 0)),
             "total_amount": fmt_price(float(reservation.total_amount or 0)),
             "paid_amount": fmt_price(float(reservation.paid_amount or 0)),
+            "balance_display": fmt_price(
+                float(reservation.total_amount or 0) - float(reservation.paid_amount or 0)
+            ),
             "status": status_ui,
             "created_at": self._format_company_datetime(
                 reservation.created_at,
@@ -747,7 +751,7 @@ class ServicesState(MixinState):
                 for p in prices
             ]
 
-    new_field_price_sport: str = "Futbol"
+    new_field_price_sport: str = "futbol"
     new_field_price_name: str = ""
     new_field_price_amount: str = ""
     editing_field_price_id: str = ""
@@ -824,11 +828,12 @@ class ServicesState(MixinState):
                     session.add(price)
                     session.commit()
 
-            # Reiniciar estado de edicion
             self.editing_field_price_id = ""
             self.new_field_price_name = ""
             self.new_field_price_amount = ""
+            self.new_field_price_sport = "futbol"
             self.load_field_prices()
+            return rx.toast("Precio actualizado.", duration=2000)
         except ValueError:
             return rx.toast("El precio debe ser un número válido.", duration=3000)
 
@@ -855,8 +860,15 @@ class ServicesState(MixinState):
                     session.add(price)
                     session.commit()
             self.load_field_prices()
+            return rx.toast("Precio actualizado.", duration=2000)
         except ValueError:
             pass
+
+    def cancel_edit_field_price(self):
+        self.editing_field_price_id = ""
+        self.new_field_price_name = ""
+        self.new_field_price_amount = ""
+        self.new_field_price_sport = "futbol"
 
     def edit_field_price(self, price_id: str):
         toast = self._require_manage_config()
@@ -977,6 +989,18 @@ class ServicesState(MixinState):
         if self.reservation_current_page < self.reservation_total_pages:
             self.reservation_current_page += 1
             self.load_reservations()
+
+    @rx.var(cache=True)
+    def field_prices_by_sport(self) -> list[FieldPriceGroup]:
+        groups: dict[str, list] = {}
+        order: list[str] = []
+        for p in self.field_prices:
+            sport = p["sport"]
+            if sport not in groups:
+                groups[sport] = []
+                order.append(sport)
+            groups[sport].append(p)
+        return [{"sport": s, "items": groups[s]} for s in order]
 
     @rx.var(cache=True)
     def field_prices_for_current_sport(self) -> list[FieldPrice]:

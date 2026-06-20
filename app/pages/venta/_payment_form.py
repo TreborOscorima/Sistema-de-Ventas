@@ -161,6 +161,14 @@ def _quot_load_drawer() -> rx.Component:
                 class_name="flex items-center justify-between",
             ),
             rx.el.div(
+                rx.icon("user", class_name="h-3 w-3 text-slate-400 shrink-0"),
+                rx.el.span(
+                    q["client_name"],
+                    class_name="text-xs text-slate-600 truncate",
+                ),
+                class_name="flex items-center gap-1 mt-0.5",
+            ),
+            rx.el.div(
                 rx.el.span(
                     "Creado: ", q["created_at"],
                     class_name="text-xs text-slate-400",

@@ -359,10 +359,7 @@ class QuotationService:
         items: list[dict[str, Any]],
         company_settings: dict[str, Any],
     ) -> bytes:
-        """Genera el PDF del presupuesto usando reportlab.
-
-        Retorna bytes del PDF listo para descargar.
-        """
+        """Genera el PDF del presupuesto usando reportlab."""
         try:
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.units import mm
@@ -372,149 +369,219 @@ class QuotationService:
             logger.error("reportlab no está instalado.")
             raise
 
+        # ── Paleta limpia (estilo Cierre de Caja) ─────────────────────
+        NAVY     = colors.HexColor("#1e3a5f")   # header tabla
+        GRAY_800 = colors.HexColor("#1f2937")   # texto principal
+        GRAY_500 = colors.HexColor("#6B7280")   # texto secundario
+        GRAY_200 = colors.HexColor("#E5E7EB")   # bordes
+        GRAY_50  = colors.HexColor("#F9FAFB")   # fila alterna
+        WHITE    = colors.white
+
         buffer = io.BytesIO()
         page_w, page_h = A4
-        margin = 20 * mm
+        margin    = 18 * mm
         content_w = page_w - 2 * margin
-
         c = rl_canvas.Canvas(buffer, pagesize=A4)
 
-        # ── Encabezado ─────────────────────────────────────────────────
-        y = page_h - margin
+        # ── Datos ─────────────────────────────────────────────────────
         company_name = company_settings.get("company_name") or "Empresa"
         tax_id_label = company_settings.get("tax_id_label") or "RUC"
-        ruc = company_settings.get("ruc") or ""
-        address = company_settings.get("address") or ""
-        phone = company_settings.get("phone") or ""
-        currency_symbol = company_settings.get("currency_symbol") or "S/ "
+        ruc          = company_settings.get("ruc") or ""
+        address      = company_settings.get("address") or ""
+        phone        = company_settings.get("phone") or ""
+        cur          = (company_settings.get("currency_symbol") or "$").strip()
+        client_name  = company_settings.get("client_name") or "Público en general"
 
-        # Nombre empresa
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(margin, y, company_name)
-        y -= 6 * mm
-
-        c.setFont("Helvetica", 9)
-        if ruc:
-            c.drawString(margin, y, f"{tax_id_label}: {ruc}")
-            y -= 5 * mm
-        if address:
-            c.drawString(margin, y, f"Dir: {address}")
-            y -= 5 * mm
-        if phone:
-            c.drawString(margin, y, f"Tel: {phone}")
-            y -= 5 * mm
-
-        # Separador
-        y -= 3 * mm
-        c.setStrokeColor(colors.HexColor("#4F46E5"))
-        c.setLineWidth(1.5)
-        c.line(margin, y, page_w - margin, y)
-        y -= 5 * mm
-
-        # Título del documento
-        c.setFont("Helvetica-Bold", 12)
-        c.drawCentredString(page_w / 2, y, "PRESUPUESTO / COTIZACIÓN")
-        y -= 6 * mm
-
-        # Número y fecha
-        c.setFont("Helvetica", 9)
-        q_id = f"#{quotation.id:05d}"
         created_str = quotation.created_at.strftime("%d/%m/%Y") if quotation.created_at else "-"
         expires_str = quotation.expires_at.strftime("%d/%m/%Y") if quotation.expires_at else "-"
-        c.drawString(margin, y, f"Nro: {q_id}    Fecha: {created_str}    Válido hasta: {expires_str}")
+        q_id        = f"#{quotation.id:05d}"
+
+        def fmt(amount) -> str:
+            return f"{cur} {float(amount):,.2f}"
+
+        y = page_h - margin
+
+        # ── CABECERA: empresa ──────────────────────────────────────────
+        c.setFillColor(GRAY_800)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(margin, y, company_name)
+        y -= 5.5 * mm
+
+        c.setFont("Helvetica", 8.5)
+        c.setFillColor(GRAY_500)
+        info_parts = []
+        if ruc:
+            info_parts.append(f"{tax_id_label}: {ruc}")
+        if address:
+            info_parts.append(address)
+        if phone:
+            info_parts.append(f"Tel: {phone}")
+        if info_parts:
+            c.drawString(margin, y, "  ·  ".join(info_parts))
+            y -= 5 * mm
+
+        y -= 4 * mm
+
+        # ── TÍTULO DEL DOCUMENTO ──────────────────────────────────────
+        c.setFillColor(GRAY_800)
+        c.setFont("Helvetica-Bold", 13)
+        c.drawCentredString(page_w / 2, y, "PRESUPUESTO / COTIZACIÓN")
         y -= 5 * mm
+        c.setFont("Helvetica", 9)
+        c.setFillColor(GRAY_500)
+        c.drawCentredString(page_w / 2, y,
+            f"{q_id}   |   Fecha: {created_str}   |   Válido hasta: {expires_str}")
+        y -= 4 * mm
 
-        # Cliente
-        client_name = company_settings.get("client_name") or "Público en general"
-        c.drawString(margin, y, f"Cliente: {client_name}")
-        y -= 8 * mm
-
-        # ── Tabla de ítems ──────────────────────────────────────────────
-        c.setFont("Helvetica-Bold", 9)
-        col_x = {
-            "item": margin,
-            "desc": margin + 12 * mm,
-            "qty": margin + 85 * mm,
-            "price": margin + 105 * mm,
-            "disc": margin + 130 * mm,
-            "subtotal": margin + 155 * mm,
-        }
-
-        # Header de tabla
-        c.setFillColor(colors.HexColor("#4F46E5"))
-        c.rect(margin, y - 5 * mm, content_w, 6 * mm, fill=1, stroke=0)
-        c.setFillColor(colors.white)
-        c.drawString(col_x["item"], y - 3.5 * mm, "#")
-        c.drawString(col_x["desc"], y - 3.5 * mm, "Descripción")
-        c.drawString(col_x["qty"], y - 3.5 * mm, "Cant.")
-        c.drawString(col_x["price"], y - 3.5 * mm, "P. Unit.")
-        c.drawString(col_x["disc"], y - 3.5 * mm, "Desc.%")
-        c.drawString(col_x["subtotal"], y - 3.5 * mm, "Subtotal")
+        # ── LÍNEA SEPARADORA ──────────────────────────────────────────
+        c.setStrokeColor(GRAY_200)
+        c.setLineWidth(1)
+        c.line(margin, y, page_w - margin, y)
         y -= 6 * mm
-        c.setFillColor(colors.black)
 
-        c.setFont("Helvetica", 8)
+        # ── TABLA DE METADATOS ────────────────────────────────────────
+        meta_row_h = 6 * mm
+        meta_labels = ["Cliente", "Validez"]
+        meta_values = [client_name, f"{quotation.validity_days} días"]
+        col_lbl = margin
+        col_val = margin + 30 * mm
+
+        for lbl, val in zip(meta_labels, meta_values):
+            # borde inferior suave
+            c.setStrokeColor(GRAY_200)
+            c.setLineWidth(0.4)
+            c.line(margin, y - meta_row_h + 1 * mm, page_w - margin, y - meta_row_h + 1 * mm)
+            c.setFont("Helvetica-Bold", 8.5)
+            c.setFillColor(GRAY_800)
+            c.drawString(col_lbl, y - 3.5 * mm, lbl)
+            c.setFont("Helvetica", 8.5)
+            c.setFillColor(GRAY_500)
+            c.drawString(col_val, y - 3.5 * mm, val)
+            y -= meta_row_h
+
+        y -= 6 * mm
+
+        # ── TABLA DE ÍTEMS ─────────────────────────────────────────────
+        cx = {
+            "num":    margin,
+            "desc":   margin + 0.05 * content_w,
+            "qty_r":  margin + 0.47 * content_w,
+            "prc_r":  margin + 0.62 * content_w,
+            "dsc_r":  margin + 0.75 * content_w,
+            "sub_r":  margin + content_w,
+        }
+        row_h = 5.5 * mm
+        hdr_h = 6.5 * mm
+
+        # Header navy oscuro
+        c.setFillColor(NAVY)
+        c.rect(margin, y - hdr_h, content_w, hdr_h, fill=1, stroke=0)
+        c.setFillColor(WHITE)
+        c.setFont("Helvetica-Bold", 8)
+        hy = y - hdr_h + 2.2 * mm
+        c.drawString(cx["num"] + 1 * mm, hy, "#")
+        c.drawString(cx["desc"],          hy, "Descripción")
+        c.drawRightString(cx["qty_r"],    hy, "Cant.")
+        c.drawRightString(cx["prc_r"],    hy, "P. Unit.")
+        c.drawRightString(cx["dsc_r"],    hy, "Desc.%")
+        c.drawRightString(cx["sub_r"],    hy, "Subtotal")
+        y -= hdr_h
+
+        subtotal_bruto   = 0.0
+        descuentos_items = 0.0
+
         for i, item in enumerate(items, 1):
-            if y < margin + 20 * mm:
+            if y < margin + 35 * mm:
                 c.showPage()
                 y = page_h - margin
 
-            row_bg = colors.HexColor("#F8FAFC") if i % 2 == 0 else colors.white
+            row_bg = GRAY_50 if i % 2 == 0 else WHITE
             c.setFillColor(row_bg)
-            c.rect(margin, y - 5 * mm, content_w, 5.5 * mm, fill=1, stroke=0)
-            c.setFillColor(colors.black)
+            c.rect(margin, y - row_h, content_w, row_h, fill=1, stroke=0)
+            # borde inferior
+            c.setStrokeColor(GRAY_200)
+            c.setLineWidth(0.3)
+            c.line(margin, y - row_h, page_w - margin, y - row_h)
 
-            desc = item.get("name") or item.get("product_name_snapshot") or "-"
-            if len(desc) > 38:
-                desc = desc[:35] + "..."
+            desc     = item.get("name") or item.get("product_name_snapshot") or "-"
+            if len(desc) > 42:
+                desc = desc[:39] + "..."
+            qty      = float(item.get("quantity", 0))
+            price    = float(item.get("unit_price", 0))
+            disc_pct = float(item.get("discount_percentage", 0))
+            sub      = float(item.get("subtotal", 0))
+            subtotal_bruto   += qty * price
+            descuentos_items += (qty * price - sub)
 
-            qty = item.get("quantity", 0)
-            price = item.get("unit_price", 0)
-            disc = item.get("discount_percentage", 0)
-            subtotal = item.get("subtotal", 0)
+            ry = y - row_h + 1.5 * mm
+            c.setFont("Helvetica", 8)
+            c.setFillColor(GRAY_500)
+            c.drawString(cx["num"] + 1 * mm, ry, str(i))
+            c.setFillColor(GRAY_800)
+            c.drawString(cx["desc"],          ry, desc)
+            c.drawRightString(cx["qty_r"],    ry, f"{qty:.2f}")
+            c.drawRightString(cx["prc_r"],    ry, fmt(price))
+            c.drawRightString(cx["dsc_r"],    ry, f"{disc_pct:.1f}%")
+            c.setFont("Helvetica-Bold", 8)
+            c.drawRightString(cx["sub_r"],    ry, fmt(sub))
+            y -= row_h
 
-            c.drawString(col_x["item"], y - 3.5 * mm, str(i))
-            c.drawString(col_x["desc"], y - 3.5 * mm, desc)
-            c.drawRightString(col_x["qty"] + 15 * mm, y - 3.5 * mm, f"{float(qty):.2f}")
-            c.drawRightString(col_x["price"] + 20 * mm, y - 3.5 * mm, f"{currency_symbol}{float(price):.2f}")
-            c.drawRightString(col_x["disc"] + 20 * mm, y - 3.5 * mm, f"{float(disc):.1f}%")
-            c.drawRightString(col_x["subtotal"] + 20 * mm, y - 3.5 * mm, f"{currency_symbol}{float(subtotal):.2f}")
-            y -= 5.5 * mm
+        # ── TOTALES ───────────────────────────────────────────────────
+        y -= 5 * mm
+        tx_lbl = margin + content_w * 0.57
+        tx_val = page_w - margin
 
-        # Línea divisoria
-        y -= 2 * mm
-        c.setStrokeColor(colors.HexColor("#E2E8F0"))
-        c.setLineWidth(0.5)
-        c.line(margin, y, page_w - margin, y)
-        y -= 4 * mm
+        disc_global_pct = float(quotation.discount_percentage or 0)
+        total_final     = float(quotation.total_amount or 0)
 
-        # ── Totales ──────────────────────────────────────────────────
-        disc_pct = float(quotation.discount_percentage or 0)
-        total = float(quotation.total_amount or 0)
-
-        c.setFont("Helvetica", 9)
-        if disc_pct > 0:
-            c.drawRightString(page_w - margin, y, f"Descuento global: {disc_pct:.1f}%")
+        def tot_line(label: str, value: str, bold: bool = False):
+            nonlocal y
+            c.setFont("Helvetica-Bold" if bold else "Helvetica", 8.5)
+            c.setFillColor(GRAY_500 if not bold else GRAY_800)
+            c.drawString(tx_lbl, y, label)
+            c.setFillColor(GRAY_800)
+            c.setFont("Helvetica-Bold" if bold else "Helvetica", 8.5)
+            c.drawRightString(tx_val, y, value)
             y -= 5 * mm
 
-        c.setFont("Helvetica-Bold", 11)
-        c.drawRightString(page_w - margin, y, f"TOTAL: {currency_symbol}{total:.2f}")
+        tot_line("Subtotal bruto:", fmt(subtotal_bruto))
+        if descuentos_items > 0.005:
+            tot_line("Descuentos por ítem:", f"- {fmt(descuentos_items)}")
+        if disc_global_pct > 0:
+            disc_global_amt = subtotal_bruto - descuentos_items - total_final
+            tot_line(f"Descuento global ({disc_global_pct:.1f}%):", f"- {fmt(disc_global_amt)}")
+
+        # Línea y total final
+        c.setStrokeColor(GRAY_800)
+        c.setLineWidth(0.8)
+        c.line(tx_lbl, y + 3 * mm, tx_val, y + 3 * mm)
+        y -= 1 * mm
+        c.setFont("Helvetica-Bold", 10)
+        c.setFillColor(GRAY_800)
+        c.drawString(tx_lbl, y, "TOTAL")
+        c.drawRightString(tx_val, y, fmt(total_final))
         y -= 8 * mm
 
-        # ── Notas ─────────────────────────────────────────────────────
+        # ── NOTAS ────────────────────────────────────────────────────
         if quotation.notes:
-            c.setFont("Helvetica-Oblique", 8)
-            c.setFillColor(colors.HexColor("#64748B"))
-            c.drawString(margin, y, f"Notas: {quotation.notes[:200]}")
+            c.setFont("Helvetica-Bold", 8.5)
+            c.setFillColor(GRAY_800)
+            c.drawString(margin, y, "Notas:")
+            y -= 5 * mm
+            c.setFont("Helvetica", 8.5)
+            c.setFillColor(GRAY_500)
+            c.drawString(margin, y, (quotation.notes or "")[:140])
             y -= 8 * mm
 
-        c.setFont("Helvetica", 8)
-        c.setFillColor(colors.HexColor("#94A3B8"))
-        c.drawCentredString(
-            page_w / 2,
-            margin,
-            f"Presupuesto válido hasta el {expires_str} — {company_name}",
-        )
+        # ── PIE ───────────────────────────────────────────────────────
+        c.setStrokeColor(GRAY_200)
+        c.setLineWidth(0.5)
+        c.line(margin, margin + 6 * mm, page_w - margin, margin + 6 * mm)
+        c.setFont("Helvetica", 7.5)
+        c.setFillColor(GRAY_500)
+        c.drawString(margin, margin + 2 * mm,
+                     f"Presupuesto válido hasta el {expires_str}  ·  {company_name}")
+        c.drawRightString(page_w - margin, margin + 2 * mm, q_id)
 
         c.save()
         buffer.seek(0)

@@ -386,7 +386,7 @@ def _user_card(user: rx.Var[dict]) -> rx.Component:
         on_click=lambda _, username=user["username"]: State.show_edit_user_form_by_username(username),
         title="Editar usuario",
         aria_label="Editar usuario",
-        class_name=BUTTON_STYLES["icon_primary"],
+        class_name=BUTTON_STYLES["icon_warning"],
       ),
       rx.el.button(
         rx.icon("trash-2", class_name="h-4 w-4"),
@@ -458,7 +458,7 @@ def user_section() -> rx.Component:
                     ),
                     title="Editar usuario",
                     aria_label="Editar usuario",
-                    class_name=BUTTON_STYLES["icon_primary"],
+                    class_name=BUTTON_STYLES["icon_warning"],
                   ),
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
@@ -590,7 +590,7 @@ def _branch_card(branch: rx.Var[dict]) -> rx.Component:
         on_click=lambda _, bid=branch["id"]: State.start_edit_branch(bid),
         title="Editar sucursal",
         aria_label="Editar sucursal",
-        class_name=BUTTON_STYLES["icon_primary"],
+        class_name=BUTTON_STYLES["icon_warning"],
       ),
       rx.el.button(
         rx.icon("trash-2", class_name="h-4 w-4"),
@@ -707,7 +707,7 @@ def branch_section() -> rx.Component:
                     on_click=lambda _, bid=branch["id"]: State.start_edit_branch(bid),
                     title="Editar sucursal",
                     aria_label="Editar sucursal",
-                    class_name=BUTTON_STYLES["icon_primary"],
+                    class_name=BUTTON_STYLES["icon_warning"],
                   ),
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),

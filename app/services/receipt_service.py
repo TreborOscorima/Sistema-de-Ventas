@@ -325,6 +325,7 @@ class ReceiptService:
         total = data.get("total", 0)
         timestamp = data.get("timestamp", "")
         user_name = data.get("user_name", "")
+        client_name = (data.get("client_name") or "").strip()
         payment_summary = data.get("payment_summary", "")
         reservation_context = data.get("reservation_context")
 
@@ -369,6 +370,12 @@ class ReceiptService:
                 f"Fecha: {timestamp}",
                 "",
                 f"Atendido por: {user_name}",
+            ]
+        )
+        if client_name:
+            receipt_lines.append(f"Cliente: {client_name}")
+        receipt_lines.extend(
+            [
                 "",
                 ReceiptService._line(width),
             ]
@@ -447,7 +454,7 @@ class ReceiptService:
                 base_f = None
                 has_discount = False
             display_unit_price = base_f if has_discount else price_f
-            display_subtotal = base_f * float(item["quantity"]) if has_discount else item["subtotal"]
+            display_subtotal = base_f * float(item["quantity"]) if has_discount else float(item["subtotal"])
             left_text = (
                 f"{item['quantity']} {item['unit']} x "
                 f"{currency_formatter(display_unit_price, currency_symbol)}"
