@@ -497,6 +497,11 @@ class ReceiptService:
         base_amount = data.get("base_amount", total)
         tax_amount = data.get("tax_amount", 0.0)
         if show_tax and tax_name and tax_rate_pct > 0:
+            _rate_str = (
+                f"{int(tax_rate_pct)}"
+                if tax_rate_pct == int(tax_rate_pct)
+                else f"{tax_rate_pct:g}"
+            )
             receipt_lines.append(
                 ReceiptService._row(
                     "Subtotal:",
@@ -506,7 +511,7 @@ class ReceiptService:
             )
             receipt_lines.append(
                 ReceiptService._row(
-                    f"{tax_name} ({tax_rate_pct:.2f}%):",
+                    f"{tax_name} ({_rate_str}%):",
                     currency_formatter(tax_amount, currency_symbol),
                     width,
                 )
