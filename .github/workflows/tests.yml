@@ -50,4 +50,15 @@ jobs:
         # Los tests E2E requieren un servidor Reflex en ejecución y navegadores Playwright.
         # Se excluyen del CI unitario; se ejecutan localmente o en un job dedicado.
         # cov-fail-under refleja cobertura actual (~35%) — subir gradualmente al agregar tests.
-        run: python -m pytest -q --tb=short --cov=app --cov-report=term-missing --cov-fail-under=34 --ignore=tests/test_e2e.py
+        run: |
+          python -m pytest -v --tb=long --cov=app --cov-report=term-missing \
+            --cov-fail-under=34 --ignore=tests/test_e2e.py \
+            2>&1 | tee pytest-output.txt
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload pytest output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-output
+          path: pytest-output.txt
