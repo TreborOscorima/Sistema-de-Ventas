@@ -526,17 +526,40 @@ def _promo_form_modal() -> rx.Component:
                                 rx.cond(
                                     State.promo_type == PromotionType.PERCENTAGE,
                                     "Descuento (%)",
-                                    "Monto fijo",
+                                    rx.cond(
+                                        State.promo_type == PromotionType.FIXED_AMOUNT,
+                                        rx.el.span(
+                                            "Monto fijo (",
+                                            rx.el.span(State.currency_symbol, class_name="font-semibold text-emerald-600"),
+                                            ")",
+                                        ),
+                                        "Valor",
+                                    ),
                                 ),
                                 class_name=TYPOGRAPHY["label"],
                             ),
-                            rx.el.input(
-                                default_value=State.promo_discount_value,
-                                type="text",
-                                input_mode="decimal",
-                                on_blur=State.set_promo_discount_value,
-                                class_name=INPUT_STYLES["default"],
-                                key=State.promo_form_key.to_string(),
+                            rx.el.div(
+                                rx.cond(
+                                    State.promo_type == PromotionType.FIXED_AMOUNT,
+                                    rx.el.span(
+                                        State.currency_symbol,
+                                        class_name="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm pointer-events-none select-none",
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                rx.el.input(
+                                    default_value=State.promo_discount_value,
+                                    type="text",
+                                    input_mode="decimal",
+                                    on_blur=State.set_promo_discount_value,
+                                    class_name=rx.cond(
+                                        State.promo_type == PromotionType.FIXED_AMOUNT,
+                                        INPUT_STYLES["default"] + " pl-7",
+                                        INPUT_STYLES["default"],
+                                    ),
+                                    key=State.promo_form_key.to_string(),
+                                ),
+                                class_name="relative",
                             ),
                         ),
                     ),
