@@ -1628,9 +1628,12 @@ class ServicesState(MixinState):
                     "end_datetime": new_reservation.end_datetime.strftime(
                         "%Y-%m-%d %H:%M"
                     ),
-                    "advance_amount": new_reservation.paid_amount,
-                    "total_amount": new_reservation.total_amount,
-                    "paid_amount": new_reservation.paid_amount,
+                    "advance_amount": fmt_price(float(new_reservation.paid_amount or 0)),
+                    "total_amount": fmt_price(float(new_reservation.total_amount or 0)),
+                    "paid_amount": fmt_price(float(new_reservation.paid_amount or 0)),
+                    "balance_display": fmt_price(
+                        float(new_reservation.total_amount or 0) - float(new_reservation.paid_amount or 0)
+                    ),
                     "status": status_ui,
                     "created_at": self._display_now().strftime(
                         "%Y-%m-%d %H:%M"
@@ -2479,6 +2482,27 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             "status": "pendiente",
         }
 
+    @staticmethod
+    def _sanitize_reservation_dict(r: dict) -> FieldReservation:
+        """Convierte campos monetarios a str y garantiza balance_display.
+
+        Protege contra dicts con Decimal (creados antes de fmt_price migration)
+        o MutableProxy con valores no-string que pasan el type check de Reflex.
+        """
+        total = fmt_price(float(r.get("total_amount") or 0))
+        paid  = fmt_price(float(r.get("paid_amount")  or 0))
+        adv   = fmt_price(float(r.get("advance_amount") or 0))
+        bal   = r.get("balance_display")
+        if not isinstance(bal, str):
+            bal = fmt_price(max(float(r.get("total_amount") or 0) - float(r.get("paid_amount") or 0), 0.0))
+        return {
+            **r,
+            "advance_amount": adv,
+            "total_amount":   total,
+            "paid_amount":    paid,
+            "balance_display": bal,
+        }  # type: ignore[return-value]
+
     def _find_reservation_by_id(self, res_id: str) -> FieldReservation | None:
         if not res_id:
             return None
@@ -2488,8 +2512,8 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             (r for r in self.service_reservations if str(r.get("id", "")) == res_id),
             None,
         )
-        if cached:
-            return cached
+        if cached is not None:
+            return self._sanitize_reservation_dict(dict(cached))
         # 2. Fallback a DB con cache en service_reservations para evitar
         #    queries repetidas (esta función se llama 12+ veces en flujos de pago).
         try:
@@ -2510,9 +2534,12 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             ).first()
             if reservation:
                 result = self._reservation_to_dict(reservation)
-                # Cachear en la lista para que las próximas llamadas
-                # no vuelvan a la DB.
-                self.service_reservations = list(self.service_reservations) + [result]
+                # Solo cachear si no estamos en un computed var (las mutaciones
+                # de estado en computed vars son ignoradas por Reflex).
+                try:
+                    self.service_reservations = list(self.service_reservations) + [result]
+                except Exception:
+                    pass
                 return result
             return None
 
