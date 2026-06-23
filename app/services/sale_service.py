@@ -1753,6 +1753,7 @@ class SaleService:
                 )
             price_from_cart = getattr(item, "price", None)
             base_price_from_cart = getattr(item, "base_price", None)
+            original_price_from_cart = getattr(item, "original_price", None)
             pending_items.append(
                 {
                     "description": description,
@@ -1769,8 +1770,14 @@ class SaleService:
                     # en _recompute_cart_prices, incluyendo descuentos de cotización y
                     # promociones). Se usa para bypasear la re-resolución en el service.
                     "price_override": _to_decimal(price_from_cart) if price_from_cart and price_from_cart > 0 else None,
-                    # Precio base (sin descuento) para mostrar tachado en el comprobante.
-                    "display_base_price": _to_decimal(base_price_from_cart) if base_price_from_cart and base_price_from_cart > 0 else None,
+                    # Precio original del producto (sin lista/tier) para mostrar tachado.
+                    # original_price tiene precedencia sobre base_price para ítems con lista.
+                    "display_base_price": (
+                        _to_decimal(original_price_from_cart)
+                        if original_price_from_cart and float(original_price_from_cart) > 0
+                        else _to_decimal(base_price_from_cart) if base_price_from_cart and float(base_price_from_cart) > 0
+                        else None
+                    ),
                     # Promoción pre-resuelta por el carrito; se propaga para que
                     # _consume_promotions_for_sale pueda incrementar current_uses.
                     "applied_promotion_id_from_cart": getattr(item, "applied_promotion_id", None),

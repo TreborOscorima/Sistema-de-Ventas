@@ -90,7 +90,7 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
                     rx.el.div(
                         rx.el.span(
                             State.currency_symbol,
-                            item["base_price"],
+                            item["original_price"],
                             class_name="text-slate-400 line-through text-xs leading-none",
                         ),
                         rx.el.span(

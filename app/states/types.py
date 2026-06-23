@@ -183,6 +183,7 @@ class SaleItemDict(TypedDict):
     kit_name: str
     promotion_name: str
     price_list_name: str
+    original_price: float
 
 class RecentTransactionLine(TypedDict):
     left: str

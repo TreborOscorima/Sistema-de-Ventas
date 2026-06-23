@@ -58,6 +58,7 @@ class CartMixin:
         "kit_name": "",
         "promotion_name": "",
         "price_list_name": "",
+        "original_price": 0.0,
     }
     new_sale_items: List[SaleItemDict] = []
     autocomplete_suggestions: List[str] = []
@@ -395,8 +396,14 @@ class CartMixin:
         if price_from_list:
             pl_name = (getattr(self, "selected_client", None) or {}).get("price_list_name", "") or ""
             self.new_sale_item["price_list_name"] = pl_name
+            from app.utils.pricing import resolve_effective_price as _util_price
+            _orig = float(_util_price(orm_product, None, _gm))
+            self.new_sale_item["original_price"] = self._round_currency(_orig)
+            if not promo_name:
+                self.new_sale_item["promo_receipt_hint"] = f"Lista {pl_name}" if pl_name else "Lista"
         else:
             self.new_sale_item["price_list_name"] = ""
+            self.new_sale_item["original_price"] = self._round_currency(resolution.base_price)
 
         return Decimal(str(resolution.final_price))
 
@@ -1768,11 +1775,14 @@ class CartMixin:
         client_pl_id = int(getattr(self, "_active_price_list_id", 0) or 0) or None
         coupon = self.cart_coupon_code if self.cart_coupon_status == "applied" else None
         local_now = self._display_now().replace(tzinfo=None)
-        _gm = getattr(self, "effective_profit_margin_decimal", 0.0)
+        _gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
 
         from app.utils.tenant import set_tenant_context
         set_tenant_context(int(company_id), int(branch_id))
         async with get_async_session() as session:
+            if not _gm:
+                from app.services.sale_service import _get_effective_margin
+                _gm = await _get_effective_margin(session, int(company_id), int(branch_id))
             # ── Pasada 1: precios base + subtotal pre-promo. ──
             # Se omite cart_subtotal a propósito (None) para que la pasada 1
             # NO dispare promos con umbral; solo nos interesa el base_price.
@@ -1855,10 +1865,16 @@ class CartMixin:
                 item["applied_promotion_id"] = applied_promo.id if applied_promo else None
                 item["promo_receipt_hint"] = promo_receipt_hint(applied_promo) if applied_promo else None
                 from app.services.pricing import PriceSource
-                item["price_list_name"] = (
-                    ((getattr(self, "selected_client", None) or {}).get("price_list_name", "") or "")
-                    if resolution.source == PriceSource.PRICE_LIST else ""
-                )
+                from app.utils.pricing import resolve_effective_price as _util_price
+                if resolution.source == PriceSource.PRICE_LIST:
+                    pl_name = ((getattr(self, "selected_client", None) or {}).get("price_list_name", "") or "")
+                    item["price_list_name"] = pl_name
+                    item["original_price"] = fmt_price(self._round_currency(float(_util_price(product, None, _gm))))
+                    if not applied_promo:
+                        item["promo_receipt_hint"] = f"Lista {pl_name}" if pl_name else "Lista"
+                else:
+                    item["price_list_name"] = ""
+                    item["original_price"] = fmt_price(self._round_currency(float(resolution.base_price)))
                 if not applied_promo and quot_price:
                     quot_dec = Decimal(str(quot_price))
                     if quot_dec < Decimal(str(resolution.base_price)):
