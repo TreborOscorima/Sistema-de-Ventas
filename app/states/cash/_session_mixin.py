@@ -154,6 +154,16 @@ class SessionMixin:
             session_data
         )
 
+        # Auto-filtro Caja Chica: si hay sesión activa y ambos filtros de fecha
+        # están vacíos, pre-populamos con "hoy" para que la lista muestre solo
+        # los movimientos del turno. El usuario puede limpiar un filtro para ver
+        # el historial completo.
+        if session_data.get("is_open"):
+            if not self.petty_cash_filter_date_from and not self.petty_cash_filter_date_to:
+                today = self._current_local_date_str()
+                self.petty_cash_filter_date_from = today
+                self.petty_cash_filter_date_to = today
+
         if not self.current_user["privileges"]["view_cashbox"]:
             self.petty_cash_movements = []
             self.petty_cash_total_pages = 1
@@ -693,4 +703,7 @@ class SessionMixin:
                 session.add(cashbox_session)
                 session.commit()
         self._cashbox_update_trigger += 1
+        # Al cerrar sesión, limpiar auto-filtro para que el historial quede visible
+        self.petty_cash_filter_date_from = ""
+        self.petty_cash_filter_date_to = ""
         self._refresh_cashbox_caches()
