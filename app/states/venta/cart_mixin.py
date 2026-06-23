@@ -635,7 +635,7 @@ class CartMixin:
                     "price": float(unit_price),
                     "sale_price": float(unit_price),
                     "base_price": float(unit_price),
-                    "subtotal": fmt_price(float(component_subtotal)),
+                    "subtotal": float(component_subtotal),
                     "product_id": p.id,
                     "variant_id": comp_vid,
                     "batch_id": None,
