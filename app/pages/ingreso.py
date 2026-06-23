@@ -113,15 +113,15 @@ def _entry_card(item: rx.Var) -> rx.Component:
             ),
             rx.el.div(
                 rx.el.button(
-                    rx.icon("pencil", class_name="h-4 w-4"),
-                    on_click=lambda tid=item["temp_id"]: State.edit_item_from_entry(tid),
+                    rx.icon("pencil", class_name="h-4 w-4 pointer-events-none"),
+                    on_click=State.edit_item_from_entry(item["temp_id"]),
                     title="Editar",
                     aria_label="Editar",
                     class_name=BUTTON_STYLES["icon_warning"],
                 ),
                 rx.el.button(
-                    rx.icon("trash-2", class_name="h-4 w-4"),
-                    on_click=lambda tid=item["temp_id"]: State.remove_item_from_entry(tid),
+                    rx.icon("trash-2", class_name="h-4 w-4 pointer-events-none"),
+                    on_click=State.remove_item_from_entry(item["temp_id"]),
                     title="Eliminar",
                     aria_label="Eliminar",
                     class_name=BUTTON_STYLES["icon_danger"],
@@ -143,12 +143,12 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
         rx.el.td(item["unit"], class_name="py-3 px-4 text-center hidden md:table-cell"),
         rx.el.td(
             State.currency_symbol,
-            item["price"].to_string(),
+            item["price"],
             class_name="py-3 px-4 text-right",
         ),
         rx.el.td(
             State.currency_symbol,
-            item["sale_price"].to_string(),
+            item["sale_price"],
             class_name="py-3 px-4 text-right text-green-600 hidden lg:table-cell",
         ),
         rx.el.td(
@@ -171,15 +171,15 @@ def item_entry_row(item: rx.Var[dict]) -> rx.Component:
                     class_name=f"{SELECT_STYLES['default']} sm:w-40 min-w-[8rem]",
                 ),
                 rx.el.button(
-                    rx.icon("pencil", class_name="h-4 w-4"),
-                    on_click=lambda tid=item["temp_id"]: State.edit_item_from_entry(tid),
+                    rx.icon("pencil", class_name="h-4 w-4 pointer-events-none"),
+                    on_click=State.edit_item_from_entry(item["temp_id"]),
                     title="Editar",
                     aria_label="Editar",
                     class_name=BUTTON_STYLES["icon_warning"],
                 ),
                 rx.el.button(
-                    rx.icon("trash-2", class_name="h-4 w-4"),
-                    on_click=lambda tid=item["temp_id"]: State.remove_item_from_entry(tid),
+                    rx.icon("trash-2", class_name="h-4 w-4 pointer-events-none"),
+                    on_click=State.remove_item_from_entry(item["temp_id"]),
                     title="Eliminar",
                     aria_label="Eliminar",
                     class_name=BUTTON_STYLES["icon_danger"],
@@ -648,14 +648,29 @@ def ingreso_page() -> rx.Component:
                     on_blur=lambda val: State.handle_entry_change("price", val),
                     on_key_down=lambda key: State.handle_entry_field_keydown(key),
                     class_name=INPUT_STYLES["default"],
-                    default_value=State.new_entry_item["price"].to_string(),
+                    default_value=State.entry_price_display,
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
             ),
             rx.el.div(
-                rx.el.label(
-                    "Precio Venta",
-                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
+                rx.el.div(
+                    rx.el.label(
+                        "Precio Venta",
+                        class_name=f"{TYPOGRAPHY['label_secondary']}",
+                    ),
+                    rx.cond(
+                        State.entry_effective_margin != "",
+                        rx.el.span(
+                            "Margen: ",
+                            rx.el.span(
+                                State.entry_effective_margin + "%",
+                                class_name="font-semibold text-indigo-600",
+                            ),
+                            class_name="text-xs text-slate-400",
+                        ),
+                        rx.fragment(),
+                    ),
+                    class_name="flex items-center justify-between mb-1",
                 ),
                 rx.el.input(
                     type="number",

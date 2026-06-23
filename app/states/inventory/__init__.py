@@ -38,6 +38,8 @@ class InventoryState(
     # ── State variables (shared across mixins) ───────────────────
     new_category_name: str = ""
     new_category_input_key: int = 0
+    edit_margin_key: int = 0
+    edit_sale_price_key: int = 0
     inventory_search_term: str = ""
     inventory_current_page: int = 1
     inventory_items_per_page: int = DEFAULT_ITEMS_PER_PAGE
@@ -101,6 +103,13 @@ class InventoryState(
     inventory_in_stock_count: int = 0
     inventory_low_stock_count: int = 0
     inventory_out_of_stock_count: int = 0
+    inventory_total_value: str = "0.00"
+    inventory_page_total: str = "0.00"
+    inventory_sort_field: str = "description"
+    inventory_sort_asc: bool = True
+    inventory_category_filter: str = ""
+    confirm_delete_product_id: int = 0
+    confirm_delete_product_name: str = ""
 
     # ── Importación masiva ──
     import_modal_open: bool = False

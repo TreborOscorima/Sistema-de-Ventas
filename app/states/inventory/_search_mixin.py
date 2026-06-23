@@ -12,8 +12,9 @@ from app.models import (
     Category,
 )
 from app.utils.tenant import set_tenant_context, tenant_bypass
-from app.utils.formatting import fmt_input_num
+from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import escape_like
+from app.utils.pricing import resolve_effective_price
 
 DEFAULT_LOW_STOCK_THRESHOLD = 5
 
@@ -132,9 +133,14 @@ class SearchMixin:
             "unit": product.unit,
             "purchase_price": product.purchase_price,
             "sale_price": product.sale_price,
+            "variant_has_own_price": False,
+            "purchase_price_display": fmt_price(float(product.purchase_price or 0)),
+            "sale_price_display": fmt_price(float(resolve_effective_price(
+                product, global_margin=getattr(self, "effective_profit_margin_decimal", 0.0)
+            ))),
             "custom_profit_margin": product.custom_profit_margin,
             "default_supplier_id": product.default_supplier_id,
-            "stock_total_display": fmt_input_num(stock_total),
+            "stock_total_display": fmt_price(stock_total),
         }
 
     def _inventory_row_from_variant(
@@ -156,9 +162,13 @@ class SearchMixin:
             min_alert = float(
                 getattr(product, 'min_stock_alert', None) or DEFAULT_LOW_STOCK_THRESHOLD
             )
+        variant_price = getattr(variant, "sale_price", None)
+        global_margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+        effective_sale_price = resolve_effective_price(product, variant, global_margin)
         return {
             "id": product.id,
             "variant_id": variant.id,
+            "variant_has_own_price": variant_price is not None,
             "is_variant": True,
             "is_kit": is_kit,
             "is_active": getattr(product, 'is_active', True),
@@ -170,10 +180,12 @@ class SearchMixin:
             "stock_is_medium": min_alert < stock_value <= min_alert * 2,
             "unit": product.unit,
             "purchase_price": product.purchase_price,
-            "sale_price": product.sale_price,
+            "sale_price": effective_sale_price,
+            "purchase_price_display": fmt_price(float(product.purchase_price or 0)),
+            "sale_price_display": fmt_price(float(effective_sale_price)),
             "custom_profit_margin": product.custom_profit_margin,
             "default_supplier_id": product.default_supplier_id,
-            "stock_total_display": fmt_input_num(stock_total),
+            "stock_total_display": fmt_price(stock_total),
         }
 
     def _inventory_search_count(
@@ -182,10 +194,12 @@ class SearchMixin:
         search: str,
         company_id: int,
         branch_id: int,
+        cat_filter: str = "",
     ) -> int:
         """Count total matching rows for search using SQL COUNT (no row loading)."""
         term = f"%{escape_like(search)}%"
         active_filter = [] if self.show_inactive_products else [Product.is_active == True]
+        cat_clause = [Product.category == cat_filter] if cat_filter else []
         variant_count = int(
             session.exec(
                 select(func.count(ProductVariant.id))
@@ -195,6 +209,7 @@ class SearchMixin:
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
                 .where(*active_filter)
+                .where(*cat_clause)
                 .where(
                     or_(
                         ProductVariant.sku.ilike(term),
@@ -218,6 +233,7 @@ class SearchMixin:
                 .where(Product.branch_id == branch_id)
                 .where(no_variant)
                 .where(*active_filter)
+                .where(*cat_clause)
                 .where(
                     or_(
                         Product.description.ilike(term),
@@ -238,10 +254,14 @@ class SearchMixin:
         branch_id: int,
         offset: int = 0,
         per_page: int = 20,
+        cat_filter: str = "",
+        sort_field: str = "description",
+        sort_asc: bool = True,
     ) -> List[Dict[str, Any]]:
         """Fetch one page of search results via SQL UNION ALL + OFFSET/LIMIT."""
         term = f"%{escape_like(search)}%"
         active_filter = [] if self.show_inactive_products else [Product.is_active == True]
+        cat_clause = [Product.category == cat_filter] if cat_filter else []
 
         # Variant IDs matching search
         variant_ids_q = (
@@ -257,6 +277,7 @@ class SearchMixin:
             .where(Product.company_id == company_id)
             .where(Product.branch_id == branch_id)
             .where(*active_filter)
+            .where(*cat_clause)
             .where(
                 or_(
                     ProductVariant.sku.ilike(term),
@@ -284,6 +305,7 @@ class SearchMixin:
             .where(Product.branch_id == branch_id)
             .where(no_variant)
             .where(*active_filter)
+            .where(*cat_clause)
             .where(
                 or_(
                     Product.description.ilike(term),
@@ -293,11 +315,16 @@ class SearchMixin:
             )
         )
 
-        # SQL UNION ALL with ORDER BY + OFFSET + LIMIT
+        # SQL UNION ALL con sort dinámico
+        sort_order = unioned_c = None
         unioned = union_all(variant_ids_q, product_ids_q).subquery()
+        unioned_c = unioned.c
+        sort_order = (
+            unioned_c.sort_desc if sort_asc else unioned_c.sort_desc.desc()
+        )
         page_q = (
-            select(unioned.c.pid, unioned.c.vid)
-            .order_by(unioned.c.sort_desc, unioned.c.sort_code)
+            select(unioned_c.pid, unioned_c.vid)
+            .order_by(sort_order, unioned_c.sort_code)
             .offset(offset)
             .limit(per_page)
         )
@@ -376,16 +403,32 @@ class SearchMixin:
             return
 
         search = (self.inventory_search_term or "").strip().lower()
+        cat_filter = (self.inventory_category_filter or "").strip()
         per_page = max(self.inventory_items_per_page, 1)
         page = max(self.inventory_current_page, 1)
+
+        # Mapa de campo de orden a columna ORM
+        _sort_col = {
+            "description": Product.description,
+            "stock": Product.stock,
+            "purchase_price": Product.purchase_price,
+            "sale_price": Product.sale_price,
+            "category": Product.category,
+        }
+        sort_col = _sort_col.get(self.inventory_sort_field, Product.description)
+        sort_expr = sort_col if self.inventory_sort_asc else sort_col.desc()
 
         with rx.session() as session:
             # tenant_bypass por sesión: WHERE explícitos garantizan aislamiento;
             # evita race de ContextVar que aplica company_id de otro tenant.
             session.info["tenant_bypass"] = True
+
+            # Filtro por categoría (aplica a ambas ramas)
+            cat_clause = [Product.category == cat_filter] if cat_filter else []
+
             if search:
                 total_items = self._inventory_search_count(
-                    session, search, company_id, branch_id
+                    session, search, company_id, branch_id, cat_filter=cat_filter
                 )
                 total_pages = (
                     1 if total_items == 0 else (total_items + per_page - 1) // per_page
@@ -397,6 +440,8 @@ class SearchMixin:
                 page_rows = self._inventory_search_rows(
                     session, search, company_id, branch_id,
                     offset=offset, per_page=per_page,
+                    cat_filter=cat_filter, sort_field=self.inventory_sort_field,
+                    sort_asc=self.inventory_sort_asc,
                 )
             else:
                 active_filter = [] if self.show_inactive_products else [Product.is_active == True]
@@ -406,6 +451,7 @@ class SearchMixin:
                         .where(Product.company_id == company_id)
                         .where(Product.branch_id == branch_id)
                         .where(*active_filter)
+                        .where(*cat_clause)
                     ).one()
                     or 0
                 )
@@ -421,7 +467,8 @@ class SearchMixin:
                     .where(Product.company_id == company_id)
                     .where(Product.branch_id == branch_id)
                     .where(*active_filter)
-                    .order_by(Product.description, Product.id)
+                    .where(*cat_clause)
+                    .order_by(sort_expr, Product.id)
                     .offset(offset)
                     .limit(per_page)
                 )
@@ -440,8 +487,7 @@ class SearchMixin:
                     for product in products_page
                 ]
 
-            # Single query con CASE para obtener los 4 contadores en 1 round-trip
-            # Solo cuenta productos activos para las estadisticas.
+            # Contadores de stock (solo productos activos, ignora filtro de categoría y búsqueda)
             stock_stats = session.exec(
                 select(
                     func.count(Product.id),
@@ -467,12 +513,29 @@ class SearchMixin:
             low_stock_count = int(stock_stats[2] or 0)
             out_of_stock_count = int(stock_stats[3] or 0)
 
+            # Valor total del inventario (todos los productos activos)
+            total_value_raw = session.exec(
+                select(func.sum(Product.purchase_price * Product.stock))
+                .where(Product.company_id == company_id)
+                .where(Product.branch_id == branch_id)
+                .where(Product.is_active == True)
+            ).one()
+            total_value = float(total_value_raw or 0)
+
+        # Subtotal de la página actual
+        page_total = sum(
+            float(str(r.get("purchase_price") or 0)) * float(str(r.get("stock") or 0))
+            for r in page_rows
+        )
+
         self.inventory_list = page_rows
         self.inventory_total_pages = total_pages
         self.inventory_total_products = total_products
         self.inventory_in_stock_count = in_stock_count
         self.inventory_low_stock_count = low_stock_count
         self.inventory_out_of_stock_count = out_of_stock_count
+        self.inventory_total_value = fmt_price(total_value)
+        self.inventory_page_total = fmt_price(page_total)
 
     @rx.event
     def refresh_inventory_cache(self):
@@ -640,6 +703,31 @@ class SearchMixin:
         if 1 <= page_num <= self.inventory_total_pages:
             self.inventory_current_page = page_num
             self._refresh_inventory_cache()
+
+    @rx.event
+    def set_inventory_items_per_page(self, value: str):
+        try:
+            self.inventory_items_per_page = max(1, int(value))
+        except (ValueError, TypeError):
+            self.inventory_items_per_page = 10
+        self.inventory_current_page = 1
+        self._refresh_inventory_cache()
+
+    @rx.event
+    def set_inventory_category_filter(self, value: str):
+        self.inventory_category_filter = value if value != "__all__" else ""
+        self.inventory_current_page = 1
+        self._refresh_inventory_cache()
+
+    @rx.event
+    def set_inventory_sort(self, field: str):
+        if self.inventory_sort_field == field:
+            self.inventory_sort_asc = not self.inventory_sort_asc
+        else:
+            self.inventory_sort_field = field
+            self.inventory_sort_asc = True
+        self.inventory_current_page = 1
+        self._refresh_inventory_cache()
 
     def _variant_label(self, variant: ProductVariant) -> str:
         parts: List[str] = []

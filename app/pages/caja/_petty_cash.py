@@ -16,12 +16,12 @@ def _tipo_badge(movement_type: rx.Var) -> rx.Component:
   return rx.cond(
     movement_type == "ingreso",
     rx.el.span(
-      rx.icon("arrow-up-circle", class_name="w-3 h-3"),
+      rx.icon("circle-arrow-up", class_name="w-3 h-3"),
       "Ingreso",
       class_name="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700",
     ),
     rx.el.span(
-      rx.icon("arrow-down-circle", class_name="w-3 h-3"),
+      rx.icon("circle-arrow-down", class_name="w-3 h-3"),
       "Egreso",
       class_name="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700",
     ),

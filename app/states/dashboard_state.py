@@ -338,7 +338,7 @@ class DashboardState(MixinState):
                         func.sum(SaleItem.quantity * SaleItem.unit_price), 0
                     ),
                     func.coalesce(
-                        func.sum(SaleItem.quantity * Product.purchase_price), 0
+                        func.sum(SaleItem.quantity * func.coalesce(Product.purchase_price, 0)), 0
                     ),
                 )
                 .select_from(SaleItem)

@@ -399,6 +399,7 @@ async def resolve_effective_price(
     company_id: int,
     branch_id: int,
     client_price_list_id: int | None,
+    global_margin: float = 0.0,
     now: datetime | None = None,
     coupon_code: str | None = None,
     cart_subtotal: Decimal | None = None,
@@ -444,7 +445,13 @@ async def resolve_effective_price(
             source = PriceSource.TIER
 
     if base_price is None:
-        base_price = Decimal(str(product.sale_price or 0))
+        if product.sale_price is not None:
+            base_price = Decimal(str(product.sale_price))
+        elif global_margin > 0 and product.purchase_price and float(product.purchase_price) > 0:
+            pp = float(product.purchase_price)
+            base_price = Decimal(str(round(pp * (1 + global_margin / 100), 2)))
+        else:
+            base_price = Decimal("0")
         source = PriceSource.BASE
 
     promo = await find_applicable_promotion(

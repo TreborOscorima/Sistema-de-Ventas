@@ -30,6 +30,7 @@ from sqlmodel import select, and_, or_
 
 from app.models import Product, ProductVariant
 from app.utils.db import get_async_session
+from app.utils.pricing import resolve_effective_price as _resolve_price
 from app.utils.tenant import set_tenant_context
 from app.utils.timezone import utc_now_naive
 
@@ -83,13 +84,14 @@ class LabelService:
         company_id: int,
         branch_id: int,
         session: AsyncSession | None = None,
+        global_margin: float = 0.0,
     ) -> list[dict]:
         set_tenant_context(company_id, branch_id)
         try:
             if session is None:
                 async with get_async_session() as s:
-                    return await LabelService._query_products(s, config, company_id, branch_id)
-            return await LabelService._query_products(session, config, company_id, branch_id)
+                    return await LabelService._query_products(s, config, company_id, branch_id, global_margin)
+            return await LabelService._query_products(session, config, company_id, branch_id, global_margin)
         finally:
             set_tenant_context(None, None)
 
@@ -99,6 +101,7 @@ class LabelService:
         config: LabelConfig,
         company_id: int,
         branch_id: int,
+        global_margin: float = 0.0,
     ) -> list[dict]:
         stmt = (
             select(Product)
@@ -145,7 +148,7 @@ class LabelService:
                         "barcode": bc,
                         "description": description,
                         "category": p.category or "",
-                        "sale_price": float(p.sale_price or 0),
+                        "sale_price": float(_resolve_price(p, v, global_margin)),
                         "purchase_price": float(p.purchase_price or 0),
                         "unit": p.unit or "Unidad",
                         "tax_rate": float(getattr(p, "tax_rate", 0) or 0),
@@ -161,7 +164,7 @@ class LabelService:
                     "barcode": bc,
                     "description": p.description or "",
                     "category": p.category or "",
-                    "sale_price": float(p.sale_price or 0),
+                    "sale_price": float(_resolve_price(p, global_margin=global_margin)),
                     "purchase_price": float(p.purchase_price or 0),
                     "unit": p.unit or "Unidad",
                     "tax_rate": float(getattr(p, "tax_rate", 0) or 0),

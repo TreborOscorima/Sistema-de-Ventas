@@ -125,7 +125,7 @@ def _price_form() -> rx.Component:
           class_name="flex items-center gap-1 text-xs font-semibold text-amber-700",
         ),
         rx.el.span(
-          rx.icon("plus-circle", class_name="h-3.5 w-3.5"),
+          rx.icon("circle-plus", class_name="h-3.5 w-3.5"),
           "Nuevo precio de campo",
           class_name="flex items-center gap-1 text-xs font-semibold text-slate-500",
         ),

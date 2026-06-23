@@ -281,7 +281,8 @@ async def get_recent_activity(
         set_tenant_context(None, None)
 
 
-def _adapt_product_payload(product: Product) -> dict[str, Any]:
+def _adapt_product_payload(product: Product, global_margin: float = 0.0) -> dict[str, Any]:
+    from app.utils.pricing import resolve_effective_price
     payload = {
         "id": product.id,
         "product_id": product.id,
@@ -291,7 +292,7 @@ def _adapt_product_payload(product: Product) -> dict[str, Any]:
         "description": product.description,
         "category": product.category,
         "unit": product.unit,
-        "sale_price": product.sale_price,
+        "sale_price": resolve_effective_price(product, global_margin=global_margin),
         "purchase_price": getattr(product, "purchase_price", None),
         "stock": product.stock,
     }
@@ -307,12 +308,15 @@ def _adapt_product_payload(product: Product) -> dict[str, Any]:
 def _adapt_variant_payload(
     variant: ProductVariant,
     parent: Product,
+    global_margin: float = 0.0,
 ) -> dict[str, Any]:
+    from app.utils.pricing import resolve_effective_price
     label = _variant_label(variant)
     description = parent.description
     if label:
         description = f"{parent.description} ({label})"
-    payload = _adapt_product_payload(parent)
+    payload = _adapt_product_payload(parent, global_margin=global_margin)
+    effective_sale_price = resolve_effective_price(parent, variant, global_margin)
     payload.update(
         {
             "barcode": variant.sku,
@@ -321,9 +325,34 @@ def _adapt_variant_payload(
             "is_variant": True,
             "variant_id": variant.id,
             "product_id": parent.id,
+            "sale_price": effective_sale_price,
         }
     )
     return payload
+
+
+async def _get_effective_margin(
+    session: AsyncSession,
+    company_id: int | None,
+    branch_id: int | None,
+) -> float:
+    """Margen global vigente para esta empresa/sucursal (sucursal > empresa)."""
+    from app.models.sales import CompanySettings
+    rows = (
+        await session.exec(
+            select(CompanySettings)
+            .where(CompanySettings.company_id == company_id)
+            .order_by(CompanySettings.branch_id)
+        )
+    ).all()
+    if not rows:
+        return 0.0
+    company_row = rows[0]
+    branch_row = next((r for r in rows if r.branch_id == branch_id), None)
+    if branch_row and branch_row.default_profit_margin is not None:
+        if branch_row.branch_id != company_row.branch_id:
+            return float(branch_row.default_profit_margin)
+    return float(company_row.default_profit_margin) if company_row.default_profit_margin else 0.0
 
 
 async def get_product_by_barcode(
@@ -342,6 +371,7 @@ async def get_product_by_barcode(
             return None
 
         async def _run(current_session: AsyncSession) -> dict[str, Any] | None:
+            gm = await _get_effective_margin(current_session, company_id, branch_id)
             variant_query = select(ProductVariant).where(ProductVariant.sku == code)
             variant = (
                 await current_session.exec(
@@ -362,7 +392,7 @@ async def get_product_by_barcode(
                     )
                 ).first()
                 if parent:
-                    return _adapt_variant_payload(variant, parent)
+                    return _adapt_variant_payload(variant, parent, global_margin=gm)
 
             product_query = select(Product).where(
                 Product.barcode == code,
@@ -376,7 +406,7 @@ async def get_product_by_barcode(
                 )
             ).first()
             if product:
-                return _adapt_product_payload(product)
+                return _adapt_product_payload(product, global_margin=gm)
             return None
 
         if session is not None:
@@ -404,6 +434,7 @@ async def search_products(
         like_search = f"%{escape_like(term)}%"
 
         async def _run(current_session: AsyncSession) -> list[dict[str, Any]]:
+            gm = await _get_effective_margin(current_session, company_id, branch_id)
             product_query = select(Product).where(
                 Product.is_active == True,
                 or_(
@@ -477,18 +508,17 @@ async def search_products(
             for product in products:
                 if product.id and product.id not in seen_ids:
                     seen_ids.add(product.id)
-                    results.append(_adapt_product_payload(product))
+                    results.append(_adapt_product_payload(product, global_margin=gm))
             for variant, parent in variant_rows:
                 if parent:
-                    key = ("v", variant.id)
                     vid = variant.id or 0
                     if vid not in seen_ids:
                         seen_ids.add(vid)
-                        results.append(_adapt_variant_payload(variant, parent))
+                        results.append(_adapt_variant_payload(variant, parent, global_margin=gm))
             for product in attr_products:
                 if product.id and product.id not in seen_ids:
                     seen_ids.add(product.id)
-                    results.append(_adapt_product_payload(product))
+                    results.append(_adapt_product_payload(product, global_margin=gm))
             return results[:limit]
 
         if session is not None:
@@ -547,7 +577,9 @@ async def calculate_item_price(
             ).first()
             if not product:
                 return Decimal("0.00")
-            return _round_money(product.sale_price)
+            gm = await _get_effective_margin(current_session, company_id, branch_id)
+            from app.utils.pricing import resolve_effective_price as _rep
+            return _round_money(_rep(product, global_margin=gm))
 
         if session is not None:
             return await _run(session)
@@ -859,7 +891,11 @@ async def _calculate_item_price(
     if tier_price is not None:
         return _round_money(tier_price)
 
-    return _round_money(product.sale_price)
+    if product.sale_price is not None:
+        return _round_money(product.sale_price)
+    gm = await _get_effective_margin(session, company_id, branch_id)
+    from app.utils.pricing import resolve_effective_price
+    return _round_money(resolve_effective_price(product, global_margin=gm))
 
 
 async def _apply_promotions(
@@ -1005,7 +1041,12 @@ async def _resolve_item_base_price(
             base_price = _round_money(tier_price)
 
     if base_price is None:
-        base_price = _round_money(product.sale_price)
+        if product.sale_price is not None:
+            base_price = _round_money(product.sale_price)
+        else:
+            gm = await _get_effective_margin(session, company_id, branch_id)
+            from app.utils.pricing import resolve_effective_price
+            base_price = _round_money(resolve_effective_price(product, global_margin=gm))
 
     return base_price, applied_pl_id
 

@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlmodel import select
 from sqlalchemy.orm import selectinload
+from app.utils.pricing import resolve_effective_price as _resolve_export_price
 
 from app.models import (
     Product,
@@ -95,6 +96,7 @@ class ExportMixin:
                 parts.append(str(variant.color).strip())
             return " ".join([p for p in parts if p]).strip()
 
+        _exp_gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
         export_rows: list[dict[str, Any]] = []
         for product in products:
             variants = list(product.variants or [])
@@ -112,7 +114,7 @@ class ExportMixin:
                             "unit": product.unit or "Unid.",
                             "stock": variant.stock or 0,
                             "purchase_price": float(product.purchase_price or 0),
-                            "sale_price": float(product.sale_price or 0),
+                            "sale_price": float(_resolve_export_price(product, variant, _exp_gm)),
                         }
                     )
             else:
@@ -124,7 +126,7 @@ class ExportMixin:
                         "unit": product.unit or "Unid.",
                         "stock": product.stock or 0,
                         "purchase_price": float(product.purchase_price or 0),
-                        "sale_price": float(product.sale_price or 0),
+                        "sale_price": float(_resolve_export_price(product, global_margin=_exp_gm)),
                     }
                 )
 

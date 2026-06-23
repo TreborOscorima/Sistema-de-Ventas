@@ -290,6 +290,75 @@ def company_settings_section() -> rx.Component:
         ),
         class_name="flex justify-end sm:justify-start",
       ),
+      # ── Aplicar al inventario existente ──────────────────────────────────
+      rx.el.div(
+        rx.el.div(
+          rx.el.p(
+            "Aplicar al inventario existente",
+            class_name="text-sm font-semibold text-slate-700",
+          ),
+          rx.el.p(
+            "Normaliza todos los productos al margen global activo. "
+            "Los precios y márgenes personalizados se eliminan; "
+            "los productos calcularán su precio desde el margen global vigente.",
+            class_name=TYPOGRAPHY["caption"],
+          ),
+          class_name="space-y-1",
+        ),
+        rx.el.button(
+          rx.cond(
+            State.applying_margin_to_inventory,
+            rx.icon("loader", class_name="h-4 w-4 animate-spin"),
+            rx.icon("refresh-cw", class_name="h-4 w-4"),
+          ),
+          rx.cond(
+            State.applying_margin_to_inventory,
+            "Normalizando...",
+            "Normalizar al margen global",
+          ),
+          on_click=State.open_normalize_confirm,
+          disabled=State.applying_margin_to_inventory,
+          class_name=f"{BUTTON_STYLES['secondary']} flex items-center gap-2 min-h-[44px]",
+        ),
+        class_name="pt-3 border-t border-slate-100 space-y-3",
+      ),
+      # ── Modal de confirmación ─────────────────────────────────────────────
+      rx.dialog.root(
+        rx.dialog.content(
+          rx.el.div(
+            rx.el.div(
+              rx.icon("alert-triangle", class_name="h-8 w-8 text-amber-500"),
+              class_name="flex justify-center mb-3",
+            ),
+            rx.el.p(
+              "¿Normalizar todos los productos?",
+              class_name="text-base font-semibold text-slate-800 text-center mb-2",
+            ),
+            rx.el.p(
+              "Esta acción eliminará los precios fijos y márgenes personalizados "
+              "de todos los productos. A partir de ese momento, cada producto "
+              "calculará su precio de venta desde el margen global activo.",
+              class_name="text-sm text-slate-600 text-center mb-5",
+            ),
+            rx.el.div(
+              rx.el.button(
+                "Cancelar",
+                on_click=State.close_normalize_confirm,
+                class_name=f"{BUTTON_STYLES['secondary']} min-h-[40px]",
+              ),
+              rx.el.button(
+                "Sí, normalizar todo",
+                on_click=State.apply_global_margin_to_inventory,
+                class_name=f"{BUTTON_STYLES['danger']} min-h-[40px]",
+              ),
+              class_name="flex gap-3 justify-center",
+            ),
+            class_name="p-2",
+          ),
+          max_width="420px",
+        ),
+        open=State.show_normalize_confirm,
+      ),
       class_name=f"{CARD_STYLES['default']} space-y-4",
     ),
     class_name="space-y-4",

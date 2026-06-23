@@ -29,12 +29,12 @@ def sale_items_list(
         rx.el.span(
           item["quantity"].to_string(),
           " x ",
-          item["sale_price"].to_string(),
+          item["sale_price"],
           class_name=TYPOGRAPHY["caption"],
         ),
         rx.el.span(
           State.currency_symbol,
-          item["subtotal"].to_string(),
+          item["subtotal"],
           class_name="text-xs font-semibold text-slate-700",
         ),
         class_name="flex justify-between items-center",
@@ -137,7 +137,7 @@ def _cashbox_sale_card(sale: rx.Var[dict]) -> rx.Component:
     rx.el.div(
       rx.el.span(
         State.currency_symbol,
-        sale["amount"].to_string(),
+        sale["amount"],
         class_name="text-base font-semibold tabular-nums text-slate-900 whitespace-nowrap",
       ),
       rx.el.div(
@@ -208,7 +208,7 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
     rx.el.td(
       rx.el.span(
         State.currency_symbol,
-        sale["amount"].to_string(),
+        sale["amount"],
         class_name="text-base font-semibold text-slate-900 tabular-nums tracking-tight",
       ),
       class_name="py-3.5 px-4 text-right align-top",

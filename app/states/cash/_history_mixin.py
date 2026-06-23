@@ -515,7 +515,7 @@ class HistoryMixin:
             "payment_condition": sale.payment_condition,
             "is_credit": (sale.payment_condition or "").strip().lower() == "credito",
             "amount_paid": total_paid,
-            "amount": paid_total,
+            "amount": fmt_price(paid_total),
             "total": fmt_price(float(total_amount or 0)),
             "is_deleted": sale.status == SaleStatus.cancelled,
             "delete_reason": sale.delete_reason,

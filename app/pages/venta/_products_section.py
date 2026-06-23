@@ -249,7 +249,7 @@ def quick_add_bar() -> rx.Component:
                         min="0",
                         step="0.01",
                         key=State.sale_form_key.to_string() + "_price",
-                        default_value=State.new_sale_item["price"].to_string(),
+                        default_value=State.sale_price_form_display,
                         on_blur=lambda val: State.handle_sale_change("price", val),
                         class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none text-right",
                     ),

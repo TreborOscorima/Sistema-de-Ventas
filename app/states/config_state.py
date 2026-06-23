@@ -65,6 +65,8 @@ class ConfigState(MixinState):
     # branch_profit_margin  → override de la sucursal actual ("" = hereda empresa)
     company_profit_margin: str = ""
     branch_profit_margin: str = ""
+    applying_margin_to_inventory: bool = False
+    show_normalize_confirm: bool = False
 
     # País de operación
     selected_country_code: str = "PE"
@@ -740,6 +742,7 @@ class ConfigState(MixinState):
                     .where(Product.branch_id == s.branch_id)
                     .where(Product.custom_profit_margin.is_(None))
                     .where(Product.purchase_price > 0)
+                    .where(Product.sale_price.isnot(None))
                 ).all()
                 for p in products:
                     p.sale_price = float(
@@ -754,6 +757,64 @@ class ConfigState(MixinState):
 
         suffix = f" {total_updated} productos actualizados." if total_updated else "."
         return rx.toast(f"Margenes guardados.{suffix}", duration=3000)
+
+    @rx.event
+    def open_normalize_confirm(self):
+        self.show_normalize_confirm = True
+
+    @rx.event
+    def close_normalize_confirm(self):
+        self.show_normalize_confirm = False
+
+    @rx.event
+    async def apply_global_margin_to_inventory(self):
+        """Resetea sale_price y custom_profit_margin de TODOS los productos de la
+        empresa a NULL, haciéndolos dinámicos: su precio se calcula desde el margen
+        global vigente en cada sucursal."""
+        self.show_normalize_confirm = False
+        toast = self._require_manage_config()
+        if toast:
+            yield toast
+            return
+
+        company_id = self._company_id()
+        if not company_id:
+            yield rx.toast("Empresa no definida.", duration=3000)
+            return
+
+        from app.models.inventory import Product
+
+        self.applying_margin_to_inventory = True
+        yield
+        try:
+            with rx.session() as session:
+                session.info["tenant_bypass"] = True
+                products = session.exec(
+                    select(Product)
+                    .where(Product.company_id == company_id)
+                    .where(Product.purchase_price > 0)
+                ).all()
+                count = sum(
+                    1 for p in products
+                    if p.sale_price is not None or p.custom_profit_margin is not None
+                )
+                for p in products:
+                    p.sale_price = None
+                    p.custom_profit_margin = None
+                    session.add(p)
+                session.commit()
+            if count:
+                yield rx.toast(
+                    f"{count} producto(s) ahora siguen el margen global.",
+                    duration=3000,
+                )
+            else:
+                yield rx.toast(
+                    "Todos los productos ya siguen el margen global.",
+                    duration=2500,
+                )
+        finally:
+            self.applying_margin_to_inventory = False
 
     @rx.event
     def go_to_config_tab(self, tab: str):

@@ -23,6 +23,7 @@ from app.utils.barcode import clean_barcode, validate_barcode
 from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import escape_like, sanitize_text
 from app.utils.stock import recalculate_stock_totals
+from app.utils.pricing import resolve_effective_price, price_matches_margin
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +87,32 @@ class IngresoState(MixinState):
     _entry_sale_price_manual: bool = rx.field(default=False, is_var=False)
 
     @rx.var(cache=False)
+    def entry_price_display(self) -> str:
+        """P. COMPRA formateado con 2 decimales; vacío si es 0."""
+        try:
+            val = float(self.new_entry_item.get("price", 0) or 0)
+        except (TypeError, ValueError):
+            val = 0.0
+        return f"{val:.2f}" if val > 0 else ""
+
+    @rx.var(cache=False)
     def entry_sale_price_display(self) -> str:
-        """Devuelve el precio de venta como string; vacío si es 0 (para mostrar placeholder)."""
-        val = float(self.new_entry_item.get("sale_price", 0) or 0)
-        return str(val) if val > 0 else ""
+        """P. VENTA formateado con 2 decimales; vacío si es 0 (para mostrar placeholder)."""
+        try:
+            val = float(self.new_entry_item.get("sale_price", 0) or 0)
+        except (TypeError, ValueError):
+            val = 0.0
+        return f"{val:.2f}" if val > 0 else ""
+
+    @rx.var(cache=False)
+    def entry_effective_margin(self) -> str:
+        """Margen efectivo real basado en P. COMPRA y P. VENTA actuales."""
+        pc = float(self.new_entry_item.get("price") or 0)
+        pv = float(self.new_entry_item.get("sale_price") or 0)
+        if pc > 0 and pv > 0:
+            m = round((pv - pc) / pc * 100, 1)
+            return str(int(m)) if m == int(m) else f"{m:g}"
+        return ""
 
     @rx.var(cache=True)
     def entry_subtotal(self) -> float:
@@ -427,15 +450,20 @@ class IngresoState(MixinState):
             self.entry_mode = "standard"
         self.variant_size = ""
         self.variant_color = ""
-        self._entry_sale_price_manual = False
-        # Si el producto no tiene precio de venta en BD, auto-calcular desde margen
-        if not float(self.new_entry_item.get("sale_price") or 0) > 0:
-            purchase_price = float(self.new_entry_item.get("price") or 0)
-            margin = getattr(self, "effective_profit_margin_decimal", 0.0)
-            if purchase_price > 0 and margin > 0:
-                self.new_entry_item["sale_price"] = self._round_currency(
-                    purchase_price * (1 + margin / 100)
-                )
+        _loaded_sp = float(self.new_entry_item.get("sale_price") or 0)
+        if product.get("has_explicit_price"):
+            # Precio personalizado en DB: protegerlo de auto-recalculación al tabear
+            self._entry_sale_price_manual = True
+        else:
+            self._entry_sale_price_manual = False
+            # Sin precio explícito: auto-calcular desde margen si hace falta
+            if not _loaded_sp > 0:
+                purchase_price = float(self.new_entry_item.get("price") or 0)
+                margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+                if purchase_price > 0 and margin > 0:
+                    self.new_entry_item["sale_price"] = self._round_currency(
+                        purchase_price * (1 + margin / 100)
+                    )
         self.entry_sale_price_key += 1
         # Force remount of uncontrolled fields (qty, price) to reflect product data
         self.entry_form_key += 1
@@ -549,9 +577,9 @@ class IngresoState(MixinState):
         if (
             not self.new_entry_item["description"]
             or not self.new_entry_item["category"]
-            or self.new_entry_item["quantity"] <= 0
-            or self.new_entry_item["price"] <= 0
-            or self.new_entry_item["sale_price"] <= 0
+            or float(self.new_entry_item.get("quantity") or 0) <= 0
+            or float(self.new_entry_item.get("price") or 0) <= 0
+            or float(self.new_entry_item.get("sale_price") or 0) <= 0
         ):
             return rx.toast(
                 "Por favor, complete todos los campos correctamente.", duration=3000
@@ -711,6 +739,9 @@ class IngresoState(MixinState):
                 self.new_entry_items = [
                     entry for entry in self.new_entry_items if entry["temp_id"] != temp_id
                 ]
+                self._entry_sale_price_manual = False
+                self.entry_form_key += 1
+                self.entry_sale_price_key += 1
                 self.entry_autocomplete_suggestions = []
                 self.entry_autocomplete_active_index = -1
                 return
@@ -1051,8 +1082,28 @@ class IngresoState(MixinState):
                         )
                         session.add(movement)
                     else:
-                        if item["sale_price"] > 0:
-                            product.sale_price = Decimal(str(item["sale_price"]))
+                        _sp_val = float(item.get("sale_price") or 0)
+                        _pp_val = float(item.get("price") or 0)
+                        _global_margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+                        # Si el precio coincide con el margen global → dinámico (NULL).
+                        # Si el usuario lo personalizó → guardar precio Y calcular el
+                        # margen resultante, para que Inventario lo muestre correctamente.
+                        if _sp_val > 0 and price_matches_margin(_sp_val, _pp_val, _global_margin):
+                            new_sale_price = None
+                            new_custom_margin = None
+                        else:
+                            new_sale_price = Decimal(str(_sp_val)) if _sp_val > 0 else None
+                            if new_sale_price is not None and _pp_val > 0:
+                                _calc = round((_sp_val - _pp_val) / _pp_val * 100, 2)
+                                new_custom_margin = Decimal(str(_calc))
+                            else:
+                                new_custom_margin = None
+                        if variant:
+                            variant.sale_price = new_sale_price
+                            session.add(variant)
+                        else:
+                            product.sale_price = new_sale_price
+                            product.custom_profit_margin = new_custom_margin
                         product.purchase_price = unit_cost
                         if supplier_id:
                             product.default_supplier_id = supplier_id
@@ -1257,6 +1308,8 @@ class IngresoState(MixinState):
                     .where(Product.branch_id == branch_id)
                 ).first()
                 if parent:
+                    global_margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+                    effective_price = resolve_effective_price(parent, variant, global_margin)
                     return {
                         "id": str(parent.id),
                         "product_id": parent.id,
@@ -1267,7 +1320,12 @@ class IngresoState(MixinState):
                         "stock": variant.stock,
                         "unit": parent.unit,
                         "purchase_price": parent.purchase_price,
-                        "sale_price": parent.sale_price,
+                        "sale_price": effective_price,
+                        "has_explicit_price": (
+                            variant.sale_price is not None
+                            or parent.sale_price is not None
+                            or parent.custom_profit_margin is not None
+                        ),
                     }
 
             p = session.exec(
@@ -1277,6 +1335,8 @@ class IngresoState(MixinState):
                 .where(Product.branch_id == branch_id)
             ).first()
             if p:
+                global_margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+                effective_price = resolve_effective_price(p, global_margin=global_margin)
                 return {
                     "id": str(p.id),
                     "product_id": p.id,
@@ -1287,7 +1347,10 @@ class IngresoState(MixinState):
                     "stock": p.stock,
                     "unit": p.unit,
                     "purchase_price": p.purchase_price,
-                    "sale_price": p.sale_price,
+                    "sale_price": effective_price,
+                    "has_explicit_price": (
+                        p.sale_price is not None or p.custom_profit_margin is not None
+                    ),
                 }
         return None
 
@@ -1330,6 +1393,7 @@ class IngresoState(MixinState):
             ).first()
 
             if product:
+                _gm = getattr(self, "effective_profit_margin_decimal", 0.0)
                 self._apply_existing_product_context(
                     {
                         "id": str(product.id),
@@ -1341,7 +1405,8 @@ class IngresoState(MixinState):
                         "stock": product.stock,
                         "unit": product.unit,
                         "purchase_price": product.purchase_price,
-                        "sale_price": product.sale_price,
+                        "sale_price": resolve_effective_price(product, global_margin=_gm),
+                        "has_explicit_price": (product.sale_price is not None or product.custom_profit_margin is not None),
                     }
                 )
         self.entry_autocomplete_suggestions = []

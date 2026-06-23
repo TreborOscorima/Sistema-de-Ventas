@@ -80,17 +80,52 @@ class ProductMixin:
 
         product_id = _read_value("id", None)
 
-        # Convertir modelo a dict para edicion
         raw_margin = _read_value("custom_profit_margin", None)
+        pp = float(_read_value("purchase_price", 0) or 0)
+        variant_id = _read_value("variant_id", None)
+        variant_has_own_price = bool(_read_value("variant_has_own_price", False))
+
+        # Resolución de P. VENTA y % Ganancia para el formulario:
+        #
+        # Caso 1 — Variante con precio propio explícito (el usuario lo personalizó
+        #   o redondeó): mostrar ese precio y calcular el margen efectivo real.
+        #
+        # Caso 2 — Producto/variante con margen personalizado (custom_profit_margin
+        #   NOT NULL): recalcular P. VENTA desde ese margen.
+        #
+        # Caso 3 — Sin precio propio ni margen custom: el producto sigue el margen
+        #   global/sucursal vigente → recalcular P. VENTA desde ese margen.
+        #   Efecto: cambiar el margen global y abrir este modal ya muestra el
+        #   precio actualizado listo para guardar.
+
+        if variant_id and variant_has_own_price:
+            # Caso 1
+            sp = float(_read_value("sale_price", 0) or 0)
+            if raw_margin is None and pp > 0 and sp > 0:
+                eff = (sp - pp) / pp * 100
+                raw_margin = round(eff, 2)
+            sale_price_for_form = sp
+        elif raw_margin is not None:
+            # Caso 2
+            try:
+                sale_price_for_form = pp * (1 + float(raw_margin) / 100) if pp > 0 else 0.0
+            except (TypeError, ValueError):
+                sale_price_for_form = float(_read_value("sale_price", 0) or 0)
+        else:
+            # Caso 3 — margen global vigente
+            global_margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+            sale_price_for_form = pp * (1 + global_margin / 100) if pp > 0 else 0.0
+
         self.editing_product = {
             "id": product_id,
+            "variant_id": variant_id,
             "barcode": _read_value("barcode", ""),
             "description": _read_value("description", ""),
             "category": _read_value("category", ""),
             "stock": _read_value("stock", 0),
             "unit": _read_value("unit", ""),
-            "purchase_price": fmt_price(float(_read_value("purchase_price", 0) or 0)),
-            "sale_price": fmt_price(float(_read_value("sale_price", 0) or 0)),
+            "purchase_price": fmt_price(pp),
+            "sale_price": fmt_price(sale_price_for_form),
             "custom_profit_margin": str(raw_margin) if raw_margin is not None else "",
             "default_supplier_id": _read_value("default_supplier_id", None),
         }
@@ -156,7 +191,7 @@ class ProductMixin:
                     self.price_tiers = [
                         {
                             "min_qty": tier.min_quantity,
-                            "price": fmt_input_num(tier.unit_price or 0),
+                            "price": fmt_price(float(tier.unit_price or 0)),
                         }
                         for tier in tiers
                     ]
@@ -219,16 +254,33 @@ class ProductMixin:
                         select(Product).where(Product.id.in_(comp_ids))
                     ).all()
                     comp_map = {p.id: p for p in comp_products}
-                    self.kit_components = [
-                        {
+                    variant_ids = [c.component_variant_id for c in kit_comps if c.component_variant_id]
+                    variant_map: dict = {}
+                    if variant_ids:
+                        variants = session.exec(
+                            select(ProductVariant).where(ProductVariant.id.in_(variant_ids))
+                        ).all()
+                        variant_map = {v.id: v for v in variants}
+                    rows = []
+                    for c in kit_comps:
+                        prod = comp_map.get(c.component_product_id)
+                        variant = variant_map.get(c.component_variant_id) if c.component_variant_id else None
+                        if variant:
+                            display_barcode = variant.sku or ""
+                            variant_label = " ".join(filter(None, [variant.size, variant.color]))
+                        else:
+                            display_barcode = (prod.barcode or "") if prod else ""
+                            variant_label = ""
+                        rows.append({
                             "id": c.id,
-                            "component_barcode": (comp_map[c.component_product_id].barcode or "") if c.component_product_id in comp_map else "",
-                            "component_name": (comp_map[c.component_product_id].description or "") if c.component_product_id in comp_map else "",
+                            "component_barcode": display_barcode,
+                            "component_name": (prod.description or "") if prod else "",
                             "component_product_id": c.component_product_id,
-                            "quantity": fmt_input_num(c.quantity or 1),
-                        }
-                        for c in kit_comps
-                    ]
+                            "component_variant_id": c.component_variant_id,
+                            "variant_label": variant_label,
+                            "quantity": float(c.quantity or 1),
+                        })
+                    self.kit_components = rows
                     self.show_kit_components = True
 
         self.is_editing_product = True
@@ -386,13 +438,17 @@ class ProductMixin:
                 return val
 
         if field == "profit_margin":
-            self.editing_product["custom_profit_margin"] = value
             try:
                 value_str = str(value)
+            except Exception:
+                value_str = ""
+            self.editing_product["custom_profit_margin"] = value_str
+            try:
                 margin = float(value_str) if value_str.strip() else 0.0
                 purchase = float(self.editing_product.get("purchase_price") or 0)
                 if purchase > 0:
                     self.editing_product["sale_price"] = fmt_price(_q(purchase * (1 + margin / 100)))
+                    self.edit_sale_price_key += 1
             except (ValueError, TypeError):
                 pass
 
@@ -407,6 +463,7 @@ class ProductMixin:
                     )
                 else:
                     self.editing_product["custom_profit_margin"] = ""
+                self.edit_margin_key += 1
             except (ValueError, TypeError):
                 pass
 
@@ -416,16 +473,16 @@ class ProductMixin:
                 self.editing_product["purchase_price"] = fmt_price(purchase)
                 raw_margin = str(self.editing_product.get("custom_profit_margin") or "").strip()
                 if raw_margin and purchase > 0:
-                    # Hay margen explícito → mantenerlo y recalcular sale_price
                     margin = float(raw_margin)
                     self.editing_product["sale_price"] = fmt_price(_q(purchase * (1 + margin / 100)))
+                    self.edit_sale_price_key += 1
                 elif purchase > 0:
-                    # No hay margen → recalcular el % implícito desde el sale_price actual
                     sale = float(self.editing_product.get("sale_price") or 0)
                     if sale > 0:
                         self.editing_product["custom_profit_margin"] = str(
                             _q((sale - purchase) / purchase * 100)
                         )
+                        self.edit_margin_key += 1
             except (ValueError, TypeError):
                 pass
 
@@ -544,7 +601,7 @@ class ProductMixin:
     def add_tier_row(self):
         self.price_tiers = [
             *self.price_tiers,
-            {"min_qty": 0, "price": 0.0},
+            {"min_qty": 0, "price": "0.00"},
         ]
 
     @rx.event
@@ -568,7 +625,7 @@ class ProductMixin:
                 return
         elif field == "price":
             try:
-                row[field] = float(value) if value not in ("", None) else 0
+                row[field] = fmt_price(float(value)) if value not in ("", None) else "0.00"
             except (TypeError, ValueError):
                 return
         else:
@@ -668,7 +725,15 @@ class ProductMixin:
     def add_kit_component_row(self):
         self.kit_components = [
             *self.kit_components,
-            {"id": None, "component_barcode": "", "component_name": "", "component_product_id": None, "quantity": 1.0},
+            {
+                "id": None,
+                "component_barcode": "",
+                "component_name": "",
+                "component_product_id": None,
+                "component_variant_id": None,
+                "variant_label": "",
+                "quantity": 1.0,
+            },
         ]
 
     @rx.event
@@ -697,7 +762,12 @@ class ProductMixin:
 
     @rx.event
     def resolve_kit_component(self, index: int, barcode: str):
-        """Busca un producto por código de barras y lo asigna como componente del kit."""
+        """Busca producto/variante por código y lo asigna como componente del kit.
+
+        Orden de búsqueda:
+        1. Product.barcode → componente sin variante específica
+        2. ProductVariant.sku → componente con variante específica
+        """
         if index < 0 or index >= len(self.kit_components):
             return
         code = (barcode or "").strip()
@@ -709,19 +779,45 @@ class ProductMixin:
             return
         with rx.session() as session:
             session.info["tenant_bypass"] = True
+            # 1. Buscar por barcode del producto padre
             p = session.exec(
                 select(Product)
                 .where(Product.barcode == code)
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
             ).first()
-            if not p:
-                return rx.toast(f"Producto con código '{code}' no encontrado.", duration=3000)
+            if p:
+                comps = list(self.kit_components)
+                row = dict(comps[index])
+                row["component_barcode"] = p.barcode or ""
+                row["component_name"] = p.description or ""
+                row["component_product_id"] = p.id
+                row["component_variant_id"] = None
+                row["variant_label"] = ""
+                comps[index] = row
+                self.kit_components = comps
+                return
+
+            # 2. Buscar por SKU de variante
+            variant = session.exec(
+                select(ProductVariant)
+                .where(ProductVariant.sku == code)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+            ).first()
+            if not variant:
+                return rx.toast(f"Código '{code}' no encontrado como producto ni variante.", duration=3000)
+            parent = session.exec(
+                select(Product).where(Product.id == variant.product_id)
+            ).first()
+            variant_label = " ".join(filter(None, [variant.size, variant.color]))
             comps = list(self.kit_components)
             row = dict(comps[index])
-            row["component_barcode"] = p.barcode or ""
-            row["component_name"] = p.description or ""
-            row["component_product_id"] = p.id
+            row["component_barcode"] = variant.sku or ""
+            row["component_name"] = (parent.description or "") if parent else ""
+            row["component_product_id"] = variant.product_id
+            row["component_variant_id"] = variant.id
+            row["variant_label"] = variant_label
             comps[index] = row
             self.kit_components = comps
 
@@ -871,7 +967,14 @@ class ProductMixin:
                 return self.add_notification(
                     "Agregue al menos un componente válido al kit.", "error"
                 )
-            if len(comp_ids) != len(set(comp_ids)):
+            # Duplicado = mismo (product_id, variant_id); variantes distintas del mismo
+            # producto son componentes válidos y distintos dentro del mismo kit.
+            comp_keys = [
+                (c.get("component_product_id"), c.get("component_variant_id"))
+                for c in self.kit_components
+                if c.get("component_product_id")
+            ]
+            if len(comp_keys) != len(set(comp_keys)):
                 return self.add_notification(
                     "Hay componentes duplicados en el kit.", "error"
                 )
@@ -945,28 +1048,59 @@ class ProductMixin:
                     product.unit = product_data.get("unit", "Unidad")
                     product.purchase_price = product_data.get("purchase_price", 0)
                     product.default_supplier_id = product_data.get("default_supplier_id") or None
-                    new_sale_price = product_data.get("sale_price", 0)
-                    # Registrar timestamp si el precio de venta cambió
+                    new_sale_price_raw = product_data.get("sale_price", 0)
                     from decimal import Decimal, InvalidOperation
-                    if Decimal(str(new_sale_price or 0)) != Decimal(str(product.sale_price or 0)):
-                        from app.utils.timezone import utc_now_naive as _now
-                        product.sale_price_updated_at = _now()
-                    product.sale_price = new_sale_price
-                    # Persistir override de margen por producto
-                    raw_margin = (product_data.get("custom_profit_margin") or "").strip()
-                    try:
-                        product.custom_profit_margin = (
-                            Decimal(raw_margin).quantize(Decimal("0.01")) if raw_margin else None
-                        )
-                    except (InvalidOperation, ValueError):
-                        product.custom_profit_margin = None
+                    from app.utils.pricing import price_matches_margin as _pmm
+                    editing_variant_id = product_data.get("variant_id")
+                    _sp_val = float(new_sale_price_raw or 0)
+                    _pp_val = float(product_data.get("purchase_price") or 0)
+                    _raw_custom = str(product_data.get("custom_profit_margin") or "").strip()
+                    _global_margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+                    # NULL cuando el precio guardado sigue el margen vigente (global o custom).
+                    # El producto queda "dinámico": cambiar el margen recalcula el precio.
+                    _use_margin = float(_raw_custom) if _raw_custom else _global_margin
+                    _price_is_dynamic = _pmm(_sp_val, _pp_val, _use_margin) and not _raw_custom
+                    explicit_price = None if _price_is_dynamic else (
+                        Decimal(str(_sp_val)) if _sp_val > 0 else None
+                    )
+                    if editing_variant_id:
+                        # Edición desde fila de variante: precio va solo a esa variante
+                        ev = session.exec(
+                            select(ProductVariant)
+                            .where(ProductVariant.id == int(editing_variant_id))
+                            .where(ProductVariant.company_id == company_id)
+                            .where(ProductVariant.branch_id == branch_id)
+                            .with_for_update()
+                        ).first()
+                        if ev:
+                            ev.sale_price = explicit_price
+                            session.add(ev)
+                    else:
+                        # Producto sin variante activa: actualizar precio del padre
+                        old_price = product.sale_price
+                        if Decimal(str(_sp_val or 0)) != Decimal(str(old_price or 0)):
+                            from app.utils.timezone import utc_now_naive as _now
+                            product.sale_price_updated_at = _now()
+                        product.sale_price = explicit_price
+                    # Persistir override de margen solo cuando se edita el producto
+                    # completo (no una variante individual). Si viene de fila de
+                    # variante el margen calculado es local a esa variante y no
+                    # debe pisar el margen que heredan las demás variantes sin precio propio.
+                    if not editing_variant_id:
+                        raw_margin = str(product_data.get("custom_profit_margin") or "").strip()
+                        try:
+                            product.custom_profit_margin = (
+                                Decimal(raw_margin).quantize(Decimal("0.01")) if raw_margin else None
+                            )
+                        except (InvalidOperation, ValueError):
+                            product.custom_profit_margin = None
 
                     session.add(product)
                     msg = "Producto actualizado correctamente."
                 else:
                     # Parsear margen custom para nuevo producto
                     from decimal import Decimal, InvalidOperation
-                    raw_margin = (product_data.get("custom_profit_margin") or "").strip()
+                    raw_margin = str(product_data.get("custom_profit_margin") or "").strip()
                     try:
                         parsed_margin = (
                             Decimal(raw_margin).quantize(Decimal("0.01")) if raw_margin else None
@@ -1194,10 +1328,12 @@ class ProductMixin:
                                 qty_value = Decimal(str(qty_value))
                             except (TypeError, InvalidOperation):
                                 qty_value = Decimal("1")
+                            comp_vid = comp.get("component_variant_id")
                             session.add(
                                 ProductKit(
                                     kit_product_id=product_id,
                                     component_product_id=int(comp_pid),
+                                    component_variant_id=int(comp_vid) if comp_vid else None,
                                     quantity=qty_value,
                                     company_id=company_id,
                                     branch_id=branch_id,
@@ -1240,6 +1376,16 @@ class ProductMixin:
         self.attributes = []
         self.kit_components = []
         return self.add_notification(msg, "success")
+
+    @rx.event
+    def open_confirm_delete_product(self, product: dict):
+        self.confirm_delete_product_id = product.get("id", 0)
+        self.confirm_delete_product_name = product.get("description", "")
+
+    @rx.event
+    def cancel_delete_product(self):
+        self.confirm_delete_product_id = 0
+        self.confirm_delete_product_name = ""
 
     @rx.event
     def delete_product(self, product_id: int):
@@ -1291,6 +1437,8 @@ class ProductMixin:
         finally:
             self.is_loading = False
 
+        self.confirm_delete_product_id = 0
+        self.confirm_delete_product_name = ""
         if deleted:
             self._refresh_inventory_cache()
             return self.add_notification("Producto eliminado.", "success")

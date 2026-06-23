@@ -59,6 +59,9 @@ class ClientesState(MixinState):
     search_query: str = ""
     show_modal: bool = False
     select_after_save: bool = False
+    modal_key: int = 0
+    # Var plana para el select de lista de precios (evita Var[Any] por subscript de dict)
+    current_client_price_list_id: str = ""
     current_client: dict = {
         "id": None,
         "name": "",
@@ -251,25 +254,50 @@ class ClientesState(MixinState):
         self.load_clients()
 
     @rx.event
-    def open_modal(self, client: dict | None = None):
+    async def open_modal(self, client: dict | None = None):
         self.select_after_save = False
-        if isinstance(client, dict) and client:
-            pl_id = client.get("price_list_id") or 0
-            self.current_client = {
-                "id": client.get("id"),
-                "name": client.get("name", "") or "",
-                "dni": client.get("dni", "") or "",
-                "phone": client.get("phone", "") or "",
-                "address": client.get("address", "") or "",
-                "email": client.get("email", "") or "",
-                "credit_limit": str(client.get("credit_limit", "0.00")),
-                "current_debt": str(client.get("current_debt", "0.00")),
-                "price_list_id": str(pl_id) if pl_id else "",
-                "segment": client.get("segment", "") or "",
-            }
+        self.modal_key += 1
+        client_id = client.get("id") if isinstance(client, dict) else None
+        if client_id:
+            company_id = self._company_id()
+            branch_id = self._branch_id()
+            from app.utils.tenant import set_tenant_context
+            set_tenant_context(company_id, branch_id)
+            with rx.session() as session:
+                session.info["tenant_bypass"] = True
+                db_c = session.exec(
+                    select(Client)
+                    .where(Client.id == client_id)
+                    .where(Client.company_id == company_id)
+                    .where(Client.branch_id == branch_id)
+                ).first()
+            if db_c:
+                pl_id_str = str(db_c.price_list_id) if db_c.price_list_id else ""
+                self.current_client = {
+                    "id": db_c.id,
+                    "name": db_c.name or "",
+                    "dni": db_c.dni or "",
+                    "phone": db_c.phone or "",
+                    "address": db_c.address or "",
+                    "email": db_c.email or "",
+                    "credit_limit": str(db_c.credit_limit or "0.00"),
+                    "current_debt": str(db_c.current_debt or "0.00"),
+                    "price_list_id": pl_id_str,
+                    "segment": db_c.segment or "",
+                }
+                self.current_client_price_list_id = pl_id_str
+            else:
+                self.current_client = self._empty_client_form()
+                self.current_client_price_list_id = ""
         else:
             self.current_client = self._empty_client_form()
+            self.current_client_price_list_id = ""
         self.show_modal = True
+
+    @rx.event
+    def set_client_price_list(self, value: str):
+        self.current_client_price_list_id = value
+        self.current_client = {**self.current_client, "price_list_id": value}
 
     @rx.event
     def open_modal_from_pos(self):

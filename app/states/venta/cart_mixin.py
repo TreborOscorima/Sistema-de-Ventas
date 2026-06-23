@@ -188,7 +188,10 @@ class CartMixin:
 
     @rx.var(cache=True)
     def sale_subtotal(self) -> float:
-        return self.new_sale_item["subtotal"]
+        try:
+            return float(self.new_sale_item.get("subtotal", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
 
     @rx.var(cache=True)
     def products_cart_subtotal(self) -> float:
@@ -201,6 +204,15 @@ class CartMixin:
     @rx.var(cache=False)
     def products_cart_subtotal_display(self) -> str:
         return fmt_price(self.products_cart_subtotal)
+
+    @rx.var(cache=False)
+    def sale_price_form_display(self) -> str:
+        """Precio unitario del ítem en edición, formateado con 2 decimales."""
+        try:
+            val = float(self.new_sale_item.get("price", 0) or 0)
+        except (TypeError, ValueError):
+            val = 0.0
+        return f"{val:.2f}" if val > 0 else ""
 
     @rx.var(cache=True)
     def sale_total(self) -> float:
@@ -232,10 +244,12 @@ class CartMixin:
         unit = item.get("unit", "")
         item["quantity"] = self._normalize_quantity_value(item.get("quantity", 0), unit)
         if "sale_price" in item:
-            item["sale_price"] = fmt_price(self._round_currency(item.get("sale_price", 0)))
+            item["sale_price"] = fmt_price(self._round_currency(float(item.get("sale_price") or 0)))
         if "base_price" in item:
-            item["base_price"] = fmt_price(self._round_currency(item.get("base_price", 0)))
-        item["subtotal"] = self._round_currency(item["quantity"] * item.get("price", 0))
+            item["base_price"] = fmt_price(self._round_currency(float(item.get("base_price") or 0)))
+        item["subtotal"] = fmt_price(
+            self._round_currency(float(item.get("quantity") or 0) * float(item.get("price") or 0))
+        )
 
     def _product_value(self, product: Any, key: str, default: Any = None) -> Any:
         if isinstance(product, dict):
@@ -324,6 +338,10 @@ class CartMixin:
                 if not orm_product:
                     return None
 
+                _gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
+                if _gm <= 0:
+                    from app.services.sale_service import _get_effective_margin
+                    _gm = await _get_effective_margin(session, int(company_id), int(branch_id))
                 # Primer pass: precio base sin promo para obtener el subtotal correcto.
                 base_res = await resolve_effective_price(
                     session,
@@ -333,6 +351,7 @@ class CartMixin:
                     company_id=int(company_id),
                     branch_id=int(branch_id),
                     client_price_list_id=price_list_id,
+                    global_margin=_gm,
                     coupon_code=None,
                     cart_subtotal=None,
                 )
@@ -347,6 +366,7 @@ class CartMixin:
                     company_id=int(company_id),
                     branch_id=int(branch_id),
                     client_price_list_id=price_list_id,
+                    global_margin=_gm,
                     coupon_code=coupon,
                     cart_subtotal=cart_subtotal_pre_promo,
                 )
@@ -365,9 +385,9 @@ class CartMixin:
         self.new_sale_item["price"] = round(float(resolution.final_price), 4)
         self.new_sale_item["sale_price"] = self._round_currency(resolution.final_price)
         self.new_sale_item["base_price"] = self._round_currency(resolution.base_price)
-        self.new_sale_item["subtotal"] = self._round_currency(
+        self.new_sale_item["subtotal"] = fmt_price(self._round_currency(
             self.new_sale_item["quantity"] * float(resolution.final_price)
-        )
+        ))
         self.price_list_price_applied = price_from_list
         self.wholesale_price_applied = price_from_tier and not price_from_list
         self.promotion_applied = bool(promo_name)
@@ -408,9 +428,9 @@ class CartMixin:
         )
         self.new_sale_item["price"] = self._round_currency(sale_price)
         self.new_sale_item["sale_price"] = self._round_currency(sale_price)
-        self.new_sale_item["subtotal"] = self._round_currency(
+        self.new_sale_item["subtotal"] = fmt_price(self._round_currency(
             self.new_sale_item["quantity"] * self.new_sale_item["price"]
-        )
+        ))
         if isinstance(product, dict):
             self.selected_product = dict(product)
 
@@ -541,29 +561,42 @@ class CartMixin:
                     )
 
             # Validar stock de todos los componentes en un solo round-trip (bulk).
+            stock_keys = [
+                (int(c.component_product_id), int(c.component_variant_id) if c.component_variant_id else None)
+                for c in components
+            ]
             stock_map = await SaleService.get_available_stock_bulk(
-                [(int(p.id), None) for p in product_map.values()],
+                stock_keys,
                 int(company_id), int(branch_id),
                 session=session,
             )
             for comp in components:
                 p = product_map[comp.component_product_id]
-                available = stock_map.get((int(p.id), None), Decimal("0"))
+                vid = int(comp.component_variant_id) if comp.component_variant_id else None
+                available = stock_map.get((int(p.id), vid), Decimal("0"))
                 needed = float(comp.quantity)
                 in_cart = sum(
                     float(item.get("quantity", 0))
                     for item in self.new_sale_items
-                    if item.get("product_id") == p.id and not item.get("variant_id")
+                    if item.get("product_id") == p.id and item.get("variant_id") == vid
                 )
+                label = p.description or ""
+                if vid:
+                    from app.models.inventory import ProductVariant as _PV
+                    pv = await session.get(_PV, vid)
+                    if pv:
+                        label += f" ({' '.join(filter(None, [pv.size, pv.color]))})"
                 if float(available or 0) < needed + in_cart:
                     return rx.toast(
-                        f"Stock insuficiente de '{p.description}' para armar el kit.",
+                        f"Stock insuficiente de '{label}' para armar el kit.",
                         duration=3000,
                     )
 
             # Calcular peso proporcional para distribuir precio del kit
+            from app.utils.pricing import resolve_effective_price as _rep_util
+            _kit_gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
             total_weight = sum(
-                float(product_map[c.component_product_id].sale_price or 0) * float(c.quantity)
+                float(_rep_util(product_map[c.component_product_id], global_margin=_kit_gm)) * float(c.quantity)
                 for c in components
             )
 
@@ -572,12 +605,13 @@ class CartMixin:
 
             for i, comp in enumerate(components):
                 p = product_map[comp.component_product_id]
+                comp_vid = int(comp.component_variant_id) if comp.component_variant_id else None
                 qty = float(comp.quantity)
 
                 if i == len(components) - 1:
                     component_subtotal = remaining_price
                 elif total_weight > 0:
-                    weight = Decimal(str(float(p.sale_price or 0) * qty))
+                    weight = Decimal(str(float(_rep_util(p, global_margin=_kit_gm)) * qty))
                     component_subtotal = (kit_price * weight / Decimal(str(total_weight))).quantize(
                         Decimal("0.01"), rounding=ROUND_HALF_UP
                     )
@@ -601,9 +635,9 @@ class CartMixin:
                     "price": float(unit_price),
                     "sale_price": float(unit_price),
                     "base_price": float(unit_price),
-                    "subtotal": float(component_subtotal),
+                    "subtotal": fmt_price(float(component_subtotal)),
                     "product_id": p.id,
-                    "variant_id": None,
+                    "variant_id": comp_vid,
                     "batch_id": None,
                     "batch_number": "",
                     "requires_batch": False,
@@ -988,9 +1022,9 @@ class CartMixin:
                     self.new_sale_item["quantity"] = self._normalize_quantity_value(
                         self.new_sale_item["quantity"], value
                     )
-            self.new_sale_item["subtotal"] = self._round_currency(
+            self.new_sale_item["subtotal"] = fmt_price(self._round_currency(
                 self.new_sale_item["quantity"] * self.new_sale_item["price"]
-            )
+            ))
             if field == "description":
                 self.selected_product = None
                 if value and len(str(value)) > 1:
@@ -1040,7 +1074,7 @@ class CartMixin:
                     self.new_sale_item["description"] = ""
                     self.new_sale_item["quantity"] = 0
                     self.new_sale_item["price"] = 0
-                    self.new_sale_item["subtotal"] = 0
+                    self.new_sale_item["subtotal"] = "0.00"
                     self.autocomplete_suggestions = []
                     self.autocomplete_results = []
                     self.autocomplete_selected_index = -1
@@ -1118,7 +1152,7 @@ class CartMixin:
             self.new_sale_item["description"] = ""
             self.new_sale_item["quantity"] = 0
             self.new_sale_item["price"] = 0
-            self.new_sale_item["subtotal"] = 0
+            self.new_sale_item["subtotal"] = "0.00"
             self.autocomplete_suggestions = []
             self.autocomplete_results = []
             return
@@ -1481,12 +1515,14 @@ class CartMixin:
                         | ProductModel.category.ilike(like)
                     )
                 products = (await session.exec(q)).all()
+                from app.utils.pricing import resolve_effective_price as _rep_grid
+                _grid_gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
                 self.product_grid_items = [
                     {
                         "product_id": p.id,
                         "barcode": p.barcode or "",
                         "description": p.description or "",
-                        "sale_price": fmt_price(p.sale_price or 0),
+                        "sale_price": fmt_price(_rep_grid(p, global_margin=_grid_gm)),
                         "stock": float(p.stock or 0),
                         "sin_stock": float(p.stock or 0) <= 0,
                         "category": p.category or "General",
@@ -1727,6 +1763,7 @@ class CartMixin:
         client_pl_id = getattr(self, "client_price_list_id", None)
         coupon = self.cart_coupon_code if self.cart_coupon_status == "applied" else None
         local_now = self._display_now().replace(tzinfo=None)
+        _gm = getattr(self, "effective_profit_margin_decimal", 0.0)
 
         from app.utils.tenant import set_tenant_context
         set_tenant_context(int(company_id), int(branch_id))
@@ -1761,6 +1798,7 @@ class CartMixin:
                     company_id=int(company_id),
                     branch_id=int(branch_id),
                     client_price_list_id=client_pl_id,
+                    global_margin=_gm,
                     now=local_now,
                     coupon_code=None,
                     cart_subtotal=None,
@@ -1792,6 +1830,7 @@ class CartMixin:
                     company_id=int(company_id),
                     branch_id=int(branch_id),
                     client_price_list_id=client_pl_id,
+                    global_margin=_gm,
                     now=local_now,
                     coupon_code=coupon,
                     cart_subtotal=cart_subtotal_pre_promo,

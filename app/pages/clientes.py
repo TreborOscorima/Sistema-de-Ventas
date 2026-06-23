@@ -300,8 +300,9 @@ def client_form_modal() -> rx.Component:
               State.available_price_lists,
               lambda pl: rx.el.option(pl["display_name"], value=pl["id"]),
             ),
-            value=State.current_client["price_list_id"],
-            on_change=lambda v: State.update_current_client("price_list_id", v),
+            value=State.current_client_price_list_id,
+            on_change=State.set_client_price_list,
+            key=State.modal_key.to_string() + "-pl",
             class_name=INPUT_STYLES["default"],
           ),
           rx.el.p(

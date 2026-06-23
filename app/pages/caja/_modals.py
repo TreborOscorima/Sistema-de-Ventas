@@ -456,7 +456,7 @@ def petty_cash_modal() -> rx.Component:
           rx.el.label("Tipo de movimiento", class_name=TYPOGRAPHY["label"]),
           rx.el.div(
             rx.el.button(
-              rx.icon("arrow-down-circle", class_name="w-4 h-4 shrink-0"),
+              rx.icon("circle-arrow-down", class_name="w-4 h-4 shrink-0"),
               "Egreso",
               on_click=State.set_petty_cash_type("egreso"),
               class_name=rx.cond(
@@ -466,7 +466,7 @@ def petty_cash_modal() -> rx.Component:
               ),
             ),
             rx.el.button(
-              rx.icon("arrow-up-circle", class_name="w-4 h-4 shrink-0"),
+              rx.icon("circle-arrow-up", class_name="w-4 h-4 shrink-0"),
               "Ingreso",
               on_click=State.set_petty_cash_type("ingreso"),
               class_name=rx.cond(
@@ -588,8 +588,8 @@ def petty_cash_modal() -> rx.Component:
       rx.el.button(
         rx.cond(
           State.petty_cash_type == "egreso",
-          rx.icon("arrow-down-circle", class_name="h-4 w-4"),
-          rx.icon("arrow-up-circle", class_name="h-4 w-4"),
+          rx.icon("circle-arrow-down", class_name="h-4 w-4"),
+          rx.icon("circle-arrow-up", class_name="h-4 w-4"),
         ),
         rx.cond(
           State.petty_cash_type == "egreso",
@@ -628,12 +628,12 @@ def petty_cash_edit_modal() -> rx.Component:
           rx.cond(
             State.petty_cash_edit_type == "egreso",
             rx.el.span(
-              rx.icon("arrow-down-circle", class_name="w-4 h-4"),
+              rx.icon("circle-arrow-down", class_name="w-4 h-4"),
               "Egreso",
               class_name="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-100 text-red-700 border border-red-200",
             ),
             rx.el.span(
-              rx.icon("arrow-up-circle", class_name="w-4 h-4"),
+              rx.icon("circle-arrow-up", class_name="w-4 h-4"),
               "Ingreso",
               class_name="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-green-100 text-green-700 border border-green-200",
             ),

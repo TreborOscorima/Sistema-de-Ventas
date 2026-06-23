@@ -62,9 +62,10 @@ class Product(TenantMixin, SQLModel, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
-    sale_price: Decimal = Field(
-        default=Decimal("0.00"),
-        sa_column=sqlalchemy.Column(Numeric(10, 2)),
+    sale_price: Optional[Decimal] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(Numeric(10, 2), nullable=True),
+        description="NULL = sin precio explícito, se calcula desde el margen global vigente.",
     )
     is_active: bool = Field(
         default=True,
@@ -169,6 +170,12 @@ class ProductVariant(TenantMixin, SQLModel, table=True):
         default=None,
         sa_column=sqlalchemy.Column(Numeric(10, 4), nullable=True),
     )
+    # NULL = heredar precio del Product padre (comportamiento original).
+    # NOT NULL = precio exclusivo de esta variante (ej: Talla XL cuesta más).
+    sale_price: Optional[Decimal] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(Numeric(10, 2), nullable=True),
+    )
 
     product: "Product" = Relationship(back_populates="variants")
     batches: List["ProductBatch"] = Relationship(back_populates="product_variant")
@@ -247,14 +254,13 @@ class ProductKit(TenantMixin, SQLModel, table=True):
             "branch_id",
             "kit_product_id",
             "component_product_id",
-            name="uq_productkit_company_branch_component",
+            "component_variant_id",
+            name="uq_productkit_company_branch_component_variant",
         ),
         CheckConstraint("quantity > 0", name="ck_productkit_quantity_positive"),
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    # ondelete CASCADE: si se borra el producto-kit o el componente,
-    # la relación de explosión pierde sentido → limpia automáticamente.
     kit_product_id: int = Field(
         sa_column=sqlalchemy.Column(
             sqlalchemy.Integer,
@@ -268,6 +274,15 @@ class ProductKit(TenantMixin, SQLModel, table=True):
             sqlalchemy.Integer,
             sqlalchemy.ForeignKey("product.id", ondelete="CASCADE"),
             nullable=False,
+            index=True,
+        ),
+    )
+    component_variant_id: int | None = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("productvariant.id", ondelete="SET NULL"),
+            nullable=True,
             index=True,
         ),
     )

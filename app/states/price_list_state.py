@@ -12,6 +12,7 @@ from app.models import Client, Product, ProductVariant
 from app.models.price_lists import PriceList, PriceListItem
 from app.utils.timezone import utc_now_naive
 from app.utils.formatting import fmt_input_num, fmt_price
+from app.utils.pricing import resolve_effective_price
 
 from .mixin_state import MixinState, require_permission
 
@@ -35,8 +36,10 @@ class PriceListState(MixinState):
 
     # ── Detalle/ítems ────────────────────────────────────────────────
     show_price_list_detail: bool = False
+    pl_detail_tab: str = "precios"
     selected_price_list: dict[str, Any] = {}
     price_list_items: list[dict[str, Any]] = []
+    selected_price_list_clients: list[dict[str, Any]] = []
 
     # Formulario de ítem
     show_pl_item_form: bool = False
@@ -45,6 +48,10 @@ class PriceListState(MixinState):
     pl_item_product_results: list[dict[str, Any]] = []
     pl_item_unit_price: str = ""
     pl_item_variant_id: str = ""
+
+    # ── Búsqueda de clientes para asignar ────────────────────────────
+    pl_client_search: str = ""
+    pl_client_search_results: list[dict[str, Any]] = []
 
     # ── Descuento masivo ─────────────────────────────────────────────
     pl_bulk_discount_pct: float = 0.0
@@ -129,6 +136,7 @@ class PriceListState(MixinState):
             )
             items = session.exec(stmt).all()
 
+            _gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
             result = []
             for item in items:
                 product_name = ""
@@ -144,7 +152,7 @@ class PriceListState(MixinState):
                     if p:
                         product_name = p.description or ""
                         barcode = p.barcode or ""
-                        sale_price_val = float(p.sale_price or 0)
+                        sale_price_val = float(resolve_effective_price(p, global_margin=_gm))
                 variant_desc = ""
                 if item.product_variant_id:
                     v = session.exec(
@@ -292,12 +300,159 @@ class PriceListState(MixinState):
         if pl_data:
             self.selected_price_list = pl_data
         self.show_price_list_detail = True
+        self.pl_detail_tab = "precios"
+        self.pl_client_search = ""
+        self.pl_client_search_results = []
         self.pl_item_product_id = ""
         self.pl_item_variant_id = ""
         self.pl_item_unit_price = ""
         self.pl_item_product_search = ""
         self.pl_item_product_results = []
         await self._load_price_list_items(price_list_id)
+        await self._load_price_list_clients(price_list_id)
+
+    @rx.event
+    def set_pl_detail_tab(self, tab: str):
+        self.pl_detail_tab = tab
+        self.pl_client_search = ""
+        self.pl_client_search_results = []
+
+    async def _load_price_list_clients(self, price_list_id: int):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            clients = session.exec(
+                select(Client)
+                .where(Client.price_list_id == price_list_id)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+                .order_by(Client.name)
+            ).all()
+        self.selected_price_list_clients = [
+            {"id": c.id, "name": c.name, "email": c.email or ""}
+            for c in clients
+        ]
+
+    @rx.event
+    async def pl_search_clients_to_assign(self, query: str):
+        self.pl_client_search = query
+        if len(query.strip()) < 2:
+            self.pl_client_search_results = []
+            return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        from app.utils.tenant import set_tenant_context
+        from sqlalchemy import func as sa_func
+        set_tenant_context(company_id, branch_id)
+        pl_id = self.selected_price_list.get("id")
+        assigned_ids = {c["id"] for c in self.selected_price_list_clients}
+        q_lower = query.strip().lower()
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            rows = session.exec(
+                select(Client)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+                .where(sa_func.lower(Client.name).contains(q_lower))
+                .order_by(Client.name)
+                .limit(8)
+            ).all()
+        self.pl_client_search_results = [
+            {"id": c.id, "name": c.name, "email": c.email or "", "already": c.id in assigned_ids}
+            for c in rows
+        ]
+
+    @rx.event
+    @require_permission("manage_config")
+    async def pl_assign_client(self, client_id: int):
+        pl_id = self.selected_price_list.get("id")
+        if not pl_id:
+            return
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            client = session.exec(
+                select(Client)
+                .where(Client.id == client_id)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+            ).first()
+            if not client:
+                yield rx.toast("Cliente no encontrado.", duration=3000)
+                return
+            client.price_list_id = pl_id
+            session.add(client)
+            session.commit()
+        self.pl_client_search = ""
+        self.pl_client_search_results = []
+        await self._load_price_list_clients(pl_id)
+        await self._reload_price_lists()
+        yield rx.toast(f"{client.name} asignado a la lista.", duration=3000)
+
+    @rx.event
+    @require_permission("manage_config")
+    async def pl_remove_client(self, client_id: int):
+        pl_id = self.selected_price_list.get("id")
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            client = session.exec(
+                select(Client)
+                .where(Client.id == client_id)
+                .where(Client.company_id == company_id)
+                .where(Client.branch_id == branch_id)
+            ).first()
+            if not client:
+                return
+            client.price_list_id = None
+            session.add(client)
+            session.commit()
+        await self._load_price_list_clients(pl_id)
+        await self._reload_price_lists()
+        yield rx.toast("Cliente removido de la lista.", duration=3000)
+
+    async def _reload_price_lists(self):
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        from app.utils.tenant import set_tenant_context
+        set_tenant_context(company_id, branch_id)
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            rows = session.exec(
+                select(PriceList)
+                .where(PriceList.company_id == company_id)
+                .where(PriceList.branch_id == branch_id)
+                .where(PriceList.is_active == True)  # noqa: E712
+                .order_by(PriceList.is_default.desc(), PriceList.name)
+            ).all()
+            counts = {pl.id: session.exec(select(func.count(PriceListItem.id)).where(PriceListItem.price_list_id == pl.id)).one() or 0 for pl in rows}
+            client_counts = {pl.id: session.exec(select(func.count(Client.id)).where(Client.price_list_id == pl.id)).one() or 0 for pl in rows}
+        self.price_lists = [
+            {
+                "id": pl.id,
+                "name": pl.name,
+                "description": pl.description or "",
+                "is_default": pl.is_default,
+                "is_active": pl.is_active,
+                "currency_code": pl.currency_code,
+                "item_count": counts.get(pl.id, 0),
+                "client_count": client_counts.get(pl.id, 0),
+            }
+            for pl in rows
+        ]
+        if self.selected_price_list:
+            updated = next((p for p in self.price_lists if p["id"] == self.selected_price_list.get("id")), None)
+            if updated:
+                self.selected_price_list = updated
 
     @rx.event
     def close_price_list_detail(self):
@@ -318,6 +473,7 @@ class PriceListState(MixinState):
         from sqlalchemy import func as sa_func
         set_tenant_context(company_id, branch_id)
         q_lower = query.strip().lower()
+        _gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
         results: list[dict] = []
         with rx.session() as session:
             session.info["tenant_bypass"] = True
@@ -339,7 +495,7 @@ class PriceListState(MixinState):
                     "variant_id": "",
                     "description": p.description,
                     "barcode": p.barcode or "",
-                    "sale_price": fmt_price(p.sale_price or 0),
+                    "sale_price": fmt_price(resolve_effective_price(p, global_margin=_gm)),
                 })
 
             # Variantes
@@ -376,7 +532,7 @@ class PriceListState(MixinState):
                     "variant_id": str(v.id),
                     "description": f"{parent.description} — {variant_label}",
                     "barcode": v.sku,
-                    "sale_price": fmt_input_num(parent.sale_price or 0),
+                    "sale_price": fmt_input_num(float(resolve_effective_price(parent, v, _gm))),
                 })
 
         self.pl_item_product_results = results
@@ -471,6 +627,7 @@ class PriceListState(MixinState):
         from app.utils.tenant import set_tenant_context
         set_tenant_context(company_id, branch_id)
 
+        _gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
         updated = 0
         with rx.session() as session:
             session.info["tenant_bypass"] = True
@@ -489,9 +646,18 @@ class PriceListState(MixinState):
                     .where(Product.company_id == company_id)
                     .where(Product.branch_id == branch_id)
                 ).first()
-                if p and p.sale_price:
+                if not p:
+                    continue
+                v = None
+                if item.product_variant_id:
+                    v = session.exec(
+                        select(ProductVariant)
+                        .where(ProductVariant.id == item.product_variant_id)
+                    ).first()
+                base_price = Decimal(str(resolve_effective_price(p, v, _gm)))
+                if base_price > 0:
                     factor = (Decimal("100") - pct) / Decimal("100")
-                    item.unit_price = round(Decimal(str(p.sale_price)) * factor, 2)
+                    item.unit_price = round(base_price * factor, 2)
                     updated += 1
             session.commit()
 

@@ -608,10 +608,10 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
-        # Cargar márgenes para el auto-cálculo del precio de venta
-        if not getattr(self, "company_profit_margin", "").strip():
-            if hasattr(self, "load_settings"):
-                self.load_settings()
+        # Siempre recargar margen desde DB al navegar a esta página
+        # (garantiza que cambios de config en otra pestaña se reflejen aquí)
+        if hasattr(self, "load_settings"):
+            self.load_settings()
         # Delta parcial: renderiza la UI de inmediato
         yield
 
@@ -673,6 +673,9 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        # Recargar margen y config siempre al entrar a POS
+        if hasattr(self, "load_settings"):
+            self.load_settings()
         # Garantiza que Venta siempre use la configuración más reciente de métodos de pago.
         self._refresh_payment_config_with_ttl()
         if hasattr(self, "_ensure_payment_method_selected"):
@@ -769,10 +772,9 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
-        # Cargar márgenes para placeholder del modal de edición de producto
-        if not getattr(self, "company_profit_margin", "").strip():
-            if hasattr(self, "load_settings"):
-                self.load_settings()
+        # Siempre recargar margen desde DB al navegar a esta página
+        if hasattr(self, "load_settings"):
+            self.load_settings()
         # Delta parcial: renderiza la UI de inmediato
         yield
 
@@ -793,6 +795,8 @@ class State(RootState):
         redirect = self.run_common_guards()
         if redirect:
             yield redirect
+        if hasattr(self, "load_settings"):
+            self.load_settings()
         yield
 
     @rx.event
@@ -919,6 +923,8 @@ class State(RootState):
         if redirect:
             yield redirect
             return
+        if hasattr(self, "load_settings"):
+            self.load_settings()
         yield
         yield State.bg_load_price_lists
 

@@ -103,7 +103,7 @@ def _product_card(product: rx.Var) -> rx.Component:
             rx.el.div(
                 rx.el.span("Precio Venta", class_name=TYPOGRAPHY["caption"]),
                 rx.el.span(
-                    State.currency_symbol, " ", product["sale_price"].to_string(),
+                    State.currency_symbol, " ", product["sale_price_display"],
                     class_name="font-semibold tabular-nums text-green-600",
                 ),
                 class_name="flex flex-col gap-0.5 text-right",
@@ -121,7 +121,7 @@ def _product_card(product: rx.Var) -> rx.Component:
                 class_name=BUTTON_STYLES["link_primary"],
             ),
             rx.el.button(
-                rx.icon("eye", class_name="h-4 w-4"),
+                rx.icon("layers", class_name="h-4 w-4"),
                 " Desglose",
                 on_click=lambda: State.open_stock_details(product),
                 title="Ver desglose de stock",

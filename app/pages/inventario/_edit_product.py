@@ -112,7 +112,7 @@ def edit_product_modal() -> rx.Component:
             rx.el.label("Precio Compra", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.input(
               type="number",
-              default_value=State.editing_product["purchase_price"].to_string(),
+              default_value=State.editing_product["purchase_price"],
               on_blur=lambda v: State.handle_edit_product_change("purchase_price", v),
               class_name=INPUT_STYLES["default"],
             ),
@@ -125,8 +125,9 @@ def edit_product_modal() -> rx.Component:
             rx.el.div(
               rx.el.input(
                 type="number",
+                key=State.edit_margin_key.to_string(),
                 placeholder=State.effective_profit_margin + " (global)",
-                default_value=State.editing_product["custom_profit_margin"].to_string(),
+                default_value=State.editing_product["custom_profit_margin"],
                 on_blur=lambda v: State.handle_edit_product_change("profit_margin", v),
                 min="0",
                 max="9999",
@@ -148,7 +149,8 @@ def edit_product_modal() -> rx.Component:
             rx.el.label("Precio Venta", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.input(
               type="number",
-              default_value=State.editing_product["sale_price"].to_string(),
+              key=State.edit_sale_price_key.to_string(),
+              default_value=State.editing_product["sale_price"],
               on_blur=lambda v: State.handle_edit_product_change("sale_price", v),
               class_name=INPUT_STYLES["default"],
             ),
@@ -433,7 +435,7 @@ def edit_product_modal() -> rx.Component:
                   rx.el.input(
                     type="number",
                     placeholder="0.00",
-                    default_value=row["price"].to_string(),
+                    default_value=row["price"],
                     on_blur=lambda v, index=row["index"]: State.update_tier_field(
                       index, "price", v
                     ),
@@ -647,13 +649,24 @@ def edit_product_modal() -> rx.Component:
                     ),
                     class_name=f"{INPUT_STYLES['default']} sm:col-span-2",
                   ),
-                  rx.el.span(
-                    rx.cond(
-                      row["component_name"] != "",
-                      row["component_name"],
-                      "Sin asignar",
+                  rx.el.div(
+                    rx.el.span(
+                      rx.cond(
+                        row["component_name"] != "",
+                        row["component_name"],
+                        "Sin asignar",
+                      ),
+                      class_name="text-sm text-slate-700 truncate",
                     ),
-                    class_name="text-sm text-slate-600 sm:col-span-2 truncate py-2",
+                    rx.cond(
+                      row["variant_label"] != "",
+                      rx.el.span(
+                        row["variant_label"],
+                        class_name="text-xs text-indigo-600 font-medium bg-indigo-50 rounded px-1.5 py-0.5",
+                      ),
+                      rx.fragment(),
+                    ),
+                    class_name="flex flex-col gap-0.5 sm:col-span-2 py-1 justify-center",
                   ),
                   rx.el.input(
                     type="number",

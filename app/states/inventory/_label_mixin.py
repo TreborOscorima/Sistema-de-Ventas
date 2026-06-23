@@ -7,6 +7,7 @@ from typing import Any
 import reflex as rx
 
 from app.services.label_service import LabelConfig, LabelService
+from app.utils.pricing import resolve_effective_price
 
 logger = logging.getLogger(__name__)
 
@@ -219,6 +220,7 @@ class LabelMixin:
                 )
                 product_rows = (await s.execute(stmt_p)).scalars().all()
 
+            _gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
             results: list[dict] = []
             for variant, product in variant_rows:
                 item_key = f"v_{variant.id}"
@@ -234,14 +236,15 @@ class LabelMixin:
                 # Solo nombre + talla/color; el SKU/barcode va bajo el código de barras
                 description = (product.description or "") + (f" ({label})" if label else "")
                 bc = sku if sku and sku not in _GENERIC else LabelService.resolve_barcode(product)
+                _sp = float(resolve_effective_price(product, variant, _gm))
                 results.append({
                     "item_key": item_key,
                     "id": product.id,
                     "variant_id": variant.id,
                     "description": description,
                     "barcode": bc,
-                    "sale_price": float(product.sale_price or 0),
-                    "sale_price_str": f"{float(product.sale_price or 0):.2f}",
+                    "sale_price": _sp,
+                    "sale_price_str": f"{_sp:.2f}",
                     "purchase_price": float(product.purchase_price or 0),
                     "category": product.category or "",
                     "unit": product.unit or "Unidad",
@@ -253,14 +256,15 @@ class LabelMixin:
                 item_key = f"p_{p.id}"
                 if item_key in selected_keys:
                     continue
+                _sp = float(resolve_effective_price(p, global_margin=_gm))
                 results.append({
                     "item_key": item_key,
                     "id": p.id,
                     "variant_id": None,
                     "description": p.description or "",
                     "barcode": LabelService.resolve_barcode(p),
-                    "sale_price": float(p.sale_price or 0),
-                    "sale_price_str": f"{float(p.sale_price or 0):.2f}",
+                    "sale_price": _sp,
+                    "sale_price_str": f"{_sp:.2f}",
                     "purchase_price": float(p.purchase_price or 0),
                     "category": p.category or "",
                     "unit": p.unit or "Unidad",
@@ -350,8 +354,9 @@ class LabelMixin:
                 page_format=self.label_page_format,
                 show_pretax_price=self.label_show_pretax,
             )
+            _gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
             products = await LabelService.get_products_for_labels(
-                config, company_id, branch_id
+                config, company_id, branch_id, global_margin=_gm
             )
             self.label_preview_count = len(products)
             self.label_preview_products = []
@@ -401,8 +406,9 @@ class LabelMixin:
                     for _ in range(max(1, item.get("qty", 1)))
                 ]
             else:
+                _gm = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
                 products = await LabelService.get_products_for_labels(
-                    config, company_id, branch_id
+                    config, company_id, branch_id, global_margin=_gm
                 )
                 if not products:
                     yield rx.toast("No hay productos para etiquetar con los filtros actuales.", duration=3000)
