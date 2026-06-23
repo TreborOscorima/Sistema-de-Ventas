@@ -182,6 +182,7 @@ class SaleItemDict(TypedDict):
     kit_product_id: int | None
     kit_name: str
     promotion_name: str
+    price_list_name: str
 
 class RecentTransactionLine(TypedDict):
     left: str
