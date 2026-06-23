@@ -1758,7 +1758,7 @@ class CartMixin:
         if not company_id or not self.new_sale_items:
             return
 
-        client_pl_id = getattr(self, "client_price_list_id", None)
+        client_pl_id = int(getattr(self, "_active_price_list_id", 0) or 0) or None
         coupon = self.cart_coupon_code if self.cart_coupon_status == "applied" else None
         local_now = self._display_now().replace(tzinfo=None)
         _gm = getattr(self, "effective_profit_margin_decimal", 0.0)
