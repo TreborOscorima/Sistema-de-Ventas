@@ -84,11 +84,12 @@ def _make_product(*, id_: int, barcode: str, description: str, sale_price, stock
     return p
 
 
-def _make_kit_component(*, kit_id: int, component_id: int, quantity):
+def _make_kit_component(*, kit_id: int, component_id: int, quantity, variant_id=None):
     c = MagicMock()
     c.kit_product_id = kit_id
     c.component_product_id = component_id
     c.quantity = Decimal(str(quantity))
+    c.component_variant_id = variant_id
     return c
 
 
