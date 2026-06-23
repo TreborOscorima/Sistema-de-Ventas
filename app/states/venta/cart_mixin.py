@@ -247,9 +247,7 @@ class CartMixin:
             item["sale_price"] = fmt_price(self._round_currency(float(item.get("sale_price") or 0)))
         if "base_price" in item:
             item["base_price"] = fmt_price(self._round_currency(float(item.get("base_price") or 0)))
-        item["subtotal"] = fmt_price(
-            self._round_currency(float(item.get("quantity") or 0) * float(item.get("price") or 0))
-        )
+        item["subtotal"] = self._round_currency(item["quantity"] * item.get("price", 0))
 
     def _product_value(self, product: Any, key: str, default: Any = None) -> Any:
         if isinstance(product, dict):
