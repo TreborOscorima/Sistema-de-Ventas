@@ -57,6 +57,7 @@ class CartMixin:
         "kit_product_id": None,
         "kit_name": "",
         "promotion_name": "",
+        "price_list_name": "",
     }
     new_sale_items: List[SaleItemDict] = []
     autocomplete_suggestions: List[str] = []
@@ -391,6 +392,11 @@ class CartMixin:
         self.promotion_applied = bool(promo_name)
         self.promotion_name = promo_name
         self.new_sale_item["promotion_name"] = promo_name
+        if price_from_list:
+            pl_name = (getattr(self, "selected_client", None) or {}).get("price_list_name", "") or ""
+            self.new_sale_item["price_list_name"] = pl_name
+        else:
+            self.new_sale_item["price_list_name"] = ""
 
         return Decimal(str(resolution.final_price))
 
@@ -991,6 +997,7 @@ class CartMixin:
             "kit_product_id": None,
             "kit_name": "",
             "promotion_name": "",
+            "price_list_name": "",
         }
         self.autocomplete_suggestions = []
         self.autocomplete_results = []
@@ -1847,6 +1854,11 @@ class CartMixin:
                 item["promotion_name"] = applied_promo.name if applied_promo else ""
                 item["applied_promotion_id"] = applied_promo.id if applied_promo else None
                 item["promo_receipt_hint"] = promo_receipt_hint(applied_promo) if applied_promo else None
+                from app.services.pricing import PriceSource
+                item["price_list_name"] = (
+                    ((getattr(self, "selected_client", None) or {}).get("price_list_name", "") or "")
+                    if resolution.source == PriceSource.PRICE_LIST else ""
+                )
                 if not applied_promo and quot_price:
                     quot_dec = Decimal(str(quot_price))
                     if quot_dec < Decimal(str(resolution.base_price)):

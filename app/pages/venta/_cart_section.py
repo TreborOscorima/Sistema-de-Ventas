@@ -52,6 +52,15 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
+                rx.cond(
+                    item["price_list_name"] != "",
+                    rx.el.span(
+                        rx.icon("tag", class_name="h-3 w-3 inline mr-0.5"),
+                        item["price_list_name"],
+                        class_name="text-xs font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 w-fit",
+                    ),
+                    rx.fragment(),
+                ),
                 class_name="flex flex-col gap-0.5",
             ),
             class_name="py-2 px-3 text-sm",
@@ -76,7 +85,23 @@ def compact_sale_item_row(item: rx.Var[dict]) -> rx.Component:
                     ),
                     class_name="flex flex-col items-end gap-0.5",
                 ),
-                rx.el.span(State.currency_symbol, item["sale_price"]),
+                rx.cond(
+                    item["price_list_name"] != "",
+                    rx.el.div(
+                        rx.el.span(
+                            State.currency_symbol,
+                            item["base_price"],
+                            class_name="text-slate-400 line-through text-xs leading-none",
+                        ),
+                        rx.el.span(
+                            State.currency_symbol,
+                            item["sale_price"],
+                            class_name="text-indigo-600 font-semibold",
+                        ),
+                        class_name="flex flex-col items-end gap-0.5",
+                    ),
+                    rx.el.span(State.currency_symbol, item["sale_price"]),
+                ),
             ),
             class_name="py-2 px-3 text-right text-sm hidden sm:table-cell",
         ),
@@ -143,6 +168,15 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
                     ),
                     rx.fragment(),
                 ),
+                rx.cond(
+                    item["price_list_name"] != "",
+                    rx.el.span(
+                        rx.icon("tag", class_name="h-3 w-3 inline mr-0.5"),
+                        item["price_list_name"],
+                        class_name="text-xs font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 w-fit",
+                    ),
+                    rx.fragment(),
+                ),
                 class_name="flex flex-col gap-0.5",
             ),
             rx.el.button(
@@ -177,7 +211,23 @@ def mobile_sale_item_card(item: rx.Var[dict]) -> rx.Component:
                         ),
                         class_name="flex flex-col items-start leading-tight",
                     ),
-                    rx.el.span(State.currency_symbol, item["sale_price"], class_name="font-medium"),
+                    rx.cond(
+                        item["price_list_name"] != "",
+                        rx.el.div(
+                            rx.el.span(
+                                State.currency_symbol,
+                                item["base_price"],
+                                class_name="text-slate-400 line-through text-xs",
+                            ),
+                            rx.el.span(
+                                State.currency_symbol,
+                                item["sale_price"],
+                                class_name="font-semibold text-indigo-600",
+                            ),
+                            class_name="flex flex-col items-start leading-tight",
+                        ),
+                        rx.el.span(State.currency_symbol, item["sale_price"], class_name="font-medium"),
+                    ),
                 ),
                 class_name="flex items-center gap-1",
             ),
