@@ -20,7 +20,7 @@ from sqlmodel import select, func
 from sqlalchemy import and_
 from sqlalchemy.orm import selectinload
 
-from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User
+from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User, SaleReturn
 from app.models import Promotion
 from app.models import PriceList
 from app.models import PaymentMethod
@@ -748,6 +748,23 @@ def generate_sales_report(
         for pl in session.exec(select(PriceList).where(PriceList.id.in_(_pl_ids))).all()
     } if _pl_ids else {}
 
+    # ── Devoluciones: total + por día ────────────────────────────────────────
+    _ret_f: list = [SaleReturn.timestamp >= start_date, SaleReturn.timestamp <= end_date]
+    if company_id:
+        _ret_f.append(SaleReturn.company_id == company_id)
+    if branch_id:
+        _ret_f.append(SaleReturn.branch_id == branch_id)
+    total_devoluciones = _safe_decimal(session.execute(
+        select(func.coalesce(func.sum(SaleReturn.refund_amount), 0)).where(*_ret_f)
+    ).scalar())
+    dev_by_day: dict[str, Decimal] = {}
+    for _ret_sid, _ret_amt in session.execute(
+        select(SaleReturn.original_sale_id, SaleReturn.refund_amount).where(*_ret_f)
+    ):
+        _d = _sale_day_map.get(_ret_sid, "")
+        if _d:
+            dev_by_day[_d] = dev_by_day.get(_d, Decimal("0")) + _safe_decimal(_ret_amt)
+
     period_str = (
         f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
         f"{_format_report_datetime(end_date, '%d/%m/%Y', country_code, timezone)}"
@@ -769,9 +786,10 @@ def generate_sales_report(
         timezone=timezone,
     )
 
-    utilidad_bruta = total_ventas - total_costo
-    margen_bruto = (utilidad_bruta / total_ventas * 100) if total_ventas > 0 else Decimal("0")
-    ticket_promedio = (total_ventas / ventas_count) if ventas_count > 0 else Decimal("0")
+    total_ventas_neto = total_ventas - total_devoluciones
+    utilidad_bruta = total_ventas_neto - total_costo
+    margen_bruto = (utilidad_bruta / total_ventas_neto * 100) if total_ventas_neto > 0 else Decimal("0")
+    ticket_promedio = (total_ventas_neto / ventas_count) if ventas_count > 0 else Decimal("0")
 
     # Escribir resumen
     row += 1
@@ -780,6 +798,8 @@ def generate_sales_report(
 
     indicators = [
         (MSG.REPORT_KPI_GROSS_SALES, _format_currency(total_ventas, currency_symbol)),
+        ("(-) Devoluciones:", _format_currency(total_devoluciones, currency_symbol)),
+        ("(=) Ventas Netas:", _format_currency(total_ventas_neto, currency_symbol)),
         ("(-) Costo de Ventas:", _format_currency(total_costo, currency_symbol)),
         ("(=) Utilidad Bruta:", _format_currency(utilidad_bruta, currency_symbol)),
         (MSG.REPORT_KPI_MARGIN, f"{fmt_input_num(float(margen_bruto))}%"),
@@ -798,10 +818,12 @@ def generate_sales_report(
         row += 1
 
     _add_notes_section(ws_summary, row, [
-        "Ventas Brutas: Importe total facturado en el período seleccionado.",
+        "Ventas Brutas: Importe total facturado en el período (antes de descontar devoluciones).",
+        "Devoluciones: Suma de montos devueltos a clientes en el período.",
+        "Ventas Netas = Ventas Brutas − Devoluciones.",
         "Costo de Ventas: Costo de adquisición de los ítems efectivamente vendidos.",
-        "Utilidad Bruta = Ventas Brutas - Costo de Ventas.",
-        "Ticket Promedio = Ventas Brutas ÷ Nº de transacciones.",
+        "Utilidad Bruta = Ventas Netas − Costo de Ventas.",
+        "Ticket Promedio = Ventas Netas ÷ Nº de transacciones.",
         "Ventas a Crédito: Operaciones con saldo pendiente parcial o total.",
     ], columns=8)
 
@@ -814,7 +836,7 @@ def generate_sales_report(
         company_name,
         MSG.REPORT_DAILY_TITLE,
         period_str,
-        columns=6,
+        columns=8,
         **header_kwargs,
     )
 
@@ -822,6 +844,8 @@ def generate_sales_report(
         "Fecha",
         "Nº Transacciones",
         f"Venta Bruta ({currency_label})",
+        f"(-) Devoluciones ({currency_label})",
+        f"(=) Venta Neta ({currency_label})",
         f"Costo ({currency_label})",
         f"Utilidad ({currency_label})",
         "Margen (%)",
@@ -836,13 +860,16 @@ def generate_sales_report(
         ws_daily.cell(row=row, column=1, value=_safe_string(day_key))
         ws_daily.cell(row=row, column=2, value=day_data["count"])
         ws_daily.cell(row=row, column=3, value=day_data["total"]).number_format = currency_format
-        ws_daily.cell(row=row, column=4, value=day_data["cost"]).number_format = currency_format
-        # Utilidad = Fórmula Excel: Venta - Costo
+        ws_daily.cell(row=row, column=4, value=dev_by_day.get(day_key, Decimal("0"))).number_format = currency_format
+        # Venta Neta = Bruta - Devoluciones
         ws_daily.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = currency_format
-        # Margen % = Fórmula Excel: (Utilidad / Venta) * 100
-        ws_daily.cell(row=row, column=6, value=f"=IF(C{row}>0,E{row}/C{row},0)").number_format = PERCENT_FORMAT
+        ws_daily.cell(row=row, column=6, value=day_data["cost"]).number_format = currency_format
+        # Utilidad = Venta Neta - Costo
+        ws_daily.cell(row=row, column=7, value=f"=E{row}-F{row}").number_format = currency_format
+        # Margen % sobre Venta Neta
+        ws_daily.cell(row=row, column=8, value=f"=IF(E{row}>0,G{row}/E{row},0)").number_format = PERCENT_FORMAT
 
-        for col in range(1, 7):
+        for col in range(1, 9):
             ws_daily.cell(row=row, column=col).border = THIN_BORDER
         row += 1
 
@@ -854,16 +881,20 @@ def generate_sales_report(
         {"type": "sum", "col_letter": "C", "number_format": currency_format},
         {"type": "sum", "col_letter": "D", "number_format": currency_format},
         {"type": "sum", "col_letter": "E", "number_format": currency_format},
-        {"type": "formula", "value": f"=IF(C{totals_row}>0,E{totals_row}/C{totals_row},0)", "number_format": PERCENT_FORMAT},
+        {"type": "sum", "col_letter": "F", "number_format": currency_format},
+        {"type": "sum", "col_letter": "G", "number_format": currency_format},
+        {"type": "formula", "value": f"=IF(E{totals_row}>0,G{totals_row}/E{totals_row},0)", "number_format": PERCENT_FORMAT},
     ])
 
     # Agregar notas explicativas
     _add_notes_section(ws_daily, totals_row, [
-        "Venta Bruta: Total facturado sin incluir descuentos aplicados.",
+        "Venta Bruta: Total facturado en el día (antes de descontar devoluciones).",
+        "Devoluciones: Montos devueltos a clientes cuya venta original fue en este día.",
+        "Venta Neta = Venta Bruta − Devoluciones (fórmula verificable en Excel).",
         "Costo: Precio de compra/adquisición de los productos vendidos.",
-        "Utilidad = Venta Bruta - Costo (fórmula verificable en Excel).",
-        "Margen % = Utilidad ÷ Venta Bruta × 100.",
-    ], columns=6)
+        "Utilidad = Venta Neta − Costo (fórmula verificable en Excel).",
+        "Margen % = Utilidad ÷ Venta Neta × 100.",
+    ], columns=8)
 
     _auto_adjust_columns(ws_daily)
 

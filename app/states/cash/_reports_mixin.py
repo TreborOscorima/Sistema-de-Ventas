@@ -97,9 +97,18 @@ class ReportsMixin:
             )
             if is_credit:
                 credit_operations += 1
-            total_facturado += total_amount
-            total_cobrado += paid_amount
-            total_pendiente += max(total_amount - paid_amount, 0)
+            # Descontar devoluciones del flujo de caja real (créditos no generan CashboxLog → refund=0)
+            refund_exec = 0.0
+            if sale.get("has_return"):
+                try:
+                    refund_exec = float(str(sale.get("refund_amount", "0") or "0").replace(",", ""))
+                except (ValueError, TypeError):
+                    refund_exec = 0.0
+            net_amount = max(0.0, total_amount - refund_exec)
+            net_paid = max(0.0, paid_amount - refund_exec)
+            total_facturado += net_amount
+            total_cobrado += net_paid
+            total_pendiente += max(net_amount - net_paid, 0)
 
         wb, ws = create_excel_workbook("Resumen de Caja")
 
@@ -109,7 +118,7 @@ class ReportsMixin:
             company_name,
             "RESUMEN DE GESTIÓN DE CAJA",
             period_label,
-            columns=8,
+            columns=10,
             generated_at=self._display_now(),
         )
 
@@ -145,6 +154,8 @@ class ReportsMixin:
             f"Monto Total ({currency_label})",
             f"Monto Cobrado ({currency_label})",
             "Productos Vendidos",
+            f"Devolución ({currency_label})",
+            "Estado",
         ]
         style_header_row(ws, row, headers)
         data_start = row + 1
@@ -219,6 +230,17 @@ class ReportsMixin:
                 item_parts.append(f"{name} (x{quantity}) - {price_display}")
             details = "\n".join(item_parts) if item_parts else "Sin detalle"
 
+            # Devolución y estado
+            refund_raw = 0.0
+            estado_sale = ""
+            if sale.get("has_return"):
+                try:
+                    refund_raw = float(str(sale.get("refund_amount", "0") or "0").replace(",", ""))
+                except (ValueError, TypeError):
+                    refund_raw = 0.0
+                return_type = sale.get("return_type", "")
+                estado_sale = "Devuelta" if return_type == "total" else "Dev. Parcial"
+
             ws.cell(row=row, column=1, value=sale["timestamp"])
             ws.cell(row=row, column=2, value=sale["user"])
             ws.cell(row=row, column=3, value=method_raw)
@@ -227,8 +249,13 @@ class ReportsMixin:
             ws.cell(row=row, column=6, value=sale["total"] or 0).number_format = currency_format
             ws.cell(row=row, column=7, value=sale.get("amount", 0) or 0).number_format = currency_format
             ws.cell(row=row, column=8, value=details)
+            if refund_raw > 0:
+                ws.cell(row=row, column=9, value=refund_raw).number_format = currency_format
+            else:
+                ws.cell(row=row, column=9, value="")
+            ws.cell(row=row, column=10, value=estado_sale)
 
-            for col in range(1, 9):
+            for col in range(1, 11):
                 ws.cell(row=row, column=col).border = THIN_BORDER
             row += 1
 
@@ -246,16 +273,20 @@ class ReportsMixin:
             {"type": "sum", "col_letter": "F", "number_format": currency_format},
             {"type": "sum", "col_letter": "G", "number_format": currency_format},
             {"type": "text", "value": ""},
+            {"type": "sum", "col_letter": "I", "number_format": currency_format},
+            {"type": "text", "value": ""},
         ])
 
         # Notas explicativas
         add_notes_section(ws, totals_row, [
             "Monto Total: Precio total de la venta según productos.",
             "Monto Cobrado: Dinero efectivamente recibido (puede diferir en ventas a crédito).",
+            "Devolución: Monto devuelto al cliente. Se resta del Monto Total para obtener el neto real.",
+            "Estado: 'Devuelta' = devolución total; 'Dev. Parcial' = devolución parcial.",
             "Crédito (Completado): El cliente pagó la totalidad del crédito.",
             "Crédito (Adelanto): El cliente realizó un pago parcial.",
             "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
-        ], columns=8)
+        ], columns=10)
 
         auto_adjust_column_widths(ws)
 
@@ -296,7 +327,7 @@ class ReportsMixin:
 
         info_dict["Apertura"] = self._format_currency(breakdown["opening_amount"])
         info_dict["Ingresos reales"] = self._format_currency(breakdown["income_total"])
-        info_dict["Egresos caja chica"] = self._format_currency(breakdown["expense_total"])
+        info_dict["Devoluciones y egresos"] = self._format_currency(breakdown["expense_total"])
         info_dict["Saldo esperado"] = self._format_currency(breakdown["expected_total"])
         if self.cashbox_close_has_counted:
             info_dict["Total contado"] = self._format_currency(self.cashbox_close_counted_total)

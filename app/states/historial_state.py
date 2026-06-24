@@ -144,6 +144,10 @@ class HistorialState(MixinState):
     productos_stock_bajo: list[Dict] = []
     sales_by_day: list[dict] = []
 
+    selected_sale_returns: list[dict] = []
+    selected_sale_items_retained: list[dict] = []
+    selected_sale_items_returned_detail: list[dict] = []
+
     # ── Devoluciones ──
     return_modal_open: bool = False
     return_sale_id: int = 0
@@ -843,6 +847,20 @@ class HistorialState(MixinState):
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
             sale_user_lookup = self._build_sale_user_lookup(session, sales)
             pm_names = self._load_pm_names(session, self._company_id(), self._branch_id())
+            # Devoluciones por venta para badge de estado
+            return_refunds: dict[int, float] = {}
+            if sale_ids:
+                from app.models import SaleReturn as SaleReturnModel
+                ret_rows = session.exec(
+                    select(
+                        SaleReturnModel.original_sale_id,
+                        sa.func.sum(SaleReturnModel.refund_amount),
+                    )
+                    .where(SaleReturnModel.original_sale_id.in_(sale_ids))
+                    .group_by(SaleReturnModel.original_sale_id)
+                ).all()
+                for sid, total in ret_rows:
+                    return_refunds[int(sid)] = float(total or 0)
 
             rows: list[dict] = []
             for sale in sales:
@@ -879,6 +897,13 @@ class HistorialState(MixinState):
                     sale, sale_user_lookup, MSG.FALLBACK_UNKNOWN
                 )
                 total_amount = self._round_currency(sale.total_amount or 0)
+                refunded = return_refunds.get(int(sale.id or 0), 0.0)
+                if sale.status == SaleStatus.returned:
+                    ret_status = "returned"
+                elif refunded > 0:
+                    ret_status = "partial"
+                else:
+                    ret_status = ""
                 rows.append(
                     {
                         "sale_id": str(sale.id),
@@ -890,6 +915,8 @@ class HistorialState(MixinState):
                         "payment_method": payment_method,
                         "payment_details": self._payment_details_text(payment_details),
                         "user": user_name,
+                        "return_status": ret_status,
+                        "total_refunded": fmt_price(self._round_currency(refunded)),
                     }
                 )
             return rows
@@ -1203,6 +1230,53 @@ class HistorialState(MixinState):
             for payment_label, amount in session.exec(query_log).all():
                 method_key = self._method_key_from_label(payment_label or "")
                 self._add_to_stats(stats, method_key, Decimal(str(amount or 0)))
+
+            # Restar devoluciones por método de pago usando SaleReturn + SalePayment (con prorrateo para ventas mixtas)
+            refund_sale_stmt = (
+                select(
+                    SaleReturn.original_sale_id,
+                    sa.func.sum(SaleReturn.refund_amount).label("total_refund"),
+                )
+                .where(SaleReturn.company_id == company_id)
+                .where(SaleReturn.branch_id == branch_id)
+            )
+            if start_date:
+                refund_sale_stmt = refund_sale_stmt.where(SaleReturn.timestamp >= start_date)
+            if end_date:
+                refund_sale_stmt = refund_sale_stmt.where(SaleReturn.timestamp <= end_date)
+            refund_sale_stmt = refund_sale_stmt.group_by(SaleReturn.original_sale_id)
+            refund_by_sale: dict[int, Decimal] = {
+                row[0]: Decimal(str(row[1] or 0))
+                for row in session.exec(refund_sale_stmt).all()
+            }
+            if refund_by_sale:
+                pm_rows = session.exec(
+                    select(
+                        SalePayment.sale_id,
+                        SalePayment.method_type,
+                        SalePayment.payment_method_id,
+                        sa.func.sum(SalePayment.amount).label("paid"),
+                    )
+                    .where(SalePayment.sale_id.in_(list(refund_by_sale.keys())))
+                    .group_by(SalePayment.sale_id, SalePayment.method_type, SalePayment.payment_method_id)
+                ).all()
+                total_paid_by_sale: dict[int, Decimal] = {}
+                for sid, _mt, _pmid, paid in pm_rows:
+                    total_paid_by_sale[sid] = total_paid_by_sale.get(sid, Decimal("0")) + Decimal(str(paid or 0))
+                for sid, method_type, pm_id, paid in pm_rows:
+                    if sid not in refund_by_sale:
+                        continue
+                    total_paid = total_paid_by_sale.get(sid, Decimal("0"))
+                    if not total_paid:
+                        continue
+                    allocated = refund_by_sale[sid] * (Decimal(str(paid or 0)) / total_paid)
+                    key = self._payment_method_key(method_type)
+                    if key == "other" and pm_id and pm_id in pm_names:
+                        custom_key = f"other_{pm_id}"
+                        if custom_key in stats:
+                            stats[custom_key] -= allocated
+                    else:
+                        self._add_to_stats(stats, key, -allocated)
 
             paid_initial_subq = (
                 select(
@@ -1562,15 +1636,107 @@ class HistorialState(MixinState):
                         "payment_details", payment_details
                     )
             sale_user_lookup = self._build_sale_user_lookup(session, [sale])
-            self.selected_sale_items = [
-                {
-                    "description": item.product_name_snapshot,
-                    "quantity": fmt_input_num(item.quantity or 0),
-                    "unit_price": fmt_price(self._round_currency(item.unit_price or 0)),
-                    "subtotal": fmt_price(self._round_currency(item.subtotal or 0)),
-                }
-                for item in (sale.items or [])
-            ]
+
+            # Cargar devoluciones realizadas para esta venta
+            from app.models import SaleReturn as SaleReturnModel, SaleReturnItem as SaleReturnItemModel
+            from app.enums import ReturnReason
+            sale_returns = session.exec(
+                select(SaleReturnModel)
+                .where(SaleReturnModel.original_sale_id == sale_db_id)
+                .where(SaleReturnModel.company_id == company_id)
+                .options(selectinload(SaleReturnModel.items))
+                .order_by(SaleReturnModel.timestamp.asc())
+            ).all()
+
+            # Calcular qty ya devuelta por sale_item_id
+            returned_qty_map: dict[int, float] = {}
+            for ret in sale_returns:
+                for ri in (ret.items or []):
+                    sid = ri.sale_item_id
+                    returned_qty_map[sid] = returned_qty_map.get(sid, 0.0) + float(ri.quantity or 0)
+
+            # Lookup de nombre de producto para los ítems de devolución
+            product_ids_for_ret = {ri.product_id for ret in sale_returns for ri in (ret.items or []) if ri.product_id}
+            prod_name_map: dict[int, str] = {}
+            if product_ids_for_ret:
+                for row in session.exec(select(Product.id, Product.description).where(Product.id.in_(product_ids_for_ret))).all():
+                    prod_name_map[int(row[0])] = str(row[1] or "Producto")
+
+            # Construir lista de devoluciones para el modal
+            returns_list = []
+            for ret in sale_returns:
+                try:
+                    reason_label = ReturnReason(ret.reason).display_label
+                except (ValueError, KeyError):
+                    reason_label = ret.reason or "Otro"
+                items_summary = []
+                for ri in (ret.items or []):
+                    pname = prod_name_map.get(ri.product_id, "Producto") if ri.product_id else "Producto"
+                    items_summary.append(f"{pname} x{int(ri.quantity or 0)}")
+                returns_list.append({
+                    "timestamp": self._format_company_datetime(ret.timestamp) if ret.timestamp else "",
+                    "reason": reason_label,
+                    "items": ", ".join(items_summary),
+                    "refund": fmt_price(self._round_currency(float(ret.refund_amount or 0))),
+                })
+            self.selected_sale_returns = returns_list
+
+            # Ítems separados: retenidos (cliente conservó) y devueltos
+            retained_items: list[dict] = []
+            returned_items: list[dict] = []
+            for item in (sale.items or []):
+                returned_qty = returned_qty_map.get(item.id, 0.0)
+                available_qty = max(0.0, float(item.quantity or 0) - returned_qty)
+                unit_price_val = self._round_currency(item.unit_price or 0)
+                if available_qty > 0:
+                    retained_items.append({
+                        "description": item.product_name_snapshot,
+                        "quantity": fmt_input_num(available_qty),
+                        "unit_price": fmt_price(unit_price_val),
+                        "subtotal": fmt_price(self._round_currency(available_qty * unit_price_val)),
+                    })
+                if returned_qty > 0:
+                    returned_items.append({
+                        "description": item.product_name_snapshot,
+                        "quantity": fmt_input_num(returned_qty),
+                        "unit_price": fmt_price(unit_price_val),
+                        "subtotal": fmt_price(self._round_currency(returned_qty * unit_price_val)),
+                    })
+            self.selected_sale_items_retained = retained_items
+            self.selected_sale_items_returned_detail = returned_items
+            self.selected_sale_items = []
+
+            total_amount = self._round_currency(sale.total_amount or 0)
+            total_refunded = self._round_currency(sum(float(r.refund_amount or 0) for r in sale_returns))
+            net_total = self._round_currency(total_amount - total_refunded)
+
+            # Desglose financiero
+            subtotal_bruto = self._round_currency(
+                sum(float(item.quantity or 0) * float(item.unit_price_base or 0) for item in (sale.items or []))
+            )
+            total_discount = self._round_currency(subtotal_bruto - total_amount)
+            if total_discount < 0:
+                total_discount = 0.0
+
+            tax_settings = self._company_settings_snapshot()
+            show_tax = bool(tax_settings.get("show_tax_on_receipt", False))
+            tax_rate_pct = float(tax_settings.get("default_tax_rate_pct", 0.0))
+            tax_name = str(tax_settings.get("default_tax_name", "IVA") or "IVA")
+            tax_amount = 0.0
+            subtotal_neto = total_amount
+            if show_tax and tax_rate_pct > 0:
+                rate_f = tax_rate_pct / 100.0
+                subtotal_neto = self._round_currency(total_amount / (1 + rate_f))
+                tax_amount = self._round_currency(total_amount - subtotal_neto)
+
+            # Estado de la venta
+            if sale.status == SaleStatus.returned:
+                detail_return_status = "returned"
+            elif sale_returns:
+                detail_return_status = "partial"
+            else:
+                detail_return_status = ""
+
             self.selected_sale_id = str(sale.id)
             self.selected_sale_summary = {
                 "sale_id": str(sale.id),
@@ -1583,7 +1749,22 @@ class HistorialState(MixinState):
                 ),
                 "payment_method": payment_method,
                 "payment_details": self._payment_details_text(payment_details),
-                "total": fmt_price(self._round_currency(sale.total_amount or 0)),
+                "total": fmt_price(total_amount),
+                "total_refunded": fmt_price(total_refunded),
+                "net_total": fmt_price(net_total),
+                "has_returns": len(sale_returns) > 0,
+                "return_status": detail_return_status,
+                # Desglose financiero
+                "subtotal_bruto": fmt_price(subtotal_bruto),
+                "total_discount": fmt_price(total_discount),
+                "has_discount": total_discount > 0,
+                "show_tax": show_tax and tax_rate_pct > 0,
+                "tax_name": tax_name,
+                "tax_rate_pct": f"{tax_rate_pct:.0f}",
+                "tax_amount": fmt_price(tax_amount),
+                "subtotal_neto": fmt_price(subtotal_neto),
+                "has_retained_items": len(retained_items) > 0,
+                "retained_total": fmt_price(net_total),
             }
         self.sale_detail_modal_open = True
 
@@ -1593,6 +1774,9 @@ class HistorialState(MixinState):
         self.selected_sale_id = ""
         self.selected_sale_summary = {}
         self.selected_sale_items = []
+        self.selected_sale_returns = []
+        self.selected_sale_items_retained = []
+        self.selected_sale_items_returned_detail = []
 
     @rx.event
     def set_sale_detail_modal_open(self, open_state: bool):
@@ -1604,6 +1788,14 @@ class HistorialState(MixinState):
     @rx.var(cache=True)
     def selected_sale_items_view(self) -> list[dict]:
         return list(self.selected_sale_items or [])
+
+    @rx.var(cache=True)
+    def selected_sale_items_retained_view(self) -> list[dict]:
+        return list(self.selected_sale_items_retained or [])
+
+    @rx.var(cache=True)
+    def selected_sale_items_returned_view(self) -> list[dict]:
+        return list(self.selected_sale_items_returned_detail or [])
 
     @rx.var(cache=False)
     def credit_outstanding_display(self) -> str:
@@ -1646,7 +1838,7 @@ class HistorialState(MixinState):
             company_name,
             "HISTORIAL DE MOVIMIENTOS Y VENTAS",
             period_label,
-            columns=15,
+            columns=17,
             generated_at=self._display_now(),
         )
 
@@ -1666,6 +1858,8 @@ class HistorialState(MixinState):
             "% Descuento",
             "Fuente Descuento",
             f"Subtotal ({currency_label})",
+            "Estado",
+            f"Devolución ({currency_label})",
         ]
         style_header_row(ws, row, headers)
         data_start = row + 1
@@ -1689,6 +1883,27 @@ class HistorialState(MixinState):
             )
             sales = session.exec(query).all()
             sale_ids = [sale.id for sale in sales if sale and sale.id is not None]
+            # Pre-cargar devoluciones por venta (para Estado: Devuelta / Dev. Parcial)
+            _hist_refunds: dict[int, Decimal] = {}
+            if sale_ids:
+                for _r in session.exec(
+                    select(SaleReturn.original_sale_id, sa.func.sum(SaleReturn.refund_amount))
+                    .where(SaleReturn.original_sale_id.in_(sale_ids))
+                    .where(SaleReturn.company_id == company_id)
+                    .group_by(SaleReturn.original_sale_id)
+                ).all():
+                    _hist_refunds[_r[0]] = Decimal(str(_r[1] or 0))
+            # Pre-cargar devoluciones por ítem (para columna Devolución exacta por producto)
+            _hist_item_refunds: dict[int, float] = {}
+            if sale_ids:
+                for _ri in session.exec(
+                    select(SaleReturnItem.sale_item_id, sa.func.sum(SaleReturnItem.refund_subtotal))
+                    .join(SaleReturn, SaleReturn.id == SaleReturnItem.sale_return_id)
+                    .where(SaleReturn.original_sale_id.in_(sale_ids))
+                    .where(SaleReturn.company_id == company_id)
+                    .group_by(SaleReturnItem.sale_item_id)
+                ).all():
+                    _hist_item_refunds[_ri[0]] = float(_ri[1] or 0)
             log_payment_info = self._sale_log_payment_info(session, sale_ids)
             sale_user_lookup = self._build_sale_user_lookup(session, sales)
             pm_names = self._load_pm_names(session, self._company_id(), self._branch_id())
@@ -1786,7 +2001,14 @@ class HistorialState(MixinState):
                 if not sale_items:
                     sale_items = [None]
 
-                for item in sale_items:
+                refund_sale = _hist_refunds.get(sale.id or 0, Decimal("0"))
+                total_sale = Decimal(str(sale.total_amount or 0))
+                if refund_sale > 0:
+                    estado_sale = "Devuelta" if refund_sale >= total_sale else "Dev. Parcial"
+                else:
+                    estado_sale = ""
+
+                for idx_item, item in enumerate(sale_items):
                     if item is None:
                         product_name = MSG.FALLBACK_NO_PRODUCTS
                         variant_label = "-"
@@ -1870,8 +2092,14 @@ class HistorialState(MixinState):
                     ws.cell(row=row, column=13, value=discount_pct_fraction).number_format = PERCENT_FORMAT
                     ws.cell(row=row, column=14, value=discount_source)
                     ws.cell(row=row, column=15, value=subtotal).number_format = currency_format
+                    ws.cell(row=row, column=16, value=estado_sale if idx_item == 0 else "")
+                    item_refund = _hist_item_refunds.get(item.id, 0.0) if item and item.id else 0.0
+                    if item_refund > 0:
+                        ws.cell(row=row, column=17, value=item_refund).number_format = currency_format
+                    else:
+                        ws.cell(row=row, column=17, value="")
 
-                    for col in range(1, 16):
+                    for col in range(1, 18):
                         ws.cell(row=row, column=col).border = THIN_BORDER
                     row += 1
 
@@ -1893,6 +2121,8 @@ class HistorialState(MixinState):
             {"type": "text", "value": ""},                    # 13: %
             {"type": "text", "value": ""},                    # 14: fuente
             {"type": "sum", "col_letter": "O", "number_format": currency_format}, # 15: subtotal
+            {"type": "text", "value": ""},                    # 16: estado
+            {"type": "sum", "col_letter": "Q", "number_format": currency_format}, # 17: devolución
         ])
 
         # Notas explicativas
@@ -1904,11 +2134,13 @@ class HistorialState(MixinState):
             "% Descuento: Porcentaje de reducción respecto al precio base.",
             "Fuente Descuento: Origen del descuento (Promoción, Lista de Precios, Especial).",
             "Subtotal: Precio Final × Cantidad.",
+            "Estado: 'Devuelta' = devolución total del pedido; 'Dev. Parcial' = devolución parcial.",
+            "Devolución: Monto devuelto al cliente. Subtotal - Devolución = ingreso neto real.",
             "Crédito (Completado): El cliente pagó la totalidad del crédito.",
             "Crédito (Adelanto): El cliente realizó un pago parcial.",
             "Crédito (Pendiente Total): No se ha recibido ningún pago aún.",
             "Venta al contado: Cliente no identificado, pago inmediato.",
-        ], columns=15)
+        ], columns=17)
 
         auto_adjust_column_widths(ws)
 
@@ -2388,6 +2620,7 @@ class HistorialState(MixinState):
                     "already_returned": prev_returned,
                     "available_qty": available,
                     "return_qty": available,
+                    "at_max": True,
                     "refund_line": fmt_price(round(available * unit_price, 2)),
                 })
             if not items:
@@ -2433,7 +2666,36 @@ class HistorialState(MixinState):
                 available = item["available_qty"]
                 item = dict(item)
                 item["return_qty"] = min(qty, available)
+                item["at_max"] = item["return_qty"] >= available
                 item["refund_line"] = round(item["return_qty"] * item["unit_price"], 2)
+            updated.append(item)
+        self.return_items = updated
+
+    @rx.event
+    def increment_return_qty(self, sale_item_id: str):
+        item_id = int(sale_item_id)
+        updated = []
+        for item in self.return_items:
+            if item["sale_item_id"] == item_id:
+                item = dict(item)
+                new_qty = min(item["return_qty"] + 1, item["available_qty"])
+                item["return_qty"] = new_qty
+                item["at_max"] = new_qty >= item["available_qty"]
+                item["refund_line"] = round(new_qty * item["unit_price"], 2)
+            updated.append(item)
+        self.return_items = updated
+
+    @rx.event
+    def decrement_return_qty(self, sale_item_id: str):
+        item_id = int(sale_item_id)
+        updated = []
+        for item in self.return_items:
+            if item["sale_item_id"] == item_id:
+                item = dict(item)
+                new_qty = max(item["return_qty"] - 1, 0)
+                item["return_qty"] = new_qty
+                item["at_max"] = False
+                item["refund_line"] = round(new_qty * item["unit_price"], 2)
             updated.append(item)
         self.return_items = updated
 
@@ -2444,6 +2706,7 @@ class HistorialState(MixinState):
         for item in self.return_items:
             item = dict(item)
             item["return_qty"] = item["available_qty"]
+            item["at_max"] = True
             item["refund_line"] = round(item["return_qty"] * item["unit_price"], 2)
             updated.append(item)
         self.return_items = updated
@@ -2515,7 +2778,10 @@ class HistorialState(MixinState):
         self.close_return_modal()
         self._history_update_trigger += 1
         refund_display = self._format_currency(float(result.refund_amount))
-        self._load_returns_report()
+        try:
+            self._load_returns_report()
+        except Exception:
+            logger.exception("Error al recargar reporte tras devolución venta #%s", sale_id)
         yield rx.toast(
             f"Devolución procesada: {result.items_returned} ítem(s), "
             f"reembolso {refund_display}",
@@ -2722,7 +2988,7 @@ class HistorialState(MixinState):
             product_lookup: dict[int, str] = {}
             if product_ids:
                 prod_rows = session.exec(
-                    select(Product.id, Product.name)
+                    select(Product.id, Product.description)
                     .where(Product.id.in_(product_ids))
                 ).all()
                 for row in prod_rows:
@@ -2732,16 +2998,24 @@ class HistorialState(MixinState):
                     except (TypeError, ValueError):
                         continue
 
+            # Pre-compute per-sale refund totals for group headers
+            sale_refund_totals: dict[int, float] = {}
+            for ret in returns:
+                sid = ret.original_sale_id or 0
+                sale_refund_totals[sid] = (
+                    sale_refund_totals.get(sid, 0.0) + float(ret.refund_amount or 0)
+                )
+
             rows = []
             total_refund = 0.0
+            prev_sale_id: int | None = None
             for ret in returns:
                 # Build items summary
                 items_detail = []
                 for item in (ret.items or []):
                     prod_name = product_lookup.get(item.product_id, "Producto") if item.product_id else "Producto"
-                    items_detail.append(
-                        f"{prod_name} x{float(item.quantity or 0):.0f}"
-                    )
+                    qty = float(item.quantity or 0)
+                    items_detail.append(f"{prod_name} ×{qty:.0f}")
 
                 reason_label = ret.reason or "other"
                 try:
@@ -2751,19 +3025,25 @@ class HistorialState(MixinState):
 
                 refund_amt = float(ret.refund_amount or 0)
                 total_refund += refund_amt
+                sid = ret.original_sale_id or 0
+                is_group_start = sid != prev_sale_id
+                prev_sale_id = sid
 
                 rows.append({
                     "id": ret.id,
                     "timestamp": self._format_company_datetime(
                         ret.timestamp, "%d/%m/%Y %H:%M"
                     ) if ret.timestamp else "",
-                    "original_sale_id": ret.original_sale_id,
+                    "original_sale_id": sid,
                     "reason": reason_label,
                     "notes": ret.notes or "",
+                    "items_display": "\n".join(items_detail) if items_detail else "Sin ítems",
                     "items_summary": ", ".join(items_detail) if items_detail else "Sin ítems",
                     "items_count": len(items_detail),
                     "refund_amount": fmt_price(refund_amt),
                     "user": user_lookup.get(int(ret.user_id), "Desconocido") if ret.user_id else "Desconocido",
+                    "is_group_start": is_group_start,
+                    "group_sale_total": fmt_price(round(sale_refund_totals.get(sid, 0.0), 2)),
                 })
 
             self.returns_report_rows = rows

@@ -27,6 +27,8 @@ from app.models import (
     SaleInstallment,
     CashboxLog,
     FieldReservation,
+    SaleReturn,
+    SaleReturnItem,
 )
 from app.utils.timezone import utc_now_naive
 from .inventory import LOW_STOCK_THRESHOLD
@@ -295,15 +297,34 @@ class DashboardState(MixinState):
                     )
                 )
             ).one()
+            # Restar devoluciones por período usando SaleReturn.timestamp
+            ret_agg = session.exec(
+                select(
+                    func.coalesce(func.sum(case((SaleReturn.timestamp >= today_start, SaleReturn.refund_amount))), 0).label("t_ref"),
+                    func.coalesce(func.sum(case((SaleReturn.timestamp >= week_start, SaleReturn.refund_amount))), 0).label("w_ref"),
+                    func.coalesce(func.sum(case((SaleReturn.timestamp >= month_start, SaleReturn.refund_amount))), 0).label("m_ref"),
+                    func.coalesce(func.sum(case((and_(SaleReturn.timestamp >= period_start, SaleReturn.timestamp <= period_end), SaleReturn.refund_amount))), 0).label("p_ref"),
+                    func.coalesce(func.sum(case((and_(SaleReturn.timestamp >= prev_start, SaleReturn.timestamp < prev_end), SaleReturn.refund_amount))), 0).label("prev_ref"),
+                )
+                .where(
+                    and_(
+                        SaleReturn.timestamp >= earliest,
+                        SaleReturn.timestamp <= latest,
+                        SaleReturn.company_id == company_id,
+                        SaleReturn.branch_id == branch_id,
+                    )
+                )
+            ).one()
+
             self.today_sales_count = int(agg[0] or 0)
-            self.today_sales = float(agg[1] or 0)
+            self.today_sales = max(0.0, float(agg[1] or 0) - float(ret_agg[0] or 0))
             self.week_sales_count = int(agg[2] or 0)
-            self.week_sales = float(agg[3] or 0)
+            self.week_sales = max(0.0, float(agg[3] or 0) - float(ret_agg[1] or 0))
             self.month_sales_count = int(agg[4] or 0)
-            self.month_sales = float(agg[5] or 0)
+            self.month_sales = max(0.0, float(agg[5] or 0) - float(ret_agg[2] or 0))
             self.period_sales_count = int(agg[6] or 0)
-            self.period_sales = float(agg[7] or 0)
-            self.period_prev_sales = float(agg[8] or 0)
+            self.period_sales = max(0.0, float(agg[7] or 0) - float(ret_agg[3] or 0))
+            self.period_prev_sales = max(0.0, float(agg[8] or 0) - float(ret_agg[4] or 0))
 
             if self.period_sales_count > 0:
                 self.avg_ticket = self.period_sales / self.period_sales_count
@@ -892,11 +913,12 @@ class DashboardState(MixinState):
         currency_label = self._currency_symbol_clean()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
 
-        # Calcular descuentos por categoría en el mismo período
+        # Calcular descuentos y devoluciones por categoría en el mismo período
         period_start, period_end, _, _ = self._get_period_dates()
         company_id = self._company_id()
         branch_id = self._branch_id()
         discount_by_cat: dict[str, float] = {}
+        refund_by_cat: dict[str, float] = {}
         if company_id and branch_id:
             with rx.session() as session:
                 session.info["tenant_bypass"] = True
@@ -936,6 +958,35 @@ class DashboardState(MixinState):
                     (row[0] or MSG.FALLBACK_NO_CATEGORY): float(row[1] or 0)
                     for row in disc_rows
                 }
+                # Devoluciones por categoría (via SaleReturnItem → SaleItem)
+                ref_cat_expr = func.coalesce(
+                    func.nullif(func.trim(SaleItem.product_category_snapshot), ""),
+                    Product.category,
+                    MSG.FALLBACK_NO_CATEGORY,
+                )
+                ref_rows = session.exec(
+                    select(
+                        ref_cat_expr,
+                        func.sum(SaleReturnItem.refund_subtotal).label("total_refund"),
+                    )
+                    .select_from(SaleReturnItem)
+                    .join(SaleReturn, SaleReturn.id == SaleReturnItem.sale_return_id)
+                    .join(SaleItem, SaleItem.id == SaleReturnItem.sale_item_id)
+                    .outerjoin(Product, Product.id == SaleItem.product_id)
+                    .where(
+                        and_(
+                            SaleReturn.timestamp >= period_start,
+                            SaleReturn.timestamp <= period_end,
+                            SaleReturn.company_id == company_id,
+                            SaleReturn.branch_id == branch_id,
+                        )
+                    )
+                    .group_by(ref_cat_expr)
+                ).all()
+                refund_by_cat = {
+                    (row[0] or MSG.FALLBACK_NO_CATEGORY): float(row[1] or 0)
+                    for row in ref_rows
+                }
 
         wb, ws = create_excel_workbook(MSG.REPORT_CAT_SALES_SHEET)
 
@@ -944,7 +995,7 @@ class DashboardState(MixinState):
             company_name,
             "REPORTE DE VENTAS POR CATEGORÍA",
             self.period_label,
-            columns=6,
+            columns=8,
             generated_at=self._display_now(),
         )
 
@@ -953,6 +1004,8 @@ class DashboardState(MixinState):
             "Categoría",
             f"Venta Bruta ({currency_label})",
             f"Descuentos ({currency_label})",
+            f"Subtotal ({currency_label})",
+            f"Devoluciones ({currency_label})",
             f"Venta Neta ({currency_label})",
             "Participación (%)",
         ]
@@ -960,12 +1013,17 @@ class DashboardState(MixinState):
         data_start = row + 1
         row += 1
 
-        total_net = sum(cat.get("total", 0) for cat in export_categories)
+        total_net = sum(
+            max(0.0, float(cat.get("total", 0)) - refund_by_cat.get(cat["category"], 0.0))
+            for cat in export_categories
+        )
         for idx, cat in enumerate(export_categories, 1):
             cat_name = cat["category"]
-            net_sales = float(cat.get("total", 0))
+            subtotal = float(cat.get("total", 0))  # ya es neto de descuentos
             disc = discount_by_cat.get(cat_name, 0.0)
-            gross = net_sales + disc
+            gross = subtotal + disc
+            devolucion = refund_by_cat.get(cat_name, 0.0)
+            net_sales = max(0.0, subtotal - devolucion)
             pct = net_sales / total_net if total_net > 0 else 0.0
 
             ws.cell(row=row, column=1, value=idx).border = THIN_BORDER
@@ -981,12 +1039,23 @@ class DashboardState(MixinState):
             cell_disc.border = THIN_BORDER
             cell_disc.alignment = Alignment(horizontal="right")
 
-            cell_net = ws.cell(row=row, column=5, value=net_sales)
+            cell_sub = ws.cell(row=row, column=5, value=subtotal)
+            cell_sub.number_format = currency_format
+            cell_sub.border = THIN_BORDER
+            cell_sub.alignment = Alignment(horizontal="right")
+
+            cell_dev = ws.cell(row=row, column=6, value=devolucion if devolucion > 0 else "")
+            if devolucion > 0:
+                cell_dev.number_format = currency_format
+            cell_dev.border = THIN_BORDER
+            cell_dev.alignment = Alignment(horizontal="right")
+
+            cell_net = ws.cell(row=row, column=7, value=net_sales)
             cell_net.number_format = currency_format
             cell_net.border = THIN_BORDER
             cell_net.alignment = Alignment(horizontal="right")
 
-            cell_pct = ws.cell(row=row, column=6, value=pct)
+            cell_pct = ws.cell(row=row, column=8, value=pct)
             cell_pct.number_format = PERCENT_FORMAT
             cell_pct.border = THIN_BORDER
             cell_pct.alignment = Alignment(horizontal="right")
@@ -999,35 +1068,39 @@ class DashboardState(MixinState):
             {"type": "sum", "col_letter": "C", "number_format": currency_format},
             {"type": "sum", "col_letter": "D", "number_format": currency_format},
             {"type": "sum", "col_letter": "E", "number_format": currency_format},
+            {"type": "sum", "col_letter": "F", "number_format": currency_format},
+            {"type": "sum", "col_letter": "G", "number_format": currency_format},
             {"type": "text", "value": "100.00%"},
         ])
         totals_row = row
 
-        # Actualizar participación con fórmulas relativas al total neto
+        # Actualizar participación con fórmulas relativas al total neto (col G)
         for r in range(data_start, totals_row):
             ws.cell(
-                row=r, column=6,
-                value=f"=IF($E${totals_row}>0,E{r}/$E${totals_row},0)",
+                row=r, column=8,
+                value=f"=IF($G${totals_row}>0,G{r}/$G${totals_row},0)",
             ).number_format = PERCENT_FORMAT
 
-        # Gráfico de torta sobre Venta Neta
+        # Gráfico de torta sobre Venta Neta (col G)
         if len(export_categories) > 0:
             chart = PieChart()
             chart.title = "Distribución Venta Neta"
-            data_ref = Reference(ws, min_col=5, min_row=data_start - 1, max_row=totals_row - 1)
+            data_ref = Reference(ws, min_col=7, min_row=data_start - 1, max_row=totals_row - 1)
             labels = Reference(ws, min_col=2, min_row=data_start, max_row=totals_row - 1)
             chart.add_data(data_ref, titles_from_data=True)
             chart.set_categories(labels)
             chart.width = 12
             chart.height = 8
-            ws.add_chart(chart, "H4")
+            ws.add_chart(chart, "J4")
 
         add_notes_section(ws, totals_row, [
             "Venta Bruta: Monto total antes de descontar promociones y listas de precios.",
-            "Descuentos: Total de descuentos aplicados en el período (Venta Bruta - Venta Neta).",
-            "Venta Neta: Monto efectivamente cobrado al cliente.",
+            "Descuentos: Total de descuentos aplicados en el período.",
+            "Subtotal: Venta Bruta menos Descuentos.",
+            "Devoluciones: Monto devuelto a clientes en el período, desglosado por categoría.",
+            "Venta Neta: Subtotal menos Devoluciones. Es el ingreso real del período.",
             "Participación: Porcentaje de Venta Neta respecto al total general.",
-        ], columns=6)
+        ], columns=8)
 
         auto_adjust_column_widths(ws)
 
