@@ -246,8 +246,10 @@ class ReportsMixin:
             ws.cell(row=row, column=3, value=method_raw)
             ws.cell(row=row, column=4, value=method_label)
             ws.cell(row=row, column=5, value=payment_details)
-            ws.cell(row=row, column=6, value=sale["total"] or 0).number_format = currency_format
-            ws.cell(row=row, column=7, value=sale.get("amount", 0) or 0).number_format = currency_format
+            _total_num = float(str(sale.get("total", 0) or 0).replace(",", ""))
+            _paid_num  = float(str(sale.get("amount", 0) or 0).replace(",", ""))
+            ws.cell(row=row, column=6, value=_total_num).number_format = currency_format
+            ws.cell(row=row, column=7, value=_paid_num).number_format = currency_format
             ws.cell(row=row, column=8, value=details)
             if refund_raw > 0:
                 ws.cell(row=row, column=9, value=refund_raw).number_format = currency_format
