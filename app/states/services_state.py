@@ -709,7 +709,7 @@ class ServicesState(MixinState):
                 "Pagado: Importe efectivamente cobrado al cliente.",
                 "Saldo = Monto Total - Pagado (fórmula verificable en Excel).",
                 "Estado Pendiente: reserva creada con saldo pendiente de cobro.",
-                "Estado Pagada: reserva totalmente cancelada.",
+                "Estado Pagada: reserva totalmente cobrada, sin saldo pendiente.",
                 "Estado Cancelada: reserva anulada, no genera ingreso operativo.",
             ],
             columns=12,
