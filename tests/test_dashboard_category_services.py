@@ -15,14 +15,23 @@ class _ExecResult:
 
 
 class _FakeSession:
-    def __init__(self, rows, capture: dict):
-        self._rows = rows
+    def __init__(self, rows_sequence, capture: dict):
+        # rows_sequence: lista de listas de filas para exec() secuenciales
+        # Primera exec() → ventas por categoría; segunda exec() → devoluciones (vacío por default)
+        if isinstance(rows_sequence[0], tuple) or not isinstance(rows_sequence[0], list):
+            # Se pasó una sola lista de filas → primera exec la usa, segunda devuelve []
+            self._queue = [rows_sequence, []]
+        else:
+            self._queue = rows_sequence
+        self._call_index = 0
         self.info = {}
         self._capture = capture
 
     def exec(self, statement):
         self._capture["sql"] = str(statement)
-        return _ExecResult(self._rows)
+        items = self._queue[self._call_index] if self._call_index < len(self._queue) else []
+        self._call_index += 1
+        return _ExecResult(items)
 
     def __enter__(self):
         return self
@@ -34,6 +43,7 @@ class _FakeSession:
 def test_query_sales_by_category_includes_services_snapshot(monkeypatch):
     state = DashboardState()
     capture = {}
+    # Primera exec → filas de ventas; segunda exec → sin devoluciones
     rows = [("Servicios", Decimal("120.00")), ("Bebidas", Decimal("80.00"))]
 
     monkeypatch.setattr(
