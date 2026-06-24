@@ -19,14 +19,19 @@ class ExecResult:
 
 
 class FakeSession:
-    def __init__(self, results):
-        self.results = results
+    def __init__(self, results, refund_results=None):
+        # results: lista de filas para la primera exec (ingresos por método)
+        # refund_results: lista de filas para la segunda exec (devoluciones); por defecto vacío
+        self._results_queue = [results, refund_results if refund_results is not None else []]
+        self._call_index = 0
         self.info = {}
         self.statement = None
 
     def exec(self, statement):
         self.statement = statement
-        return ExecResult(all_items=self.results)
+        items = self._results_queue[self._call_index] if self._call_index < len(self._results_queue) else []
+        self._call_index += 1
+        return ExecResult(all_items=items)
 
     def __enter__(self):
         return self
@@ -39,11 +44,13 @@ def test_build_cashbox_summary_formats_and_sorts(monkeypatch):
     state = CashState()
     state.current_user = {"company_id": 1, "privileges": {"view_cashbox": True}}
     state.selected_branch_id = "1"
+    # Primera exec → ingresos por método (3 cols); segunda exec → devoluciones (2 cols, vacío)
     fake_session = FakeSession(
         [
             ("Efectivo", 2, Decimal("20.00")),
             (None, 1, Decimal("5.00")),
-        ]
+        ],
+        refund_results=[],
     )
     monkeypatch.setattr(rx, "session", lambda: fake_session)
     monkeypatch.setattr(
