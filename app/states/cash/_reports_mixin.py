@@ -135,13 +135,13 @@ class ReportsMixin:
         ws.cell(row=row, column=2, value=credit_operations)
         row += 1
         ws.cell(row=row, column=1, value=f"Total facturado ({currency_label}):")
-        ws.cell(row=row, column=2, value=total_facturado).number_format = currency_format
+        ws.cell(row=row, column=2, value=round(total_facturado, 2)).number_format = currency_format
         row += 1
         ws.cell(row=row, column=1, value=f"Total cobrado ({currency_label}):")
-        ws.cell(row=row, column=2, value=total_cobrado).number_format = currency_format
+        ws.cell(row=row, column=2, value=round(total_cobrado, 2)).number_format = currency_format
         row += 1
         ws.cell(row=row, column=1, value=f"Saldo pendiente ({currency_label}):")
-        ws.cell(row=row, column=2, value=total_pendiente).number_format = currency_format
+        ws.cell(row=row, column=2, value=round(total_pendiente, 2)).number_format = currency_format
 
         row += 2
 

@@ -1078,11 +1078,11 @@ class DashboardState(MixinState):
         )
         for idx, cat in enumerate(export_categories, 1):
             cat_name = cat["category"]
-            subtotal = float(cat.get("total", 0))  # ya es neto de descuentos
-            disc = discount_by_cat.get(cat_name, 0.0)
-            gross = subtotal + disc
-            devolucion = refund_by_cat.get(cat_name, 0.0)
-            net_sales = max(0.0, subtotal - devolucion)
+            subtotal = round(float(cat.get("total", 0)), 2)  # ya es neto de descuentos
+            disc = round(discount_by_cat.get(cat_name, 0.0), 2)
+            gross = round(subtotal + disc, 2)
+            devolucion = round(refund_by_cat.get(cat_name, 0.0), 2)
+            net_sales = round(max(0.0, subtotal - devolucion), 2)
             pct = net_sales / total_net if total_net > 0 else 0.0
 
             ws.cell(row=row, column=1, value=idx).border = THIN_BORDER

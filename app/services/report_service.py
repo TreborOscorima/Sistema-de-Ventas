@@ -1006,8 +1006,10 @@ def generate_sales_report(
         ws_category.cell(row=row, column=4, value=cat_data.get("discount", Decimal("0"))).number_format = currency_format
         # (-) Devoluciones
         ws_category.cell(row=row, column=5, value=_cat_dev).number_format = currency_format
-        # (=) Venta Neta = Venta Bruta - Descuentos - Devoluciones
-        ws_category.cell(row=row, column=6, value=f"=C{row}-D{row}-E{row}").number_format = currency_format
+        # (=) Venta Neta = Venta Bruta - Devoluciones
+        # Nota: Venta Bruta usa SaleItem.subtotal (precio post-descuento), por lo que
+        # NO se vuelve a restar Descuentos (ya están incorporados en Venta Bruta).
+        ws_category.cell(row=row, column=6, value=f"=C{row}-E{row}").number_format = currency_format
         # Costo neto (gross cost - costo de ítems devueltos)
         ws_category.cell(row=row, column=7, value=_cat_cost_net).number_format = currency_format
         # Utilidad = Venta Neta - Costo
@@ -1040,10 +1042,10 @@ def generate_sales_report(
         ws_category.cell(row=r, column=10, value=f"=IF($F${cat_totals_row}>0,F{r}/$F${cat_totals_row},0)").number_format = PERCENT_FORMAT
 
     _add_notes_section(ws_category, cat_totals_row, [
-        "Venta Bruta: importe total facturado antes de descontar promociones ni devoluciones.",
-        "Descuentos: suma de (Precio Base − Precio Final) × Cantidad por ítem de esta categoría.",
+        "Venta Bruta: subtotal efectivamente facturado (Precio Final × Cantidad); los descuentos ya están incluidos.",
+        "Descuentos: referencia informativa — diferencia entre precio de lista y precio final (ya deducida en Venta Bruta).",
         "Devoluciones: monto devuelto al cliente por ítems de esta categoría en el período.",
-        "Venta Neta = Venta Bruta − Descuentos − Devoluciones (fórmula verificable en Excel).",
+        "Venta Neta = Venta Bruta − Devoluciones (fórmula verificable en Excel).",
         "Costo: costo de adquisición neto (bruto menos costo de ítems devueltos al inventario).",
         "Utilidad = Venta Neta − Costo.",
         "Margen = Utilidad ÷ Venta Neta.",
