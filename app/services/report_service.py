@@ -20,7 +20,7 @@ from sqlmodel import select, func
 from sqlalchemy import and_
 from sqlalchemy.orm import selectinload
 
-from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User, SaleReturn
+from app.models import Sale, SaleItem, Product, Client, SaleInstallment, CashboxLog, SalePayment, User, SaleReturn, SaleReturnItem
 from app.models import Promotion
 from app.models import PriceList
 from app.models import PaymentMethod
@@ -765,6 +765,72 @@ def generate_sales_report(
         if _d:
             dev_by_day[_d] = dev_by_day.get(_d, Decimal("0")) + _safe_decimal(_ret_amt)
 
+    # ── Devoluciones detalladas a nivel de ítem (categoría, producto, costo) ──
+    # Una sola query que cubre todas las dimensiones restantes.
+    dev_cost_by_day: dict[str, Decimal] = {}
+    dev_by_cat: dict[str, Decimal] = {}
+    dev_cost_by_cat: dict[str, Decimal] = {}
+    dev_by_product: dict[str, tuple[Decimal, Decimal]] = {}  # snap_name → (qty, rev)
+    dev_cost_by_product: dict[str, Decimal] = {}
+    dev_by_hour: dict[int, Decimal] = {}
+    total_costo_dev = Decimal("0")
+
+    for (_pname, _cat_k, _orig_sid_i, _qty_i, _rev_i, _cost_price_i, _orig_ts_i) in session.execute(
+        select(
+            SaleItem.product_name_snapshot,
+            func.coalesce(SaleItem.product_category_snapshot, "Sin categoría"),
+            SaleReturn.original_sale_id,
+            SaleReturnItem.quantity,
+            SaleReturnItem.refund_subtotal,
+            func.coalesce(Product.purchase_price, 0),
+            Sale.timestamp,
+        )
+        .select_from(SaleReturnItem)
+        .join(SaleReturn, SaleReturn.id == SaleReturnItem.sale_return_id)
+        .join(SaleItem, SaleItem.id == SaleReturnItem.sale_item_id)
+        .join(Sale, Sale.id == SaleReturn.original_sale_id)
+        .outerjoin(Product, Product.id == SaleItem.product_id)
+        .where(*_ret_f)
+    ):
+        _qty_d = _safe_decimal(_qty_i)
+        _rev_d = _safe_decimal(_rev_i)
+        _cost_d = _safe_decimal(_cost_price_i) * _qty_d
+        total_costo_dev += _cost_d
+
+        _cat_s = _cat_k or "Sin categoría"
+        dev_by_cat[_cat_s] = dev_by_cat.get(_cat_s, Decimal("0")) + _rev_d
+        dev_cost_by_cat[_cat_s] = dev_cost_by_cat.get(_cat_s, Decimal("0")) + _cost_d
+
+        _pn = _pname or ""
+        _old_pq, _old_pr = dev_by_product.get(_pn, (Decimal("0"), Decimal("0")))
+        dev_by_product[_pn] = (_old_pq + _qty_d, _old_pr + _rev_d)
+        dev_cost_by_product[_pn] = dev_cost_by_product.get(_pn, Decimal("0")) + _cost_d
+
+        _day_k2 = _sale_day_map.get(_orig_sid_i, "")
+        if _day_k2:
+            dev_cost_by_day[_day_k2] = dev_cost_by_day.get(_day_k2, Decimal("0")) + _cost_d
+
+        if _orig_ts_i:
+            _lts_i = to_local_datetime(_orig_ts_i, country_code, timezone=timezone) or _orig_ts_i
+            _hr_i = _lts_i.hour
+            dev_by_hour[_hr_i] = dev_by_hour.get(_hr_i, Decimal("0")) + _rev_d
+
+    # Devoluciones por vendedor (nivel SaleReturn, para Hoja 5)
+    dev_by_user: dict[str, Decimal] = {}
+    for (_uname_r, _u_ret_tot) in session.execute(
+        select(
+            User.username,
+            func.coalesce(func.sum(SaleReturn.refund_amount), 0),
+        )
+        .select_from(SaleReturn)
+        .join(Sale, Sale.id == SaleReturn.original_sale_id)
+        .outerjoin(User, User.id == Sale.user_id)
+        .where(*_ret_f)
+        .group_by(User.username)
+    ):
+        _uk = _safe_string(_uname_r, MSG.REPORT_UNKNOWN)
+        dev_by_user[_uk] = dev_by_user.get(_uk, Decimal("0")) + _safe_decimal(_u_ret_tot)
+
     period_str = (
         f"{_format_report_datetime(start_date, '%d/%m/%Y', country_code, timezone)} - "
         f"{_format_report_datetime(end_date, '%d/%m/%Y', country_code, timezone)}"
@@ -787,7 +853,8 @@ def generate_sales_report(
     )
 
     total_ventas_neto = total_ventas - total_devoluciones
-    utilidad_bruta = total_ventas_neto - total_costo
+    total_costo_neto = max(Decimal("0"), total_costo - total_costo_dev)  # costo neto tras reversión de devoluciones
+    utilidad_bruta = total_ventas_neto - total_costo_neto
     margen_bruto = (utilidad_bruta / total_ventas_neto * 100) if total_ventas_neto > 0 else Decimal("0")
     ticket_promedio = (total_ventas_neto / ventas_count) if ventas_count > 0 else Decimal("0")
 
@@ -800,7 +867,7 @@ def generate_sales_report(
         (MSG.REPORT_KPI_GROSS_SALES, _format_currency(total_ventas, currency_symbol)),
         ("(-) Devoluciones:", _format_currency(total_devoluciones, currency_symbol)),
         ("(=) Ventas Netas:", _format_currency(total_ventas_neto, currency_symbol)),
-        ("(-) Costo de Ventas:", _format_currency(total_costo, currency_symbol)),
+        ("(-) Costo de Ventas:", _format_currency(total_costo_neto, currency_symbol)),
         ("(=) Utilidad Bruta:", _format_currency(utilidad_bruta, currency_symbol)),
         (MSG.REPORT_KPI_MARGIN, f"{fmt_input_num(float(margen_bruto))}%"),
         ("(-) Descuentos otorgados:", _format_currency(total_descuentos, currency_symbol)),
@@ -857,13 +924,14 @@ def generate_sales_report(
     for day_key in sorted(by_day.keys()):
         day_data = by_day[day_key]
 
+        _day_cost_net = max(Decimal("0"), day_data["cost"] - dev_cost_by_day.get(day_key, Decimal("0")))
         ws_daily.cell(row=row, column=1, value=_safe_string(day_key))
         ws_daily.cell(row=row, column=2, value=day_data["count"])
         ws_daily.cell(row=row, column=3, value=day_data["total"]).number_format = currency_format
         ws_daily.cell(row=row, column=4, value=dev_by_day.get(day_key, Decimal("0"))).number_format = currency_format
         # Venta Neta = Bruta - Devoluciones
         ws_daily.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = currency_format
-        ws_daily.cell(row=row, column=6, value=day_data["cost"]).number_format = currency_format
+        ws_daily.cell(row=row, column=6, value=_day_cost_net).number_format = currency_format
         # Utilidad = Venta Neta - Costo
         ws_daily.cell(row=row, column=7, value=f"=E{row}-F{row}").number_format = currency_format
         # Margen % sobre Venta Neta
@@ -907,7 +975,7 @@ def generate_sales_report(
         company_name,
         MSG.REPORT_CATEGORY_TITLE,
         period_str,
-        columns=9,
+        columns=10,
         **header_kwargs,
     )
 
@@ -916,6 +984,7 @@ def generate_sales_report(
         "Unidades Vendidas",
         f"Venta Bruta ({currency_label})",
         f"(-) Descuentos ({currency_label})",
+        f"(-) Devoluciones ({currency_label})",
         f"(=) Venta Neta ({currency_label})",
         f"Costo ({currency_label})",
         f"Utilidad ({currency_label})",
@@ -929,21 +998,26 @@ def generate_sales_report(
     sorted_categories = sorted(by_category.items(), key=lambda x: x[1]["total"], reverse=True)
 
     for cat_name, cat_data in sorted_categories:
+        _cat_dev = dev_by_cat.get(cat_name, Decimal("0"))
+        _cat_cost_net = max(Decimal("0"), cat_data["cost"] - dev_cost_by_cat.get(cat_name, Decimal("0")))
         ws_category.cell(row=row, column=1, value=_safe_string(cat_name))
         ws_category.cell(row=row, column=2, value=cat_data["qty"])
         ws_category.cell(row=row, column=3, value=cat_data["total"]).number_format = currency_format
         ws_category.cell(row=row, column=4, value=cat_data.get("discount", Decimal("0"))).number_format = currency_format
-        # Venta Neta = Venta Bruta - Descuentos
-        ws_category.cell(row=row, column=5, value=f"=C{row}-D{row}").number_format = currency_format
-        ws_category.cell(row=row, column=6, value=cat_data["cost"]).number_format = currency_format
+        # (-) Devoluciones
+        ws_category.cell(row=row, column=5, value=_cat_dev).number_format = currency_format
+        # (=) Venta Neta = Venta Bruta - Descuentos - Devoluciones
+        ws_category.cell(row=row, column=6, value=f"=C{row}-D{row}-E{row}").number_format = currency_format
+        # Costo neto (gross cost - costo de ítems devueltos)
+        ws_category.cell(row=row, column=7, value=_cat_cost_net).number_format = currency_format
         # Utilidad = Venta Neta - Costo
-        ws_category.cell(row=row, column=7, value=f"=E{row}-F{row}").number_format = currency_format
+        ws_category.cell(row=row, column=8, value=f"=F{row}-G{row}").number_format = currency_format
         # Margen % = Utilidad / Venta Neta
-        ws_category.cell(row=row, column=8, value=f"=IF(E{row}>0,G{row}/E{row},0)").number_format = PERCENT_FORMAT
+        ws_category.cell(row=row, column=9, value=f"=IF(F{row}>0,H{row}/F{row},0)").number_format = PERCENT_FORMAT
         # % del Total (placeholder, se sustituye abajo con fórmula dinámica)
-        ws_category.cell(row=row, column=9, value=cat_data["total"]).number_format = currency_format
+        ws_category.cell(row=row, column=10, value=cat_data["total"]).number_format = currency_format
 
-        for col in range(1, 10):
+        for col in range(1, 11):
             ws_category.cell(row=row, column=col).border = THIN_BORDER
         row += 1
 
@@ -956,22 +1030,25 @@ def generate_sales_report(
         {"type": "sum", "col_letter": "E", "number_format": currency_format},
         {"type": "sum", "col_letter": "F", "number_format": currency_format},
         {"type": "sum", "col_letter": "G", "number_format": currency_format},
-        {"type": "formula", "value": f"=IF(E{cat_totals_row}>0,G{cat_totals_row}/E{cat_totals_row},0)", "number_format": PERCENT_FORMAT},
+        {"type": "sum", "col_letter": "H", "number_format": currency_format},
+        {"type": "formula", "value": f"=IF(F{cat_totals_row}>0,H{cat_totals_row}/F{cat_totals_row},0)", "number_format": PERCENT_FORMAT},
         {"type": "text", "value": "100.00%"},
     ])
 
-    # Sustituir col I con fórmulas de participación respecto a Venta Neta total
+    # Sustituir col J con fórmulas de participación respecto a Venta Neta total (col F)
     for r in range(cat_data_start, cat_totals_row):
-        ws_category.cell(row=r, column=9, value=f"=IF($E${cat_totals_row}>0,E{r}/$E${cat_totals_row},0)").number_format = PERCENT_FORMAT
+        ws_category.cell(row=r, column=10, value=f"=IF($F${cat_totals_row}>0,F{r}/$F${cat_totals_row},0)").number_format = PERCENT_FORMAT
 
     _add_notes_section(ws_category, cat_totals_row, [
-        "Venta Bruta: importe total facturado antes de descontar promociones.",
+        "Venta Bruta: importe total facturado antes de descontar promociones ni devoluciones.",
         "Descuentos: suma de (Precio Base − Precio Final) × Cantidad por ítem de esta categoría.",
-        "Venta Neta = Venta Bruta − Descuentos (importe efectivamente cobrado).",
-        "Utilidad = Venta Neta − Costo de adquisición.",
+        "Devoluciones: monto devuelto al cliente por ítems de esta categoría en el período.",
+        "Venta Neta = Venta Bruta − Descuentos − Devoluciones (fórmula verificable en Excel).",
+        "Costo: costo de adquisición neto (bruto menos costo de ítems devueltos al inventario).",
+        "Utilidad = Venta Neta − Costo.",
         "Margen = Utilidad ÷ Venta Neta.",
         "Participación = Venta Neta de categoría ÷ Venta Neta Total.",
-    ], columns=9)
+    ], columns=10)
 
     _auto_adjust_columns(ws_category)
 
@@ -1141,13 +1218,15 @@ def generate_sales_report(
     sorted_users = sorted(by_user.items(), key=lambda x: x[1]["total"], reverse=True)
 
     for user_name, user_data in sorted_users:
+        _user_dev = dev_by_user.get(user_name, Decimal("0"))
+        _user_net = max(Decimal("0"), user_data["total"] - _user_dev)
         ws_user.cell(row=row, column=1, value=_safe_string(user_name))
         ws_user.cell(row=row, column=2, value=user_data["count"])
-        ws_user.cell(row=row, column=3, value=user_data["total"]).number_format = currency_format
+        ws_user.cell(row=row, column=3, value=_user_net).number_format = currency_format
         # Ticket Promedio = Fórmula: Venta Total / Nº Transacciones
         ws_user.cell(row=row, column=4, value=f"=IF(B{row}>0,C{row}/B{row},0)").number_format = currency_format
         # Participación - se calculará con referencia al total
-        ws_user.cell(row=row, column=5, value=user_data["total"]).number_format = currency_format  # Temporal
+        ws_user.cell(row=row, column=5, value=_user_net).number_format = currency_format  # Temporal
 
         for col in range(1, 6):
             ws_user.cell(row=row, column=col).border = THIN_BORDER
@@ -1405,12 +1484,17 @@ def generate_sales_report(
     row += 1
 
     for prod in sorted_products:
+        _pn_key = prod["name"] or ""
+        _dev_qty_p, _dev_rev_p = dev_by_product.get(_pn_key, (Decimal("0"), Decimal("0")))
+        _net_qty_p = max(0, prod["qty"] - int(_dev_qty_p))
+        _net_rev_p = max(Decimal("0"), prod["total"] - _dev_rev_p)
+        _net_cost_p = max(Decimal("0"), prod["cost"] - dev_cost_by_product.get(_pn_key, Decimal("0")))
         ws_top_products.cell(row=row, column=1, value=_safe_string(prod["name"][:50]))
         ws_top_products.cell(row=row, column=2, value=_safe_string(prod["category"]))
-        ws_top_products.cell(row=row, column=3, value=prod["qty"])
+        ws_top_products.cell(row=row, column=3, value=_net_qty_p)
         ws_top_products.cell(row=row, column=4, value=prod["transactions"])
-        ws_top_products.cell(row=row, column=5, value=prod["total"]).number_format = currency_format
-        ws_top_products.cell(row=row, column=6, value=prod["cost"]).number_format = currency_format
+        ws_top_products.cell(row=row, column=5, value=_net_rev_p).number_format = currency_format
+        ws_top_products.cell(row=row, column=6, value=_net_cost_p).number_format = currency_format
         # Utilidad = Fórmula: Ingresos - Costo
         ws_top_products.cell(row=row, column=7, value=f"=E{row}-F{row}").number_format = currency_format
         # Margen = Fórmula: Utilidad / Ingresos
@@ -1468,12 +1552,13 @@ def generate_sales_report(
 
     for hour in sorted(by_hour.keys()):
         hour_data = by_hour[hour]
+        _hour_net = max(Decimal("0"), hour_data["total"] - dev_by_hour.get(hour, Decimal("0")))
 
         ws_hourly.cell(row=row, column=1, value=f"{hour:02d}:00 - {hour:02d}:59")
         ws_hourly.cell(row=row, column=2, value=hour_data["count"])
-        ws_hourly.cell(row=row, column=3, value=hour_data["total"]).number_format = currency_format
+        ws_hourly.cell(row=row, column=3, value=_hour_net).number_format = currency_format
         # Participación - se calculará con referencia al total
-        ws_hourly.cell(row=row, column=4, value=hour_data["total"]).number_format = currency_format  # Temporal
+        ws_hourly.cell(row=row, column=4, value=_hour_net).number_format = currency_format  # Temporal
         # Ticket Promedio = Fórmula: Venta / Transacciones
         ws_hourly.cell(row=row, column=5, value=f"=IF(B{row}>0,C{row}/B{row},0)").number_format = currency_format
 
