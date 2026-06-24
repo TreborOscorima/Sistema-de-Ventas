@@ -24,11 +24,13 @@ from app.models import Sale, SaleItem, Product, Client, SaleInstallment, Cashbox
 from app.models import Promotion
 from app.models import PriceList
 from app.models import PaymentMethod
+from app.models import CompanySettings
 from app.enums import SaleStatus, PaymentMethodType
 from app.i18n import MSG
 from app.utils.tenant import tenant_bypass, tenant_context
 from app.utils.exports import _safe_decimal, _sanitize_excel_value
 from app.utils.formatting import fmt_input_num
+from app.utils.pricing import resolve_effective_price
 from app.utils.timezone import format_local_datetime, to_local_datetime, utc_now_naive
 
 
@@ -388,7 +390,7 @@ def _cashbox_action_nature(action: str | None) -> str:
         return "Apertura"
     if raw == "cierre":
         return "Cierre"
-    if "gasto" in raw or "egreso" in raw:
+    if "gasto" in raw or "egreso" in raw or "devolucion" in raw:
         return "Egreso"
     return "Ingreso"
 
@@ -1653,6 +1655,15 @@ def generate_inventory_report(
             parts.append(str(variant.color).strip())
         return " ".join([p for p in parts if p]).strip()
 
+    # Margen global de la empresa para resolver precios sin sale_price explícito
+    _global_margin = 0.0
+    if company_id:
+        _cs = session.exec(
+            select(CompanySettings).where(CompanySettings.company_id == company_id)
+        ).first()
+        if _cs and _cs.default_profit_margin:
+            _global_margin = float(_cs.default_profit_margin)
+
     inventory_rows: list[dict[str, Any]] = []
     for product in session.exec(query.execution_options(yield_per=500)):
         variants = list(product.variants or [])
@@ -1673,7 +1684,7 @@ def generate_inventory_report(
                         "stock": stock,
                         "unit": _safe_string(product.unit, "Unid."),
                         "purchase_price": _safe_decimal(product.purchase_price),
-                        "sale_price": _safe_decimal(product.sale_price),
+                        "sale_price": resolve_effective_price(product, variant=variant, global_margin=_global_margin),
                     }
                 )
         else:
@@ -1688,7 +1699,7 @@ def generate_inventory_report(
                     "stock": stock,
                     "unit": _safe_string(product.unit, "Unid."),
                     "purchase_price": _safe_decimal(product.purchase_price),
-                    "sale_price": _safe_decimal(product.sale_price),
+                    "sale_price": resolve_effective_price(product, global_margin=_global_margin),
                 }
             )
 
@@ -3219,7 +3230,7 @@ def generate_promotions_report(
         ("Promociones distintas aplicadas:", total_promos_used),
         ("Ventas que usaron al menos una promo:", total_sales_with_promo),
         ("Unidades vendidas con promo:", f"{total_units:,.2f}"),
-        ("Ingreso bruto bajo promo:", _format_currency(total_revenue, currency_symbol)),
+        ("Ingreso bruto bajo promo:", _format_currency(total_revenue + total_discount, currency_symbol)),
         ("Descuento total otorgado:", _format_currency(total_discount, currency_symbol)),
     ]
     for label, value in indicators:
@@ -3389,7 +3400,7 @@ def generate_promotions_report(
             if unit_base > 0 and unit_base > unit_final
             else Decimal("0")
         )
-        promo_type_raw = getattr(promo, "discount_type", "") or ""
+        promo_type_raw = getattr(promo, "promotion_type", "") or ""
 
         ws_detail.cell(
             row=row,
