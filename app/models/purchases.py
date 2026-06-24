@@ -161,6 +161,18 @@ class PurchaseItem(TenantMixin, SQLModel, table=True):
         default=Decimal("0.00"),
         sa_column=sqlalchemy.Column(Numeric(10, 2)),
     )
+    original_price: Optional[Decimal] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(Numeric(10, 2), nullable=True),
+    )
+    exchange_rate: Optional[Decimal] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(Numeric(15, 6), nullable=True),
+    )
+    original_currency_code: Optional[str] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.String(10), nullable=True),
+    )
 
     purchase: "Purchase" = Relationship(back_populates="items")
     product: Optional["Product"] = Relationship()

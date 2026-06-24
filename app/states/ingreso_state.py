@@ -45,6 +45,8 @@ class IngresoState(MixinState):
     purchase_supplier_active_index: int = -1
     purchase_supplier_input_key: int = 0
     selected_supplier: Optional[Dict[str, Any]] = None
+    purchase_currency_code: str = ""
+    purchase_exchange_rate: str = ""
     is_existing_product: bool = False
     has_variants: bool = False
     requires_batches: bool = False
@@ -78,6 +80,9 @@ class IngresoState(MixinState):
         "is_existing_product": False,
         "has_variants": False,
         "requires_batches": False,
+        "original_cost": 0,
+        "original_currency": "",
+        "purchase_rate": 0,
     }
     new_entry_items: List[TransactionItem] = []
     entry_autocomplete_suggestions: List[str] = []
@@ -123,6 +128,32 @@ class IngresoState(MixinState):
         return f"{float(self.new_entry_item.get('subtotal') or 0):.2f}"
 
     @rx.var(cache=True)
+    def purchase_is_foreign_currency(self) -> bool:
+        """True cuando la moneda del documento difiere de la moneda de la empresa."""
+        code = self.purchase_currency_code
+        if not code:
+            return False
+        return code != getattr(self, "selected_currency_code", "PEN")
+
+    @rx.var(cache=False)
+    def purchase_exchange_rate_float(self) -> float:
+        try:
+            return max(0.0, float(self.purchase_exchange_rate or 0))
+        except (ValueError, TypeError):
+            return 0.0
+
+    @rx.var(cache=False)
+    def entry_local_price_display(self) -> str:
+        """Precio convertido a moneda local (read-only) cuando hay moneda extranjera."""
+        price = float(self.new_entry_item.get("price") or 0)
+        return f"{price:.2f}" if price > 0 else "0.00"
+
+    @rx.var(cache=True)
+    def effective_purchase_currency_code(self) -> str:
+        """Moneda efectiva del documento: la elegida o la de la empresa."""
+        return self.purchase_currency_code or getattr(self, "selected_currency_code", "PEN")
+
+    @rx.var(cache=True)
     def entry_total(self) -> float:
         return self._round_currency(
             sum(float(item.get("subtotal") or 0) for item in self.new_entry_items)
@@ -147,6 +178,44 @@ class IngresoState(MixinState):
             {"value": suggestion, "index": index}
             for index, suggestion in enumerate(self.entry_autocomplete_suggestions)
         ]
+
+    @rx.event
+    def set_purchase_currency_code_handler(self, val: str):
+        self.purchase_currency_code = val
+        company_currency = getattr(self, "selected_currency_code", "PEN")
+        if val == company_currency:
+            self.purchase_exchange_rate = ""
+            self.new_entry_item["original_cost"] = 0
+            self.new_entry_item["original_currency"] = ""
+            self.new_entry_item["purchase_rate"] = 0
+
+    @rx.event
+    def handle_exchange_rate_change(self, val: str):
+        self.purchase_exchange_rate = val
+
+    @rx.event
+    def handle_foreign_price_change(self, val: str):
+        """Precio en moneda del proveedor → convierte a moneda local y actualiza el ítem."""
+        try:
+            foreign = float(val) if val else 0.0
+        except ValueError:
+            foreign = 0.0
+        rate = self.purchase_exchange_rate_float
+        local = self._round_currency(foreign * rate) if (foreign > 0 and rate > 0) else 0.0
+        self.new_entry_item["price"] = local
+        self.new_entry_item["original_cost"] = foreign
+        self.new_entry_item["original_currency"] = self.purchase_currency_code
+        self.new_entry_item["purchase_rate"] = rate
+        self.new_entry_item["subtotal"] = self._round_currency(
+            float(self.new_entry_item["quantity"]) * local
+        )
+        if not self._entry_sale_price_manual:
+            margin = getattr(self, "effective_profit_margin_decimal", 0.0)
+            if margin > 0 and local > 0:
+                self.new_entry_item["sale_price"] = self._round_currency(
+                    local * (1 + margin / 100)
+                )
+                self.entry_sale_price_key += 1
 
     @rx.event
     def handle_entry_change(self, field: str, value: str):
@@ -357,6 +426,8 @@ class IngresoState(MixinState):
         self.purchase_supplier_active_index = -1
         self.purchase_supplier_input_key += 1
         self.selected_supplier = None
+        self.purchase_currency_code = ""
+        self.purchase_exchange_rate = ""
 
     def _set_new_product_mode(self):
         self.is_existing_product = False
@@ -837,7 +908,7 @@ class IngresoState(MixinState):
                                 duration=4000,
                             )
 
-                currency_code = getattr(self, "selected_currency_code", "PEN")
+                currency_code = self.effective_purchase_currency_code or getattr(self, "selected_currency_code", "PEN")
                 purchase = Purchase(
                     doc_type=doc_type,
                     series=series,
@@ -1204,6 +1275,9 @@ class IngresoState(MixinState):
                         product.category if product else item.get("category", "")
                     )
 
+                    _orig_cost = item.get("original_cost") or 0
+                    _orig_rate = item.get("purchase_rate") or 0
+                    _orig_curr = item.get("original_currency") or ""
                     purchase_item = PurchaseItem(
                         purchase_id=purchase.id,
                         product_id=product.id if product else None,
@@ -1216,6 +1290,9 @@ class IngresoState(MixinState):
                         unit=item.get("unit", MSG.FALLBACK_UNIT),
                         unit_cost=unit_cost,
                         subtotal=subtotal,
+                        original_price=Decimal(str(_orig_cost)) if _orig_cost else None,
+                        exchange_rate=Decimal(str(_orig_rate)) if _orig_rate else None,
+                        original_currency_code=_orig_curr if _orig_curr else None,
                     )
                     session.add(purchase_item)
 
@@ -1277,6 +1354,9 @@ class IngresoState(MixinState):
             "is_existing_product": False,
             "has_variants": False,
             "requires_batches": False,
+            "original_cost": 0,
+            "original_currency": "",
+            "purchase_rate": 0,
         }
         self.entry_autocomplete_suggestions = []
         self.entry_autocomplete_active_index = -1

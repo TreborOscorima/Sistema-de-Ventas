@@ -367,6 +367,49 @@ def ingreso_page() -> rx.Component:
             ),
             class_name="w-full",
         ),
+        rx.el.div(
+            rx.el.label(
+                "Moneda del Doc.",
+                class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
+            ),
+            rx.el.select(
+                rx.foreach(
+                    State.available_currencies,
+                    lambda c: rx.el.option(
+                        c["code"] + " — " + c["name"],
+                        value=c["code"],
+                    ),
+                ),
+                value=State.effective_purchase_currency_code,
+                on_change=State.set_purchase_currency_code_handler,
+                class_name=SELECT_STYLES["default"],
+            ),
+            class_name="w-full",
+        ),
+        rx.cond(
+            State.purchase_is_foreign_currency,
+            rx.el.div(
+                rx.el.label(
+                    "Tipo de Cambio (1 "
+                    + State.effective_purchase_currency_code
+                    + " = ? "
+                    + State.selected_currency_code
+                    + ")",
+                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
+                ),
+                rx.el.input(
+                    type="number",
+                    placeholder="Ej: 900.00",
+                    on_blur=State.handle_exchange_rate_change,
+                    default_value=State.purchase_exchange_rate,
+                    class_name=INPUT_STYLES["default"],
+                    min="0",
+                    step="0.000001",
+                ),
+                class_name="w-full",
+            ),
+            rx.fragment(),
+        ),
         class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end",
     )
 
@@ -637,20 +680,52 @@ def ingreso_page() -> rx.Component:
                 ),
                 class_name="col-span-6 sm:col-span-2 lg:col-span-2",
             ),
-            rx.el.div(
-                rx.el.label(
-                    "Precio Compra",
-                    class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
+            rx.cond(
+                State.purchase_is_foreign_currency,
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.label(
+                            "Precio (" + State.effective_purchase_currency_code + ")",
+                            class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
+                        ),
+                        rx.el.input(
+                            type="number",
+                            key=State.entry_form_key.to_string() + "_foreign_price",
+                            on_blur=State.handle_foreign_price_change,
+                            on_key_down=lambda key: State.handle_entry_field_keydown(key),
+                            class_name=INPUT_STYLES["default"],
+                            placeholder="0.00",
+                        ),
+                        class_name="w-full",
+                    ),
+                    rx.el.div(
+                        rx.el.label(
+                            "P. Compra (" + State.selected_currency_code + ")",
+                            class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
+                        ),
+                        rx.el.div(
+                            State.entry_local_price_display,
+                            class_name="w-full h-10 px-3 text-sm bg-slate-50 border border-slate-200 rounded-md text-right font-semibold flex items-center justify-end text-indigo-700",
+                        ),
+                        class_name="w-full",
+                    ),
+                    class_name="col-span-6 sm:col-span-4 lg:col-span-4 grid grid-cols-2 gap-2",
                 ),
-                rx.el.input(
-                    type="number",
-                    key=State.entry_form_key.to_string() + "_price",
-                    on_blur=lambda val: State.handle_entry_change("price", val),
-                    on_key_down=lambda key: State.handle_entry_field_keydown(key),
-                    class_name=INPUT_STYLES["default"],
-                    default_value=State.entry_price_display,
+                rx.el.div(
+                    rx.el.label(
+                        "Precio Compra",
+                        class_name=f"block {TYPOGRAPHY['label_secondary']} mb-1",
+                    ),
+                    rx.el.input(
+                        type="number",
+                        key=State.entry_form_key.to_string() + "_price",
+                        on_blur=lambda val: State.handle_entry_change("price", val),
+                        on_key_down=lambda key: State.handle_entry_field_keydown(key),
+                        class_name=INPUT_STYLES["default"],
+                        default_value=State.entry_price_display,
+                    ),
+                    class_name="col-span-6 sm:col-span-2 lg:col-span-2",
                 ),
-                class_name="col-span-6 sm:col-span-2 lg:col-span-2",
             ),
             rx.el.div(
                 rx.el.div(

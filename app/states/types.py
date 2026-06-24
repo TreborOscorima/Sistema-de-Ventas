@@ -35,6 +35,9 @@ class TransactionItem(TypedDict):
     is_existing_product: bool
     has_variants: bool
     requires_batches: bool
+    original_cost: float
+    original_currency: str
+    purchase_rate: float
 
 class Movement(TypedDict):
     id: str
