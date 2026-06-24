@@ -205,8 +205,8 @@ class ExportMixin:
             ws.cell(row=row, column=7, value=sale_price).number_format = currency_format
             # Margen Unitario = Fórmula: Precio - Costo
             ws.cell(row=row, column=8, value=f"=G{row}-F{row}").number_format = currency_format
-            # Margen % = Fórmula: (Margen / Costo) si Costo > 0
-            ws.cell(row=row, column=9, value=f"=IF(F{row}>0,H{row}/F{row},0)").number_format = PERCENT_FORMAT
+            # Margen % = (Margen / Costo) si Costo > 0; blanco si Costo no está definido
+            ws.cell(row=row, column=9, value=f'=IF(F{row}>0,H{row}/F{row},"")').number_format = PERCENT_FORMAT
             # Valor al Costo = Fórmula: Stock × Costo
             ws.cell(row=row, column=10, value=f"=D{row}*F{row}").number_format = currency_format
             # Valor a Venta = Fórmula: Stock × Precio
@@ -250,7 +250,7 @@ class ExportMixin:
             "Costo Unitario: Precio al que se compró el producto al proveedor.",
             "Precio Venta: Precio de venta al público.",
             "Margen Unitario = Precio Venta - Costo Unitario (ganancia por unidad).",
-            "Margen % = Margen Unitario ÷ Costo Unitario × 100.",
+            "Margen % = Margen Unitario ÷ Costo Unitario × 100. Productos sin costo definido muestran blanco.",
             "Valor al Costo: Inversión total = Stock × Costo Unitario.",
             "Valor a Venta: Potencial de ventas = Stock × Precio Venta.",
             "SIN STOCK: Producto agotado. CRÍTICO: ≤5 unidades. BAJO: ≤10 unidades.",
