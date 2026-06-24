@@ -569,6 +569,7 @@ class DashboardState(MixinState):
             session.info["tenant_bypass"] = True
             results = session.exec(
                 select(
+                    Product.id,
                     Product.description,
                     func.sum(SaleItem.quantity).label("qty"),
                     func.sum(SaleItem.subtotal).label("revenue")
@@ -588,19 +589,47 @@ class DashboardState(MixinState):
                     )
                 )
                 .group_by(Product.id, Product.description)
-                .order_by(func.sum(SaleItem.quantity).desc())
-                .limit(10)
+                .order_by(func.sum(SaleItem.subtotal).desc())
+                .limit(30)
             ).all()
 
-            self.dash_top_products = [
-                {
-                    "name": r[0][:25] + "..." if len(r[0]) > 25 else r[0],
-                    "quantity": int(r[1] or 0),
-                    "revenue": float(r[2] or 0),
-                    "revenue_fmt": f"{float(r[2] or 0):.2f}",
-                }
-                for r in results
-            ]
+            # Devoluciones por producto para descontar del neto
+            ret_rows = session.exec(
+                select(
+                    SaleItem.product_id,
+                    func.sum(SaleReturnItem.quantity).label("ret_qty"),
+                    func.sum(SaleReturnItem.refund_subtotal).label("ret_rev"),
+                )
+                .select_from(SaleReturnItem)
+                .join(SaleReturn, SaleReturn.id == SaleReturnItem.sale_return_id)
+                .join(SaleItem, SaleItem.id == SaleReturnItem.sale_item_id)
+                .where(
+                    and_(
+                        SaleReturn.timestamp >= period_start,
+                        SaleReturn.timestamp <= period_end,
+                        SaleReturn.company_id == company_id,
+                        SaleReturn.branch_id == branch_id,
+                    )
+                )
+                .group_by(SaleItem.product_id)
+            ).all()
+
+        refund_by_prod: dict[int, tuple[float, float]] = {
+            r[0]: (float(r[1] or 0), float(r[2] or 0)) for r in ret_rows
+        }
+        top: list[dict] = []
+        for r in results:
+            prod_id, name = r[0], r[1]
+            gross_qty, gross_rev = int(r[2] or 0), float(r[3] or 0)
+            ret_qty, ret_rev = refund_by_prod.get(prod_id, (0.0, 0.0))
+            net_qty = max(0, gross_qty - int(ret_qty))
+            net_rev = max(0.0, gross_rev - ret_rev)
+            if net_qty <= 0 and net_rev <= 0:
+                continue  # producto totalmente devuelto → excluir del top
+            short_name = name[:25] + "..." if len(name) > 25 else name
+            top.append({"name": short_name, "quantity": net_qty, "revenue": net_rev, "revenue_fmt": f"{net_rev:.2f}"})
+        top.sort(key=lambda x: x["revenue"], reverse=True)
+        self.dash_top_products = top[:10]
 
     def _load_expiring_batches(self):
         """Carga lotes vencidos y próximos a vencer (con stock > 0).
@@ -771,19 +800,49 @@ class DashboardState(MixinState):
                 query = query.limit(int(limit))
             rows = session.exec(query).all()
 
-        total_sales = sum(float(row[1] or 0) for row in rows)
+            # Devoluciones por categoría para descontar del neto
+            ref_cat_expr = func.coalesce(
+                func.nullif(func.trim(SaleItem.product_category_snapshot), ""),
+                Product.category,
+                MSG.FALLBACK_NO_CATEGORY,
+            )
+            ref_rows = session.exec(
+                select(ref_cat_expr, func.sum(SaleReturnItem.refund_subtotal))
+                .select_from(SaleReturnItem)
+                .join(SaleReturn, SaleReturn.id == SaleReturnItem.sale_return_id)
+                .join(SaleItem, SaleItem.id == SaleReturnItem.sale_item_id)
+                .outerjoin(Product, Product.id == SaleItem.product_id)
+                .where(
+                    and_(
+                        SaleReturn.timestamp >= period_start,
+                        SaleReturn.timestamp <= period_end,
+                        SaleReturn.company_id == company_id,
+                        SaleReturn.branch_id == branch_id,
+                    )
+                )
+                .group_by(ref_cat_expr)
+            ).all()
+        refund_by_cat: dict[str, float] = {
+            (r[0] or MSG.FALLBACK_NO_CATEGORY): float(r[1] or 0) for r in ref_rows
+        }
+
+        result_list: list[dict] = []
+        for row in rows:
+            cat = row[0] or MSG.FALLBACK_NO_CATEGORY
+            gross = float(row[1] or 0)
+            net = max(0.0, gross - refund_by_cat.get(cat, 0.0))
+            if net <= 0:
+                continue  # categoría totalmente devuelta → excluir del chart
+            result_list.append({"category": cat, "_net": net})
+        total_sales = sum(r["_net"] for r in result_list)
         return [
             {
-                "category": row[0] or MSG.FALLBACK_NO_CATEGORY,
-                "total": float(row[1] or 0),
-                "total_fmt": f"{float(row[1] or 0):.2f}",
-                "percentage": (
-                    round((float(row[1] or 0) / total_sales * 100), 1)
-                    if total_sales > 0
-                    else 0
-                ),
+                "category": r["category"],
+                "total": r["_net"],
+                "total_fmt": f"{r['_net']:.2f}",
+                "percentage": round(r["_net"] / total_sales * 100, 1) if total_sales > 0 else 0,
             }
-            for row in rows
+            for r in result_list
         ]
 
     def _load_payment_breakdown(self):
