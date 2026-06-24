@@ -202,11 +202,11 @@ class IngresoState(MixinState):
             self.purchase_exchange_rate = 0.0
 
     @rx.event
-    def handle_foreign_price_change(self, val: str):
+    def handle_foreign_price_change(self, val: float):
         """Precio en moneda del proveedor → convierte a moneda local y actualiza el ítem."""
         try:
-            foreign = float(val) if val else 0.0
-        except ValueError:
+            foreign = float(val or 0)
+        except (ValueError, TypeError):
             foreign = 0.0
         rate = self.purchase_exchange_rate_float
         local = self._round_currency(foreign * rate) if (foreign > 0 and rate > 0) else 0.0
