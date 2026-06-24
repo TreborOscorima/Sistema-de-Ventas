@@ -135,7 +135,12 @@ class CashboxSale(TypedDict):
     items_preview: List[TransactionItem]
     items_hidden_count: int
     is_deleted: bool
+    is_returned: bool
     delete_reason: str
+    has_return: bool
+    refund_amount: str
+    net_amount: str
+    return_type: str
 
 class CashboxSession(TypedDict):
     opening_amount: float

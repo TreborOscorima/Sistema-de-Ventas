@@ -451,7 +451,7 @@ class HistoryMixin:
             return next(iter(keys))
         return ""
 
-    def _cashbox_sale_row(self, sale: Sale, user: UserModel | None, pm_names: dict[int, str] | None = None, log_pm_names: dict[int, str] | None = None) -> CashboxSale:
+    def _cashbox_sale_row(self, sale: Sale, user: UserModel | None, pm_names: dict[int, str] | None = None, log_pm_names: dict[int, str] | None = None, refund_by_sale: dict[int, float] | None = None) -> CashboxSale:
         payments = sale.payments or []
         details_text = self._payment_summary_from_payments(payments, pm_names)
         method_label = self._payment_method_display(payments, pm_names)
@@ -503,6 +503,10 @@ class HistoryMixin:
             )
             items_total += item.subtotal or 0
         total_amount = sale.total_amount if sale.total_amount is not None else items_total
+        refund_amount_val = self._round_currency(
+            (refund_by_sale or {}).get(sale.id or 0, 0.0)
+        )
+        net_amount_val = self._round_currency(float(paid_total) - refund_amount_val)
         preview_limit = 2
         hidden_count = max(len(items) - preview_limit, 0)
         sale_dict: CashboxSale = {
@@ -525,6 +529,11 @@ class HistoryMixin:
             "service_total": total_amount,
             "payment_breakdown": payment_breakdown,
             "payment_kind": payment_kind,
+            "has_return": refund_amount_val > 0,
+            "is_returned": sale.status == SaleStatus.returned,
+            "refund_amount": fmt_price(refund_amount_val),
+            "net_amount": fmt_price(max(net_amount_val, 0.0)),
+            "return_type": "total" if net_amount_val <= 0 else "parcial",
         }
         return sale_dict
 
@@ -557,6 +566,7 @@ class HistoryMixin:
                     ).all()
                     pm_names = {m.id: m.name for m in methods if m.id is not None}
                     sale_ids = [sale.id for sale, _ in sales_results if sale.id is not None]
+                    refund_by_sale: dict[int, float] = {}
                     if sale_ids:
                         log_rows = session.exec(
                             select(CashboxLogModel)
@@ -568,7 +578,21 @@ class HistoryMixin:
                         for _log in log_rows:
                             if _log.sale_id and _log.payment_method:
                                 log_pm_names[_log.sale_id] = _log.payment_method
+                        refund_logs = session.exec(
+                            select(CashboxLogModel)
+                            .where(CashboxLogModel.action == "Devolucion")
+                            .where(CashboxLogModel.sale_id.in_(sale_ids))
+                            .where(CashboxLogModel.is_voided == False)
+                            .where(CashboxLogModel.company_id == company_id)
+                            .where(CashboxLogModel.branch_id == branch_id)
+                        ).all()
+                        for rlog in refund_logs:
+                            if rlog.sale_id:
+                                refund_by_sale[rlog.sale_id] = (
+                                    refund_by_sale.get(rlog.sale_id, 0.0)
+                                    + float(rlog.amount or 0)
+                                )
                 return [
-                    self._cashbox_sale_row(sale, user, pm_names, log_pm_names)
+                    self._cashbox_sale_row(sale, user, pm_names, log_pm_names, refund_by_sale)
                     for sale, user in sales_results
                 ]

@@ -87,7 +87,8 @@ class ReportsMixin:
                 continue
             total_operations += 1
             total_amount = float(sale.get("total", 0) or 0)
-            paid_amount = float(sale.get("amount", 0) or 0)
+            # amount_paid = pago inicial + cuotas abonadas (amount = solo pago inicial)
+            paid_amount = float(sale.get("amount_paid", sale.get("amount", 0)) or 0)
             payment_condition = (sale.get("payment_condition") or "").strip().lower()
             payment_type = (sale.get("payment_type") or "").strip().lower()
             is_credit = (
@@ -105,6 +106,9 @@ class ReportsMixin:
                 except (ValueError, TypeError):
                     refund_exec = 0.0
             net_amount = max(0.0, total_amount - refund_exec)
+            # Crédito totalmente devuelto sin CashboxLog → excluir de facturado/pendiente
+            if is_credit and sale.get("is_returned"):
+                net_amount = 0.0
             net_paid = max(0.0, paid_amount - refund_exec)
             total_facturado += net_amount
             total_cobrado += net_paid
@@ -240,6 +244,9 @@ class ReportsMixin:
                     refund_raw = 0.0
                 return_type = sale.get("return_type", "")
                 estado_sale = "Devuelta" if return_type == "total" else "Dev. Parcial"
+            elif sale.get("is_returned"):
+                # Crédito devuelto sin reembolso en efectivo (nunca se cobró)
+                estado_sale = "Devuelta"
 
             ws.cell(row=row, column=1, value=sale["timestamp"])
             ws.cell(row=row, column=2, value=sale["user"])
@@ -247,7 +254,8 @@ class ReportsMixin:
             ws.cell(row=row, column=4, value=method_label)
             ws.cell(row=row, column=5, value=payment_details)
             _total_num = float(str(sale.get("total", 0) or 0).replace(",", ""))
-            _paid_num  = float(str(sale.get("amount", 0) or 0).replace(",", ""))
+            # Monto cobrado = pago inicial + cuotas abonadas (refleja lo realmente recibido)
+            _paid_num = float(sale.get("amount_paid", 0) or 0)
             ws.cell(row=row, column=6, value=_total_num).number_format = currency_format
             ws.cell(row=row, column=7, value=_paid_num).number_format = currency_format
             ws.cell(row=row, column=8, value=details)
