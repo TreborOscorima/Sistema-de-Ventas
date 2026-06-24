@@ -46,7 +46,7 @@ class IngresoState(MixinState):
     purchase_supplier_input_key: int = 0
     selected_supplier: Optional[Dict[str, Any]] = None
     purchase_currency_code: str = ""
-    purchase_exchange_rate: str = ""
+    purchase_exchange_rate: float = 0.0
     is_existing_product: bool = False
     has_variants: bool = False
     requires_batches: bool = False
@@ -135,12 +135,17 @@ class IngresoState(MixinState):
             return False
         return code != getattr(self, "selected_currency_code", "PEN")
 
-    @rx.var(cache=False)
+    @rx.var(cache=True)
     def purchase_exchange_rate_float(self) -> float:
-        try:
-            return max(0.0, float(self.purchase_exchange_rate or 0))
-        except (ValueError, TypeError):
-            return 0.0
+        return max(0.0, self.purchase_exchange_rate)
+
+    @rx.var(cache=False)
+    def purchase_exchange_rate_display(self) -> str:
+        """Para el campo input: vacío cuando es 0, sin decimales innecesarios."""
+        v = self.purchase_exchange_rate
+        if v <= 0:
+            return ""
+        return str(int(v)) if v == int(v) else f"{v:g}"
 
     @rx.var(cache=False)
     def entry_local_price_display(self) -> str:
@@ -184,14 +189,17 @@ class IngresoState(MixinState):
         self.purchase_currency_code = val
         company_currency = getattr(self, "selected_currency_code", "PEN")
         if val == company_currency:
-            self.purchase_exchange_rate = ""
+            self.purchase_exchange_rate = 0.0
             self.new_entry_item["original_cost"] = 0
             self.new_entry_item["original_currency"] = ""
             self.new_entry_item["purchase_rate"] = 0
 
     @rx.event
-    def handle_exchange_rate_change(self, val: str):
-        self.purchase_exchange_rate = val
+    def handle_exchange_rate_change(self, val: float):
+        try:
+            self.purchase_exchange_rate = max(0.0, float(val or 0))
+        except (ValueError, TypeError):
+            self.purchase_exchange_rate = 0.0
 
     @rx.event
     def handle_foreign_price_change(self, val: str):
@@ -427,7 +435,7 @@ class IngresoState(MixinState):
         self.purchase_supplier_input_key += 1
         self.selected_supplier = None
         self.purchase_currency_code = ""
-        self.purchase_exchange_rate = ""
+        self.purchase_exchange_rate = 0.0
 
     def _set_new_product_mode(self):
         self.is_existing_product = False

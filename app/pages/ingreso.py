@@ -399,9 +399,10 @@ def ingreso_page() -> rx.Component:
                 ),
                 rx.el.input(
                     type="number",
+                    key=State.purchase_currency_code,
                     placeholder="Ej: 900.00",
-                    on_blur=State.handle_exchange_rate_change,
-                    default_value=State.purchase_exchange_rate,
+                    on_blur=lambda val: State.handle_exchange_rate_change(val),
+                    default_value=State.purchase_exchange_rate_display,
                     class_name=INPUT_STYLES["default"],
                     min="0",
                     step="0.000001",
