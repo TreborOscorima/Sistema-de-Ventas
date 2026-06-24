@@ -77,7 +77,7 @@ def close_cashbox_modal() -> rx.Component:
               class_name="border-b",
             ),
             rx.el.tr(
-              rx.el.td("Egresos caja chica", class_name="py-2 px-3 text-left text-sm"),
+              rx.el.td("Devoluciones y egresos", class_name="py-2 px-3 text-left text-sm"),
               rx.el.td(
                 State.cashbox_close_expense_total_display,
                 class_name="py-2 px-3 text-right text-sm font-semibold",
@@ -109,10 +109,10 @@ def close_cashbox_modal() -> rx.Component:
           rx.el.thead(
             rx.el.tr(
               rx.el.th("Metodo", scope="col", class_name=TABLE_STYLES["header_cell"]),
-              rx.el.th(
-                "Movimientos", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"
-              ),
-              rx.el.th("Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+              rx.el.th("Mov.", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+              rx.el.th("Ingresos", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+              rx.el.th("Devoluciones", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+              rx.el.th("Neto", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
               class_name=TABLE_STYLES["header"],
             )
           ),
@@ -130,14 +130,26 @@ def close_cashbox_modal() -> rx.Component:
                 ),
                 rx.el.td(
                   item["total"],
-                  class_name="py-2 px-3 text-right text-sm font-semibold",
+                  class_name="py-2 px-3 text-right text-sm text-slate-500",
+                ),
+                rx.el.td(
+                  rx.cond(
+                    item["has_refund"],
+                    rx.el.span("-", item["refund"], class_name="text-red-500 font-medium"),
+                    rx.el.span("—", class_name="text-slate-300"),
+                  ),
+                  class_name="py-2 px-3 text-right text-sm",
+                ),
+                rx.el.td(
+                  item["net_total"],
+                  class_name="py-2 px-3 text-right text-sm font-semibold text-slate-900",
                 ),
                 class_name="border-b",
               ),
             ),
             rx.el.tr(
               rx.el.td(
-                rx.el.span("Total ingresos", class_name="font-semibold"),
+                rx.el.span("Total neto", class_name="font-semibold"),
                 class_name="py-2 px-3 text-left text-sm",
               ),
               rx.el.td(
@@ -146,7 +158,22 @@ def close_cashbox_modal() -> rx.Component:
               ),
               rx.el.td(
                 State.cashbox_close_income_total_display,
-                class_name="py-2 px-3 text-right text-sm font-bold",
+                class_name="py-2 px-3 text-right text-sm text-slate-400",
+              ),
+              rx.el.td(
+                rx.cond(
+                  State.cashbox_close_refund_total > 0,
+                  rx.el.span(
+                    "-", State.cashbox_close_refund_total_display,
+                    class_name="text-red-500 font-medium",
+                  ),
+                  rx.el.span("—", class_name="text-slate-300"),
+                ),
+                class_name="py-2 px-3 text-right text-sm",
+              ),
+              rx.el.td(
+                rx.el.span(State.cashbox_close_net_income_display, class_name="font-bold text-slate-900"),
+                class_name="py-2 px-3 text-right text-sm",
               ),
               class_name="border-t border-slate-200 bg-slate-50",
             )
@@ -202,6 +229,60 @@ def close_cashbox_modal() -> rx.Component:
           class_name="max-h-64 overflow-y-auto overflow-x-auto border rounded-lg",
         ),
         class_name="mb-6",
+      ),
+      # Detalle de egresos (devoluciones y gastos caja chica)
+      rx.cond(
+        State.cashbox_close_expense_total > 0,
+        rx.el.div(
+          rx.el.h4(
+            "Detalle de egresos",
+            class_name=f"{TYPOGRAPHY['card_title']} mb-2",
+          ),
+          rx.el.div(
+            rx.el.table(
+              rx.el.thead(
+                rx.el.tr(
+                  rx.el.th("Hora", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th("Concepto", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                  rx.el.th(
+                    "Monto", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"
+                  ),
+                  class_name=TABLE_STYLES["header"],
+                )
+              ),
+              rx.el.tbody(
+                rx.foreach(
+                  State.cashbox_close_summary_returns,
+                  lambda exp: rx.el.tr(
+                    rx.el.td(
+                      exp["time"],
+                      class_name="py-2 px-3 text-sm text-slate-500 font-mono whitespace-nowrap",
+                    ),
+                    rx.el.td(
+                      rx.el.p(
+                        exp["concept"],
+                        class_name="text-sm font-medium text-slate-900 max-w-md truncate",
+                        title=exp["concept"],
+                      ),
+                      class_name="py-2 px-3 text-sm",
+                    ),
+                    rx.el.td(
+                      rx.el.span(
+                        "-", State.currency_symbol, exp["amount"],
+                        class_name="text-red-600 font-semibold",
+                      ),
+                      class_name="py-2 px-3 text-right text-sm",
+                    ),
+                    class_name="border-b",
+                  ),
+                )
+              ),
+              class_name="min-w-full text-sm",
+            ),
+            class_name="max-h-48 overflow-y-auto overflow-x-auto border rounded-lg",
+          ),
+          class_name="mb-6",
+        ),
       ),
       # Sección de arqueo por denominación
       rx.el.div(

@@ -49,7 +49,7 @@ WARNING_FILL = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="
 CURRENCY_FORMAT = '"S/"#,##0.00'
 PERCENT_FORMAT = '0.00%'
 NUMBER_FORMAT = '#,##0'
-PDF_CONTROL_KEYS = {"logo_path", "logo", "page_size", "column_widths", "wrap_columns"}
+PDF_CONTROL_KEYS = {"logo_path", "logo", "page_size", "column_widths", "wrap_columns", "method_table"}
 
 
 def _sanitize_excel_value(value: Any) -> Any:
@@ -426,6 +426,62 @@ def create_pdf_report(
         )
         elements.append(info_table)
         elements.append(Spacer(1, 12))
+
+    method_table_cfg = info_dict.get("method_table")
+    if method_table_cfg and isinstance(method_table_cfg, dict):
+        mt_title = method_table_cfg.get("title", "")
+        mt_headers = method_table_cfg.get("headers") or []
+        mt_data = method_table_cfg.get("data") or []
+        if mt_headers or mt_data:
+            if mt_title:
+                section_style = ParagraphStyle(
+                    name="MethodTableTitle",
+                    parent=styles["Normal"],
+                    fontSize=10,
+                    fontName="Helvetica-Bold",
+                    textColor=colors.HexColor("#1E3A8A"),
+                    spaceAfter=4,
+                )
+                elements.append(Paragraph(mt_title, section_style))
+            mt_table_data: list[list[Any]] = []
+            if mt_headers:
+                mt_table_data.append(mt_headers)
+            mt_table_data.extend(mt_data)
+            n_rows = len(mt_table_data)
+            mt_col_widths_raw = method_table_cfg.get("column_widths")
+            mt_col_widths = None
+            if (
+                mt_col_widths_raw
+                and isinstance(mt_col_widths_raw, (list, tuple))
+                and len(mt_col_widths_raw) == (len(mt_headers) or (len(mt_data[0]) if mt_data else 0))
+            ):
+                try:
+                    nw = [float(w) for w in mt_col_widths_raw]
+                    if sum(nw) <= 1.1:
+                        mt_col_widths = [doc.width * w for w in nw]
+                except (TypeError, ValueError):
+                    pass
+            mt_tbl = Table(mt_table_data, colWidths=mt_col_widths, hAlign="LEFT")
+            mt_style = TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (0, 0), (0, -1), "LEFT"),
+                ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+                ("ALIGN", (1, 0), (1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("BACKGROUND", (0, n_rows - 1), (-1, n_rows - 1), colors.HexColor("#E5E7EB")),
+                ("FONTNAME", (0, n_rows - 1), (-1, n_rows - 1), "Helvetica-Bold"),
+            ])
+            mt_tbl.setStyle(mt_style)
+            elements.append(mt_tbl)
+            elements.append(Spacer(1, 12))
 
     table_data: list[list[Any]] = []
     if headers:

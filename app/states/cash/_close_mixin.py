@@ -42,10 +42,30 @@ class CloseMixin:
                 "method": item.get("method", MSG.FALLBACK_NOT_SPECIFIED),
                 "count": str(int(item.get("count", 0))),
                 "total": self._format_currency(item.get("total", 0)),
+                "refund": self._format_currency(item.get("refund", 0.0)),
+                "net_total": self._format_currency(item.get("net_total", item.get("total", 0))),
+                "has_refund": item.get("refund", 0.0) > 0,
             }
             for item in self.summary_by_method
             if item.get("total", 0) > 0
         ]
+
+    @rx.var(cache=True)
+    def cashbox_close_refund_total(self) -> float:
+        """Suma de devoluciones por método (para el total de la columna DEVOLUCIONES)."""
+        return self._round_currency(
+            sum(item.get("refund", 0.0) for item in self.summary_by_method)
+        )
+
+    @rx.var(cache=True)
+    def cashbox_close_refund_total_display(self) -> str:
+        return self._format_currency(self.cashbox_close_refund_total)
+
+    @rx.var(cache=True)
+    def cashbox_close_net_income_display(self) -> str:
+        """Ingreso neto = ingresos brutos - total devoluciones (sin gasto caja chica)."""
+        net = self._round_currency(self.cashbox_close_income_total - self.cashbox_close_refund_total)
+        return self._format_currency(net)
 
     @rx.var(cache=True)
     def cashbox_close_total_amount(self) -> str:
@@ -174,8 +194,10 @@ class CloseMixin:
         summary = breakdown["summary"]
         # No bloqueamos el cierre aunque no haya movimientos: una caja abierta con
         # $0 y cero ventas es válida de cerrar (_cashbox_guard ya verificó is_open).
+        day_expenses = self._get_day_expenses(today)
         self.summary_by_method = summary
         self.cashbox_close_summary_sales = day_sales
+        self.cashbox_close_summary_returns = day_expenses
         self.cashbox_close_summary_date = today
         self.cashbox_close_opening_amount = breakdown["opening_amount"]
         self.cashbox_close_income_total = breakdown["income_total"]
@@ -209,6 +231,7 @@ class CloseMixin:
         breakdown = self._build_cashbox_close_breakdown(date)
         summary = breakdown["summary"]
         day_sales = self.cashbox_close_summary_sales or self._get_day_sales(date)
+        day_expenses = self.cashbox_close_summary_returns or self._get_day_expenses(date)
         closing_timestamp = self._display_now().strftime("%Y-%m-%d %H:%M:%S")
         totals_list = [
             {
@@ -439,6 +462,21 @@ class CloseMixin:
             receipt_lines.append(line())
             seq -= 1
 
+        if day_expenses:
+            receipt_lines.append(line())
+            receipt_lines.append("")
+            receipt_lines.append("DETALLE DE EGRESOS")
+            receipt_lines.append("")
+            for exp in day_expenses:
+                receipt_lines.append(f"{exp.get('time', '')}")
+                receipt_lines.extend(
+                    self._wrap_receipt_label_value(
+                        "Concepto", exp.get("concept", ""), receipt_width
+                    )
+                )
+                receipt_lines.append(row("Monto:", f"-{self._format_currency(float(exp.get('amount_raw', 0)))}"))
+                receipt_lines.append(line())
+
         receipt_lines.extend([
             "",
             center("FIN DEL REPORTE"),
@@ -546,6 +584,47 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
                 )
             return result
 
+    def _get_day_expenses(self, date: str) -> list[dict]:
+        """Devuelve los egresos (devoluciones + gastos caja chica) del turno."""
+        start_dt, end_dt, session_info = self._cashbox_time_range(date)
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return []
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            statement = (
+                select(CashboxLogModel, UserModel.username)
+                .join(UserModel, isouter=True)
+                .where(CashboxLogModel.amount > 0)
+                .where(CashboxLogModel.action.in_(CASHBOX_EXPENSE_ACTIONS))
+                .where(CashboxLogModel.is_voided == False)
+                .where(CashboxLogModel.timestamp >= start_dt)
+                .where(CashboxLogModel.timestamp <= end_dt)
+                .where(CashboxLogModel.company_id == company_id)
+                .where(CashboxLogModel.branch_id == branch_id)
+                .order_by(CashboxLogModel.timestamp)
+            )
+            if session_info:
+                statement = statement.where(
+                    CashboxLogModel.user_id == session_info["user_id"]
+                )
+            logs = session.exec(statement).all()
+            result: list[dict] = []
+            for log, username in logs:
+                action_label = (log.action or "").replace("_", " ").strip().title()
+                concept = (log.notes or action_label or "Egreso").strip()
+                time_label = self._format_event_timestamp(log.timestamp, "%H:%M") if log.timestamp else ""
+                result.append({
+                    "time": time_label,
+                    "user": username or MSG.FALLBACK_UNKNOWN,
+                    "concept": concept,
+                    "amount": fmt_price(self._round_currency(log.amount or 0)),
+                    "amount_raw": float(log.amount or 0),
+                    "action": log.action or "",
+                })
+            return result
+
     def _build_cashbox_summary(self, date: str) -> list[dict]:
         start_date, end_date, session_info = self._cashbox_time_range(date)
         company_id = self._company_id()
@@ -577,17 +656,43 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
             statement
             .group_by(method_col)
         )
+        refund_stmt = (
+            select(
+                sqlalchemy.func.coalesce(
+                    CashboxLogModel.payment_method, MSG.FALLBACK_NOT_SPECIFIED
+                ),
+                sqlalchemy.func.sum(CashboxLogModel.amount),
+            )
+            .where(CashboxLogModel.action == "Devolucion")
+            .where(CashboxLogModel.is_voided == False)
+            .where(CashboxLogModel.timestamp >= start_date)
+            .where(CashboxLogModel.timestamp <= end_date)
+            .where(CashboxLogModel.company_id == company_id)
+            .where(CashboxLogModel.branch_id == branch_id)
+            .group_by(CashboxLogModel.payment_method)
+        )
         summary: list[dict] = []
         with rx.session() as session:
             session.info["tenant_bypass"] = True
             results = session.exec(statement).all()
+            refund_results = session.exec(refund_stmt).all()
+        refunds_by_method: dict[str, float] = {}
+        for r_method, r_amount in refund_results:
+            label = (r_method or MSG.FALLBACK_NOT_SPECIFIED).strip() or MSG.FALLBACK_NOT_SPECIFIED
+            refunds_by_method[label] = self._round_currency(
+                refunds_by_method.get(label, 0.0) + float(r_amount or 0)
+            )
         for method, count, amount in results:
             label = (method or MSG.FALLBACK_NOT_SPECIFIED).strip() or MSG.FALLBACK_NOT_SPECIFIED
+            gross = self._round_currency(amount or 0)
+            refund = self._round_currency(refunds_by_method.get(label, 0.0))
             summary.append(
                 {
                     "method": label,
                     "count": int(count or 0),
-                    "total": self._round_currency(amount or 0),
+                    "total": gross,
+                    "refund": refund,
+                    "net_total": self._round_currency(gross - refund),
                 }
             )
         summary.sort(key=lambda item: item.get("total", 0), reverse=True)
@@ -597,6 +702,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
         self.cashbox_close_modal_open = False
         self.summary_by_method = []
         self.cashbox_close_summary_sales = []
+        self.cashbox_close_summary_returns = []
         self.cashbox_close_summary_date = ""
         self.cashbox_close_opening_amount = 0.0
         self.cashbox_close_income_total = 0.0

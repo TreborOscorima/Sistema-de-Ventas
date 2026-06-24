@@ -325,25 +325,50 @@ class ReportsMixin:
         info_dict = {
             "Fecha Cierre": report_date,
             "Responsable": self.current_user["username"],
+            "Apertura": self._format_currency(breakdown["opening_amount"]),
+            "Ingresos reales": self._format_currency(breakdown["income_total"]),
+            "Devoluciones y egresos": self._format_currency(breakdown["expense_total"]),
+            "Saldo esperado": self._format_currency(breakdown["expected_total"]),
         }
-        total_value = 0.0
-        for item in summary:
-            total = item.get("total", 0) or 0
-            if total <= 0:
-                continue
-            method = (item.get("method", MSG.FALLBACK_NOT_SPECIFIED) or "").strip() or MSG.FALLBACK_NOT_SPECIFIED
-            info_dict[f"Total {method}"] = self._format_currency(total)
-            total_value += float(total)
-
-        info_dict["Apertura"] = self._format_currency(breakdown["opening_amount"])
-        info_dict["Ingresos reales"] = self._format_currency(breakdown["income_total"])
-        info_dict["Devoluciones y egresos"] = self._format_currency(breakdown["expense_total"])
-        info_dict["Saldo esperado"] = self._format_currency(breakdown["expected_total"])
         if self.cashbox_close_has_counted:
             info_dict["Total contado"] = self._format_currency(self.cashbox_close_counted_total)
             diff = self.cashbox_close_discrepancy
             sign = "+" if diff > 0 else ""
             info_dict["Diferencia"] = f"{sign}{self._format_currency(diff)}"
+
+        # Tabla "Ingresos por método" con columnas Método | Mov. | Ingresos | Devoluciones | Neto
+        mt_rows: list[list[str]] = []
+        for item in summary:
+            gross = item.get("total", 0) or 0
+            if gross <= 0:
+                continue
+            refund = item.get("refund", 0.0) or 0.0
+            net = item.get("net_total", gross - refund) or (gross - refund)
+            count = item.get("count", 0) or 0
+            method_lbl = (item.get("method", MSG.FALLBACK_NOT_SPECIFIED) or "").strip() or MSG.FALLBACK_NOT_SPECIFIED
+            mt_rows.append([
+                method_lbl,
+                str(int(count)),
+                self._format_currency(gross),
+                f"-{self._format_currency(refund)}" if refund > 0 else "—",
+                self._format_currency(net),
+            ])
+        income_total_val = breakdown["income_total"]
+        refund_total_val = self._round_currency(sum(item.get("refund", 0.0) or 0 for item in summary if (item.get("total") or 0) > 0))
+        net_total_val = self._round_currency(income_total_val - refund_total_val)
+        mt_rows.append([
+            "Total",
+            "—",
+            self._format_currency(income_total_val),
+            f"-{self._format_currency(refund_total_val)}" if refund_total_val > 0 else "—",
+            self._format_currency(net_total_val),
+        ])
+        info_dict["method_table"] = {
+            "title": "Ingresos por método",
+            "headers": ["Método", "Mov.", "Ingresos", "Devoluciones", "Neto"],
+            "data": mt_rows,
+            "column_widths": [0.30, 0.10, 0.20, 0.22, 0.18],
+        }
 
         def _format_time(timestamp: str) -> str:
             if not timestamp:
@@ -483,17 +508,36 @@ class ReportsMixin:
         info_dict = {
             "Fecha Cierre": report_date,
             "Responsable": responsable,
+            "Apertura": self._format_currency(opening_amount),
+            "Ingresos reales": self._format_currency(income_total),
+            "Egresos caja chica": self._format_currency(expense_total),
+            "Saldo esperado": self._format_currency(expected_total),
         }
+
+        # Tabla "Ingresos por método" (sin desglose de devoluciones por método en histórico)
+        mt_rows_log: list[list[str]] = []
         for item in summary:
-            total = item.get("total", 0) or 0
-            if total <= 0:
+            gross = item.get("total", 0) or 0
+            if gross <= 0:
                 continue
-            method = (item.get("method", MSG.FALLBACK_NOT_SPECIFIED) or "").strip() or MSG.FALLBACK_NOT_SPECIFIED
-            info_dict[f"Total {method}"] = self._format_currency(total)
-        info_dict["Apertura"] = self._format_currency(opening_amount)
-        info_dict["Ingresos reales"] = self._format_currency(income_total)
-        info_dict["Egresos caja chica"] = self._format_currency(expense_total)
-        info_dict["Saldo esperado"] = self._format_currency(expected_total)
+            count = item.get("count", 0) or 0
+            method_lbl = (item.get("method", MSG.FALLBACK_NOT_SPECIFIED) or "").strip() or MSG.FALLBACK_NOT_SPECIFIED
+            mt_rows_log.append([
+                method_lbl,
+                str(int(count)),
+                self._format_currency(gross),
+            ])
+        mt_rows_log.append([
+            "Total",
+            "—",
+            self._format_currency(income_total),
+        ])
+        info_dict["method_table"] = {
+            "title": "Ingresos por método",
+            "headers": ["Método", "Mov.", "Ingresos"],
+            "data": mt_rows_log,
+            "column_widths": [0.50, 0.15, 0.35],
+        }
 
         def _format_time(timestamp: str) -> str:
             if not timestamp:
