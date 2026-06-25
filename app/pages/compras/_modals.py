@@ -231,7 +231,7 @@ def purchase_detail_modal() -> rx.Component:
                 class_name="py-3 px-4",
               ),
               rx.el.td(
-                item["quantity"].to_string(),
+                item["quantity"],
                 class_name="py-3 px-4 text-center text-sm tabular-nums",
               ),
               rx.el.td(

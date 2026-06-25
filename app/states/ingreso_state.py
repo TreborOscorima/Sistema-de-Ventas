@@ -916,14 +916,17 @@ class IngresoState(MixinState):
                                 duration=4000,
                             )
 
-                currency_code = self.effective_purchase_currency_code or getattr(self, "selected_currency_code", "PEN")
+                # total_amount es siempre en moneda local (los precios se convierten al ingresar).
+                # currency_code refleja la moneda local; la moneda del doc del proveedor
+                # queda auditada en cada PurchaseItem.original_currency_code.
+                local_currency = getattr(self, "selected_currency_code", "PEN")
                 purchase = Purchase(
                     doc_type=doc_type,
                     series=series,
                     number=number,
                     issue_date=issue_date,
                     total_amount=Decimal(str(self.entry_total or 0)),
-                    currency_code=str(currency_code or "PEN"),
+                    currency_code=str(local_currency or "PEN"),
                     notes=notes,
                     company_id=company_id,
                     branch_id=branch_id,
