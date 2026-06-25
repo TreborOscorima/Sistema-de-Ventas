@@ -700,6 +700,26 @@ class IngresoState(MixinState):
         item_copy["subtotal"] = fmt_price(float(item_copy.get("subtotal") or 0))
         item_copy["price"] = fmt_price(float(item_copy.get("price") or 0))
         item_copy["sale_price"] = fmt_price(float(item_copy.get("sale_price") or 0))
+
+        _new_pid = item_copy.get("product_id")
+        _new_bc = (item_copy.get("barcode") or "").strip()
+        _new_vid = item_copy.get("variant_id")
+        _new_batch = (item_copy.get("batch_code") or "").strip()
+        for _existing in self.new_entry_items:
+            _ex_pid = _existing.get("product_id")
+            _ex_bc = (_existing.get("barcode") or "").strip()
+            _same_product = (
+                (_new_pid and _ex_pid and _new_pid == _ex_pid)
+                or (_new_bc and _ex_bc and _new_bc == _ex_bc)
+            )
+            _same_variant = _new_vid == _existing.get("variant_id")
+            _same_batch = _new_batch == (_existing.get("batch_code") or "").strip()
+            if _same_product and _same_variant and _same_batch:
+                return rx.toast(
+                    "Este producto ya está en la lista. Para agregar más unidades, editá la cantidad directamente.",
+                    duration=4000,
+                )
+
         self.new_entry_items.append(item_copy)
         self._reset_entry_form()
         return rx.call_script(
