@@ -12,6 +12,7 @@ from decimal import Decimal
 from sqlmodel import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import (
     Sale,
@@ -27,6 +28,7 @@ from app.models import (
     ProductBatch,
 )
 from app.enums import SaleStatus
+from app.constants import CASHBOX_INCOME_ACTIONS
 from app.utils.stock import async_recalculate_stock_totals
 from app.utils.tenant import set_tenant_context
 from app.utils.timezone import utc_now_naive
@@ -151,11 +153,13 @@ async def _process_return_impl(
 
     # R1-02: FOR UPDATE para serializar devoluciones concurrentes sobre la
     # misma venta (evita doble reembolso / stock revertido dos veces).
+    # Sale.items tiene lazy="noload" — cargamos explícitamente con selectinload.
     sale = (await session.exec(
         select(Sale)
         .where(Sale.id == sale_id)
         .where(Sale.company_id == company_id)
         .where(Sale.branch_id == branch_id)
+        .options(selectinload(Sale.items))
         .with_for_update()
     )).first()
 
@@ -315,6 +319,8 @@ async def _process_return_impl(
             product_id=si.product_id,
             product_variant_id=si.product_variant_id,
             product_batch_id=si.product_batch_id,
+            company_id=company_id,
+            branch_id=branch_id,
         )
         session.add(return_item)
 
@@ -369,6 +375,10 @@ async def _process_return_impl(
             branch_id=branch_id,
         )
         session.add(movement)
+
+    # Flush explícito para que el SUM en async_recalculate_stock_totals
+    # lea los valores actualizados de batch/variant (mismo patrón que sale_service S1-05).
+    await session.flush()
 
     # Recalcular totales de stock
     await async_recalculate_stock_totals(
@@ -445,19 +455,32 @@ async def _process_return_impl(
                 remaining_refund = Decimal("0.00")
             session.add(inst)
 
-    # Registrar egreso en CashboxLog (R1-07)
-    log = CashboxLog(
-        company_id=company_id,
-        branch_id=branch_id,
-        user_id=user_id,
-        action="Devolucion",
-        amount=refund_total,
-        notes=f"Devolución venta #{sale_id} ({len(return_items)} ítems)",
-        sale_id=sale_id,
-        timestamp=ts,
-        payment_method=(refund_method or None),
-    )
-    session.add(log)
+    # Registrar egreso en CashboxLog solo para ventas con flujo de caja real.
+    # Las ventas a crédito no generan egreso: el reembolso cancela deuda, no saca efectivo.
+    if (sale.payment_condition or "").strip().lower() != "credito":
+        # Heredar el método de pago del ingreso original para poder mostrar neto por método
+        income_log = (await session.exec(
+            select(CashboxLog)
+            .where(CashboxLog.sale_id == sale_id)
+            .where(CashboxLog.action.in_(CASHBOX_INCOME_ACTIONS))
+            .where(CashboxLog.is_voided == False)
+            .limit(1)
+        )).first()
+        sale_payment_method = (
+            income_log.payment_method if income_log else (refund_method or None)
+        )
+        log = CashboxLog(
+            company_id=company_id,
+            branch_id=branch_id,
+            user_id=user_id,
+            action="Devolucion",
+            amount=refund_total,
+            notes=f"Devolución venta #{sale_id} ({len(return_items)} ítems)",
+            sale_id=sale_id,
+            timestamp=ts,
+            payment_method=sale_payment_method,
+        )
+        session.add(log)
 
     return ReturnResult(
         success=True,
