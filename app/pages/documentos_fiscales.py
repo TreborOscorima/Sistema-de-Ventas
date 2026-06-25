@@ -15,7 +15,9 @@ from app.components.ui import (
     SPACING,
     TABLE_STYLES,
     TYPOGRAPHY,
+    action_button,
     empty_state,
+    modal_container,
     page_title,
     permission_guard,
 )
@@ -631,7 +633,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                                     rx.icon("file-minus", class_name="h-4 w-4"),
                                 ),
                                 " Nota de Crédito",
-                                on_click=State.emit_credit_note(doc["id"], "ANULACIÓN"),
+                                on_click=State.open_nota_credito_confirm(doc["id"]),
                                 disabled=State.nota_credito_loading,
                                 class_name=BUTTON_STYLES["danger"],
                             ),
@@ -685,6 +687,40 @@ def _summary_card(icon_name: str, label: str, color: str, count_var: rx.Var) -> 
 
 
 # ════════════════════════════════════════════════════════════
+# MODAL DE CONFIRMACIÓN — NOTA DE CRÉDITO
+# ════════════════════════════════════════════════════════════
+
+def _nota_credito_confirm_modal() -> rx.Component:
+    """Modal de confirmación antes de emitir una Nota de Crédito (acción irreversible)."""
+    return modal_container(
+        is_open=State.nota_credito_confirm_open,
+        on_close=State.close_nota_credito_confirm,
+        title="Emitir Nota de Crédito",
+        children=[
+            rx.el.p(
+                "Esta acción anulará el comprobante ante el ente fiscal (SUNAT / AFIP) "
+                "y no puede deshacerse. ¿Confirmas la emisión de la Nota de Crédito?",
+                class_name="text-sm text-slate-600",
+            ),
+        ],
+        footer=rx.el.div(
+            rx.el.button(
+                "Cancelar",
+                on_click=State.close_nota_credito_confirm,
+                class_name=BUTTON_STYLES["ghost"],
+            ),
+            action_button(
+                "Emitir Nota de Crédito",
+                on_click=State.confirm_emit_credit_note,
+                variant="danger",
+                icon="file-minus",
+            ),
+            class_name="flex justify-end gap-3",
+        ),
+    )
+
+
+# ════════════════════════════════════════════════════════════
 # PÁGINA PRINCIPAL
 # ════════════════════════════════════════════════════════════
 
@@ -734,6 +770,9 @@ def documentos_fiscales_page() -> rx.Component:
 
                 # Modal de detalle
                 _fiscal_doc_detail_modal(),
+
+                # Modal de confirmación nota de crédito
+                _nota_credito_confirm_modal(),
 
                 class_name="flex flex-col gap-6",
             ),

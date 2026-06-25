@@ -232,7 +232,7 @@ class BillingState(MixinState):
                 session.commit()
         except Exception as exc:
             logger.exception("Error guardando configuración fiscal company_id=%s", company_id)
-            self.add_notification(f"Error al guardar: {exc}", "error")
+            self.add_notification("Error inesperado al guardar la configuración fiscal.", "error")
             return rx.toast("Error al guardar la configuración fiscal.", duration=4000)
 
         self.billing_config_exists = True
@@ -534,20 +534,21 @@ class BillingState(MixinState):
             self.retry_loading = False
 
         # Refrescar la lista
-        self.load_failed_fiscal_docs()
+        yield self.load_failed_fiscal_docs()
 
     # ══════════════════════════════════════════════════════════
     # DASHBOARD DE DOCUMENTOS FISCALES — /documentos-fiscales
     # ══════════════════════════════════════════════════════════
 
     @rx.event
-    def load_fiscal_docs(self):
+    async def load_fiscal_docs(self):
         """Carga documentos fiscales con filtros y paginación."""
         company_id = self._company_id()
         if not company_id:
             return
 
         self.fiscal_docs_loading = True
+        yield  # flush spinner a UI antes de la query
         try:
             with rx.session() as session:
                 session.info["tenant_bypass"] = True
@@ -676,13 +677,13 @@ class BillingState(MixinState):
     def fiscal_docs_next_page(self):
         if self.fiscal_docs_has_next:
             self.fiscal_docs_page += 1
-            self.load_fiscal_docs()
+            return self.load_fiscal_docs()
 
     @rx.event
     def fiscal_docs_prev_page(self):
         if self.fiscal_docs_has_prev:
             self.fiscal_docs_page -= 1
-            self.load_fiscal_docs()
+            return self.load_fiscal_docs()
 
     @rx.event
     def set_fiscal_docs_status_filter(self, value: str):
@@ -708,7 +709,7 @@ class BillingState(MixinState):
     def apply_fiscal_docs_filters(self):
         """Aplica filtros y vuelve a la primera página."""
         self.fiscal_docs_page = 0
-        self.load_fiscal_docs()
+        return self.load_fiscal_docs()
 
     @rx.event
     def reset_fiscal_docs_filters(self):
@@ -719,7 +720,7 @@ class BillingState(MixinState):
         self.fiscal_docs_search = ""
         self.fiscal_docs_date_from = ""
         self.fiscal_docs_date_to = ""
-        self.load_fiscal_docs()
+        return self.load_fiscal_docs()
 
     @rx.event
     def open_fiscal_doc_detail(self, doc_id: str):
@@ -784,13 +785,32 @@ class BillingState(MixinState):
         finally:
             self.fiscal_docs_loading = False
 
-        self.load_fiscal_docs()
+        yield self.load_fiscal_docs()
 
     # ══════════════════════════════════════════════════════════
     # NOTA DE CRÉDITO — anulación de ventas facturadas
     # ══════════════════════════════════════════════════════════
 
     nota_credito_loading: bool = False
+    nota_credito_confirm_open: bool = False
+    nota_credito_confirm_doc_id: str = ""
+
+    @rx.event
+    def open_nota_credito_confirm(self, doc_id: str):
+        self.nota_credito_confirm_doc_id = doc_id
+        self.nota_credito_confirm_open = True
+
+    @rx.event
+    def close_nota_credito_confirm(self):
+        self.nota_credito_confirm_open = False
+        self.nota_credito_confirm_doc_id = ""
+
+    @rx.event
+    async def confirm_emit_credit_note(self):
+        doc_id = self.nota_credito_confirm_doc_id
+        self.nota_credito_confirm_open = False
+        self.nota_credito_confirm_doc_id = ""
+        yield self.emit_credit_note(doc_id, "ANULACIÓN")
 
     @rx.event
     async def emit_credit_note(self, fiscal_doc_id: str, reason: str = ""):
@@ -902,5 +922,5 @@ class BillingState(MixinState):
         finally:
             self.nota_credito_loading = False
 
-        self.load_fiscal_docs()
+        yield self.load_fiscal_docs()
         self.fiscal_doc_detail_open = False

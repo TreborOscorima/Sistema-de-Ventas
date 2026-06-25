@@ -335,6 +335,17 @@ def company_settings_section() -> rx.Component:
               class_name="text-base font-semibold text-slate-800 text-center mb-2",
             ),
             rx.el.p(
+              rx.cond(
+                State.normalize_products_count > 0,
+                rx.el.span(
+                  State.normalize_products_count.to_string(),
+                  " producto(s) tienen precio fijo o margen personalizado y serán normalizados.",
+                ),
+                rx.el.span("Todos los productos ya siguen el margen global."),
+              ),
+              class_name="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 text-center mb-3",
+            ),
+            rx.el.p(
               "Esta acción eliminará los precios fijos y márgenes personalizados "
               "de todos los productos. A partir de ese momento, cada producto "
               "calculará su precio de venta desde el margen global activo.",

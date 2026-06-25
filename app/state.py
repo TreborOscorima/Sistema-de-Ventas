@@ -956,8 +956,7 @@ class State(RootState):
         self.fiscal_docs_date_to = ""
         self.fiscal_doc_selected = {}
         self.fiscal_doc_detail_open = False
-        self.load_fiscal_docs()
-        yield
+        yield self.load_fiscal_docs()
 
     @rx.event
     async def page_init_configuracion(self):

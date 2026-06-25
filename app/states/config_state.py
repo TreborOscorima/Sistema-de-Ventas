@@ -3,8 +3,9 @@ import uuid
 from typing import List, Dict, Any, Set
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy import func
 from sqlmodel import select
-from app.models import Unit, PaymentMethod, Currency, CompanySettings
+from app.models import Unit, PaymentMethod, Currency, CompanySettings, Branch
 from app.utils.db_seeds import (
     SUPPORTED_COUNTRIES,
     get_payment_methods_for_country,
@@ -67,6 +68,7 @@ class ConfigState(MixinState):
     branch_profit_margin: str = ""
     applying_margin_to_inventory: bool = False
     show_normalize_confirm: bool = False
+    normalize_products_count: int = 0
 
     # País de operación
     selected_country_code: str = "PE"
@@ -418,31 +420,36 @@ class ConfigState(MixinState):
                     )
                 )
 
-            # Limpiar métodos de pago existentes
+            # Limpiar métodos de pago de TODAS las sucursales de la empresa
             existing_methods = session.exec(
                 select(PaymentMethod)
                 .where(PaymentMethod.company_id == company_id)
-                .where(PaymentMethod.branch_id == branch_id)
             ).all()
             for method in existing_methods:
                 session.delete(method)
 
-            # Insertar métodos de pago del nuevo país
+            # Obtener todas las sucursales activas
+            branches = session.exec(
+                select(Branch).where(Branch.company_id == company_id)
+            ).all()
+
+            # Insertar métodos de pago del nuevo país para cada sucursal
             new_methods = get_payment_methods_for_country(code)
-            for data in new_methods:
-                method = PaymentMethod(
-                    name=data["name"],
-                    code=data["code"],
-                    is_active=True,
-                    allows_change=data["allows_change"],
-                    method_id=data["method_id"],
-                    description=data["description"],
-                    kind=data["kind"],
-                    enabled=True,
-                    company_id=company_id,
-                    branch_id=branch_id,
-                )
-                session.add(method)
+            for branch in branches:
+                for data in new_methods:
+                    method = PaymentMethod(
+                        name=data["name"],
+                        code=data["code"],
+                        is_active=True,
+                        allows_change=data["allows_change"],
+                        method_id=data["method_id"],
+                        description=data["description"],
+                        kind=data["kind"],
+                        enabled=True,
+                        company_id=company_id,
+                        branch_id=branch.id,
+                    )
+                    session.add(method)
 
             session.commit()
 
@@ -665,7 +672,7 @@ class ConfigState(MixinState):
                 if d < 0 or d > 9999:
                     return None
                 return d.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            except Exception:
+            except (ValueError, InvalidOperation):
                 return None
 
         company_margin = _parse_margin(self.company_profit_margin)
@@ -753,6 +760,21 @@ class ConfigState(MixinState):
 
     @rx.event
     def open_normalize_confirm(self):
+        company_id = self._company_id()
+        if company_id:
+            from app.models.inventory import Product
+            with rx.session() as session:
+                session.info["tenant_bypass"] = True
+                affected = session.exec(
+                    select(func.count(Product.id))
+                    .where(Product.company_id == company_id)
+                    .where(Product.purchase_price > 0)
+                    .where(
+                        (Product.sale_price.isnot(None))
+                        | (Product.custom_profit_margin.isnot(None))
+                    )
+                ).one()
+                self.normalize_products_count = int(affected or 0)
         self.show_normalize_confirm = True
 
     @rx.event
@@ -1025,6 +1047,9 @@ class ConfigState(MixinState):
         Args:
             code: Código ISO de la moneda (ej: 'PEN', 'USD', 'ARS')
         """
+        block = self._require_manage_config()
+        if block:
+            return block
         code = (code or "").upper()
         match = next((c for c in self.available_currencies if c["code"] == code), None)
         if not match:
@@ -1116,6 +1141,9 @@ class ConfigState(MixinState):
         if not any(c["code"] == code for c in self.available_currencies):
             return
 
+        was_active = (self.selected_currency_code == code)
+        company_id = self._company_id()
+
         with rx.session() as session:
             session.info["tenant_bypass"] = True
             currency_db = session.exec(select(Currency).where(Currency.code == code)).first()
@@ -1124,8 +1152,22 @@ class ConfigState(MixinState):
                 session.commit()
 
         self.load_config_data()
-        if self.selected_currency_code == code and self.available_currencies:
-            self.selected_currency_code = self.available_currencies[0]["code"]
+        if was_active and self.available_currencies:
+            new_code = self.available_currencies[0]["code"]
+            self.selected_currency_code = new_code
+            # Persistir la nueva moneda activa en todas las CompanySettings del tenant
+            if company_id:
+                with rx.session() as session:
+                    session.info["tenant_bypass"] = True
+                    for settings in session.exec(
+                        select(CompanySettings).where(CompanySettings.company_id == company_id)
+                    ).all():
+                        settings.default_currency_code = new_code
+                        session.add(settings)
+                    session.commit()
+        elif was_active:
+            self.selected_currency_code = ""
+
         if hasattr(self, "_refresh_payment_feedback"):
             self._refresh_payment_feedback()
         return [
@@ -1399,6 +1441,9 @@ class ConfigState(MixinState):
 
     @rx.event
     def remove_payment_method(self, method_id: str):
+        block = self._require_manage_config()
+        if block:
+            return block
         method = self._payment_method_by_identifier(method_id)
         if not method:
             return

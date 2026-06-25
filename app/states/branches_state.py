@@ -10,6 +10,7 @@ from app.models import (
     Sale, Purchase, CashboxSession, Product,
     Category, CashboxLog, Client,
     PaymentMethod, Unit, CompanySettings,
+    Quotation, Promotion, PriceList,
 )
 from app.i18n import MSG
 from app.utils.db_seeds import seed_new_branch_data
@@ -181,7 +182,10 @@ class BranchesState(MixinState):
                 session.flush()
                 user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
                 if user_id:
-                    session.add(UserBranch(user_id=int(user_id), branch_id=branch.id))
+                    try:
+                        session.add(UserBranch(user_id=int(user_id), branch_id=branch.id))
+                    except (TypeError, ValueError):
+                        logger.warning("create_branch: user_id inválido: %r", user_id)
                 seed_new_branch_data(session, company_id, branch.id)
                 # Clonar CompanySettings de la sucursal canónica para la nueva
                 from app.models import CompanySettings
@@ -266,6 +270,7 @@ class BranchesState(MixinState):
 
     @rx.event
     def start_edit_branch(self, branch_id: str):
+        self.branch_users_rows = []
         company_id = self._company_id()
         if not company_id:
             return
@@ -393,6 +398,18 @@ class BranchesState(MixinState):
                 select(Client.id).where(Client.branch_id == branch_id_int)
             ).first():
                 return rx.toast("No puedes eliminar una sucursal con clientes registrados.", duration=3000)
+            if session.exec(
+                select(Quotation.id).where(Quotation.branch_id == branch_id_int)
+            ).first():
+                return rx.toast("No puedes eliminar una sucursal con cotizaciones registradas.", duration=3000)
+            if session.exec(
+                select(Promotion.id).where(Promotion.branch_id == branch_id_int)
+            ).first():
+                return rx.toast("No puedes eliminar una sucursal con promociones registradas.", duration=3000)
+            if session.exec(
+                select(PriceList.id).where(PriceList.branch_id == branch_id_int)
+            ).first():
+                return rx.toast("No puedes eliminar una sucursal con listas de precios.", duration=3000)
 
             branch = session.exec(
                 select(Branch)

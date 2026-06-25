@@ -80,7 +80,31 @@ def config_nav() -> rx.Component:
     ),
     rx.el.div(
       *[
-        rx.link(
+        rx.cond(
+          State.company_has_electronic_billing,
+          rx.link(
+            rx.el.div(
+              rx.icon(section["icon"], class_name="h-5 w-5"),
+              rx.el.div(
+                rx.el.span(section["label"], class_name="font-semibold"),
+                rx.el.span(
+                  section["description"],
+                  class_name=TYPOGRAPHY["caption"],
+                ),
+                class_name="flex flex-col items-start",
+              ),
+              class_name="flex items-center gap-3",
+            ),
+            href=f"/configuracion?tab={section['key']}",
+            underline="none",
+            class_name=rx.cond(
+              State.config_tab == section["key"],
+              "w-full text-left bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-md shadow-sm",
+              "w-full text-left bg-white text-slate-700 border px-3 py-2 rounded-md hover:bg-slate-50",
+            ),
+          ),
+          rx.fragment(),
+        ) if section["key"] == "facturacion" else rx.link(
           rx.el.div(
             rx.icon(section["icon"], class_name="h-5 w-5"),
             rx.el.div(

@@ -385,14 +385,14 @@ def _user_card(user: rx.Var[dict]) -> rx.Component:
     rx.el.div(
       rx.el.button(
         rx.icon("pencil", class_name="h-4 w-4"),
-        on_click=lambda _, username=user["username"]: State.show_edit_user_form_by_username(username),
+        on_click=State.show_edit_user_form_by_username(user["username"]),
         title="Editar usuario",
         aria_label="Editar usuario",
         class_name=BUTTON_STYLES["icon_warning"],
       ),
       rx.el.button(
         rx.icon("trash-2", class_name="h-4 w-4"),
-        on_click=lambda _, username=user["username"]: State.open_delete_user_confirm(username),
+        on_click=State.open_delete_user_confirm(user["username"]),
         title="Eliminar usuario",
         aria_label="Eliminar usuario",
         class_name=BUTTON_STYLES["icon_danger"],
@@ -400,6 +400,39 @@ def _user_card(user: rx.Var[dict]) -> rx.Component:
       class_name="flex gap-2 pt-2 border-t border-slate-100",
     ),
     class_name="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3",
+    key=user["username"],
+  )
+
+
+def _user_table_row(user: rx.Var[dict]) -> rx.Component:
+  """Fila de usuario para tabla desktop (visible solo >= md)."""
+  return rx.el.tr(
+    rx.el.td(user["username"], class_name="py-3 px-4 w-32 truncate"),
+    rx.el.td(user["role"], class_name="py-3 px-4 w-28 truncate"),
+    rx.el.td(
+      privilege_badges(user),
+      class_name="py-3 px-4 w-full",
+    ),
+    rx.el.td(
+      rx.el.div(
+        rx.el.button(
+          rx.icon("pencil", class_name="h-4 w-4"),
+          on_click=State.show_edit_user_form_by_username(user["username"]),
+          title="Editar usuario",
+          aria_label="Editar usuario",
+          class_name=BUTTON_STYLES["icon_warning"],
+        ),
+        rx.el.button(
+          rx.icon("trash-2", class_name="h-4 w-4"),
+          on_click=State.open_delete_user_confirm(user["username"]),
+          title="Eliminar usuario",
+          aria_label="Eliminar usuario",
+          class_name=BUTTON_STYLES["icon_danger"],
+        ),
+        class_name="flex justify-center gap-2",
+      )
+    ),
+    class_name="border-b",
     key=user["username"],
   )
 
@@ -442,44 +475,7 @@ def user_section() -> rx.Component:
         ),
         rx.el.tbody(
 
-          rx.foreach(
-            State.users_list,
-            lambda user: rx.el.tr(
-              rx.el.td(user["username"], class_name="py-3 px-4 w-32 truncate"),
-              rx.el.td(user["role"], class_name="py-3 px-4 w-28 truncate"),
-              rx.el.td(
-                privilege_badges(user),
-                class_name="py-3 px-4 w-full",
-              ),
-              rx.el.td(
-                rx.el.div(
-                  rx.el.button(
-                    rx.icon("pencil", class_name="h-4 w-4"),
-                    on_click=lambda _,
-                    username=user["username"]: State.show_edit_user_form_by_username(
-                      username
-                    ),
-                    title="Editar usuario",
-                    aria_label="Editar usuario",
-                    class_name=BUTTON_STYLES["icon_warning"],
-                  ),
-                  rx.el.button(
-                    rx.icon("trash-2", class_name="h-4 w-4"),
-                    on_click=lambda _,
-                    username=user["username"]: State.open_delete_user_confirm(
-                      username
-                    ),
-                    title="Eliminar usuario",
-                    aria_label="Eliminar usuario",
-                    class_name=BUTTON_STYLES["icon_danger"],
-                  ),
-                  class_name="flex justify-center gap-2",
-                )
-              ),
-              class_name="border-b",
-              key=user["username"],
-            ),
-          )
+          rx.foreach(State.users_list, _user_table_row)
         ),
         class_name="w-full min-w-[600px]",
       ),
@@ -739,6 +735,15 @@ def branch_section() -> rx.Component:
         class_name="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end",
       ),
       class_name=f"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 {CARD_STYLES['compact']}",
+    ),
+    # Estado vacío cuando no hay sucursales
+    rx.cond(
+      State.branches_list == [],
+      rx.el.p(
+        "No hay sucursales creadas. Agregá la primera sucursal con el formulario de arriba.",
+        class_name="text-sm text-slate-500 italic py-2",
+      ),
+      rx.fragment(),
     ),
     # Vista móvil: cards (visible solo < md)
     rx.el.div(
