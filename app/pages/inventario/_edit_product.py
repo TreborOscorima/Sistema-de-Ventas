@@ -98,11 +98,7 @@ def edit_product_modal() -> rx.Component:
           rx.el.div(
             rx.el.label("Unidad", class_name=f"block {TYPOGRAPHY['label']}"),
             rx.el.select(
-              rx.el.option("Unidad", value="Unidad"),
-              rx.el.option("Kg", value="Kg"),
-              rx.el.option("Lt", value="Lt"),
-              rx.el.option("Paquete", value="Paquete"),
-              rx.el.option("Caja", value="Caja"),
+              rx.foreach(State.units, lambda u: rx.el.option(u, value=u)),
               default_value=State.editing_product["unit"],
               on_change=lambda v: State.handle_edit_product_change("unit", v),
               class_name=SELECT_STYLES["default"],

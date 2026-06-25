@@ -607,12 +607,7 @@ def petty_cash_modal() -> rx.Component:
           rx.el.div(
             rx.el.label("Unidad", class_name=TYPOGRAPHY["label"]),
             rx.el.select(
-              rx.el.option("Unidad",   value="Unidad"),
-              rx.el.option("Kg",       value="Kg"),
-              rx.el.option("Lt",       value="Lt"),
-              rx.el.option("Paquete",  value="Paquete"),
-              rx.el.option("Caja",     value="Caja"),
-              rx.el.option("Otro",     value="Otro"),
+              rx.foreach(State.units, lambda u: rx.el.option(u, value=u)),
               default_value=State.petty_cash_unit,
               on_change=State.set_petty_cash_unit,
               class_name=INPUT_STYLES["default"],
@@ -773,12 +768,7 @@ def petty_cash_edit_modal() -> rx.Component:
           rx.el.div(
             rx.el.label("Unidad", class_name="text-sm font-medium text-slate-700"),
             rx.el.select(
-              rx.el.option("Unidad",  value="Unidad"),
-              rx.el.option("Kg",      value="Kg"),
-              rx.el.option("Lt",      value="Lt"),
-              rx.el.option("Paquete", value="Paquete"),
-              rx.el.option("Caja",    value="Caja"),
-              rx.el.option("Otro",    value="Otro"),
+              rx.foreach(State.units, lambda u: rx.el.option(u, value=u)),
               default_value=State.petty_cash_edit_unit,
               on_change=State.set_petty_cash_edit_unit,
               class_name=INPUT_STYLES["default"],
