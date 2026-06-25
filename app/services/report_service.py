@@ -1179,7 +1179,8 @@ def generate_sales_report(
     row += 1
 
     ws_payment.cell(row=row, column=1, value="(=) Pendiente de Cobro:").font = Font(bold=True, color="B45309")
-    ws_payment.cell(row=row, column=2, value=f"={total_ventas}-C{pay_totals_row}").number_format = currency_format
+    _pendiente = float(total_ventas) - float(total_pagos_recibidos)
+    ws_payment.cell(row=row, column=2, value=_pendiente).number_format = currency_format
     ws_payment.cell(row=row, column=2).fill = WARNING_FILL
 
     _add_notes_section(ws_payment, row, [

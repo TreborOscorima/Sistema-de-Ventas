@@ -511,6 +511,7 @@ class ExportMixin:
                     product = products_by_barcode.get(barcode)
                     if product:
                         # Actualizar
+                        stock_delta = stock - float(product.stock or 0)
                         product.description = description
                         product.category = category_name
                         product.stock = stock
@@ -518,6 +519,17 @@ class ExportMixin:
                         product.purchase_price = purchase_price
                         product.sale_price = sale_price
                         session.add(product)
+                        if stock_delta != 0:
+                            session.add(StockMovement(
+                                product_id=product.id,
+                                user_id=user_id,
+                                type="Importacion",
+                                quantity=stock_delta,
+                                description=f"Importación masiva (ajuste): {description}",
+                                timestamp=self._event_timestamp(),
+                                company_id=company_id,
+                                branch_id=branch_id,
+                            ))
                         updated += 1
                     else:
                         # Crear

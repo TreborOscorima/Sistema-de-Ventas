@@ -3159,14 +3159,15 @@ class HistorialState(MixinState):
                 cell.number_format = currency_format
 
             # Totals row
+            from openpyxl.styles import Font as _Font
             totals_row = data_end + 1
             ws.cell(row=totals_row, column=1, value="TOTAL")
-            ws.cell(row=totals_row, column=1).font = ws.cell(row=totals_row, column=1).font.copy(bold=True)
+            ws.cell(row=totals_row, column=1).font = _Font(bold=True)
             ws.cell(row=totals_row, column=5, value=self.returns_report_count)
-            ws.cell(row=totals_row, column=5).font = ws.cell(row=totals_row, column=5).font.copy(bold=True)
+            ws.cell(row=totals_row, column=5).font = _Font(bold=True)
             total_cell = ws.cell(row=totals_row, column=6, value=self.returns_report_total)
             total_cell.number_format = currency_format
-            total_cell.font = total_cell.font.copy(bold=True)
+            total_cell.font = _Font(bold=True)
             total_cell.fill = NEGATIVE_FILL
 
         auto_adjust_column_widths(ws)
