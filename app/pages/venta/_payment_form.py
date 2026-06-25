@@ -758,58 +758,16 @@ def _payment_form_body(variant: str) -> tuple:
             rx.el.div(
                 rx.el.label("Complemento", class_name="text-xs font-medium text-slate-600"),
                 rx.el.div(
-                    rx.el.button(
-                        "T. Débito",
-                        on_click=lambda: State.set_mixed_non_cash_kind("debit"),
-                        class_name=rx.cond(
-                            State.payment_mixed_non_cash_kind == "debit",
-                            mixed_btn_active,
-                            mixed_btn_inactive,
-                        ),
-                    ),
-                    rx.el.button(
-                        "T. Crédito",
-                        on_click=lambda: State.set_mixed_non_cash_kind("credit"),
-                        class_name=rx.cond(
-                            State.payment_mixed_non_cash_kind == "credit",
-                            mixed_btn_active,
-                            mixed_btn_inactive,
-                        ),
-                    ),
-                    rx.el.button(
-                        "Yape",
-                        on_click=lambda: State.set_mixed_non_cash_kind("yape"),
-                        class_name=rx.cond(
-                            State.payment_mixed_non_cash_kind == "yape",
-                            mixed_btn_active,
-                            mixed_btn_inactive,
-                        ),
-                    ),
-                    rx.el.button(
-                        "Plin",
-                        on_click=lambda: State.set_mixed_non_cash_kind("plin"),
-                        class_name=rx.cond(
-                            State.payment_mixed_non_cash_kind == "plin",
-                            mixed_btn_active,
-                            mixed_btn_inactive,
-                        ),
-                    ),
-                    rx.el.button(
-                        "Transferencia",
-                        on_click=lambda: State.set_mixed_non_cash_kind("transfer"),
-                        class_name=rx.cond(
-                            State.payment_mixed_non_cash_kind == "transfer",
-                            mixed_btn_active,
-                            mixed_btn_inactive,
-                        ),
-                    ),
-                    rx.el.button(
-                        "Mercado Pago",
-                        on_click=lambda: State.set_mixed_non_cash_kind("mercadopago"),
-                        class_name=rx.cond(
-                            State.payment_mixed_non_cash_kind == "mercadopago",
-                            mixed_btn_active,
-                            mixed_btn_inactive,
+                    rx.foreach(
+                        State.enabled_payment_methods_for_complement,
+                        lambda m: rx.el.button(
+                            m["name"],
+                            on_click=lambda _, mid=m["id"]: State.select_mixed_complement(mid),
+                            class_name=rx.cond(
+                                State.payment_mixed_complement_id == m["id"],
+                                mixed_btn_active,
+                                mixed_btn_inactive,
+                            ),
                         ),
                     ),
                     class_name="grid grid-cols-2 gap-2",
@@ -829,64 +787,6 @@ def _payment_form_body(variant: str) -> tuple:
                     class_name="flex items-center gap-2 px-3 py-2 border rounded-lg bg-slate-50",
                 ),
                 class_name="flex flex-col gap-1",
-            ),
-            rx.cond(
-                State.payment_mixed_non_cash_kind == "card",
-                rx.el.div(
-                    rx.el.label("Tipo de tarjeta", class_name="text-xs font-medium text-slate-600"),
-                    rx.el.div(
-                        rx.el.button(
-                            "Credito",
-                            on_click=lambda: State.set_card_type("Credito"),
-                            class_name=rx.cond(
-                                State.payment_card_type == "Credito",
-                                mixed_btn_active,
-                                mixed_btn_inactive,
-                            ),
-                        ),
-                        rx.el.button(
-                            "Debito",
-                            on_click=lambda: State.set_card_type("Debito"),
-                            class_name=rx.cond(
-                                State.payment_card_type == "Debito",
-                                mixed_btn_active,
-                                mixed_btn_inactive,
-                            ),
-                        ),
-                        class_name="flex gap-2",
-                    ),
-                    class_name="flex flex-col gap-2",
-                ),
-                rx.fragment(),
-            ),
-            rx.cond(
-                State.payment_mixed_non_cash_kind == "wallet",
-                rx.el.div(
-                    rx.el.label("Billetera", class_name="text-xs font-medium text-slate-600"),
-                    rx.el.div(
-                        rx.el.button(
-                            "Yape",
-                            on_click=lambda: State.choose_wallet_provider("Yape"),
-                            class_name=rx.cond(
-                                State.payment_wallet_choice == "Yape",
-                                mixed_yape_active,
-                                mixed_yape_inactive,
-                            ),
-                        ),
-                        rx.el.button(
-                            "Plin",
-                            on_click=lambda: State.choose_wallet_provider("Plin"),
-                            class_name=rx.cond(
-                                State.payment_wallet_choice == "Plin",
-                                mixed_plin_active,
-                                mixed_plin_inactive,
-                            ),
-                        ),
-                        class_name="flex gap-2",
-                    ),
-                    class_name="flex flex-col gap-2",
-                ),
-                rx.fragment(),
             ),
             class_name=mixed_section_class,
         ),

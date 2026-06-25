@@ -29,6 +29,8 @@ class PaymentMixin:
     payment_mixed_card: float = 0
     payment_mixed_wallet: float = 0
     payment_mixed_non_cash_kind: str = "credit"
+    payment_mixed_complement_id: str = ""
+    payment_mixed_complement_name: str = ""
     payment_mixed_message: str = ""
     payment_mixed_status: str = "neutral"
     payment_mixed_notes: str = ""
@@ -39,6 +41,17 @@ class PaymentMixin:
     @rx.var(cache=True)
     def enabled_payment_methods(self) -> list[PaymentMethodConfig]:
         return [m for m in self.payment_methods if m.get("enabled", True)]
+
+    @rx.var(cache=True)
+    def enabled_payment_methods_for_complement(self) -> list[PaymentMethodConfig]:
+        excluded_kinds = {"cash", "mixed"}
+        excluded_names = {"efectivo", "pago mixto"}
+        return [
+            m for m in self.payment_methods
+            if m.get("enabled", True)
+            and (m.get("kind") or "other").lower() not in excluded_kinds
+            and (m.get("name") or "").lower() not in excluded_names
+        ]
 
     @rx.var(cache=True)
     def payment_summary(self) -> str:
@@ -193,20 +206,21 @@ class PaymentMixin:
             if self.payment_mixed_cash > 0:
                 parts.append(f"Efectivo {self._format_currency(self.payment_mixed_cash)}")
             if self.payment_mixed_card > 0:
-                card_label = mapping.get(
-                    non_cash_kind,
-                    f"Tarjeta ({self.payment_card_type})",
+                card_label = (
+                    self.payment_mixed_complement_name
+                    or mapping.get(non_cash_kind)
+                    or f"Tarjeta ({self.payment_card_type})"
                 )
                 parts.append(
                     f"{card_label} {self._format_currency(self.payment_mixed_card)}"
                 )
             if self.payment_mixed_wallet > 0:
-                provider = (
-                    self.payment_wallet_provider
-                    or self.payment_wallet_choice
+                wallet_label = (
+                    self.payment_mixed_complement_name
+                    or mapping.get(non_cash_kind)
+                    or self.payment_wallet_provider
                     or "Billetera"
                 )
-                wallet_label = mapping.get(non_cash_kind, provider)
                 parts.append(
                     f"{wallet_label} {self._format_currency(self.payment_mixed_wallet)}"
                 )
@@ -267,7 +281,7 @@ class PaymentMixin:
         total = self._mixed_effective_total(total_override)
         paid_cash = self._round_currency(self.payment_mixed_cash)
         remaining = self._round_currency(max(total - paid_cash, 0))
-        if self.payment_mixed_non_cash_kind in ["wallet", "yape", "plin", "mercadopago"]:
+        if self.payment_mixed_non_cash_kind not in ["debit", "credit", "card"]:
             self.payment_mixed_wallet = remaining
             self.payment_mixed_card = 0
         else:
@@ -392,6 +406,8 @@ class PaymentMixin:
         self.payment_mixed_card = 0
         self.payment_mixed_wallet = 0
         self.payment_mixed_non_cash_kind = "credit"
+        self.payment_mixed_complement_id = ""
+        self.payment_mixed_complement_name = ""
         self.payment_mixed_message = ""
         self.payment_mixed_status = "neutral"
         self.payment_mixed_notes = ""
@@ -461,14 +477,7 @@ class PaymentMixin:
     @rx.event
     def set_mixed_non_cash_kind(self, kind: str):
         if kind not in [
-            "card",
-            "wallet",
-            "debit",
-            "credit",
-            "yape",
-            "plin",
-            "transfer",
-            "mercadopago",
+            "card", "wallet", "debit", "credit", "yape", "plin", "transfer",
         ]:
             return
         if kind == "debit":
@@ -481,10 +490,30 @@ class PaymentMixin:
         elif kind == "plin":
             self.payment_wallet_choice = "Plin"
             self.payment_wallet_provider = "Plin"
-        elif kind == "mercadopago":
-            self.payment_wallet_choice = "Mercado Pago"
-            self.payment_wallet_provider = "Mercado Pago"
         self.payment_mixed_non_cash_kind = kind
+        self._auto_allocate_mixed_amounts()
+        self._update_mixed_message()
+
+    @rx.event
+    def select_mixed_complement(self, method_id: str):
+        method = self._payment_method_by_identifier(method_id)
+        if not method:
+            return
+        kind = (method.get("kind") or "other").lower()
+        self.payment_mixed_complement_id = method_id
+        self.payment_mixed_complement_name = method.get("name", "")
+        if kind in ["debit", "credit", "card"]:
+            self.payment_mixed_non_cash_kind = kind
+            self.payment_card_type = "Debito" if kind == "debit" else "Credito"
+            self.payment_mixed_card = 0
+            self.payment_mixed_wallet = 0
+        else:
+            # transfer, yape, plin, wallet, other → billetera/electrónico
+            self.payment_mixed_non_cash_kind = kind if kind in ["yape", "plin", "transfer"] else "wallet"
+            self.payment_wallet_provider = method.get("name", "")
+            self.payment_wallet_choice = method.get("name", "")
+            self.payment_mixed_card = 0
+            self.payment_mixed_wallet = 0
         self._auto_allocate_mixed_amounts()
         self._update_mixed_message()
 
@@ -571,22 +600,18 @@ class PaymentMixin:
             if paid_wallet > 0 and remaining > 0:
                 applied_wallet = min(paid_wallet, remaining)
                 if applied_wallet > 0:
-                    if non_cash_kind in ["yape", "plin", "mercadopago"]:
+                    if non_cash_kind in ["yape", "plin"]:
                         wallet_label = mapping[non_cash_kind]
+                    elif self.payment_mixed_complement_name:
+                        wallet_label = self.payment_mixed_complement_name
                     elif non_cash_kind == "wallet":
-                        provider = (
+                        wallet_label = (
                             self.payment_wallet_provider
                             or self.payment_wallet_choice
                             or "Billetera"
                         )
-                        provider_key = provider.strip().lower()
-                        wallet_label = (
-                            mapping["plin"]
-                            if "plin" in provider_key
-                            else mapping["yape"]
-                        )
                     else:
-                        wallet_label = mapping["yape"]
+                        wallet_label = mapping.get(non_cash_kind, "Billetera")
                     parts.append(
                         {
                             "label": wallet_label,
