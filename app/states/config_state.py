@@ -143,15 +143,6 @@ class ConfigState(MixinState):
             options.insert(0, current)
         return options
 
-    def _require_manage_config(self):
-        if hasattr(self, "current_user") and not self.current_user["privileges"].get(
-            "manage_config"
-        ):
-            return rx.toast(
-                "No tiene permisos para configurar el sistema.", duration=3000
-            )
-        return None
-
     def load_config_data(self):
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -527,7 +518,7 @@ class ConfigState(MixinState):
                 receipt_width_value = int(receipt_width_raw)
             except ValueError:
                 return rx.toast(
-                    "El ancho de recibo debe ser un numero.",
+                    "El ancho de recibo debe ser un número.",
                     duration=3000,
                 )
             if receipt_width_value < 24 or receipt_width_value > 64:
@@ -538,7 +529,7 @@ class ConfigState(MixinState):
         timezone_value = (self.timezone or "").strip()
         if not is_valid_timezone(timezone_value):
             return rx.toast(
-                "Zona horaria invalida. Usa el formato IANA (ej: America/Lima).",
+                "Zona horaria inválida. Usa el formato IANA (ej: America/Lima).",
                 duration=3500,
             )
         timezone_db_value = timezone_value or None
@@ -620,7 +611,7 @@ class ConfigState(MixinState):
         self.company_form_key += 1
         return [
             self._emit_runtime_sync_event(),
-            rx.toast("Configuracion de empresa guardada.", duration=2500),
+            rx.toast("Configuración de empresa guardada.", duration=2500),
         ]
 
     @rx.var(cache=False)
@@ -650,9 +641,11 @@ class ConfigState(MixinState):
         except (ValueError, TypeError):
             return "10.00"
 
+    @rx.event
     def set_company_profit_margin(self, value: str):
         self.company_profit_margin = value
 
+    @rx.event
     def set_branch_profit_margin(self, value: str):
         self.branch_profit_margin = value
 
@@ -679,9 +672,9 @@ class ConfigState(MixinState):
         branch_margin = _parse_margin(self.branch_profit_margin)
 
         if self.company_profit_margin.strip() and company_margin is None:
-            return rx.toast("Margen de empresa invalido. Ingresa un número >= 0.", duration=3500)
+            return rx.toast("Margen de empresa inválido. Ingresa un número >= 0.", duration=3500)
         if self.branch_profit_margin.strip() and branch_margin is None:
-            return rx.toast("Margen de sucursal invalido. Ingresa un número >= 0.", duration=3500)
+            return rx.toast("Margen de sucursal inválido. Ingresa un número >= 0.", duration=3500)
 
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -700,7 +693,7 @@ class ConfigState(MixinState):
 
             if not all_settings:
                 session.commit()
-                return rx.toast("Margenes de ganancia guardados.", duration=2500)
+                return rx.toast("Márgenes de ganancia guardados.", duration=2500)
 
             main_branch_id = all_settings[0].branch_id
 
@@ -756,7 +749,7 @@ class ConfigState(MixinState):
             session.commit()
 
         suffix = f" {total_updated} productos actualizados." if total_updated else "."
-        return rx.toast(f"Margenes guardados.{suffix}", duration=3000)
+        return rx.toast(f"Márgenes guardados.{suffix}", duration=3000)
 
     @rx.event
     def open_normalize_confirm(self):
@@ -820,6 +813,7 @@ class ConfigState(MixinState):
     def go_to_config_tab(self, tab: str):
         return rx.redirect(f"/configuracion?tab={tab}")
 
+    @rx.event
     def add_unit(self):
         toast = self._require_manage_config()
         if toast:
@@ -860,6 +854,7 @@ class ConfigState(MixinState):
             else:
                 return rx.toast("La unidad ya existe.", duration=2000)
 
+    @rx.event
     def set_unit_decimal(self, unit_name: str, allows_decimal: bool):
         toast = self._require_manage_config()
         if toast:
@@ -883,6 +878,7 @@ class ConfigState(MixinState):
         self.load_config_data()
         return self._emit_runtime_sync_event()
 
+    @rx.event
     def remove_unit(self, unit_name: str):
         toast = self._require_manage_config()
         if toast:
@@ -1087,7 +1083,7 @@ class ConfigState(MixinState):
         name = (self.new_currency_name or "").strip()
         symbol = (self.new_currency_symbol or "").strip()
         if not code or not name or not symbol:
-            return rx.toast("Complete codigo, nombre y simbolo.", duration=3000)
+            return rx.toast("Complete código, nombre y símbolo.", duration=3000)
         if any(c["code"] == code for c in self.available_currencies):
             return rx.toast("La moneda ya existe.", duration=3000)
 
@@ -1164,7 +1160,7 @@ class ConfigState(MixinState):
         if not name:
             return rx.toast("Ingrese el nombre de la unidad.", duration=3000)
         if name in self.decimal_units:
-            return rx.toast("Esa unidad ya esta registrada.", duration=3000)
+            return rx.toast("Esa unidad ya está registrada.", duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -1410,7 +1406,7 @@ class ConfigState(MixinState):
             m for m in self._enabled_payment_methods_list() if m["id"] != method_id
         ]
         if not remaining_enabled:
-            return rx.toast("No puedes eliminar el unico metodo activo.", duration=3000)
+            return rx.toast("No puedes eliminar el único método activo.", duration=3000)
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -1431,5 +1427,5 @@ class ConfigState(MixinState):
         self._ensure_payment_method_selected()
         return [
             self._emit_payment_methods_sync_event(),
-            rx.toast(f"Metodo {method['name']} eliminado.", duration=2500),
+            rx.toast(f"Método {method['name']} eliminado.", duration=2500),
         ]

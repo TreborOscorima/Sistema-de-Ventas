@@ -270,6 +270,12 @@ class MixinState:
 
         return None
 
+    def _require_manage_config(self):
+        """Bloquea si el usuario no tiene permiso manage_config."""
+        if hasattr(self, "current_user") and not self.current_user["privileges"].get("manage_config"):
+            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
+        return None
+
     def _company_id(self) -> int | None:
         company_id, branch_id = self._tenant_ids()
         set_tenant_context(company_id, branch_id)

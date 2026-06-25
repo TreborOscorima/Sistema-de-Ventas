@@ -19,7 +19,7 @@ def company_settings_section() -> rx.Component:
         "DATOS DE MI EMPRESA", class_name="text-xl font-semibold text-slate-700"
       ),
       rx.el.p(
-        "Actualiza la informacion que aparece en recibos y reportes.",
+        "Actualiza la información que aparece en recibos y reportes.",
         class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
@@ -106,7 +106,7 @@ def company_settings_section() -> rx.Component:
           rx.el.select(
             rx.el.option("General (Multi-rubro)", value="general"),
             rx.el.option("Bodega / Kiosko", value="bodega"),
-            rx.el.option("Ferreteria", value="ferreteria"),
+            rx.el.option("Ferretería", value="ferreteria"),
             rx.el.option("Farmacia", value="farmacia"),
             rx.el.option("Tienda de Ropa", value="ropa"),
             rx.el.option("Jugueteria", value="jugueteria"),
@@ -136,7 +136,7 @@ def company_settings_section() -> rx.Component:
           class_name="flex flex-col gap-1 md:col-span-2",
         ),
         rx.el.div(
-          rx.el.label("Papel de Impresion", class_name=TYPOGRAPHY["label"]),
+          rx.el.label("Papel de Impresión", class_name=TYPOGRAPHY["label"]),
           rx.el.select(
             rx.el.option("80 mm (default)", value="80"),
             rx.el.option("58 mm", value="58"),
@@ -161,7 +161,7 @@ def company_settings_section() -> rx.Component:
             class_name=INPUT_STYLES["default"],
           ),
           rx.el.p(
-            "Deja en blanco para usar el ancho automatico.",
+            "Deja en blanco para usar el ancho automático.",
             class_name=TYPOGRAPHY["caption"],
           ),
           class_name="flex flex-col gap-1",
@@ -175,7 +175,7 @@ def company_settings_section() -> rx.Component:
         ),
         rx.el.div(
           rx.el.button(
-            "Guardar Configuracion",
+            "Guardar Configuración",
             on_click=State.save_settings,
             class_name=f"{BUTTON_STYLES['primary']} w-full sm:w-auto min-h-[44px]",
           ),
@@ -189,7 +189,7 @@ def company_settings_section() -> rx.Component:
     rx.el.div(
       rx.el.div(
         rx.el.h2(
-          "MARGENES DE GANANCIA",
+          "MÁRGENES DE GANANCIA",
           class_name="text-xl font-semibold text-slate-700",
         ),
         rx.el.p(
@@ -284,7 +284,7 @@ def company_settings_section() -> rx.Component:
       ),
       rx.el.div(
         rx.el.button(
-          "Guardar Margenes",
+          "Guardar Márgenes",
           on_click=State.save_profit_margin,
           class_name=f"{BUTTON_STYLES['primary']} w-full sm:w-auto min-h-[44px]",
         ),
@@ -358,6 +358,7 @@ def company_settings_section() -> rx.Component:
           max_width="420px",
         ),
         open=State.show_normalize_confirm,
+        on_open_change=State.close_normalize_confirm,
       ),
       class_name=f"{CARD_STYLES['default']} space-y-4",
     ),
@@ -438,7 +439,7 @@ def subscription_section() -> rx.Component:
   """Sección de información y estado de suscripción."""
   return rx.el.div(
     rx.el.div(
-      rx.el.h2("MI SUSCRIPCION", class_name="text-xl font-semibold text-slate-700"),
+      rx.el.h2("MI SUSCRIPCIÓN", class_name="text-xl font-semibold text-slate-700"),
       rx.el.p(
         "Consulta tu plan actual y el consumo de recursos.",
         class_name=TYPOGRAPHY["body_secondary"],

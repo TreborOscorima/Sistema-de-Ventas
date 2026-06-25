@@ -75,10 +75,10 @@ def billing_config_section() -> rx.Component:
   return rx.el.div(
     rx.el.div(
       rx.el.h2(
-        "FACTURACION ELECTRONICA", class_name="text-xl font-semibold text-slate-700"
+        "FACTURACIÓN ELECTRÓNICA", class_name="text-xl font-semibold text-slate-700"
       ),
       rx.el.p(
-        "Datos fiscales de tu empresa para la emision de boletas y facturas electronicas.",
+        "Datos fiscales de tu empresa para la emisión de boletas y facturas electrónicas.",
         class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
@@ -97,16 +97,16 @@ def billing_config_section() -> rx.Component:
             ),
             rx.el.span(
               rx.icon("circle-x", class_name="h-3.5 w-3.5"),
-              "Pendiente de activacion",
+              "Pendiente de activación",
               class_name=_badge_inactive,
             ),
           ),
           class_name="flex flex-col gap-1.5",
         ),
         rx.el.div(
-          rx.el.label("Pais", class_name=_label),
+          rx.el.label("País", class_name=_label),
           rx.el.select(
-            rx.el.option("Peru", value="PE"),
+            rx.el.option("Perú", value="PE"),
             rx.el.option("Argentina", value="AR"),
             value=State.billing_country,
             on_change=State.set_billing_country,
@@ -121,7 +121,7 @@ def billing_config_section() -> rx.Component:
             State.billing_environment == "production",
             rx.el.span(
               rx.icon("shield-check", class_name="h-3 w-3"),
-              "Produccion",
+              "Producción",
               class_name=_badge_prod,
             ),
             rx.el.span(
@@ -153,7 +153,7 @@ def billing_config_section() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label("Razon Social", class_name=_label),
+          rx.el.label("Razón Social", class_name=_label),
           rx.el.input(
             default_value=State.billing_business_name,
             on_blur=State.set_billing_business_name,
@@ -164,7 +164,7 @@ def billing_config_section() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label("Direccion Fiscal", class_name=_label),
+          rx.el.label("Dirección Fiscal", class_name=_label),
           rx.el.input(
             default_value=State.billing_business_address,
             on_blur=State.set_billing_business_address,
@@ -227,12 +227,12 @@ def billing_config_section() -> rx.Component:
         State.billing_country == "AR",
         rx.el.div(
           rx.el.h3(
-            "Configuracion Fiscal Argentina",
+            "Configuración Fiscal Argentina",
             class_name="text-base font-semibold text-slate-600 border-b pb-1",
           ),
           rx.el.div(
             rx.el.div(
-              rx.el.label("Condicion IVA del Emisor", class_name=_label),
+              rx.el.label("Condición IVA del Emisor", class_name=_label),
               rx.el.select(
                 rx.el.option("Responsable Inscripto", value="RI"),
                 rx.el.option("Monotributo", value="monotributo"),
@@ -435,7 +435,7 @@ def billing_config_section() -> rx.Component:
         State.billing_config_exists,
         rx.el.div(
           rx.el.h3(
-            "Series y Numeracion",
+            "Series y Numeración",
             class_name="text-base font-semibold text-slate-600 border-b pb-1",
           ),
           rx.el.div(
@@ -456,7 +456,7 @@ def billing_config_section() -> rx.Component:
               class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-              rx.el.label("Ult. Nro Factura", class_name=_label),
+              rx.el.label("Últ. Nro. Factura", class_name=_label),
               rx.el.span(
                 State.billing_seq_factura.to_string(),
                 class_name="text-sm font-mono text-slate-600 h-10 flex items-center px-3 bg-slate-50 rounded-md border border-slate-100",
@@ -464,7 +464,7 @@ def billing_config_section() -> rx.Component:
               class_name="flex flex-col gap-1",
             ),
             rx.el.div(
-              rx.el.label("Ult. Nro Boleta", class_name=_label),
+              rx.el.label("Últ. Nro. Boleta", class_name=_label),
               rx.el.span(
                 State.billing_seq_boleta.to_string(),
                 class_name="text-sm font-mono text-slate-600 h-10 flex items-center px-3 bg-slate-50 rounded-md border border-slate-100",
@@ -506,11 +506,11 @@ def billing_config_section() -> rx.Component:
             rx.icon("info", class_name="h-4 w-4 text-indigo-500 shrink-0 mt-0.5"),
             rx.el.div(
               rx.el.p(
-                "Para activar la facturacion electronica, completa tus datos fiscales y guarda.",
+                "Para activar la facturación electrónica, completa tus datos fiscales y guarda.",
                 class_name=TYPOGRAPHY["body"],
               ),
               rx.el.p(
-                "El equipo de TuWaykiApp configurara la conexion con el servicio de emision (Nubefact/AFIP) y activara tu cuenta.",
+                "El equipo de TuWaykiApp configurará la conexión con el servicio de emisión (Nubefact/AFIP) y activará tu cuenta.",
                 class_name=f"{TYPOGRAPHY['caption']} mt-1",
               ),
             ),
@@ -523,7 +523,7 @@ def billing_config_section() -> rx.Component:
       # ── Guardar ──
       rx.el.div(
         rx.el.p(
-          "Estos datos se usan para la emision de comprobantes electronicos.",
+          "Estos datos se usan para la emisión de comprobantes electrónicos.",
           class_name=_help,
         ),
         rx.el.div(

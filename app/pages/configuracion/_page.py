@@ -18,18 +18,18 @@ CONFIG_SECTIONS: list[dict[str, str]] = [
   {
     "key": "empresa",
     "label": "Datos de Empresa",
-    "description": "Informacion fiscal y de contacto",
+    "description": "Información fiscal y de contacto",
     "icon": "building",
   },
   {
     "key": "sucursales",
     "label": "Sucursales",
-    "description": "Gestion de sedes y accesos",
+    "description": "Gestión de sedes y accesos",
     "icon": "map-pin",
   },
   {
     "key": "usuarios",
-    "label": "Gestion de Usuarios",
+    "label": "Gestión de Usuarios",
     "description": "Roles, accesos y credenciales",
     "icon": "users",
   },
@@ -47,25 +47,25 @@ CONFIG_SECTIONS: list[dict[str, str]] = [
   },
   {
     "key": "pagos",
-    "label": "Metodos de Pago",
-    "description": "Botones y opciones que veras en Venta",
+    "label": "Métodos de Pago",
+    "description": "Botones y opciones que verás en Venta",
     "icon": "credit-card",
   },
   {
     "key": "impuestos",
     "label": "Impuestos",
-    "description": "Tasas de IGV, IVA y configuracion fiscal",
+    "description": "Tasas de IGV, IVA y configuración fiscal",
     "icon": "percent",
   },
   {
     "key": "facturacion",
-    "label": "Facturacion Electronica",
+    "label": "Facturación Electrónica",
     "description": "Boletas y facturas SUNAT / AFIP",
     "icon": "file-text",
   },
   {
     "key": "suscripcion",
-    "label": "Suscripcion",
+    "label": "Suscripción",
     "description": "Estado del plan y consumo",
     "icon": "sparkles",
   },
@@ -75,7 +75,7 @@ CONFIG_SECTIONS: list[dict[str, str]] = [
 def config_nav() -> rx.Component:
   return rx.el.div(
     rx.el.p(
-      "Submenus de configuracion",
+      "Submenús de configuración",
       class_name="text-sm font-semibold text-slate-700",
     ),
     rx.el.div(
@@ -114,8 +114,8 @@ def configuracion_page() -> rx.Component:
   content = rx.fragment(
     rx.el.div(
       page_title(
-        "CONFIGURACION DEL SISTEMA",
-        "Gestiona usuarios, monedas, unidades y metodos de pago desde un solo lugar.",
+        "CONFIGURACIÓN DEL SISTEMA",
+        "Gestiona usuarios, monedas, unidades y métodos de pago desde un solo lugar.",
       ),
       rx.el.div(
           rx.match(
@@ -129,7 +129,7 @@ def configuracion_page() -> rx.Component:
             ("impuestos", impuestos_section()),
             ("facturacion", billing_config_section()),
             ("suscripcion", subscription_section()),
-            user_section(),
+            company_settings_section(),
           ),
           class_name="space-y-4",
         ),

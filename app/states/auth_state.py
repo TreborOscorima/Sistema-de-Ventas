@@ -2657,6 +2657,27 @@ class AuthState(MixinState):
                     rx.toast(f"Usuario {username} creado.", duration=3000),
                 ]
 
+    # ── Confirmación de eliminación de usuario ──────────────────
+    delete_user_confirm_open: bool = False
+    delete_user_confirm_username: str = ""
+
+    @rx.event
+    def open_delete_user_confirm(self, username: str):
+        self.delete_user_confirm_username = username
+        self.delete_user_confirm_open = True
+
+    @rx.event
+    def close_delete_user_confirm(self):
+        self.delete_user_confirm_open = False
+        self.delete_user_confirm_username = ""
+
+    @rx.event
+    def confirm_delete_user(self):
+        username = self.delete_user_confirm_username
+        self.delete_user_confirm_open = False
+        self.delete_user_confirm_username = ""
+        return self.delete_user(username)
+
     @rx.event
     def delete_user(self, username: str):
         if not self.current_user["privileges"]["manage_users"]:

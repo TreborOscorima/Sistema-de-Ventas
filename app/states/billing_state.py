@@ -314,7 +314,6 @@ class BillingState(MixinState):
             return block
         cert_pem = (cert_pem or "").strip()
         if not cert_pem:
-            self.add_notification(MSG.FISCAL_CERT_EMPTY, "warning")
             return
         if "-----BEGIN CERTIFICATE-----" not in cert_pem:
             self.add_notification(MSG.FISCAL_CERT_INVALID_PEM, "warning")
@@ -362,7 +361,6 @@ class BillingState(MixinState):
             return block
         key_pem = (key_pem or "").strip()
         if not key_pem:
-            self.add_notification(MSG.FISCAL_KEY_EMPTY, "warning")
             return
         from app.utils.fiscal_validators import validate_private_key_pem
         key_ok, key_err = validate_private_key_pem(key_pem)
@@ -489,6 +487,9 @@ class BillingState(MixinState):
     @rx.event
     async def retry_fiscal_doc(self, doc_id: str):
         """Reintenta la emisión de un documento fiscal fallido."""
+        block = self._require_manage_config()
+        if block:
+            return block
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -737,6 +738,9 @@ class BillingState(MixinState):
     @rx.event
     async def retry_fiscal_doc_from_dashboard(self, doc_id: str):
         """Reintenta un documento fiscal desde el dashboard."""
+        block = self._require_manage_config()
+        if block:
+            return block
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -794,6 +798,9 @@ class BillingState(MixinState):
         estado 'authorized') necesita ser anulada.  Crea un nuevo FiscalDocument
         del tipo nota_credito referenciando la venta original.
         """
+        block = self._require_manage_config()
+        if block:
+            return block
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:

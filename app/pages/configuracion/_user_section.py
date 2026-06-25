@@ -7,6 +7,8 @@ from app.components.ui import (
   SELECT_STYLES,
   TABLE_STYLES,
   TYPOGRAPHY,
+  action_button,
+  modal_container,
   toggle_switch,
 )
 
@@ -75,10 +77,10 @@ PRIVILEGE_SECTIONS: list[tuple[str, list[tuple[str, str]]]] = [
     ],
   ),
   (
-    "Administracion",
+    "Administración",
     [
       ("Gestionar Usuarios", "manage_users"),
-      ("Configuracion Global", "manage_config"),
+      ("Configuración Global", "manage_config"),
     ],
   ),
 ]
@@ -390,7 +392,7 @@ def _user_card(user: rx.Var[dict]) -> rx.Component:
       ),
       rx.el.button(
         rx.icon("trash-2", class_name="h-4 w-4"),
-        on_click=lambda _, username=user["username"]: State.delete_user(username),
+        on_click=lambda _, username=user["username"]: State.open_delete_user_confirm(username),
         title="Eliminar usuario",
         aria_label="Eliminar usuario",
         class_name=BUTTON_STYLES["icon_danger"],
@@ -404,10 +406,11 @@ def _user_card(user: rx.Var[dict]) -> rx.Component:
 
 def user_section() -> rx.Component:
   return rx.el.div(
+    _delete_user_confirm_modal(),
     rx.el.div(
       rx.el.div(
         rx.el.h2(
-          "GESTION DE USUARIOS", class_name="text-xl font-semibold text-slate-700"
+          "GESTIÓN DE USUARIOS", class_name="text-xl font-semibold text-slate-700"
         ),
         rx.el.p(
           "Crea usuarios, roles y ajusta sus privilegios.",
@@ -463,7 +466,7 @@ def user_section() -> rx.Component:
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
                     on_click=lambda _,
-                    username=user["username"]: State.delete_user(
+                    username=user["username"]: State.open_delete_user_confirm(
                       username
                     ),
                     title="Eliminar usuario",
@@ -483,6 +486,62 @@ def user_section() -> rx.Component:
       class_name=f"hidden md:block {CARD_STYLES['default']} overflow-x-auto",
     ),
     class_name="space-y-4",
+  )
+
+
+def _branch_user_row(user: rx.Var[dict]) -> rx.Component:
+  """Fila de usuario en el modal de acceso por sucursal."""
+  return rx.el.div(
+    rx.el.div(
+      rx.el.div(
+        rx.el.span(user["username"], class_name="font-semibold text-slate-800"),
+        rx.el.span(
+          user["role"],
+          class_name=TYPOGRAPHY["caption"],
+        ),
+        class_name="flex flex-col",
+      ),
+      rx.el.span(user["email"], class_name="text-xs text-slate-400"),
+      class_name="flex flex-col",
+    ),
+    rx.el.div(
+      toggle_switch(
+        checked=user["has_access"],
+        on_change=State.set_branch_user_access(user["id"]),
+      ),
+    ),
+    class_name="flex items-center justify-between gap-4 p-3 border border-slate-200 rounded-lg bg-white",
+  )
+
+
+def _delete_user_confirm_modal() -> rx.Component:
+  """Modal de confirmación antes de eliminar un usuario."""
+  return modal_container(
+    is_open=State.delete_user_confirm_open,
+    on_close=State.close_delete_user_confirm,
+    title="Eliminar usuario",
+    children=[
+      rx.el.p(
+        "¿Estás seguro de que deseas eliminar al usuario ",
+        rx.el.strong(State.delete_user_confirm_username),
+        "? Esta acción no puede deshacerse.",
+        class_name="text-sm text-slate-600",
+      ),
+    ],
+    footer=rx.el.div(
+      rx.el.button(
+        "Cancelar",
+        on_click=State.close_delete_user_confirm,
+        class_name=BUTTON_STYLES["ghost"],
+      ),
+      action_button(
+        "Eliminar",
+        on_click=State.confirm_delete_user,
+        variant="danger",
+        icon="trash-2",
+      ),
+      class_name="flex justify-end gap-3",
+    ),
   )
 
 
@@ -512,27 +571,7 @@ def branch_users_modal() -> rx.Component:
           rx.el.div(
             rx.foreach(
               State.branch_users_rows,
-              lambda user: rx.el.div(
-                rx.el.div(
-                  rx.el.div(
-                    rx.el.span(user["username"], class_name="font-semibold text-slate-800"),
-                    rx.el.span(
-                      user["role"],
-                      class_name=TYPOGRAPHY["caption"],
-                    ),
-                    class_name="flex flex-col",
-                  ),
-                  rx.el.span(user["email"], class_name="text-xs text-slate-400"),
-                  class_name="flex flex-col",
-                ),
-                rx.el.div(
-                  toggle_switch(
-                    checked=user["has_access"],
-                    on_change=lambda value, uid=user["id"]: State.set_branch_user_access(uid, value),
-                  ),
-                ),
-                class_name="flex items-center justify-between gap-4 p-3 border border-slate-200 rounded-lg bg-white",
-              ),
+              _branch_user_row,
             ),
             class_name="space-y-3",
           ),
@@ -594,7 +633,7 @@ def _branch_card(branch: rx.Var[dict]) -> rx.Component:
       ),
       rx.el.button(
         rx.icon("trash-2", class_name="h-4 w-4"),
-        on_click=lambda _, bid=branch["id"]: State.delete_branch(bid),
+        on_click=lambda _, bid=branch["id"]: State.open_delete_branch_confirm(bid),
         title="Eliminar sucursal",
         aria_label="Eliminar sucursal",
         class_name=BUTTON_STYLES["icon_danger"],
@@ -603,6 +642,37 @@ def _branch_card(branch: rx.Var[dict]) -> rx.Component:
     ),
     class_name="bg-white border border-slate-200 rounded-xl p-4 flex flex-col gap-3",
     key=branch["id"],
+  )
+
+
+def _branch_delete_confirm_modal() -> rx.Component:
+  """Modal de confirmación antes de eliminar una sucursal."""
+  return modal_container(
+    is_open=State.delete_branch_confirm_open,
+    on_close=State.close_delete_branch_confirm,
+    title="Eliminar sucursal",
+    children=[
+      rx.el.p(
+        "¿Estás seguro de que deseas eliminar la sucursal ",
+        rx.el.strong(State.delete_branch_confirm_name),
+        "? Esta acción no puede deshacerse.",
+        class_name="text-sm text-slate-600",
+      ),
+    ],
+    footer=rx.el.div(
+      rx.el.button(
+        "Cancelar",
+        on_click=State.close_delete_branch_confirm,
+        class_name=BUTTON_STYLES["ghost"],
+      ),
+      action_button(
+        "Eliminar",
+        on_click=State.confirm_delete_branch,
+        variant="danger",
+        icon="trash-2",
+      ),
+      class_name="flex justify-end gap-3",
+    ),
   )
 
 
@@ -619,6 +689,7 @@ def branch_section() -> rx.Component:
       class_name="space-y-1",
     ),
     branch_users_modal(),
+    _branch_delete_confirm_modal(),
     rx.el.div(
       rx.el.div(
         rx.el.label("Nombre de Sucursal", class_name=TYPOGRAPHY["label"]),
@@ -711,7 +782,7 @@ def branch_section() -> rx.Component:
                   ),
                   rx.el.button(
                     rx.icon("trash-2", class_name="h-4 w-4"),
-                    on_click=lambda _, bid=branch["id"]: State.delete_branch(bid),
+                    on_click=lambda _, bid=branch["id"]: State.open_delete_branch_confirm(bid),
                     title="Eliminar sucursal",
                     aria_label="Eliminar sucursal",
                     class_name=BUTTON_STYLES["icon_danger"],

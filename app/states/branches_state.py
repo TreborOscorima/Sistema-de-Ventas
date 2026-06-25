@@ -42,18 +42,40 @@ class BranchesState(MixinState):
     show_limit_modal: bool = False
     limit_modal_message: str = ""
 
+    delete_branch_confirm_open: bool = False
+    delete_branch_confirm_id: str = ""
+    delete_branch_confirm_name: str = ""
+
+    @rx.event
+    def open_delete_branch_confirm(self, branch_id: str):
+        for branch in self.branches_list:
+            if branch["id"] == branch_id:
+                self.delete_branch_confirm_id = branch_id
+                self.delete_branch_confirm_name = branch["name"]
+                self.delete_branch_confirm_open = True
+                return
+        return rx.toast("Sucursal no encontrada.", duration=2500)
+
+    @rx.event
+    def close_delete_branch_confirm(self):
+        self.delete_branch_confirm_open = False
+        self.delete_branch_confirm_id = ""
+        self.delete_branch_confirm_name = ""
+
+    @rx.event
+    def confirm_delete_branch(self):
+        branch_id = self.delete_branch_confirm_id
+        self.delete_branch_confirm_open = False
+        self.delete_branch_confirm_id = ""
+        self.delete_branch_confirm_name = ""
+        return self.delete_branch(branch_id)
+
     @rx.event
     def close_limit_modal(self):
         self.show_limit_modal = False
         self.limit_modal_message = ""
 
-    def _require_manage_config(self):
-        if hasattr(self, "current_user") and not self.current_user["privileges"].get(
-            "manage_config"
-        ):
-            return rx.toast(MSG.AUTH_PERM_CONFIG, duration=3000)
-        return None
-
+    @rx.event
     def load_branches(self):
         company_id = self._company_id()
         if not company_id:
@@ -572,7 +594,7 @@ class BranchesState(MixinState):
             ).all()
             existing_ids = {int(row.user_id) for row in existing}
 
-            to_add = desired_ids - existing_ids
+            to_add = (desired_ids & company_user_ids) - existing_ids
             to_remove = existing_ids - desired_ids
 
             for user_id in to_add:
