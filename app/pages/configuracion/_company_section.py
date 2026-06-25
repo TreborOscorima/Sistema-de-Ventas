@@ -40,7 +40,7 @@ def company_settings_section() -> rx.Component:
           class_name="flex flex-col gap-1",
         ),
         rx.el.div(
-          rx.el.label("N° de Registro de Empresa", class_name=TYPOGRAPHY["label"]),
+          rx.el.label(State.tax_id_label, class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.ruc,
             on_blur=State.set_ruc,

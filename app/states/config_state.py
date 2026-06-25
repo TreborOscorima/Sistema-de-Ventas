@@ -1106,7 +1106,7 @@ class ConfigState(MixinState):
             self._refresh_payment_feedback()
         return [
             self._emit_runtime_sync_event(),
-            rx.toast(f"Moneda {name} agregado.", duration=2500),
+            rx.toast(f"Moneda {name} agregada.", duration=2500),
         ]
 
     @rx.event

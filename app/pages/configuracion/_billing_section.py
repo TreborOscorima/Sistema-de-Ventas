@@ -34,7 +34,7 @@ def _failed_doc_row(doc: dict) -> rx.Component:
         ),
       ),
       rx.el.span(
-        "Intento " + doc["retry_count"] + "/3",
+        "Intento " + doc["retry_count"].to_string() + "/3",
         class_name="text-xs text-slate-400",
       ),
       class_name="flex items-center gap-2 flex-wrap",
@@ -278,8 +278,8 @@ def billing_config_section() -> rx.Component:
                   class_name="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0",
                 ),
                 rx.el.div(
-                  rx.el.p("Generá tu clave privada RSA", class_name="text-xs font-semibold text-slate-700"),
-                  rx.el.p("En tu terminal ejecutá:", class_name="text-xs text-slate-500 mt-0.5"),
+                  rx.el.p("Genera tu clave privada RSA", class_name="text-xs font-semibold text-slate-700"),
+                  rx.el.p("En tu terminal ejecuta:", class_name="text-xs text-slate-500 mt-0.5"),
                   rx.el.code(
                     "openssl genrsa -out mi_clave.key 2048",
                     class_name="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded font-mono block mt-1",
@@ -295,9 +295,9 @@ def billing_config_section() -> rx.Component:
                   class_name="w-5 h-5 rounded-full bg-indigo-500 flex items-center justify-center shrink-0",
                 ),
                 rx.el.div(
-                  rx.el.p("Solicitá el certificado en AFIP", class_name="text-xs font-semibold text-slate-700"),
+                  rx.el.p("Solicita el certificado en AFIP", class_name="text-xs font-semibold text-slate-700"),
                   rx.el.p(
-                    "Ingresá al portal AFIP con tu CUIT → Administración de Certificados Digitales → Nuevo Certificado → subí tu clave pública (.csr).",
+                    "Ingresa al portal AFIP con tu CUIT → Administración de Certificados Digitales → Nuevo Certificado → sube tu clave pública (.csr).",
                     class_name="text-xs text-slate-500 mt-0.5",
                   ),
                   rx.el.a(
@@ -322,8 +322,8 @@ def billing_config_section() -> rx.Component:
                   ),
                 ),
                 rx.el.div(
-                  rx.el.p("Pegá los archivos descargados abajo", class_name="text-xs font-semibold text-slate-700"),
-                  rx.el.p("Pegá el contenido completo del .pem y .key en los campos de abajo y salí de cada campo para guardar.", class_name="text-xs text-slate-500 mt-0.5"),
+                  rx.el.p("Pega los archivos descargados abajo", class_name="text-xs font-semibold text-slate-700"),
+                  rx.el.p("Pega el contenido completo del .pem y .key en los campos de abajo y sal de cada campo para guardar.", class_name="text-xs text-slate-500 mt-0.5"),
                   class_name="flex flex-col",
                 ),
                 class_name="flex items-start gap-2",
@@ -392,7 +392,7 @@ def billing_config_section() -> rx.Component:
                   class_name=_input + " font-mono text-xs resize-none",
                 ),
                 rx.el.p(
-                  "Pegá el contenido completo del archivo .crt o .pem descargado de AFIP.",
+                  "Pega el contenido completo del archivo .crt o .pem descargado de AFIP.",
                   class_name=_help,
                 ),
                 class_name="flex flex-col gap-1",

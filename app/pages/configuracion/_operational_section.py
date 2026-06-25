@@ -354,7 +354,7 @@ def payment_methods_section() -> rx.Component:
                 class_name="flex items-center gap-2",
               ),
               rx.cond(
-                method["description"] != "Sin descripcion",
+                method["description"] != "Sin descripción",
                 rx.el.p(
                   method["description"],
                   class_name=TYPOGRAPHY["caption"],
