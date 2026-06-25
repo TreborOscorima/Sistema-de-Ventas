@@ -57,6 +57,7 @@ class CashState(
     cashbox_close_modal_open: bool = False
     summary_by_method: list[dict] = []
     cashbox_close_summary_sales: List[CashboxSale] = []
+    cashbox_close_summary_returns: List[dict] = []
     cashbox_close_summary_date: str = ""
     cashbox_close_opening_amount: float = 0.0
     cashbox_close_income_total: float = 0.0

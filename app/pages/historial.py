@@ -131,6 +131,18 @@ def history_table_row(movement: rx.Var[dict]) -> rx.Component:
       class_name="py-3 px-4 text-right font-semibold tabular-nums text-slate-900 whitespace-nowrap",
     ),
     rx.el.td(
+      rx.cond(
+        movement["return_status"] == "returned",
+        rx.el.span("Devuelta", class_name="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700"),
+        rx.cond(
+          movement["return_status"] == "partial",
+          rx.el.span("Dev. Parcial", class_name="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700"),
+          rx.el.span(""),
+        ),
+      ),
+      class_name="py-3 px-4 text-sm hidden sm:table-cell",
+    ),
+    rx.el.td(
       movement.get("user", "Desconocido"),
       class_name="py-3 px-4 text-sm text-slate-500 hidden xl:table-cell",
     ),
@@ -176,6 +188,28 @@ def _sale_card(sale: rx.Var) -> rx.Component:
       ),
       class_name="grid grid-cols-2 gap-3 mt-2",
     ),
+    # Badge de devolución (solo si aplica)
+    rx.cond(
+      sale["return_status"] == "returned",
+      rx.el.div(
+        rx.el.span(
+          "Devuelta",
+          class_name="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700",
+        ),
+        class_name="mt-2",
+      ),
+      rx.cond(
+        sale["return_status"] == "partial",
+        rx.el.div(
+          rx.el.span(
+            "Dev. Parcial",
+            class_name="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700",
+          ),
+          class_name="mt-2",
+        ),
+        rx.fragment(),
+      ),
+    ),
     on_click=State.open_sale_detail(sale["sale_id"]),
     class_name=(
       "bg-white border border-slate-200 rounded-xl p-4 shadow-sm "
@@ -193,123 +227,160 @@ def sale_detail_modal() -> rx.Component:
         class_name="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 modal-overlay"
       ),
       rx.radix.primitives.dialog.content(
+        # ── Header fijo ──────────────────────────────────────────
         rx.el.div(
-          rx.el.h3("Detalle de venta", class_name=TYPOGRAPHY["section_title"]),
+          rx.el.div(
+            rx.el.h3(
+              "Venta #",
+              State.selected_sale_summary.get("sale_id", ""),
+              class_name=TYPOGRAPHY["section_title"],
+            ),
+            rx.cond(
+              State.selected_sale_summary.get("return_status", "") == "returned",
+              rx.el.span("Devuelta", class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700"),
+              rx.cond(
+                State.selected_sale_summary.get("return_status", "") == "partial",
+                rx.el.span("Dev. Parcial", class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700"),
+                rx.el.span("Completada", class_name="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700"),
+              ),
+            ),
+            class_name="flex items-center gap-3",
+          ),
           rx.el.p(
-            "Productos y resumen del comprobante seleccionado.",
+            State.selected_sale_summary.get("timestamp", ""),
             class_name=TYPOGRAPHY["body_secondary"],
           ),
-          class_name="flex flex-col gap-1",
+          class_name="px-6 pt-5 pb-3 shrink-0 flex flex-col gap-1",
         ),
         rx.divider(color="slate-100"),
+        # ── Body scrollable ──────────────────────────────────────
+        rx.el.div(
         rx.cond(
           State.selected_sale_id == "",
           rx.el.p("Venta no disponible.", class_name=TYPOGRAPHY["body_secondary"]),
           rx.el.div(
+            # Info: Cliente · Método · Total
             rx.el.div(
-              rx.el.div(
-                rx.el.span("Fecha", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
-                rx.el.span(
-                  State.selected_sale_summary["timestamp"],
-                  class_name="text-sm font-semibold text-slate-900",
-                ),
-                class_name="flex flex-col gap-1",
-              ),
               rx.el.div(
                 rx.el.span("Cliente", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
-                rx.el.span(
-                  State.selected_sale_summary["client_name"],
-                  class_name="text-sm font-semibold text-slate-900",
-                ),
-                class_name="flex flex-col gap-1",
+                rx.el.span(State.selected_sale_summary["client_name"], class_name="text-sm font-semibold text-slate-900"),
+                class_name="flex flex-col gap-0.5",
               ),
               rx.el.div(
-                rx.el.span("Usuario", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
-                rx.el.span(
-                  State.selected_sale_summary["user"],
-                  class_name="text-sm font-semibold text-slate-900",
-                ),
-                class_name="flex flex-col gap-1",
-              ),
-            class_name="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3",
-          ),
-            rx.el.div(
-              rx.el.div(
-                rx.el.span("Metodo de pago", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                rx.el.span("Método de pago", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 payment_method_badge(State.selected_sale_summary["payment_method"]),
-                class_name="flex flex-col gap-1",
+                class_name="flex flex-col gap-0.5 items-start",
               ),
               rx.el.div(
                 rx.el.span("Total", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
                 rx.el.span(
-                  State.currency_symbol,
-                  State.selected_sale_summary["total"],
-                  class_name="text-lg font-semibold text-slate-900",
+                  State.currency_symbol, State.selected_sale_summary["total"],
+                  class_name="text-xl font-bold text-slate-900",
                 ),
-                class_name="flex flex-col gap-1",
+                class_name="flex flex-col gap-0.5",
               ),
-            class_name="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3",
-          ),
+              class_name="grid grid-cols-3 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4",
+            ),
+            # Sección Productos (lo que el cliente conservó)
             rx.el.div(
               rx.el.h4("Productos", class_name=TYPOGRAPHY["label"]),
               rx.cond(
-                State.selected_sale_items_view.length() == 0,
-                rx.el.p(
-                  "Sin productos registrados.",
-                  class_name=TYPOGRAPHY["body_secondary"],
-                ),
+                State.selected_sale_summary["has_retained_items"],
                 rx.el.div(
                   rx.el.table(
                     rx.el.thead(
                       rx.el.tr(
                         rx.el.th("Producto", scope="col", class_name=TABLE_STYLES["header_cell"]),
-                        rx.el.th(
-                          "Cantidad",
-                          scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
-                        ),
-                        rx.el.th(
-                          "Precio",
-                          scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
-                        ),
-                        rx.el.th(
-                          "Subtotal",
-                          scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right",
-                        ),
+                        rx.el.th("Cant.", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+                        rx.el.th("Precio", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+                        rx.el.th("Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
                         class_name=TABLE_STYLES["header"],
                       )
                     ),
                     rx.el.tbody(
                       rx.foreach(
-                        State.selected_sale_items_view,
+                        State.selected_sale_items_retained_view,
                         lambda item: rx.el.tr(
                           rx.el.td(item["description"], class_name="py-2 px-3 text-sm"),
                           rx.el.td(item["quantity"], class_name="py-2 px-3 text-right text-sm"),
-                          rx.el.td(
-                            State.currency_symbol,
-                            item["unit_price"],
-                            class_name="py-2 px-3 text-right text-sm",
-                          ),
-                          rx.el.td(
-                            State.currency_symbol,
-                            item["subtotal"],
-                            class_name="py-2 px-3 text-right text-sm font-semibold",
-                          ),
+                          rx.el.td(State.currency_symbol, item["unit_price"], class_name="py-2 px-3 text-right text-sm text-slate-500"),
+                          rx.el.td(State.currency_symbol, item["subtotal"], class_name="py-2 px-3 text-right text-sm font-semibold"),
                           class_name="border-b border-slate-100",
                         ),
                       )
                     ),
                     class_name="min-w-full text-sm",
                   ),
-                class_name="max-h-64 overflow-y-auto overflow-x-auto border border-slate-200 rounded-xl",
+                  class_name="overflow-x-auto border border-slate-200 rounded-xl",
+                ),
+                rx.el.p("Todos los productos fueron devueltos.", class_name=TYPOGRAPHY["body_secondary"]),
               ),
+              rx.el.div(
+                rx.el.span("Total", class_name="text-xs text-slate-400"),
+                rx.el.span(
+                  State.currency_symbol, State.selected_sale_summary["retained_total"],
+                  class_name="text-sm font-semibold text-slate-900",
+                ),
+                class_name="flex justify-end items-center gap-2 pt-1",
+              ),
+              class_name="flex flex-col gap-2",
             ),
-            class_name="flex flex-col gap-2",
-          ),
+            # Sección Devoluciones (lo que fue devuelto)
+            rx.cond(
+              State.selected_sale_summary["has_returns"],
+              rx.el.div(
+                rx.el.div(
+                  rx.icon("undo-2", class_name="h-3.5 w-3.5 text-orange-500"),
+                  rx.el.span("Devoluciones", class_name=f"{TYPOGRAPHY['label']} text-orange-700"),
+                  class_name="flex items-center gap-1.5",
+                ),
+                rx.el.div(
+                  rx.el.table(
+                    rx.el.thead(
+                      rx.el.tr(
+                        rx.el.th("Producto", scope="col", class_name=TABLE_STYLES["header_cell"]),
+                        rx.el.th("Cant.", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+                        rx.el.th("Precio", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+                        rx.el.th("Total", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
+                        class_name=TABLE_STYLES["header"],
+                      )
+                    ),
+                    rx.el.tbody(
+                      rx.foreach(
+                        State.selected_sale_items_returned_view,
+                        lambda item: rx.el.tr(
+                          rx.el.td(item["description"], class_name="py-2 px-3 text-sm"),
+                          rx.el.td(item["quantity"], class_name="py-2 px-3 text-right text-sm"),
+                          rx.el.td(State.currency_symbol, item["unit_price"], class_name="py-2 px-3 text-right text-sm text-slate-400"),
+                          rx.el.td(State.currency_symbol, item["subtotal"], class_name="py-2 px-3 text-right text-sm font-semibold text-orange-600"),
+                          class_name="border-b border-orange-100",
+                        ),
+                      )
+                    ),
+                    class_name="min-w-full text-sm",
+                  ),
+                  class_name="overflow-x-auto border border-orange-200 rounded-xl bg-orange-50/30",
+                ),
+                rx.el.div(
+                  rx.el.span("Reembolsado", class_name="text-xs text-orange-400"),
+                  rx.el.span(
+                    "-", State.currency_symbol, State.selected_sale_summary["total_refunded"],
+                    class_name="text-sm font-semibold text-orange-600",
+                  ),
+                  class_name="flex justify-end items-center gap-2 pt-1",
+                ),
+                class_name="flex flex-col gap-2",
+              ),
+              rx.fragment(),
+            ),
           class_name="flex flex-col gap-4",
         ),
-      ),
-      rx.divider(color="slate-100"),
-      rx.el.div(
+        ),
+        class_name="flex-1 overflow-y-auto px-6 py-4",
+        ),
+        rx.divider(color="slate-100"),
+        # ── Footer fijo ──────────────────────────────────────────
+        rx.el.div(
         rx.el.button(
           "Cerrar",
           on_click=State.close_sale_detail,
@@ -324,10 +395,11 @@ def sale_detail_modal() -> rx.Component:
           ],
           class_name=BUTTON_STYLES["danger"],
         ),
-        class_name="flex justify-end gap-3",
-      ),
+        class_name="flex justify-end gap-3 px-6 py-4 shrink-0",
+        ),
       class_name=(
-        "bg-white rounded-xl border border-slate-200 shadow-sm p-6 w-full max-w-3xl space-y-4 "
+        "bg-white rounded-xl border border-slate-200 shadow-sm w-full max-w-3xl "
+        "flex flex-col max-h-[90vh] "
         "data-[state=open]:animate-in data-[state=closed]:animate-out "
         "data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 "
         "data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 "
@@ -391,9 +463,8 @@ def return_modal() -> rx.Component:
             rx.el.thead(
               rx.el.tr(
                 rx.el.th("Producto", scope="col", class_name=TABLE_STYLES["header_cell"]),
-                rx.el.th("Vendido", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
-                rx.el.th("Disponible", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
-                rx.el.th("Devolver", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center w-24"),
+                rx.el.th("Máx.", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
+                rx.el.th("Devolver", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-center"),
                 rx.el.th("Reembolso", scope="col", class_name=f"{TABLE_STYLES['header_cell']} text-right"),
                 class_name=TABLE_STYLES["header"],
               )
@@ -404,40 +475,69 @@ def return_modal() -> rx.Component:
                 lambda item: rx.el.tr(
                   rx.el.td(
                     item["product_name"],
-                    class_name="py-2 px-3 text-sm",
-                  ),
-                  rx.el.td(
-                    item["original_qty"].to_string(),
-                    class_name="py-2 px-3 text-center text-sm",
+                    class_name="py-2.5 px-3 text-sm",
                   ),
                   rx.el.td(
                     item["available_qty"].to_string(),
-                    class_name="py-2 px-3 text-center text-sm font-semibold",
+                    class_name="py-2.5 px-3 text-center text-sm text-slate-500",
                   ),
                   rx.el.td(
-                    rx.el.input(
-                      type="number",
-                      min="0",
-                      max=item["available_qty"].to_string(),
-                      step="1",
-                      value=item["return_qty"].to_string(),
-                      on_change=lambda val, sid=item["sale_item_id"].to_string(): State.set_return_item_qty(sid, val),
-                      class_name="w-20 text-center text-sm border rounded px-2 py-1 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
+                    rx.el.div(
+                      rx.el.button(
+                        "−",
+                        on_click=State.decrement_return_qty(item["sale_item_id"].to_string()),
+                        disabled=item["return_qty"] == 0,
+                        class_name=(
+                          "w-7 h-7 flex items-center justify-center rounded-l-md "
+                          "border border-r-0 border-slate-200 bg-slate-50 "
+                          "text-slate-600 hover:bg-slate-100 font-bold text-base "
+                          "disabled:opacity-30 disabled:cursor-not-allowed"
+                        ),
+                      ),
+                      rx.el.span(
+                        item["return_qty"].to_string(),
+                        class_name=(
+                          "w-9 text-center text-sm font-semibold "
+                          "border-t border-b border-slate-200 py-1 bg-white leading-5"
+                        ),
+                      ),
+                      rx.el.button(
+                        "+",
+                        on_click=State.increment_return_qty(item["sale_item_id"].to_string()),
+                        disabled=item["at_max"],
+                        class_name=(
+                          "w-7 h-7 flex items-center justify-center rounded-r-md "
+                          "border border-l-0 border-slate-200 bg-slate-50 "
+                          "text-slate-600 hover:bg-slate-100 font-bold text-base "
+                          "disabled:opacity-30 disabled:cursor-not-allowed"
+                        ),
+                      ),
+                      class_name="flex items-center justify-center",
                     ),
                     class_name="py-2 px-3 text-center",
                   ),
                   rx.el.td(
-                    State.currency_symbol,
-                    item["refund_line"],
-                    class_name="py-2 px-3 text-right text-sm font-mono",
+                    rx.cond(
+                      ~(item["return_qty"] == 0),
+                      rx.el.span(
+                        State.currency_symbol, item["refund_line"],
+                        class_name="text-sm font-semibold text-orange-600",
+                      ),
+                      rx.el.span("—", class_name="text-sm text-slate-300"),
+                    ),
+                    class_name="py-2.5 px-3 text-right",
                   ),
-                  class_name="border-b",
+                  class_name=rx.cond(
+                    ~(item["return_qty"] == 0),
+                    "border-b border-orange-100 bg-orange-50",
+                    "border-b border-slate-100",
+                  ),
                 ),
               ),
             ),
             class_name="min-w-full text-sm",
           ),
-          class_name="max-h-64 overflow-y-auto border rounded-lg",
+          class_name="max-h-64 overflow-y-auto border border-slate-200 rounded-xl",
         ),
         class_name="mb-4",
       ),
@@ -463,11 +563,11 @@ def return_modal() -> rx.Component:
           rx.el.span("Total a reembolsar:", class_name="text-sm font-semibold text-slate-700"),
           rx.el.span(
             State.return_refund_total,
-            class_name="text-lg font-bold text-red-600",
+            class_name="text-lg font-bold text-orange-600",
           ),
           class_name="flex items-center justify-between",
         ),
-        class_name="bg-red-50 border border-red-200 rounded-lg p-3",
+        class_name="bg-orange-50 border border-orange-200 rounded-xl p-3",
       ),
     ],
     footer=rx.el.div(
@@ -481,7 +581,11 @@ def return_modal() -> rx.Component:
         "Confirmar devolución",
         on_click=State.confirm_return,
         disabled=~State.return_has_selection,
-        class_name=f"{BUTTON_STYLES['danger']} min-h-[42px]",
+        class_name=rx.cond(
+          State.return_has_selection,
+          f"{BUTTON_STYLES['danger']} min-h-[42px]",
+          f"{BUTTON_STYLES['danger']} min-h-[42px] opacity-40 cursor-not-allowed",
+        ),
       ),
       class_name="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 mt-4",
     ),
@@ -572,35 +676,80 @@ def render_dynamic_card(card: rx.Var[dict]) -> rx.Component:
 
 
 def returns_report_row(ret: rx.Var[dict]) -> rx.Component:
-  """Fila de la tabla de devoluciones."""
-  return rx.el.tr(
-    rx.el.td(ret["timestamp"], class_name="py-3 px-4 text-sm text-slate-700 whitespace-nowrap"),
+  """Fila de la tabla de devoluciones, con cabecera de grupo si es la primera de esa venta."""
+  group_header = rx.cond(
+    ret["is_group_start"],
+    rx.el.tr(
+      rx.el.td(
+        rx.el.span(
+          "Venta #", ret["original_sale_id"].to_string(),
+          class_name="text-xs font-semibold text-slate-600",
+        ),
+        rx.el.span(" · Total devuelto: ", class_name="text-xs text-slate-400"),
+        rx.el.span(
+          State.currency_symbol, " ", ret["group_sale_total"],
+          class_name="text-xs font-bold text-red-600",
+        ),
+        col_span=6,
+        class_name="px-4 py-1.5 bg-slate-50",
+      ),
+      class_name="border-t-2 border-slate-200",
+    ),
+    rx.fragment(),
+  )
+  data_row = rx.el.tr(
+    rx.el.td(ret["timestamp"], class_name="py-3 px-4 text-sm text-slate-500 whitespace-nowrap"),
     rx.el.td(
-      rx.el.span("#", ret["original_sale_id"].to_string(), class_name="font-mono"),
-      class_name="py-3 px-4 text-sm text-slate-700",
+      rx.el.button(
+        "#", ret["original_sale_id"].to_string(),
+        on_click=State.open_sale_detail(ret["original_sale_id"].to_string()),
+        class_name=(
+          "font-mono text-indigo-600 hover:text-indigo-800 "
+          "hover:underline underline-offset-2 text-sm"
+        ),
+      ),
+      class_name="py-3 px-4",
     ),
     rx.el.td(ret["reason"], class_name="py-3 px-4 text-sm text-slate-700"),
     rx.el.td(
-      ret["items_summary"],
-      class_name="py-3 px-4 text-sm text-slate-500 max-w-[160px] md:max-w-[250px] truncate",
-      title=ret["items_summary"],
+      ret["items_display"],
+      class_name="py-3 px-4 text-sm text-slate-600",
+      style={"white_space": "pre-line"},
     ),
     rx.el.td(
-      State.currency_symbol,
-      " ",
-      ret["refund_amount"],
-      class_name="py-3 px-4 text-right font-semibold tabular-nums text-red-600 whitespace-nowrap",
+      rx.el.span(
+        State.currency_symbol, " ", ret["refund_amount"],
+        class_name="font-semibold tabular-nums text-red-600 whitespace-nowrap",
+      ),
+      class_name="py-3 px-4 text-right text-sm",
     ),
     rx.el.td(ret["user"], class_name="py-3 px-4 text-sm text-slate-500 hidden xl:table-cell"),
-    class_name="border-b border-slate-100 hover:bg-red-50/40 transition-colors duration-150",
+    class_name="border-b border-slate-100 hover:bg-red-50/30 transition-colors duration-150",
   )
+  return rx.fragment(group_header, data_row)
 
 
 def _return_card(ret: rx.Var[dict]) -> rx.Component:
   """Card de devolución para vista móvil."""
   return rx.el.div(
+    # Separador de grupo cuando es la primera de esa venta
+    rx.cond(
+      ret["is_group_start"],
+      rx.el.div(
+        rx.el.span(
+          "Venta #", ret["original_sale_id"].to_string(),
+          class_name="text-xs font-semibold text-slate-600",
+        ),
+        rx.el.span(
+          " · Total: ", State.currency_symbol, " ", ret["group_sale_total"],
+          class_name="text-xs font-bold text-red-600",
+        ),
+        class_name="flex items-center gap-1 mb-2 pb-2 border-b border-slate-100",
+      ),
+      rx.fragment(),
+    ),
     rx.el.div(
-      rx.el.span(ret["timestamp"], class_name="font-mono font-medium text-slate-900 text-sm"),
+      rx.el.span(ret["timestamp"], class_name="text-slate-500 text-xs"),
       rx.el.span(
         State.currency_symbol, " ", ret["refund_amount"],
         class_name="text-base font-bold text-red-600 tabular-nums",
@@ -610,9 +759,10 @@ def _return_card(ret: rx.Var[dict]) -> rx.Component:
     rx.el.div(
       rx.el.div(
         rx.el.span("Venta", class_name=TYPOGRAPHY["caption"]),
-        rx.el.span(
+        rx.el.button(
           "#", ret["original_sale_id"].to_string(),
-          class_name="text-sm font-medium text-slate-800 font-mono",
+          on_click=State.open_sale_detail(ret["original_sale_id"].to_string()),
+          class_name="text-sm font-mono text-indigo-600 hover:underline text-left",
         ),
         class_name="flex flex-col gap-0.5",
       ),
@@ -624,9 +774,9 @@ def _return_card(ret: rx.Var[dict]) -> rx.Component:
       class_name="grid grid-cols-2 gap-3 mt-2",
     ),
     rx.el.p(
-      ret["items_summary"],
-      class_name="text-xs text-slate-500 mt-1 truncate",
-      title=ret["items_summary"],
+      ret["items_display"],
+      class_name="text-xs text-slate-500 mt-2",
+      style={"white_space": "pre-line"},
     ),
     class_name=(
       "bg-white border border-slate-200 rounded-xl p-4 shadow-sm "

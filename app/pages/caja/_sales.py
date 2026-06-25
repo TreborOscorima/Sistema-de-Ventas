@@ -135,10 +135,28 @@ def _cashbox_sale_card(sale: rx.Var[dict]) -> rx.Component:
     ),
     # Footer: Monto + Acciones
     rx.el.div(
-      rx.el.span(
-        State.currency_symbol,
-        sale["amount"],
-        class_name="text-base font-semibold tabular-nums text-slate-900 whitespace-nowrap",
+      rx.cond(
+        sale["has_return"],
+        rx.el.div(
+          rx.el.span(
+            State.currency_symbol, sale["amount"],
+            class_name="text-xs text-slate-400 line-through tabular-nums",
+          ),
+          rx.el.span(
+            State.currency_symbol, sale["net_amount"],
+            class_name="text-base font-semibold tabular-nums text-slate-900 whitespace-nowrap",
+          ),
+          rx.el.span(
+            rx.cond(sale["return_type"] == "total", "Dev. Total", "Dev. Parcial"),
+            class_name="text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5",
+          ),
+          class_name="flex flex-col gap-0.5",
+        ),
+        rx.el.span(
+          State.currency_symbol,
+          sale["amount"],
+          class_name="text-base font-semibold tabular-nums text-slate-900 whitespace-nowrap",
+        ),
       ),
       rx.el.div(
         rx.el.button(
@@ -206,10 +224,32 @@ def sale_row(sale: rx.Var[dict]) -> rx.Component:
       class_name="py-3.5 px-4 align-top text-sm text-slate-700",
     ),
     rx.el.td(
-      rx.el.span(
-        State.currency_symbol,
-        sale["amount"],
-        class_name="text-base font-semibold text-slate-900 tabular-nums tracking-tight",
+      rx.cond(
+        sale["has_return"],
+        rx.el.div(
+          rx.el.span(
+            State.currency_symbol, sale["amount"],
+            class_name="text-xs text-slate-400 line-through tabular-nums",
+          ),
+          rx.el.span(
+            State.currency_symbol, sale["net_amount"],
+            class_name="text-base font-semibold text-slate-900 tabular-nums tracking-tight",
+          ),
+          rx.el.span(
+            rx.cond(
+              sale["return_type"] == "total",
+              "Dev. Total",
+              "Dev. Parcial",
+            ),
+            class_name="text-xs font-medium text-orange-600 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5 whitespace-nowrap",
+          ),
+          class_name="flex flex-col items-end gap-0.5",
+        ),
+        rx.el.span(
+          State.currency_symbol,
+          sale["amount"],
+          class_name="text-base font-semibold text-slate-900 tabular-nums tracking-tight",
+        ),
       ),
       class_name="py-3.5 px-4 text-right align-top",
     ),
