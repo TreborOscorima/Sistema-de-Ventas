@@ -694,7 +694,7 @@ class AuthState(MixinState):
             self.payment_alert_info = {
                 "show": True,
                 "color": "yellow",
-                "message": f"Tu plan vence en {days_remaining} días.",
+                "message": f"Tu plan vence en {days_remaining} {'día' if days_remaining == 1 else 'días'}.",
             }
             return
         if days_remaining >= -5:
@@ -704,7 +704,7 @@ class AuthState(MixinState):
                 "color": "red",
                 "message": (
                     "¡Pago vencido! "
-                    f"Tienes {grace_left} días de gracia antes del corte."
+                    f"Tienes {grace_left} {'día' if grace_left == 1 else 'días'} de gracia antes del corte."
                 ),
             }
             return
@@ -907,7 +907,7 @@ class AuthState(MixinState):
             self.payment_alert_info = {
                 "show": True,
                 "color": "yellow",
-                "message": f"Tu plan vence en {days_remaining} días.",
+                "message": f"Tu plan vence en {days_remaining} {'día' if days_remaining == 1 else 'días'}.",
             }
             return
         if days_remaining >= -5:
@@ -917,7 +917,7 @@ class AuthState(MixinState):
                 "color": "red",
                 "message": (
                     "¡Pago vencido! "
-                    f"Tienes {grace_left} días de gracia antes del corte."
+                    f"Tienes {grace_left} {'día' if grace_left == 1 else 'días'} de gracia antes del corte."
                 ),
             }
             return

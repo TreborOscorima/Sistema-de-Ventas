@@ -1294,13 +1294,14 @@ class ConfigState(MixinState):
 
     @rx.event
     def add_payment_method(self):
-        if hasattr(self, "current_user") and not self.current_user["privileges"]["manage_config"]:
-            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         name = (self.new_payment_method_name or "").strip()
         description = (self.new_payment_method_description or "").strip()
         kind = (self.new_payment_method_kind or "other").strip().lower()
         if not name:
-            return rx.toast("Asigne un nombre al metodo de pago.", duration=3000)
+            return rx.toast("Asigne un nombre al método de pago.", duration=3000)
         if is_reserved_payment_method(name=name):
             return rx.toast(
                 "La venta a crédito / fiado se configura desde el switch de Punto de Venta, no como método de pago.",
@@ -1320,7 +1321,7 @@ class ConfigState(MixinState):
         ]:
             kind = "other"
         if any(m["name"].lower() == name.lower() for m in self.payment_methods):
-            return rx.toast("Ya existe un metodo con ese nombre.", duration=3000)
+            return rx.toast("Ya existe un método con ese nombre.", duration=3000)
 
         method_id = str(uuid.uuid4())
         company_id = self._company_id()
@@ -1359,13 +1360,14 @@ class ConfigState(MixinState):
             self._set_payment_method(method)
         return [
             self._emit_payment_methods_sync_event(),
-            rx.toast(f"Metodo {name} agregado.", duration=2500),
+            rx.toast(f"Método {name} agregado.", duration=2500),
         ]
 
     @rx.event
     def toggle_payment_method_enabled(self, method_id: str, enabled: bool | str):
-        if hasattr(self, "current_user") and not self.current_user["privileges"]["manage_config"]:
-            return rx.toast("No tiene permisos para configurar el sistema.", duration=3000)
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         if isinstance(enabled, str):
             enabled = enabled.lower() in ["true", "1", "on", "yes"]
         active_methods = self._enabled_payment_methods_list()
@@ -1375,7 +1377,7 @@ class ConfigState(MixinState):
             return
 
         if not enabled and method.get("enabled", True) and len(active_methods) <= 1:
-            return rx.toast("Debe haber al menos un metodo activo.", duration=3000)
+            return rx.toast("Debe haber al menos un método activo.", duration=3000)
 
         company_id = self._company_id()
         branch_id = self._branch_id()

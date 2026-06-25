@@ -160,6 +160,30 @@ def _tax_rate_dialog() -> rx.Component:
   )
 
 
+def _presets_confirm_dialog() -> rx.Component:
+  """Modal de confirmación antes de aplicar preset de país (acción destructiva)."""
+  return modal_container(
+    is_open=State.show_presets_confirm_open,
+    on_close=State.close_presets_confirm,
+    title="Cargar configuración de país",
+    description="Esta acción reemplazará todas las tasas de impuesto actuales con los valores predefinidos del país seleccionado. Las tasas personalizadas se perderán.",
+    footer=rx.el.div(
+      rx.el.button(
+        "Cancelar",
+        on_click=State.close_presets_confirm,
+        class_name=BUTTON_STYLES["ghost"],
+      ),
+      action_button(
+        "Confirmar",
+        on_click=State.apply_country_presets(State.pending_preset_country),
+        variant="danger",
+        icon="refresh-cw",
+      ),
+      class_name="flex justify-end gap-3",
+    ),
+  )
+
+
 def _tax_delete_confirm_dialog() -> rx.Component:
   """Modal de confirmación de borrado de tasa."""
   return modal_container(
@@ -236,7 +260,7 @@ def impuestos_section() -> rx.Component:
         *[
           rx.el.button(
             country_label,
-            on_click=State.apply_country_presets(country_code),
+            on_click=State.open_presets_confirm(country_code),
             class_name=rx.cond(
               State.active_preset_country == country_code,
               "text-xs px-3 py-1.5 rounded-md border border-indigo-300 "
@@ -344,6 +368,7 @@ def impuestos_section() -> rx.Component:
     # ── Dialogs ───────────────────────────────────────────────────────────
     _tax_rate_dialog(),
     _tax_delete_confirm_dialog(),
+    _presets_confirm_dialog(),
 
     class_name="space-y-4",
   )

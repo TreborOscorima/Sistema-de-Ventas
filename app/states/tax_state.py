@@ -46,6 +46,10 @@ class TaxConfigState(MixinState):
     tax_config_loading: bool = False
     active_preset_country: str = ""
 
+    # Confirmación antes de aplicar presets (acción destructiva)
+    show_presets_confirm_open: bool = False
+    pending_preset_country: str = ""
+
     # ── Computed vars ──────────────────────────────────────────────────────────
 
     @rx.var(cache=False)
@@ -299,6 +303,19 @@ class TaxConfigState(MixinState):
         self.load_tax_config()
 
     # ── Presets de país ────────────────────────────────────────────────────────
+
+    @rx.event
+    def open_presets_confirm(self, country_code: str):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
+        self.pending_preset_country = country_code
+        self.show_presets_confirm_open = True
+
+    @rx.event
+    def close_presets_confirm(self):
+        self.show_presets_confirm_open = False
+        self.pending_preset_country = ""
 
     @rx.event
     def apply_country_presets(self, country_code: str):

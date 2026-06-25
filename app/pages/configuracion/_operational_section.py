@@ -29,14 +29,14 @@ def currency_section() -> rx.Component:
         "SELECTOR DE MONEDAS", class_name="text-xl font-semibold text-slate-700"
       ),
       rx.el.p(
-        "Configura las monedas disponibles y el simbolo que se muestra en los modulos.",
+        "Configura las monedas disponibles y el símbolo que se muestra en los módulos.",
         class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
     ),
     rx.el.div(
       rx.el.div(
-        rx.el.label("Codigo", class_name=TYPOGRAPHY["label"]),
+        rx.el.label("Código", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.new_currency_code,
           on_blur=State.set_new_currency_code,
@@ -58,7 +58,7 @@ def currency_section() -> rx.Component:
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Simbolo", class_name=TYPOGRAPHY["label"]),
+        rx.el.label("Símbolo", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
           default_value=State.new_currency_symbol,
           on_blur=State.set_new_currency_symbol,
@@ -157,7 +157,7 @@ def unit_section() -> rx.Component:
         "UNIDADES DE MEDIDA", class_name="text-xl font-semibold text-slate-700"
       ),
       rx.el.p(
-        "Define las unidades que podras seleccionar en inventario, ingresos y ventas.",
+        "Define las unidades que podrás seleccionar en inventario, ingresos y ventas.",
         class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
@@ -253,10 +253,10 @@ def payment_methods_section() -> rx.Component:
   return rx.el.div(
     rx.el.div(
       rx.el.h2(
-        "METODOS DE PAGO", class_name="text-xl font-semibold text-slate-700"
+        "MÉTODOS DE PAGO", class_name="text-xl font-semibold text-slate-700"
       ),
       rx.el.p(
-        "Activa, crea o elimina los botones que veras en el modulo de Venta.",
+        "Activa, crea o elimina los botones que verás en el módulo de Venta.",
         class_name=TYPOGRAPHY["body_secondary"],
       ),
       class_name="space-y-1",
@@ -274,9 +274,9 @@ def payment_methods_section() -> rx.Component:
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
-        rx.el.label("Descripcion", class_name=TYPOGRAPHY["label"]),
+        rx.el.label("Descripción", class_name=TYPOGRAPHY["label"]),
         rx.el.input(
-          placeholder="Breve detalle del metodo",
+          placeholder="Breve detalle del método",
           default_value=State.new_payment_method_description,
           on_blur=State.set_new_payment_method_description,
           class_name=INPUT_STYLES["default"],
