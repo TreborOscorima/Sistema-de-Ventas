@@ -98,37 +98,46 @@ def add_company_header(
 
     Retorna la fila donde deben comenzar los datos (después del encabezado).
     """
-    # Fila 1: Nombre de empresa
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=columns)
-    title_cell = ws.cell(row=1, column=1, value=company_name.upper() if company_name else "EMPRESA")
-    title_cell.font = TITLE_FONT
-    title_cell.alignment = Alignment(horizontal="center")
+    end_col = get_column_letter(columns)
+
+    # Fila 1: Nombre de empresa — fondo azul, texto blanco 18pt
+    ws.merge_cells(f"A1:{end_col}1")
+    title_cell = ws["A1"]
+    title_cell.value = (company_name or "SIN NOMBRE").upper()
+    title_cell.font = Font(bold=True, size=18, color="FFFFFF")
+    title_cell.fill = HEADER_FILL
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 30
 
     # Fila 2: Título del reporte
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=columns)
-    subtitle_cell = ws.cell(row=2, column=1, value=report_title)
-    subtitle_cell.font = SUBTITLE_FONT
-    subtitle_cell.alignment = Alignment(horizontal="center")
+    ws.merge_cells(f"A2:{end_col}2")
+    subtitle_cell = ws["A2"]
+    subtitle_cell.value = report_title
+    subtitle_cell.font = Font(bold=True, size=12, color="6366F1")
+    subtitle_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[2].height = 25
 
     # Fila 3: Período
-    if period_str:
-        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=columns)
-        period_cell = ws.cell(row=3, column=1, value=f"📅 {period_str}")
-        period_cell.font = Font(size=10, color="6B7280")
-        period_cell.alignment = Alignment(horizontal="center")
+    ws.merge_cells(f"A3:{end_col}3")
+    period_cell = ws["A3"]
+    period_cell.value = f"📅 Período: {period_str}" if period_str else ""
+    period_cell.font = Font(size=11, color="374151")
+    period_cell.alignment = Alignment(horizontal="center")
 
     # Fila 4: Fecha de generación
     now = generated_at or datetime.datetime.now()
-    ws.merge_cells(start_row=4, start_column=1, end_row=4, end_column=columns)
-    date_cell = ws.cell(row=4, column=1, value=f"⏱ Generado: {now.strftime('%d/%m/%Y a las %H:%M:%S')}")
-    date_cell.font = Font(size=9, italic=True, color="9CA3AF")
+    ws.merge_cells(f"A4:{end_col}4")
+    date_cell = ws["A4"]
+    date_cell.value = f"🕐 Generado: {now.strftime('%d/%m/%Y a las %H:%M:%S')}"
+    date_cell.font = Font(size=9, italic=True, color="6B7280")
     date_cell.alignment = Alignment(horizontal="center")
 
-    # Fila 5: Espacio
-    ws.row_dimensions[5].height = 10
+    # Fila 5: Línea separadora (borde inferior azul)
+    ws.merge_cells(f"A5:{end_col}5")
+    ws["A5"].border = Border(bottom=Side(style="medium", color="4F46E5"))
 
-    # Retornar fila 6 para encabezados de datos
-    return 6
+    # Retornar fila 7 (fila 6 como espacio visual)
+    return 7
 
 
 def add_totals_row_with_formulas(

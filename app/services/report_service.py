@@ -164,7 +164,7 @@ def _add_company_header(
 
     # Fila 1: Logo / Nombre empresa con fondo
     ws.merge_cells(f"A1:{end_col}1")
-    ws["A1"] = company_name.upper()
+    ws["A1"] = (company_name or "SIN NOMBRE").upper()
     ws["A1"].font = Font(bold=True, size=18, color="FFFFFF")
     ws["A1"].fill = HEADER_FILL
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
