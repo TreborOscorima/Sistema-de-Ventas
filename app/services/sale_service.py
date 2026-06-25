@@ -63,6 +63,7 @@ from app.models import (
     SaleInstallment,
     SaleItem,
     SalePayment,
+    StockMovement,
     Unit,
 )
 # PriceListItem y Promotion se acceden vía app.services.pricing (single source of truth).
@@ -2534,6 +2535,17 @@ class SaleService:
                 name_snapshot = product.description
                 if variant_label:
                     name_snapshot = f"{product.description} ({variant_label})"
+                session.add(
+                    StockMovement(
+                        type="Venta",
+                        product_id=product.id,
+                        quantity=-item["quantity"],
+                        description=f"Venta: {name_snapshot}",
+                        user_id=user_id,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                    )
+                )
                 sale_item = SaleItem(
                     sale_id=new_sale.id,
                     product_id=product.id,
