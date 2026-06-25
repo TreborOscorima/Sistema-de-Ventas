@@ -803,6 +803,15 @@ def _payment_form_body(variant: str) -> tuple:
                             mixed_btn_inactive,
                         ),
                     ),
+                    rx.el.button(
+                        "Mercado Pago",
+                        on_click=lambda: State.set_mixed_non_cash_kind("mercadopago"),
+                        class_name=rx.cond(
+                            State.payment_mixed_non_cash_kind == "mercadopago",
+                            mixed_btn_active,
+                            mixed_btn_inactive,
+                        ),
+                    ),
                     class_name="grid grid-cols-2 gap-2",
                 ),
                 class_name="flex flex-col gap-2",

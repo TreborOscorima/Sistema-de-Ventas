@@ -169,6 +169,7 @@ class PaymentMixin:
             "yape": "Billetera Digital (Yape)",
             "plin": "Billetera Digital (Plin)",
             "transfer": "Transferencia Bancaria",
+            "mercadopago": "Mercado Pago",
         }
         if kind == "cash":
             detail = f"Monto {self._format_currency(self.payment_cash_amount)}"
@@ -213,8 +214,6 @@ class PaymentMixin:
                 parts.append(self.payment_mixed_notes)
             if not parts:
                 parts.append("Sin detalle")
-            if self.payment_mixed_message:
-                parts.append(self.payment_mixed_message)
             return f"{method} - {' / '.join(parts)}"
         return f"{method} - {self.payment_method_description}"
 
@@ -268,7 +267,7 @@ class PaymentMixin:
         total = self._mixed_effective_total(total_override)
         paid_cash = self._round_currency(self.payment_mixed_cash)
         remaining = self._round_currency(max(total - paid_cash, 0))
-        if self.payment_mixed_non_cash_kind in ["wallet", "yape", "plin"]:
+        if self.payment_mixed_non_cash_kind in ["wallet", "yape", "plin", "mercadopago"]:
             self.payment_mixed_wallet = remaining
             self.payment_mixed_card = 0
         else:
@@ -439,7 +438,7 @@ class PaymentMixin:
             self.payment_wallet_provider = provider
         if (
             self.payment_method_kind == "mixed"
-            and self.payment_mixed_non_cash_kind in ["wallet", "yape", "plin"]
+            and self.payment_mixed_non_cash_kind in ["wallet", "yape", "plin", "mercadopago"]
         ):
             self._auto_allocate_mixed_amounts()
             self._update_mixed_message()
@@ -469,6 +468,7 @@ class PaymentMixin:
             "yape",
             "plin",
             "transfer",
+            "mercadopago",
         ]:
             return
         if kind == "debit":
@@ -481,6 +481,9 @@ class PaymentMixin:
         elif kind == "plin":
             self.payment_wallet_choice = "Plin"
             self.payment_wallet_provider = "Plin"
+        elif kind == "mercadopago":
+            self.payment_wallet_choice = "Mercado Pago"
+            self.payment_wallet_provider = "Mercado Pago"
         self.payment_mixed_non_cash_kind = kind
         self._auto_allocate_mixed_amounts()
         self._update_mixed_message()
@@ -509,6 +512,7 @@ class PaymentMixin:
             "yape": "Billetera Digital (Yape)",
             "plin": "Billetera Digital (Plin)",
             "transfer": "Transferencia Bancaria",
+            "mercadopago": "Mercado Pago",
             "mixed": "Pago Mixto",
             "other": "Otros",
         }
@@ -567,7 +571,7 @@ class PaymentMixin:
             if paid_wallet > 0 and remaining > 0:
                 applied_wallet = min(paid_wallet, remaining)
                 if applied_wallet > 0:
-                    if non_cash_kind in ["yape", "plin"]:
+                    if non_cash_kind in ["yape", "plin", "mercadopago"]:
                         wallet_label = mapping[non_cash_kind]
                     elif non_cash_kind == "wallet":
                         provider = (
