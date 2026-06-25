@@ -16,15 +16,6 @@ from app.components.ui import (
   permission_guard,
 )
 
-PAYMENT_METHOD_OPTIONS = [
-  "Efectivo",
-  "Transferencia",
-  "Yape",
-  "Plin",
-  "T. Debito",
-  "T. Credito",
-  "Pago Mixto",
-]
 
 
 def stats_dashboard_component(
@@ -452,10 +443,10 @@ def installment_action(installment: rx.Var[dict]) -> rx.Component:
             class_name=f"{TYPOGRAPHY['caption']} uppercase tracking-wide",
           ),
           rx.el.select(
-            *[
-              rx.el.option(option, value=option)
-              for option in PAYMENT_METHOD_OPTIONS
-            ],
+            rx.foreach(
+              State.enabled_payment_methods,
+              lambda m: rx.el.option(m["name"], value=m["name"]),
+            ),
             value=State.installment_payment_method,
             on_change=State.set_installment_payment_method,
             class_name=SELECT_STYLES["default"],
