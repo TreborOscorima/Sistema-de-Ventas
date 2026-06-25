@@ -402,7 +402,7 @@ class ReportsMixin:
                 self._normalize_wallet_label(method_raw) if method_raw else MSG.FALLBACK_NOT_SPECIFIED
             )
             reference = self._payment_details_text(sale.get("payment_details", ""))
-            reference_clean = re.sub(r"#\s*\d+", "", reference or "").strip()
+            reference_clean = re.sub(r"#\s*\d+\s*:?\s*", "", reference or "").strip()
             if not reference_clean:
                 reference_clean = reference
             amount = sale.get("total")
@@ -569,7 +569,7 @@ class ReportsMixin:
                 self._normalize_wallet_label(method_raw) if method_raw else MSG.FALLBACK_NOT_SPECIFIED
             )
             reference = self._payment_details_text(sale.get("payment_details", ""))
-            reference_clean = re.sub(r"#\s*\d+", "", reference or "").strip()
+            reference_clean = re.sub(r"#\s*\d+\s*:?\s*", "", reference or "").strip()
             if not reference_clean:
                 reference_clean = reference
             amount = sale.get("total")

@@ -838,7 +838,7 @@ class DashboardState(MixinState):
         return [
             {
                 "category": r["category"],
-                "total": r["_net"],
+                "total": round(r["_net"], 2),
                 "total_fmt": f"{r['_net']:.2f}",
                 "percentage": round(r["_net"] / total_sales * 100, 1) if total_sales > 0 else 0,
             }
