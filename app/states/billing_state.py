@@ -489,7 +489,8 @@ class BillingState(MixinState):
         """Reintenta la emisión de un documento fiscal fallido."""
         block = self._require_manage_config()
         if block:
-            return block
+            yield block
+            return
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -740,7 +741,8 @@ class BillingState(MixinState):
         """Reintenta un documento fiscal desde el dashboard."""
         block = self._require_manage_config()
         if block:
-            return block
+            yield block
+            return
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
@@ -800,7 +802,8 @@ class BillingState(MixinState):
         """
         block = self._require_manage_config()
         if block:
-            return block
+            yield block
+            return
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id or not branch_id:
