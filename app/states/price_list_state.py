@@ -227,7 +227,7 @@ class PriceListState(MixinState):
     def set_pl_currency_code(self, v: str): self.pl_currency_code = v
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_listas_precios")
     async def save_price_list(self):
         if not self.pl_name.strip():
             yield rx.toast("El nombre de la lista es obligatorio.", duration=3000)
@@ -366,7 +366,7 @@ class PriceListState(MixinState):
         ]
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_listas_precios")
     async def pl_assign_client(self, client_id: int):
         pl_id = self.selected_price_list.get("id")
         if not pl_id:
@@ -396,7 +396,7 @@ class PriceListState(MixinState):
         yield rx.toast(f"{client.name} asignado a la lista.", duration=3000)
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_listas_precios")
     async def pl_remove_client(self, client_id: int):
         pl_id = self.selected_price_list.get("id")
         company_id = self._company_id()
@@ -550,7 +550,7 @@ class PriceListState(MixinState):
         self.pl_item_unit_price = v
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_listas_precios")
     async def add_price_list_item(self):
         pl_id = self.selected_price_list.get("id")
         if not pl_id or not self.pl_item_product_id:
@@ -606,7 +606,7 @@ class PriceListState(MixinState):
         self.pl_bulk_discount_pct = v
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_listas_precios")
     async def apply_bulk_discount(self):
         """Recalcula unit_price de todos los ítems de la lista aplicando un % de descuento sobre Product.sale_price."""
         pl_id = self.selected_price_list.get("id")
@@ -669,7 +669,7 @@ class PriceListState(MixinState):
         )
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_listas_precios")
     async def remove_price_list_item(self, item_id: int):
         pl_id = self.selected_price_list.get("id")
         company_id = self._company_id()

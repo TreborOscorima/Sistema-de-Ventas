@@ -474,7 +474,7 @@ class PromotionsState(MixinState):
     # ─── Guardar promoción ───────────────────────────────────────────
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_promociones")
     async def save_promotion(self):
         if not self.promo_name.strip():
             yield rx.toast("El nombre es obligatorio.", duration=3000)
@@ -715,7 +715,7 @@ class PromotionsState(MixinState):
     # ─── Activar/Desactivar ──────────────────────────────────────────
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_promociones")
     async def toggle_promotion(self, promo_id: int, new_active: bool):
         company_id = self._company_id()
         branch_id = self._branch_id()
@@ -746,7 +746,7 @@ class PromotionsState(MixinState):
     # ─── Eliminar ────────────────────────────────────────────────────
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_promociones")
     def confirm_delete_promotion(self, promo_id: int, promo_name: str):
         self.promo_delete_id = promo_id
         self.promo_delete_name = promo_name
@@ -759,7 +759,7 @@ class PromotionsState(MixinState):
         self.show_delete_confirm = False
 
     @rx.event
-    @require_permission("manage_config")
+    @require_permission("manage_promociones")
     async def delete_promotion(self):
         if not self.promo_delete_id:
             return
