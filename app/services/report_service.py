@@ -2755,11 +2755,13 @@ def generate_cashbox_report(
         action_label = _translate_cashbox_action(getattr(log, "action", ""))
         nature = _cashbox_action_nature(getattr(log, "action", ""))
         method_raw = _safe_string(getattr(log, "payment_method", ""))
-        method_label = (
-            _translate_payment_method(_normalize_payment_method(method_raw))
-            if method_raw
-            else "No especificado"
-        )
+        log_pm_id = getattr(log, "payment_method_id", None)
+        if method_raw == "other" and log_pm_id and log_pm_id in pm_by_id:
+            method_label = pm_by_id[log_pm_id]
+        elif method_raw:
+            method_label = _translate_payment_method(_normalize_payment_method(method_raw))
+        else:
+            method_label = "No especificado"
 
         ws_logs.cell(
             row=row,

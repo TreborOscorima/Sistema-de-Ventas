@@ -56,7 +56,11 @@ def _sanitize_excel_value(value: Any) -> Any:
     if not isinstance(value, str):
         return value
     stripped = value.lstrip()
-    if stripped.startswith(("=", "+", "-", "@")):
+    # Un guion solitario ("-") no es fórmula en Excel; solo escapar si va
+    # seguido de más caracteres (ej: "-SUM(A1)" o "-123").
+    if stripped.startswith(("=", "+", "@")):
+        return f"'{value}"
+    if stripped.startswith("-") and len(stripped) > 1:
         return f"'{value}"
     return value
 
