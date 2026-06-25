@@ -1301,6 +1301,8 @@ class IngresoState(MixinState):
                         original_price=Decimal(str(_orig_cost)) if _orig_cost else None,
                         exchange_rate=Decimal(str(_orig_rate)) if _orig_rate else None,
                         original_currency_code=_orig_curr if _orig_curr else None,
+                        batch_number=batch_number or None,
+                        variant_id=variant.id if variant else None,
                     )
                     session.add(purchase_item)
 

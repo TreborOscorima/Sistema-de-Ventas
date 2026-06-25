@@ -10,7 +10,7 @@ from sqlmodel import select
 from sqlalchemy import or_, func
 from sqlalchemy.orm import selectinload
 
-from app.models import Purchase, Supplier, Product, PurchaseItem, StockMovement
+from app.models import Purchase, Supplier, Product, PurchaseItem, StockMovement, ProductBatch, ProductVariant
 from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import escape_like, sanitize_text
 from app.utils.exports import (
@@ -676,12 +676,40 @@ class PurchasesState(MixinState):
                 doc_label = f"{doc_type} {series}-{number}" if series else f"{doc_type} {number}"
                 user_id = self.current_user.get("id")
 
-                # Actualizar stock y registrar movimientos (sin queries adicionales)
+                # Revertir batch stocks y reducir product.stock
+                products_recalc_batches: set[int] = set()
+                products_recalc_variants: set[int] = set()
                 for item in items:
                     product = products_map[item.product_id]
                     qty = Decimal(str(item.quantity or 0))
-                    product.stock = (product.stock or Decimal("0")) - qty
-                    session.add(product)
+
+                    # Revertir batch si el ítem lo registró
+                    if item.batch_number and item.product_id:
+                        variant_id = item.variant_id
+                        batch = session.exec(
+                            select(ProductBatch)
+                            .where(ProductBatch.batch_number == item.batch_number)
+                            .where(ProductBatch.product_id == item.product_id)
+                            .where(ProductBatch.product_variant_id == variant_id)
+                            .where(ProductBatch.company_id == company_id)
+                            .where(ProductBatch.branch_id == branch_id)
+                            .with_for_update()
+                        ).first()
+                        if batch:
+                            batch.stock = (batch.stock or Decimal("0")) - qty
+                            if batch.stock <= 0:
+                                session.delete(batch)
+                            else:
+                                session.add(batch)
+                        if variant_id:
+                            products_recalc_variants.add(item.product_id)
+                        else:
+                            products_recalc_batches.add(item.product_id)
+                    else:
+                        # Producto simple sin lote: reducir stock directo
+                        product.stock = (product.stock or Decimal("0")) - qty
+                        session.add(product)
+
                     session.add(
                         StockMovement(
                             type="Anulacion Ingreso",
@@ -692,6 +720,17 @@ class PurchasesState(MixinState):
                             company_id=company_id,
                             branch_id=branch_id,
                         )
+                    )
+
+                # Recalcular totales para productos con lotes/variantes
+                from app.utils.stock import recalculate_stock_totals
+                if products_recalc_batches or products_recalc_variants:
+                    recalculate_stock_totals(
+                        session=session,
+                        company_id=company_id,
+                        branch_id=branch_id,
+                        products_from_batches=products_recalc_batches,
+                        products_from_variants=products_recalc_variants,
                     )
 
                 for item in items:

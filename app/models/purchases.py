@@ -173,6 +173,18 @@ class PurchaseItem(TenantMixin, SQLModel, table=True):
         default=None,
         sa_column=sqlalchemy.Column(sqlalchemy.String(10), nullable=True),
     )
+    batch_number: Optional[str] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.String(60), nullable=True),
+    )
+    variant_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("productvariant.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
 
     purchase: "Purchase" = Relationship(back_populates="items")
     product: Optional["Product"] = Relationship()
