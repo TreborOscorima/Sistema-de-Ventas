@@ -327,7 +327,7 @@ def company_settings_section() -> rx.Component:
         rx.dialog.content(
           rx.el.div(
             rx.el.div(
-              rx.icon("alert-triangle", class_name="h-8 w-8 text-amber-500"),
+              rx.icon("triangle-alert", class_name="h-8 w-8 text-amber-500"),
               class_name="flex justify-center mb-3",
             ),
             rx.el.p(
