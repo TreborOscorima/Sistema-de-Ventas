@@ -320,7 +320,7 @@ def _category_chart() -> rx.Component:
         on_click=State.export_categories_excel,
         class_name=BUTTON_STYLES["success_sm"],
       ),
-      class_name="flex items-center justify-between mb-4",
+      class_name="flex items-center justify-between flex-wrap gap-2 mb-4",
     ),
     # Gráfico de torta
     rx.el.div(
@@ -592,7 +592,7 @@ def _kpis_grid() -> rx.Component:
         ),
         class_name="p-6",
       ),
-      class_name=f"bg-gradient-to-br from-white to-indigo-50 {RADIUS['xl']} border border-slate-200 {SHADOWS['sm']} col-span-1 sm:col-span-2",
+      class_name=f"bg-gradient-to-br from-white to-indigo-50 {RADIUS['xl']} border border-slate-200 {SHADOWS['sm']} col-span-1 sm:col-span-2 lg:col-span-2",
     ),
     # Reservas del período con acceso directo al módulo de servicios
     rx.link(

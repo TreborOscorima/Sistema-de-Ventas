@@ -366,7 +366,7 @@ def company_settings_section() -> rx.Component:
             ),
             class_name="p-2",
           ),
-          max_width="420px",
+          max_width="min(420px, calc(100vw - 1rem))",
         ),
         open=State.show_normalize_confirm,
         on_open_change=State.close_normalize_confirm,

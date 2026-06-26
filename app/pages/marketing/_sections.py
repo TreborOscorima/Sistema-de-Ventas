@@ -503,7 +503,7 @@ def _screenshots_section() -> rx.Component:
 
     panels = []
     for i, tab in enumerate(SCREENSHOT_TABS):
-        panel_cls = "twk-tab-panel" + (" active" if i == 0 else "") + " grid-cols-1 items-center gap-8 lg:grid-cols-2"
+        panel_cls = "twk-tab-panel" + (" active" if i == 0 else "") + " grid grid-cols-1 items-center gap-8 lg:grid-cols-2"
         panels.append(
             rx.el.div(
                 rx.el.div(
@@ -786,7 +786,7 @@ def _pricing_section() -> rx.Component:
                         "tab-btn inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all cursor-pointer",
                     ),
                 ),
-                class_name="reveal mt-10 inline-flex gap-2 rounded-xl bg-slate-100 p-1.5",
+                class_name="reveal mt-10 flex flex-wrap justify-center gap-2 rounded-xl bg-slate-100 p-1.5",
             ),
             rx.cond(
                 MarketingState.active_tab == "nube",

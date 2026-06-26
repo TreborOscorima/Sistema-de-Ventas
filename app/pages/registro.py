@@ -101,7 +101,7 @@ def registro_page() -> rx.Component:
                             input_mode="numeric",
                             class_name=INPUT_STYLES["default"],
                         ),
-                        class_name="grid grid-cols-[116px_1fr] sm:grid-cols-[130px_1fr] items-center gap-2",
+                        class_name="grid grid-cols-[100px_1fr] sm:grid-cols-[130px_1fr] items-center gap-2",
                     ),
                     rx.el.p(
                         "Selecciona el código de país y luego escribe tu número.",

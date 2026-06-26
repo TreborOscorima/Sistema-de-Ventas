@@ -183,7 +183,7 @@ def _quotation_detail_modal() -> rx.Component:
                     ),
                     class_name="text-right",
                 ),
-                class_name="flex justify-between items-start",
+                class_name="flex justify-between items-start flex-wrap gap-2",
             ),
             rx.divider(color="slate-100"),
 

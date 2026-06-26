@@ -44,7 +44,7 @@ def reservation_info_card() -> rx.Component:
                     aria_label="Cerrar cobro de servicio",
                     class_name="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors shrink-0",
                 ),
-                class_name="flex items-center justify-between gap-2",
+                class_name="flex items-center justify-between gap-2 min-w-0",
             ),
             # Resumen de montos
             rx.el.div(
@@ -146,7 +146,7 @@ def _reservation_products_breakdown() -> rx.Component:
                 class_name="flex flex-col items-center",
             ),
             class_name=(
-                "flex items-center justify-center gap-4 py-2 px-4 "
+                "flex flex-wrap items-center justify-center gap-4 py-2 px-4 "
                 "bg-slate-50 border border-slate-200 rounded-xl"
             ),
         ),

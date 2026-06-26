@@ -94,7 +94,7 @@ def _search_bar() -> rx.Component:
                 " empresas",
                 class_name=TYPOGRAPHY["body_secondary"],
             ),
-            class_name="flex flex-col-reverse sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full sm:w-auto",
+            class_name="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full sm:w-auto",
         ),
         class_name="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4",
     )

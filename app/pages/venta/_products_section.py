@@ -468,7 +468,7 @@ def visual_product_grid() -> rx.Component:
                         class_name="border border-slate-200 rounded-xl overflow-hidden hover:shadow-md transition-shadow bg-white",
                     ),
                 ),
-                class_name="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 p-3 overflow-y-auto max-h-[400px]",
+                class_name="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 p-3 overflow-y-auto max-h-[50vh]",
             ),
             rx.el.div(
                 rx.icon("package-search", class_name="h-8 w-8 text-slate-300"),

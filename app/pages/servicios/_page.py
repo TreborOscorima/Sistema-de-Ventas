@@ -213,7 +213,7 @@ def _price_group_card(group: rx.Var) -> rx.Component:
       ),
       class_name="min-w-full",
     ),
-    class_name=f"{CARD_STYLES['default']} overflow-hidden p-0",
+    class_name=f"{CARD_STYLES['default']} overflow-x-auto p-0",
   )
 
 

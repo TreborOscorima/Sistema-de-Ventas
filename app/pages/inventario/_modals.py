@@ -169,7 +169,7 @@ def import_modal() -> rx.Component:
               ),
               class_name="min-w-full text-sm",
             ),
-            class_name="max-h-52 overflow-y-auto border rounded-lg",
+            class_name="max-h-52 overflow-y-auto overflow-x-auto border rounded-lg",
           ),
         ),
         rx.fragment(),
@@ -263,7 +263,7 @@ def stock_details_modal() -> rx.Component:
                 ),
               )
             ),
-            class_name="w-full text-sm",
+            class_name="min-w-full text-sm",
           ),
           rx.cond(
             State.stock_details_mode == "batch",
@@ -293,7 +293,7 @@ def stock_details_modal() -> rx.Component:
                   ),
                 )
               ),
-              class_name="w-full text-sm",
+              class_name="min-w-full text-sm",
             ),
             rx.el.p(
               "Producto único sin variantes.",
@@ -309,7 +309,7 @@ def stock_details_modal() -> rx.Component:
           ),
           class_name="flex justify-end mt-6",
         ),
-        class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto",
+        class_name="relative z-10 w-full max-w-2xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-y-auto overflow-x-auto",
       ),
       class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
     ),

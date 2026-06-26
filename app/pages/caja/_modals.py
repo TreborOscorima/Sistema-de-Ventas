@@ -96,9 +96,9 @@ def close_cashbox_modal() -> rx.Component:
               class_name="border-t border-slate-200 bg-slate-50",
             ),
           ),
-          class_name="w-full text-sm border rounded-lg",
+          class_name="min-w-full text-sm border rounded-lg",
         ),
-        class_name="mb-6",
+        class_name="overflow-x-auto mb-6",
       ),
       rx.el.div(
         rx.el.h4(
@@ -178,9 +178,9 @@ def close_cashbox_modal() -> rx.Component:
               class_name="border-t border-slate-200 bg-slate-50",
             )
           ),
-          class_name="w-full text-sm border rounded-lg",
+          class_name="min-w-full text-sm border rounded-lg",
         ),
-        class_name="mb-6",
+        class_name="overflow-x-auto mb-6",
       ),
       rx.el.div(
         rx.el.h4(
@@ -346,7 +346,7 @@ def close_cashbox_modal() -> rx.Component:
             ),
             class_name="min-w-full text-sm",
           ),
-          class_name="max-h-56 overflow-y-auto border rounded-lg",
+          class_name="max-h-56 overflow-y-auto overflow-x-auto border rounded-lg",
         ),
         # Resultado del arqueo
         rx.el.div(
@@ -775,7 +775,7 @@ def petty_cash_edit_modal() -> rx.Component:
             ),
             class_name="flex flex-col gap-2",
           ),
-          class_name="grid grid-cols-2 gap-4",
+          class_name="grid grid-cols-1 sm:grid-cols-2 gap-4",
         ),
         # ── Costo Unitario + Total ─────────────────────────────────────
         rx.el.div(
@@ -811,7 +811,7 @@ def petty_cash_edit_modal() -> rx.Component:
             ),
             class_name="flex flex-col gap-2",
           ),
-          class_name="grid grid-cols-2 gap-4",
+          class_name="grid grid-cols-1 sm:grid-cols-2 gap-4",
         ),
         key=State.petty_cash_edit_id,
         class_name="flex flex-col gap-4 py-4",

@@ -284,7 +284,7 @@ def _quot_load_drawer() -> rx.Component:
                     class_name="flex-1 overflow-y-auto p-3 space-y-2",
                 ),
                 class_name=(
-                    "absolute right-0 top-0 h-full w-80 bg-slate-50 shadow-2xl "
+                    "absolute right-0 top-0 h-full w-full sm:w-80 bg-slate-50 shadow-2xl "
                     "flex flex-col z-10"
                 ),
             ),

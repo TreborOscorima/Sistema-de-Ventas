@@ -279,7 +279,7 @@ def sale_detail_modal() -> rx.Component:
                 ),
                 class_name="flex flex-col gap-0.5",
               ),
-              class_name="grid grid-cols-3 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4",
+              class_name="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4",
             ),
             # Sección Productos (lo que el cliente conservó)
             rx.el.div(
