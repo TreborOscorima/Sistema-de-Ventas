@@ -43,7 +43,6 @@ class TaxConfigState(MixinState):
     delete_confirm_open: bool = False
     deleting_rate_id: int = -1
 
-    tax_config_loading: bool = False
     active_preset_country: str = ""
 
     # Confirmación antes de aplicar presets (acción destructiva)
@@ -165,6 +164,7 @@ class TaxConfigState(MixinState):
                 session.add(settings)
             session.commit()
         self.show_tax_on_receipt = bool(value)
+        self._settings_snapshot_ts = 0.0  # forzar refresco del snapshot en próxima venta
 
     # ── Dialog add/edit ────────────────────────────────────────────────────────
 
@@ -248,6 +248,7 @@ class TaxConfigState(MixinState):
             session.commit()
 
         self.tax_dialog_open = False
+        self._settings_snapshot_ts = 0.0  # forzar refresco del snapshot en próxima venta
         self.load_tax_config()
         action = "actualizada" if rate_id else "agregada"
         return rx.toast(f"Tasa {action} correctamente.", duration=2500)
@@ -283,6 +284,7 @@ class TaxConfigState(MixinState):
             session.commit()
         self.delete_confirm_open = False
         self.deleting_rate_id = -1
+        self._settings_snapshot_ts = 0.0  # forzar refresco del snapshot en próxima venta
         self.load_tax_config()
         return rx.toast("Tasa eliminada.", duration=2000)
 
@@ -300,6 +302,7 @@ class TaxConfigState(MixinState):
             session.info["tenant_bypass"] = True
             tax_service.set_default_rate(rate_id, company_id, session)
             session.commit()
+        self._settings_snapshot_ts = 0.0  # forzar refresco del snapshot en próxima venta
         self.load_tax_config()
 
     # ── Presets de país ────────────────────────────────────────────────────────
@@ -330,6 +333,7 @@ class TaxConfigState(MixinState):
             session.info["tenant_bypass"] = True
             tax_service.initialize_country_defaults(company_id, code, session)
             session.commit()
+        self._settings_snapshot_ts = 0.0  # forzar refresco del snapshot en próxima venta
         self.load_tax_config()
         self.active_preset_country = code
         presets = get_presets_for_country(code)
