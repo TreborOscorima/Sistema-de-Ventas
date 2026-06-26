@@ -50,7 +50,7 @@ def inventario_page() -> rx.Component:
         State.currency_symbol + State.inventory_total_value,
         "text-indigo-700",
       ),
-      class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4",
+      class_name="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4",
     ),
     rx.el.div(
       rx.el.div(

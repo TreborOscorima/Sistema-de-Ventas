@@ -234,7 +234,7 @@ def _receipt_type_selector() -> rx.Component:
                         BUTTON_STYLES["tab_inactive"],
                     ),
                 ),
-                class_name="flex gap-1 w-full",
+                class_name="flex gap-1 w-full items-stretch min-h-[44px]",
             ),
             class_name="flex flex-col gap-1 px-3 py-2 bg-slate-50 rounded-lg",
         ),

@@ -332,7 +332,7 @@ def recent_moves_modal() -> rx.Component:
         table_body,
         variant="surface",
         size="2",
-        class_name="w-full",
+        class_name="min-w-full",
     )
 
     content = rx.cond(

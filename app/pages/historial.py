@@ -395,7 +395,7 @@ def sale_detail_modal() -> rx.Component:
           ],
           class_name=BUTTON_STYLES["danger"],
         ),
-        class_name="flex justify-end gap-3 px-6 py-4 shrink-0",
+        class_name="flex flex-wrap justify-end gap-3 px-6 py-4 shrink-0",
         ),
       class_name=(
         "bg-white rounded-xl border border-slate-200 shadow-sm w-full max-w-3xl "

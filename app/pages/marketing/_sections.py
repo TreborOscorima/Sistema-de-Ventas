@@ -652,7 +652,7 @@ def _cloud_panel() -> rx.Component:
                 _plan_card("Enterprise", "Para compañías con demanda de escala, personalización y SLA dedicado.", "$175",
                     ["Plan personalizable por operación", "Onboarding y arquitectura dedicada", "Integraciones y flujos a medida", "Acompañamiento prioritario", "Gobernanza enterprise"],
                     "Solicitar Enterprise", _enterprise_link, "click_plan_enterprise", tone="enterprise", badge_text="Escala total"),
-                class_name="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-3",
+                class_name="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 lg:grid-cols-3",
             ),
             class_name="mt-8",
         ),

@@ -748,7 +748,7 @@ def dashboard_page() -> rx.Component:
     rx.el.div(
       rx.el.div(
         _sales_chart(),
-        class_name="lg:col-span-2",
+        class_name="md:col-span-2 lg:col-span-2",
       ),
       rx.el.div(
         _alerts_panel(),
