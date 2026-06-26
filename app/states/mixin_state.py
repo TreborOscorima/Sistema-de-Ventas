@@ -262,7 +262,8 @@ class MixinState:
                     rx.redirect("/periodo-prueba-finalizado"),
                 ]
 
-        if status_label in ("suspendido", "pago vencido"):
+        if status_label == "suspendido":
+            # Solo bloquear al superar los 5 días de gracia; "pago vencido" = gracia activa
             return [
                 rx.toast("Cuenta suspendida.", duration=3000),
                 rx.redirect("/cuenta-suspendida"),

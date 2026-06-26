@@ -511,19 +511,32 @@ class AuthState(MixinState):
                 sub_status = sub_status.value
             sub_status = str(sub_status or "").strip().lower()
 
-            # Fecha de suscripción vencida → forzar suspendido
-            if subscription_ends_at and subscription_ends_at.date() < today:
-                status_label = MSG.STATUS_SUSPENDED
-                status_tone = "danger"
-            elif sub_status == SubscriptionStatus.WARNING.value:
-                status_label = MSG.STATUS_ABOUT_TO_EXPIRE
-                status_tone = "warning"
-            elif sub_status == SubscriptionStatus.PAST_DUE.value:
-                status_label = MSG.STATUS_PAST_DUE
-                status_tone = "danger"
-            elif sub_status == SubscriptionStatus.SUSPENDED.value:
-                status_label = MSG.STATUS_SUSPENDED
-                status_tone = "danger"
+            # Prioridad 1: lógica basada en fecha (más autoritativa que el campo DB)
+            _date_overrode = False
+            if subscription_ends_at:
+                _grace_cutoff = subscription_ends_at.date() + timedelta(days=5)
+                if _grace_cutoff < today:
+                    # Superó los 5 días de gracia → suspendido definitivo
+                    status_label = MSG.STATUS_SUSPENDED
+                    status_tone = "danger"
+                    _date_overrode = True
+                elif subscription_ends_at.date() < today:
+                    # Dentro del período de gracia (1-5 días post-vencimiento)
+                    status_label = MSG.STATUS_PAST_DUE
+                    status_tone = "danger"
+                    _date_overrode = True
+
+            # Prioridad 2: campo subscription_status en DB (si la fecha no lo resolvió)
+            if not _date_overrode:
+                if sub_status == SubscriptionStatus.WARNING.value:
+                    status_label = MSG.STATUS_ABOUT_TO_EXPIRE
+                    status_tone = "warning"
+                elif sub_status == SubscriptionStatus.PAST_DUE.value:
+                    status_label = MSG.STATUS_PAST_DUE
+                    status_tone = "danger"
+                elif sub_status == SubscriptionStatus.SUSPENDED.value:
+                    status_label = MSG.STATUS_SUSPENDED
+                    status_tone = "danger"
 
         trial_days_left = 0
         trial_ends_on = ""
@@ -1648,8 +1661,31 @@ class AuthState(MixinState):
             return  # Trial activo, nada que hacer
 
         # --- Plan pago: verificar vencimiento desde snapshot ---
-        if status_label in ("suspendido", "pago vencido"):
-            # Auto-suspender en DB si aún no está marcado
+        if status_label == "pago vencido":
+            # Dentro del período de gracia: marcar PAST_DUE en DB pero NO redirigir.
+            # El banner rojo en el layout ya informa al cliente.
+            company_id = self.current_user.get("company_id")
+            if company_id:
+                with rx.session() as session:
+                    session.info["tenant_bypass"] = True
+                    company = session.exec(
+                        select(Company).where(Company.id == company_id)
+                    ).first()
+                    if company:
+                        current_status = getattr(company, "subscription_status", "")
+                        if hasattr(current_status, "value"):
+                            current_status = current_status.value
+                        if str(current_status or "") not in (
+                            SubscriptionStatus.PAST_DUE.value,
+                            SubscriptionStatus.SUSPENDED.value,
+                        ):
+                            company.subscription_status = SubscriptionStatus.PAST_DUE.value
+                            session.add(company)
+                            session.commit()
+            return  # gracia activa → continuar en la app
+
+        if status_label == "suspendido":
+            # Pasó la gracia → suspender definitivamente en DB y redirigir
             company_id = self.current_user.get("company_id")
             if company_id:
                 with rx.session() as session:
@@ -1681,7 +1717,8 @@ class AuthState(MixinState):
         if bool(snapshot.get("is_trial")):
             return
         status_label = str(snapshot.get("status_label", "") or "").strip().lower()
-        if status_label in ("suspendido", "pago vencido"):
+        if status_label == "suspendido":
+            # Solo redirigir al superar los 5 días de gracia; "pago vencido" = gracia activa
             return rx.redirect("/cuenta-suspendida")
 
     @rx.event
