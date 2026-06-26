@@ -455,6 +455,7 @@ class ConfigState(MixinState):
 
         self.selected_country_code = code
         self.selected_currency_code = new_currency
+        self._settings_snapshot_ts = 0.0  # forzar refresco del snapshot en próxima venta
         # Resetear arqueo para que las denominaciones del nuevo país partan de cero
         self.denomination_counts = {}
         self.cashbox_close_counted_total = 0.0
@@ -615,6 +616,7 @@ class ConfigState(MixinState):
             str(receipt_width_value) if receipt_width_value is not None else ""
         )
         self.timezone = timezone_value
+        self._settings_snapshot_ts = 0.0  # forzar refresco del snapshot en próxima venta
         self.company_form_key += 1
         return [
             self._emit_runtime_sync_event(),
@@ -760,6 +762,9 @@ class ConfigState(MixinState):
 
     @rx.event
     def open_normalize_confirm(self):
+        toast = self._require_manage_config()
+        if toast:
+            return toast
         company_id = self._company_id()
         if company_id:
             from app.models.inventory import Product
