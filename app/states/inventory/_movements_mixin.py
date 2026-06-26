@@ -174,9 +174,12 @@ class MovementsMixin:
             qty = float(movement.quantity or 0)
             qty_str = f"+{abs(qty):g}" if qty >= 0 else f"-{abs(qty):g}"
 
+            ts_parts = ts_str.split(" ")
             result.append({
                 "id": movement.id,
                 "timestamp": ts_str,
+                "timestamp_date": ts_parts[0] if len(ts_parts) > 0 else "-",
+                "timestamp_time": ts_parts[1] if len(ts_parts) > 1 else "",
                 "type": movement.type or "-",
                 "quantity": qty_str,
                 "quantity_positive": qty >= 0,
