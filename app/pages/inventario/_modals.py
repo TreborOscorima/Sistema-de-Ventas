@@ -372,145 +372,140 @@ def inventory_adjustment_modal() -> rx.Component:
         rx.cond(
           State.inventory_check_status == "ajuste",
           rx.el.div(
-            rx.el.h4(
-              "Productos con diferencias",
-              class_name=TYPOGRAPHY["label"],
-            ),
+            # ── Búsqueda ───────────────────────────────────────────
             rx.el.div(
-              rx.el.label(
-                "Buscar producto",
-                class_name=TYPOGRAPHY["label_secondary"],
+              rx.el.label("Buscar producto", class_name=TYPOGRAPHY["label"]),
+              rx.el.p(
+                "Escribí el nombre o escaneá el código. Al seleccionar, el campo se limpia para buscar otro.",
+                class_name="text-xs text-slate-400 mb-2",
               ),
               rx.el.div(
                 rx.debounce_input(
                   rx.input(
                     id="inventory-adjustment-search",
-                    placeholder="Ej: Gaseosa 500ml o código",
-                    default_value=State.inventory_adjustment_item["description"],
-                    on_change=lambda value: State.handle_inventory_adjustment_change(
-                      "description", value
-                    ),
-                    on_blur=lambda e: State.process_inventory_adjustment_search_blur(e),
+                    placeholder="Nombre del producto o código de barras...",
+                    value=State.inventory_adjustment_search_term,
+                    on_change=State.set_inventory_adjustment_search,
                     on_key_down=lambda k: State.handle_inventory_adjustment_search_enter(
                       k, "inventory-adjustment-search"
                     ),
                     auto_complete=False,
                     class_name=INPUT_STYLES["default"],
                   ),
-                  debounce_timeout=600,
+                  debounce_timeout=400,
                 ),
                 rx.cond(
-                  State.inventory_adjustment_suggestions.length()
-                  > 0,
+                  State.inventory_adjustment_suggestions.length() > 0,
                   rx.el.div(
                     rx.foreach(
                       State.inventory_adjustment_suggestions,
                       lambda suggestion: rx.el.button(
-                        suggestion["label"],
+                        rx.el.div(
+                          rx.icon("package", class_name="h-3.5 w-3.5 text-slate-400 flex-shrink-0"),
+                          rx.el.span(suggestion["label"], class_name="text-sm text-slate-700"),
+                          class_name="flex items-center gap-2",
+                        ),
                         on_click=lambda _,
                         suggestion=suggestion: State.select_inventory_adjustment_product(
                           suggestion
                         ),
-                        class_name="w-full text-left px-3 py-2 hover:bg-slate-100",
+                        class_name="w-full text-left px-3 py-2.5 hover:bg-indigo-50 border-b border-slate-100 last:border-0",
                       ),
                     ),
-                    class_name="absolute z-20 w-full mt-1 border rounded-md bg-white shadow-lg max-h-48 overflow-y-auto",
+                    class_name="absolute z-20 w-full mt-1 border border-slate-200 rounded-lg bg-white shadow-lg max-h-52 overflow-y-auto",
                   ),
                   rx.fragment(),
                 ),
                 class_name="relative",
               ),
-              class_name="mt-3",
             ),
+            # ── Producto seleccionado ──────────────────────────────
+            rx.cond(
+              State.inventory_adjustment_item["description"] != "",
+              rx.el.div(
+                rx.el.div(
+                  rx.icon("package-check", class_name="h-4 w-4 text-emerald-500 flex-shrink-0"),
+                  rx.el.span("Producto seleccionado", class_name="text-xs font-semibold text-emerald-600"),
+                  class_name="flex items-center gap-1.5 col-span-full mb-1",
+                ),
+                # Nombre (ancho completo)
+                rx.el.div(
+                  rx.el.label("Nombre del producto", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                  rx.el.input(
+                    value=State.inventory_adjustment_item["description"],
+                    disabled=True,
+                    class_name=INPUT_STYLES["disabled"],
+                  ),
+                  class_name="col-span-full",
+                ),
+                # Código + Categoría
+                rx.el.div(
+                  rx.el.label("Código de barra", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                  rx.el.input(
+                    value=State.inventory_adjustment_item["barcode"],
+                    disabled=True,
+                    class_name=f"{INPUT_STYLES['disabled']} font-mono",
+                  ),
+                ),
+                rx.el.div(
+                  rx.el.label("Categoría", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                  rx.el.input(
+                    value=State.inventory_adjustment_item["category"],
+                    disabled=True,
+                    class_name=INPUT_STYLES["disabled"],
+                  ),
+                ),
+                # Unidad + Stock
+                rx.el.div(
+                  rx.el.label("Unidad", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                  rx.el.input(
+                    value=State.inventory_adjustment_item["unit"],
+                    disabled=True,
+                    class_name=INPUT_STYLES["disabled"],
+                  ),
+                ),
+                rx.el.div(
+                  rx.el.label("Stock disponible", class_name=f"{TYPOGRAPHY['caption']} uppercase"),
+                  rx.el.input(
+                    value=State.inventory_adjustment_item["current_stock"].to_string(),
+                    disabled=True,
+                    class_name=INPUT_STYLES["disabled"],
+                  ),
+                ),
+                class_name="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-emerald-50/50 border border-emerald-100 rounded-lg",
+              ),
+              rx.fragment(),
+            ),
+            # ── Cantidad y motivo ─────────────────────────────────
             rx.el.div(
               rx.el.div(
-                rx.el.label(
-                  "Codigo de barra",
-                  class_name=f"{TYPOGRAPHY['caption']} uppercase",
-                ),
-                rx.el.input(
-                  value=State.inventory_adjustment_item["barcode"],
-                  disabled=True,
-                  class_name=INPUT_STYLES["disabled"],
-                ),
-              ),
-              rx.el.div(
-                rx.el.label(
-                  "Categoria",
-                  class_name=f"{TYPOGRAPHY['caption']} uppercase",
-                ),
-                rx.el.input(
-                  value=State.inventory_adjustment_item["category"],
-                  disabled=True,
-                  class_name=INPUT_STYLES["disabled"],
-                ),
-              ),
-              rx.el.div(
-                rx.el.label(
-                  "Unidad",
-                  class_name=f"{TYPOGRAPHY['caption']} uppercase",
-                ),
-                rx.el.input(
-                  value=State.inventory_adjustment_item["unit"],
-                  disabled=True,
-                  class_name=INPUT_STYLES["disabled"],
-                ),
-              ),
-              rx.el.div(
-                rx.el.label(
-                  "Stock disponible",
-                  class_name=f"{TYPOGRAPHY['caption']} uppercase",
-                ),
-                rx.el.input(
-                  value=State.inventory_adjustment_item[
-                    "current_stock"
-                  ].to_string(),
-                  disabled=True,
-                  class_name=INPUT_STYLES["disabled"],
-                ),
-              ),
-              class_name="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4",
-            ),
-            rx.el.div(
-              rx.el.div(
-                rx.el.label(
-                  "Cantidad a ajustar",
-                  class_name=TYPOGRAPHY["label"],
-                ),
+                rx.el.label("Cantidad a ajustar", class_name=TYPOGRAPHY["label"]),
+                rx.el.p("Diferencia detectada (+ingreso / −egreso)", class_name="text-xs text-slate-400 mb-1"),
                 rx.el.input(
                   type="number",
-                  min="0",
                   step="0.01",
-                  default_value=State.inventory_adjustment_item[
-                    "adjust_quantity"
-                  ].to_string(),
-                  on_blur=lambda value: State.handle_inventory_adjustment_change(
-                    "adjust_quantity", value
-                  ),
+                  default_value=State.inventory_adjustment_item["adjust_quantity"].to_string(),
+                  on_blur=lambda value: State.handle_inventory_adjustment_change("adjust_quantity", value),
                   class_name=INPUT_STYLES["default"],
                 ),
               ),
               rx.el.div(
-                rx.el.label(
-                  "Motivo del ajuste",
-                  class_name=TYPOGRAPHY["label"],
-                ),
+                rx.el.label("Motivo del ajuste", class_name=TYPOGRAPHY["label"]),
+                rx.el.p("Razón que quedará en el historial de movimientos", class_name="text-xs text-slate-400 mb-1"),
                 rx.el.textarea(
                   placeholder="Ej: Producto dañado, consumo interno, vencido, etc.",
                   default_value=State.inventory_adjustment_item["reason"],
-                  on_blur=lambda value: State.handle_inventory_adjustment_change(
-                    "reason", value
-                  ),
-                  class_name=f"{INPUT_STYLES['default']} h-24",
+                  on_blur=lambda value: State.handle_inventory_adjustment_change("reason", value),
+                  class_name=f"{INPUT_STYLES['default']} h-20 resize-none",
                 ),
               ),
-              class_name="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4",
+              class_name="grid grid-cols-1 sm:grid-cols-2 gap-4",
             ),
             rx.el.button(
               rx.icon("plus", class_name="h-4 w-4"),
               "Agregar producto al ajuste",
               on_click=State.add_inventory_adjustment_item,
-              class_name=f"{BUTTON_STYLES['primary']} mt-4 w-full",
+              class_name=f"{BUTTON_STYLES['primary']} w-full",
             ),
             rx.cond(
               State.inventory_adjustment_items.length() > 0,

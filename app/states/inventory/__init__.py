@@ -80,6 +80,7 @@ class InventoryState(
     inventory_check_modal_open: bool = False
     inventory_check_status: str = "perfecto"
     inventory_adjustment_notes: str = ""
+    inventory_adjustment_search_term: str = ""
     inventory_adjustment_item: InventoryAdjustment = {
         "temp_id": "",
         "barcode": "",

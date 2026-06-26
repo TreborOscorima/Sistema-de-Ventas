@@ -112,6 +112,7 @@ class AdjustmentMixin:
             "variant_id": None,
         }
         self.inventory_adjustment_suggestions = []
+        self.inventory_adjustment_search_term = ""
 
     # ------------------------------------------------------------------
     # Helpers privados de búsqueda/llenado (lines 1916-2080)
@@ -286,9 +287,14 @@ class AdjustmentMixin:
     # Búsqueda y selección de productos para ajuste (lines 2081-2309)
     # ------------------------------------------------------------------
 
+    @rx.event
+    def set_inventory_adjustment_search(self, value: str):
+        """Actualiza el campo de búsqueda y dispara la búsqueda de sugerencias."""
+        self.inventory_adjustment_search_term = value
+        self._process_inventory_adjustment_search(value)
+
     def _process_inventory_adjustment_search(self, value: Any):
         term = str(value or "").strip()
-        self.inventory_adjustment_item["description"] = term
         if not term:
             self.inventory_adjustment_suggestions = []
             return
@@ -303,6 +309,7 @@ class AdjustmentMixin:
                 if product:
                     self._fill_inventory_adjustment_from_product(product, variant)
                     self.inventory_adjustment_suggestions = []
+                    self.inventory_adjustment_search_term = ""
                     return
 
         search_term = term.lower()
@@ -403,6 +410,7 @@ class AdjustmentMixin:
             if product:
                 self._fill_inventory_adjustment_from_product(product, variant)
         self.inventory_adjustment_suggestions = []
+        self.inventory_adjustment_search_term = ""
 
     @rx.event
     def set_inventory_adjustment_item_barcode(self, value: str):
