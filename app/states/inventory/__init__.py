@@ -15,6 +15,7 @@ from ._product_mixin import ProductMixin
 from ._adjustment_mixin import AdjustmentMixin
 from ._export_mixin import ExportMixin
 from ._label_mixin import LabelMixin
+from ._movements_mixin import MovementsMixin
 
 # Re-export constants for backwards compatibility (dashboard_state, etc.)
 DEFAULT_LOW_STOCK_THRESHOLD = 5
@@ -22,6 +23,7 @@ LOW_STOCK_THRESHOLD = DEFAULT_LOW_STOCK_THRESHOLD
 
 
 class InventoryState(
+    MovementsMixin,
     LabelMixin,
     ExportMixin,
     AdjustmentMixin,

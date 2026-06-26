@@ -15,6 +15,7 @@ from app.components.ui import (
 from ._edit_product import edit_product_modal
 from ._modals import import_modal, stock_details_modal, inventory_adjustment_modal
 from ._product_table import inventory_stat_card, _product_card
+from ._movements_section import movements_section
 
 
 def inventario_page() -> rx.Component:
@@ -550,6 +551,7 @@ def inventario_page() -> rx.Component:
       ),
       rx.fragment(),
     ),
+    movements_section(),
     inventory_adjustment_modal(),
     edit_product_modal(),
     stock_details_modal(),
