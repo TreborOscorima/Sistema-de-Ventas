@@ -2,6 +2,7 @@
   "name": "TUWAYKIAPP",
   "short_name": "TUWAYKIAPP",
   "description": "Sistema de ventas, caja e inventario para tu negocio.",
+  "id": "/",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#4f46e5",
@@ -12,13 +13,13 @@
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
