@@ -45,9 +45,9 @@ def legal_header() -> rx.Component:
                 rx.el.a(
                     "Iniciar prueba gratis",
                     href=_app_href("/registro"),
-                    class_name=BUTTON_STYLES["success"],
+                    class_name=BUTTON_STYLES["success"] + " hidden sm:inline-flex",
                 ),
-                class_name="hidden sm:flex items-center gap-3",
+                class_name="flex items-center gap-2 sm:gap-3",
             ),
             class_name="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8",
         ),

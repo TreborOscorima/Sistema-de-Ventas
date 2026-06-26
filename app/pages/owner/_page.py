@@ -107,7 +107,7 @@ def _owner_header() -> rx.Component:
                         ),
                         class_name="flex flex-col",
                     ),
-                    class_name="flex items-center gap-2",
+                    class_name="hidden sm:flex items-center gap-2",
                 ),
                 # Logout del backoffice (no afecta sesión de ventas)
                 rx.el.button(
@@ -117,9 +117,9 @@ def _owner_header() -> rx.Component:
                     aria_label="Cerrar sesión del backoffice",
                     class_name=f"p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 {RADIUS['md']} {TRANSITIONS['fast']}",
                 ),
-                class_name="flex items-center gap-2 sm:gap-3 flex-wrap justify-center sm:justify-end w-full sm:w-auto",
+                class_name="flex items-center gap-2 sm:gap-3 justify-end",
             ),
-            class_name="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-0 w-full",
+            class_name="flex flex-row items-center justify-between max-w-7xl mx-auto px-4 sm:px-6 py-3 w-full",
         ),
         class_name=f"sticky top-0 z-40 bg-white/95 backdrop-blur-sm border-b border-slate-200 {SHADOWS['sm']}",
     )

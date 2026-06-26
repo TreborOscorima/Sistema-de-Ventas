@@ -697,7 +697,7 @@ def cuentas_detail_modal() -> rx.Component:
           ),
           class_name="flex-1 overflow-y-auto min-h-0 space-y-6",
         ),
-        class_name="relative z-10 w-full max-w-5xl rounded-xl bg-white p-6 shadow-xl max-h-[90vh] overflow-hidden flex flex-col gap-6",
+        class_name="relative z-10 w-full max-w-5xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[90vh] overflow-hidden flex flex-col gap-6",
       ),
       class_name="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-4 py-6 overflow-hidden",
     ),

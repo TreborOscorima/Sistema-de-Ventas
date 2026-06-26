@@ -88,7 +88,7 @@ def cambiar_contrasena_page() -> rx.Component:
                 rx.el.button(
                     "Actualizar",
                     type="submit",
-                    class_name=BUTTON_STYLES["primary"] + " w-full",
+                    class_name=BUTTON_STYLES["primary"] + " w-full min-h-[44px]",
                 ),
                 on_submit=State.change_password,
             ),

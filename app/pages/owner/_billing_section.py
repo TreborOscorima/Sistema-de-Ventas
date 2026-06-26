@@ -258,7 +258,7 @@ def _billing_modal() -> rx.Component:
                                     ),
                                     class_name="flex flex-col gap-1",
                                 ),
-                                class_name="grid grid-cols-1 md:grid-cols-4 gap-3",
+                                class_name="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3",
                             ),
                             rx.fragment(),
                         ),
