@@ -600,6 +600,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                     "card": self._round_currency(max(self.payment_mixed_card, 0)),
                     "wallet": self._round_currency(max(self.payment_mixed_wallet, 0)),
                     "non_cash_kind": self.payment_mixed_non_cash_kind,
+                    "complement_name": self.payment_mixed_complement_name,
                     "notes": self.payment_mixed_notes,
                     "message": self.payment_mixed_message,
                     "status": self.payment_mixed_status,

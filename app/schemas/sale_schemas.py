@@ -73,6 +73,7 @@ class PaymentMixedDTO(BaseSchema):
     card: Decimal = Decimal("0.00")
     wallet: Decimal = Decimal("0.00")
     non_cash_kind: str = ""
+    complement_name: str = ""
     notes: str = ""
     message: str = ""
     status: str = ""

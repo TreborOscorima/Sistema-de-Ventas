@@ -1322,6 +1322,10 @@ def _build_sale_payments(
             card_type = _method_type_from_kind(non_cash_kind)
         elif non_cash_kind in {"yape", "plin"}:
             wallet_type = _method_type_from_kind(non_cash_kind)
+        elif (payment_data.mixed.complement_name or "").strip():
+            # Método custom (kind="other/wallet") → registrar como "other" para
+            # que el loop de SalePayment lo resuelva por nombre en la DB
+            wallet_type = PaymentMethodType.other
         return _allocate_mixed_payments(
             sale_total,
             _to_decimal(payment_data.mixed.cash),
@@ -2332,7 +2336,11 @@ class SaleService:
                 method_code = _payment_method_code(method_type)
                 method_id = resolve_payment_method_id(method_code)
                 if method_id is None and method_type == PaymentMethodType.other:
-                    _other_name = (payment_data.method or "").strip().lower()
+                    # Prioriza complement_name (método custom en Pago Mixto) sobre method
+                    _other_name = (
+                        (payment_data.mixed.complement_name or "").strip().lower()
+                        or (payment_data.method or "").strip().lower()
+                    )
                     if _other_name:
                         for _m in all_methods:
                             if (_m.name or "").strip().lower() == _other_name:

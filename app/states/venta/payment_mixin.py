@@ -507,9 +507,16 @@ class PaymentMixin:
             self.payment_card_type = "Debito" if kind == "debit" else "Credito"
             self.payment_mixed_card = 0
             self.payment_mixed_wallet = 0
+        elif kind in ["yape", "plin", "transfer"]:
+            # billetera/electrónico con tipo conocido por tuwayki_core
+            self.payment_mixed_non_cash_kind = kind
+            self.payment_wallet_provider = method.get("name", "")
+            self.payment_wallet_choice = method.get("name", "")
+            self.payment_mixed_card = 0
+            self.payment_mixed_wallet = 0
         else:
-            # transfer, yape, plin, wallet, other → billetera/electrónico
-            self.payment_mixed_non_cash_kind = kind if kind in ["yape", "plin", "transfer"] else "wallet"
+            # wallet, other → método custom; complement_name resuelve el ID en el service
+            self.payment_mixed_non_cash_kind = "other"
             self.payment_wallet_provider = method.get("name", "")
             self.payment_wallet_choice = method.get("name", "")
             self.payment_mixed_card = 0
