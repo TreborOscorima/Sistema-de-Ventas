@@ -168,13 +168,17 @@ def _company_modules(company: rx.Var) -> rx.Component:
 
 def _company_actions(company: rx.Var) -> rx.Component:
     return rx.el.div(
-        _owner_action_icon_button(
-            "repeat",
-            "Cambiar Plan",
-            on_click=State.owner_open_modal(
-                "change_plan", company["id"], company["name"]
+        rx.cond(
+            State.owner_active_product_tab == "ventas",
+            _owner_action_icon_button(
+                "repeat",
+                "Cambiar Plan",
+                on_click=State.owner_open_modal(
+                    "change_plan", company["id"], company["name"]
+                ),
+                tone="indigo",
             ),
-            tone="indigo",
+            rx.fragment(),
         ),
         _owner_action_icon_button(
             "toggle-right",
@@ -192,29 +196,35 @@ def _company_actions(company: rx.Var) -> rx.Component:
             ),
             tone="slate",
         ),
-        _owner_action_icon_button(
-            "sliders-horizontal",
-            "Ajustar Límites",
-            on_click=State.owner_open_modal(
-                "adjust_limits", company["id"], company["name"]
+        rx.cond(
+            State.owner_active_product_tab == "ventas",
+            rx.fragment(
+                _owner_action_icon_button(
+                    "sliders-horizontal",
+                    "Ajustar Límites",
+                    on_click=State.owner_open_modal(
+                        "adjust_limits", company["id"], company["name"]
+                    ),
+                    tone="slate",
+                ),
+                _owner_action_icon_button(
+                    "key-round",
+                    "Resetear Contraseña",
+                    on_click=State.owner_open_reset_modal(
+                        company["id"], company["name"]
+                    ),
+                    tone="slate",
+                ),
+                _owner_action_icon_button(
+                    "file-text",
+                    "Billing / Facturación",
+                    on_click=State.owner_open_billing_modal(
+                        company["id"], company["name"]
+                    ),
+                    tone="indigo",
+                ),
             ),
-            tone="slate",
-        ),
-        _owner_action_icon_button(
-            "key-round",
-            "Resetear Contraseña",
-            on_click=State.owner_open_reset_modal(
-                company["id"], company["name"]
-            ),
-            tone="slate",
-        ),
-        _owner_action_icon_button(
-            "file-text",
-            "Billing / Facturación",
-            on_click=State.owner_open_billing_modal(
-                company["id"], company["name"]
-            ),
-            tone="indigo",
+            rx.fragment(),
         ),
         class_name="flex items-center gap-2 flex-wrap",
     )

@@ -19,6 +19,7 @@ class OwnerAuditLog(SQLModel, table=True):
         sqlalchemy.Index("ix_owner_audit_log_company", "target_company_id"),
         sqlalchemy.Index("ix_owner_audit_log_action", "action"),
         sqlalchemy.Index("ix_owner_audit_log_created_at", "created_at"),
+        sqlalchemy.Index("ix_owner_audit_log_product_type", "target_product_type"),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -33,13 +34,22 @@ class OwnerAuditLog(SQLModel, table=True):
         description="Email del actor al momento de la acción",
     )
     target_company_id: int = Field(
-        foreign_key="company.id",
         nullable=False,
-        description="Empresa objetivo de la acción",
+        description=(
+            "Empresa objetivo de la acción. Sin FK: si target_product_type es "
+            "'food', este id referencia food_db (base separada), no company.id "
+            "de esta base -- ver [[tuwaykifood-arquitectura]]."
+        ),
     )
     target_company_name: str = Field(
         default="",
         description="Nombre de la empresa al momento de la acción",
+    )
+    target_product_type: str = Field(
+        default="ventas",
+        max_length=20,
+        nullable=False,
+        description="Producto de la empresa objetivo: ventas o food",
     )
     action: str = Field(
         max_length=100,

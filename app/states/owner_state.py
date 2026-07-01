@@ -7,6 +7,7 @@ Credenciales configurables vía variables de entorno:
   OWNER_ADMIN_PASSWORD (default: usa hash embebido)
 """
 
+import json
 import os
 import asyncio
 import time
@@ -19,6 +20,9 @@ from sqlmodel import select
 from app.models.auth import User as UserModel
 from app.models.billing import CompanyBillingConfig
 from app.models.company import PlanType, ProductType, SubscriptionStatus
+from app.models.owner import OwnerAuditLog
+from app.services import food_owner_client
+from app.services.food_owner_client import FoodOwnerClientError
 from app.services.owner_service import OwnerService, OwnerServiceError
 from app.utils.crypto import encrypt_credential, encrypt_text
 from app.utils.fiscal_validators import (
@@ -425,20 +429,29 @@ class OwnerState:
         self.owner_loading = True
         yield
         try:
-            async with AsyncSessionLocal() as session:
-                with tenant_bypass():
-                    items, total = await OwnerService.list_companies(
-                        session,
-                        search=self.owner_search.strip(),
-                        page=self.owner_page,
-                        per_page=self.owner_per_page,
-                        product_type=self.owner_active_product_tab,
-                    )
-                # Ignorar respuestas viejas (evita sobrescribir con datos stale).
-                if seq != self._owner_companies_load_seq:
-                    return
-                self.owner_companies = items
-                self.owner_companies_total = total
+            if self.owner_active_product_tab == ProductType.FOOD:
+                # TUWAYKIFOOD vive en food_db (base separada) — se consulta
+                # por HTTP, no hay Company local que filtrar.
+                items, total = await food_owner_client.list_companies(
+                    search=self.owner_search.strip(),
+                    page=self.owner_page,
+                    per_page=self.owner_per_page,
+                )
+            else:
+                async with AsyncSessionLocal() as session:
+                    with tenant_bypass():
+                        items, total = await OwnerService.list_companies(
+                            session,
+                            search=self.owner_search.strip(),
+                            page=self.owner_page,
+                            per_page=self.owner_per_page,
+                            product_type=self.owner_active_product_tab,
+                        )
+            # Ignorar respuestas viejas (evita sobrescribir con datos stale).
+            if seq != self._owner_companies_load_seq:
+                return
+            self.owner_companies = items
+            self.owner_companies_total = total
         except Exception as e:
             logger.exception("Error cargando empresas")
             if seq == self._owner_companies_load_seq:
@@ -718,6 +731,75 @@ class OwnerState:
             company_id,
             actor_email,
         )
+
+        if self.owner_active_product_tab == ProductType.FOOD:
+            # TUWAYKIFOOD vive en food_db (base separada) -- solo tiene
+            # sentido activar/suspender/extender trial, no hay planes ni
+            # límites de módulos todavía en su modelo Company minimal.
+            if action not in ("change_status", "extend_trial"):
+                self.owner_loading = False
+                yield rx.toast("Esta acción no está disponible para TUWAYKIFOOD.", duration=3500)
+                return
+            try:
+                before = await food_owner_client.get_company_detail(company_id)
+                if action == "change_status":
+                    if self.owner_form_status not in ("active", "suspended"):
+                        self.owner_loading = False
+                        yield rx.toast(
+                            "Estado inválido para TUWAYKIFOOD (solo Activo o Suspendido).",
+                            duration=3500,
+                        )
+                        return
+                    if self.owner_form_status == "active":
+                        after = await food_owner_client.activate(company_id)
+                    else:
+                        after = await food_owner_client.suspend(company_id)
+                    action_label = "activate" if self.owner_form_status == "active" else "suspend"
+                    toast_msg = "Estado actualizado correctamente."
+                else:
+                    try:
+                        days = int(self.owner_form_extra_days)
+                    except (ValueError, TypeError):
+                        days = 7
+                    after = await food_owner_client.extend_trial(company_id, days)
+                    action_label = "extend_trial"
+                    toast_msg = f"Trial extendido {days} días."
+
+                async with AsyncSessionLocal() as session:
+                    with tenant_bypass():
+                        log = OwnerAuditLog(
+                            actor_user_id=actor["actor_user_id"],
+                            actor_email=actor["actor_email"],
+                            target_company_id=company_id,
+                            target_company_name=self.owner_modal_company_name,
+                            target_product_type=ProductType.FOOD,
+                            action=action_label,
+                            before_snapshot=json.dumps(before or {}, ensure_ascii=False, default=str),
+                            after_snapshot=json.dumps(after or {}, ensure_ascii=False, default=str),
+                            reason=full_reason,
+                        )
+                        session.add(log)
+                        await session.commit()
+            except FoodOwnerClientError as e:
+                logger.warning(
+                    "FoodOwnerClientError action=%s company_id=%s actor=%s: %s",
+                    action, company_id, actor_email, e,
+                )
+                yield rx.toast(f"Error: {e}", duration=5000)
+                self.owner_loading = False
+                return
+            except Exception:
+                logger.exception("Error ejecutando acción owner sobre TUWAYKIFOOD")
+                yield rx.toast("Error inesperado. Revise los logs del servidor.", duration=5000)
+                self.owner_loading = False
+                return
+
+            _record_owner_action(actor_email)
+            self.owner_modal_open = False
+            self.owner_loading = False
+            yield rx.toast(toast_msg, duration=4000)
+            yield type(self).owner_load_companies
+            return
 
         try:
             async with AsyncSessionLocal() as session:

@@ -222,8 +222,14 @@ def _form_change_status() -> rx.Component:
             rx.el.label("Nuevo Estado", class_name=TYPOGRAPHY["label"]),
             rx.el.select(
                 rx.el.option("Activo", value="active"),
-                rx.el.option("Advertencia", value="warning"),
-                rx.el.option("Vencido", value="past_due"),
+                rx.cond(
+                    State.owner_active_product_tab == "ventas",
+                    rx.fragment(
+                        rx.el.option("Advertencia", value="warning"),
+                        rx.el.option("Vencido", value="past_due"),
+                    ),
+                    rx.fragment(),
+                ),
                 rx.el.option("Suspendido", value="suspended"),
                 value=State.owner_form_status,
                 on_change=State.owner_set_form_status,
