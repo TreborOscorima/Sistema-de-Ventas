@@ -13,6 +13,255 @@ COUNTRY_DIAL_OPTIONS = [
 ]
 
 
+def _producto_selector() -> rx.Component:
+    return rx.el.div(
+        rx.el.button(
+            rx.icon("shopping-bag", class_name="h-4 w-4 mr-1.5"),
+            "TUWAYKIAPP",
+            type="button",
+            on_click=State.set_register_producto("ventas"),
+            class_name=rx.cond(
+                State.register_producto == "ventas",
+                "flex-1 inline-flex items-center justify-center rounded-lg border-2 border-indigo-600 bg-indigo-50 px-3 py-2.5 text-sm font-semibold text-indigo-700",
+                "flex-1 inline-flex items-center justify-center rounded-lg border-2 border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-500 hover:border-slate-300",
+            ),
+        ),
+        rx.el.button(
+            rx.icon("utensils", class_name="h-4 w-4 mr-1.5"),
+            "TUWAYKIFOOD",
+            type="button",
+            on_click=State.set_register_producto("food"),
+            class_name=rx.cond(
+                State.register_producto == "food",
+                "flex-1 inline-flex items-center justify-center rounded-lg border-2 border-orange-500 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-700",
+                "flex-1 inline-flex items-center justify-center rounded-lg border-2 border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-500 hover:border-slate-300",
+            ),
+        ),
+        class_name="flex gap-2 mb-6",
+    )
+
+
+def _success_block() -> rx.Component:
+    return rx.el.div(
+        rx.icon("circle-check", class_name="h-10 w-10 text-emerald-500 mx-auto"),
+        rx.el.p(
+            State.register_success_message,
+            class_name="mt-3 text-sm text-slate-700 text-center",
+        ),
+        rx.el.a(
+            "Ir a iniciar sesión en TUWAYKIFOOD",
+            href=State.food_login_url,
+            class_name="mt-5 inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600 w-full",
+        ),
+        class_name="flex flex-col items-center py-4",
+    )
+
+
+def _registro_form() -> rx.Component:
+    return rx.fragment(
+        rx.el.form(
+            rx.el.div(
+                rx.el.label(
+                    "Nombre de la Empresa",
+                    class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
+                ),
+                rx.el.input(
+                    placeholder="Mi Negocio",
+                    name="company_name",
+                    class_name=INPUT_STYLES["default"],
+                ),
+                class_name="space-y-1",
+            ),
+            rx.cond(
+                State.register_producto == "ventas",
+                rx.el.div(
+                    rx.el.label(
+                        "Usuario",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
+                    ),
+                    rx.el.input(
+                        placeholder="admin",
+                        name="username",
+                        auto_complete="username",
+                        class_name=INPUT_STYLES["default"],
+                    ),
+                    class_name="space-y-1",
+                ),
+                rx.fragment(),
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Correo",
+                    class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
+                ),
+                rx.el.input(
+                    placeholder="tu@empresa.com",
+                    name="email",
+                    type="email",
+                    auto_complete="email",
+                    class_name=INPUT_STYLES["default"],
+                ),
+                class_name="space-y-1",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Número de contacto",
+                    class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
+                ),
+                rx.el.div(
+                    rx.el.select(
+                        *[
+                            rx.el.option(label, value=value)
+                            for label, value in COUNTRY_DIAL_OPTIONS
+                        ],
+                        name="contact_phone_country",
+                        default_value="+54",
+                        class_name=(
+                            INPUT_STYLES["default"]
+                            + " w-full px-2 sm:px-3 text-xs sm:text-sm"
+                        ),
+                    ),
+                    rx.el.input(
+                        placeholder="9 11 1234 5678",
+                        name="contact_phone_number",
+                        type="tel",
+                        auto_complete="tel-national",
+                        input_mode="numeric",
+                        class_name=INPUT_STYLES["default"],
+                    ),
+                    class_name="grid grid-cols-[100px_1fr] sm:grid-cols-[130px_1fr] items-center gap-2",
+                ),
+                rx.el.p(
+                    "Selecciona el código de país y luego escribe tu número.",
+                    class_name=TYPOGRAPHY["caption"],
+                ),
+                class_name="space-y-1",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Contraseña",
+                    class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
+                ),
+                rx.el.div(
+                    rx.el.input(
+                        placeholder="••••••••",
+                        name="password",
+                        type=rx.cond(
+                            State.show_register_password,
+                            "text",
+                            "password",
+                        ),
+                        auto_complete="new-password",
+                        class_name=INPUT_STYLES["default"] + " pr-11",
+                    ),
+                    rx.el.button(
+                        rx.cond(
+                            State.show_register_password,
+                            rx.icon("eye-off", class_name="h-4 w-4"),
+                            rx.icon("eye", class_name="h-4 w-4"),
+                        ),
+                        type="button",
+                        on_click=State.toggle_register_password_visibility,
+                        class_name=(
+                            "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                            "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                            "hover:text-slate-700 transition-colors duration-150"
+                        ),
+                        aria_label=rx.cond(
+                            State.show_register_password,
+                            "Ocultar contraseña",
+                            "Mostrar contraseña",
+                        ),
+                        title=rx.cond(
+                            State.show_register_password,
+                            "Ocultar contraseña",
+                            "Mostrar contraseña",
+                        ),
+                    ),
+                    class_name="relative",
+                ),
+                class_name="space-y-1",
+            ),
+            rx.el.div(
+                rx.el.label(
+                    "Confirmar Contraseña",
+                    class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
+                ),
+                rx.el.div(
+                    rx.el.input(
+                        placeholder="••••••••",
+                        name="confirm_password",
+                        type=rx.cond(
+                            State.show_register_confirm_password,
+                            "text",
+                            "password",
+                        ),
+                        auto_complete="new-password",
+                        class_name=INPUT_STYLES["default"] + " pr-11",
+                    ),
+                    rx.el.button(
+                        rx.cond(
+                            State.show_register_confirm_password,
+                            rx.icon("eye-off", class_name="h-4 w-4"),
+                            rx.icon("eye", class_name="h-4 w-4"),
+                        ),
+                        type="button",
+                        on_click=State.toggle_register_confirm_password_visibility,
+                        class_name=(
+                            "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
+                            "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
+                            "hover:text-slate-700 transition-colors duration-150"
+                        ),
+                        aria_label=rx.cond(
+                            State.show_register_confirm_password,
+                            "Ocultar contraseña",
+                            "Mostrar contraseña",
+                        ),
+                        title=rx.cond(
+                            State.show_register_confirm_password,
+                            "Ocultar contraseña",
+                            "Mostrar contraseña",
+                        ),
+                    ),
+                    class_name="relative",
+                ),
+                class_name="space-y-1",
+            ),
+            rx.el.button(
+                rx.cond(
+                    State.is_registering,
+                    "Creando...",
+                    rx.cond(
+                        State.register_producto == "food",
+                        "Crear cuenta TUWAYKIFOOD",
+                        "Comenzar Prueba Gratis",
+                    ),
+                ),
+                type="submit",
+                disabled=State.is_registering,
+                class_name=BUTTON_STYLES["primary"] + " w-full min-h-[44px]",
+            ),
+            on_submit=State.handle_registration,
+            class_name="space-y-5",
+        ),
+        rx.cond(
+            State.register_error != "",
+            rx.el.div(
+                rx.icon(
+                    "circle-alert",
+                    class_name="h-5 w-5 text-red-500 flex-shrink-0",
+                ),
+                rx.el.p(State.register_error, class_name=TYPOGRAPHY["error_message"]),
+                role="alert",
+                class_name=(
+                    "flex items-center gap-3 mt-5 bg-red-50 p-4 "
+                    f"{RADIUS['lg']} border border-red-200"
+                ),
+            ),
+        ),
+    )
+
+
 def registro_page() -> rx.Component:
     """Página de registro de empresa y usuario administrador."""
     return rx.el.div(
@@ -35,197 +284,11 @@ def registro_page() -> rx.Component:
                 ),
                 class_name="flex flex-col items-center gap-3 mb-8",
             ),
-            rx.el.form(
-                rx.el.div(
-                    rx.el.label(
-                        "Nombre de la Empresa",
-                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
-                    ),
-                    rx.el.input(
-                        placeholder="Mi Negocio",
-                        name="company_name",
-                        class_name=INPUT_STYLES["default"],
-                    ),
-                    class_name="space-y-1",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Usuario",
-                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
-                    ),
-                    rx.el.input(
-                        placeholder="admin",
-                        name="username",
-                        auto_complete="username",
-                        class_name=INPUT_STYLES["default"],
-                    ),
-                    class_name="space-y-1",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Correo",
-                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
-                    ),
-                    rx.el.input(
-                        placeholder="tu@empresa.com",
-                        name="email",
-                        type="email",
-                        auto_complete="email",
-                        class_name=INPUT_STYLES["default"],
-                    ),
-                    class_name="space-y-1",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Número de contacto",
-                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
-                    ),
-                    rx.el.div(
-                        rx.el.select(
-                            *[
-                                rx.el.option(label, value=value)
-                                for label, value in COUNTRY_DIAL_OPTIONS
-                            ],
-                            name="contact_phone_country",
-                            default_value="+54",
-                            class_name=(
-                                INPUT_STYLES["default"]
-                                + " w-full px-2 sm:px-3 text-xs sm:text-sm"
-                            ),
-                        ),
-                        rx.el.input(
-                            placeholder="9 11 1234 5678",
-                            name="contact_phone_number",
-                            type="tel",
-                            auto_complete="tel-national",
-                            input_mode="numeric",
-                            class_name=INPUT_STYLES["default"],
-                        ),
-                        class_name="grid grid-cols-[100px_1fr] sm:grid-cols-[130px_1fr] items-center gap-2",
-                    ),
-                    rx.el.p(
-                        "Selecciona el código de país y luego escribe tu número.",
-                        class_name=TYPOGRAPHY["caption"],
-                    ),
-                    class_name="space-y-1",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Contraseña",
-                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
-                    ),
-                    rx.el.div(
-                        rx.el.input(
-                            placeholder="••••••••",
-                            name="password",
-                            type=rx.cond(
-                                State.show_register_password,
-                                "text",
-                                "password",
-                            ),
-                            auto_complete="new-password",
-                            class_name=INPUT_STYLES["default"] + " pr-11",
-                        ),
-                        rx.el.button(
-                            rx.cond(
-                                State.show_register_password,
-                                rx.icon("eye-off", class_name="h-4 w-4"),
-                                rx.icon("eye", class_name="h-4 w-4"),
-                            ),
-                            type="button",
-                            on_click=State.toggle_register_password_visibility,
-                            class_name=(
-                                "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
-                                "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
-                                "hover:text-slate-700 transition-colors duration-150"
-                            ),
-                            aria_label=rx.cond(
-                                State.show_register_password,
-                                "Ocultar contraseña",
-                                "Mostrar contraseña",
-                            ),
-                            title=rx.cond(
-                                State.show_register_password,
-                                "Ocultar contraseña",
-                                "Mostrar contraseña",
-                            ),
-                        ),
-                        class_name="relative",
-                    ),
-                    class_name="space-y-1",
-                ),
-                rx.el.div(
-                    rx.el.label(
-                        "Confirmar Contraseña",
-                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
-                    ),
-                    rx.el.div(
-                        rx.el.input(
-                            placeholder="••••••••",
-                            name="confirm_password",
-                            type=rx.cond(
-                                State.show_register_confirm_password,
-                                "text",
-                                "password",
-                            ),
-                            auto_complete="new-password",
-                            class_name=INPUT_STYLES["default"] + " pr-11",
-                        ),
-                        rx.el.button(
-                            rx.cond(
-                                State.show_register_confirm_password,
-                                rx.icon("eye-off", class_name="h-4 w-4"),
-                                rx.icon("eye", class_name="h-4 w-4"),
-                            ),
-                            type="button",
-                            on_click=State.toggle_register_confirm_password_visibility,
-                            class_name=(
-                                "absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 "
-                                "items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 "
-                                "hover:text-slate-700 transition-colors duration-150"
-                            ),
-                            aria_label=rx.cond(
-                                State.show_register_confirm_password,
-                                "Ocultar contraseña",
-                                "Mostrar contraseña",
-                            ),
-                            title=rx.cond(
-                                State.show_register_confirm_password,
-                                "Ocultar contraseña",
-                                "Mostrar contraseña",
-                            ),
-                        ),
-                        class_name="relative",
-                    ),
-                    class_name="space-y-1",
-                ),
-                rx.el.button(
-                    rx.cond(
-                        State.is_registering,
-                        "Creando...",
-                        "Comenzar Prueba Gratis",
-                    ),
-                    type="submit",
-                    disabled=State.is_registering,
-                    class_name=BUTTON_STYLES["primary"] + " w-full min-h-[44px]",
-                ),
-                on_submit=State.handle_registration,
-                class_name="space-y-5",
-            ),
+            _producto_selector(),
             rx.cond(
-                State.register_error != "",
-                rx.el.div(
-                    rx.icon(
-                        "circle-alert",
-                        class_name="h-5 w-5 text-red-500 flex-shrink-0",
-                    ),
-                    rx.el.p(State.register_error, class_name=TYPOGRAPHY["error_message"]),
-                    role="alert",
-                    class_name=(
-                        "flex items-center gap-3 mt-5 bg-red-50 p-4 "
-                        f"{RADIUS['lg']} border border-red-200"
-                    ),
-                ),
+                State.register_success,
+                _success_block(),
+                _registro_form(),
             ),
             rx.el.div(
                 rx.el.span("¿Ya tienes cuenta?", class_name="text-slate-400"),

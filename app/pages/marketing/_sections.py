@@ -884,25 +884,29 @@ def _tuwaykifood_section() -> rx.Component:
             rx.el.div(
                 rx.el.div(
                     rx.el.p(
-                        "Próximamente disponible",
+                        "Disponible ahora",
                         class_name="text-sm font-semibold text-orange-700 uppercase tracking-wide",
                     ),
                     rx.el.p(
-                        "TUWAYKIFOOD estará disponible en ",
-                        rx.el.strong("food.tuwayki.com", class_name="font-bold"),
-                        ". Mientras tanto, agendá una demo con nosotros.",
+                        "Ingresá a tu cuenta o creá una nueva para tu restaurante.",
                         class_name="mt-1 text-sm text-slate-600",
                     ),
                     class_name="flex flex-col",
                 ),
-                rx.el.a(
-                    rx.icon("message-circle", class_name="h-4 w-4 mr-2"),
-                    "Quiero saber más",
-                    href=_food_demo_link,
-                    target="_blank",
-                    rel="noopener noreferrer",
-                    on_click=rx.call_script(_track_event_script("click_food_cta", "food_section")),
-                    class_name="inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600 whitespace-nowrap",
+                rx.el.div(
+                    rx.el.a(
+                        "Ingresar",
+                        href=_food_href("/login"),
+                        on_click=rx.call_script(_track_event_script("click_food_login", "food_section")),
+                        class_name="inline-flex items-center justify-center rounded-xl border-2 border-orange-500 bg-white px-5 py-2.5 text-sm font-semibold text-orange-600 transition-colors hover:bg-orange-50 whitespace-nowrap",
+                    ),
+                    rx.el.a(
+                        "Registrarme",
+                        href=_app_href("/registro?producto=food"),
+                        on_click=rx.call_script(_track_event_script("click_food_registro", "food_section")),
+                        class_name="inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-orange-600 whitespace-nowrap",
+                    ),
+                    class_name="flex flex-col gap-2 sm:flex-row",
                 ),
                 class_name="reveal mt-12 flex flex-col items-center gap-5 rounded-2xl border border-orange-100 bg-orange-50 p-8 sm:flex-row sm:justify-between",
             ),

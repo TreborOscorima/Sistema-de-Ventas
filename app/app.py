@@ -542,6 +542,7 @@ def _register_app_routes():
         page_registro,
         route="/registro",
         title="Registro - TUWAYKIAPP",
+        on_load=State.on_load_registro,
     )
 
     _add_private_page(
