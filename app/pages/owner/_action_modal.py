@@ -829,6 +829,22 @@ def _action_modal() -> rx.Component:
                     ("adjust_limits", _form_adjust_limits()),
                     rx.fragment(),
                 ),
+                # Error inline (visible dentro del modal)
+                rx.cond(
+                    State.owner_form_error != "",
+                    rx.el.div(
+                        rx.el.div(
+                            rx.icon("circle-alert", class_name="h-4 w-4 text-red-600 shrink-0 mt-0.5"),
+                            rx.el.p(
+                                State.owner_form_error,
+                                class_name="text-sm text-red-700",
+                            ),
+                            class_name="flex items-start gap-2",
+                        ),
+                        class_name=f"bg-red-50 border border-red-200 {RADIUS['lg']} p-3 mt-4",
+                    ),
+                    rx.fragment(),
+                ),
                 # Footer
                 rx.el.div(
                     rx.el.button(

@@ -250,6 +250,7 @@ class OwnerState:
     owner_form_current_status: str = ""
     owner_form_trial_ends_at: str = ""
     owner_form_effective_date: str = ""  # Fecha cuando se aplica la acción
+    owner_form_error: str = ""  # Error inline visible en el modal
 
     # ─── Auditoría ─────────────────────────────────────
     owner_audit_logs: list[dict] = []
@@ -559,6 +560,7 @@ class OwnerState:
         self.owner_form_current_plan = ""
         self.owner_form_current_status = ""
         self.owner_form_trial_ends_at = ""
+        self.owner_form_error = ""
         self.owner_form_effective_date = _dt.now().strftime("%Y-%m-%d %H:%M")
 
         # Pre-cargar valores actuales de la empresa seleccionada
@@ -684,6 +686,7 @@ class OwnerState:
         """Ejecuta la acción seleccionada en el modal."""
         if self.owner_loading:
             return
+        self.owner_form_error = ""
         if not self.is_owner_authenticated:
             yield rx.toast("Acceso denegado. Inicie sesión en el panel owner.", duration=3000)
             return
@@ -785,13 +788,15 @@ class OwnerState:
                     "FoodOwnerClientError action=%s company_id=%s actor=%s: %s",
                     action, company_id, actor_email, e,
                 )
-                yield rx.toast(f"Error: {e}", duration=5000)
+                self.owner_form_error = str(e)
                 self.owner_loading = False
+                yield rx.toast(f"Error: {e}", duration=5000)
                 return
             except Exception:
                 logger.exception("Error ejecutando acción owner sobre TUWAYKIFOOD")
-                yield rx.toast("Error inesperado. Revise los logs del servidor.", duration=5000)
+                self.owner_form_error = "Error inesperado. Revise los logs del servidor."
                 self.owner_loading = False
+                yield rx.toast("Error inesperado. Revise los logs del servidor.", duration=5000)
                 return
 
             _record_owner_action(actor_email)
@@ -885,13 +890,15 @@ class OwnerState:
                 actor_email,
                 e,
             )
-            yield rx.toast(f"Error: {e}", duration=5000)
+            self.owner_form_error = str(e)
             self.owner_loading = False
+            yield rx.toast(f"Error: {e}", duration=5000)
             return
         except Exception as e:
             logger.exception("Error ejecutando acción owner")
-            yield rx.toast("Error inesperado. Revise los logs del servidor.", duration=5000)
+            self.owner_form_error = "Error inesperado. Revise los logs del servidor."
             self.owner_loading = False
+            yield rx.toast("Error inesperado. Revise los logs del servidor.", duration=5000)
             return
 
         _record_owner_action(actor_email)

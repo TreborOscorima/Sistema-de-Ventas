@@ -33,22 +33,10 @@ logger = get_logger("OwnerService")
 # ───────────────────────────────────────────────────────
 
 VALID_STATUS_TRANSITIONS: Dict[str, List[str]] = {
-    SubscriptionStatus.ACTIVE: [
-        SubscriptionStatus.WARNING,
-        SubscriptionStatus.SUSPENDED,
-    ],
-    SubscriptionStatus.WARNING: [
-        SubscriptionStatus.ACTIVE,
-        SubscriptionStatus.PAST_DUE,
-        SubscriptionStatus.SUSPENDED,
-    ],
-    SubscriptionStatus.PAST_DUE: [
-        SubscriptionStatus.ACTIVE,
-        SubscriptionStatus.SUSPENDED,
-    ],
-    SubscriptionStatus.SUSPENDED: [
-        SubscriptionStatus.ACTIVE,
-    ],
+    "active": ["warning", "suspended"],
+    "warning": ["active", "past_due", "suspended"],
+    "past_due": ["active", "suspended"],
+    "suspended": ["active"],
 }
 
 # Límites por plan
@@ -111,8 +99,8 @@ PLAN_DEFAULTS: Dict[str, Dict[str, Any]] = {
 def _company_snapshot(company: Company) -> Dict[str, Any]:
     """Genera snapshot serializable del estado relevante de la empresa."""
     return {
-        "plan_type": company.plan_type,
-        "subscription_status": company.subscription_status,
+        "plan_type": company.plan_type.value if hasattr(company.plan_type, "value") else str(company.plan_type),
+        "subscription_status": company.subscription_status.value if hasattr(company.subscription_status, "value") else str(company.subscription_status),
         "is_active": company.is_active,
         "trial_ends_at": company.trial_ends_at.isoformat() if company.trial_ends_at else None,
         "subscription_ends_at": (
@@ -187,8 +175,9 @@ def _effective_status(company: Company) -> str:
             and company.subscription_status
             in (SubscriptionStatus.ACTIVE, SubscriptionStatus.WARNING, SubscriptionStatus.PAST_DUE)
         ):
-            return SubscriptionStatus.SUSPENDED
-    return company.subscription_status
+            return SubscriptionStatus.SUSPENDED.value
+    s = company.subscription_status
+    return s.value if hasattr(s, "value") else str(s)
 
 
 class OwnerService:
@@ -378,8 +367,8 @@ class OwnerService:
                     "admin_email": admin_emails.get(company_id) or "Sin correo",
                     "company_phone": company_phones.get(company_id) or "Sin teléfono",
                     "is_active": c.is_active,
-                    "plan_type": c.plan_type,
-                    "subscription_status": c.subscription_status,
+                    "plan_type": c.plan_type.value if hasattr(c.plan_type, "value") else str(c.plan_type),
+                    "subscription_status": c.subscription_status.value if hasattr(c.subscription_status, "value") else str(c.subscription_status),
                     "effective_status": _effective_status(c),
                     "trial_ends_at": effective_trial_ends.strftime("%d/%m/%Y") if effective_trial_ends else None,
                     "subscription_ends_at": (
@@ -455,8 +444,8 @@ class OwnerService:
             "admin_email": admin_email or "Sin correo",
             "company_phone": company_phone or "Sin teléfono",
             "is_active": company.is_active,
-            "plan_type": company.plan_type,
-            "subscription_status": company.subscription_status,
+            "plan_type": company.plan_type.value if hasattr(company.plan_type, "value") else str(company.plan_type),
+            "subscription_status": company.subscription_status.value if hasattr(company.subscription_status, "value") else str(company.subscription_status),
             "effective_status": _effective_status(company),
             "trial_ends_at": (
                 company.trial_ends_at.strftime("%d/%m/%Y") if company.trial_ends_at else None
@@ -659,51 +648,67 @@ class OwnerService:
         if not reason or not reason.strip():
             raise OwnerServiceError("El motivo es obligatorio.")
 
+        new_val = new_status.value if hasattr(new_status, "value") else str(new_status)
+
         valid_statuses = [s.value for s in SubscriptionStatus]
-        if new_status not in valid_statuses:
+        if new_val not in valid_statuses:
             raise OwnerServiceError(
-                f"Estado inválido: {new_status}. Válidos: {valid_statuses}"
+                f"Estado inválido: {new_val}. Válidos: {valid_statuses}"
             )
 
         company = await session.get(Company, company_id)
         if not company:
             raise OwnerServiceError(f"Empresa {company_id} no encontrada.")
 
-        current = company.subscription_status
-        if current == new_status:
+        current_val = (
+            company.subscription_status.value
+            if hasattr(company.subscription_status, "value")
+            else str(company.subscription_status)
+        )
+        effective = _effective_status(company)
+
+        if current_val == new_val:
+            if effective != new_val:
+                label_map = {
+                    "trial_expired": "Trial expirado",
+                    "suspended": "Suspendido (efectivo)",
+                }
+                eff_label = label_map.get(effective, effective)
+                raise OwnerServiceError(
+                    f"El estado en BD ya es '{new_val}', pero el estado "
+                    f"efectivo es '{eff_label}'. Use 'Extender Prueba' o "
+                    f"'Cambiar Plan' para resolver esta situación."
+                )
             raise OwnerServiceError(
-                f"La empresa ya tiene estado '{new_status}'."
+                f"La empresa ya tiene estado '{new_val}'."
             )
 
-        # Validar transición
-        allowed = VALID_STATUS_TRANSITIONS.get(current, [])
-        if new_status not in allowed:
+        allowed = VALID_STATUS_TRANSITIONS.get(current_val, [])
+        if new_val not in allowed:
+            allowed_labels = ", ".join(allowed) if allowed else "ninguno"
             raise OwnerServiceError(
-                f"Transición inválida: '{current}' → '{new_status}'. "
-                f"Transiciones permitidas desde '{current}': {allowed}"
+                f"Transición inválida: '{current_val}' → '{new_val}'. "
+                f"Permitidas desde '{current_val}': {allowed_labels}"
             )
 
         before = _company_snapshot(company)
 
-        company.subscription_status = new_status
+        company.subscription_status = new_val
 
-        # Si se suspende, desactivar la empresa
-        if new_status == SubscriptionStatus.SUSPENDED:
+        if new_val == "suspended":
             company.is_active = False
 
-        # Si se activa, reactivar la empresa
-        if new_status == SubscriptionStatus.ACTIVE:
+        if new_val == "active":
             company.is_active = True
 
         after = _company_snapshot(company)
 
-        # Determinar acción descriptiva
         action = "change_status"
-        if new_status == SubscriptionStatus.SUSPENDED:
+        if new_val == "suspended":
             action = "suspend"
-        elif new_status == SubscriptionStatus.ACTIVE and current == SubscriptionStatus.SUSPENDED:
+        elif new_val == "active" and current_val == "suspended":
             action = "reactivate"
-        elif new_status == SubscriptionStatus.ACTIVE:
+        elif new_val == "active":
             action = "activate"
 
         session.add(company)
@@ -721,8 +726,8 @@ class OwnerService:
         await session.commit()
 
         logger.info(
-            f"Owner {actor_email} cambió status de empresa {company.name} "
-            f"({current} → {new_status})"
+            "Owner %s cambió status de empresa %s (%s → %s)",
+            actor_email, company.name, current_val, new_val,
         )
         return after
 
