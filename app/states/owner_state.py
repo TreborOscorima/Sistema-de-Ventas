@@ -456,7 +456,9 @@ class OwnerState:
         except Exception as e:
             logger.exception("Error cargando empresas")
             if seq == self._owner_companies_load_seq:
-                yield rx.toast("Error al cargar empresas. Revise los logs.", duration=4000)
+                self.owner_companies = []
+                self.owner_companies_total = 0
+                yield rx.toast(str(e) or "Error al cargar empresas. Revise los logs.", duration=4000)
         finally:
             if seq == self._owner_companies_load_seq:
                 self.owner_loading = False

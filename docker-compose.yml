@@ -117,6 +117,9 @@ services:
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
       # api_url en Reflex = URL base del backend (sin /api). Mismo host que el frontend si NPM hace proxy.
       PUBLIC_API_URL: ${PUBLIC_API_URL:-https://tuwayki.app}
+      PUBLIC_FOOD_URL: ${PUBLIC_FOOD_URL:-https://food.tuwayki.app}
+      FOOD_API_URL: ${FOOD_API_URL:-}
+      FOOD_ADMIN_API_SECRET: ${FOOD_ADMIN_API_SECRET:-}
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       GA4_MEASUREMENT_ID: ${GA4_MEASUREMENT_ID:-}
@@ -173,6 +176,9 @@ services:
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
       PUBLIC_API_URL: https://sys.tuwayki.app
+      PUBLIC_FOOD_URL: ${PUBLIC_FOOD_URL:-https://food.tuwayki.app}
+      FOOD_API_URL: ${FOOD_API_URL:-}
+      FOOD_ADMIN_API_SECRET: ${FOOD_ADMIN_API_SECRET:-}
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
     env_file:
@@ -225,6 +231,9 @@ services:
       PUBLIC_APP_URL: https://sys.tuwayki.app
       PUBLIC_OWNER_URL: https://admin.tuwayki.app
       PUBLIC_API_URL: https://admin.tuwayki.app
+      PUBLIC_FOOD_URL: ${PUBLIC_FOOD_URL:-https://food.tuwayki.app}
+      FOOD_API_URL: ${FOOD_API_URL:-}
+      FOOD_ADMIN_API_SECRET: ${FOOD_ADMIN_API_SECRET:-}
       AUTH_SECRET_KEY: ${AUTH_SECRET_KEY:?AUTH_SECRET_KEY requerido en .env, min 32 chars}
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
     env_file:
