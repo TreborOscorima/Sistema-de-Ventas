@@ -1,0 +1,97 @@
+# Deploy automático a producción (Docker) vía SSH al servidor AWS.
+#
+# Disparadores:
+#   - Tests exitosos en push a main o docker-deploy-prod
+#   - Manual: Actions → deploy-prod → Run workflow
+#
+# Secrets requeridos (Settings → Secrets and variables → Actions):
+#   DEPLOY_SSH_HOST          IP o hostname del servidor (ej. 52.x.x.x)
+#   DEPLOY_SSH_USER          Usuario SSH (ej. ubuntu)
+#   DEPLOY_SSH_PRIVATE_KEY   Clave privada OpenSSH (contenido completo del archivo)
+#
+# Secrets opcionales:
+#   DEPLOY_SSH_PORT          Puerto SSH (default 22 en ssh-action)
+#   DEPLOY_APP_DIR           Ruta del repo en el servidor (default /home/ubuntu/sist-ventas-trebor)
+#
+# Setup inicial en el servidor (una sola vez):
+#   1. Generar par de claves: ssh-keygen -t ed25519 -f deploy_gha -N ""
+#   2. Agregar deploy_gha.pub a ~/.ssh/authorized_keys del usuario ubuntu
+#   3. Pegar deploy_gha en DEPLOY_SSH_PRIVATE_KEY (secret de GitHub)
+#   4. Verificar: ssh -i deploy_gha ubuntu@<host> "cd ~/sist-ventas-trebor && docker compose ps"
+#   5. El servidor debe tener .env, Docker y acceso git al repo configurados
+#
+# Opcional: environment "production" con required reviewers para aprobar cada deploy.
+
+name: deploy-prod
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+    branches: [main, docker-deploy-prod]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Rama a desplegar en el servidor
+        required: true
+        default: docker-deploy-prod
+        type: choice
+        options:
+          - docker-deploy-prod
+          - main
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Docker prod (SSH)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Resolver rama a desplegar
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "branch=${{ inputs.branch }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resumen pre-deploy
+        run: |
+          echo "### Deploy producción" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rama: **${{ steps.meta.outputs.branch }}**" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.meta.outputs.sha }}" ]; then
+            echo "- Commit: \`${{ steps.meta.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Deploy en servidor (scripts/deploy-prod.sh)
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DEPLOY_SSH_HOST }}
+          username: ${{ secrets.DEPLOY_SSH_USER }}
+          key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          command_timeout: 40m
+          script: |
+            set -euo pipefail
+            APP_DIR="${{ secrets.DEPLOY_APP_DIR }}"
+            if [ -z "$APP_DIR" ]; then
+              APP_DIR="/home/ubuntu/sist-ventas-trebor"
+            fi
+            export APP_DIR
+            export BRANCH="${{ steps.meta.outputs.branch }}"
+            cd "$APP_DIR"
+            bash scripts/deploy-prod.sh
+
+      - name: Deploy OK
+        if: success()
+        run: echo "Deploy completado en ${{ steps.meta.outputs.branch }}"
