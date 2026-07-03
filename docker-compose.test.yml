@@ -30,6 +30,9 @@ services:
       PUBLIC_SITE_URL: "http://${TEST_IP:-localhost}:3000"
       PUBLIC_APP_URL: "http://${TEST_IP:-localhost}:3001"
       PUBLIC_OWNER_URL: "http://${TEST_IP:-localhost}:3002"
+      PUBLIC_FOOD_URL: "http://${TEST_IP:-localhost}:3003"
+      FOOD_API_URL: "http://${TEST_IP:-localhost}:3003"
+      FOOD_ADMIN_API_SECRET: "${FOOD_ADMIN_API_SECRET}"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       ENV: prod
 
@@ -41,6 +44,9 @@ services:
       PUBLIC_SITE_URL: "http://${TEST_IP:-localhost}:3000"
       PUBLIC_APP_URL: "http://${TEST_IP:-localhost}:3001"
       PUBLIC_OWNER_URL: "http://${TEST_IP:-localhost}:3002"
+      PUBLIC_FOOD_URL: "http://${TEST_IP:-localhost}:3003"
+      FOOD_API_URL: "http://${TEST_IP:-localhost}:3003"
+      FOOD_ADMIN_API_SECRET: "${FOOD_ADMIN_API_SECRET}"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       ENV: prod
 
@@ -52,6 +58,9 @@ services:
       PUBLIC_SITE_URL: "http://${TEST_IP:-localhost}:3000"
       PUBLIC_APP_URL: "http://${TEST_IP:-localhost}:3001"
       PUBLIC_OWNER_URL: "http://${TEST_IP:-localhost}:3002"
+      PUBLIC_FOOD_URL: "http://${TEST_IP:-localhost}:3003"
+      FOOD_API_URL: "http://${TEST_IP:-localhost}:3003"
+      FOOD_ADMIN_API_SECRET: "${FOOD_ADMIN_API_SECRET}"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "0"
       ENV: prod
 
