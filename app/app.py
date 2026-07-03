@@ -56,7 +56,7 @@ from app.pages.login import login_page
 from app.pages.periodo_prueba_finalizado import periodo_prueba_finalizado_page
 from app.pages.cuenta_suspendida import cuenta_suspendida_page
 from app.pages.registro import registro_page
-from app.pages.marketing import marketing_page
+from app.pages.marketing import marketing_page, home_page, food_page
 from app.pages.terminos import terminos_page
 from app.pages.privacidad import privacidad_page
 from app.pages.cookies import cookies_page
@@ -375,6 +375,12 @@ def page_login() -> rx.Component:
 def page_marketing() -> rx.Component:
     return marketing_page()
 
+def page_home() -> rx.Component:
+    return home_page()
+
+def page_food() -> rx.Component:
+    return food_page()
+
 def page_terminos() -> rx.Component:
     return terminos_page()
 
@@ -460,24 +466,52 @@ def _add_private_page(
     app.add_page(component, **kwargs)
 
 
+FOOD_TITLE = "TUWAYKIFOOD | Sistema para restaurantes y restobares"
+FOOD_DESCRIPTION = (
+    "Carta digital con QR, gestión de mesas, pedidos por tablet y comanda automática en cocina. "
+    "Todo conectado con la caja del turno."
+)
+HOME_TITLE = "TUWAYKI | Sistema de gestión para tu negocio"
+HOME_DESCRIPTION = "Elige el sistema que corresponde a tu negocio: TUWAYKIAPP para ventas y multi-sucursal, o TUWAYKIFOOD para restaurantes y restobares."
+
+
 def _register_landing_routes():
     if APP_SURFACE == "landing":
+        # Selector de productos — nueva home
         app.add_page(
-            page_marketing,
+            page_home,
             route="/",
-            title=LANDING_TITLE,
-            description=LANDING_DESCRIPTION,
+            title=HOME_TITLE,
+            description=HOME_DESCRIPTION,
             image=LANDING_IMAGE,
             meta=_landing_meta(f"{PUBLIC_SITE_URL}/", indexable=True),
         )
-        # Alias temporal de compatibilidad.
+        # Landing TUWAYKIAPP (sistema de ventas)
+        app.add_page(
+            page_marketing,
+            route="/ventas",
+            title=LANDING_TITLE,
+            description=LANDING_DESCRIPTION,
+            image=LANDING_IMAGE,
+            meta=_landing_meta(f"{PUBLIC_SITE_URL}/ventas", indexable=True),
+        )
+        # Alias de compatibilidad con SEO previo
         app.add_page(
             page_marketing,
             route="/home",
             title=LANDING_TITLE,
             description=LANDING_DESCRIPTION,
             image=LANDING_IMAGE,
-            meta=_landing_meta(f"{PUBLIC_SITE_URL}/", indexable=False),
+            meta=_landing_meta(f"{PUBLIC_SITE_URL}/ventas", indexable=False),
+        )
+        # Landing TUWAYKIFOOD (sistema para restobares)
+        app.add_page(
+            page_food,
+            route="/food",
+            title=FOOD_TITLE,
+            description=FOOD_DESCRIPTION,
+            image=LANDING_IMAGE,
+            meta=_landing_meta(f"{PUBLIC_SITE_URL}/food", indexable=True),
         )
     else:
         # Modo all: mantener landing en /home hasta completar migración de dominios.
