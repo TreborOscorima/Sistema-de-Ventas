@@ -100,6 +100,33 @@ validate_env() {
 validate_env
 ok "Validación .env OK"
 
+# ─── Sync .env con .env.example (agrega variables nuevas, nunca pisa existentes)
+sync_env_example() {
+    local example="$APP_DIR/.env.example"
+    local env_file="$APP_DIR/.env"
+    [[ -f "$example" ]] || { warn ".env.example no encontrado — sync omitido"; return; }
+
+    local added=0
+    while IFS= read -r line; do
+        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+        local key="${line%%=*}"
+        [[ -z "$key" ]] && continue
+        if ! grep -qE "^${key}=" "$env_file" 2>/dev/null; then
+            echo "$line" >> "$env_file"
+            info "  + $key (agregado desde .env.example)"
+            added=$((added + 1))
+        fi
+    done < "$example"
+
+    if [[ $added -gt 0 ]]; then
+        warn "$added variable(s) nueva(s) agregada(s) al .env desde .env.example — revisar valores sensibles"
+    else
+        ok "Sync .env ↔ .env.example: todo al día"
+    fi
+}
+sync_env_example
+
 # ─── Red NPM ──────────────────────────────────────────────────────────────────
 if ! docker network inspect "$NPM_NETWORK" >/dev/null 2>&1; then
     warn "Red $NPM_NETWORK no existe — creando..."
