@@ -138,14 +138,25 @@ def _form_change_plan() -> rx.Component:
         # Nuevo plan
         rx.el.div(
             rx.el.label("Nuevo Plan", class_name=TYPOGRAPHY["label"]),
-            rx.el.select(
-                rx.el.option("Prueba", value="trial"),
-                rx.el.option("Estándar", value="standard"),
-                rx.el.option("Profesional", value="professional"),
-                rx.el.option("Empresarial", value="enterprise"),
-                value=State.owner_form_plan,
-                on_change=State.owner_set_form_plan,
-                class_name=SELECT_STYLES["default"],
+            rx.cond(
+                State.owner_active_product_tab == "food",
+                rx.el.select(
+                    rx.el.option("Prueba", value="trial"),
+                    rx.el.option("Estándar", value="standard"),
+                    rx.el.option("Profesional", value="profesional"),
+                    value=State.owner_form_plan,
+                    on_change=State.owner_set_form_plan,
+                    class_name=SELECT_STYLES["default"],
+                ),
+                rx.el.select(
+                    rx.el.option("Prueba", value="trial"),
+                    rx.el.option("Estándar", value="standard"),
+                    rx.el.option("Profesional", value="professional"),
+                    rx.el.option("Empresarial", value="enterprise"),
+                    value=State.owner_form_plan,
+                    on_change=State.owner_set_form_plan,
+                    class_name=SELECT_STYLES["default"],
+                ),
             ),
             class_name="flex flex-col gap-1.5",
         ),

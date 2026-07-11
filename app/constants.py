@@ -104,6 +104,38 @@ SERVICES_SUBSECTIONS: list[dict] = [
 
 
 # =============================================================================
+# LEYENDAS DEFENSA DEL CONSUMIDOR — Presets por jurisdicción (Argentina)
+# =============================================================================
+
+CONSUMER_DEFENSE_PRESETS: list[dict[str, str]] = [
+    {
+        "jurisdiction": "CABA",
+        "legend": "Tel. gratuito CABA 147 — Defensa y Protección al Consumidor",
+    },
+    {
+        "jurisdiction": "Buenos Aires (Provincia)",
+        "legend": "Tel. gratuito 0800-222-9042 — Dirección de Defensa del Consumidor PBA",
+    },
+    {
+        "jurisdiction": "Córdoba",
+        "legend": "Tel. 0800-111-0003 — Dirección de Defensa del Consumidor y Lealtad Comercial, Córdoba",
+    },
+    {
+        "jurisdiction": "Santa Fe",
+        "legend": "Tel. 0800-555-3226 — Defensa del Consumidor, Santa Fe",
+    },
+    {
+        "jurisdiction": "Mendoza",
+        "legend": "Tel. 0800-222-6678 — Dirección de Defensa del Consumidor, Mendoza",
+    },
+    {
+        "jurisdiction": "Tucumán",
+        "legend": "Tel. (0381) 4311700 — Dirección de Comercio Interior, Tucumán",
+    },
+]
+
+
+# =============================================================================
 # PRICING PLANS
 # =============================================================================
 

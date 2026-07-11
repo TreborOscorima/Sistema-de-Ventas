@@ -718,6 +718,47 @@ def branch_section() -> rx.Component:
         class_name="flex flex-col gap-1",
       ),
       rx.el.div(
+        rx.el.label(
+          "Leyenda Defensa del Consumidor",
+          class_name=TYPOGRAPHY["label"],
+        ),
+        rx.el.p(
+          "Texto obligatorio al pie de tickets (Argentina). Dejar vacío si no aplica.",
+          class_name="text-xs text-slate-500",
+        ),
+        rx.el.div(
+          rx.el.select(
+            rx.el.option("-- Presets Argentina --", value=""),
+            rx.el.option("CABA — Tel. 147", value="Tel. gratuito CABA 147 — Defensa y Protección al Consumidor"),
+            rx.el.option("Buenos Aires (PBA) — 0800-222-9042", value="Tel. gratuito 0800-222-9042 — Dirección de Defensa del Consumidor PBA"),
+            rx.el.option("Córdoba — 0800-111-0003", value="Tel. 0800-111-0003 — Dirección de Defensa del Consumidor y Lealtad Comercial, Córdoba"),
+            rx.el.option("Santa Fe — 0800-555-3226", value="Tel. 0800-555-3226 — Defensa del Consumidor, Santa Fe"),
+            rx.el.option("Mendoza — 0800-222-6678", value="Tel. 0800-222-6678 — Dirección de Defensa del Consumidor, Mendoza"),
+            rx.el.option("Tucumán — (0381) 4311700", value="Tel. (0381) 4311700 — Dirección de Comercio Interior, Tucumán"),
+            on_change=State.apply_consumer_legend_preset,
+            class_name=SELECT_STYLES["default"] + " text-sm",
+          ),
+          class_name="mb-1",
+        ),
+        rx.el.textarea(
+          default_value=rx.cond(
+            State.editing_branch_id != "",
+            State.editing_branch_consumer_legend,
+            State.new_branch_consumer_legend,
+          ),
+          on_blur=State.handle_branch_consumer_legend_change,
+          placeholder="Ej: Tel. gratuito CABA 147 — Defensa y Protección al Consumidor",
+          key=State.editing_branch_id + "-branch-legend-" + rx.cond(
+            State.editing_branch_id != "",
+            State.editing_branch_consumer_legend,
+            State.new_branch_consumer_legend,
+          ),
+          rows=2,
+          class_name=INPUT_STYLES["default"] + " resize-none",
+        ),
+        class_name="flex flex-col gap-1 sm:col-span-2 lg:col-span-3",
+      ),
+      rx.el.div(
         rx.el.button(
           rx.cond(State.editing_branch_id != "", "Actualizar", "Crear"),
           on_click=rx.cond(State.editing_branch_id != "", State.save_branch, State.create_branch),

@@ -32,9 +32,12 @@ class BranchesState(MixinState):
     new_branch_name: str = ""
     new_branch_address: str = ""
 
+    new_branch_consumer_legend: str = ""
+
     editing_branch_id: str = ""
     editing_branch_name: str = ""
     editing_branch_address: str = ""
+    editing_branch_consumer_legend: str = ""
 
     branch_users_modal_open: bool = False
     branch_users_branch_id: str = ""
@@ -128,6 +131,20 @@ class BranchesState(MixinState):
             self.new_branch_address = value or ""
 
     @rx.event
+    def handle_branch_consumer_legend_change(self, value: str):
+        if self.editing_branch_id:
+            self.editing_branch_consumer_legend = value or ""
+        else:
+            self.new_branch_consumer_legend = value or ""
+
+    @rx.event
+    def apply_consumer_legend_preset(self, legend: str):
+        if self.editing_branch_id:
+            self.editing_branch_consumer_legend = legend
+        else:
+            self.new_branch_consumer_legend = legend
+
+    @rx.event
     def create_branch(self):
         toast = self._require_manage_config()
         if toast:
@@ -177,7 +194,13 @@ class BranchesState(MixinState):
                 ).first()
                 if existing:
                     return rx.toast("Ya existe una sucursal con ese nombre.", duration=2500)
-                branch = Branch(company_id=company_id, name=name, address=address)
+                consumer_legend = (self.new_branch_consumer_legend or "").strip()
+                branch = Branch(
+                    company_id=company_id,
+                    name=name,
+                    address=address,
+                    consumer_defense_legend=consumer_legend,
+                )
                 session.add(branch)
                 session.flush()
                 user_id = self.current_user.get("id") if hasattr(self, "current_user") else None
@@ -260,6 +283,7 @@ class BranchesState(MixinState):
             )
         self.new_branch_name = ""
         self.new_branch_address = ""
+        self.new_branch_consumer_legend = ""
         self.load_branches()
         if hasattr(self, "refresh_auth_runtime_cache"):
             self.refresh_auth_runtime_cache()
@@ -286,6 +310,7 @@ class BranchesState(MixinState):
             self.editing_branch_id = str(branch.id)
             self.editing_branch_name = branch.name or ""
             self.editing_branch_address = branch.address or ""
+            self.editing_branch_consumer_legend = branch.consumer_defense_legend or ""
 
     @rx.event
     def set_editing_branch_name(self, value: str):
@@ -300,6 +325,7 @@ class BranchesState(MixinState):
         self.editing_branch_id = ""
         self.editing_branch_name = ""
         self.editing_branch_address = ""
+        self.editing_branch_consumer_legend = ""
 
     @rx.event
     def save_branch(self):
@@ -336,8 +362,10 @@ class BranchesState(MixinState):
             ).first()
             if not branch:
                 return rx.toast("Sucursal no encontrada.", duration=2500)
+            consumer_legend = (self.editing_branch_consumer_legend or "").strip()
             branch.name = name
             branch.address = address
+            branch.consumer_defense_legend = consumer_legend
             session.add(branch)
             session.commit()
         self.cancel_edit_branch()

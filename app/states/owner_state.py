@@ -738,16 +738,30 @@ class OwnerState:
         )
 
         if self.owner_active_product_tab == ProductType.FOOD:
-            # TUWAYKIFOOD vive en food_db (base separada) -- solo tiene
-            # sentido activar/suspender/extender trial, no hay planes ni
-            # límites de módulos todavía en su modelo Company minimal.
-            if action not in ("change_status", "extend_trial"):
+            if action not in ("change_status", "extend_trial", "change_plan"):
                 self.owner_loading = False
                 yield rx.toast("Esta acción no está disponible para TUWAYKIFOOD.", duration=3500)
                 return
             try:
                 before = await food_owner_client.get_company_detail(company_id)
-                if action == "change_status":
+                if action == "change_plan":
+                    new_plan = self.owner_form_plan
+                    if new_plan not in ("trial", "standard", "profesional"):
+                        self.owner_loading = False
+                        yield rx.toast(
+                            "Plan inválido para TUWAYKIFOOD (trial, standard o profesional).",
+                            duration=3500,
+                        )
+                        return
+                    try:
+                        sub_months = int(self.owner_form_subscription_months)
+                    except (ValueError, TypeError):
+                        sub_months = 12
+                    expires_days = sub_months * 30 if new_plan != "trial" else 0
+                    after = await food_owner_client.set_plan(company_id, new_plan, expires_days)
+                    action_label = "change_plan"
+                    toast_msg = f"Plan actualizado a {new_plan.capitalize()}."
+                elif action == "change_status":
                     if self.owner_form_status not in ("active", "suspended"):
                         self.owner_loading = False
                         yield rx.toast(

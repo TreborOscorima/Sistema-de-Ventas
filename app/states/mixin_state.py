@@ -519,6 +519,9 @@ class MixinState:
             "show_tax_on_receipt": show_tax,
             "default_tax_name": default_tax.tax_name if default_tax else "",
             "default_tax_rate_pct": float(default_tax.rate) if default_tax else 0.0,
+            "consumer_defense_legend": (
+                branch.consumer_defense_legend if branch else ""
+            ),
         }
 
         # Guardar en cache

@@ -136,6 +136,17 @@ class Branch(SQLModel, table=True):
     )
     name: str = Field(nullable=False, index=True, max_length=150)
     address: str = Field(default="", nullable=False, max_length=500)
+    consumer_defense_legend: str = Field(
+        default="",
+        nullable=False,
+        max_length=500,
+        description=(
+            "Leyenda obligatoria de defensa del consumidor que se imprime al "
+            "pie de tickets/facturas a consumidor final. Varía por jurisdicción "
+            "(ej: CABA → '147 — Tel. Gratuito CABA, Defensa del Consumidor'). "
+            "Si está vacío, no se imprime nada."
+        ),
+    )
 
     company: "Company" = Relationship(back_populates="branches")
     users: List["User"] = Relationship(back_populates="branch")

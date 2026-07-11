@@ -168,17 +168,13 @@ def _company_modules(company: rx.Var) -> rx.Component:
 
 def _company_actions(company: rx.Var) -> rx.Component:
     return rx.el.div(
-        rx.cond(
-            State.owner_active_product_tab == "ventas",
-            _owner_action_icon_button(
-                "repeat",
-                "Cambiar Plan",
-                on_click=State.owner_open_modal(
-                    "change_plan", company["id"], company["name"]
-                ),
-                tone="indigo",
+        _owner_action_icon_button(
+            "repeat",
+            "Cambiar Plan",
+            on_click=State.owner_open_modal(
+                "change_plan", company["id"], company["name"]
             ),
-            rx.fragment(),
+            tone="indigo",
         ),
         _owner_action_icon_button(
             "toggle-right",

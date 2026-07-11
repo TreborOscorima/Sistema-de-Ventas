@@ -546,6 +546,17 @@ class ReceiptService:
             footer_lines = ReceiptService._wrap_receipt_lines(footer_message, width)
             for footer_line in footer_lines:
                 receipt_lines.append(ReceiptService._center(footer_line, width))
+
+        consumer_legend = (company.get("consumer_defense_legend") or "").strip()
+        if consumer_legend:
+            receipt_lines.append("")
+            receipt_lines.append(ReceiptService._line(width))
+            legend_lines = ReceiptService._wrap_receipt_lines(
+                consumer_legend, width
+            )
+            for legend_line in legend_lines:
+                receipt_lines.append(ReceiptService._center(legend_line, width))
+
         receipt_lines.extend([" ", " ", " "])
         return receipt_lines
 

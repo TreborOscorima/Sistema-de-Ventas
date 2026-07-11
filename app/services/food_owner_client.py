@@ -34,22 +34,27 @@ def _normalize_food_company(raw: dict) -> dict:
     """Mapea el JSON de Food al mismo shape que espera la UI de Ventas
     (_company_row / _company_mobile_card) -- con placeholders seguros para
     los campos que Food no tiene (planes, módulos, usuarios/sucursales)."""
+    plan = raw.get("plan") or "trial"
+    is_trial = plan == "trial"
+    status = "active" if raw.get("is_active") else "suspended"
+    if is_trial and raw.get("trial_ends_at"):
+        status = "active" if raw.get("is_active") else "suspended"
     return {
         "id": raw.get("id"),
         "name": raw.get("name", ""),
         "ruc": raw.get("slug", ""),
         "admin_email": raw.get("admin_email") or "Sin correo",
         "company_phone": "Sin teléfono",
-        "plan_type": "trial",
-        "plan": "trial",
-        "subscription_status": "active" if raw.get("is_active") else "suspended",
-        "effective_status": "active" if raw.get("is_active") else "suspended",
+        "plan_type": plan,
+        "plan": plan,
+        "subscription_status": status,
+        "effective_status": status,
         "current_users": 0,
         "max_users": 0,
         "current_branches": 1,
         "max_branches": 1,
         "trial_ends_at": raw.get("trial_ends_at"),
-        "subscription_ends_at": None,
+        "subscription_ends_at": raw.get("plan_expires_at"),
         "has_reservations_module": False,
         "has_services_module": False,
         "has_clients_module": False,
@@ -120,5 +125,14 @@ async def suspend(company_id: int) -> dict:
 async def extend_trial(company_id: int, extra_days: int) -> dict:
     data = await _request(
         "POST", f"/api/admin/companies/{company_id}/extend-trial", json={"extra_days": extra_days}
+    )
+    return data
+
+
+async def set_plan(company_id: int, plan: str, expires_days: int = 365) -> dict:
+    data = await _request(
+        "POST",
+        f"/api/admin/companies/{company_id}/set-plan",
+        json={"plan": plan, "expires_days": expires_days},
     )
     return data

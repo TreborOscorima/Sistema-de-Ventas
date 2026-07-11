@@ -59,6 +59,7 @@ _BADGE_PLAN = {
     "trial": "bg-amber-100 text-amber-700",
     "standard": "bg-indigo-100 text-indigo-700",
     "professional": "bg-purple-100 text-purple-700",
+    "profesional": "bg-purple-100 text-purple-700",
     "enterprise": "bg-emerald-100 text-emerald-700",
 }
 
@@ -86,6 +87,7 @@ def _plan_badge(plan: rx.Var) -> rx.Component:
             ("trial", f"px-2 py-0.5 text-xs font-medium {RADIUS['sm']} {_BADGE_PLAN['trial']}"),
             ("standard", f"px-2 py-0.5 text-xs font-medium {RADIUS['sm']} {_BADGE_PLAN['standard']}"),
             ("professional", f"px-2 py-0.5 text-xs font-medium {RADIUS['sm']} {_BADGE_PLAN['professional']}"),
+            ("profesional", f"px-2 py-0.5 text-xs font-medium {RADIUS['sm']} {_BADGE_PLAN['profesional']}"),
             ("enterprise", f"px-2 py-0.5 text-xs font-medium {RADIUS['sm']} {_BADGE_PLAN['enterprise']}"),
             f"px-2 py-0.5 text-xs font-medium {RADIUS['sm']} bg-slate-100 text-slate-600",
         ),
