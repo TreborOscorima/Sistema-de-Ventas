@@ -300,6 +300,62 @@ def remaining_lockout_time(
     return max(0, int(remaining) + 1)
 
 
+def is_action_rate_limited(
+    actor_key: str,
+    max_actions: int = 10,
+    window_seconds: int = 60,
+    prefix: str = "action_rate",
+) -> bool:
+    """Sliding-window rate limit genérico para acciones arbitrarias.
+
+    A diferencia de is_rate_limited (diseñado para intentos de login fallidos),
+    este funciona con ventana en segundos y prefijo configurable.
+    """
+    if not actor_key:
+        return True
+
+    redis_client = _get_redis()
+    if redis_client is None and _strict_rate_limit_backend():
+        return True
+
+    if redis_client is not None:
+        try:
+            rk = f"{prefix}:{actor_key}"
+            count = redis_client.get(rk)
+            return int(count or 0) >= max_actions
+        except Exception as e:
+            logger.error("Redis is_action_rate_limited: %s", e)
+            if _strict_rate_limit_backend():
+                return True
+
+    window_minutes = max(1, window_seconds // 60)
+    return _is_rate_limited_memory(actor_key, max_actions, window_minutes)
+
+
+def record_action(
+    actor_key: str,
+    window_seconds: int = 60,
+    prefix: str = "action_rate",
+) -> None:
+    """Registra una acción para rate limiting genérico."""
+    if not actor_key:
+        return
+
+    redis_client = _get_redis()
+    if redis_client is not None:
+        try:
+            rk = f"{prefix}:{actor_key}"
+            pipe = redis_client.pipeline()
+            pipe.incr(rk)
+            pipe.expire(rk, window_seconds)
+            pipe.execute()
+            return
+        except Exception as e:
+            logger.error("Redis record_action: %s", e)
+
+    _memory_touch(actor_key).append(datetime.now())
+
+
 def get_rate_limit_status() -> dict:
     """
     Obtiene estado del sistema de limitación de tasa (para depuración).

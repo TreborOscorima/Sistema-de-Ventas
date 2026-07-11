@@ -11,7 +11,6 @@ import json
 import os
 import asyncio
 import time
-from collections import defaultdict
 
 import bcrypt
 import reflex as rx
@@ -33,7 +32,13 @@ from app.utils.fiscal_validators import (
 )
 from app.utils.db import AsyncSessionLocal
 from app.utils.logger import get_logger
-from app.utils.rate_limit import is_rate_limited, record_failed_attempt, clear_login_attempts
+from app.utils.rate_limit import (
+    is_rate_limited,
+    record_failed_attempt,
+    clear_login_attempts,
+    is_action_rate_limited,
+    record_action,
+)
 from app.utils.tenant import tenant_bypass
 from app.utils.timezone import utc_now_naive
 
@@ -113,28 +118,28 @@ def _verify_owner_credentials(email: str, password: str) -> bool:
         return False
 
 # ─── Rate limiting para acciones owner ─────────────────
-# Máximo OWNER_MAX_ACTIONS acciones por ventana de OWNER_ACTION_WINDOW_SECONDS
 OWNER_MAX_ACTIONS: int = 10
 OWNER_ACTION_WINDOW_SECONDS: int = 60
-
-# Almacena timestamps de acciones por actor_email
-_owner_action_timestamps: dict[str, list[float]] = defaultdict(list)
+_OWNER_RL_PREFIX: str = "owner_action"
 
 
 def _is_owner_rate_limited(actor_email: str) -> bool:
-    """Verifica si el actor excedió el límite de acciones owner."""
-    now = time.time()
-    cutoff = now - OWNER_ACTION_WINDOW_SECONDS
-    # Limpiar timestamps antiguos
-    _owner_action_timestamps[actor_email] = [
-        t for t in _owner_action_timestamps[actor_email] if t > cutoff
-    ]
-    return len(_owner_action_timestamps[actor_email]) >= OWNER_MAX_ACTIONS
+    """Verifica si el actor excedió el límite de acciones owner (Redis-backed)."""
+    return is_action_rate_limited(
+        actor_email,
+        max_actions=OWNER_MAX_ACTIONS,
+        window_seconds=OWNER_ACTION_WINDOW_SECONDS,
+        prefix=_OWNER_RL_PREFIX,
+    )
 
 
 def _record_owner_action(actor_email: str) -> None:
-    """Registra una acción exitosa del owner."""
-    _owner_action_timestamps[actor_email].append(time.time())
+    """Registra una acción exitosa del owner (Redis-backed)."""
+    record_action(
+        actor_email,
+        window_seconds=OWNER_ACTION_WINDOW_SECONDS,
+        prefix=_OWNER_RL_PREFIX,
+    )
 
 
 def _normalize_non_negative_int_input(value: str | float | int) -> str:

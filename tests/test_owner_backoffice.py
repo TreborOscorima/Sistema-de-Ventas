@@ -732,12 +732,12 @@ class TestPlanDefaults:
 # ═════════════════════════════════════════════════════════
 
 class TestOwnerRateLimiting:
-    """Verifica el throttling de acciones owner."""
+    """Verifica el throttling de acciones owner (Redis-backed con fallback memoria)."""
 
     def setup_method(self):
-        """Limpiar timestamps entre tests."""
-        from app.states.owner_state import _owner_action_timestamps
-        _owner_action_timestamps.clear()
+        """Limpiar store de memoria entre tests."""
+        from app.utils.rate_limit import _memory_store
+        _memory_store.clear()
 
     def test_not_limited_initially(self):
         from app.states.owner_state import _is_owner_rate_limited
@@ -775,16 +775,15 @@ class TestOwnerRateLimiting:
         assert _is_owner_rate_limited("admin2@test.com") is False
 
     def test_old_timestamps_cleaned(self):
-        import time
+        from datetime import datetime, timedelta
         from app.states.owner_state import (
             _is_owner_rate_limited,
-            _owner_action_timestamps,
             OWNER_MAX_ACTIONS,
             OWNER_ACTION_WINDOW_SECONDS,
         )
-        # Insertar timestamps viejos (fuera de ventana)
-        old_time = time.time() - OWNER_ACTION_WINDOW_SECONDS - 10
-        _owner_action_timestamps["old@test.com"] = [old_time] * OWNER_MAX_ACTIONS
+        from app.utils.rate_limit import _memory_store
+        old_time = datetime.now() - timedelta(seconds=OWNER_ACTION_WINDOW_SECONDS + 10)
+        _memory_store["old@test.com"] = [old_time] * OWNER_MAX_ACTIONS
         assert _is_owner_rate_limited("old@test.com") is False
 
 

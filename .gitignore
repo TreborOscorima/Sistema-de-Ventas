@@ -19,5 +19,11 @@ redis_data/
 .claude/
 .clone/
 
+# Artefactos de testing/dev
+.coverage
+dev.err
+e2e_screenshots/
+testing_session_log.md
+
 # Vendor local para builds Docker (tuwayki-core se instala desde _vendor/)
 _vendor/
