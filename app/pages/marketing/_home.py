@@ -12,6 +12,7 @@ from ._scripts import (
     _cookie_consent_script,
     _cookie_consent_banner,
     _track_event_script,
+    home_jsonld_components,
 )
 
 
@@ -181,6 +182,7 @@ def home_page() -> rx.Component:
         rx.script(_sw_cleanup_script()),
         rx.script(_analytics_bootstrap_script()),
         rx.script(_cookie_consent_script()),
+        *home_jsonld_components(),
         _home_header(),
         rx.el.main(
             rx.el.div(

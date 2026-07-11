@@ -35,15 +35,16 @@ services:
       - --collation-server=utf8mb4_unicode_ci
       - --skip-name-resolve
       - --slow_query_log=1
-      - --long_query_time=2
+      - --long_query_time=1
+      - --log_slow_extra=ON
       - --log-error-verbosity=3
       - --max_connections=200
-      - --innodb_buffer_pool_size=256M
+      - --innodb_buffer_pool_size=384M
       - --innodb_flush_log_at_trx_commit=1
     deploy:
       resources:
         limits:
-          memory: 768M
+          memory: 1024M
     healthcheck:
       test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql -h localhost -u root -e 'SELECT 1' || exit 1"]
       interval: 10s

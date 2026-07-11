@@ -9,6 +9,7 @@ from ._scripts import (
     _cookie_consent_script,
     _reveal_script,
     _cookie_consent_banner,
+    food_jsonld_components,
 )
 from ._food_sections import (
     _food_header,
@@ -31,6 +32,7 @@ def food_page() -> rx.Component:
         rx.script(_analytics_bootstrap_script()),
         rx.script(_cookie_consent_script()),
         rx.script(_reveal_script()),
+        *food_jsonld_components(),
         _food_header(),
         rx.el.main(
             _food_hero(),

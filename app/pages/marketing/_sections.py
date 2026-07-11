@@ -545,6 +545,8 @@ def _screenshots_section() -> rx.Component:
                     rx.el.img(
                         src=tab["src"],
                         alt=tab["alt"],
+                        width=1280,
+                        height=720,
                         class_name="w-full h-auto object-cover",
                         loading="lazy",
                     ),

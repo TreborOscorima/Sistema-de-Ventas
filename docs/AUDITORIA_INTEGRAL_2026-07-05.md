@@ -61,12 +61,12 @@ Sistema-de-Ventas/
 - `/food` → landing de restobares (`_food_page.py` + `_food_sections.py`)
 - `/home` → alias con `noindex` para compatibilidad SEO
 
-Lo que ya está bien: canonical + OG + Twitter cards por ruta, `robots.txt` y `sitemap.xml` en assets, imágenes en WebP, preconnect a Google Fonts con `display=swap`, GA4 y Meta Pixel opcionales por env var, service worker **excluido de la landing a propósito** (evita HTML stale post-deploy), CSS/JS estáticos cacheables.
+Lo que ya está bien: canonical + OG + Twitter cards por ruta (diferenciados por producto), `robots.txt` y `sitemap.xml` en assets (incluye `/ventas` y `/food`), imágenes en WebP con `width`/`height` (anti-CLS), preconnect a Google Fonts con `display=swap`, GA4 y Meta Pixel opcionales por env var, service worker **excluido de la landing a propósito** (evita HTML stale post-deploy), CSS/JS estáticos cacheables, JSON-LD structured data (`Organization`, `SoftwareApplication`, `FAQPage`, `BreadcrumbList`), `og:locale`, `og:site_name`, `hreflang`, `html lang="es"`, fonts via `<link>` (no `@import` render-blocking).
 
-Mejoras recomendadas (orden de impacto):
-1. **JSON-LD structured data** (`Organization`, `SoftwareApplication`, `FAQPage`) — hoy no hay datos estructurados; es SEO barato.
-2. **Landing estática a futuro:** servir la landing desde Reflex implica cargar el runtime React completo para una página de marketing. Si el tráfico crece, evaluar pre-render estático o Astro/HTML plano detrás de NPM (la landing casi no tiene estado; `_state.py` es de 304 líneas, principalmente formulario de contacto/CTA).
-3. Auditoría Lighthouse periódica (LCP de la imagen hero, CLS de fuentes) y un test E2E de humo para las 3 rutas públicas.
+Mejoras futuras (orden de impacto):
+1. **Landing estática a futuro:** servir la landing desde Reflex implica cargar el runtime React completo para una página de marketing. Si el tráfico crece, evaluar pre-render estático o Astro/HTML plano detrás de NPM (la landing casi no tiene estado; `_state.py` es de 304 líneas, principalmente formulario de contacto/CTA).
+2. Auditoría Lighthouse periódica (LCP de la imagen hero, CLS de fuentes) y un test E2E de humo para las 3 rutas públicas.
+3. Responsive images (`srcset`/`<picture>`) para optimizar carga mobile.
 
 ---
 
@@ -215,8 +215,8 @@ Mejoras: (1) job de CI que corra pytest en PR (si no existe ya — verificar `.g
 | 5 | ~~P2~~ | Seguridad | ~~Owner rate-limit a Redis~~ ✅ `79c4d1b`; ~~CSP report-only~~ ✅; ~~quitar X-XSS-Protection~~ ✅; ~~confirmar HSTS~~ ✅ — TODO COMPLETADO |
 | 6 | ~~P2~~ | Fiscal | ~~Alerta automática de certificados fiscales a <30 días de vencer~~ ✅ `f90c0d9` (2026-07-11) |
 | 7 | ~~P2~~ | Infra | ~~Verificar backups offsite + cron activo; probar restore trimestral~~ ✅ S3 offsite + cron auto-install + health-check integrados en `deploy-prod.sh`; `backup_restore_verify.py` reescrito (auto-discovery + cleanup + Docker). Se activa solo con `S3_BUCKET=<bucket>` en `.env` |
-| 8 | **P3** | Rendimiento | Rutina mensual slow-query→índices; evaluar `innodb_buffer_pool_size`; auditar tamaño de State |
-| 9 | **P3** | Landing | JSON-LD; Lighthouse; considerar landing estática si crece tráfico |
+| 8 | ~~P3~~ | Rendimiento | ~~Rutina mensual slow-query→índices; evaluar `innodb_buffer_pool_size`; auditar tamaño de State~~ ✅ `ops/mysql-perf-audit.sh` creado (7 secciones: buffer pool, slow queries, tablas grandes, índices faltantes, redundantes, conexiones, recomendaciones). `docker-compose.yml`: `long_query_time` 2→1s, `log_slow_extra=ON`, `innodb_buffer_pool_size` 256→384M, MySQL mem limit 768→1024M. Auditoría de State: ~670 vars en árbol flat (top: InventoryState 75, VentaState 74, CashState 57, HistorialState 57); optimización previa ya aplicó 24 `is_var=False` — arquitectura flat es inherente a Reflex 0.9.x; siguiente mejora sería substates nativos en Reflex ≥0.10 |
+| 9 | ~~P3~~ | Landing | ~~JSON-LD; Lighthouse; considerar landing estática si crece tráfico~~ ✅ JSON-LD (Organization + SoftwareApplication + FAQPage + BreadcrumbList) en `/ventas`, `/food` y `/`. OG meta per-page (título/descripción diferenciados por producto). `og:image` corregido (`dashboard-screenshot.webp`), agregados `og:locale`, `og:site_name`, `og:image:width/height`, `hreflang`. `html lang="es"` + `Content-Language`. Fonts: `@import` CSS → `<link>` (no render-blocking). `width`/`height` en imágenes (anti-CLS). `sitemap.xml` completado (+`/ventas`, +`/food`) |
 | 10 | **P3** | Producto | 2FA opcional para admins tenant; métricas MRR/churn en Owner; multi-sucursal Food (futuro confirmado, no agendado) |
 | 11 | ~~P3~~ | Limpieza | ~~`default.conf` obsoleto (puerto 8000); `.gitignore` para dev.err/.coverage/e2e_screenshots~~ ✅ `79c4d1b` |
 

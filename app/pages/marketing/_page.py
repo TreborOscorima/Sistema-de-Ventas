@@ -9,6 +9,7 @@ from ._scripts import (
     _reveal_script,
     _cookie_consent_banner,
     _sw_cleanup_script,
+    ventas_jsonld_components,
 )
 from ._sections import (
     _announcement_banner,
@@ -40,6 +41,7 @@ def marketing_page() -> rx.Component:
         rx.script(_analytics_bootstrap_script()),
         rx.script(_cookie_consent_script()),
         rx.script(_reveal_script()),
+        *ventas_jsonld_components(),
         _announcement_banner(),
         _header_section(),
         rx.el.main(

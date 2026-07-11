@@ -82,22 +82,38 @@ LANDING_DESCRIPTION = (
     "Centraliza ventas, caja, inventario, clientes y reservas en una sola plataforma SaaS "
     "multiempresa, segura y lista para escalar."
 )
-LANDING_IMAGE = f"{PUBLIC_SITE_URL}/dashboard-hero-real.png"
+LANDING_IMAGE = f"{PUBLIC_SITE_URL}/dashboard-screenshot.webp"
 
 
-def _landing_meta(canonical_url: str, *, indexable: bool = True) -> list[dict | rx.Component]:
+def _landing_meta(
+    canonical_url: str,
+    *,
+    indexable: bool = True,
+    title: str = "",
+    description: str = "",
+    image: str = "",
+) -> list[dict | rx.Component]:
+    t = title or LANDING_TITLE
+    d = description or LANDING_DESCRIPTION
+    img = image or LANDING_IMAGE
     return [
         rx.el.link(rel="canonical", href=canonical_url),
+        rx.el.link(rel="alternate", hreflang="es", href=canonical_url),
+        rx.el.link(rel="alternate", hreflang="x-default", href=canonical_url),
         {"name": "robots", "content": "index,follow" if indexable else "noindex,follow"},
         {"property": "og:type", "content": "website"},
-        {"property": "og:title", "content": LANDING_TITLE},
-        {"property": "og:description", "content": LANDING_DESCRIPTION},
+        {"property": "og:site_name", "content": "TUWAYKI"},
+        {"property": "og:locale", "content": "es_LA"},
+        {"property": "og:title", "content": t},
+        {"property": "og:description", "content": d},
         {"property": "og:url", "content": canonical_url},
-        {"property": "og:image", "content": LANDING_IMAGE},
+        {"property": "og:image", "content": img},
+        {"property": "og:image:width", "content": "1200"},
+        {"property": "og:image:height", "content": "630"},
         {"name": "twitter:card", "content": "summary_large_image"},
-        {"name": "twitter:title", "content": LANDING_TITLE},
-        {"name": "twitter:description", "content": LANDING_DESCRIPTION},
-        {"name": "twitter:image", "content": LANDING_IMAGE},
+        {"name": "twitter:title", "content": t},
+        {"name": "twitter:description", "content": d},
+        {"name": "twitter:image", "content": img},
     ]
 
 
@@ -421,9 +437,18 @@ _pwa_components: list = (
     else []
 )
 
+_landing_font_components = [
+    rx.el.link(
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap",
+        rel="stylesheet",
+    ),
+] if APP_SURFACE in ("landing", "all") else []
+
 app = rx.App(
     api_transformer=health_app,
+    html_lang="es",
     head_components=[
+        rx.el.meta(http_equiv="Content-Language", content="es"),
         # Accesibilidad + estilos base (cacheables, Cache-Control immutable en nginx).
         rx.el.link(rel="stylesheet", href="/css/accessibility.css"),
         rx.el.link(rel="stylesheet", href="/css/twk-app.css"),
@@ -434,6 +459,8 @@ app = rx.App(
             href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap",
             rel="stylesheet",
         ),
+        # Landing usa Manrope + Space Grotesk (cargado via <link>, no @import).
+        *_landing_font_components,
         # PWA — manifest + banner (condicional por superficie).
         *_pwa_components,
         # Scripts globales (defer → no bloquean render). Contenido idempotente.
@@ -484,7 +511,12 @@ def _register_landing_routes():
             title=HOME_TITLE,
             description=HOME_DESCRIPTION,
             image=LANDING_IMAGE,
-            meta=_landing_meta(f"{PUBLIC_SITE_URL}/", indexable=True),
+            meta=_landing_meta(
+                f"{PUBLIC_SITE_URL}/",
+                indexable=True,
+                title=HOME_TITLE,
+                description=HOME_DESCRIPTION,
+            ),
         )
         # Landing TUWAYKIAPP (sistema de ventas)
         app.add_page(
@@ -511,7 +543,12 @@ def _register_landing_routes():
             title=FOOD_TITLE,
             description=FOOD_DESCRIPTION,
             image=LANDING_IMAGE,
-            meta=_landing_meta(f"{PUBLIC_SITE_URL}/food", indexable=True),
+            meta=_landing_meta(
+                f"{PUBLIC_SITE_URL}/food",
+                indexable=True,
+                title=FOOD_TITLE,
+                description=FOOD_DESCRIPTION,
+            ),
         )
     else:
         # Modo all: mantener landing en /home hasta completar migración de dominios.

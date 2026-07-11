@@ -1,8 +1,139 @@
-"""Script generators and global CSS for the marketing landing page."""
+"""Script generators, JSON-LD and global CSS for the marketing landing page."""
+
+import json
 
 import reflex as rx
 
-from ._state import GA4_MEASUREMENT_ID, META_PIXEL_ID
+from ._state import GA4_MEASUREMENT_ID, META_PIXEL_ID, PUBLIC_SITE_URL, FAQ_ITEMS
+
+
+def _jsonld_script(data: dict | list) -> rx.Component:
+    return rx.el.script(
+        dangerously_set_inner_html=json.dumps(data, ensure_ascii=False),
+        type="application/ld+json",
+    )
+
+
+def _jsonld_organization() -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "TUWAYKI",
+        "url": PUBLIC_SITE_URL or "https://tuwayki.app",
+        "logo": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/icon-512.png",
+        "contactPoint": {
+            "@type": "ContactPoint",
+            "contactType": "sales",
+            "availableLanguage": "Spanish",
+        },
+    }
+
+
+def _jsonld_ventas_app() -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TUWAYKIAPP",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": (
+            "Sistema de ventas SaaS multi-tenant: punto de venta, inventario, "
+            "caja, reservas y reportes en una sola plataforma."
+        ),
+        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/ventas",
+        "offers": {
+            "@type": "AggregateOffer",
+            "priceCurrency": "USD",
+            "lowPrice": "35",
+            "highPrice": "175",
+            "offerCount": "3",
+        },
+    }
+
+
+def _jsonld_food_app() -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TUWAYKIFOOD",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": (
+            "Sistema para restaurantes y restobares: carta digital con QR, "
+            "gestión de mesas, pedidos por tablet y comanda automática en cocina."
+        ),
+        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/food",
+    }
+
+
+def _jsonld_faq(items: list[tuple[str, str]]) -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": q,
+                "acceptedAnswer": {"@type": "Answer", "text": a},
+            }
+            for q, a in items
+        ],
+    }
+
+
+def _jsonld_breadcrumbs(items: list[tuple[str, str]]) -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": i + 1,
+                "name": name,
+                "item": url,
+            }
+            for i, (name, url) in enumerate(items)
+        ],
+    }
+
+
+def ventas_jsonld_components() -> list[rx.Component]:
+    base = PUBLIC_SITE_URL or "https://tuwayki.app"
+    return [
+        _jsonld_script(_jsonld_organization()),
+        _jsonld_script(_jsonld_ventas_app()),
+        _jsonld_script(_jsonld_faq(FAQ_ITEMS)),
+        _jsonld_script(_jsonld_breadcrumbs([
+            ("Inicio", f"{base}/"),
+            ("Sistema de Ventas", f"{base}/ventas"),
+        ])),
+    ]
+
+
+def food_jsonld_components() -> list[rx.Component]:
+    from ._food_sections import FOOD_FAQ_ITEMS as _food_faq
+    base = PUBLIC_SITE_URL or "https://tuwayki.app"
+    return [
+        _jsonld_script(_jsonld_organization()),
+        _jsonld_script(_jsonld_food_app()),
+        _jsonld_script(_jsonld_faq(_food_faq)),
+        _jsonld_script(_jsonld_breadcrumbs([
+            ("Inicio", f"{base}/"),
+            ("TUWAYKIFOOD", f"{base}/food"),
+        ])),
+    ]
+
+
+def home_jsonld_components() -> list[rx.Component]:
+    return [
+        _jsonld_script(_jsonld_organization()),
+        _jsonld_script({
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "TUWAYKI",
+            "url": PUBLIC_SITE_URL or "https://tuwayki.app",
+        }),
+    ]
 
 
 def _sw_cleanup_script() -> str:
@@ -177,7 +308,6 @@ def _reveal_script() -> str:
 # ── Styles (minimal) ────────────────────────────────────────
 def _global_styles() -> str:
     return """
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 @keyframes tickerMove {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }

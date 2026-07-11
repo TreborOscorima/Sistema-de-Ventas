@@ -65,6 +65,8 @@ def _browser_frame(src: str, alt: str) -> rx.Component:
             rx.el.img(
                 src=src,
                 alt=alt,
+                width=1280,
+                height=720,
                 class_name="h-auto w-full object-cover",
             ),
             class_name="bg-white p-1",
