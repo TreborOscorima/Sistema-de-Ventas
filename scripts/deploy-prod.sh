@@ -148,6 +148,19 @@ else
         [[ -s "$BACKUP" ]] || { rm -f "$BACKUP"; fail "Backup vacío — abortado"; }
         ok "Backup OK ($(du -h "$BACKUP" | cut -f1))"
         ls -t "$BACKUP_DIR"/db_*.sql.gz 2>/dev/null | tail -n +$((BACKUP_KEEP + 1)) | xargs -r rm -f
+
+        # Offsite S3 (si S3_BUCKET está configurado en .env)
+        S3_BUCKET="$(grep -E '^S3_BUCKET=' "$APP_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')"
+        S3_PREFIX="$(grep -E '^S3_PREFIX=' "$APP_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')"
+        S3_PREFIX="${S3_PREFIX:-backups/}"
+        if [[ -n "$S3_BUCKET" ]] && command -v aws >/dev/null 2>&1; then
+            info "Subiendo backup offsite → s3://${S3_BUCKET}/${S3_PREFIX}..."
+            if aws s3 cp "$BACKUP" "s3://${S3_BUCKET}/${S3_PREFIX}$(basename "$BACKUP")" --quiet; then
+                ok "Copia offsite S3 OK"
+            else
+                warn "Falló la copia offsite S3 (el backup local se conserva)"
+            fi
+        fi
     else
         warn "tuwayki_mysql no corre — backup omitido (primer deploy?)"
     fi
@@ -261,6 +274,24 @@ check_public_health() {
 check_public_health "https://tuwayki.app/api/health" "landing"
 check_public_health "https://sys.tuwayki.app/api/health" "sys"
 check_public_health "https://admin.tuwayki.app/api/health" "admin"
+
+# ─── 8. Cron de backup (auto-install idempotente) ──────────────────────────────
+CRON_CMD="0 2 * * * ${APP_DIR}/ops/backup-db.sh ${APP_DIR}/backups >> /var/log/tuwayki-backup.log 2>&1"
+if crontab -l 2>/dev/null | grep -qF "backup-db.sh"; then
+    ok "Cron de backup ya instalado"
+else
+    info "Instalando cron de backup diario (02:00 AM)..."
+    ( crontab -l 2>/dev/null; echo "$CRON_CMD" ) | crontab -
+    ok "Cron instalado: $CRON_CMD"
+fi
+
+# ─── 9. Backup health-check ──────────────────────────────────────────────────
+if [[ -x "$APP_DIR/ops/backup-healthcheck.sh" ]]; then
+    info "Ejecutando backup health-check..."
+    S3_BUCKET="${S3_BUCKET:-$(grep -E '^S3_BUCKET=' "$APP_DIR/.env" 2>/dev/null | cut -d= -f2- | tr -d '[:space:]')}" \
+    DB_NAME="${DB_NAME:-sistema_ventas}" \
+    bash "$APP_DIR/ops/backup-healthcheck.sh" "$APP_DIR/backups" || warn "Backup health-check reportó problemas (no bloquea el deploy)"
+fi
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"

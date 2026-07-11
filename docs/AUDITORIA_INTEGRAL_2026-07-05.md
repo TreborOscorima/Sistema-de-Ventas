@@ -214,7 +214,7 @@ Mejoras: (1) job de CI que corra pytest en PR (si no existe ya — verificar `.g
 | 4 | **P2** | Offline | Fallback offline del SW (opción A) + definir oferta "servidor local" (opción B) |
 | 5 | ~~P2~~ | Seguridad | ~~Owner rate-limit a Redis~~ ✅ `79c4d1b`; ~~CSP report-only~~ ✅; ~~quitar X-XSS-Protection~~ ✅; ~~confirmar HSTS~~ ✅ — TODO COMPLETADO |
 | 6 | ~~P2~~ | Fiscal | ~~Alerta automática de certificados fiscales a <30 días de vencer~~ ✅ `f90c0d9` (2026-07-11) |
-| 7 | ~~P2~~ | Infra | ~~Verificar backups offsite + cron activo; probar restore trimestral~~ ✅ S3 offsite en `backup-db.sh`, `backup_restore_verify.py` reescrito (auto-discovery + cleanup + Docker), `backup-healthcheck.sh` nuevo. Pendiente operativo: activar cron + `S3_BUCKET` en prod |
+| 7 | ~~P2~~ | Infra | ~~Verificar backups offsite + cron activo; probar restore trimestral~~ ✅ S3 offsite + cron auto-install + health-check integrados en `deploy-prod.sh`; `backup_restore_verify.py` reescrito (auto-discovery + cleanup + Docker). Se activa solo con `S3_BUCKET=<bucket>` en `.env` |
 | 8 | **P3** | Rendimiento | Rutina mensual slow-query→índices; evaluar `innodb_buffer_pool_size`; auditar tamaño de State |
 | 9 | **P3** | Landing | JSON-LD; Lighthouse; considerar landing estática si crece tráfico |
 | 10 | **P3** | Producto | 2FA opcional para admins tenant; métricas MRR/churn en Owner; multi-sucursal Food (futuro confirmado, no agendado) |
