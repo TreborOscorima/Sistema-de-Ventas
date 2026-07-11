@@ -83,8 +83,8 @@ Mejoras recomendadas (orden de impacto):
 - **Backups:** `ops/backup-db.sh`, `scripts/backup_restore_verify.py` (verificación de restauración — excelente práctica). Confirmar que el cron esté activo en el servidor de prod y que las copias salgan de la máquina (S3/offsite).
 
 Deudas menores detectadas:
-- `default.conf` (nginx por IP, sin dominio) referencia `app:8000` — layout de Reflex antiguo (0.8.x separaba frontend/backend). Con Reflex 0.9 todo va al `:3000`. Es archivo casi muerto (con dominio se usa NPM); **actualizarlo o borrarlo** para evitar confusión.
-- `dev.err`, `.coverage`, `e2e_screenshots/`, `testing_session_log.md` sin trackear en la raíz — agregarlos a `.gitignore` o limpiar.
+- ~~`default.conf` (nginx por IP, sin dominio) referencia `app:8000`~~ — **borrado** en `79c4d1b`.
+- ~~`dev.err`, `.coverage`, `e2e_screenshots/`, `testing_session_log.md` sin trackear~~ — **agregados a `.gitignore`** en `79c4d1b`.
 
 ---
 
@@ -182,7 +182,7 @@ BillingStrategy (ABC)
 3. Tener en el radar: **FCE MiPyME** (WSFECRED) si algún tenant B2B lo pide, condición IVA del receptor (RG 5616, campo `CondicionIVAReceptorId` vigente desde 2025) — verificar que el payload WSFE la incluya.
 4. Renombrar referencias de UI "AFIP" → "ARCA" (el organismo cambió de nombre a fines de 2024; los endpoints siguen siendo afip.gov.ar).
 
-**Común:** monitoreo de vencimiento de certificados ya existe (`CertMetadata.days_remaining`) — conectar a una alerta (email/owner dashboard) a <30 días.
+**Común:** monitoreo de vencimiento de certificados implementado — `get_cert_expiry_alerts()` en `alert_service.py` genera alertas WARNING/ERROR/CRITICAL visibles en el Dashboard al login cuando `cert_not_after` ≤30 días (`f90c0d9`).
 
 ---
 
@@ -212,13 +212,13 @@ Mejoras: (1) job de CI que corra pytest en PR (si no existe ya — verificar `.g
 | 2 | **P1** | Fiscal AR | QR RG 4892 en representación impresa + campo condición IVA receptor (RG 5616); luego homologación ARCA completa |
 | 3 | **P1** | Fiscal PE | Validar representación impresa Nubefact (QR/hash/leyendas) + flujo de bajas/resumen diario en UI |
 | 4 | **P2** | Offline | Fallback offline del SW (opción A) + definir oferta "servidor local" (opción B) |
-| 5 | **P2** | Seguridad | Owner rate-limit a Redis; CSP report-only; quitar X-XSS-Protection; confirmar HSTS |
-| 6 | **P2** | Fiscal | Alerta automática de certificados fiscales a <30 días de vencer |
+| 5 | ~~P2~~ | Seguridad | ~~Owner rate-limit a Redis~~ ✅ `79c4d1b`; CSP report-only; ~~quitar X-XSS-Protection~~ ✅; confirmar HSTS (NPM config) |
+| 6 | ~~P2~~ | Fiscal | ~~Alerta automática de certificados fiscales a <30 días de vencer~~ ✅ `f90c0d9` (2026-07-11) |
 | 7 | **P2** | Infra | Verificar backups offsite + cron activo; probar restore trimestral (`backup_restore_verify.py`) |
 | 8 | **P3** | Rendimiento | Rutina mensual slow-query→índices; evaluar `innodb_buffer_pool_size`; auditar tamaño de State |
 | 9 | **P3** | Landing | JSON-LD; Lighthouse; considerar landing estática si crece tráfico |
 | 10 | **P3** | Producto | 2FA opcional para admins tenant; métricas MRR/churn en Owner; multi-sucursal Food (futuro confirmado, no agendado) |
-| 11 | **P3** | Limpieza | `default.conf` obsoleto (puerto 8000); `.gitignore` para dev.err/.coverage/e2e_screenshots |
+| 11 | ~~P3~~ | Limpieza | ~~`default.conf` obsoleto (puerto 8000); `.gitignore` para dev.err/.coverage/e2e_screenshots~~ ✅ `79c4d1b` |
 
 ---
 
