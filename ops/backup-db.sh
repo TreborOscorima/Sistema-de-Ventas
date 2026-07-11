@@ -9,6 +9,8 @@
 #   DB_NAME          Nombre de la base de datos               (default: sistema_ventas)
 #   MYSQL_CONTAINER  Nombre del contenedor MySQL              (default: tuwayki_mysql)
 #   KEEP_DAYS        Días de retención antes de rotar         (default: 30)
+#   S3_BUCKET        Bucket S3 para copia offsite             (default: vacío = sin offsite)
+#   S3_PREFIX        Prefijo dentro del bucket                (default: backups/)
 #
 # Instalar en cron (como root o el usuario que ejecuta Docker):
 #   0 2 * * * /opt/tuwayki/ops/backup-db.sh /opt/tuwayki/backups >> /var/log/tuwayki-backup.log 2>&1
@@ -30,6 +32,8 @@ BACKUP_DIR="${1:-${BACKUP_DIR:-${PROJECT_DIR}/backups}}"
 DB_NAME="${DB_NAME:-sistema_ventas}"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-tuwayki_mysql}"
 KEEP_DAYS="${KEEP_DAYS:-30}"
+S3_BUCKET="${S3_BUCKET:-}"
+S3_PREFIX="${S3_PREFIX:-backups/}"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 OUTFILE="${BACKUP_DIR}/${DB_NAME}_${TIMESTAMP}.sql.gz"
@@ -64,6 +68,17 @@ log "Backup completado: $(basename "$OUTFILE") (${SIZE})"
 DELETED=$(find "$BACKUP_DIR" -maxdepth 1 -name "${DB_NAME}_*.sql.gz" -mtime +"${KEEP_DAYS}" -print -delete | wc -l)
 if [ "$DELETED" -gt 0 ]; then
     log "Rotación: ${DELETED} backup(s) eliminado(s) (>$KEEP_DAYS días)"
+fi
+
+# Copia offsite a S3 (opcional — requiere aws cli configurado)
+if [ -n "$S3_BUCKET" ]; then
+    S3_DEST="s3://${S3_BUCKET}/${S3_PREFIX}$(basename "$OUTFILE")"
+    log "Subiendo copia offsite a ${S3_DEST}..."
+    if aws s3 cp "$OUTFILE" "$S3_DEST" --quiet; then
+        log "Copia offsite completada."
+    else
+        log "ERROR: falló la copia offsite a S3. El backup local se conserva."
+    fi
 fi
 
 # Mostrar backups actuales
