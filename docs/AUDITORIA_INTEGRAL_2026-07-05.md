@@ -112,7 +112,7 @@ Deudas menores detectadas:
 
 **P2 — Rate limit de acciones Owner es in-memory por proceso** (`_owner_action_timestamps` en `owner_state.py`) — con más de un worker no protege. Moverlo al helper Redis existente.
 
-**P2 — Sin Content-Security-Policy.** Agregar CSP (aunque sea report-only al inicio) en NPM; el inventario de scripts es corto (GA4, Meta Pixel, Google Fonts, JS propio). Además `X-XSS-Protection` está obsoleto (inofensivo, se puede quitar). Confirmar HSTS en NPM.
+~~**P2 — Sin Content-Security-Policy.**~~ ✅ CSP report-only agregado en NPM custom configs, `domain-split.conf`, `single-surface.conf` y docs. HSTS confirmado activo (checkbox NPM + header explícito). `X-XSS-Protection` eliminado de docs. Pendiente: migrar a CSP enforcing tras 1-2 semanas sin violaciones en DevTools.
 
 **P3 — 2FA opcional para usuarios tenant** (admins de empresa), y política de contraseñas configurable por empresa.
 
@@ -212,7 +212,7 @@ Mejoras: (1) job de CI que corra pytest en PR (si no existe ya — verificar `.g
 | 2 | **P1** | Fiscal AR | QR RG 4892 en representación impresa + campo condición IVA receptor (RG 5616); luego homologación ARCA completa |
 | 3 | **P1** | Fiscal PE | Validar representación impresa Nubefact (QR/hash/leyendas) + flujo de bajas/resumen diario en UI |
 | 4 | **P2** | Offline | Fallback offline del SW (opción A) + definir oferta "servidor local" (opción B) |
-| 5 | ~~P2~~ | Seguridad | ~~Owner rate-limit a Redis~~ ✅ `79c4d1b`; CSP report-only; ~~quitar X-XSS-Protection~~ ✅; confirmar HSTS (NPM config) |
+| 5 | ~~P2~~ | Seguridad | ~~Owner rate-limit a Redis~~ ✅ `79c4d1b`; ~~CSP report-only~~ ✅; ~~quitar X-XSS-Protection~~ ✅; ~~confirmar HSTS~~ ✅ — TODO COMPLETADO |
 | 6 | ~~P2~~ | Fiscal | ~~Alerta automática de certificados fiscales a <30 días de vencer~~ ✅ `f90c0d9` (2026-07-11) |
 | 7 | **P2** | Infra | Verificar backups offsite + cron activo; probar restore trimestral (`backup_restore_verify.py`) |
 | 8 | **P3** | Rendimiento | Rutina mensual slow-query→índices; evaluar `innodb_buffer_pool_size`; auditar tamaño de State |

@@ -74,14 +74,11 @@ server {
     # Prevenir MIME-type sniffing
     add_header X-Content-Type-Options "nosniff" always;
     
-    # Protección XSS (navegadores modernos)
-    add_header X-XSS-Protection "1; mode=block" always;
-    
-    # Content Security Policy (ajustar según necesidades)
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://tudominio.com;" always;
+    # Content Security Policy — empezar en report-only, monitorear DevTools,
+    # luego migrar a Content-Security-Policy (enforcing) cuando esté limpio.
+    add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';" always;
     
     # HTTP Strict Transport Security (HSTS)
-    # Solo activar cuando SSL esté funcionando correctamente
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     
     # Política de referrer
@@ -135,11 +132,10 @@ tudominio.com {
     header {
         X-Frame-Options "SAMEORIGIN"
         X-Content-Type-Options "nosniff"
-        X-XSS-Protection "1; mode=block"
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         Referrer-Policy "strict-origin-when-cross-origin"
         Permissions-Policy "geolocation=(), microphone=(), camera=()"
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://tudominio.com;"
+        Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';"
     }
     
     # Proxy a Reflex

@@ -150,8 +150,17 @@ location /ping {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
 }
+
+# Seguridad
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+# CSP en modo report-only: registra violaciones en la consola del navegador
+# sin bloquear recursos. Monitorear DevTools > Console antes de pasar a enforcing.
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://www.googletagmanager.com https://www.facebook.com; connect-src 'self' wss: https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://www.facebook.com; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://wa.me;" always;
 ```
 
 Guardar y aplicar.
@@ -216,10 +225,16 @@ location /ping {
     proxy_set_header X-Forwarded-Proto $scheme;
 }
 
-# Cabeceras recomendadas
+# Seguridad
 add_header X-Robots-Tag "noindex, nofollow" always;
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+# CSP report-only (app interna — no analytics externos)
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';" always;
 ```
 
 Guardar y aplicar.
@@ -282,9 +297,16 @@ location /ping {
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $scheme;
 }
+# Seguridad
 add_header X-Robots-Tag "noindex, nofollow" always;
 add_header X-Frame-Options "SAMEORIGIN" always;
 add_header X-Content-Type-Options "nosniff" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+# CSP report-only (panel owner — no analytics externos)
+add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' wss:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self';" always;
 ```
 
 Guardar y aplicar.
@@ -337,3 +359,27 @@ docker network inspect nginx-proxy-manager_default
 Deben aparecer los contenedores `tuwayki_landing`, `tuwayki_sys` y `tuwayki_admin`. Si NPM está en otra red, hay que añadirla al `docker-compose.yml` (o conectar los contenedores a esa red).
 
 Si NPM está en otro host (no en el mismo Docker daemon), no podrás usar el hostname del contenedor. En ese caso tendrías que poner la IP del host y exponer el puerto 3000 de cada superficie en el host (por ejemplo con `ports: "3001:3000"`, `3002:3000"`, `3003:3000"`) y en NPM usar esa IP y el puerto correspondiente.
+
+---
+
+## Notas de seguridad (HSTS + CSP)
+
+### HSTS
+
+Activar el checkbox **HSTS Enabled** en la pestaña SSL de cada proxy host. Esto agrega `Strict-Transport-Security: max-age=63072000` automáticamente. Los bloques custom de arriba también incluyen el header explícitamente con `includeSubDomains` como respaldo; NPM deduplica correctamente.
+
+### CSP — Migración de report-only a enforcing
+
+Los bloques custom usan `Content-Security-Policy-Report-Only` para monitorear sin romper nada:
+
+1. **Aplicar** los bloques custom tal cual están arriba (report-only).
+2. **Monitorear** DevTools > Console en cada superficie durante 1-2 semanas. Buscar líneas `[Report Only]` que indiquen recursos bloqueados.
+3. **Ajustar** la directiva si aparecen violaciones legítimas (ej: un nuevo script externo).
+4. **Migrar** a enforcing: reemplazar `Content-Security-Policy-Report-Only` por `Content-Security-Policy` en los 3 bloques custom.
+
+```bash
+# Verificar headers activos después de aplicar:
+curl -sI https://tuwayki.app | grep -iE "content-security|strict-transport"
+curl -sI https://sys.tuwayki.app | grep -iE "content-security|strict-transport"
+curl -sI https://admin.tuwayki.app | grep -iE "content-security|strict-transport"
+```
