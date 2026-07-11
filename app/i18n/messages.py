@@ -237,6 +237,8 @@ class _Messages:
     ALERT_OPEN_CASHBOX = "Caja Abierta"
     ALERT_BATCH_EXPIRING = "Lotes por Vencer"
     ALERT_BATCH_EXPIRED = "Lotes Vencidos"
+    ALERT_CERT_EXPIRING = "Certificado por Vencer"
+    ALERT_CERT_EXPIRED = "Certificado Vencido"
 
     # ── Reportes — hojas adicionales ──────────────────────────
     REPORT_BY_SELLER_SHEET = "Por Vendedor"

@@ -30,6 +30,7 @@ from app.models import (
     Sale,
     CashboxSession,
 )
+from app.models.billing import CompanyBillingConfig
 from app.enums import SaleStatus
 from app.i18n import MSG
 from app.utils.formatting import format_currency
@@ -45,6 +46,8 @@ class AlertType(str, Enum):
     CASHBOX_OPEN_LONG = "cashbox_open_long"
     BATCH_EXPIRING_SOON = "batch_expiring_soon"
     BATCH_EXPIRED = "batch_expired"
+    CERT_EXPIRING = "cert_expiring"
+    CERT_EXPIRED = "cert_expired"
 
 
 class AlertSeverity(str, Enum):
@@ -88,6 +91,7 @@ STOCK_CRITICAL_FLOOR = 3       # Mínimo absoluto para umbral crítico
 INSTALLMENT_DUE_DAYS = 3      # Días antes del vencimiento para alertar
 CASHBOX_OPEN_HOURS = 12       # Horas para alertar caja abierta
 BATCH_EXPIRING_DAYS = 30      # Ventana de "lotes por vencer" (Farmacia/Supermercado)
+CERT_EXPIRING_DAYS = 30       # Días antes de vencer para alertar certificado fiscal
 
 
 def _require_tenant(company_id: int | None, branch_id: int | None) -> None:
@@ -547,6 +551,80 @@ def get_expiring_batches_alerts(
     return alerts
 
 
+def get_cert_expiry_alerts(
+    company_id: int | None = None,
+    branch_id: int | None = None,
+    *,
+    _session=None,
+) -> List[Alert]:
+    """Alerta si el certificado fiscal de la empresa vence en ≤ CERT_EXPIRING_DAYS días.
+
+    Solo aplica a empresas con facturación electrónica activa y certificado
+    cargado (cert_not_after != NULL).
+    """
+    if not company_id:
+        return []
+    alerts: List[Alert] = []
+    now = utc_now_naive()
+    threshold = now + timedelta(days=CERT_EXPIRING_DAYS)
+
+    with ExitStack() as stack:
+        if _session is not None:
+            session = _session
+        else:
+            session = stack.enter_context(rx.session())
+            session.info["tenant_bypass"] = True
+
+        config = session.exec(
+            select(CompanyBillingConfig).where(
+                and_(
+                    CompanyBillingConfig.company_id == company_id,
+                    CompanyBillingConfig.is_active == True,
+                    CompanyBillingConfig.cert_not_after != None,
+                )
+            )
+        ).first()
+
+        if config is None:
+            return alerts
+
+        cert_expiry: datetime = config.cert_not_after
+        days_remaining = (cert_expiry - now).days
+
+        if cert_expiry < now:
+            alerts.append(Alert(
+                type=AlertType.CERT_EXPIRED,
+                severity=AlertSeverity.CRITICAL,
+                title=MSG.ALERT_CERT_EXPIRED,
+                message=(
+                    f"El certificado fiscal venció hace {abs(days_remaining)} día(s). "
+                    "La emisión de comprobantes electrónicos está interrumpida."
+                ),
+                count=1,
+                details={
+                    "cert_not_after": cert_expiry.isoformat(),
+                    "days_expired": abs(days_remaining),
+                },
+            ))
+        elif cert_expiry <= threshold:
+            alerts.append(Alert(
+                type=AlertType.CERT_EXPIRING,
+                severity=AlertSeverity.WARNING if days_remaining > 7 else AlertSeverity.ERROR,
+                title=MSG.ALERT_CERT_EXPIRING,
+                message=(
+                    f"El certificado fiscal vence en {days_remaining} día(s). "
+                    "Renueve antes de que expire para evitar interrupciones."
+                ),
+                count=1,
+                details={
+                    "cert_not_after": cert_expiry.isoformat(),
+                    "days_remaining": days_remaining,
+                },
+            ))
+
+    return alerts
+
+
 async def get_overdue_count(
     session,
     company_id: int | None = None,
@@ -637,6 +715,13 @@ def get_all_alerts(
             )
         except Exception:
             logger.warning("Error obteniendo alertas de caja", exc_info=True)
+
+        try:
+            alerts.extend(
+                get_cert_expiry_alerts(company_id, branch_id, _session=session)
+            )
+        except Exception:
+            logger.warning("Error obteniendo alertas de certificado fiscal", exc_info=True)
 
     # Ordenar por severidad (crítico primero)
     severity_order = {
