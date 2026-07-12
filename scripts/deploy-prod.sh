@@ -127,6 +127,26 @@ sync_env_example() {
 }
 sync_env_example
 
+# ─── Inyectar GitHub Secrets al .env (si las env vars llegan del workflow) ────
+inject_secret() {
+    local var_name="$1"
+    local var_value="${2:-}"
+    local env_file="$APP_DIR/.env"
+    [[ -z "$var_value" ]] && return
+    if grep -qE "^${var_name}=" "$env_file" 2>/dev/null; then
+        local current
+        current="$(grep -E "^${var_name}=" "$env_file" | cut -d= -f2-)"
+        if [[ "$current" != "$var_value" ]]; then
+            sed -i "s|^${var_name}=.*|${var_name}=${var_value}|" "$env_file"
+            info "  ↻ $var_name actualizado desde GitHub Secret"
+        fi
+    else
+        echo "${var_name}=${var_value}" >> "$env_file"
+        info "  + $var_name inyectado desde GitHub Secret"
+    fi
+}
+inject_secret "OWNER_TOTP_SECRET" "${OWNER_TOTP_SECRET:-}"
+
 # ─── Red NPM ──────────────────────────────────────────────────────────────────
 if ! docker network inspect "$NPM_NETWORK" >/dev/null 2>&1; then
     warn "Red $NPM_NETWORK no existe — creando..."

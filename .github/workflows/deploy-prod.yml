@@ -12,6 +12,7 @@
 # Secrets opcionales:
 #   DEPLOY_SSH_PORT          Puerto SSH (default 22 en ssh-action)
 #   DEPLOY_APP_DIR           Ruta del repo en el servidor (default /home/ubuntu/sist-ventas-trebor)
+#   OWNER_TOTP_SECRET        Secret TOTP para MFA del Owner Backoffice (vacío = MFA desactivado)
 #
 # Setup inicial en el servidor (una sola vez):
 #   1. Generar par de claves: ssh-keygen -t ed25519 -f deploy_gha -N ""
@@ -81,6 +82,7 @@ jobs:
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           command_timeout: 40m
+          envs: OWNER_TOTP_SECRET
           script: |
             set -euo pipefail
             APP_DIR="${{ secrets.DEPLOY_APP_DIR }}"
@@ -91,6 +93,8 @@ jobs:
             export BRANCH="${{ steps.meta.outputs.branch }}"
             cd "$APP_DIR"
             bash scripts/deploy-prod.sh
+        env:
+          OWNER_TOTP_SECRET: ${{ secrets.OWNER_TOTP_SECRET }}
 
       - name: Deploy OK
         if: success()
