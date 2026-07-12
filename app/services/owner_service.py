@@ -1059,3 +1059,117 @@ class OwnerService:
             actor_email, user.username, user.id, company.name,
         )
         return temp_password
+
+    # ─── Métricas de plataforma ─────────────────────────────
+
+    PLAN_PRICES: Dict[str, float] = {
+        PlanType.STANDARD: 35.0,
+        PlanType.PROFESSIONAL: 55.0,
+        PlanType.ENTERPRISE: 175.0,
+    }
+
+    @staticmethod
+    async def get_platform_metrics(
+        session: AsyncSession,
+    ) -> Dict[str, Any]:
+        """Calcula métricas agregadas de la plataforma (MRR, churn, distribución)."""
+        now = utc_now_naive()
+
+        # Conteo por plan_type y subscription_status en una sola query
+        rows = (
+            await session.execute(
+                select(
+                    Company.plan_type,
+                    Company.subscription_status,
+                    func.count(Company.id),
+                )
+                .where(Company.product_type == ProductType.VENTAS)
+                .group_by(Company.plan_type, Company.subscription_status)
+            )
+        ).all()
+
+        total = 0
+        by_plan: Dict[str, int] = {
+            PlanType.TRIAL: 0,
+            PlanType.STANDARD: 0,
+            PlanType.PROFESSIONAL: 0,
+            PlanType.ENTERPRISE: 0,
+        }
+        by_status: Dict[str, int] = {
+            SubscriptionStatus.ACTIVE: 0,
+            SubscriptionStatus.WARNING: 0,
+            SubscriptionStatus.PAST_DUE: 0,
+            SubscriptionStatus.SUSPENDED: 0,
+        }
+        paying_active: Dict[str, int] = {
+            PlanType.STANDARD: 0,
+            PlanType.PROFESSIONAL: 0,
+            PlanType.ENTERPRISE: 0,
+        }
+
+        for plan, status, cnt in rows:
+            total += cnt
+            by_plan[plan] = by_plan.get(plan, 0) + cnt
+            by_status[status] = by_status.get(status, 0) + cnt
+            if plan in paying_active and status in (
+                SubscriptionStatus.ACTIVE,
+                SubscriptionStatus.WARNING,
+            ):
+                paying_active[plan] = paying_active.get(plan, 0) + cnt
+
+        # MRR = suma de (empresas pagantes activas × precio del plan)
+        mrr = sum(
+            paying_active.get(plan, 0) * price
+            for plan, price in OwnerService.PLAN_PRICES.items()
+        )
+
+        # Churn rate = suspended / (active + warning + suspended)
+        active_pool = (
+            by_status.get(SubscriptionStatus.ACTIVE, 0)
+            + by_status.get(SubscriptionStatus.WARNING, 0)
+            + by_status.get(SubscriptionStatus.SUSPENDED, 0)
+        )
+        suspended = by_status.get(SubscriptionStatus.SUSPENDED, 0)
+        churn_rate = (suspended / active_pool * 100) if active_pool > 0 else 0.0
+
+        # Trial conversion = empresas que salieron de trial / total que alguna vez existieron
+        non_trial = total - by_plan.get(PlanType.TRIAL, 0)
+        trial_conversion = (non_trial / total * 100) if total > 0 else 0.0
+
+        # Nuevas altas últimos 7 y 30 días
+        for days_label, days in [("7d", 7), ("30d", 30)]:
+            since = now - timedelta(days=days)
+            cnt_result = (
+                await session.execute(
+                    select(func.count(Company.id))
+                    .where(
+                        Company.product_type == ProductType.VENTAS,
+                        Company.created_at >= since,
+                    )
+                )
+            ).scalar_one()
+            if days_label == "7d":
+                new_7d = cnt_result
+            else:
+                new_30d = cnt_result
+
+        total_paying = sum(paying_active.values())
+
+        return {
+            "total_companies": total,
+            "plan_trial": by_plan.get(PlanType.TRIAL, 0),
+            "plan_standard": by_plan.get(PlanType.STANDARD, 0),
+            "plan_professional": by_plan.get(PlanType.PROFESSIONAL, 0),
+            "plan_enterprise": by_plan.get(PlanType.ENTERPRISE, 0),
+            "status_active": by_status.get(SubscriptionStatus.ACTIVE, 0),
+            "status_warning": by_status.get(SubscriptionStatus.WARNING, 0),
+            "status_past_due": by_status.get(SubscriptionStatus.PAST_DUE, 0),
+            "status_suspended": by_status.get(SubscriptionStatus.SUSPENDED, 0),
+            "total_paying": total_paying,
+            "mrr": round(mrr, 2),
+            "arr": round(mrr * 12, 2),
+            "churn_rate": round(churn_rate, 1),
+            "trial_conversion": round(trial_conversion, 1),
+            "new_7d": new_7d,
+            "new_30d": new_30d,
+        }

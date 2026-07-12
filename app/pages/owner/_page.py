@@ -14,6 +14,7 @@ from ._companies_section import _product_tabs, _search_bar, _companies_table, _p
 from ._action_modal import _action_modal, _reset_password_modal
 from ._audit_section import _audit_section
 from ._billing_section import _platform_billing_section, _billing_modal
+from ._metrics_section import _metrics_section
 
 
 def _totp_verification_form() -> rx.Component:
@@ -253,6 +254,7 @@ def _owner_content() -> rx.Component:
             ),
             class_name="mb-5 sm:mb-6",
         ),
+        _metrics_section(),
         _platform_billing_section(),
         _product_tabs(),
         _search_bar(),

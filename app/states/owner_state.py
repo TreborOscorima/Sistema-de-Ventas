@@ -322,6 +322,10 @@ class OwnerState:
     owner_reset_result_visible: bool = False
     owner_reset_loading: bool = False
 
+    # ─── Métricas de plataforma ──────────────────────────
+    owner_metrics: dict = {}
+    owner_metrics_loading: bool = False
+
     # ─── Loading ───────────────────────────────────────
     owner_loading: bool = False
     _owner_companies_load_seq: int = rx.field(default=0, is_var=False)
@@ -567,6 +571,24 @@ class OwnerState:
         finally:
             if seq == self._owner_companies_load_seq:
                 self.owner_loading = False
+
+    @rx.event
+    async def owner_load_metrics(self):
+        """Carga métricas agregadas de la plataforma (MRR, churn, distribución)."""
+        if not self.is_owner_authenticated:
+            return
+        self.owner_metrics_loading = True
+        yield
+        try:
+            async with AsyncSessionLocal() as session:
+                with tenant_bypass():
+                    metrics = await OwnerService.get_platform_metrics(session)
+            self.owner_metrics = metrics
+        except Exception:
+            logger.exception("Error cargando métricas de plataforma")
+            self.owner_metrics = {}
+        finally:
+            self.owner_metrics_loading = False
 
     @rx.event
     async def owner_search_companies(self, search: str):

@@ -1352,6 +1352,81 @@ class TestModulesAndSubscription:
         )
         assert card is not None
 
+
+# ═════════════════════════════════════════════════════════
+# TESTS DE MÉTRICAS DE PLATAFORMA
+# ═════════════════════════════════════════════════════════
+
+class TestPlatformMetrics:
+    """Tests para OwnerService.get_platform_metrics."""
+
+    @pytest.mark.asyncio
+    async def test_metrics_empty_db(self):
+        """Sin empresas debe devolver todo en 0."""
+        session = AsyncMock()
+        session.execute = AsyncMock()
+
+        # group by query → empty
+        group_result = MagicMock()
+        group_result.all.return_value = []
+
+        # count queries (new_7d, new_30d) → 0
+        count_result = MagicMock()
+        count_result.scalar_one.return_value = 0
+
+        session.execute.side_effect = [group_result, count_result, count_result]
+
+        result = await OwnerService.get_platform_metrics(session)
+
+        assert result["total_companies"] == 0
+        assert result["mrr"] == 0
+        assert result["arr"] == 0
+        assert result["churn_rate"] == 0
+        assert result["trial_conversion"] == 0
+        assert result["total_paying"] == 0
+        assert result["new_7d"] == 0
+        assert result["new_30d"] == 0
+
+    @pytest.mark.asyncio
+    async def test_metrics_with_companies(self):
+        """Métricas correctas con mix de empresas."""
+        session = AsyncMock()
+        session.execute = AsyncMock()
+
+        group_result = MagicMock()
+        group_result.all.return_value = [
+            (PlanType.TRIAL, SubscriptionStatus.ACTIVE, 5),
+            (PlanType.STANDARD, SubscriptionStatus.ACTIVE, 3),
+            (PlanType.PROFESSIONAL, SubscriptionStatus.ACTIVE, 2),
+            (PlanType.ENTERPRISE, SubscriptionStatus.ACTIVE, 1),
+            (PlanType.STANDARD, SubscriptionStatus.SUSPENDED, 1),
+        ]
+
+        count_7d = MagicMock()
+        count_7d.scalar_one.return_value = 2
+        count_30d = MagicMock()
+        count_30d.scalar_one.return_value = 4
+
+        session.execute.side_effect = [group_result, count_7d, count_30d]
+
+        result = await OwnerService.get_platform_metrics(session)
+
+        assert result["total_companies"] == 12
+        assert result["plan_trial"] == 5
+        assert result["plan_standard"] == 4  # 3 active + 1 suspended
+        assert result["plan_professional"] == 2
+        assert result["plan_enterprise"] == 1
+        # MRR: 3×$35 + 2×$55 + 1×$175 = $105 + $110 + $175 = $390
+        assert result["mrr"] == 390.0
+        assert result["arr"] == 4680.0
+        assert result["total_paying"] == 6  # 3+2+1 active paying
+        # Churn: 1 suspended / (11 active + 1 suspended) = 8.3%
+        assert result["churn_rate"] == 8.3
+        # Trial conversion: 7 non-trial / 12 total = 58.3%
+        assert result["trial_conversion"] == 58.3
+        assert result["new_7d"] == 2
+        assert result["new_30d"] == 4
+
     def test_form_adjust_limits_has_module_cards(self):
         """_form_adjust_limits debe renderizar tarjetas de módulo."""
         from app.pages.owner import _form_adjust_limits

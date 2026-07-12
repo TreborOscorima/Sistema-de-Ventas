@@ -190,7 +190,7 @@ BillingStrategy (ABC)
 
 Funcional y completo para su alcance: gestión de empresas (suspender, extender trial, resetear password con generación segura), sección billing de plataforma, auditoría de acciones, modal de acciones con confirmación. Sirve también de puente al backoffice de TUWAYKIFOOD (`food_owner_client.py` vía `FOOD_ADMIN_API_SECRET`).
 
-Mejoras: ver §5 (MFA, cuentas múltiples, rate limit Redis). Además: métricas de negocio (MRR, churn, empresas activas/7d) en el dashboard owner — hoy el owner ve empresas pero no tendencias.
+Mejoras: ver §5 (MFA, cuentas múltiples, rate limit Redis). ~~Además: métricas de negocio (MRR, churn, empresas activas/7d) en el dashboard owner~~ ✅ Implementado: sección "Métricas de Plataforma" con 8 KPIs (MRR, ARR, total empresas, pagantes, churn %, conversión trial %, altas 7d, altas 30d) + barra de distribución por plan.
 
 ---
 
@@ -217,7 +217,7 @@ Mejoras: (1) job de CI que corra pytest en PR (si no existe ya — verificar `.g
 | 7 | ~~P2~~ | Infra | ~~Verificar backups offsite + cron activo; probar restore trimestral~~ ✅ S3 offsite + cron auto-install + health-check integrados en `deploy-prod.sh`; `backup_restore_verify.py` reescrito (auto-discovery + cleanup + Docker). Se activa solo con `S3_BUCKET=<bucket>` en `.env` |
 | 8 | ~~P3~~ | Rendimiento | ~~Rutina mensual slow-query→índices; evaluar `innodb_buffer_pool_size`; auditar tamaño de State~~ ✅ `ops/mysql-perf-audit.sh` creado (7 secciones: buffer pool, slow queries, tablas grandes, índices faltantes, redundantes, conexiones, recomendaciones). `docker-compose.yml`: `long_query_time` 2→1s, `log_slow_extra=ON`, `innodb_buffer_pool_size` 256→384M, MySQL mem limit 768→1024M. Auditoría de State: ~670 vars en árbol flat (top: InventoryState 75, VentaState 74, CashState 57, HistorialState 57); optimización previa ya aplicó 24 `is_var=False` — arquitectura flat es inherente a Reflex 0.9.x; siguiente mejora sería substates nativos en Reflex ≥0.10 |
 | 9 | ~~P3~~ | Landing | ~~JSON-LD; Lighthouse; considerar landing estática si crece tráfico~~ ✅ JSON-LD (Organization + SoftwareApplication + FAQPage + BreadcrumbList) en `/ventas`, `/food` y `/`. OG meta per-page (título/descripción diferenciados por producto). `og:image` corregido (`dashboard-screenshot.webp`), agregados `og:locale`, `og:site_name`, `og:image:width/height`, `hreflang`. `html lang="es"` + `Content-Language`. Fonts: `@import` CSS → `<link>` (no render-blocking). `width`/`height` en imágenes (anti-CLS). `sitemap.xml` completado (+`/ventas`, +`/food`) |
-| 10 | **P3** | Producto | 2FA opcional para admins tenant; métricas MRR/churn en Owner; multi-sucursal Food (futuro confirmado, no agendado) |
+| 10 | **P3** | Producto | 2FA opcional para admins tenant; ~~métricas MRR/churn en Owner~~ ✅ Dashboard de métricas en Owner: MRR, ARR, churn rate, conversión trial, distribución por plan (barra visual), empresas pagantes, altas 7d/30d. Servicio `get_platform_metrics()` + tests. Se carga automáticamente al acceder al backoffice; multi-sucursal Food (futuro confirmado, no agendado) |
 | 11 | ~~P3~~ | Limpieza | ~~`default.conf` obsoleto (puerto 8000); `.gitignore` para dev.err/.coverage/e2e_screenshots~~ ✅ `79c4d1b` |
 
 ---
