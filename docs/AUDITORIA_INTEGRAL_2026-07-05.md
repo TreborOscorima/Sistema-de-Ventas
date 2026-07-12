@@ -135,7 +135,7 @@ Riesgos y mejoras:
 
 ## 7. Online / Offline — análisis honesto
 
-**Hoy:** hay PWA instalable (manifest + banner de instalación + `sw.js` v2) **solo en la superficie app**. El SW hace: network-first para HTML, cache-first para `/_next/static/*` (assets con hash), bypass total de `/api/*`, precache de íconos. Eso da arranque rápido y tolerancia a micro-cortes, **pero NO operación offline real**.
+**Hoy:** hay PWA instalable (manifest + banner de instalación + `sw.js` v3) **solo en la superficie app**. El SW hace: network-first para HTML con **fallback a página offline de cortesía** (embebida en el SW, auto-retry progresivo + reconexión automática vía `navigator.online`), cache-first para `/_next/static/*` (assets con hash), bypass total de `/api/*`, precache de íconos + página offline. Eso da arranque rápido, tolerancia a micro-cortes, y **UX digna ante cortes de internet** (mensaje informativo + reintento automático), **pero NO operación offline real** (no se puede vender sin conexión).
 
 **Limitación arquitectónica:** Reflex mantiene todo el estado en el servidor y cada interacción viaja por WebSocket. Sin conexión, la app no puede ni agregar un producto al carrito. **No hay forma de hacer el POS actual offline sin salirse del modelo de Reflex.** Cualquier promesa de "funciona offline" con la arquitectura actual sería falsa.
 
@@ -143,11 +143,11 @@ Opciones reales, de menor a mayor esfuerzo:
 
 | Opción | Esfuerzo | Qué da |
 |---|---|---|
-| **A. Página offline de cortesía** (SW sirve un fallback "sin conexión, reintentando…" con auto-retry) | Días | UX digna ante cortes; cero venta offline |
+| ~~**A. Página offline de cortesía**~~ ✅ (SW v3 sirve fallback embebido con auto-retry progresivo + `navigator.online`) | ~~Días~~ | UX digna ante cortes; cero venta offline |
 | **B. Modo servidor local (on-premises)**: el stack Docker ya corre completo en una PC del local; internet solo para el acceso remoto | Días (es empaquetado + licenciamiento) | Offline total *dentro del local* (la red LAN sigue viva aunque caiga internet). Es la vía más corta a "vender sin internet" |
 | **C. POS offline-first satélite**: mini-app JS pura (PWA con IndexedDB) SOLO para el flujo de venta rápida — catálogo cacheado, cola de ventas local, endpoint REST de sincronización/reconciliación (numeración provisoria → definitiva al reconectar) | Semanas/meses | Venta offline real con sync. Requiere resolver conflictos de stock y numeración fiscal (los comprobantes fiscales NO pueden emitirse offline; quedan en cola como en el retry worker actual) |
 
-**Recomendación:** implementar A ya (trivial), ofrecer B como SKU "local/híbrido" para clientes con mala conectividad, y solo encarar C si el mercado lo exige. Nota fiscal: tanto SUNAT como ARCA contemplan emisión diferida/contingencia — la cola de reintentos existente (`fiscal_retry_worker`) ya modela ese patrón, lo cual facilita C.
+**Recomendación:** ~~implementar A ya (trivial)~~ ✅ hecho, ofrecer B como SKU "local/híbrido" para clientes con mala conectividad, y solo encarar C si el mercado lo exige. Nota fiscal: tanto SUNAT como ARCA contemplan emisión diferida/contingencia — la cola de reintentos existente (`fiscal_retry_worker`) ya modela ese patrón, lo cual facilita C.
 
 ---
 
@@ -211,7 +211,7 @@ Mejoras: (1) job de CI que corra pytest en PR (si no existe ya — verificar `.g
 | 1 | ~~P1~~ | Seguridad | ~~MFA/TOTP en Owner + allowlist IP en NPM para admin.tuwayki.app~~ ✅ TOTP implementado: `pyotp` + flujo 2-step login (contraseña → código 6 dígitos). Activación via `OWNER_TOTP_SECRET` en `.env` (comentado=desactivado, backwards-compatible). Pantalla MFA dedicada con auto-focus, `input_mode="numeric"`, botón cancelar. Allowlist IP → configurar en NPM Advanced tab: `allow 203.0.113.0/24; deny all;` en el proxy host de `admin.tuwayki.app` |
 | 2 | **P1** | Fiscal AR | QR RG 4892 en representación impresa + campo condición IVA receptor (RG 5616); luego homologación ARCA completa |
 | 3 | **P1** | Fiscal PE | Validar representación impresa Nubefact (QR/hash/leyendas) + flujo de bajas/resumen diario en UI |
-| 4 | **P2** | Offline | Fallback offline del SW (opción A) + definir oferta "servidor local" (opción B) |
+| 4 | ~~P2~~ | Offline | ~~Fallback offline del SW (opción A)~~ ✅ SW v3: página offline embebida en `sw.js` (HTML inline cacheado como `/_offline`), pre-cacheada al install. Network-first para documentos, fallback a página de cortesía con: icono TUWAYKIAPP, mensaje "Sin conexión a internet", auto-retry progresivo (10s→15s→…→30s máx), botón "Reintentar ahora", detección `navigator.online` para reconexión instantánea, recarga automática al reconectar. Opción B (servidor local on-premises) queda como oferta comercial futura — no requiere desarrollo adicional (el stack Docker ya corre completo en LAN) |
 | 5 | ~~P2~~ | Seguridad | ~~Owner rate-limit a Redis~~ ✅ `79c4d1b`; ~~CSP report-only~~ ✅; ~~quitar X-XSS-Protection~~ ✅; ~~confirmar HSTS~~ ✅ — TODO COMPLETADO |
 | 6 | ~~P2~~ | Fiscal | ~~Alerta automática de certificados fiscales a <30 días de vencer~~ ✅ `f90c0d9` (2026-07-11) |
 | 7 | ~~P2~~ | Infra | ~~Verificar backups offsite + cron activo; probar restore trimestral~~ ✅ S3 offsite + cron auto-install + health-check integrados en `deploy-prod.sh`; `backup_restore_verify.py` reescrito (auto-discovery + cleanup + Docker). Se activa solo con `S3_BUCKET=<bucket>` en `.env` |
