@@ -7,12 +7,15 @@ Credenciales configurables vía variables de entorno:
   OWNER_ADMIN_PASSWORD (default: usa hash embebido)
 """
 
+import base64
+import io
 import json
 import os
 import asyncio
 import time
 
 import bcrypt
+import pyotp
 import reflex as rx
 from sqlmodel import select
 
@@ -103,6 +106,48 @@ def _load_owner_password_hash() -> str:
 
 
 _OWNER_ADMIN_PASSWORD_HASH: str = _load_owner_password_hash()
+
+# ─── TOTP / MFA ──────────────────────────────────────────────────────
+# Si OWNER_TOTP_SECRET tiene valor, se requiere código TOTP tras la contraseña.
+# Vacío = MFA desactivado (backwards-compatible).
+OWNER_TOTP_SECRET: str = os.environ.get("OWNER_TOTP_SECRET", "").strip()
+OWNER_TOTP_ISSUER: str = "TUWAYKIAPP Owner"
+
+
+def _is_totp_enabled() -> bool:
+    return bool(OWNER_TOTP_SECRET)
+
+
+def _verify_totp(code: str) -> bool:
+    if not OWNER_TOTP_SECRET:
+        return True
+    totp = pyotp.TOTP(OWNER_TOTP_SECRET)
+    return totp.verify(code, valid_window=1)
+
+
+def _get_totp_provisioning_uri() -> str:
+    if not OWNER_TOTP_SECRET:
+        return ""
+    totp = pyotp.TOTP(OWNER_TOTP_SECRET)
+    return totp.provisioning_uri(
+        name=OWNER_ADMIN_EMAIL,
+        issuer_name=OWNER_TOTP_ISSUER,
+    )
+
+
+def _generate_totp_qr_data_uri() -> str:
+    uri = _get_totp_provisioning_uri()
+    if not uri:
+        return ""
+    try:
+        import qrcode
+        img = qrcode.make(uri)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        return f"data:image/png;base64,{b64}"
+    except ImportError:
+        return ""
 
 
 def _verify_owner_credentials(email: str, password: str) -> bool:
@@ -212,6 +257,11 @@ class OwnerState:
     owner_login_error: str = ""
     owner_login_loading: bool = False
 
+    # ─── MFA / TOTP ──────────────────────────────────────
+    owner_totp_pending: bool = False
+    owner_totp_code: str = ""
+    owner_totp_error: str = ""
+
     # ─── Tab activo (ventas / food) ────────────────────
     owner_active_product_tab: str = ProductType.VENTAS
 
@@ -283,6 +333,10 @@ class OwnerState:
     def is_owner(self) -> bool:
         """Verifica si el usuario actual es owner de la plataforma."""
         return bool(self.current_user.get("is_platform_owner", False))
+
+    @rx.var(cache=True)
+    def owner_totp_enabled(self) -> bool:
+        return _is_totp_enabled()
 
     @rx.var(cache=True)
     def is_owner_authenticated(self) -> bool:
@@ -362,7 +416,20 @@ class OwnerState:
         # Limpiar intentos fallidos tras login exitoso
         clear_login_attempts(rate_key)
 
-        # Buscar al platform owner en la BD para auditoría
+        # Si TOTP está habilitado, pasar al paso de verificación MFA
+        if _is_totp_enabled():
+            self.owner_totp_pending = True
+            self.owner_totp_code = ""
+            self.owner_totp_error = ""
+            self.owner_login_loading = False
+            logger.info("Owner password OK, esperando TOTP: %s", email[:20])
+            return
+
+        self._owner_activate_session(email)
+        return rx.redirect(OWNER_ROOT_PATH)
+
+    def _owner_activate_session(self, email: str):
+        """Activa la sesión owner (helper interno, llamado tras password o TOTP)."""
         owner_user_id = 0
         with rx.session() as session:
             session.info["tenant_bypass"] = True
@@ -380,17 +447,50 @@ class OwnerState:
             if owner_user:
                 owner_user_id = owner_user.id
 
-        # ¡Login exitoso! Activar sesión owner con timestamp
         self.owner_session_active = True
         self.owner_session_email = email
         self.owner_session_user_id = owner_user_id
         self._owner_session_started_at = time.time()
+        self.owner_totp_pending = False
+        self.owner_totp_code = ""
+        self.owner_totp_error = ""
         self.owner_login_email = ""
         self.owner_login_password = ""
         self.owner_login_error = ""
         self.owner_login_loading = False
         logger.info("Owner login exitoso: %s", email[:20])
+
+    @rx.event
+    def owner_verify_totp(self, form_data: dict):
+        """Verifica el código TOTP ingresado tras password exitoso."""
+        code = (form_data.get("totp_code", "") or self.owner_totp_code).strip()
+        if not code:
+            self.owner_totp_error = "Ingrese el código de verificación."
+            return
+        if len(code) != 6 or not code.isdigit():
+            self.owner_totp_error = "El código debe ser de 6 dígitos."
+            return
+
+        if not _verify_totp(code):
+            self.owner_totp_error = "Código inválido o expirado. Intente nuevamente."
+            logger.warning("Owner TOTP fallido: %s", self.owner_login_email[:20])
+            return
+
+        email = self.owner_login_email
+        self._owner_activate_session(email)
         return rx.redirect(OWNER_ROOT_PATH)
+
+    @rx.event
+    def owner_cancel_totp(self):
+        """Cancela el paso de TOTP y vuelve al login normal."""
+        self.owner_totp_pending = False
+        self.owner_totp_code = ""
+        self.owner_totp_error = ""
+        self.owner_login_password = ""
+
+    @rx.event
+    def owner_set_totp_code(self, value: str):
+        self.owner_totp_code = value
 
     @rx.event
     def owner_logout(self):

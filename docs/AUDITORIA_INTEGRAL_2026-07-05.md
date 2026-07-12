@@ -208,7 +208,7 @@ Mejoras: (1) job de CI que corra pytest en PR (si no existe ya — verificar `.g
 
 | # | Prioridad | Área | Acción |
 |---|---|---|---|
-| 1 | **P1** | Seguridad | MFA/TOTP en Owner + allowlist IP en NPM para admin.tuwayki.app |
+| 1 | ~~P1~~ | Seguridad | ~~MFA/TOTP en Owner + allowlist IP en NPM para admin.tuwayki.app~~ ✅ TOTP implementado: `pyotp` + flujo 2-step login (contraseña → código 6 dígitos). Activación via `OWNER_TOTP_SECRET` en `.env` (comentado=desactivado, backwards-compatible). Pantalla MFA dedicada con auto-focus, `input_mode="numeric"`, botón cancelar. Allowlist IP → configurar en NPM Advanced tab: `allow 203.0.113.0/24; deny all;` en el proxy host de `admin.tuwayki.app` |
 | 2 | **P1** | Fiscal AR | QR RG 4892 en representación impresa + campo condición IVA receptor (RG 5616); luego homologación ARCA completa |
 | 3 | **P1** | Fiscal PE | Validar representación impresa Nubefact (QR/hash/leyendas) + flujo de bajas/resumen diario en UI |
 | 4 | **P2** | Offline | Fallback offline del SW (opción A) + definir oferta "servidor local" (opción B) |

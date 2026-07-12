@@ -383,3 +383,28 @@ curl -sI https://tuwayki.app | grep -iE "content-security|strict-transport"
 curl -sI https://sys.tuwayki.app | grep -iE "content-security|strict-transport"
 curl -sI https://admin.tuwayki.app | grep -iE "content-security|strict-transport"
 ```
+
+### Allowlist IP para admin.tuwayki.app (Owner Backoffice)
+
+Restringir el acceso al panel de administración por IP. En NPM, ir al proxy host de `admin.tuwayki.app` → pestaña **Advanced** → agregar al inicio del bloque custom:
+
+```nginx
+# Allowlist IP — solo IPs autorizadas acceden al Owner Backoffice
+allow 203.0.113.0/24;   # Reemplazar con la IP o rango de tu red
+# allow 198.51.100.5;   # Agregar más IPs según necesidad
+deny all;
+```
+
+Para obtener tu IP pública: `curl ifconfig.me`. Si usas IP dinámica, considerar un rango `/24` o un servicio de DNS dinámico.
+
+### MFA / TOTP para Owner Backoffice
+
+Adicionalmente al allowlist IP, el Owner Backoffice soporta autenticación en dos pasos (TOTP):
+
+1. Generar un secret: `python -c "import pyotp; print(pyotp.random_base32())"`
+2. Agregar al `.env` del servidor: `OWNER_TOTP_SECRET=<el_secret_generado>`
+3. Generar URI para escanear con Authenticator: `python -c "import pyotp; print(pyotp.TOTP('<secret>').provisioning_uri(name='admin@tuwaykiapp.com', issuer_name='TUWAYKIAPP Owner'))"`
+4. Escanear el QR (generar desde la URI) con Google Authenticator, Authy o similar.
+5. Re-deployar. Al hacer login, tras la contraseña se pedirá el código de 6 dígitos.
+
+Dejar `OWNER_TOTP_SECRET` vacío o comentado desactiva MFA (backwards-compatible).

@@ -16,6 +16,116 @@ from ._audit_section import _audit_section
 from ._billing_section import _platform_billing_section, _billing_modal
 
 
+def _totp_verification_form() -> rx.Component:
+    """Formulario de verificación TOTP (segundo paso del login MFA)."""
+    return rx.el.div(
+        rx.el.div(
+            # Logo
+            rx.el.div(
+                rx.el.div(
+                    rx.icon("shield-check", class_name="h-7 w-7 sm:h-8 sm:w-8 text-white"),
+                    class_name=f"p-3 bg-slate-800 {RADIUS['xl']}",
+                ),
+                rx.el.div(
+                    rx.el.span(
+                        "TUWAYKIAPP",
+                        class_name="text-lg sm:text-xl font-bold text-slate-800 tracking-tight",
+                    ),
+                    rx.el.span(
+                        "Verificación MFA",
+                        class_name="text-xs text-slate-400 uppercase tracking-widest",
+                    ),
+                    class_name="flex flex-col leading-tight",
+                ),
+                class_name="flex items-center justify-center gap-3 mb-8 w-full",
+            ),
+            # Icono y título
+            rx.el.div(
+                rx.icon("smartphone", class_name="h-12 w-12 text-indigo-500 mx-auto"),
+                rx.el.h1(
+                    "Verificación en dos pasos",
+                    class_name="text-xl sm:text-2xl font-bold text-slate-800 text-center mt-4",
+                ),
+                rx.el.p(
+                    "Ingrese el código de 6 dígitos de su aplicación de autenticación.",
+                    class_name=f"{TYPOGRAPHY['body_secondary']} mt-1 mb-6 text-center",
+                ),
+            ),
+            # Error
+            rx.cond(
+                State.owner_totp_error != "",
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("circle-alert", class_name="h-4 w-4 text-red-500 flex-shrink-0"),
+                        rx.el.p(
+                            State.owner_totp_error,
+                            class_name="text-sm text-red-600",
+                        ),
+                        class_name="flex items-center gap-2",
+                    ),
+                    role="alert",
+                    class_name=f"p-3 bg-red-50 border border-red-200 {RADIUS['lg']} mb-4",
+                ),
+            ),
+            # Formulario TOTP
+            rx.el.form(
+                rx.el.div(
+                    rx.el.label(
+                        "Código de verificación",
+                        html_for="totp_code",
+                        class_name=f"block {TYPOGRAPHY['label']} mb-1.5",
+                    ),
+                    rx.el.input(
+                        name="totp_code",
+                        type="text",
+                        placeholder="000000",
+                        auto_complete="one-time-code",
+                        input_mode="numeric",
+                        pattern="[0-9]{6}",
+                        max_length=6,
+                        required=True,
+                        auto_focus=True,
+                        class_name=INPUT_STYLES["default"] + " w-full text-center text-2xl tracking-[0.5em] font-mono",
+                    ),
+                    class_name="mb-6",
+                ),
+                rx.el.button(
+                    rx.icon("check-circle", class_name="h-4 w-4"),
+                    "Verificar",
+                    type="submit",
+                    class_name=f"w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 text-white font-medium {RADIUS['lg']} hover:bg-slate-700 {TRANSITIONS['fast']}",
+                ),
+                on_submit=State.owner_verify_totp,
+                reset_on_submit=False,
+            ),
+            # Botón cancelar
+            rx.el.button(
+                rx.icon("arrow-left", class_name="h-4 w-4"),
+                "Volver al login",
+                on_click=State.owner_cancel_totp,
+                class_name=f"w-full flex items-center justify-center gap-2 px-4 py-2 mt-3 text-sm text-slate-500 hover:text-slate-700 {TRANSITIONS['fast']} cursor-pointer",
+            ),
+            # Info
+            rx.el.div(
+                rx.el.div(class_name="flex-1 h-px bg-slate-200"),
+                rx.el.span(
+                    "Autenticación multifactor",
+                    class_name="px-3 text-xs text-slate-400 uppercase tracking-wide",
+                ),
+                rx.el.div(class_name="flex-1 h-px bg-slate-200"),
+                class_name="flex items-center mt-6 mb-4",
+            ),
+            rx.el.p(
+                "Abra Google Authenticator, Authy u otra app TOTP compatible "
+                "y copie el código de 6 dígitos vigente.",
+                class_name="text-xs text-slate-400 text-center leading-relaxed",
+            ),
+            class_name=f"w-full max-w-md bg-white {RADIUS['xl']} {SHADOWS['lg']} p-5 sm:p-8 border border-slate-200",
+        ),
+        class_name="w-full min-h-screen bg-slate-50 flex items-center justify-center px-3 sm:px-4",
+    )
+
+
 # ─── Vista de acceso denegado ─────────────────────────────
 
 def _access_denied() -> rx.Component:
@@ -269,6 +379,10 @@ def owner_login_page() -> rx.Component:
                     ),
                     class_name="w-full min-h-screen bg-slate-50 flex items-center justify-center",
                 ),
+                # Si TOTP pendiente → mostrar formulario de código
+                rx.cond(
+                    State.owner_totp_pending,
+                    _totp_verification_form(),
                 # Formulario de login
                 rx.el.div(
                     rx.el.div(
@@ -387,6 +501,7 @@ def owner_login_page() -> rx.Component:
                         class_name=f"w-full max-w-md bg-white {RADIUS['xl']} {SHADOWS['lg']} p-5 sm:p-8 border border-slate-200",
                     ),
                     class_name="w-full min-h-screen bg-slate-50 flex items-center justify-center px-3 sm:px-4",
+                ),
                 ),
             ),
             # Skeleton loading
