@@ -1176,9 +1176,11 @@ class AuthState(MixinState):
         if not user_id:
             return []
         user = session.exec(
-            select(UserModel).where(UserModel.id == user_id)
+            select(UserModel)
+            .options(selectinload(UserModel.role))
+            .where(UserModel.id == user_id)
         ).first()
-        if user and user.role in ("Superadmin", "Administrador"):
+        if user and user.role and user.role.name in ("Superadmin", "Administrador"):
             rows = session.exec(
                 select(Branch.id).where(Branch.company_id == user.company_id)
             ).all()
