@@ -79,10 +79,10 @@ def _transfer_items_table() -> rx.Component:
             rx.el.table(
                 rx.el.thead(
                     rx.el.tr(
-                        rx.el.th("Producto", class_name=TABLE_STYLES["th"]),
-                        rx.el.th("Stock disp.", class_name=TABLE_STYLES["th"] + " text-center"),
-                        rx.el.th("Cantidad", class_name=TABLE_STYLES["th"] + " text-center"),
-                        rx.el.th("", class_name=TABLE_STYLES["th"] + " w-10"),
+                        rx.el.th("Producto", class_name=TABLE_STYLES["header_cell"]),
+                        rx.el.th("Stock disp.", class_name=TABLE_STYLES["header_cell"] + " text-center"),
+                        rx.el.th("Cantidad", class_name=TABLE_STYLES["header_cell"] + " text-center"),
+                        rx.el.th("", class_name=TABLE_STYLES["header_cell"] + " w-10"),
                     ),
                 ),
                 rx.el.tbody(
@@ -95,11 +95,11 @@ def _transfer_items_table() -> rx.Component:
                                     rx.el.span(item["barcode"], class_name="text-xs text-slate-400"),
                                     class_name="flex flex-col",
                                 ),
-                                class_name=TABLE_STYLES["td"],
+                                class_name=TABLE_STYLES["cell"],
                             ),
                             rx.el.td(
                                 item["available_stock"], " ", item["unit"],
-                                class_name=TABLE_STYLES["td"] + " text-center text-sm text-slate-500",
+                                class_name=TABLE_STYLES["cell"] + " text-center text-sm text-slate-500",
                             ),
                             rx.el.td(
                                 rx.el.input(
@@ -109,7 +109,7 @@ def _transfer_items_table() -> rx.Component:
                                     on_change=lambda v, pid=item["product_id"]: State.transfer_update_qty(pid, v),
                                     class_name="w-20 px-2 py-1 text-sm text-center border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
                                 ),
-                                class_name=TABLE_STYLES["td"] + " text-center",
+                                class_name=TABLE_STYLES["cell"] + " text-center",
                             ),
                             rx.el.td(
                                 rx.el.button(
@@ -117,7 +117,7 @@ def _transfer_items_table() -> rx.Component:
                                     on_click=State.transfer_remove_item(item["product_id"]),
                                     class_name=f"p-1.5 text-red-500 hover:bg-red-50 {RADIUS['md']} cursor-pointer {TRANSITIONS['fast']}",
                                 ),
-                                class_name=TABLE_STYLES["td"],
+                                class_name=TABLE_STYLES["cell"],
                             ),
                         ),
                     ),
@@ -246,24 +246,24 @@ def transfer_history_section() -> rx.Component:
                         rx.el.table(
                             rx.el.thead(
                                 rx.el.tr(
-                                    rx.el.th("#", class_name=TABLE_STYLES["th"]),
-                                    rx.el.th("Origen", class_name=TABLE_STYLES["th"]),
-                                    rx.el.th("Destino", class_name=TABLE_STYLES["th"]),
-                                    rx.el.th("Productos", class_name=TABLE_STYLES["th"]),
-                                    rx.el.th("Estado", class_name=TABLE_STYLES["th"]),
-                                    rx.el.th("Fecha", class_name=TABLE_STYLES["th"]),
+                                    rx.el.th("#", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Origen", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Destino", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Productos", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("Fecha", class_name=TABLE_STYLES["header_cell"]),
                                 ),
                             ),
                             rx.el.tbody(
                                 rx.foreach(
                                     State.transfer_history,
                                     lambda t: rx.el.tr(
-                                        rx.el.td(t["id"], class_name=TABLE_STYLES["td"] + " text-sm"),
-                                        rx.el.td(t["origin"], class_name=TABLE_STYLES["td"] + " text-sm"),
-                                        rx.el.td(t["destination"], class_name=TABLE_STYLES["td"] + " text-sm"),
+                                        rx.el.td(t["id"], class_name=TABLE_STYLES["cell"] + " text-sm"),
+                                        rx.el.td(t["origin"], class_name=TABLE_STYLES["cell"] + " text-sm"),
+                                        rx.el.td(t["destination"], class_name=TABLE_STYLES["cell"] + " text-sm"),
                                         rx.el.td(
                                             t["items_summary"],
-                                            class_name=TABLE_STYLES["td"] + " text-xs text-slate-500 max-w-48 truncate",
+                                            class_name=TABLE_STYLES["cell"] + " text-xs text-slate-500 max-w-48 truncate",
                                         ),
                                         rx.el.td(
                                             rx.cond(
@@ -275,9 +275,9 @@ def transfer_history_section() -> rx.Component:
                                                     rx.el.span("Pendiente", class_name="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"),
                                                 ),
                                             ),
-                                            class_name=TABLE_STYLES["td"],
+                                            class_name=TABLE_STYLES["cell"],
                                         ),
-                                        rx.el.td(t["created_at"], class_name=TABLE_STYLES["td"] + " text-xs text-slate-500"),
+                                        rx.el.td(t["created_at"], class_name=TABLE_STYLES["cell"] + " text-xs text-slate-500"),
                                     ),
                                 ),
                             ),
