@@ -38,7 +38,8 @@ import os
 import time
 import functools
 import datetime
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
+from dataclasses import dataclass
 import reflex as rx
 from decimal import Decimal, ROUND_HALF_UP
 from typing import List, Dict, Any, Callable, TypeVar
@@ -46,7 +47,7 @@ from typing import List, Dict, Any, Callable, TypeVar
 logger = logging.getLogger(__name__)
 
 from app.constants import DEFAULT_RECEIPT_WIDTH, MIN_RECEIPT_WIDTH, MAX_RECEIPT_WIDTH, DEFAULT_PAPER_WIDTH_MM
-from app.utils.tenant import set_tenant_context
+from app.utils.tenant import set_tenant_context, tenant_bypass
 from app.utils.payment import normalize_wallet_label, payment_category
 from app.utils.timezone import (
     country_now,
@@ -58,6 +59,14 @@ from app.utils.timezone import (
     utc_now_naive,
 )
 from .types import CashboxSale, PaymentBreakdownItem
+
+@dataclass(frozen=True, slots=True)
+class ScopedCtx:
+    """Resultado de scoped_session / async_scoped_session."""
+    session: Any
+    company_id: int
+    branch_id: int
+
 
 # Type variable para preservar tipo de retorno del método decorado
 F = TypeVar('F', bound=Callable[..., Any])
@@ -231,6 +240,56 @@ class MixinState:
         with rx.session() as session:
             session.info["tenant_bypass"] = True
             yield session
+
+    @contextmanager
+    def scoped_session(self):
+        """Sesión sync con bypass + company_id/branch_id resueltos.
+
+        Uso::
+
+            with self.scoped_session() as ctx:
+                prods = ctx.session.exec(
+                    select(Product).where(
+                        Product.company_id == ctx.company_id,
+                        Product.branch_id == ctx.branch_id,
+                    )
+                ).all()
+
+        Lanza ValueError si el usuario no tiene company/branch asignados.
+        """
+        company_id, branch_id = self._tenant_ids()
+        if not company_id or not branch_id:
+            raise ValueError("Sesión sin empresa/sucursal activa.")
+        set_tenant_context(company_id, branch_id)
+        with tenant_bypass():
+            with rx.session() as session:
+                session.info["tenant_bypass"] = True
+                yield ScopedCtx(session=session, company_id=company_id, branch_id=branch_id)
+
+    @asynccontextmanager
+    async def async_scoped_session(self):
+        """Sesión async con bypass + company_id/branch_id resueltos.
+
+        Uso::
+
+            async with self.async_scoped_session() as ctx:
+                result = await ctx.session.exec(
+                    select(Product).where(
+                        Product.company_id == ctx.company_id,
+                    )
+                )
+
+        Lanza ValueError si el usuario no tiene company/branch asignados.
+        """
+        from app.utils.db import AsyncSessionLocal
+
+        company_id, branch_id = self._tenant_ids()
+        if not company_id or not branch_id:
+            raise ValueError("Sesión sin empresa/sucursal activa.")
+        set_tenant_context(company_id, branch_id)
+        with tenant_bypass():
+            async with AsyncSessionLocal() as session:
+                yield ScopedCtx(session=session, company_id=company_id, branch_id=branch_id)
 
     def _require_active_subscription(self):
         """Bloquea acciones si la suscripción está suspendida o el trial expiró.

@@ -67,36 +67,34 @@ class TransferMixin:
             self.transfer_search_results = []
             return
 
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        try:
+            with self.scoped_session() as ctx:
+                escaped = escape_like(term)
+                prods = ctx.session.exec(
+                    select(Product)
+                    .where(
+                        Product.company_id == ctx.company_id,
+                        Product.branch_id == ctx.branch_id,
+                        Product.is_active == True,  # noqa: E712
+                        Product.stock > 0,
+                        (Product.description.ilike(f"%{escaped}%"))
+                        | (Product.barcode.ilike(f"%{escaped}%")),
+                    )
+                    .limit(10)
+                ).all()
+
+                self.transfer_search_results = [
+                    {
+                        "id": p.id,
+                        "barcode": p.barcode,
+                        "description": p.description,
+                        "stock": str(p.stock),
+                        "unit": p.unit,
+                    }
+                    for p in prods
+                ]
+        except ValueError:
             return
-
-        with self.tenant_session() as session:
-            escaped = escape_like(term)
-            prods = session.exec(
-                select(Product)
-                .where(
-                    Product.company_id == company_id,
-                    Product.branch_id == branch_id,
-                    Product.is_active == True,  # noqa: E712
-                    Product.stock > 0,
-                    (Product.description.ilike(f"%{escaped}%"))
-                    | (Product.barcode.ilike(f"%{escaped}%")),
-                )
-                .limit(10)
-            ).all()
-
-            self.transfer_search_results = [
-                {
-                    "id": p.id,
-                    "barcode": p.barcode,
-                    "description": p.description,
-                    "stock": str(p.stock),
-                    "unit": p.unit,
-                }
-                for p in prods
-            ]
 
     @rx.event
     def transfer_add_item(self, product_id: int):

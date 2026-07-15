@@ -12,6 +12,7 @@ from app.models import (
     Category,
 )
 from app.utils.tenant import set_tenant_context, tenant_bypass
+from app.states.mixin_state import ScopedCtx
 from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.sanitization import escape_like
 from app.utils.pricing import resolve_effective_price
@@ -562,28 +563,26 @@ class SearchMixin:
         block = self._require_active_subscription()
         if block:
             return block
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
+        try:
+            with self.scoped_session() as ctx:
+                product = ctx.session.exec(
+                    select(Product)
+                    .where(Product.id == product_id)
+                    .where(Product.company_id == ctx.company_id)
+                    .where(Product.branch_id == ctx.branch_id)
+                ).first()
+                if not product:
+                    return self.add_notification("Producto no encontrado.", "error")
+                product.is_active = not product.is_active
+                ctx.session.add(product)
+                ctx.session.commit()
+                status = "activado" if product.is_active else "desactivado"
+                self._refresh_inventory_cache()
+                return self.add_notification(
+                    f"Producto '{product.description}' {status}.", "success"
+                )
+        except ValueError:
             return self.add_notification("Empresa no definida.", "error")
-        with rx.session() as session:
-            session.info["tenant_bypass"] = True
-            product = session.exec(
-                select(Product)
-                .where(Product.id == product_id)
-                .where(Product.company_id == company_id)
-                .where(Product.branch_id == branch_id)
-            ).first()
-            if not product:
-                return self.add_notification("Producto no encontrado.", "error")
-            product.is_active = not product.is_active
-            session.add(product)
-            session.commit()
-            status = "activado" if product.is_active else "desactivado"
-            self._refresh_inventory_cache()
-            return self.add_notification(
-                f"Producto '{product.description}' {status}.", "success"
-            )
 
     @rx.event
     def update_new_category_name(self, value: str):
@@ -605,27 +604,22 @@ class SearchMixin:
         name = (self.new_category_name or "").strip().upper()
         if not name:
             return
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return self.add_notification("Empresa no definida.", "error")
 
         self.is_loading = True
 
         try:
-            with rx.session() as session:
-                session.info["tenant_bypass"] = True
-                existing = session.exec(
+            with self.scoped_session() as ctx:
+                existing = ctx.session.exec(
                     select(Category)
                     .where(Category.name == name)
-                    .where(Category.company_id == company_id)
-                    .where(Category.branch_id == branch_id)
+                    .where(Category.company_id == ctx.company_id)
+                    .where(Category.branch_id == ctx.branch_id)
                 ).first()
                 if not existing:
-                    session.add(
-                        Category(name=name, company_id=company_id, branch_id=branch_id)
+                    ctx.session.add(
+                        Category(name=name, company_id=ctx.company_id, branch_id=ctx.branch_id)
                     )
-                    session.commit()
+                    ctx.session.commit()
                     self.new_category_name = ""
                     self.new_category_input_key += 1
                     self.load_categories()
@@ -637,6 +631,8 @@ class SearchMixin:
                         events.append(notification)
                     return events
                 return self.add_notification("La categoría ya existe.", "warning")
+        except ValueError:
+            return self.add_notification("Empresa no definida.", "error")
         finally:
             self.is_loading = False
 
@@ -653,25 +649,20 @@ class SearchMixin:
             return self.add_notification(
                 "No se puede eliminar la categoría General.", "error"
             )
-        company_id = self._company_id()
-        branch_id = self._branch_id()
-        if not company_id or not branch_id:
-            return self.add_notification("Empresa no definida.", "error")
 
         self.is_loading = True
 
         try:
-            with rx.session() as session:
-                session.info["tenant_bypass"] = True
-                cat = session.exec(
+            with self.scoped_session() as ctx:
+                cat = ctx.session.exec(
                     select(Category)
                     .where(Category.name == category)
-                    .where(Category.company_id == company_id)
-                    .where(Category.branch_id == branch_id)
+                    .where(Category.company_id == ctx.company_id)
+                    .where(Category.branch_id == ctx.branch_id)
                 ).first()
                 if cat:
-                    session.delete(cat)
-                    session.commit()
+                    ctx.session.delete(cat)
+                    ctx.session.commit()
                     self.load_categories()
                     events = [self._emit_runtime_sync_event()]
                     notification = self.add_notification(
@@ -681,6 +672,8 @@ class SearchMixin:
                         events.append(notification)
                     return events
                 return self.add_notification("Categoría no encontrada.", "warning")
+        except ValueError:
+            return self.add_notification("Empresa no definida.", "error")
         finally:
             self.is_loading = False
 
