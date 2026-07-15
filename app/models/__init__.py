@@ -11,6 +11,9 @@ from .inventory import (
     ProductKit,
     ProductVariant,
     StockMovement,
+    StockTransfer,
+    StockTransferItem,
+    TransferStatus,
     Unit,
 )
 from .purchases import (
@@ -67,6 +70,9 @@ __all__ = [
     "ProductKit",
     "ProductVariant",
     "StockMovement",
+    "StockTransfer",
+    "StockTransferItem",
+    "TransferStatus",
     "Unit",
     "Supplier",
     "Purchase",

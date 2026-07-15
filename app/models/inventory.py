@@ -1,6 +1,7 @@
 from typing import List, Optional, TYPE_CHECKING
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
 from sqlmodel import Field, Relationship, SQLModel
 import sqlalchemy
@@ -13,6 +14,7 @@ from ._mixins import TenantMixin
 
 if TYPE_CHECKING:
     from .auth import User
+    from .company import Branch
     from .sales import SaleItem
 
 
@@ -489,6 +491,149 @@ class Unit(TenantMixin, SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(index=True, nullable=False, max_length=100)
     allows_decimal: bool = Field(default=False)
+
+
+class TransferStatus(str, Enum):
+    """Estados de una transferencia de stock entre sucursales."""
+    PENDING = "pending"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class StockTransfer(SQLModel, table=True):
+    """Transferencia de stock entre sucursales de la misma empresa.
+
+    Scoped por company_id (no usa TenantMixin porque referencia 2
+    sucursales distintas: origin_branch_id y destination_branch_id).
+    """
+
+    __tablename__ = "stocktransfer"
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_stocktransfer_company_status",
+            "company_id",
+            "status",
+        ),
+        sqlalchemy.Index(
+            "ix_stocktransfer_company_created",
+            "company_id",
+            "created_at",
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    company_id: int = Field(
+        foreign_key="company.id", index=True, nullable=False,
+    )
+    origin_branch_id: int = Field(
+        foreign_key="branch.id", index=True, nullable=False,
+    )
+    destination_branch_id: int = Field(
+        foreign_key="branch.id", index=True, nullable=False,
+    )
+    status: TransferStatus = Field(
+        default=TransferStatus.PENDING,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Enum(
+                TransferStatus,
+                native_enum=False,
+                length=20,
+                validate_strings=True,
+                values_callable=lambda e: [m.value for m in e],
+            ),
+            nullable=False,
+            server_default=TransferStatus.PENDING.value,
+        ),
+    )
+    notes: str = Field(default="", max_length=500)
+    created_at: datetime = Field(
+        default_factory=utc_now_naive,
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(sqlalchemy.DateTime(timezone=False)),
+    )
+    created_by_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("user.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    completed_by_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("user.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+
+    items: List["StockTransferItem"] = Relationship(back_populates="transfer")
+    origin_branch: "Branch" = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[StockTransfer.origin_branch_id]"},
+    )
+    destination_branch: "Branch" = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[StockTransfer.destination_branch_id]"},
+    )
+    created_by: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[StockTransfer.created_by_id]"},
+    )
+    completed_by: Optional["User"] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[StockTransfer.completed_by_id]"},
+    )
+
+
+class StockTransferItem(SQLModel, table=True):
+    """Línea de una transferencia de stock."""
+
+    __tablename__ = "stocktransferitem"
+
+    __table_args__ = (
+        sqlalchemy.Index(
+            "ix_stocktransferitem_transfer",
+            "transfer_id",
+        ),
+        CheckConstraint("quantity > 0", name="ck_stocktransferitem_qty_pos"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    transfer_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("stocktransfer.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    product_id: int = Field(
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("product.id", ondelete="RESTRICT"),
+            nullable=False,
+            index=True,
+        ),
+    )
+    product_variant_id: Optional[int] = Field(
+        default=None,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Integer,
+            sqlalchemy.ForeignKey("productvariant.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    quantity: Decimal = Field(
+        default=Decimal("1.0000"),
+        sa_column=sqlalchemy.Column(Numeric(10, 4)),
+    )
+    product_name_snapshot: str = Field(default="", max_length=500)
+
+    transfer: "StockTransfer" = Relationship(back_populates="items")
+    product: Optional["Product"] = Relationship()
+    product_variant: Optional["ProductVariant"] = Relationship()
 
 
 class FieldPrice(TenantMixin, SQLModel, table=True):

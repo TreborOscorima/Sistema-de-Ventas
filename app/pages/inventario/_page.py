@@ -16,6 +16,7 @@ from ._edit_product import edit_product_modal
 from ._modals import import_modal, stock_details_modal, inventory_adjustment_modal
 from ._product_table import inventory_stat_card, _product_card
 from ._movements_section import movements_section
+from ._transfer_modal import transfer_modal, transfer_history_section
 
 
 def inventario_page() -> rx.Component:
@@ -192,6 +193,16 @@ def inventario_page() -> rx.Component:
             "Registrar Fisico",
             on_click=State.open_inventory_check_modal,
             class_name=BUTTON_STYLES["warning"],
+          ),
+          rx.cond(
+            State.available_branches.length() > 1,
+            rx.el.button(
+              rx.icon("arrow-right-left", class_name="h-4 w-4"),
+              "Transferir",
+              on_click=State.transfer_open_modal,
+              class_name=BUTTON_STYLES["ghost"],
+            ),
+            rx.fragment(),
           ),
           rx.el.button(
             rx.icon("tag", class_name="h-4 w-4"),
@@ -552,10 +563,16 @@ def inventario_page() -> rx.Component:
       rx.fragment(),
     ),
     movements_section(),
+    rx.cond(
+      State.available_branches.length() > 1,
+      transfer_history_section(),
+      rx.fragment(),
+    ),
     inventory_adjustment_modal(),
     edit_product_modal(),
     stock_details_modal(),
     import_modal(),
+    transfer_modal(),
     on_mount=State.refresh_inventory_cache,
     class_name=f"w-full flex flex-col {SPACING['page_gap']}",
   )
