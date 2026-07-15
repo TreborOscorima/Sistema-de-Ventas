@@ -8,7 +8,27 @@ import datetime
 
 from app.utils.timezone import local_day_bounds_utc_naive
 from app.utils.tenant import set_tenant_context
-from typing import Any
+from typing import Any, Dict, List, Optional, Set
+
+from .types import (  # noqa: F401 – needed for get_type_hints on dynamic RootState
+    CashboxLogEntry,
+    CashboxSale,
+    CashboxSession,
+    CurrencyOption,
+    FieldPrice,
+    FieldReservation,
+    InventoryAdjustment,
+    NewUser,
+    PaymentBreakdownItem,
+    PaymentMethodConfig,
+    Privileges,
+    RecentTransaction,
+    ReservationReceipt,
+    SaleItemDict,
+    ServiceLogEntry,
+    TransactionItem,
+    User,
+)
 
 import reflex as rx
 from sqlalchemy import func
