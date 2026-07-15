@@ -1175,6 +1175,14 @@ class AuthState(MixinState):
     def _user_branch_ids(self, session, user_id: int) -> list[int]:
         if not user_id:
             return []
+        user = session.exec(
+            select(UserModel).where(UserModel.id == user_id)
+        ).first()
+        if user and user.role in ("Superadmin", "Administrador"):
+            rows = session.exec(
+                select(Branch.id).where(Branch.company_id == user.company_id)
+            ).all()
+            return [int(row) for row in rows if row]
         rows = session.exec(
             select(UserBranch.branch_id).where(UserBranch.user_id == user_id)
         ).all()
