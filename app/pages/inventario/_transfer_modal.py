@@ -12,129 +12,206 @@ from app.components.ui import (
 )
 
 
-def _transfer_search_bar() -> rx.Component:
+def _barcode_scanner() -> rx.Component:
     return rx.el.div(
         rx.el.label(
-            "Buscar productos para transferir",
-            class_name="text-xs font-medium text-slate-500 uppercase tracking-wide",
+            rx.icon("scan-barcode", class_name="h-3.5 w-3.5"),
+            "Escanear código de barras",
+            class_name="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide",
         ),
-        rx.el.div(
-            rx.icon("search", class_name="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"),
-            rx.el.input(
-                placeholder="Código de barras o descripción...",
-                value=State.transfer_search_term,
-                on_change=State.transfer_search_products,
-                class_name=INPUT_STYLES["default"] + " pl-9",
-            ),
-            class_name="relative",
-        ),
-        rx.cond(
-            State.transfer_search_results.length() > 0,
+        rx.el.form(
             rx.el.div(
-                rx.foreach(
-                    State.transfer_search_results,
-                    lambda r: rx.el.div(
-                        rx.el.div(
-                            rx.el.span(
-                                r["description"],
-                                class_name="text-sm font-medium text-slate-700",
-                            ),
-                            rx.el.span(
-                                r["barcode"],
-                                class_name="text-xs text-slate-400",
-                            ),
-                            class_name="flex flex-col",
-                        ),
-                        rx.el.div(
-                            rx.el.span(
-                                "Stock: ", r["stock"], " ", r["unit"],
-                                class_name="text-xs text-slate-500",
-                            ),
-                            rx.el.button(
-                                rx.icon("plus", class_name="h-3.5 w-3.5"),
-                                on_click=State.transfer_add_item(r["id"]),
-                                class_name=f"p-1.5 text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} cursor-pointer {TRANSITIONS['fast']}",
-                            ),
-                            class_name="flex items-center gap-2",
-                        ),
-                        class_name=f"flex items-center justify-between px-3 py-2 hover:bg-slate-50 {TRANSITIONS['fast']} cursor-pointer",
-                    ),
+                rx.icon("scan-barcode", class_name="h-4 w-4 text-indigo-500 flex-shrink-0"),
+                rx.el.input(
+                    name="barcode",
+                    key=State.transfer_barcode_key.to_string(),
+                    placeholder="Escanee o escriba el código y presione Enter...",
+                    auto_complete="off",
+                    auto_focus=True,
+                    class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0 placeholder-slate-400",
                 ),
-                class_name=f"border border-slate-200 {RADIUS['lg']} overflow-hidden divide-y divide-slate-100 max-h-48 overflow-y-auto",
+                class_name="flex items-center gap-2 px-3 py-2.5 border-2 border-indigo-200 rounded-lg bg-indigo-50/30 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400",
             ),
-            rx.fragment(),
+            on_submit=State.transfer_barcode_submit,
+            reset_on_submit=True,
         ),
-        class_name="flex flex-col gap-2",
+        rx.el.p(
+            "Escanee un producto para agregarlo. Si ya existe, se incrementa la cantidad.",
+            class_name="text-xs text-slate-400 italic",
+        ),
+        class_name="flex flex-col gap-1.5",
     )
 
 
-def _transfer_items_table() -> rx.Component:
+def _description_search() -> rx.Component:
+    return rx.el.div(
+        rx.el.label(
+            rx.icon("search", class_name="h-3.5 w-3.5"),
+            "Buscar por descripción",
+            class_name="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide",
+        ),
+        rx.el.div(
+            rx.el.div(
+                rx.icon("search", class_name="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"),
+                rx.el.input(
+                    value=State.transfer_search_term,
+                    on_change=State.transfer_search_products,
+                    placeholder="Escriba para buscar por nombre o código...",
+                    class_name=INPUT_STYLES["default"] + " pl-9",
+                ),
+                class_name="relative",
+            ),
+            rx.cond(
+                State.transfer_search_results.length() > 0,
+                rx.el.div(
+                    rx.foreach(
+                        State.transfer_search_results,
+                        lambda r: rx.el.button(
+                            rx.el.div(
+                                rx.el.span(
+                                    r["description"],
+                                    class_name="text-sm font-medium text-slate-700",
+                                ),
+                                rx.cond(
+                                    r["barcode"] != "",
+                                    rx.el.span(
+                                        r["barcode"],
+                                        class_name="text-xs text-slate-400 font-mono",
+                                    ),
+                                    rx.fragment(),
+                                ),
+                                class_name="flex flex-col items-start",
+                            ),
+                            rx.el.div(
+                                rx.el.span(
+                                    r["stock"], " ", r["unit"],
+                                    class_name="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full",
+                                ),
+                                rx.icon("circle-plus", class_name="h-5 w-5 text-indigo-500"),
+                                class_name="flex items-center gap-2 shrink-0",
+                            ),
+                            on_click=State.transfer_add_item(r["id"]),
+                            type="button",
+                            class_name=f"flex items-center justify-between w-full px-3 py-2.5 hover:bg-indigo-50 {TRANSITIONS['fast']} cursor-pointer text-left",
+                        ),
+                    ),
+                    class_name=f"border border-slate-200 {RADIUS['lg']} overflow-hidden divide-y divide-slate-100 max-h-52 overflow-y-auto bg-white shadow-lg",
+                ),
+                rx.fragment(),
+            ),
+            class_name="flex flex-col gap-1",
+        ),
+        class_name="flex flex-col gap-1.5",
+    )
+
+
+def _qty_stepper(item: rx.Var) -> rx.Component:
+    return rx.el.div(
+        rx.el.button(
+            rx.icon("minus", class_name="h-3.5 w-3.5"),
+            on_click=State.transfer_decrement_qty(item["product_id"]),
+            type="button",
+            class_name=f"p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} {TRANSITIONS['fast']} disabled:opacity-30",
+            disabled=item["quantity"] == "1",
+        ),
+        rx.el.input(
+            type="number",
+            min="1",
+            value=item["quantity"],
+            on_change=lambda v, pid=item["product_id"]: State.transfer_update_qty(pid, v),
+            class_name="w-14 px-1 py-0.5 text-sm text-center font-medium border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+        ),
+        rx.el.button(
+            rx.icon("plus", class_name="h-3.5 w-3.5"),
+            on_click=State.transfer_increment_qty(item["product_id"]),
+            type="button",
+            class_name=f"p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} {TRANSITIONS['fast']}",
+        ),
+        class_name="flex items-center gap-0.5",
+    )
+
+
+def _transfer_items_list() -> rx.Component:
     return rx.cond(
         State.transfer_items.length() > 0,
         rx.el.div(
-            rx.el.label(
-                "Productos a transferir",
-                class_name="text-xs font-medium text-slate-500 uppercase tracking-wide",
+            rx.el.div(
+                rx.el.label(
+                    rx.icon("package", class_name="h-3.5 w-3.5"),
+                    "Productos a transferir",
+                    class_name="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide",
+                ),
+                rx.el.span(
+                    State.transfer_items.length().to_string(),
+                    rx.cond(
+                        State.transfer_items.length() == 1,
+                        " producto",
+                        " productos",
+                    ),
+                    class_name="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full",
+                ),
+                class_name="flex items-center justify-between",
             ),
-            rx.el.table(
-                rx.el.thead(
-                    rx.el.tr(
-                        rx.el.th("Producto", class_name=TABLE_STYLES["header_cell"]),
-                        rx.el.th("Stock disp.", class_name=TABLE_STYLES["header_cell"] + " text-center"),
-                        rx.el.th("Cantidad", class_name=TABLE_STYLES["header_cell"] + " text-center"),
-                        rx.el.th("", class_name=TABLE_STYLES["header_cell"] + " w-10"),
-                    ),
-                ),
-                rx.el.tbody(
-                    rx.foreach(
-                        State.transfer_items,
-                        lambda item: rx.el.tr(
-                            rx.el.td(
-                                rx.el.div(
-                                    rx.el.span(item["description"], class_name="text-sm text-slate-700"),
-                                    rx.el.span(item["barcode"], class_name="text-xs text-slate-400"),
-                                    class_name="flex flex-col",
+            rx.el.div(
+                rx.foreach(
+                    State.transfer_items,
+                    lambda item: rx.el.div(
+                        rx.el.div(
+                            rx.el.div(
+                                rx.el.span(
+                                    item["description"],
+                                    class_name="text-sm font-medium text-slate-700 line-clamp-1",
                                 ),
-                                class_name=TABLE_STYLES["cell"],
-                            ),
-                            rx.el.td(
-                                item["available_stock"], " ", item["unit"],
-                                class_name=TABLE_STYLES["cell"] + " text-center text-sm text-slate-500",
-                            ),
-                            rx.el.td(
-                                rx.el.input(
-                                    type="number",
-                                    min="1",
-                                    value=item["quantity"],
-                                    on_change=lambda v, pid=item["product_id"]: State.transfer_update_qty(pid, v),
-                                    class_name="w-20 px-2 py-1 text-sm text-center border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
+                                rx.cond(
+                                    item["barcode"] != "",
+                                    rx.el.span(
+                                        item["barcode"],
+                                        class_name="text-xs text-slate-400 font-mono",
+                                    ),
+                                    rx.fragment(),
                                 ),
-                                class_name=TABLE_STYLES["cell"] + " text-center",
+                                class_name="flex flex-col min-w-0",
                             ),
-                            rx.el.td(
-                                rx.el.button(
-                                    rx.icon("trash-2", class_name="h-3.5 w-3.5"),
-                                    on_click=State.transfer_remove_item(item["product_id"]),
-                                    class_name=f"p-1.5 text-red-500 hover:bg-red-50 {RADIUS['md']} cursor-pointer {TRANSITIONS['fast']}",
-                                ),
-                                class_name=TABLE_STYLES["cell"],
+                            rx.el.span(
+                                "Disp: ", item["available_stock"], " ", item["unit"],
+                                class_name="text-xs text-slate-400 shrink-0",
                             ),
+                            class_name="flex items-center justify-between gap-2 flex-1 min-w-0",
                         ),
+                        rx.el.div(
+                            _qty_stepper(item),
+                            rx.el.button(
+                                rx.icon("trash-2", class_name="h-3.5 w-3.5"),
+                                on_click=State.transfer_remove_item(item["product_id"]),
+                                type="button",
+                                class_name=f"p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 {RADIUS['md']} {TRANSITIONS['fast']}",
+                            ),
+                            class_name="flex items-center gap-2",
+                        ),
+                        class_name="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2.5",
                     ),
                 ),
-                class_name="w-full",
+                class_name=f"border border-slate-200 {RADIUS['lg']} divide-y divide-slate-100 overflow-hidden max-h-64 overflow-y-auto",
             ),
             class_name="flex flex-col gap-2",
         ),
-        rx.fragment(),
+        rx.el.div(
+            rx.icon("package-open", class_name="h-8 w-8 text-slate-300"),
+            rx.el.p(
+                "Escanee un código de barras o busque productos para agregarlos",
+                class_name="text-sm text-slate-400 text-center",
+            ),
+            class_name="flex flex-col items-center gap-2 py-6 border-2 border-dashed border-slate-200 rounded-xl",
+        ),
     )
 
 
 def _dest_branch_select() -> rx.Component:
     return rx.el.div(
         rx.el.label(
+            rx.icon("building-2", class_name="h-3.5 w-3.5"),
             "Sucursal destino",
-            class_name="text-xs font-medium text-slate-500 uppercase tracking-wide",
+            class_name="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide",
         ),
         rx.el.select(
             rx.el.option("Seleccione sucursal destino...", value=""),
@@ -159,17 +236,25 @@ def transfer_modal() -> rx.Component:
         is_open=State.transfer_modal_open,
         on_close=State.transfer_close_modal,
         title="Transferir stock entre sucursales",
-        description="Seleccione los productos y la sucursal destino para la transferencia.",
+        description="Escanee o busque los productos y seleccione la sucursal destino.",
         max_width="max-w-2xl",
         children=[
             rx.el.div(
                 _dest_branch_select(),
-                _transfer_search_bar(),
-                _transfer_items_table(),
+                rx.el.div(
+                    class_name="border-t border-slate-100",
+                ),
+                _barcode_scanner(),
+                _description_search(),
+                rx.el.div(
+                    class_name="border-t border-slate-100",
+                ),
+                _transfer_items_list(),
                 rx.el.div(
                     rx.el.label(
+                        rx.icon("message-square", class_name="h-3.5 w-3.5"),
                         "Notas (opcional)",
-                        class_name="text-xs font-medium text-slate-500 uppercase tracking-wide",
+                        class_name="flex items-center gap-1.5 text-xs font-medium text-slate-500 uppercase tracking-wide",
                     ),
                     rx.el.textarea(
                         value=State.transfer_notes,
@@ -184,6 +269,19 @@ def transfer_modal() -> rx.Component:
             ),
         ],
         footer=rx.el.div(
+            rx.cond(
+                State.transfer_items.length() > 0,
+                rx.el.span(
+                    State.transfer_items.length().to_string(),
+                    rx.cond(
+                        State.transfer_items.length() == 1,
+                        " producto seleccionado",
+                        " productos seleccionados",
+                    ),
+                    class_name="text-xs text-slate-500 mr-auto",
+                ),
+                rx.fragment(),
+            ),
             rx.el.button(
                 "Cancelar",
                 on_click=State.transfer_close_modal,
@@ -205,7 +303,7 @@ def transfer_modal() -> rx.Component:
                 disabled=State.transfer_loading,
                 class_name=BUTTON_STYLES["primary"],
             ),
-            class_name="flex justify-end gap-2",
+            class_name="flex items-center justify-end gap-2",
         ),
     )
 

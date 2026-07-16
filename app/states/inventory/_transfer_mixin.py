@@ -35,6 +35,7 @@ class TransferMixin:
     transfer_history_page: int = 1
     transfer_loading: bool = False
     transfer_show_history: bool = False
+    transfer_barcode_key: int = 0
 
     @rx.event
     def transfer_open_modal(self):
@@ -86,12 +87,68 @@ class TransferMixin:
                 self.transfer_search_results = [
                     {
                         "id": p.id,
-                        "barcode": p.barcode,
+                        "barcode": p.barcode or "",
                         "description": p.description,
                         "stock": str(p.stock),
                         "unit": p.unit,
                     }
                     for p in prods
+                ]
+        except ValueError:
+            return
+
+    @rx.event
+    def transfer_barcode_submit(self, form_data: dict):
+        barcode = (form_data.get("barcode") or "").strip()
+        self.transfer_barcode_key += 1
+        if not barcode:
+            return
+
+        try:
+            with self.scoped_session() as ctx:
+                prod = ctx.session.exec(
+                    select(Product)
+                    .where(
+                        Product.company_id == ctx.company_id,
+                        Product.branch_id == ctx.branch_id,
+                        Product.is_active == True,  # noqa: E712
+                        Product.barcode == barcode,
+                    )
+                ).first()
+
+                if not prod:
+                    return self.add_notification(
+                        f"No se encontró producto con código '{barcode}'.", "warning"
+                    )
+
+                if prod.stock <= 0:
+                    return self.add_notification(
+                        f"'{prod.description}' no tiene stock disponible.", "warning"
+                    )
+
+                for item in self.transfer_items:
+                    if item["product_id"] == prod.id:
+                        new_qty = int(item["quantity"]) + 1
+                        self.transfer_items = [
+                            {**i, "quantity": str(new_qty)}
+                            if i["product_id"] == prod.id
+                            else i
+                            for i in self.transfer_items
+                        ]
+                        return self.add_notification(
+                            f"'{prod.description}' +1 (total: {new_qty}).", "info"
+                        )
+
+                self.transfer_items = [
+                    *self.transfer_items,
+                    {
+                        "product_id": prod.id,
+                        "barcode": prod.barcode or "",
+                        "description": prod.description,
+                        "available_stock": str(prod.stock),
+                        "unit": prod.unit,
+                        "quantity": "1",
+                    },
                 ]
         except ValueError:
             return
@@ -136,6 +193,29 @@ class TransferMixin:
         for item in self.transfer_items:
             if item["product_id"] == product_id:
                 item = {**item, "quantity": qty}
+            new_items.append(item)
+        self.transfer_items = new_items
+
+    @rx.event
+    def transfer_increment_qty(self, product_id: int):
+        new_items = []
+        for item in self.transfer_items:
+            if item["product_id"] == product_id:
+                current = int(item["quantity"]) if item["quantity"].isdigit() else 1
+                stock = int(float(item["available_stock"])) if item["available_stock"] else 9999
+                new_val = min(current + 1, stock)
+                item = {**item, "quantity": str(new_val)}
+            new_items.append(item)
+        self.transfer_items = new_items
+
+    @rx.event
+    def transfer_decrement_qty(self, product_id: int):
+        new_items = []
+        for item in self.transfer_items:
+            if item["product_id"] == product_id:
+                current = int(item["quantity"]) if item["quantity"].isdigit() else 1
+                new_val = max(current - 1, 1)
+                item = {**item, "quantity": str(new_val)}
             new_items.append(item)
         self.transfer_items = new_items
 
@@ -260,7 +340,7 @@ class TransferMixin:
                             dest_name = dest.name
 
                         items_summary = ", ".join(
-                            f"{i.product_name_snapshot} (×{i.quantity})"
+                            f"{i.product_name_snapshot} ({'×'}{i.quantity})"
                             for i in t.items
                         )
                         self.transfer_history.append({
