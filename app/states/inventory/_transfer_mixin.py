@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict, List
 
 import reflex as rx
@@ -36,6 +36,12 @@ class TransferMixin:
     transfer_loading: bool = False
     transfer_show_history: bool = False
     transfer_barcode_key: int = 0
+
+    def _fmt_stock(self, value, unit: str) -> str:
+        d = Decimal(str(value or 0))
+        if self._unit_allows_decimal(unit):
+            return str(d.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
+        return str(int(d))
 
     @rx.event
     def transfer_open_modal(self):
@@ -89,7 +95,7 @@ class TransferMixin:
                         "id": p.id,
                         "barcode": p.barcode or "",
                         "description": p.description,
-                        "stock": str(p.stock),
+                        "stock": self._fmt_stock(p.stock, p.unit),
                         "unit": p.unit,
                     }
                     for p in prods
@@ -145,7 +151,7 @@ class TransferMixin:
                         "product_id": prod.id,
                         "barcode": prod.barcode or "",
                         "description": prod.description,
-                        "available_stock": str(prod.stock),
+                        "available_stock": self._fmt_stock(prod.stock, prod.unit),
                         "unit": prod.unit,
                         "quantity": "1",
                     },
@@ -173,7 +179,7 @@ class TransferMixin:
                 "product_id": prod["id"],
                 "barcode": prod["barcode"],
                 "description": prod["description"],
-                "available_stock": prod["stock"],
+                "available_stock": prod["stock"],  # already formatted by search
                 "unit": prod["unit"],
                 "quantity": "1",
             },

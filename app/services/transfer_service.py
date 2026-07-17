@@ -164,14 +164,15 @@ class TransferService:
                 timestamp=now,
             ))
 
-            dest_product = await session.exec(
-                select(Product).where(
-                    Product.id == item.product_id,
-                    Product.company_id == company_id,
-                    Product.branch_id == dest_id,
-                )
+            dest_query = select(Product).where(
+                Product.company_id == company_id,
+                Product.branch_id == dest_id,
             )
-            dest_product = dest_product.first()
+            if origin_product.barcode:
+                dest_query = dest_query.where(Product.barcode == origin_product.barcode)
+            else:
+                dest_query = dest_query.where(Product.description == origin_product.description)
+            dest_product = (await session.exec(dest_query)).first()
 
             if dest_product:
                 dest_product.stock += item.quantity
