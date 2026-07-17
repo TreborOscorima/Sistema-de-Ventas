@@ -304,7 +304,7 @@ class TransferMixin:
             yield self.add_notification(
                 f"Transferencia #{transfer.id} completada exitosamente.", "success"
             )
-            yield type(self).load_inventory_page
+            yield type(self).refresh_inventory_cache
         except TransferError as e:
             yield self.add_notification(str(e), "error")
         except Exception:
