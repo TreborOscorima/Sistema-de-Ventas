@@ -258,6 +258,10 @@ class TestExecuteTransfer:
             assert "Transferencia Salida" in types
             assert "Transferencia Ingreso" in types
             assert len(movs) == 2
+            by_type = {m.type: m for m in movs}
+            # El kardex nombra la sucursal real (origen "Central", destino "Norte").
+            assert "Norte" in by_type["Transferencia Salida"].description
+            assert "Central" in by_type["Transferencia Ingreso"].description
 
     @pytest.mark.asyncio
     async def test_double_execute_rejected(self, session, company_with_branches):

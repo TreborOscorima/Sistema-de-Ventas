@@ -18,6 +18,8 @@ _TYPE_OPTIONS = [
     ("Compra", "Compra"),
     ("Importacion", "Importacion"),
     ("Devolucion", "Devolucion"),
+    ("Transferencia Ingreso", "Transferencia Ingreso"),
+    ("Transferencia Salida", "Transferencia Salida"),
 ]
 
 
@@ -32,6 +34,8 @@ def _type_badge(movement_type: rx.Var) -> rx.Component:
             ("Compra",               "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700"),
             ("Importacion",          "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-700"),
             ("Devolucion",           "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700"),
+            ("Transferencia Ingreso", "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700"),
+            ("Transferencia Salida",  "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700"),
             "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600",
         ),
     )

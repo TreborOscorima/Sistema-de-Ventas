@@ -16,7 +16,11 @@ from ._edit_product import edit_product_modal
 from ._modals import import_modal, stock_details_modal, inventory_adjustment_modal
 from ._product_table import inventory_stat_card, _product_card
 from ._movements_section import movements_section
-from ._transfer_modal import transfer_modal, transfer_history_section
+from ._transfer_modal import (
+    transfer_modal,
+    transfer_history_section,
+    transfer_detail_modal,
+)
 
 
 def inventario_page() -> rx.Component:
@@ -573,6 +577,7 @@ def inventario_page() -> rx.Component:
     stock_details_modal(),
     import_modal(),
     transfer_modal(),
+    transfer_detail_modal(),
     on_mount=State.refresh_inventory_cache,
     class_name=f"w-full flex flex-col {SPACING['page_gap']}",
   )

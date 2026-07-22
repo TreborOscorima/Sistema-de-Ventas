@@ -15,6 +15,7 @@ from app.models import (
     ProductVariant,
     StockTransfer,
     StockTransferItem,
+    User,
 )
 from app.models.inventory import TransferStatus
 from app.services.sale_service import StockError
@@ -38,6 +39,9 @@ class TransferMixin:
     transfer_loading: bool = False
     transfer_show_history: bool = False
     transfer_barcode_key: int = 0
+    transfer_detail_open: bool = False
+    transfer_detail: Dict[str, Any] = {}
+    transfer_detail_items: List[Dict[str, str]] = []
 
     def _fmt_stock(self, value, unit: str) -> str:
         d = Decimal(str(value or 0))
@@ -416,29 +420,50 @@ class TransferMixin:
                         limit=50,
                     )
 
+                    branch_cache: Dict[int, str] = {}
+                    user_cache: Dict[int, str] = {}
+
+                    async def _branch_name(bid):
+                        if bid is None:
+                            return ""
+                        if bid not in branch_cache:
+                            b = await session.get(Branch, bid)
+                            branch_cache[bid] = b.name if b else f"Sucursal {bid}"
+                        return branch_cache[bid]
+
+                    async def _user_name(uid):
+                        if uid is None:
+                            return ""
+                        if uid not in user_cache:
+                            u = await session.get(User, uid)
+                            user_cache[uid] = (u.username if u else "") or ""
+                        return user_cache[uid]
+
                     self.transfer_history = []
                     for t in transfers:
-                        origin_name = ""
-                        dest_name = ""
-                        origin = await session.get(Branch, t.origin_branch_id)
-                        dest = await session.get(Branch, t.destination_branch_id)
-                        if origin:
-                            origin_name = origin.name
-                        if dest:
-                            dest_name = dest.name
-
-                        items_summary = ", ".join(
-                            f"{i.product_name_snapshot} ({'×'}{i.quantity})"
+                        origin_name = await _branch_name(t.origin_branch_id)
+                        dest_name = await _branch_name(t.destination_branch_id)
+                        items = [
+                            {
+                                "name": i.product_name_snapshot,
+                                "quantity": self._fmt_qty(i.quantity),
+                            }
                             for i in t.items
+                        ]
+                        items_summary = ", ".join(
+                            f"{it['name']} (×{it['quantity']})" for it in items
                         )
                         self.transfer_history.append({
                             "id": t.id,
                             "origin": origin_name,
                             "destination": dest_name,
                             "status": t.status.value,
+                            "items": items,
                             "items_summary": items_summary,
-                            "items_count": len(t.items),
-                            "notes": t.notes,
+                            "items_count": len(items),
+                            "notes": t.notes or "",
+                            "created_by": await _user_name(t.created_by_id),
+                            "completed_by": await _user_name(t.completed_by_id),
                             "created_at": t.created_at.strftime("%d/%m/%Y %H:%M") if t.created_at else "",
                             "completed_at": t.completed_at.strftime("%d/%m/%Y %H:%M") if t.completed_at else "",
                         })
@@ -446,6 +471,22 @@ class TransferMixin:
             logger.exception("Error cargando historial de transferencias")
         finally:
             self.transfer_loading = False
+
+    @rx.event
+    def transfer_open_detail(self, transfer_id: int):
+        for t in self.transfer_history:
+            if t["id"] == transfer_id:
+                self.transfer_detail = t
+                self.transfer_detail_items = [
+                    {"name": str(it["name"]), "quantity": str(it["quantity"])}
+                    for it in t["items"]
+                ]
+                self.transfer_detail_open = True
+                return
+
+    @rx.event
+    def transfer_close_detail(self):
+        self.transfer_detail_open = False
 
     @rx.event
     def transfer_toggle_history(self):

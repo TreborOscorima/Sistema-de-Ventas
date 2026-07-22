@@ -330,6 +330,119 @@ def transfer_modal() -> rx.Component:
     )
 
 
+def _detail_status_badge(status: rx.Var) -> rx.Component:
+    return rx.cond(
+        status == "completed",
+        rx.el.span("Completada", class_name="text-xs font-medium text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full"),
+        rx.cond(
+            status == "cancelled",
+            rx.el.span("Cancelada", class_name="text-xs font-medium text-red-600 bg-red-50 px-2.5 py-1 rounded-full"),
+            rx.el.span("Pendiente", class_name="text-xs font-medium text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full"),
+        ),
+    )
+
+
+def transfer_detail_modal() -> rx.Component:
+    d = State.transfer_detail
+    return modal_container(
+        is_open=State.transfer_detail_open,
+        on_close=State.transfer_close_detail,
+        title="Detalle de transferencia",
+        description="Resumen completo de los productos movidos en esta transferencia.",
+        max_width="max-w-lg",
+        children=[
+            rx.el.div(
+                # Encabezado: #id + estado
+                rx.el.div(
+                    rx.el.span(
+                        "#", d["id"].to_string(),
+                        class_name="text-lg font-bold text-slate-800",
+                    ),
+                    _detail_status_badge(d["status"]),
+                    class_name="flex items-center justify-between",
+                ),
+                # Origen → Destino
+                rx.el.div(
+                    rx.el.div(
+                        rx.el.span("Origen", class_name="text-xs text-slate-400 uppercase tracking-wide"),
+                        rx.el.span(d["origin"], class_name="text-sm font-semibold text-slate-700"),
+                        class_name="flex flex-col gap-0.5",
+                    ),
+                    rx.icon("arrow-right", class_name="h-5 w-5 text-indigo-400 shrink-0"),
+                    rx.el.div(
+                        rx.el.span("Destino", class_name="text-xs text-slate-400 uppercase tracking-wide"),
+                        rx.el.span(d["destination"], class_name="text-sm font-semibold text-slate-700"),
+                        class_name="flex flex-col gap-0.5",
+                    ),
+                    class_name="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 rounded-lg",
+                ),
+                # Fecha + usuario
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("calendar", class_name="h-3.5 w-3.5 text-slate-400"),
+                        rx.el.span(d["created_at"], class_name="text-xs text-slate-600"),
+                        class_name="flex items-center gap-1.5",
+                    ),
+                    rx.cond(
+                        d["created_by"] != "",
+                        rx.el.div(
+                            rx.icon("user", class_name="h-3.5 w-3.5 text-slate-400"),
+                            rx.el.span(d["created_by"], class_name="text-xs text-slate-600"),
+                            class_name="flex items-center gap-1.5",
+                        ),
+                        rx.fragment(),
+                    ),
+                    class_name="flex items-center gap-4",
+                ),
+                # Notas (si hay)
+                rx.cond(
+                    d["notes"] != "",
+                    rx.el.div(
+                        rx.el.span("Notas", class_name="text-xs text-slate-400 uppercase tracking-wide"),
+                        rx.el.p(d["notes"], class_name="text-sm text-slate-600"),
+                        class_name="flex flex-col gap-0.5 px-3 py-2 border-l-2 border-indigo-200 bg-indigo-50/40 rounded",
+                    ),
+                    rx.fragment(),
+                ),
+                # Lista de ítems
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("package", class_name="h-3.5 w-3.5"),
+                        rx.el.span(
+                            "Productos transferidos (",
+                            d["items_count"].to_string(),
+                            ")",
+                            class_name="text-xs font-medium",
+                        ),
+                        class_name="flex items-center gap-1.5 text-slate-500",
+                    ),
+                    rx.el.div(
+                        rx.foreach(
+                            State.transfer_detail_items,
+                            lambda it: rx.el.div(
+                                rx.el.span(it["name"], class_name="text-sm text-slate-700 line-clamp-1"),
+                                rx.el.span(
+                                    "×", it["quantity"],
+                                    class_name="text-sm font-semibold text-slate-800 shrink-0 bg-slate-100 px-2 py-0.5 rounded",
+                                ),
+                                class_name="flex items-center justify-between gap-2 px-3 py-2",
+                            ),
+                        ),
+                        class_name=f"border border-slate-200 {RADIUS['lg']} divide-y divide-slate-100 overflow-hidden max-h-64 overflow-y-auto",
+                    ),
+                    class_name="flex flex-col gap-1.5",
+                ),
+                class_name="flex flex-col gap-4",
+            ),
+        ],
+        footer=rx.el.button(
+            "Cerrar",
+            on_click=State.transfer_close_detail,
+            class_name=BUTTON_STYLES["secondary"],
+        ),
+    )
+
+
 def transfer_history_section() -> rx.Component:
     return rx.el.div(
         rx.el.div(
@@ -372,18 +485,23 @@ def transfer_history_section() -> rx.Component:
                                     rx.el.th("Productos", class_name=TABLE_STYLES["header_cell"]),
                                     rx.el.th("Estado", class_name=TABLE_STYLES["header_cell"]),
                                     rx.el.th("Fecha", class_name=TABLE_STYLES["header_cell"]),
+                                    rx.el.th("", class_name=TABLE_STYLES["header_cell"]),
                                 ),
                             ),
                             rx.el.tbody(
                                 rx.foreach(
                                     State.transfer_history,
                                     lambda t: rx.el.tr(
-                                        rx.el.td(t["id"], class_name=TABLE_STYLES["cell"] + " text-sm"),
+                                        rx.el.td("#", t["id"], class_name=TABLE_STYLES["cell"] + " text-sm font-medium"),
                                         rx.el.td(t["origin"], class_name=TABLE_STYLES["cell"] + " text-sm"),
                                         rx.el.td(t["destination"], class_name=TABLE_STYLES["cell"] + " text-sm"),
                                         rx.el.td(
-                                            t["items_summary"],
-                                            class_name=TABLE_STYLES["cell"] + " text-xs text-slate-500 max-w-48 truncate",
+                                            rx.el.span(
+                                                t["items_count"].to_string(),
+                                                rx.cond(t["items_count"] == 1, " producto", " productos"),
+                                                class_name="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full",
+                                            ),
+                                            class_name=TABLE_STYLES["cell"],
                                         ),
                                         rx.el.td(
                                             rx.cond(
@@ -398,6 +516,16 @@ def transfer_history_section() -> rx.Component:
                                             class_name=TABLE_STYLES["cell"],
                                         ),
                                         rx.el.td(t["created_at"], class_name=TABLE_STYLES["cell"] + " text-xs text-slate-500"),
+                                        rx.el.td(
+                                            rx.el.div(
+                                                rx.el.span("Ver detalle", class_name="text-xs font-medium text-indigo-600 hidden sm:inline"),
+                                                rx.icon("chevron-right", class_name="h-4 w-4 text-indigo-400"),
+                                                class_name="flex items-center gap-1 justify-end",
+                                            ),
+                                            class_name=TABLE_STYLES["cell"],
+                                        ),
+                                        on_click=State.transfer_open_detail(t["id"]),
+                                        class_name="cursor-pointer hover:bg-indigo-50/60 transition-colors",
                                     ),
                                 ),
                             ),

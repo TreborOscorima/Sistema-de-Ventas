@@ -241,6 +241,12 @@ class TransferService:
         dest_id = transfer.destination_branch_id
         now = utc_now_naive()
 
+        # Nombres de sucursal para descripciones de kardex auto-explicativas.
+        origin_branch = await session.get(Branch, origin_id)
+        dest_branch = await session.get(Branch, dest_id)
+        origin_name = origin_branch.name if origin_branch else f"sucursal {origin_id}"
+        dest_name = dest_branch.name if dest_branch else f"sucursal {dest_id}"
+
         decimal_units = await TransferService._decimal_units(session, company_id, origin_id)
         # Productos cuyo agregado debe recalcularse desde variantes al final.
         origin_products_recalc: set[int] = set()
@@ -341,7 +347,7 @@ class TransferService:
                 user_id=user_id,
                 type="Transferencia Salida",
                 quantity=-qty,
-                description=f"Transferencia #{transfer.id} → sucursal destino",
+                description=f"Transferencia #{transfer.id} · hacia {dest_name}",
                 timestamp=now,
             ))
 
@@ -390,7 +396,7 @@ class TransferService:
                 user_id=user_id,
                 type="Transferencia Ingreso",
                 quantity=qty,
-                description=f"Transferencia #{transfer.id} ← sucursal origen",
+                description=f"Transferencia #{transfer.id} · desde {origin_name}",
                 timestamp=now,
             ))
 
