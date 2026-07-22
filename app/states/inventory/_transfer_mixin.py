@@ -12,10 +12,12 @@ from sqlmodel import select
 from app.models import (
     Branch,
     Product,
+    ProductVariant,
     StockTransfer,
     StockTransferItem,
 )
 from app.models.inventory import TransferStatus
+from app.services.sale_service import StockError
 from app.services.transfer_service import TransferError, TransferService
 from app.utils.sanitization import escape_like
 
@@ -42,6 +44,69 @@ class TransferMixin:
         if self._unit_allows_decimal(unit):
             return str(d.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
         return str(int(d))
+
+    @staticmethod
+    def _fmt_qty(value) -> str:
+        d = Decimal(str(value or 0))
+        if d == d.to_integral_value():
+            return str(int(d))
+        return str(d.normalize())
+
+    def _product_row(self, p) -> Dict[str, Any]:
+        return {
+            "id": p.id,
+            "key": f"{p.id}:0",
+            "variant_id": None,
+            "variant_label": "",
+            "barcode": p.barcode or "",
+            "description": p.description,
+            "stock": self._fmt_stock(p.stock, p.unit),
+            "unit": p.unit,
+        }
+
+    def _variant_row(self, p, v) -> Dict[str, Any]:
+        label = " / ".join(x for x in (v.size, v.color) if x) or (v.sku or "")
+        return {
+            "id": p.id,
+            "key": f"{p.id}:{v.id}",
+            "variant_id": v.id,
+            "variant_label": label,
+            "barcode": v.sku or "",
+            "description": p.description,
+            "stock": self._fmt_stock(v.stock, p.unit),
+            "unit": p.unit,
+        }
+
+    def _add_or_inc_row(self, row: Dict[str, Any]):
+        """Agrega la fila (producto o variante) al carrito, o incrementa +1 si ya está."""
+        for item in self.transfer_items:
+            if item["key"] == row["key"]:
+                new_qty = self._fmt_qty(Decimal(str(item["quantity"] or "0")) + 1)
+                self.transfer_items = [
+                    {**i, "quantity": new_qty} if i["key"] == row["key"] else i
+                    for i in self.transfer_items
+                ]
+                label = row["description"]
+                if row["variant_label"]:
+                    label = f"{label} ({row['variant_label']})"
+                return self.add_notification(f"'{label}' +1 (total: {new_qty}).", "info")
+
+        self.transfer_items = [
+            *self.transfer_items,
+            {
+                "product_id": row["id"],
+                "key": row["key"],
+                "variant_id": row["variant_id"],
+                "variant_label": row["variant_label"],
+                "barcode": row["barcode"],
+                "description": row["description"],
+                "available_stock": row["stock"],
+                "unit": row["unit"],
+                "quantity": "1",
+            },
+        ]
+        self.transfer_search_term = ""
+        self.transfer_search_results = []
 
     @rx.event
     def transfer_open_modal(self):
@@ -83,23 +148,31 @@ class TransferMixin:
                         Product.company_id == ctx.company_id,
                         Product.branch_id == ctx.branch_id,
                         Product.is_active == True,  # noqa: E712
-                        Product.stock > 0,
                         (Product.description.ilike(f"%{escaped}%"))
                         | (Product.barcode.ilike(f"%{escaped}%")),
                     )
                     .limit(10)
                 ).all()
 
-                self.transfer_search_results = [
-                    {
-                        "id": p.id,
-                        "barcode": p.barcode or "",
-                        "description": p.description,
-                        "stock": self._fmt_stock(p.stock, p.unit),
-                        "unit": p.unit,
-                    }
-                    for p in prods
-                ]
+                results: List[Dict[str, Any]] = []
+                for p in prods:
+                    variants = ctx.session.exec(
+                        select(ProductVariant).where(
+                            ProductVariant.company_id == ctx.company_id,
+                            ProductVariant.branch_id == ctx.branch_id,
+                            ProductVariant.product_id == p.id,
+                        )
+                    ).all()
+                    if variants:
+                        # Un producto con variantes se expande: cada variante con
+                        # stock es una unidad de stock transferible inequívoca.
+                        for v in variants:
+                            if Decimal(str(v.stock or 0)) > 0:
+                                results.append(self._variant_row(p, v))
+                    elif Decimal(str(p.stock or 0)) > 0:
+                        results.append(self._product_row(p))
+
+                self.transfer_search_results = results[:15]
         except ValueError:
             return
 
@@ -112,9 +185,29 @@ class TransferMixin:
 
         try:
             with self.scoped_session() as ctx:
+                # 1) Variante por SKU (el escaneo de una talla/color concreta).
+                variant = ctx.session.exec(
+                    select(ProductVariant).where(
+                        ProductVariant.company_id == ctx.company_id,
+                        ProductVariant.branch_id == ctx.branch_id,
+                        ProductVariant.sku == barcode,
+                    )
+                ).first()
+                if variant:
+                    prod = ctx.session.get(Product, variant.product_id)
+                    if not prod or not prod.is_active:
+                        return self.add_notification(
+                            f"No se encontró producto con código '{barcode}'.", "warning"
+                        )
+                    if Decimal(str(variant.stock or 0)) <= 0:
+                        return self.add_notification(
+                            f"'{prod.description}' no tiene stock en esa variante.", "warning"
+                        )
+                    return self._add_or_inc_row(self._variant_row(prod, variant))
+
+                # 2) Producto por código de barras.
                 prod = ctx.session.exec(
-                    select(Product)
-                    .where(
+                    select(Product).where(
                         Product.company_id == ctx.company_id,
                         Product.branch_id == ctx.branch_id,
                         Product.is_active == True,  # noqa: E712
@@ -127,101 +220,90 @@ class TransferMixin:
                         f"No se encontró producto con código '{barcode}'.", "warning"
                     )
 
+                has_variants = ctx.session.exec(
+                    select(ProductVariant.id).where(
+                        ProductVariant.company_id == ctx.company_id,
+                        ProductVariant.branch_id == ctx.branch_id,
+                        ProductVariant.product_id == prod.id,
+                    ).limit(1)
+                ).first()
+                if has_variants:
+                    return self.add_notification(
+                        f"'{prod.description}' tiene variantes; búsquelo y elija la talla/color.",
+                        "warning",
+                    )
+
                 if prod.stock <= 0:
                     return self.add_notification(
                         f"'{prod.description}' no tiene stock disponible.", "warning"
                     )
 
-                for item in self.transfer_items:
-                    if item["product_id"] == prod.id:
-                        new_qty = int(item["quantity"]) + 1
-                        self.transfer_items = [
-                            {**i, "quantity": str(new_qty)}
-                            if i["product_id"] == prod.id
-                            else i
-                            for i in self.transfer_items
-                        ]
-                        return self.add_notification(
-                            f"'{prod.description}' +1 (total: {new_qty}).", "info"
-                        )
-
-                self.transfer_items = [
-                    *self.transfer_items,
-                    {
-                        "product_id": prod.id,
-                        "barcode": prod.barcode or "",
-                        "description": prod.description,
-                        "available_stock": self._fmt_stock(prod.stock, prod.unit),
-                        "unit": prod.unit,
-                        "quantity": "1",
-                    },
-                ]
+                return self._add_or_inc_row(self._product_row(prod))
         except ValueError:
             return
 
     @rx.event
-    def transfer_add_item(self, product_id: int):
+    def transfer_add_item(self, key: str):
         for item in self.transfer_items:
-            if item["product_id"] == product_id:
+            if item["key"] == key:
                 return self.add_notification("Producto ya agregado.", "warning")
 
-        prod = None
+        row = None
         for r in self.transfer_search_results:
-            if r["id"] == product_id:
-                prod = r
+            if r["key"] == key:
+                row = r
                 break
-        if not prod:
+        if not row:
             return
 
-        self.transfer_items = [
-            *self.transfer_items,
-            {
-                "product_id": prod["id"],
-                "barcode": prod["barcode"],
-                "description": prod["description"],
-                "available_stock": prod["stock"],  # already formatted by search
-                "unit": prod["unit"],
-                "quantity": "1",
-            },
-        ]
-        self.transfer_search_term = ""
-        self.transfer_search_results = []
+        return self._add_or_inc_row(row)
 
     @rx.event
-    def transfer_remove_item(self, product_id: int):
+    def transfer_remove_item(self, key: str):
         self.transfer_items = [
-            i for i in self.transfer_items if i["product_id"] != product_id
+            i for i in self.transfer_items if i["key"] != key
         ]
 
     @rx.event
-    def transfer_update_qty(self, product_id: int, qty: str):
+    def transfer_update_qty(self, key: str, qty: str):
         new_items = []
         for item in self.transfer_items:
-            if item["product_id"] == product_id:
+            if item["key"] == key:
                 item = {**item, "quantity": qty}
             new_items.append(item)
         self.transfer_items = new_items
 
     @rx.event
-    def transfer_increment_qty(self, product_id: int):
+    def transfer_increment_qty(self, key: str):
         new_items = []
         for item in self.transfer_items:
-            if item["product_id"] == product_id:
-                current = int(item["quantity"]) if item["quantity"].isdigit() else 1
-                stock = int(float(item["available_stock"])) if item["available_stock"] else 9999
-                new_val = min(current + 1, stock)
-                item = {**item, "quantity": str(new_val)}
+            if item["key"] == key:
+                try:
+                    current = Decimal(str(item["quantity"] or "0"))
+                except (InvalidOperation, ValueError):
+                    current = Decimal("1")
+                try:
+                    stock = Decimal(str(item["available_stock"] or "0"))
+                except (InvalidOperation, ValueError):
+                    stock = Decimal("999999")
+                new_val = min(current + 1, stock) if stock > 0 else current + 1
+                item = {**item, "quantity": self._fmt_qty(new_val)}
             new_items.append(item)
         self.transfer_items = new_items
 
     @rx.event
-    def transfer_decrement_qty(self, product_id: int):
+    def transfer_decrement_qty(self, key: str):
         new_items = []
         for item in self.transfer_items:
-            if item["product_id"] == product_id:
-                current = int(item["quantity"]) if item["quantity"].isdigit() else 1
-                new_val = max(current - 1, 1)
-                item = {**item, "quantity": str(new_val)}
+            if item["key"] == key:
+                try:
+                    current = Decimal(str(item["quantity"] or "0"))
+                except (InvalidOperation, ValueError):
+                    current = Decimal("1")
+                new_val = current - 1
+                if new_val < 1:
+                    new_val = Decimal("1")
+                item = {**item, "quantity": self._fmt_qty(new_val)}
             new_items.append(item)
         self.transfer_items = new_items
 
@@ -305,7 +387,7 @@ class TransferMixin:
                 f"Transferencia #{transfer.id} completada exitosamente.", "success"
             )
             yield type(self).refresh_inventory_cache
-        except TransferError as e:
+        except (TransferError, StockError) as e:
             yield self.add_notification(str(e), "error")
         except Exception:
             logger.exception("Error en transferencia de stock")

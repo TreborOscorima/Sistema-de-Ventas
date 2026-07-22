@@ -68,9 +68,20 @@ def _description_search() -> rx.Component:
                         State.transfer_search_results,
                         lambda r: rx.el.button(
                             rx.el.div(
-                                rx.el.span(
-                                    r["description"],
-                                    class_name="text-sm font-medium text-slate-700",
+                                rx.el.div(
+                                    rx.el.span(
+                                        r["description"],
+                                        class_name="text-sm font-medium text-slate-700",
+                                    ),
+                                    rx.cond(
+                                        r["variant_label"] != "",
+                                        rx.el.span(
+                                            r["variant_label"],
+                                            class_name="text-xs font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded",
+                                        ),
+                                        rx.fragment(),
+                                    ),
+                                    class_name="flex items-center gap-1.5",
                                 ),
                                 rx.cond(
                                     r["barcode"] != "",
@@ -90,7 +101,7 @@ def _description_search() -> rx.Component:
                                 rx.icon("circle-plus", class_name="h-5 w-5 text-indigo-500"),
                                 class_name="flex items-center gap-2 shrink-0",
                             ),
-                            on_click=State.transfer_add_item(r["id"]),
+                            on_click=State.transfer_add_item(r["key"]),
                             type="button",
                             class_name=f"flex items-center justify-between w-full px-3 py-2.5 hover:bg-indigo-50 {TRANSITIONS['fast']} cursor-pointer text-left",
                         ),
@@ -109,7 +120,7 @@ def _qty_stepper(item: rx.Var) -> rx.Component:
     return rx.el.div(
         rx.el.button(
             rx.icon("minus", class_name="h-3.5 w-3.5"),
-            on_click=State.transfer_decrement_qty(item["product_id"]),
+            on_click=State.transfer_decrement_qty(item["key"]),
             type="button",
             class_name=f"p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} {TRANSITIONS['fast']} disabled:opacity-30",
             disabled=item["quantity"] == "1",
@@ -118,12 +129,12 @@ def _qty_stepper(item: rx.Var) -> rx.Component:
             type="number",
             min="1",
             value=item["quantity"],
-            on_change=lambda v, pid=item["product_id"]: State.transfer_update_qty(pid, v),
+            on_change=lambda v, k=item["key"]: State.transfer_update_qty(k, v),
             class_name="w-14 px-1 py-0.5 text-sm text-center font-medium border border-slate-200 rounded-md focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500",
         ),
         rx.el.button(
             rx.icon("plus", class_name="h-3.5 w-3.5"),
-            on_click=State.transfer_increment_qty(item["product_id"]),
+            on_click=State.transfer_increment_qty(item["key"]),
             type="button",
             class_name=f"p-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 {RADIUS['md']} {TRANSITIONS['fast']}",
         ),
@@ -158,9 +169,20 @@ def _transfer_items_list() -> rx.Component:
                     lambda item: rx.el.div(
                         rx.el.div(
                             rx.el.div(
-                                rx.el.span(
-                                    item["description"],
-                                    class_name="text-sm font-medium text-slate-700 line-clamp-1",
+                                rx.el.div(
+                                    rx.el.span(
+                                        item["description"],
+                                        class_name="text-sm font-medium text-slate-700 line-clamp-1",
+                                    ),
+                                    rx.cond(
+                                        item["variant_label"] != "",
+                                        rx.el.span(
+                                            item["variant_label"],
+                                            class_name="text-xs font-medium text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded",
+                                        ),
+                                        rx.fragment(),
+                                    ),
+                                    class_name="flex items-center gap-1.5 min-w-0",
                                 ),
                                 rx.cond(
                                     item["barcode"] != "",
@@ -182,7 +204,7 @@ def _transfer_items_list() -> rx.Component:
                             _qty_stepper(item),
                             rx.el.button(
                                 rx.icon("trash-2", class_name="h-3.5 w-3.5"),
-                                on_click=State.transfer_remove_item(item["product_id"]),
+                                on_click=State.transfer_remove_item(item["key"]),
                                 type="button",
                                 class_name=f"p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 {RADIUS['md']} {TRANSITIONS['fast']}",
                             ),
