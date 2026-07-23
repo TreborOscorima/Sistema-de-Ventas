@@ -12,6 +12,7 @@ from app.utils.pricing import resolve_effective_price as _resolve_export_price
 from app.models import (
     Product,
     ProductVariant,
+    ProductBatch,
     Category,
     StockMovement,
 )
@@ -312,22 +313,44 @@ class ExportMixin:
             self.import_errors = ["Empresa no configurada."]
             return
 
-        # Cargar barcodes existentes para detectar nuevos vs actualizados
+        # Cargar productos existentes para detectar nuevos vs actualizados y,
+        # además, cuáles tienen su stock GESTIONADO por variantes o lotes
+        # (product.stock es derivado; una importación no debe pisarlo).
         existing_barcodes: set[str] = set()
+        managed_barcodes: set[str] = set()
         with rx.session() as session:
             session.info["tenant_bypass"] = True
-            products = session.exec(
-                select(Product.barcode)
+            prod_rows = session.exec(
+                select(Product.id, Product.barcode)
                 .where(Product.company_id == company_id)
                 .where(Product.branch_id == branch_id)
             ).all()
-            existing_barcodes = {str(b) for b in products}
+            existing_barcodes = {str(b) for _pid, b in prod_rows}
+            id_by_barcode = {str(b): pid for pid, b in prod_rows}
+
+            var_pids = set(session.exec(
+                select(ProductVariant.product_id)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+            ).all())
+            bat_pids = {
+                pid for pid in session.exec(
+                    select(ProductBatch.product_id)
+                    .where(ProductBatch.company_id == company_id)
+                    .where(ProductBatch.branch_id == branch_id)
+                ).all() if pid is not None
+            }
+            managed_pids = var_pids | bat_pids
+            managed_barcodes = {
+                bc for bc, pid in id_by_barcode.items() if pid in managed_pids
+            }
 
         preview = []
         errors = []
         new_count = 0
         update_count = 0
         error_count = 0
+        locked_count = 0
 
         for idx, row in enumerate(rows, start=2):
             barcode = str(row.get("barcode", "") or "").strip()
@@ -357,6 +380,12 @@ class ExportMixin:
             else:
                 update_count += 1
 
+            # Producto existente cuyo stock lo gobiernan variantes/lotes:
+            # se actualizan los demás campos pero NO el stock.
+            stock_locked = (not is_new) and (barcode in managed_barcodes)
+            if stock_locked:
+                locked_count += 1
+
             preview.append({
                 "row_num": idx,
                 "barcode": barcode,
@@ -367,6 +396,7 @@ class ExportMixin:
                 "purchase_price": purchase_price,
                 "sale_price": sale_price,
                 "status": "Nuevo" if is_new else "Actualizar",
+                "stock_locked": stock_locked,
             })
 
         self.import_preview_rows = preview[:200]  # Limitar preview a 200 filas
@@ -376,6 +406,7 @@ class ExportMixin:
             "updated": update_count,
             "errors": error_count,
             "total": len(rows),
+            "stock_locked": locked_count,
         }
 
     def _parse_import_file(self, filename: str, data: bytes) -> list[dict]:
@@ -463,6 +494,7 @@ class ExportMixin:
 
         imported = 0
         updated = 0
+        stock_skipped = 0
         errors = []
 
         with rx.session() as session:
@@ -476,6 +508,22 @@ class ExportMixin:
             products_by_barcode: dict[str, Product] = {
                 p.barcode: p for p in existing
             }
+
+            # Productos cuyo stock es DERIVADO (tienen variantes o lotes):
+            # se actualizan sus datos pero su stock no se pisa desde el archivo.
+            var_pids = set(session.exec(
+                select(ProductVariant.product_id)
+                .where(ProductVariant.company_id == company_id)
+                .where(ProductVariant.branch_id == branch_id)
+            ).all())
+            bat_pids = {
+                pid for pid in session.exec(
+                    select(ProductBatch.product_id)
+                    .where(ProductBatch.company_id == company_id)
+                    .where(ProductBatch.branch_id == branch_id)
+                ).all() if pid is not None
+            }
+            managed_pids = var_pids | bat_pids
 
             # Pre-cargar categorías
             cats = session.exec(
@@ -510,26 +558,32 @@ class ExportMixin:
 
                     product = products_by_barcode.get(barcode)
                     if product:
-                        # Actualizar
-                        stock_delta = stock - float(product.stock or 0)
+                        # Actualizar datos comunes (sin tocar stock todavía).
                         product.description = description
                         product.category = category_name
-                        product.stock = stock
                         product.unit = unit
                         product.purchase_price = purchase_price
                         product.sale_price = sale_price
+
+                        if product.id in managed_pids:
+                            # Stock gobernado por variantes/lotes → NO se pisa,
+                            # para no romper el invariante stock == SUM(lotes/variantes).
+                            stock_skipped += 1
+                        else:
+                            stock_delta = stock - Decimal(str(product.stock or 0))
+                            product.stock = stock
+                            if stock_delta != 0:
+                                session.add(StockMovement(
+                                    product_id=product.id,
+                                    user_id=user_id,
+                                    type="Importacion",
+                                    quantity=stock_delta,
+                                    description=f"Importación masiva (ajuste): {description}",
+                                    timestamp=self._event_timestamp(),
+                                    company_id=company_id,
+                                    branch_id=branch_id,
+                                ))
                         session.add(product)
-                        if stock_delta != 0:
-                            session.add(StockMovement(
-                                product_id=product.id,
-                                user_id=user_id,
-                                type="Importacion",
-                                quantity=stock_delta,
-                                description=f"Importación masiva (ajuste): {description}",
-                                timestamp=self._event_timestamp(),
-                                company_id=company_id,
-                                branch_id=branch_id,
-                            ))
                         updated += 1
                     else:
                         # Crear
@@ -579,7 +633,10 @@ class ExportMixin:
         self.close_import_modal()
         self._inventory_update_trigger += 1
         self.load_categories()
-        return rx.toast(
-            f"Importación exitosa: {imported} nuevos, {updated} actualizados.",
-            duration=5000,
-        )
+        msg = f"Importación exitosa: {imported} nuevos, {updated} actualizados."
+        if stock_skipped:
+            msg += (
+                f" ({stock_skipped} con stock gestionado por lotes/variantes: "
+                "no se modificó su stock)."
+            )
+        return rx.toast(msg, duration=5000)

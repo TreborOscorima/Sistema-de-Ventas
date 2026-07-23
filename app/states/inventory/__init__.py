@@ -120,7 +120,7 @@ class InventoryState(
     import_modal_open: bool = False
     import_preview_rows: list[dict] = []
     import_errors: list[str] = []
-    import_stats: dict = {"new": 0, "updated": 0, "errors": 0, "total": 0}
+    import_stats: dict = {"new": 0, "updated": 0, "errors": 0, "total": 0, "stock_locked": 0}
     import_processing: bool = False
     import_file_name: str = ""
 

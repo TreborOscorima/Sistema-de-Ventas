@@ -125,6 +125,20 @@ def import_modal() -> rx.Component:
         ),
         rx.fragment(),
       ),
+      # Aviso: productos con stock gestionado por lotes/variantes
+      rx.cond(
+        State.import_stats["stock_locked"].to(int) > 0,
+        rx.el.div(
+          rx.icon("shield-check", class_name="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5"),
+          rx.el.p(
+            State.import_stats["stock_locked"].to_string(),
+            " producto(s) con stock gestionado por lotes o variantes: se actualizarán sus datos, pero su stock no se modificará desde el archivo.",
+            class_name="text-xs text-amber-700",
+          ),
+          class_name="flex gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3",
+        ),
+        rx.fragment(),
+      ),
       # Tabla preview
       rx.cond(
         State.import_preview_rows.length() > 0,
@@ -161,7 +175,19 @@ def import_modal() -> rx.Component:
                     rx.el.td(row["barcode"], class_name="py-2 px-3 text-xs font-mono text-slate-600"),
                     rx.el.td(row["description"], class_name="py-2 px-3 text-sm truncate max-w-[200px]"),
                     rx.el.td(row["category"], class_name="py-2 px-3 text-xs text-slate-500 hidden sm:table-cell"),
-                    rx.el.td(row["stock"].to_string(), class_name="py-2 px-3 text-sm text-right"),
+                    rx.el.td(
+                      rx.cond(
+                        row["stock_locked"].to(bool),
+                        rx.el.span(
+                          rx.icon("lock", class_name="h-3 w-3 inline mr-1 text-amber-500"),
+                          row["stock"].to_string(),
+                          class_name="text-slate-400 line-through",
+                          title="Stock gestionado por lotes/variantes: no se modifica",
+                        ),
+                        rx.el.span(row["stock"].to_string()),
+                      ),
+                      class_name="py-2 px-3 text-sm text-right",
+                    ),
                     rx.el.td(row["sale_price"].to_string(), class_name="py-2 px-3 text-sm text-right font-mono"),
                     class_name="border-b border-slate-100",
                   ),

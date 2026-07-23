@@ -153,13 +153,16 @@ def inventario_page() -> rx.Component:
     rx.el.div(
       rx.el.div(
         rx.el.div(
-          rx.debounce_input(
-            rx.input(
-              placeholder="Buscar producto...",
-              on_change=State.set_inventory_search_term,
-              class_name=INPUT_STYLES["default"],
+          rx.el.div(
+            rx.debounce_input(
+              rx.input(
+                placeholder="Buscar producto...",
+                on_change=State.set_inventory_search_term,
+                class_name=INPUT_STYLES["default"],
+              ),
+              debounce_timeout=600,
             ),
-            debounce_timeout=600,
+            class_name="flex-1 min-w-0",
           ),
           rx.el.select(
             rx.el.option("Todas las categorías", value="__all__"),
@@ -169,9 +172,9 @@ def inventario_page() -> rx.Component:
             ),
             value=rx.cond(State.inventory_category_filter == "", "__all__", State.inventory_category_filter),
             on_change=State.set_inventory_category_filter,
-            class_name=f"{INPUT_STYLES['default']} min-w-[160px]",
+            class_name=f"{INPUT_STYLES['default']} sm:w-48 sm:flex-none",
           ),
-          class_name="flex flex-col sm:flex-row gap-3 flex-1",
+          class_name="flex flex-col sm:flex-row gap-3 flex-1 lg:min-w-[440px]",
         ),
         rx.el.div(
           rx.el.button(
@@ -182,15 +185,17 @@ def inventario_page() -> rx.Component:
           ),
           rx.el.button(
             rx.icon("upload", class_name="h-4 w-4"),
-            "Importar",
             on_click=State.open_import_modal,
-            class_name=BUTTON_STYLES["ghost"],
+            class_name=BUTTON_STYLES["ghost"] + " !px-2.5",
+            title="Importar productos desde CSV o Excel",
+            aria_label="Importar productos",
           ),
           rx.el.button(
             rx.icon("download", class_name="h-4 w-4"),
-            "Exportar Inventario",
             on_click=State.export_inventory_to_excel,
-            class_name=BUTTON_STYLES["success_sm"],
+            class_name=BUTTON_STYLES["success_sm"] + " !px-2.5",
+            title="Exportar el inventario a Excel",
+            aria_label="Exportar inventario",
           ),
           rx.el.button(
             rx.icon("clipboard-check", class_name="h-4 w-4"),
