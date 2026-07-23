@@ -247,7 +247,7 @@ def _owner_content() -> rx.Component:
                     class_name="text-xl sm:text-2xl font-bold text-slate-800",
                 ),
                 rx.el.p(
-                    "Administra clientes de Sistema de Ventas y TUWAYKIFOOD — planes, suscripciones y activaciones",
+                    "Administra clientes del SISTEMA DE VENTAS y TUWAYKIFOOD — planes, suscripciones y activaciones",
                     class_name=f"{TYPOGRAPHY['body_secondary']} mt-1",
                 ),
                 class_name="flex flex-col text-center sm:text-left",
