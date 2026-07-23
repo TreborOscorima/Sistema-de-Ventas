@@ -1370,11 +1370,15 @@ class TestPlatformMetrics:
         group_result = MagicMock()
         group_result.all.return_value = []
 
+        # audit query (churn/conversión por ventana) → sin eventos
+        audit_result = MagicMock()
+        audit_result.all.return_value = []
+
         # count queries (new_7d, new_30d) → 0
         count_result = MagicMock()
         count_result.scalar_one.return_value = 0
 
-        session.execute.side_effect = [group_result, count_result, count_result]
+        session.execute.side_effect = [group_result, audit_result, count_result, count_result]
 
         result = await OwnerService.get_platform_metrics(session)
 
@@ -1402,12 +1406,21 @@ class TestPlatformMetrics:
             (PlanType.STANDARD, SubscriptionStatus.SUSPENDED, 1),
         ]
 
+        # Eventos de auditoría en la ventana: 1 conversión trial→pago,
+        # 1 trial vencido sin convertir y 1 pagante dado de baja (churn).
+        audit_result = MagicMock()
+        audit_result.all.return_value = [
+            ("change_plan", 10, json.dumps({"plan_type": "trial"}), json.dumps({"plan_type": "standard"})),
+            ("sync_expired_trial", 11, json.dumps({"plan_type": "trial"}), json.dumps({"plan_type": "trial"})),
+            ("suspend", 12, json.dumps({"plan_type": "professional"}), json.dumps({"plan_type": "professional"})),
+        ]
+
         count_7d = MagicMock()
         count_7d.scalar_one.return_value = 2
         count_30d = MagicMock()
         count_30d.scalar_one.return_value = 4
 
-        session.execute.side_effect = [group_result, count_7d, count_30d]
+        session.execute.side_effect = [group_result, audit_result, count_7d, count_30d]
 
         result = await OwnerService.get_platform_metrics(session)
 
@@ -1420,10 +1433,13 @@ class TestPlatformMetrics:
         assert result["mrr"] == 390.0
         assert result["arr"] == 4680.0
         assert result["total_paying"] == 6  # 3+2+1 active paying
-        # Churn: 1 suspended / (11 active + 1 suspended) = 8.3%
-        assert result["churn_rate"] == 8.3
-        # Trial conversion: 7 non-trial / 12 total = 58.3%
-        assert result["trial_conversion"] == 58.3
+        # Churn (ventana): 1 pagante churneado / (6 pagantes + 1) = 14.3%
+        assert result["churned_paying_window"] == 1
+        assert result["churn_rate"] == 14.3
+        # Conversión trial (ventana): 1 convertido / (1 convertido + 1 vencido) = 50%
+        assert result["trial_converted_window"] == 1
+        assert result["trial_decided_window"] == 2
+        assert result["trial_conversion"] == 50.0
         assert result["new_7d"] == 2
         assert result["new_30d"] == 4
 

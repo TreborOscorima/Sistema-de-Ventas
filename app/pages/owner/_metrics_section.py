@@ -157,13 +157,13 @@ def _metrics_section() -> rx.Component:
                         tone="violet",
                     ),
                     _metric_card(
-                        "user-minus", "Churn",
+                        "user-minus", "Churn (30d)",
                         m["churn_rate"].to(float).to(str),
                         "%",
                         tone="red",
                     ),
                     _metric_card(
-                        "arrow-right-left", "Conversión Trial",
+                        "arrow-right-left", "Conversión Trial (30d)",
                         m["trial_conversion"].to(float).to(str),
                         "%",
                         tone="amber",

@@ -1123,18 +1123,79 @@ class OwnerService:
             for plan, price in OwnerService.PLAN_PRICES.items()
         )
 
-        # Churn rate = suspended / (active + warning + suspended)
-        active_pool = (
-            by_status.get(SubscriptionStatus.ACTIVE, 0)
-            + by_status.get(SubscriptionStatus.WARNING, 0)
-            + by_status.get(SubscriptionStatus.SUSPENDED, 0)
-        )
-        suspended = by_status.get(SubscriptionStatus.SUSPENDED, 0)
-        churn_rate = (suspended / active_pool * 100) if active_pool > 0 else 0.0
+        total_paying_now = sum(paying_active.values())
 
-        # Trial conversion = empresas que salieron de trial / total que alguna vez existieron
-        non_trial = total - by_plan.get(PlanType.TRIAL, 0)
-        trial_conversion = (non_trial / total * 100) if total > 0 else 0.0
+        # ── Churn y conversión por VENTANA de tiempo (definición estándar) ──
+        # Se calculan sobre eventos reales del OwnerAuditLog en los últimos
+        # CHURN_WINDOW_DAYS días, no como foto del estado actual.
+        CHURN_WINDOW_DAYS = 30
+        window_start = now - timedelta(days=CHURN_WINDOW_DAYS)
+        paying_plans = {
+            PlanType.STANDARD.value,
+            PlanType.PROFESSIONAL.value,
+            PlanType.ENTERPRISE.value,
+        }
+
+        audit_rows = (
+            await session.execute(
+                select(
+                    OwnerAuditLog.action,
+                    OwnerAuditLog.target_company_id,
+                    OwnerAuditLog.before_snapshot,
+                    OwnerAuditLog.after_snapshot,
+                ).where(
+                    OwnerAuditLog.target_product_type == ProductType.VENTAS.value,
+                    OwnerAuditLog.created_at >= window_start,
+                    OwnerAuditLog.action.in_(
+                        ["suspend", "sync_expired_trial", "change_plan"]
+                    ),
+                )
+            )
+        ).all()
+
+        churned_paying: set = set()   # clientes de pago dados de baja (churn real)
+        converted_trials: set = set()  # trials que pasaron a un plan pago
+        ended_trials_no_conv: set = set()  # trials que vencieron sin convertir
+
+        for action, cid, before_json, after_json in audit_rows:
+            try:
+                before = json.loads(before_json or "{}")
+            except (ValueError, TypeError):
+                before = {}
+            try:
+                after = json.loads(after_json or "{}")
+            except (ValueError, TypeError):
+                after = {}
+            b_plan = before.get("plan_type")
+            a_plan = after.get("plan_type")
+
+            if action == "suspend":
+                if b_plan in paying_plans:
+                    churned_paying.add(cid)          # cliente de pago perdido
+                elif b_plan == PlanType.TRIAL.value:
+                    ended_trials_no_conv.add(cid)    # trial cortado sin convertir
+            elif action == "sync_expired_trial":
+                ended_trials_no_conv.add(cid)        # trial vencido automáticamente
+            elif action == "change_plan":
+                if b_plan == PlanType.TRIAL.value and a_plan in paying_plans:
+                    converted_trials.add(cid)        # conversión real trial→pago
+
+        # Un trial que terminó convirtiendo no cuenta como "vencido sin convertir".
+        ended_trials_no_conv -= converted_trials
+
+        # Churn de clientes (mensual) = perdidos / (base al inicio de la ventana)
+        #   base ≈ clientes de pago actuales + los que se perdieron en la ventana.
+        churned_count = len(churned_paying)
+        churn_base = total_paying_now + churned_count
+        churn_rate = (churned_count / churn_base * 100) if churn_base > 0 else 0.0
+
+        # Conversión de trial = convertidos / (convertidos + vencidos sin convertir)
+        #   es decir, de los trials que llegaron a una decisión en la ventana.
+        converted_count = len(converted_trials)
+        trials_decided = converted_count + len(ended_trials_no_conv)
+        trial_conversion = (
+            (converted_count / trials_decided * 100) if trials_decided > 0 else 0.0
+        )
 
         # Nuevas altas últimos 7 y 30 días
         for days_label, days in [("7d", 7), ("30d", 30)]:
@@ -1170,6 +1231,10 @@ class OwnerService:
             "arr": round(mrr * 12, 2),
             "churn_rate": round(churn_rate, 1),
             "trial_conversion": round(trial_conversion, 1),
+            "churn_window_days": CHURN_WINDOW_DAYS,
+            "churned_paying_window": churned_count,
+            "trial_converted_window": converted_count,
+            "trial_decided_window": trials_decided,
             "new_7d": new_7d,
             "new_30d": new_30d,
         }
