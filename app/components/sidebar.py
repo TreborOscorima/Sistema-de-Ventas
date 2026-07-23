@@ -707,6 +707,14 @@ def sidebar() -> rx.Component:
                     _sidebar_auth_content(),
                     _sidebar_guest_content(),
                 ),
+                # Footer DENTRO del área scrolleable: así queda siempre pegado al
+                # último icono (sin hueco). Con contenido corto va justo después;
+                # con contenido largo scrollea junto con los iconos.
+                rx.cond(
+                    State.is_authenticated,
+                    _sidebar_auth_footer(),
+                    rx.fragment(),
+                ),
                 id="sidebar-nav",
                 # `flex-initial` (flex: 0 1 auto): el nav toma el alto de su
                 # contenido, así el footer queda justo debajo del último icono
@@ -716,12 +724,6 @@ def sidebar() -> rx.Component:
                 # solo lo necesario. Los flyouts del rail colapsado usan
                 # position: fixed (reposicionados por JS, ver twk-rail-flyout.js).
                 class_name="flex-initial min-h-0 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
-            ),
-            # Footer condicional: solo para autenticados
-            rx.cond(
-                State.is_authenticated,
-                _sidebar_auth_footer(),
-                rx.fragment(),
             ),
             class_name=rx.cond(
         State.sidebar_open,
