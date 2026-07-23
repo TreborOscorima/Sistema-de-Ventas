@@ -23,6 +23,29 @@ from ._transfer_modal import (
 )
 
 
+def _inventario_keyboard_js() -> str:
+  """F6 → foco al buscador de productos del inventario.
+
+  Se adjunta con on_mount=rx.call_script(...) (no rx.script, que no ejecuta en
+  navegación SPA). El IIFE se protege con window.__invKbAttached.
+  """
+  return (
+    """
+    (function(){
+        if(window.__invKbAttached) return;
+        window.__invKbAttached = true;
+        document.addEventListener('keydown', function(e){
+            if(e.key !== 'F6') return;
+            e.preventDefault();
+            if(document.querySelector('.modal-overlay')) return;
+            var s = document.getElementById('inventario_search_input');
+            if(s){ s.focus(); s.select(); }
+        });
+    })();
+    """
+  )
+
+
 def inventario_page() -> rx.Component:
   """Página principal de gestión de inventario."""
   content = rx.el.div(
@@ -156,7 +179,8 @@ def inventario_page() -> rx.Component:
           rx.el.div(
             rx.debounce_input(
               rx.input(
-                placeholder="Buscar producto...",
+                id="inventario_search_input",
+                placeholder="Buscar producto (F6)...",
                 on_change=State.set_inventory_search_term,
                 class_name=INPUT_STYLES["default"],
               ),
@@ -584,7 +608,7 @@ def inventario_page() -> rx.Component:
     import_modal(),
     transfer_modal(),
     transfer_detail_modal(),
-    on_mount=State.refresh_inventory_cache,
+    on_mount=[State.refresh_inventory_cache, rx.call_script(_inventario_keyboard_js())],
     class_name=f"w-full flex flex-col {SPACING['page_gap']}",
   )
   return permission_guard(
