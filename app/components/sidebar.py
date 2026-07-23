@@ -256,26 +256,11 @@ def _rail_flyout(
             # `pointer-events-none` — no bloquea contenido del fondo.
             on_mouse_enter=State.open_rail_flyout(page_label),
             on_mouse_leave=State.schedule_close_rail_flyout(page_label),
+            custom_attrs={"data-rail-flyout": page_label},
             class_name=rx.cond(
-                flip,
-                rx.cond(
-                    is_open,
-                    "hidden md:block absolute left-full bottom-0 pl-2 z-[60] "
-                    "opacity-100 visible pointer-events-auto "
-                    "transition-opacity duration-150",
-                    "hidden md:block absolute left-full bottom-0 pl-2 z-[60] "
-                    "opacity-0 invisible pointer-events-none "
-                    "transition-opacity duration-150",
-                ),
-                rx.cond(
-                    is_open,
-                    "hidden md:block absolute left-full top-0 pl-2 z-[60] "
-                    "opacity-100 visible pointer-events-auto "
-                    "transition-opacity duration-150",
-                    "hidden md:block absolute left-full top-0 pl-2 z-[60] "
-                    "opacity-0 invisible pointer-events-none "
-                    "transition-opacity duration-150",
-                ),
+                is_open,
+                "hidden md:block fixed z-[70] pl-2 opacity-100 visible pointer-events-auto transition-opacity duration-150",
+                "hidden md:block fixed z-[70] pl-2 opacity-0 invisible pointer-events-none transition-opacity duration-150",
             ),
         ),
         rx.fragment(),
@@ -306,18 +291,11 @@ def _rail_label_flyout(
             ),
             on_mouse_enter=State.open_rail_flyout(item["page"]),
             on_mouse_leave=State.schedule_close_rail_flyout(item["page"]),
+            custom_attrs={"data-rail-flyout": item["page"]},
             class_name=rx.cond(
-                flip,
-                rx.cond(
-                    is_open,
-                    "hidden md:block absolute left-full bottom-0 pl-2 z-[60] opacity-100 visible pointer-events-auto transition-opacity duration-150",
-                    "hidden md:block absolute left-full bottom-0 pl-2 z-[60] opacity-0 invisible pointer-events-none transition-opacity duration-150",
-                ),
-                rx.cond(
-                    is_open,
-                    "hidden md:block absolute left-full top-0 pl-2 z-[60] opacity-100 visible pointer-events-auto transition-opacity duration-150",
-                    "hidden md:block absolute left-full top-0 pl-2 z-[60] opacity-0 invisible pointer-events-none transition-opacity duration-150",
-                ),
+                is_open,
+                "hidden md:block fixed z-[70] pl-2 opacity-100 visible pointer-events-auto transition-opacity duration-150",
+                "hidden md:block fixed z-[70] pl-2 opacity-0 invisible pointer-events-none transition-opacity duration-150",
             ),
         ),
         rx.fragment(),
@@ -561,6 +539,7 @@ def _sidebar_auth_content() -> rx.Component:
                             # así que no genera cambios de estado spurios.
                             on_mouse_enter=State.open_rail_flyout(item["page"]),
                             on_mouse_leave=State.schedule_close_rail_flyout(item["page"]),
+                            custom_attrs={"data-rail-item": item["page"]},
                             class_name=rx.cond(
                                 State.sidebar_open,
                                 "flex flex-col gap-0.5 pt-2",
@@ -725,17 +704,14 @@ def sidebar() -> rx.Component:
                     _sidebar_guest_content(),
                 ),
                 id="sidebar-nav",
-                # En expandido scrolleamos verticalmente y cortamos en X.
-                # En colapsado usamos overflow-visible en ambos ejes:
-                # mezclar overflow-y:auto con overflow-x:visible activa
-                # `overflow: auto` en ambos por spec del navegador, y eso
-                # recorta el flyout absoluto. El rail (≤18 items @ h-10)
-                # cabe sobradamente en viewport sin necesidad de scroll.
-                class_name=rx.cond(
-                    State.sidebar_open,
-                    "flex-1 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
-                    "flex-1 min-w-0 overflow-visible",
-                ),
+                # `flex-initial` (flex: 0 1 auto): el nav toma el alto de su
+                # contenido, así el footer queda justo debajo del último icono
+                # (sin hueco en blanco). Cuando el contenido supera la pantalla,
+                # `min-h-0` + `overflow-y-auto` lo encogen y habilitan el scroll,
+                # de modo que crece a medida que se agregan módulos y se scrollea
+                # solo lo necesario. Los flyouts del rail colapsado usan
+                # position: fixed (reposicionados por JS, ver twk-rail-flyout.js).
+                class_name="flex-initial min-h-0 min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent",
             ),
             # Footer condicional: solo para autenticados
             rx.cond(

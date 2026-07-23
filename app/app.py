@@ -466,6 +466,7 @@ app = rx.App(
         # Scripts globales (defer → no bloquean render). Contenido idempotente.
         rx.script(src="/js/twk-sidebar-scroll.js", defer=True),
         rx.script(src="/js/twk-keyboard-shortcuts.js", defer=True),
+        rx.script(src="/js/twk-rail-flyout.js", defer=True),
     ],
 )
 
