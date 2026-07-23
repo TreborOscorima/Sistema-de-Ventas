@@ -18,19 +18,49 @@ from ._payment_form import (
 )
 
 
-def _venta_keyboard_shortcuts() -> rx.Component:
+def _venta_keyboard_shortcuts() -> str:
     """Atajos de teclado para Punto de Venta.
 
+    Se adjunta vía ``on_mount=rx.call_script(...)`` (no ``rx.script``, que no
+    ejecuta en navegación SPA). El IIFE se protege con ``window.__ventaKbAttached``
+    para no duplicar el listener entre montajes.
+
+    F6            → Foco al buscador de productos por descripción
     F11           → Abrir modal Movimientos Recientes
+    Escape        → Limpiar la barra de carga rápida (si no hay modal abierto)
     Enter         → Añadir producto (quick-add-bar, autocomplete cerrado)
                     o Confirmar Venta (desde campo numérico de monto, sin modal abierto)
     Arrow Up/Down → Navegar sugerencias de autocomplete (preventDefault + scrollIntoView)
     """
-    return rx.script(
+    return (
         """
         (function(){
             if(window.__ventaKbAttached) return;
             window.__ventaKbAttached = true;
+
+            // CAPTURA: el buscador va dentro de un debounce_input que consume el
+            // Enter antes de que llegue al listener de burbujeo o a Reflex. En la
+            // fase de captura interceptamos el Enter primero y seleccionamos la
+            // sugerencia resaltada (click → select_product_for_sale, ruta fiable).
+            document.addEventListener('keydown', function(e){
+                if(e.key !== 'Enter' && e.key !== 'NumpadEnter') return;
+                var el = document.activeElement;
+                if(!el || el.id !== 'venta_search_input') return;
+                var searchDiv = el.closest('[data-product-search]');
+                if(!searchDiv) return;
+                var dropdown = searchDiv.querySelector('[data-autocomplete-dropdown]');
+                if(dropdown && dropdown.children.length > 0){
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var opts = dropdown.querySelectorAll('button');
+                    var target = null;
+                    for(var j = 0; j < opts.length; j++){
+                        if((' ' + opts[j].className + ' ').indexOf(' bg-indigo-50 ') > -1){ target = opts[j]; break; }
+                    }
+                    (target || opts[0]).click();
+                }
+            }, true);
+
             document.addEventListener('keydown', function(e){
                 // F11 → abrir modal Movimientos Recientes
                 if(e.key === 'F11'){
@@ -38,6 +68,23 @@ def _venta_keyboard_shortcuts() -> rx.Component:
                     e.stopPropagation();
                     var btn = document.querySelector('[data-venta-recent-btn]');
                     if(btn) btn.click();
+                    return;
+                }
+
+                // F6 → foco al buscador de productos por descripción
+                if(e.key === 'F6'){
+                    e.preventDefault();
+                    if(document.querySelector('.modal-overlay')) return;
+                    var s = document.getElementById('venta_search_input');
+                    if(s){ s.focus(); s.select(); }
+                    return;
+                }
+
+                // Escape → limpiar la barra de carga rápida (si no hay modal abierto)
+                if(e.key === 'Escape'){
+                    if(document.querySelector('.modal-overlay')) return;
+                    var clr = document.querySelector('[data-venta-clear-btn]');
+                    if(clr){ clr.click(); }
                     return;
                 }
 
@@ -77,8 +124,9 @@ def _venta_keyboard_shortcuts() -> rx.Component:
                     if(bar){
                         // No interferir con el form de barcode (tiene su propio on_submit)
                         if(el.id === 'venta_barcode_input') return;
-                        // Si el autocomplete está abierto, dejar que Reflex on_key_down
-                        // maneje la selección — NO hacer click en añadir
+                        // Si el autocomplete está abierto, el Enter lo maneja Reflex
+                        // (on_key_down del input → select_product_for_sale). El segundo
+                        // Enter, con el desplegable ya cerrado, añade al carrito.
                         var searchDiv = el.closest('[data-product-search]');
                         if(searchDiv){
                             var dropdown = searchDiv.querySelector('[data-autocomplete-dropdown]');
@@ -118,7 +166,6 @@ def _venta_keyboard_shortcuts() -> rx.Component:
 def venta_page() -> rx.Component:
     """Página principal del punto de venta (POS)."""
     content = rx.el.div(
-        _venta_keyboard_shortcuts(),
         # Contenido principal
         rx.el.div(
             rx.cond(
@@ -221,6 +268,7 @@ def venta_page() -> rx.Component:
         variant_picker_modal(),
         _quot_save_modal(),
         _quot_load_drawer(),
+        on_mount=rx.call_script(_venta_keyboard_shortcuts()),
         class_name="flex min-h-[calc(100vh-4rem)] lg:h-[calc(100vh-4rem)]",
     )
     return permission_guard(

@@ -4,6 +4,21 @@ from app.components.ui import BUTTON_STYLES, TABLE_STYLES
 from ._cart_section import compact_sale_item_row, mobile_sale_item_card
 
 
+def _kbd_hint(key: str, label: str) -> rx.Component:
+    """Chip de atajo de teclado (tecla + acción) para la leyenda del POS."""
+    return rx.el.span(
+        rx.el.kbd(
+            key,
+            class_name=(
+                "px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 bg-white "
+                "border border-slate-300 rounded shadow-sm"
+            ),
+        ),
+        rx.el.span(label, class_name="text-[11px] text-slate-500"),
+        class_name="inline-flex items-center gap-1",
+    )
+
+
 def client_selector() -> rx.Component:
     """Selector de cliente para ventas a credito."""
     return rx.box(
@@ -160,13 +175,14 @@ def quick_add_bar() -> rx.Component:
                     rx.icon("search", class_name="h-5 w-5 text-slate-400 flex-shrink-0"),
                     rx.debounce_input(
                         rx.input(
+                            id="venta_search_input",
                             value=State.new_sale_item["description"],
                             on_change=lambda val: State.handle_sale_change("description", val),
                             on_key_down=State.handle_autocomplete_keydown,
-                            placeholder="Buscar producto...",
+                            placeholder="Buscar producto (F6)...",
                             class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0 placeholder-slate-400",
                         ),
-                        debounce_timeout=600,
+                        debounce_timeout=200,
                     ),
                     class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                 ),
@@ -176,13 +192,24 @@ def quick_add_bar() -> rx.Component:
                         rx.foreach(
                             State.autocomplete_rows,
                             lambda suggestion: rx.el.button(
-                                suggestion["description"],
+                                rx.el.span(
+                                    suggestion["description"],
+                                    class_name="min-w-0 truncate",
+                                ),
+                                rx.cond(
+                                    suggestion["out_of_stock"],
+                                    rx.el.span(
+                                        "Sin stock",
+                                        class_name="ml-2 shrink-0 text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-full",
+                                    ),
+                                    rx.fragment(),
+                                ),
                                 on_click=lambda _, s=suggestion: State.select_product_for_sale(s),
                                 class_name=rx.cond(
                                     suggestion["index"]
                                     == State.autocomplete_selected_index,
-                                    "w-full text-left px-3 py-2.5 bg-indigo-50 text-sm border-b border-slate-100 last:border-0",
-                                    "w-full text-left px-3 py-2.5 hover:bg-indigo-50 text-sm border-b border-slate-100 last:border-0",
+                                    "w-full flex items-center justify-between text-left px-3 py-2.5 bg-indigo-50 text-sm border-b border-slate-100 last:border-0",
+                                    "w-full flex items-center justify-between text-left px-3 py-2.5 hover:bg-indigo-50 text-sm border-b border-slate-100 last:border-0",
                                 ),
                             ),
                         ),
@@ -295,6 +322,20 @@ def quick_add_bar() -> rx.Component:
                 ),
             ),
             class_name="flex flex-wrap items-end gap-2",
+        ),
+        # Leyenda de atajos (solo desktop) + botón oculto para Esc = limpiar
+        rx.el.div(
+            _kbd_hint("F6", "Buscar"),
+            _kbd_hint("Esc", "Limpiar"),
+            _kbd_hint("F11", "Movimientos"),
+            _kbd_hint("↑↓", "Navegar"),
+            _kbd_hint("Enter", "Agregar"),
+            rx.el.button(
+                on_click=State.clear_quick_add_bar,
+                custom_attrs={"data-venta-clear-btn": "1", "tabindex": "-1", "aria-hidden": "true"},
+                class_name="hidden",
+            ),
+            class_name="hidden sm:flex flex-wrap items-center gap-x-3 gap-y-1 px-1",
         ),
         custom_attrs={"data-quick-add-bar": "1"},
         class_name="flex flex-col gap-2 p-2.5 bg-slate-50 border-b",

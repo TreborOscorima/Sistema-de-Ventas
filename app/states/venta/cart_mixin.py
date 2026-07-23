@@ -1143,14 +1143,9 @@ class CartMixin:
                     self.autocomplete_selected_index - 1, 0
                 )
             return
-        if key in ("Enter", "NumpadEnter"):
-            idx = self.autocomplete_selected_index
-            if idx < 0:
-                idx = 0
-            if 0 <= idx < total:
-                return await self.select_product_for_sale(
-                    self.autocomplete_results[idx]
-                )
+        # El Enter lo intercepta el listener global en fase de CAPTURA (antes del
+        # debounce_input): hace click en la sugerencia resaltada. No se maneja
+        # aquí para no duplicar la acción.
         if key == "Escape":
             self.autocomplete_suggestions = []
             self.autocomplete_results = []
@@ -1255,8 +1250,21 @@ class CartMixin:
         for index, result in enumerate(self.autocomplete_results):
             row = dict(result)
             row["index"] = index
+            try:
+                row["out_of_stock"] = float(result.get("stock") or 0) <= 0
+            except (TypeError, ValueError):
+                row["out_of_stock"] = False
             rows.append(row)
         return rows
+
+    @rx.event
+    def clear_quick_add_bar(self):
+        """Limpia la barra de carga rápida y devuelve el foco al lector (Esc)."""
+        self._reset_sale_form()
+        return rx.call_script(
+            "setTimeout(() => { const el = document.getElementById('venta_barcode_input'); "
+            "if (el) { el.focus(); el.select(); } }, 0);"
+        )
 
     @rx.event
     async def add_item_to_sale(self, product_override: dict | None = None):
