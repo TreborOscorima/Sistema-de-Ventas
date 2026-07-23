@@ -174,29 +174,17 @@ def inventario_page() -> rx.Component:
             on_change=State.set_inventory_category_filter,
             class_name=f"{INPUT_STYLES['default']} sm:w-48 sm:flex-none",
           ),
-          class_name="flex flex-col sm:flex-row gap-3 flex-1 lg:min-w-[440px]",
+          class_name="flex flex-col sm:flex-row gap-3",
         ),
         rx.el.div(
+          # Acción primaria
           rx.el.button(
             rx.icon("plus", class_name="h-4 w-4"),
             "Nuevo Producto",
             on_click=State.open_create_product_modal,
             class_name=BUTTON_STYLES["primary_sm"],
           ),
-          rx.el.button(
-            rx.icon("upload", class_name="h-4 w-4"),
-            on_click=State.open_import_modal,
-            class_name=BUTTON_STYLES["ghost"] + " !px-2.5",
-            title="Importar productos desde CSV o Excel",
-            aria_label="Importar productos",
-          ),
-          rx.el.button(
-            rx.icon("download", class_name="h-4 w-4"),
-            on_click=State.export_inventory_to_excel,
-            class_name=BUTTON_STYLES["success_sm"] + " !px-2.5",
-            title="Exportar el inventario a Excel",
-            aria_label="Exportar inventario",
-          ),
+          # Acciones de gestión de stock
           rx.el.button(
             rx.icon("clipboard-check", class_name="h-4 w-4"),
             "Registrar Fisico",
@@ -220,9 +208,25 @@ def inventario_page() -> rx.Component:
             class_name=BUTTON_STYLES["ghost"],
             title="Abrir el generador de etiquetas",
           ),
-          class_name="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end",
+          # Divisor + utilidades de datos (solo iconos con tooltip)
+          rx.el.div(class_name="h-6 w-px bg-slate-200 mx-1 hidden sm:block"),
+          rx.el.button(
+            rx.icon("upload", class_name="h-4 w-4"),
+            on_click=State.open_import_modal,
+            class_name=BUTTON_STYLES["ghost"] + " !px-2.5",
+            title="Importar productos desde CSV o Excel",
+            aria_label="Importar productos",
+          ),
+          rx.el.button(
+            rx.icon("download", class_name="h-4 w-4"),
+            on_click=State.export_inventory_to_excel,
+            class_name=BUTTON_STYLES["success_sm"] + " !px-2.5",
+            title="Exportar el inventario a Excel",
+            aria_label="Exportar inventario",
+          ),
+          class_name="flex flex-wrap items-center gap-2",
         ),
-        class_name="flex flex-col gap-4 md:flex-row md:items-center md:justify-between pb-4 border-b border-slate-200",
+        class_name="flex flex-col gap-3 pb-4 border-b border-slate-200",
       ),
       # Chip de filtro activo + toggle inactivos
       rx.el.div(
