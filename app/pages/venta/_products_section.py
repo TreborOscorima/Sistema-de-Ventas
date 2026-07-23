@@ -182,7 +182,7 @@ def quick_add_bar() -> rx.Component:
                             placeholder="Buscar producto (F6)...",
                             class_name="flex-1 min-w-0 border-0 focus:ring-0 text-sm bg-transparent outline-none py-0 placeholder-slate-400",
                         ),
-                        debounce_timeout=200,
+                        debounce_timeout=150,
                     ),
                     class_name="flex items-center gap-1 px-3 py-2 border rounded-lg bg-white focus-within:ring-2 focus-within:ring-indigo-500 w-full",
                 ),
