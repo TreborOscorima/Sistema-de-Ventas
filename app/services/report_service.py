@@ -8,7 +8,7 @@ import functools
 import io
 import re
 from datetime import datetime, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any
 
 from openpyxl.workbook import Workbook
@@ -67,6 +67,24 @@ PERCENT_FORMAT = '0.00%'
 DATE_FORMAT = 'DD/MM/YYYY'
 DATETIME_FORMAT = 'DD/MM/YYYY HH:MM:SS'
 NUMBER_FORMAT = '#,##0.####'
+# Formato para cantidades enteras: con separador de miles y SIN separador
+# decimal, para no dejar una coma/punto "colgante" (ej: "1," en locales es-*).
+NUMBER_FORMAT_INT = '#,##0'
+
+
+def _quantity_format(value) -> str:
+    """Elige el formato de cantidad según el valor.
+
+    - Entero (la mayoría de productos por unidad) -> '#,##0' limpio, sin
+      separador decimal colgante.
+    - Fraccionado (productos por peso/volumen: kg, lt) -> '#,##0.####', que
+      solo muestra el separador cuando hay dígitos decimales reales.
+    """
+    try:
+        d = value if isinstance(value, Decimal) else Decimal(str(value))
+        return NUMBER_FORMAT_INT if d == d.to_integral_value() else NUMBER_FORMAT
+    except (InvalidOperation, ValueError, TypeError):
+        return NUMBER_FORMAT
 
 THIN_BORDER = Border(
     left=Side(style="thin"),
@@ -1293,6 +1311,7 @@ def generate_sales_report(
     detail_data_start = row + 1
     row += 1
 
+    detail_qty_total = Decimal("0")
     for sale in session.execute(
         select(Sale)
         .where(*_base)
@@ -1412,7 +1431,8 @@ def generate_sales_report(
             ws_detail.cell(row=row, column=6, value=_safe_string(product_name))
             ws_detail.cell(row=row, column=7, value=_safe_string(variant_label, "-"))
             ws_detail.cell(row=row, column=8, value=_safe_string(category, "General"))
-            ws_detail.cell(row=row, column=9, value=quantity).number_format = NUMBER_FORMAT
+            ws_detail.cell(row=row, column=9, value=quantity).number_format = _quantity_format(quantity)
+            detail_qty_total += quantity if isinstance(quantity, Decimal) else Decimal(str(quantity or 0))
             ws_detail.cell(row=row, column=10, value=base_price).number_format = currency_format
             ws_detail.cell(row=row, column=11, value=unit_price).number_format = currency_format
             ws_detail.cell(row=row, column=12, value=discount).number_format = currency_format
@@ -1443,7 +1463,7 @@ def generate_sales_report(
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
-        {"type": "sum", "col_letter": "I", "number_format": NUMBER_FORMAT},
+        {"type": "sum", "col_letter": "I", "number_format": _quantity_format(detail_qty_total)},
         {"type": "text", "value": ""},
         {"type": "text", "value": ""},
         {"type": "sum", "col_letter": "L", "number_format": currency_format},
@@ -2604,9 +2624,17 @@ def generate_cashbox_report(
     by_payment_collections: dict[str, Decimal] = {}
     by_payment_collections_count: dict[str, int] = {}
     for log in collection_logs:
-        method_raw = getattr(log, "payment_method", "") or "cash"
-        method = _normalize_payment_method(method_raw)
-        method_es = _translate_payment_method(method)
+        method_raw = (getattr(log, "payment_method", "") or "").strip()
+        method = _normalize_payment_method(method_raw or "cash")
+        # Los métodos conocidos se agrupan y traducen; los custom/nuevos (ej.
+        # "Nequi", "Pix", los que se irán creando por país) conservan su nombre
+        # real en vez de colapsar todos en "Otro".
+        if method == "other" and method_raw and method_raw.lower() not in {
+            "other", "otro", "no especificado",
+        }:
+            method_es = method_raw
+        else:
+            method_es = _translate_payment_method(method)
         amount = _safe_decimal(log.amount)
         by_payment_collections[method_es] = by_payment_collections.get(method_es, Decimal("0")) + amount
         by_payment_collections_count[method_es] = by_payment_collections_count.get(method_es, 0) + 1
@@ -3294,6 +3322,7 @@ def generate_promotions_report(
     }
     scope_labels = {"all": "Todos", "category": "Categoría", "product": "Producto"}
 
+    promo_units_total = Decimal("0")
     for promo_id, b in sorted_promos:
         sales_count = len(b["sale_ids"])
         avg_ticket = (b["revenue"] / sales_count) if sales_count > 0 else Decimal("0")
@@ -3316,8 +3345,9 @@ def generate_promotions_report(
                 else "—"
             ),
         )
-        ws_ranking.cell(row=row, column=6, value=sales_count)
-        ws_ranking.cell(row=row, column=7, value=float(b["units"])).number_format = NUMBER_FORMAT
+        ws_ranking.cell(row=row, column=6, value=sales_count).number_format = NUMBER_FORMAT_INT
+        ws_ranking.cell(row=row, column=7, value=float(b["units"])).number_format = _quantity_format(b["units"])
+        promo_units_total += b["units"] if isinstance(b["units"], Decimal) else Decimal(str(b["units"] or 0))
         ws_ranking.cell(row=row, column=8, value=float(revenue_bruto)).number_format = currency_format
         ws_ranking.cell(row=row, column=9, value=float(b["discount_total"])).number_format = currency_format
         ws_ranking.cell(row=row, column=10, value=float(b["revenue"])).number_format = currency_format
@@ -3336,8 +3366,8 @@ def generate_promotions_report(
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "F", "number_format": NUMBER_FORMAT},
-            {"type": "sum", "col_letter": "G", "number_format": NUMBER_FORMAT},
+            {"type": "sum", "col_letter": "F", "number_format": NUMBER_FORMAT_INT},
+            {"type": "sum", "col_letter": "G", "number_format": _quantity_format(promo_units_total)},
             {"type": "sum", "col_letter": "H", "number_format": currency_format},
             {"type": "sum", "col_letter": "I", "number_format": currency_format},
             {"type": "sum", "col_letter": "J", "number_format": currency_format},
@@ -3392,6 +3422,7 @@ def generate_promotions_report(
 
     # Ordenado por fecha descendente para que las recientes queden arriba.
     rows_sorted = sorted(rows, key=lambda r: r[1].timestamp or datetime.min, reverse=True)
+    promo_detail_qty_total = Decimal("0")
     for item, sale, promo in rows_sorted:
         qty = Decimal(str(item.quantity or 0))
         unit_final = Decimal(str(item.unit_price or 0))
@@ -3420,7 +3451,8 @@ def generate_promotions_report(
         ws_detail.cell(row=row, column=3, value=_safe_string(item.product_name_snapshot))
         ws_detail.cell(row=row, column=4, value=_safe_string(promo.name))
         ws_detail.cell(row=row, column=5, value=_promo_type_labels.get(promo_type_raw, promo_type_raw))
-        ws_detail.cell(row=row, column=6, value=float(qty)).number_format = NUMBER_FORMAT
+        ws_detail.cell(row=row, column=6, value=float(qty)).number_format = _quantity_format(qty)
+        promo_detail_qty_total += qty
         ws_detail.cell(row=row, column=7, value=float(unit_base)).number_format = currency_format
         ws_detail.cell(row=row, column=8, value=float(unit_final)).number_format = currency_format
         ws_detail.cell(row=row, column=9, value=float(line_disc)).number_format = currency_format
@@ -3437,7 +3469,7 @@ def generate_promotions_report(
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "F", "number_format": NUMBER_FORMAT},
+            {"type": "sum", "col_letter": "F", "number_format": _quantity_format(promo_detail_qty_total)},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "sum", "col_letter": "I", "number_format": currency_format},
@@ -3609,6 +3641,7 @@ def generate_price_lists_report(
         key=lambda kv: (kv[0] == NO_LIST_KEY, -float(kv[1]["revenue"])),
     )
 
+    list_units_total = Decimal("0")
     for key, b in sorted_lists:
         sales_count = len(b["sale_ids"])
         ingreso_bruto = b["revenue"] + b["discount_total"]
@@ -3616,8 +3649,9 @@ def generate_price_lists_report(
         disc_pct = (b["discount_total"] / ingreso_bruto) if ingreso_bruto > 0 else Decimal("0")
 
         ws_by_list.cell(row=row, column=1, value=_safe_string(b["name"]))
-        ws_by_list.cell(row=row, column=2, value=sales_count).number_format = NUMBER_FORMAT
-        ws_by_list.cell(row=row, column=3, value=float(b["units"])).number_format = NUMBER_FORMAT
+        ws_by_list.cell(row=row, column=2, value=sales_count).number_format = NUMBER_FORMAT_INT
+        ws_by_list.cell(row=row, column=3, value=float(b["units"])).number_format = _quantity_format(b["units"])
+        list_units_total += b["units"] if isinstance(b["units"], Decimal) else Decimal(str(b["units"] or 0))
         ws_by_list.cell(row=row, column=4, value=float(ingreso_bruto)).number_format = currency_format
         ws_by_list.cell(row=row, column=5, value=float(b["discount_total"])).number_format = currency_format
         ws_by_list.cell(row=row, column=6, value=float(b["revenue"])).number_format = currency_format
@@ -3635,8 +3669,8 @@ def generate_price_lists_report(
         totals_row = row
         _add_totals_row_with_formulas(ws_by_list, totals_row, data_start, [
             {"type": "label", "value": "TOTALES"},
-            {"type": "sum", "col_letter": "B", "number_format": NUMBER_FORMAT},
-            {"type": "sum", "col_letter": "C", "number_format": NUMBER_FORMAT},
+            {"type": "sum", "col_letter": "B", "number_format": NUMBER_FORMAT_INT},
+            {"type": "sum", "col_letter": "C", "number_format": _quantity_format(list_units_total)},
             {"type": "sum", "col_letter": "D", "number_format": currency_format},
             {"type": "sum", "col_letter": "E", "number_format": currency_format},
             {"type": "sum", "col_letter": "F", "number_format": currency_format},
@@ -3680,6 +3714,7 @@ def generate_price_lists_report(
 
     # Ordenado por fecha descendente
     rows_sorted_pl = sorted(rows, key=lambda r: r[1].timestamp or datetime.min, reverse=True)
+    pl_detail_qty_total = Decimal("0")
     for item, sale in rows_sorted_pl:
         qty = Decimal(str(item.quantity or 0))
         unit_final = Decimal(str(item.unit_price or 0))
@@ -3706,7 +3741,8 @@ def generate_price_lists_report(
         ws_detail.cell(row=row, column=2, value=sale.id)
         ws_detail.cell(row=row, column=3, value=_safe_string(pl_name))
         ws_detail.cell(row=row, column=4, value=_safe_string(item.product_name_snapshot))
-        ws_detail.cell(row=row, column=5, value=float(qty)).number_format = NUMBER_FORMAT
+        ws_detail.cell(row=row, column=5, value=float(qty)).number_format = _quantity_format(qty)
+        pl_detail_qty_total += qty
         ws_detail.cell(row=row, column=6, value=float(unit_base)).number_format = currency_format
         ws_detail.cell(row=row, column=7, value=float(unit_final)).number_format = currency_format
         ws_detail.cell(row=row, column=8, value=float(line_disc)).number_format = currency_format
@@ -3722,7 +3758,7 @@ def generate_price_lists_report(
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
-            {"type": "sum", "col_letter": "E", "number_format": NUMBER_FORMAT},
+            {"type": "sum", "col_letter": "E", "number_format": _quantity_format(pl_detail_qty_total)},
             {"type": "text", "value": ""},
             {"type": "text", "value": ""},
             {"type": "sum", "col_letter": "H", "number_format": currency_format},
