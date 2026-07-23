@@ -257,10 +257,12 @@ def _rail_flyout(
             on_mouse_enter=State.open_rail_flyout(page_label),
             on_mouse_leave=State.schedule_close_rail_flyout(page_label),
             custom_attrs={"data-rail-flyout": page_label},
+            # Cerrado = display:none (fuera del flujo, no aporta alto/scroll al
+            # rail). Abierto = fixed, reubicado por JS junto al icono.
             class_name=rx.cond(
                 is_open,
-                "hidden md:block fixed z-[70] pl-2 opacity-100 visible pointer-events-auto transition-opacity duration-150",
-                "hidden md:block fixed z-[70] pl-2 opacity-0 invisible pointer-events-none transition-opacity duration-150",
+                "hidden md:block fixed z-[70] pl-2 pointer-events-auto",
+                "hidden",
             ),
         ),
         rx.fragment(),
@@ -292,10 +294,12 @@ def _rail_label_flyout(
             on_mouse_enter=State.open_rail_flyout(item["page"]),
             on_mouse_leave=State.schedule_close_rail_flyout(item["page"]),
             custom_attrs={"data-rail-flyout": item["page"]},
+            # Cerrado = display:none (fuera del flujo, no aporta alto/scroll al
+            # rail). Abierto = fixed, reubicado por JS junto al icono.
             class_name=rx.cond(
                 is_open,
-                "hidden md:block fixed z-[70] pl-2 opacity-100 visible pointer-events-auto transition-opacity duration-150",
-                "hidden md:block fixed z-[70] pl-2 opacity-0 invisible pointer-events-none transition-opacity duration-150",
+                "hidden md:block fixed z-[70] pl-2 pointer-events-auto",
+                "hidden",
             ),
         ),
         rx.fragment(),
