@@ -3149,7 +3149,7 @@ class HistorialState(MixinState):
             ])
 
         if data_rows:
-            add_data_rows(ws, row, data_rows)
+            add_data_rows(ws, data_rows, row)
             data_end = row + len(data_rows) - 1
 
             # Format currency column (F)
