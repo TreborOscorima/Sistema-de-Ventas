@@ -27,7 +27,9 @@ def _venta_keyboard_shortcuts() -> str:
 
     F6            → Foco al buscador de productos por descripción
     F11           → Abrir modal Movimientos Recientes
-    Escape        → Limpiar la barra de carga rápida (si no hay modal abierto)
+    Escape        → Contextual: si la barra de venta tiene algo cargado, LIMPIA y
+                    frena (no toca el sidebar); si está vacía, deja pasar el evento
+                    para que el Escape global contraiga el sidebar / cierre overlays
     Enter         → Añadir producto (quick-add-bar, autocomplete cerrado)
                     o Confirmar Venta (desde campo numérico de monto, sin modal abierto)
     Arrow Up/Down → Navegar sugerencias de autocomplete (preventDefault + scrollIntoView)
@@ -43,21 +45,49 @@ def _venta_keyboard_shortcuts() -> str:
             // fase de captura interceptamos el Enter primero y seleccionamos la
             // sugerencia resaltada (click → select_product_for_sale, ruta fiable).
             document.addEventListener('keydown', function(e){
-                if(e.key !== 'Enter' && e.key !== 'NumpadEnter') return;
-                var el = document.activeElement;
-                if(!el || el.id !== 'venta_search_input') return;
-                var searchDiv = el.closest('[data-product-search]');
-                if(!searchDiv) return;
-                var dropdown = searchDiv.querySelector('[data-autocomplete-dropdown]');
-                if(dropdown && dropdown.children.length > 0){
-                    e.preventDefault();
-                    e.stopPropagation();
-                    var opts = dropdown.querySelectorAll('button');
-                    var target = null;
-                    for(var j = 0; j < opts.length; j++){
-                        if((' ' + opts[j].className + ' ').indexOf(' bg-indigo-50 ') > -1){ target = opts[j]; break; }
+                // Enter en el buscador → seleccionar la sugerencia (antes del debounce_input).
+                if(e.key === 'Enter' || e.key === 'NumpadEnter'){
+                    var el = document.activeElement;
+                    if(!el || el.id !== 'venta_search_input') return;
+                    var searchDiv = el.closest('[data-product-search]');
+                    if(!searchDiv) return;
+                    var dropdown = searchDiv.querySelector('[data-autocomplete-dropdown]');
+                    if(dropdown && dropdown.children.length > 0){
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var opts = dropdown.querySelectorAll('button');
+                        var target = null;
+                        for(var j = 0; j < opts.length; j++){
+                            if((' ' + opts[j].className + ' ').indexOf(' bg-indigo-50 ') > -1){ target = opts[j]; break; }
+                        }
+                        (target || opts[0]).click();
                     }
-                    (target || opts[0]).click();
+                    return;
+                }
+
+                // Escape CONTEXTUAL: si hay algo cargado en la barra de venta, el
+                // primer Escape LIMPIA y frena acá (no contrae el sidebar). Si la
+                // barra está vacía, dejamos pasar el evento y el Escape global
+                // (twk-keyboard-shortcuts.js) contrae el sidebar / cierra overlays.
+                if(e.key === 'Escape'){
+                    if(document.querySelector('.modal-overlay')) return;
+                    if(document.querySelector('[data-radix-dialog-overlay]')) return;
+                    var bar = document.querySelector('[data-quick-add-bar]');
+                    if(!bar) return;
+                    var s = document.getElementById('venta_search_input');
+                    var bc = document.getElementById('venta_barcode_input');
+                    var dd = document.querySelector('[data-autocomplete-dropdown]');
+                    var hasContent =
+                        (s && s.value.trim() !== '') ||
+                        (bc && bc.value.trim() !== '') ||
+                        (dd && dd.children.length > 0);
+                    if(hasContent){
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var clr = document.querySelector('[data-venta-clear-btn]');
+                        if(clr){ clr.click(); }
+                    }
+                    return;
                 }
             }, true);
 
@@ -80,13 +110,8 @@ def _venta_keyboard_shortcuts() -> str:
                     return;
                 }
 
-                // Escape → limpiar la barra de carga rápida (si no hay modal abierto)
-                if(e.key === 'Escape'){
-                    if(document.querySelector('.modal-overlay')) return;
-                    var clr = document.querySelector('[data-venta-clear-btn]');
-                    if(clr){ clr.click(); }
-                    return;
-                }
+                // (El Escape se maneja en el listener de captura de arriba, de
+                // forma contextual, para no chocar con el Escape global del sidebar.)
 
                 // Arrow Up/Down → navegar sugerencias de autocomplete
                 if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
