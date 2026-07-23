@@ -148,7 +148,7 @@ def inventario_page() -> rx.Component:
         ),
         rx.fragment(),
       ),
-      class_name=f"{CARD_STYLES['default']} mb-6",
+      class_name=CARD_STYLES['default'],
     ),
     rx.el.div(
       rx.el.div(
