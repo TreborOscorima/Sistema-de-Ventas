@@ -54,7 +54,7 @@ def _jsonld_ventas_app() -> dict:
             "inventario, caja, reservas y reportes en una sola plataforma. Para "
             "tiendas, canchas, talleres y negocios multi-sucursal."
         ),
-        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/ventas",
+        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/ventas/",
         "publisher": {
             "@type": "Organization",
             "name": "TUWAYKIAPP",
@@ -83,7 +83,7 @@ def _jsonld_food_app() -> dict:
             "carta digital con QR, gestión de mesas, pedidos por tablet y comanda "
             "automática en cocina."
         ),
-        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/food",
+        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/food/",
         "publisher": {
             "@type": "Organization",
             "name": "TUWAYKIAPP",
@@ -131,7 +131,7 @@ def ventas_jsonld_components() -> list[rx.Component]:
         _jsonld_script(_jsonld_faq(FAQ_ITEMS)),
         _jsonld_script(_jsonld_breadcrumbs([
             ("Inicio", f"{base}/"),
-            ("Sistema de Ventas", f"{base}/ventas"),
+            ("Sistema de Ventas", f"{base}/ventas/"),
         ])),
     ]
 
@@ -145,7 +145,7 @@ def food_jsonld_components() -> list[rx.Component]:
         _jsonld_script(_jsonld_faq(_food_faq)),
         _jsonld_script(_jsonld_breadcrumbs([
             ("Inicio", f"{base}/"),
-            ("TUWAYKIFOOD", f"{base}/food"),
+            ("TUWAYKIFOOD", f"{base}/food/"),
         ])),
     ]
 
@@ -174,13 +174,13 @@ def home_jsonld_components() -> list[rx.Component]:
                     "@type": "ListItem",
                     "position": 1,
                     "name": "TUWAYKISHOP — Sistema de Ventas",
-                    "url": f"{base}/ventas",
+                    "url": f"{base}/ventas/",
                 },
                 {
                     "@type": "ListItem",
                     "position": 2,
                     "name": "TUWAYKIFOOD — Sistema para Restobares",
-                    "url": f"{base}/food",
+                    "url": f"{base}/food/",
                 },
             ],
         }),

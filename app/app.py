@@ -526,7 +526,7 @@ def _register_landing_routes():
             title=LANDING_TITLE,
             description=LANDING_DESCRIPTION,
             image=LANDING_IMAGE,
-            meta=_landing_meta(f"{PUBLIC_SITE_URL}/ventas", indexable=True),
+            meta=_landing_meta(f"{PUBLIC_SITE_URL}/ventas/", indexable=True),
         )
         # Alias de compatibilidad con SEO previo
         app.add_page(
@@ -535,7 +535,7 @@ def _register_landing_routes():
             title=LANDING_TITLE,
             description=LANDING_DESCRIPTION,
             image=LANDING_IMAGE,
-            meta=_landing_meta(f"{PUBLIC_SITE_URL}/ventas", indexable=False),
+            meta=_landing_meta(f"{PUBLIC_SITE_URL}/ventas/", indexable=False),
         )
         # Landing TUWAYKIFOOD (sistema para restobares)
         app.add_page(
@@ -545,7 +545,7 @@ def _register_landing_routes():
             description=FOOD_DESCRIPTION,
             image=LANDING_IMAGE,
             meta=_landing_meta(
-                f"{PUBLIC_SITE_URL}/food",
+                f"{PUBLIC_SITE_URL}/food/",
                 indexable=True,
                 title=FOOD_TITLE,
                 description=FOOD_DESCRIPTION,
@@ -569,21 +569,21 @@ def _register_landing_routes():
         route="/terminos",
         title="Términos y Condiciones - TUWAYKIAPP",
         description="Términos y condiciones de uso de TUWAYKIAPP.",
-        meta=_landing_meta(f"{PUBLIC_SITE_URL}/terminos", indexable=_legal_indexable),
+        meta=_landing_meta(f"{PUBLIC_SITE_URL}/terminos/", indexable=_legal_indexable),
     )
     app.add_page(
         page_privacidad,
         route="/privacidad",
         title="Política de Privacidad - TUWAYKIAPP",
         description="Política de privacidad de TUWAYKIAPP.",
-        meta=_landing_meta(f"{PUBLIC_SITE_URL}/privacidad", indexable=_legal_indexable),
+        meta=_landing_meta(f"{PUBLIC_SITE_URL}/privacidad/", indexable=_legal_indexable),
     )
     app.add_page(
         page_cookies,
         route="/cookies",
         title="Política de Cookies - TUWAYKIAPP",
         description="Política de cookies de TUWAYKIAPP.",
-        meta=_landing_meta(f"{PUBLIC_SITE_URL}/cookies", indexable=_legal_indexable),
+        meta=_landing_meta(f"{PUBLIC_SITE_URL}/cookies/", indexable=_legal_indexable),
     )
 
 
