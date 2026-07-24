@@ -24,6 +24,8 @@ from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
 from app.i18n import MSG
 from ..types import CashboxSale
 from app.utils.formatting import fmt_price
+from app.utils.print_helper import build_print_script
+from app.utils.receipt_format import receipt_style
 
 logger = logging.getLogger(__name__)
 
@@ -493,9 +495,7 @@ class CloseMixin:
 <meta charset='utf-8'/>
 <title>Resumen de Caja</title>
 <style>
-@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
-body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
+{receipt_style(self._receipt_paper_value())}
 </style>
 </head>
 <body>
@@ -503,13 +503,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 </body>
 </html>"""
 
-        script = f"""
-        const cashboxWindow = window.open('', '_blank');
-        cashboxWindow.document.write({json.dumps(html_content)});
-        cashboxWindow.document.close();
-        cashboxWindow.focus();
-        cashboxWindow.print();
-        """
+        script = build_print_script(html_content)
         self._close_cashbox_session()
         self._reset_cashbox_close_summary()
         return rx.call_script(script)

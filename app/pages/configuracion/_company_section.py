@@ -140,9 +140,29 @@ def company_settings_section() -> rx.Component:
           rx.el.select(
             rx.el.option("80 mm (default)", value="80"),
             rx.el.option("58 mm", value="58"),
-            value=State.receipt_paper,
+            rx.el.option("A4 (hoja completa)", value="A4"),
+            rx.el.option("Personalizado (mm)", value="custom"),
+            value=State.receipt_paper_mode,
             on_change=State.set_receipt_paper,
             class_name=SELECT_STYLES["default"],
+          ),
+          rx.cond(
+            State.receipt_paper_mode == "custom",
+            rx.el.div(
+              rx.el.input(
+                placeholder="Ej: 76",
+                type="number",
+                value=State.receipt_paper_custom_mm,
+                on_change=State.set_receipt_paper_custom_mm,
+                class_name=INPUT_STYLES["default"],
+              ),
+              rx.el.p(
+                "Ancho del papel térmico en milímetros (40–120). "
+                "El diámetro del rollo no afecta la impresión.",
+                class_name="text-xs text-slate-400",
+              ),
+              class_name="mt-2 flex flex-col gap-1",
+            ),
           ),
           class_name="flex flex-col gap-1",
         ),

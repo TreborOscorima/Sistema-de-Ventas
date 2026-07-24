@@ -424,13 +424,18 @@ class MixinState:
         elif width_raw.isdigit():
             width = int(width_raw)
         else:
-            paper = (settings.get("receipt_paper") or "").strip().lower()
+            from app.utils.receipt_format import normalize_paper
+            paper = (settings.get("receipt_paper") or "").strip()
             if not paper:
-                paper = os.getenv("RECEIPT_PAPER", "").strip().lower()
-            if paper in {"58", "58mm", "58-mm"}:
+                paper = os.getenv("RECEIPT_PAPER", "").strip()
+            fmt = normalize_paper(paper) if paper else ""
+            if fmt == "58":
                 width = 32
-            elif paper in {"80", "80mm", "80-mm"}:
+            elif fmt in {"80", "a4"}:
                 width = DEFAULT_RECEIPT_WIDTH
+            elif fmt.isdigit():
+                # Ancho personalizado en mm → derivar caracteres (~0.53 char/mm).
+                width = round(int(fmt) * 0.53)
         if not width:
             width = DEFAULT_RECEIPT_WIDTH
         return max(MIN_RECEIPT_WIDTH, min(width, MAX_RECEIPT_WIDTH))
@@ -446,6 +451,27 @@ class MixinState:
             return DEFAULT_PAPER_WIDTH_MM
         width = self._receipt_width()
         return 58 if width <= 34 else DEFAULT_PAPER_WIDTH_MM
+
+    def _receipt_paper_value(
+        self, branch_id: int | None = None, use_override: bool = False
+    ) -> str:
+        """Devuelve el papel normalizado: '58', '80' o 'a4'.
+
+        Con `use_override=True` (solo el modal del POS) respeta el tamaño que el
+        usuario eligió al imprimir; el resto de comprobantes (caja, servicios,
+        reimpresiones) usan el default de Configuración.
+        """
+        from app.utils.receipt_format import normalize_paper
+
+        if use_override:
+            override = getattr(self, "receipt_print_paper_override", "") or ""
+            if override:
+                return normalize_paper(override)
+        settings = self._company_settings_snapshot(branch_id=branch_id)
+        paper = (settings.get("receipt_paper") or "").strip()
+        if not paper:
+            paper = os.getenv("RECEIPT_PAPER", "").strip()
+        return normalize_paper(paper or "80")
 
     def _company_settings_snapshot(self, branch_id: int | None = None) -> Dict[str, Any]:
         """Obtiene snapshot de configuración de empresa con labels fiscales dinámicos.

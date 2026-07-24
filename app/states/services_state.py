@@ -30,6 +30,8 @@ from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldP
 from .mixin_state import MixinState
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
 from app.utils.formatting import fmt_input_num, fmt_price
+from app.utils.print_helper import build_print_script
+from app.utils.receipt_format import receipt_style
 from app.utils.exports import (
     create_excel_workbook,
     style_header_row,
@@ -1870,9 +1872,7 @@ class ServicesState(MixinState):
 <meta charset='utf-8'/>
 <title>Constancia de Reserva</title>
 <style>
-@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
-body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
+{receipt_style(self._receipt_paper_value())}
 </style>
 </head>
 <body>
@@ -1880,13 +1880,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 </body>
 </html>"""
 
-        script = f"""
-        const receiptWindow = window.open('', '_blank');
-        receiptWindow.document.write({json.dumps(html_content)});
-        receiptWindow.document.close();
-        receiptWindow.focus();
-        receiptWindow.print();
-        """
+        script = build_print_script(html_content)
         return rx.call_script(script)
 
     @rx.event

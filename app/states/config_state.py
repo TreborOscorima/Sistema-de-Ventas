@@ -55,6 +55,8 @@ class ConfigState(MixinState):
     phone: str = ""
     footer_message: str = ""
     receipt_paper: str = "80"
+    # Ancho en mm cuando el papel es "Personalizado" (input del selector).
+    receipt_paper_custom_mm: str = ""
     receipt_width: str = ""
     timezone: str = ""
     company_form_key: int = 0
@@ -272,8 +274,19 @@ class ConfigState(MixinState):
                 self.address = settings.address or ""
                 self.phone = settings.phone or ""
                 self.footer_message = settings.footer_message or ""
-                receipt_paper = settings.receipt_paper or "80"
-                self.receipt_paper = receipt_paper if receipt_paper in {"58", "80"} else "80"
+                receipt_paper = (settings.receipt_paper or "80").strip()
+                if receipt_paper.upper() == "A4":
+                    self.receipt_paper = "A4"
+                elif receipt_paper.isdigit():
+                    self.receipt_paper = receipt_paper
+                else:
+                    self.receipt_paper = "80"
+                # Reflejar en el input de ancho personalizado si no es un preset.
+                self.receipt_paper_custom_mm = (
+                    self.receipt_paper
+                    if self.receipt_paper.isdigit() and self.receipt_paper not in {"58", "80"}
+                    else ""
+                )
                 self.receipt_width = (
                     str(settings.receipt_width)
                     if settings.receipt_width is not None
@@ -490,9 +503,34 @@ class ConfigState(MixinState):
     def set_footer_message(self, value: str):
         self.footer_message = value or ""
 
+    @rx.var
+    def receipt_paper_mode(self) -> str:
+        """Opción del dropdown: '80', '58', 'A4' o 'custom'."""
+        p = (self.receipt_paper or "80").strip()
+        if p.upper() == "A4":
+            return "A4"
+        if p in {"58", "80"}:
+            return p
+        return "custom" if p.isdigit() else "80"
+
     @rx.event
     def set_receipt_paper(self, value: str):
-        self.receipt_paper = value or "80"
+        """Handler del dropdown de papel (80 / 58 / A4 / custom)."""
+        v = (value or "80").strip()
+        if v == "custom":
+            mm = (self.receipt_paper_custom_mm or "").strip()
+            self.receipt_paper = mm if mm.isdigit() else "72"
+            if not self.receipt_paper_custom_mm:
+                self.receipt_paper_custom_mm = self.receipt_paper
+        else:
+            self.receipt_paper = v
+
+    @rx.event
+    def set_receipt_paper_custom_mm(self, value: str):
+        """Input de ancho personalizado en mm."""
+        self.receipt_paper_custom_mm = (value or "").strip()
+        if self.receipt_paper_custom_mm.isdigit():
+            self.receipt_paper = self.receipt_paper_custom_mm
 
     @rx.event
     def set_receipt_width(self, value: str):
@@ -517,7 +555,12 @@ class ConfigState(MixinState):
         phone = (self.phone or "").strip()
         footer_message = (self.footer_message or "").strip()
         receipt_paper = (self.receipt_paper or "80").strip()
-        if receipt_paper not in {"58", "80"}:
+        if receipt_paper.upper() == "A4":
+            receipt_paper = "A4"
+        elif receipt_paper.isdigit():
+            from app.utils.receipt_format import normalize_paper
+            receipt_paper = normalize_paper(receipt_paper)  # acota 40–120 mm
+        else:
             receipt_paper = "80"
         receipt_width_value = None
         receipt_width_raw = (self.receipt_width or "").strip()

@@ -757,6 +757,8 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
                 else ""
             )
             self.sale_receipt_ready = True
+            # El selector de tamaño del modal arranca en el default de Config.
+            self.receipt_print_paper_override = self._receipt_paper_value()
             self.show_sale_receipt_modal = True
             self.new_sale_items = []
             self._reset_sale_form()

@@ -397,6 +397,25 @@ def sale_receipt_modal() -> rx.Component:
             "Selecciona la salida del comprobante para finalizar la venta.",
             class_name="text-sm text-slate-600 text-center",
         ),
+        rx.el.div(
+            rx.el.label(
+                "Tamaño de impresión",
+                class_name="text-xs font-semibold uppercase tracking-wide text-slate-500",
+            ),
+            rx.el.select(
+                rx.el.option("Térmica 80 mm", value="80"),
+                rx.el.option("Térmica 58 mm", value="58"),
+                rx.el.option("A4 (hoja completa)", value="a4"),
+                value=State.receipt_print_paper_override,
+                on_change=State.set_receipt_print_paper_override,
+                class_name="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700",
+            ),
+            rx.el.p(
+                "Por defecto usa lo configurado en Datos de Empresa.",
+                class_name="mt-1 text-xs text-slate-400",
+            ),
+            class_name="mt-4 flex flex-col gap-1",
+        ),
         class_name="py-2",
     )
 

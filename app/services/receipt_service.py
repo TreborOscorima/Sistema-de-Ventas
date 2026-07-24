@@ -629,14 +629,16 @@ class ReceiptService:
                 "</div>"
             )
 
+        # Papel: 'paper' explícito ('58'/'80'/'a4') o se deriva del ancho en mm.
+        from app.utils.receipt_format import receipt_style
+        style_css = receipt_style(data.get("paper") or str(paper_width_mm))
+
         return f"""<html>
 <head>
 <meta charset='utf-8'/>
 <title>Comprobante de Pago</title>
 <style>
-@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
-body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
+{style_css}
 </style>
 </head>
 <body>

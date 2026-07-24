@@ -47,6 +47,8 @@ from app.utils.exports import (
     WARNING_FILL,
 )
 from app.i18n import MSG
+from app.utils.print_helper import build_print_script
+from app.utils.receipt_format import receipt_style
 from app.constants import CASHBOX_INCOME_ACTIONS, CASHBOX_EXPENSE_ACTIONS
 from ..types import CashboxSale, CashboxLogEntry
 from app.utils.tenant import set_tenant_context
@@ -810,9 +812,7 @@ class ReportsMixin:
 <meta charset='utf-8'/>
 <title>Resumen de Caja</title>
 <style>
-@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
-body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
+{receipt_style(self._receipt_paper_value())}
 </style>
 </head>
 <body>
@@ -820,13 +820,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 </body>
 </html>"""
 
-        script = f"""
-        const cashboxWindow = window.open('', '_blank');
-        cashboxWindow.document.write({json.dumps(html_content)});
-        cashboxWindow.document.close();
-        cashboxWindow.focus();
-        cashboxWindow.print();
-        """
+        script = build_print_script(html_content)
         return rx.call_script(script)
 
     @rx.event
@@ -1295,9 +1289,7 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 <meta charset='utf-8'/>
 <title>Comprobante de Pago</title>
 <style>
-@page {{ size: {paper_width_mm}mm auto; margin: 0; }}
-body {{ margin: 0; padding: 2mm; }}
-pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word; }}
+{receipt_style(self._receipt_paper_value())}
 </style>
 </head>
 <body>
@@ -1305,11 +1297,5 @@ pre {{ font-family: monospace; font-size: 12px; margin: 0; white-space: pre-wrap
 </body>
 </html>"""
 
-        script = f"""
-        const receiptWindow = window.open('', '_blank');
-        receiptWindow.document.write({json.dumps(html_content)});
-        receiptWindow.document.close();
-        receiptWindow.focus();
-        receiptWindow.print();
-        """
+        script = build_print_script(html_content)
         return rx.call_script(script)

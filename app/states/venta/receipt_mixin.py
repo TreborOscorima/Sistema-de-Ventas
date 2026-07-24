@@ -10,6 +10,7 @@ from app.models import Sale, PaymentMethod, Client
 from app.services.receipt_service import ReceiptService
 from app.utils.db import get_async_session
 from app.utils.payment import payment_method_label
+from app.utils.print_helper import build_print_script
 from app.utils.timezone import format_local_datetime
 
 
@@ -29,6 +30,13 @@ class ReceiptMixin:
     last_payment_summary: str = ""
     last_client_name: str = ""
     show_sale_receipt_modal: bool = False
+    # Override de tamaño de papel elegido en el modal al momento de imprimir
+    # ("" = usa el default de Configuración). '58' | '80' | 'A4'.
+    receipt_print_paper_override: str = ""
+
+    @rx.event
+    def set_receipt_print_paper_override(self, value: str):
+        self.receipt_print_paper_override = (value or "").strip()
 
     def _payment_method_key(self, method_type: Any) -> str:
         if hasattr(method_type, "value"):
@@ -103,7 +111,7 @@ class ReceiptMixin:
             return str(method)
         return "No especificado"
 
-    def _print_receipt_logic(self, receipt_id: str | None = None):
+    def _print_receipt_logic(self, receipt_id: str | None = None, use_paper_override: bool = False):
         # Determinar fuente de datos
         receipt_items = []
         total = 0.0
@@ -244,6 +252,9 @@ class ReceiptMixin:
             "currency_symbol": self.currency_symbol,
             "width": receipt_width,
             "paper_width_mm": paper_width_mm,
+            "paper": self._receipt_paper_value(
+                branch_id=branch_id, use_override=use_paper_override
+            ),
             "branch_id": branch_id,
             "show_tax_on_receipt": _show_tax,
             "tax_name": company.get("default_tax_name", ""),
@@ -256,13 +267,9 @@ class ReceiptMixin:
             receipt_data, company
         )
 
-        script = f"""
-        const receiptWindow = window.open('', '_blank');
-        receiptWindow.document.write({json.dumps(html_content)});
-        receiptWindow.document.close();
-        receiptWindow.focus();
-        receiptWindow.print();
-        """
+        # Imprime dentro de la misma ventana (nativo en la PWA) en vez de
+        # window.open, que abría una ventana nueva del navegador.
+        script = build_print_script(html_content)
         # Para cobros de reserva, libera seleccion despues de imprimir
         if self.last_sale_reservation_context and (not receipt_id or use_state):
             if hasattr(self, "reservation_payment_id"):
@@ -290,7 +297,7 @@ class ReceiptMixin:
     def print_receipt(self):
         receipt_id = str(self.last_sale_id or "").strip()
         self.show_sale_receipt_modal = False
-        return self._print_receipt_logic(receipt_id or None)
+        return self._print_receipt_logic(receipt_id or None, use_paper_override=True)
 
     @rx.event
     def close_sale_receipt_modal(self):
@@ -448,6 +455,7 @@ class ReceiptMixin:
             "currency_symbol": self.currency_symbol,
             "width": receipt_width,
             "paper_width_mm": paper_width_mm,
+            "paper": self._receipt_paper_value(branch_id=branch_id),
             "branch_id": branch_id,
             "show_tax_on_receipt": _show_tax,
             "tax_name": company.get("default_tax_name", ""),
