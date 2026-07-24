@@ -8,19 +8,31 @@ from ._state import GA4_MEASUREMENT_ID, META_PIXEL_ID, PUBLIC_SITE_URL, FAQ_ITEM
 
 
 def _jsonld_script(data: dict | list) -> rx.Component:
+    # El JSON debe ir como hijo (texto) del <script>. Pasarlo por
+    # `dangerously_set_inner_html` NO funciona en Reflex: se trata como estilo y
+    # el <script> queda vacío (Google no ve datos estructurados). El JSON no
+    # contiene `<`, `>` ni `&`, así que es seguro como nodo de texto.
     return rx.el.script(
-        dangerously_set_inner_html=json.dumps(data, ensure_ascii=False),
+        json.dumps(data, ensure_ascii=False),
         type="application/ld+json",
     )
 
 
 def _jsonld_organization() -> dict:
+    base = PUBLIC_SITE_URL or "https://tuwayki.app"
     return {
         "@context": "https://schema.org",
         "@type": "Organization",
         "name": "TUWAYKIAPP",
-        "url": PUBLIC_SITE_URL or "https://tuwayki.app",
-        "logo": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/icon-512.png",
+        "alternateName": ["TUWAYKI", "tuwayki.app"],
+        "url": base,
+        "logo": f"{base}/icon-512.png",
+        "description": (
+            "TUWAYKIAPP desarrolla software de gestión en la nube para distintas "
+            "industrias: TUWAYKISHOP (ventas y multi-sucursal) y TUWAYKIFOOD "
+            "(restaurantes y restobares)."
+        ),
+        "slogan": "Un sistema de gestión para cada tipo de negocio.",
         "contactPoint": {
             "@type": "ContactPoint",
             "contactType": "sales",
@@ -34,13 +46,20 @@ def _jsonld_ventas_app() -> dict:
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "TUWAYKISHOP",
+        "alternateName": ["Tuwaykishop", "TUWAYKI SHOP"],
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Web",
         "description": (
-            "Sistema de ventas SaaS multi-tenant: punto de venta, inventario, "
-            "caja, reservas y reportes en una sola plataforma."
+            "TUWAYKISHOP es el sistema de ventas de TUWAYKIAPP: punto de venta, "
+            "inventario, caja, reservas y reportes en una sola plataforma. Para "
+            "tiendas, canchas, talleres y negocios multi-sucursal."
         ),
         "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/ventas",
+        "publisher": {
+            "@type": "Organization",
+            "name": "TUWAYKIAPP",
+            "url": PUBLIC_SITE_URL or "https://tuwayki.app",
+        },
         "offers": {
             "@type": "AggregateOffer",
             "priceCurrency": "USD",
@@ -56,13 +75,20 @@ def _jsonld_food_app() -> dict:
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "TUWAYKIFOOD",
+        "alternateName": ["Tuwaykifood", "TUWAYKI FOOD"],
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Web",
         "description": (
-            "Sistema para restaurantes y restobares: carta digital con QR, "
-            "gestión de mesas, pedidos por tablet y comanda automática en cocina."
+            "TUWAYKIFOOD es el sistema para restaurantes y restobares de TUWAYKIAPP: "
+            "carta digital con QR, gestión de mesas, pedidos por tablet y comanda "
+            "automática en cocina."
         ),
         "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/food",
+        "publisher": {
+            "@type": "Organization",
+            "name": "TUWAYKIAPP",
+            "url": PUBLIC_SITE_URL or "https://tuwayki.app",
+        },
     }
 
 
@@ -125,13 +151,38 @@ def food_jsonld_components() -> list[rx.Component]:
 
 
 def home_jsonld_components() -> list[rx.Component]:
+    base = PUBLIC_SITE_URL or "https://tuwayki.app"
     return [
         _jsonld_script(_jsonld_organization()),
         _jsonld_script({
             "@context": "https://schema.org",
             "@type": "WebSite",
             "name": "TUWAYKIAPP",
-            "url": PUBLIC_SITE_URL or "https://tuwayki.app",
+            "alternateName": ["TUWAYKI", "tuwayki.app"],
+            "url": base,
+        }),
+        # Declara los productos en el home para que Google asocie la empresa
+        # con cada sistema (TUWAYKISHOP / TUWAYKIFOOD).
+        _jsonld_script(_jsonld_ventas_app()),
+        _jsonld_script(_jsonld_food_app()),
+        _jsonld_script({
+            "@context": "https://schema.org",
+            "@type": "ItemList",
+            "name": "Sistemas de TUWAYKIAPP",
+            "itemListElement": [
+                {
+                    "@type": "ListItem",
+                    "position": 1,
+                    "name": "TUWAYKISHOP — Sistema de Ventas",
+                    "url": f"{base}/ventas",
+                },
+                {
+                    "@type": "ListItem",
+                    "position": 2,
+                    "name": "TUWAYKIFOOD — Sistema para Restobares",
+                    "url": f"{base}/food",
+                },
+            ],
         }),
     ]
 

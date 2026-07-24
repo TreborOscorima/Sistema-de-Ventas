@@ -499,8 +499,8 @@ FOOD_DESCRIPTION = (
     "Carta digital con QR, gestión de mesas, pedidos por tablet y comanda automática en cocina. "
     "Todo conectado con la caja del turno."
 )
-HOME_TITLE = "TUWAYKIAPP | Sistema de gestión para tu negocio"
-HOME_DESCRIPTION = "Elige el sistema que corresponde a tu negocio: TUWAYKISHOP para ventas y multi-sucursal, o TUWAYKIFOOD para restaurantes y restobares."
+HOME_TITLE = "TUWAYKIAPP | Software de gestión para comercios, restaurantes y más"
+HOME_DESCRIPTION = "TUWAYKIAPP desarrolla software de gestión en la nube para cada industria: TUWAYKISHOP (ventas y multi-sucursal) y TUWAYKIFOOD (restaurantes y restobares). Un sistema para cada tipo de negocio."
 
 
 def _register_landing_routes():
