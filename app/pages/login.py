@@ -29,7 +29,7 @@ def login_page() -> rx.Component:
                 ),
                 rx.el.div(
                     rx.el.h1(
-                        "TUWAYKIAPP",
+                        "TUWAYKISHOP",
                         class_name="text-2xl font-bold text-slate-900 tracking-tight",
                     ),
                     rx.el.p(

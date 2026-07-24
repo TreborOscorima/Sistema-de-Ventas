@@ -1,4 +1,4 @@
-/* TUWAYKIAPP Service Worker v3
+/* TUWAYKISHOP Service Worker v4
  *
  * Strategy:
  *  - HTML pages      : network-first, fallback to offline page
@@ -9,7 +9,7 @@
  * Cache version MUST be bumped on any change to this file so
  * the activate handler deletes the previous cache from all clients.
  */
-const CACHE = "twk-v3";
+const CACHE = "twk-v4";
 const OFFLINE_KEY = "/_offline";
 const PRECACHE = [
   "/icon-192.png",
@@ -21,7 +21,7 @@ const OFFLINE_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Sin conexión — TUWAYKIAPP</title>
+<title>Sin conexión — TUWAYKISHOP</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
@@ -50,7 +50,7 @@ font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
 </head>
 <body>
 <div class="card">
-<img src="/icon-192.png" alt="TUWAYKIAPP" class="icon" width="64" height="64">
+<img src="/icon-192.png" alt="TUWAYKISHOP" class="icon" width="64" height="64">
 <h1>Sin conexión a internet</h1>
 <p class="desc">No se pudo conectar al servidor. Verifica tu conexión a internet o espera unos segundos, vamos a reintentar automáticamente.</p>
 <div class="status" id="status">

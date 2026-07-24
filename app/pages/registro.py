@@ -17,7 +17,7 @@ def _producto_selector() -> rx.Component:
     return rx.el.div(
         rx.el.button(
             rx.icon("shopping-bag", class_name="h-4 w-4 mr-1.5"),
-            "TUWAYKIAPP",
+            "TUWAYKISHOP",
             type="button",
             on_click=State.set_register_producto("ventas"),
             class_name=rx.cond(

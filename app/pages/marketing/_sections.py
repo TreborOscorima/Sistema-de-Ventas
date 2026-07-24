@@ -76,7 +76,7 @@ def _header_section() -> rx.Component:
         rx.el.div(
             rx.el.a(
                 rx.icon("box", class_name="h-8 w-8 text-indigo-600"),
-                rx.el.span("TUWAYKIAPP", class_name="text-2xl font-extrabold tracking-tight text-slate-900"),
+                rx.el.span("TUWAYKISHOP", class_name="text-2xl font-extrabold tracking-tight text-slate-900"),
                 href=_site_href("/"),
                 class_name="flex items-center gap-2.5",
             ),
@@ -162,7 +162,7 @@ def _hero_section() -> rx.Component:
                     style={"fontFamily": "'Space Grotesk', sans-serif"},
                 ),
                 rx.el.p(
-                    "TUWAYKIAPP reemplaza las planillas, los cuadernos y los sistemas sueltos. "
+                    "TUWAYKISHOP reemplaza las planillas, los cuadernos y los sistemas sueltos. "
                     "Punto de venta, inventario, reservas, caja y reportes conectados — "
                     "con trazabilidad completa de cada peso, cada producto y cada usuario.",
                     class_name="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg",
@@ -384,7 +384,7 @@ def _extra_capabilities_section() -> rx.Component:
                 style={"fontFamily": "'Space Grotesk', sans-serif"},
             ),
             rx.el.p(
-                "TUWAYKIAPP no es solo un punto de venta. Es un ecosistema completo para operar, "
+                "TUWAYKISHOP no es solo un punto de venta. Es un ecosistema completo para operar, "
                 "crecer y mantener el control de cada área de tu negocio.",
                 class_name="reveal mt-3 max-w-3xl text-sm leading-relaxed text-slate-600 sm:text-base",
             ),
@@ -759,7 +759,7 @@ def _pricing_section() -> rx.Component:
     return rx.el.section(
         rx.el.div(
             rx.el.h2(
-                "Elige cómo quieres usar TUWAYKIAPP",
+                "Elige cómo quieres usar TUWAYKISHOP",
                 class_name="reveal text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl",
                 style={"fontFamily": "'Space Grotesk', sans-serif"},
             ),
@@ -958,7 +958,7 @@ def _footer_section() -> rx.Component:
                 rx.el.div(
                     rx.el.a(
                         rx.icon("box", class_name="h-7 w-7 text-indigo-600"),
-                        rx.el.span("TUWAYKIAPP", class_name="text-lg font-extrabold tracking-tight text-slate-900"),
+                        rx.el.span("TUWAYKISHOP", class_name="text-lg font-extrabold tracking-tight text-slate-900"),
                         href=_site_href("/"), class_name="inline-flex items-center gap-2.5",
                     ),
                     rx.el.p("Sistema de gestión SaaS para negocios multi-sucursal con enfoque en control real.", class_name="mt-3 max-w-xs text-sm text-slate-600"),

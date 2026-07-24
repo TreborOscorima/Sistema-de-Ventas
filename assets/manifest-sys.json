@@ -1,6 +1,6 @@
 {
-  "name": "TUWAYKIAPP",
-  "short_name": "TUWAYKIAPP",
+  "name": "TUWAYKISHOP",
+  "short_name": "TUWAYKISHOP",
   "description": "Sistema de ventas, caja e inventario para tu negocio.",
   "id": "/login",
   "start_url": "/login",

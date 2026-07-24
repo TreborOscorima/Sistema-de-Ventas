@@ -148,7 +148,7 @@ def _access_denied() -> rx.Component:
             rx.el.a(
                 rx.el.button(
                     rx.icon("arrow-left", class_name="h-4 w-4"),
-                    "Ir al Sistema de Ventas",
+                    "Ir a TUWAYKISHOP",
                     class_name=BUTTON_STYLES["primary"],
                 ),
                 href=_app_href("/"),
@@ -194,7 +194,7 @@ def _owner_header() -> rx.Component:
                 rx.el.a(
                     rx.el.button(
                         rx.icon("layout-dashboard", class_name="h-4 w-4"),
-                        "Sistema de Ventas",
+                        "TUWAYKISHOP",
                         class_name=f"flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 px-3 py-2 {RADIUS['md']} hover:bg-slate-100 {TRANSITIONS['fast']}",
                     ),
                     href=_app_href("/"),
@@ -247,7 +247,7 @@ def _owner_content() -> rx.Component:
                     class_name="text-xl sm:text-2xl font-bold text-slate-800",
                 ),
                 rx.el.p(
-                    "Administra clientes del SISTEMA DE VENTAS y TUWAYKIFOOD — planes, suscripciones y activaciones",
+                    "Administra clientes de TUWAYKISHOP y TUWAYKIFOOD — planes, suscripciones y activaciones",
                     class_name=f"{TYPOGRAPHY['body_secondary']} mt-1",
                 ),
                 class_name="flex flex-col text-center sm:text-left",

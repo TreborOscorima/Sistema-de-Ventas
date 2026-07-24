@@ -1,4 +1,4 @@
-"""Home page — selector de productos TUWAYKI."""
+"""Home page — selector de productos TUWAYKIAPP (TUWAYKISHOP / TUWAYKIFOOD)."""
 
 import reflex as rx
 
@@ -22,7 +22,7 @@ def _home_header() -> rx.Component:
             rx.el.a(
                 rx.icon("layers", class_name="h-8 w-8 text-indigo-600"),
                 rx.el.span(
-                    "TUWAYKI",
+                    "TUWAYKIAPP",
                     class_name="text-2xl font-extrabold tracking-tight text-slate-900",
                 ),
                 href=_site_href("/"),
@@ -53,7 +53,7 @@ def _product_card_ventas() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.h2(
-                    "TUWAYKIAPP",
+                    "TUWAYKISHOP",
                     class_name="text-2xl font-extrabold tracking-tight text-slate-900",
                 ),
                 rx.el.p(
@@ -153,7 +153,7 @@ def _home_footer() -> rx.Component:
     return rx.el.footer(
         rx.el.div(
             rx.el.p(
-                "TUWAYKI © 2026 · Todos los derechos reservados.",
+                "TUWAYKIAPP © 2026 · Todos los derechos reservados.",
                 class_name="text-sm text-slate-400",
             ),
             rx.el.div(
@@ -176,7 +176,7 @@ def _home_footer() -> rx.Component:
 
 
 def home_page() -> rx.Component:
-    """Página principal — selector de productos TUWAYKI."""
+    """Página principal — selector de productos TUWAYKIAPP (TUWAYKISHOP / TUWAYKIFOOD)."""
     return rx.el.div(
         rx.el.style(_global_styles()),
         rx.script(_sw_cleanup_script()),

@@ -218,7 +218,7 @@ SCREENSHOT_TABS = [
         "label": "Dashboard",
         "icon": "layout-dashboard",
         "src": "/dashboard-screenshot.webp",
-        "alt": "Dashboard principal de TUWAYKIAPP",
+        "alt": "Dashboard principal de TUWAYKISHOP",
         "headline": "El estado de tu negocio en una sola pantalla",
         "bullets": [
             "Ventas del día, semana y mes en tiempo real",
@@ -232,7 +232,7 @@ SCREENSHOT_TABS = [
         "label": "Punto de Venta",
         "icon": "shopping-cart",
         "src": "/venta-screenshot.webp",
-        "alt": "Punto de venta de TUWAYKIAPP",
+        "alt": "Punto de venta de TUWAYKISHOP",
         "headline": "Cobra en segundos, registra todo automáticamente",
         "bullets": [
             "Busca por nombre, código interno o código de barras",
@@ -246,7 +246,7 @@ SCREENSHOT_TABS = [
         "label": "Inventario",
         "icon": "package",
         "src": "/inventario-screenshot.webp",
-        "alt": "Gestión de inventario de TUWAYKIAPP",
+        "alt": "Gestión de inventario de TUWAYKISHOP",
         "headline": "Stock auditado, Kardex completo, cero sorpresas",
         "bullets": [
             "Cada movimiento registrado con usuario y motivo",
@@ -260,7 +260,7 @@ SCREENSHOT_TABS = [
         "label": "Caja",
         "icon": "wallet",
         "src": "/caja-screenshot.webp",
-        "alt": "Gestión de caja de TUWAYKIAPP",
+        "alt": "Gestión de caja de TUWAYKISHOP",
         "headline": "Cierra caja con evidencia. Sin diferencias ocultas.",
         "bullets": [
             "Apertura y cierre de turno con monto inicial registrado",
@@ -274,7 +274,7 @@ SCREENSHOT_TABS = [
         "label": "Reportes",
         "icon": "bar-chart-3",
         "src": "/reportes-screenshot.webp",
-        "alt": "Reportes y analítica de TUWAYKIAPP",
+        "alt": "Reportes y analítica de TUWAYKISHOP",
         "headline": "Datos reales para decisiones que generan resultado",
         "bullets": [
             "Rentabilidad por período, categoría y producto",
@@ -286,11 +286,11 @@ SCREENSHOT_TABS = [
 ]
 
 # ── Shared Links ─────────────────────────────────────────────
-_demo_link = _wa_link("Hola, quiero una demo en vivo de TUWAYKIAPP.")
-_local_link = _wa_link("Hola, me interesa TUWAYKIAPP en modalidad Local (pago anual). Quiero coordinar precio y detalles.")
-_standard_link = _wa_link("Hola, quiero el Plan Standard (USD 35/mes) de TUWAYKIAPP.")
-_professional_link = _wa_link("Hola, quiero el Plan Professional (USD 55/mes) de TUWAYKIAPP.")
-_enterprise_link = _wa_link("Hola, quiero el Plan Enterprise (USD 175/mes) de TUWAYKIAPP.")
+_demo_link = _wa_link("Hola, quiero una demo en vivo de TUWAYKISHOP.")
+_local_link = _wa_link("Hola, me interesa TUWAYKISHOP en modalidad Local (pago anual). Quiero coordinar precio y detalles.")
+_standard_link = _wa_link("Hola, quiero el Plan Standard (USD 35/mes) de TUWAYKISHOP.")
+_professional_link = _wa_link("Hola, quiero el Plan Professional (USD 55/mes) de TUWAYKISHOP.")
+_enterprise_link = _wa_link("Hola, quiero el Plan Enterprise (USD 175/mes) de TUWAYKISHOP.")
 _food_demo_link = _wa_link("Hola, me interesa conocer TUWAYKIFOOD para mi restaurante. Quiero coordinar una demo.")
 
 # ── TUWAYKIFOOD Static Data ───────────────────────────────────

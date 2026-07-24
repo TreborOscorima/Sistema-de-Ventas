@@ -1,5 +1,5 @@
 /**
- * TUWAYKIAPP PWA Install Banner
+ * TUWAYKISHOP PWA Install Banner
  * Posición: top-right. Captura beforeinstallprompt y persiste
  * la decisión del usuario en localStorage por 30 días.
  */
@@ -30,7 +30,7 @@
     var banner = document.createElement("div");
     banner.id = "twk-pwa-banner";
     banner.setAttribute("role", "dialog");
-    banner.setAttribute("aria-label", "Instalar TUWAYKIAPP");
+    banner.setAttribute("aria-label", "Instalar TUWAYKISHOP");
     banner.style.cssText = [
       "position:fixed",
       "top:72px",
@@ -77,7 +77,7 @@
       "flex-shrink:0;width:44px;height:44px;border-radius:11px;overflow:hidden";
     var icon = document.createElement("img");
     icon.src    = "/icon-192.png";
-    icon.alt    = "TUWAYKIAPP";
+    icon.alt    = "TUWAYKISHOP";
     icon.width  = 44;
     icon.height = 44;
     icon.style.cssText = "width:44px;height:44px;display:block";
@@ -85,7 +85,7 @@
 
     var titleWrap = document.createElement("div");
     var title = document.createElement("p");
-    title.textContent = "Instalar TUWAYKIAPP";
+    title.textContent = "Instalar TUWAYKISHOP";
     title.style.cssText =
       "margin:0 0 2px;font-weight:700;font-size:14px;color:#0f172a;line-height:1.2";
     var subtitle = document.createElement("p");

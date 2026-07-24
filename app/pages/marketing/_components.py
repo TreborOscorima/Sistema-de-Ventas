@@ -84,7 +84,7 @@ def _hero_annotation_badge(icon: str, label: str, pos_cls: str, color_cls: str) 
 def _hero_preview_card() -> rx.Component:
     return rx.el.aside(
         rx.el.div(
-            _browser_frame("/dashboard-screenshot.webp", "Dashboard de TUWAYKIAPP"),
+            _browser_frame("/dashboard-screenshot.webp", "Dashboard de TUWAYKISHOP"),
             _hero_annotation_badge(
                 "trending-up", "Ventas del día",
                 "top-[12%] -left-[12%]",

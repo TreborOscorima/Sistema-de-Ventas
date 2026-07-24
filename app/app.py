@@ -77,7 +77,7 @@ from app.api import health_app
 from app.utils.env import APP_SURFACE
 
 PUBLIC_SITE_URL = (os.getenv("PUBLIC_SITE_URL") or "https://tuwayki.app").strip().rstrip("/")
-LANDING_TITLE = "TUWAYKIAPP | Sistema de Ventas para tiendas, servicios y reservas"
+LANDING_TITLE = "TUWAYKISHOP | Sistema de Ventas para tiendas, servicios y reservas"
 LANDING_DESCRIPTION = (
     "Centraliza ventas, caja, inventario, clientes y reservas en una sola plataforma SaaS "
     "multiempresa, segura y lista para escalar."
@@ -102,7 +102,7 @@ def _landing_meta(
         rx.el.link(rel="alternate", hreflang="x-default", href=canonical_url),
         {"name": "robots", "content": "index,follow" if indexable else "noindex,follow"},
         {"property": "og:type", "content": "website"},
-        {"property": "og:site_name", "content": "TUWAYKI"},
+        {"property": "og:site_name", "content": "TUWAYKIAPP"},
         {"property": "og:locale", "content": "es_LA"},
         {"property": "og:title", "content": t},
         {"property": "og:description", "content": d},
@@ -424,7 +424,7 @@ _pwa_components: list = (
         rx.el.meta(name="theme-color", content="#4f46e5"),
         rx.el.meta(name="apple-mobile-web-app-capable", content="yes"),
         rx.el.meta(name="apple-mobile-web-app-status-bar-style", content="default"),
-        rx.el.meta(name="apple-mobile-web-app-title", content="TUWAYKIAPP"),
+        rx.el.meta(name="apple-mobile-web-app-title", content="TUWAYKISHOP" if APP_SURFACE == "app" else "TUWAYKIAPP"),
         rx.el.link(rel="apple-touch-icon", href="/icon-192.png"),
         # SW + install banner solo en la superficie app (sys.tuwayki.app).
         *(
@@ -499,8 +499,8 @@ FOOD_DESCRIPTION = (
     "Carta digital con QR, gestión de mesas, pedidos por tablet y comanda automática en cocina. "
     "Todo conectado con la caja del turno."
 )
-HOME_TITLE = "TUWAYKI | Sistema de gestión para tu negocio"
-HOME_DESCRIPTION = "Elige el sistema que corresponde a tu negocio: TUWAYKIAPP para ventas y multi-sucursal, o TUWAYKIFOOD para restaurantes y restobares."
+HOME_TITLE = "TUWAYKIAPP | Sistema de gestión para tu negocio"
+HOME_DESCRIPTION = "Elige el sistema que corresponde a tu negocio: TUWAYKISHOP para ventas y multi-sucursal, o TUWAYKIFOOD para restaurantes y restobares."
 
 
 def _register_landing_routes():
@@ -591,60 +591,60 @@ def _register_app_routes():
     _add_private_page(
         page_login,
         route="/login",
-        title="Iniciar sesión - TUWAYKIAPP",
+        title="Iniciar sesión - TUWAYKISHOP",
         on_load=State.page_init_login,
     )
     _add_private_page(
         page_cambiar_contrasena,
         route="/cambiar-clave",
-        title="Cambiar Contrasena - TUWAYKIAPP",
+        title="Cambiar Contrasena - TUWAYKISHOP",
         on_load=State.page_init_cambiar_clave,
     )
     _add_private_page(
         page_periodo_prueba_finalizado,
         route="/periodo-prueba-finalizado",
-        title="Periodo de Prueba Finalizado - TUWAYKIAPP",
+        title="Periodo de Prueba Finalizado - TUWAYKISHOP",
     )
     _add_private_page(
         page_cuenta_suspendida,
         route="/cuenta-suspendida",
-        title="Cuenta Suspendida - TUWAYKIAPP",
+        title="Cuenta Suspendida - TUWAYKISHOP",
     )
     _add_private_page(
         page_registro,
         route="/registro",
-        title="Registro - TUWAYKIAPP",
+        title="Registro - TUWAYKISHOP",
         on_load=State.on_load_registro,
     )
 
     _add_private_page(
         page_ingreso,
         route="/ingreso",
-        title="Compras e Ingresos - TUWAYKIAPP",
+        title="Compras e Ingresos - TUWAYKISHOP",
         on_load=State.page_init_ingreso,
     )
     _add_private_page(
         page_compras,
         route="/compras",
-        title="Compras - TUWAYKIAPP",
+        title="Compras - TUWAYKISHOP",
         on_load=State.page_init_compras,
     )
     _add_private_page(
         page_reposicion,
         route="/reposicion",
-        title="Órdenes de Compra - TUWAYKIAPP",
+        title="Órdenes de Compra - TUWAYKISHOP",
         on_load=State.page_init_reposicion,
     )
     _add_private_page(
         page_venta,
         route="/venta",
-        title="Venta - TUWAYKIAPP",
+        title="Venta - TUWAYKISHOP",
         on_load=State.page_init_venta,
     )
     _add_private_page(
         page_caja,
         route="/caja",
-        title="Gestión de Caja - TUWAYKIAPP",
+        title="Gestión de Caja - TUWAYKISHOP",
         on_load=State.page_init_caja,
     )
     _add_private_page(
@@ -662,73 +662,73 @@ def _register_app_routes():
     _add_private_page(
         page_dashboard,
         route="/",
-        title="Dashboard - TUWAYKIAPP",
+        title="Dashboard - TUWAYKISHOP",
         on_load=State.page_init_default,
     )
     _add_private_page(
         page_dashboard,
         route="/dashboard",
-        title="Dashboard - TUWAYKIAPP",
+        title="Dashboard - TUWAYKISHOP",
         on_load=State.page_init_default,
     )
     _add_private_page(
         page_inventario,
         route="/inventario",
-        title="Inventario - TUWAYKIAPP",
+        title="Inventario - TUWAYKISHOP",
         on_load=State.page_init_inventario,
     )
     _add_private_page(
         page_historial,
         route="/historial",
-        title="Historial - TUWAYKIAPP",
+        title="Historial - TUWAYKISHOP",
         on_load=State.page_init_historial,
     )
     _add_private_page(
         page_reportes,
         route="/reportes",
-        title="Reportes - TUWAYKIAPP",
+        title="Reportes - TUWAYKISHOP",
         on_load=State.page_init_reportes,
     )
     _add_private_page(
         page_servicios,
         route="/servicios",
-        title="Servicios - TUWAYKIAPP",
+        title="Servicios - TUWAYKISHOP",
         on_load=State.page_init_servicios,
     )
     _add_private_page(
         page_configuracion,
         route="/configuracion",
-        title="Configuración - TUWAYKIAPP",
+        title="Configuración - TUWAYKISHOP",
         on_load=State.page_init_configuracion,
     )
     _add_private_page(
         page_documentos_fiscales,
         route="/documentos-fiscales",
-        title="Documentos Fiscales - TUWAYKIAPP",
+        title="Documentos Fiscales - TUWAYKISHOP",
         on_load=State.page_init_documentos_fiscales,
     )
     _add_private_page(
         page_presupuestos,
         route="/presupuestos",
-        title="Presupuestos - TUWAYKIAPP",
+        title="Presupuestos - TUWAYKISHOP",
         on_load=State.page_init_presupuestos,
     )
     _add_private_page(
         page_promociones,
         route="/promociones",
-        title="Promociones - TUWAYKIAPP",
+        title="Promociones - TUWAYKISHOP",
         on_load=State.page_init_promociones,
     )
     _add_private_page(
         page_listas_precios,
         route="/listas-precios",
-        title="Listas de Precios - TUWAYKIAPP",
+        title="Listas de Precios - TUWAYKISHOP",
         on_load=State.page_init_listas_precios,
     )
     _add_private_page(
         page_etiquetas,
         route="/etiquetas",
-        title="Etiquetas - TUWAYKIAPP",
+        title="Etiquetas - TUWAYKISHOP",
         on_load=State.page_init_etiquetas,
     )
 

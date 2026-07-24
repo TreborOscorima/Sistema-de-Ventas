@@ -15,7 +15,7 @@ from ._shared import _plan_badge, _status_badge, _owner_action_icon_button, _own
 # ─── Tabs de producto ───────────────────────────────────
 
 def _product_tabs() -> rx.Component:
-    """Tabs para alternar entre clientes de Sistema de Ventas y TUWAYKIFOOD."""
+    """Tabs para alternar entre clientes de TUWAYKISHOP y TUWAYKIFOOD."""
     active_cls = "border-b-2 border-slate-800 text-slate-800 font-semibold"
     inactive_cls = "border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
     base_cls = "inline-flex items-center gap-2 px-4 py-2.5 text-sm transition-colors cursor-pointer"
@@ -24,7 +24,7 @@ def _product_tabs() -> rx.Component:
         rx.el.div(
             rx.el.button(
                 rx.icon("shopping-bag", class_name="h-4 w-4"),
-                "Sistema de Ventas",
+                "TUWAYKISHOP",
                 on_click=State.owner_set_product_tab("ventas"),
                 class_name=rx.cond(
                     State.owner_active_product_tab == "ventas",

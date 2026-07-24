@@ -344,7 +344,7 @@ def _sidebar_guest_content() -> rx.Component:
                 class_name="text-lg font-bold text-slate-900 text-center",
             ),
             rx.el.p(
-                "Gestiona tu negocio de forma inteligente con TUWAYKIAPP.",
+                "Gestiona tu negocio de forma inteligente con TUWAYKISHOP.",
                 class_name="text-sm text-slate-500 text-center mt-1 leading-relaxed",
             ),
             class_name="px-4 py-6",
@@ -661,7 +661,7 @@ def sidebar() -> rx.Component:
                             rx.el.div(
                                 rx.el.div(
                                     rx.el.span(
-                                        "TUWAYKIAPP",
+                                        "TUWAYKISHOP",
                                         class_name="text-lg font-bold text-slate-900 tracking-tight truncate",
                                     ),
                                     rx.cond(

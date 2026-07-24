@@ -18,7 +18,7 @@ def _jsonld_organization() -> dict:
     return {
         "@context": "https://schema.org",
         "@type": "Organization",
-        "name": "TUWAYKI",
+        "name": "TUWAYKIAPP",
         "url": PUBLIC_SITE_URL or "https://tuwayki.app",
         "logo": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/icon-512.png",
         "contactPoint": {
@@ -33,7 +33,7 @@ def _jsonld_ventas_app() -> dict:
     return {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        "name": "TUWAYKIAPP",
+        "name": "TUWAYKISHOP",
         "applicationCategory": "BusinessApplication",
         "operatingSystem": "Web",
         "description": (
@@ -130,7 +130,7 @@ def home_jsonld_components() -> list[rx.Component]:
         _jsonld_script({
             "@context": "https://schema.org",
             "@type": "WebSite",
-            "name": "TUWAYKI",
+            "name": "TUWAYKIAPP",
             "url": PUBLIC_SITE_URL or "https://tuwayki.app",
         }),
     ]
