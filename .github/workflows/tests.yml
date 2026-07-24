@@ -79,6 +79,13 @@ jobs:
       - name: Compile source
         run: python -m compileall -q app scripts
 
+      # Los tests de integración (ej. test_scoped_session::test_query_with_scoped_ctx)
+      # usan rx.session() contra el MySQL de servicio. Ese test_db arranca vacío, así
+      # que aplicamos el esquema de producción con alembic (create_all no sirve: falla
+      # con FKs auto-referenciales como fiscaldocument).
+      - name: Preparar esquema de BD (alembic upgrade head)
+        run: python -m alembic upgrade head
+
       - name: Run tests
         run: |
           set -o pipefail
