@@ -614,7 +614,7 @@ def _food_footer() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.div(
-                    rx.el.p("TUWAYKIFOOD © 2026. Todos los derechos reservados.", class_name="text-sm leading-relaxed text-slate-500"),
+                    rx.el.p("TUWAYKIAPP © 2026. Todos los derechos reservados.", class_name="text-sm leading-relaxed text-slate-500"),
                     rx.el.p("Hecho con foco en la operación real de restaurantes.", class_name="text-sm leading-relaxed text-slate-500"),
                     class_name="space-y-1",
                 ),
