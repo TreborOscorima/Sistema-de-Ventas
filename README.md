@@ -1,16 +1,23 @@
-# TUWAYKIAPP: Sistema Integral de Gestion (ERP/POS)
+# TUWAYKISHOP — Sistema Integral de Gestion (ERP/POS)
 
-**Version:** 4.2 (Mobile-first UX + Auth Stability + Docker Stability)
-**Tecnologia:** Python 3.13 / Reflex 0.9.3 / MySQL 8.0 / Docker
+**Version:** 4.3 (Rebrand TUWAYKISHOP + Impresion Nativa + Core Multi-tenant + Defensa del Consumidor)
+**Tecnologia:** Python 3.13 / Reflex 0.9.4 / MySQL 8.0 / Docker
 **Autor:** Trebor Oscorima
 
 ---
 
 ## 1. Vision General
 
-**TUWAYKIAPP** es una plataforma SaaS multi-tenant de gestion empresarial (ERP) y Punto de Venta (POS) diseñada para comercios, PYMES y centros deportivos en Latinoamerica.
+**TUWAYKISHOP** es el sistema de gestion empresarial (ERP) y Punto de Venta (POS) de la marca **TUWAYKIAPP**: una plataforma SaaS multi-tenant para comercios, PYMES y centros deportivos en Latinoamerica.
 
-La version **v4.2** incorpora un rediseno **mobile-first** completo en las 3 superficies, atajos de teclado, sidebar rail renovado con flyout, plan guards en modulos Extra y estabilidad en auth/Docker/Rolldown. La **v4.1** incorpora auto-calculo de precio de venta desde margen efectivo y un refactor de states en paquetes por mixins. La **v4.0** agrego un **Motor de Pricing completo** (Listas de Precios, Promociones avanzadas, Impuestos por empresa) y un sistema de **Presupuestos/Cotizaciones** convertibles a venta, sobre la base de la Facturacion Electronica multi-pais incorporada en v3.0.
+> **Arquitectura de marca.** **TUWAYKIAPP** es la empresa/marca madre (dominio, aspectos legales e infraestructura). Sus productos son:
+> * **TUWAYKISHOP** — este sistema de ventas/ERP/POS (retail, PYMES, deportivo).
+> * **TUWAYKIFOOD** — gestion para restaurantes (repositorio independiente).
+> * **TUWAYKILIFE** — gestion de clinicas (*proximamente*).
+>
+> El nucleo multi-tenant compartido (contexto de tenant, aislamiento por empresa/sucursal, RBAC base) vive en el paquete **tuwayki-core**, reutilizado por los distintos productos.
+
+La version **v4.3** aplica el rebrand a **TUWAYKISHOP** en todas las superficies de producto, incorpora **impresion nativa in-app** con papel configurable (termico 58/80/57 mm, ancho personalizado y A4), **leyenda de Defensa del Consumidor** configurable de forma global y por sucursal, un **fix critico de aislamiento multi-tenant** (statement cache) y **persistencia de sesion** al reabrir la PWA. La version **v4.2** incorpora un rediseno **mobile-first** completo en las 3 superficies, atajos de teclado, sidebar rail renovado con flyout, plan guards en modulos Extra y estabilidad en auth/Docker/Rolldown. La **v4.1** incorpora auto-calculo de precio de venta desde margen efectivo y un refactor de states en paquetes por mixins. La **v4.0** agrego un **Motor de Pricing completo** (Listas de Precios, Promociones avanzadas, Impuestos por empresa) y un sistema de **Presupuestos/Cotizaciones** convertibles a venta, sobre la base de la Facturacion Electronica multi-pais incorporada en v3.0.
 
 ### Capacidades Principales
 
@@ -30,7 +37,23 @@ La version **v4.2** incorpora un rediseno **mobile-first** completo en las 3 sup
 * **Servicios y Reservas:** Agenda visual para canchas deportivas con ciclo completo de pago.
 * **Reportes y Exportacion:** Consolidados por periodo con descarga Excel/PDF.
 * **Owner Backoffice:** Panel independiente para gestion de empresas, planes y billing de plataforma.
+* **Impresion Nativa:** Recibos impresos in-app (iframe, sin abrir el navegador) con papel configurable global y por sucursal — termico 58/80/57 mm, ancho personalizado (mm) y A4.
+* **Cumplimiento Legal (AR):** Leyenda de Defensa del Consumidor configurable de forma global y por sucursal, con presets por provincia.
+* **Nucleo Compartido:** Aislamiento multi-tenant y RBAC base en el paquete **tuwayki-core**, reutilizado por los productos de la marca.
 * **Despliegue Docker:** Arquitectura multi-stage de 5 contenedores con Nginx Proxy Manager.
+
+### Novedades v4.3 (2026)
+
+* **Rebrand a TUWAYKISHOP (superficies de producto):** Login, sidebar, titulos, PWA, landing `/ventas` y panel Owner adoptan la marca de producto **TUWAYKISHOP**, manteniendo **TUWAYKIAPP** para empresa/legal/infra y alineando el copyright de `/food`. Home rediseñado como sitio de empresa premium y multi-industria, con tarjeta **TUWAYKILIFE — Proximamente**.
+* **Impresion nativa in-app:** Los comprobantes se imprimen mediante un `iframe` oculto (`srcdoc` + `contentWindow.print()`) en **todos** los flujos de impresion, sin abrir una ventana del navegador — experiencia de app nativa. Ver `app/utils/print_helper.py`.
+* **Papel configurable (termico + A4):** Tamaño de papel seleccionable **global** (Datos de Empresa) y **por sucursal**: termico 58/80/57 mm, **ancho personalizado en mm** y **A4** con auto-adaptacion. Helpers en `app/utils/receipt_format.py`.
+* **Leyenda Defensa del Consumidor (Argentina):** Texto legal al pie del ticket configurable de forma **global** (`CompanySettings.consumer_defense_legend`) y **por sucursal** (`Branch.consumer_defense_legend`), con presets por provincia (CABA, PBA, Cordoba, etc.). Resolucion en el recibo: **override de sucursal → global → vacio**.
+* **Fix critico de aislamiento multi-tenant (statement cache):** `_apply_tenant_criteria` (en **tuwayki-core**) usaba lambdas con argumento por defecto que horneaban el `branch_id`/`company_id` en la cache de sentencias de SQLAlchemy, provocando que al **cambiar de sucursal** el POS no encontrara productos hasta refrescar. Se reemplazo por variables de **closure** (rastreadas via `bindparam`), garantizando que alternar sucursales A→B→C funcione **sin refrescar la pagina**, respetando la config global y por sucursal.
+* **Precios y margenes independientes por sucursal:** Cada sucursal tiene su propia fila de `Product`; los productos **transferidos** conservan precio/margen propios por sucursal (Precio Venta explicito, % Ganancia por producto o margen de sucursal), y una re-transferencia solo suma stock sin pisar el precio del destino.
+* **Fix precio $0.00 en productos transferidos:** El `sale_price` derivado (Decimal) se corrompia a `0` en el round-trip al navegador y el camino de seleccion por desplegable no re-resolvia el precio. Ahora `select_product_for_sale` re-resuelve el precio contra la BD (misma funcion que el cobro), respetando ademas promos, listas y tiers; con red de seguridad al agregar si no se eligio una sugerencia.
+* **Persistencia de sesion en PWA:** Al cerrar y reabrir la app con la sesion iniciada, ya no se pierde la sesion — recuperacion de token robusta ante la carrera de hidratacion de `localStorage` en el arranque frio de la PWA.
+* **SEO de marca:** JSON-LD corregido (se renderiza como texto hijo del `<script>`), sitemap y `canonical` con barra final (evita bounce https→http), y datos estructurados enriquecidos para que los buscadores muestren resumenes por marca (TUWAYKISHOP / TUWAYKIFOOD / TUWAYKILIFE / TUWAYKIAPP).
+* **1101 tests** — Suite estable; CI corrige la ejecucion en Actions (aiosqlite + `alembic upgrade head`) para desbloquear el auto-deploy.
 
 ### Novedades v4.2 (2026)
 
@@ -100,7 +123,8 @@ La version **v4.2** incorpora un rediseno **mobile-first** completo en las 3 sup
 | Capa | Tecnologia |
 |:-----|:-----------|
 | **Frontend** | React (compilado por Reflex desde Python) |
-| **Backend** | Python 3.13 + Reflex 0.9.3 |
+| **Backend** | Python 3.13 + Reflex 0.9.4 |
+| **Nucleo Multi-tenant** | `tuwayki-core` (paquete compartido: contexto de tenant, RBAC base) |
 | **Base de Datos** | MySQL 8.0 + SQLModel/SQLAlchemy 2.0 |
 | **Migraciones** | Alembic 1.18 |
 | **Cache / Rate Limiting** | Redis 7 |
@@ -174,7 +198,7 @@ emit_fiscal_document() -> orquestacion:
 | Modulo | Entidades | Descripcion |
 |:-------|:----------|:------------|
 | **Auth/RBAC** | `User`, `Role`, `Permission`, `RolePermission`, `UserBranch` | Usuarios, roles, permisos granulares y asignacion multi-sucursal. |
-| **Empresa** | `Company`, `Branch` | Empresas y sucursales con aislamiento de datos. |
+| **Empresa** | `Company`, `Branch` | Empresas y sucursales con aislamiento de datos; leyenda de Defensa del Consumidor por sucursal. |
 | **Clientes** | `Client`, `SaleInstallment` | Clientes con segmento, limites de credito y cuotas. |
 | **Inventario** | `Product`, `ProductVariant`, `ProductBatch`, `ProductKit`, `ProductAttribute`, `Category`, `StockMovement`, `Unit`, `PriceTier` | Catalogo, variantes, lotes FEFO, kits, atributos EAV y movimientos. |
 | **Pricing** | `PriceList`, `PriceListItem` | Listas de precios nominadas asignadas por cliente. |
@@ -185,7 +209,7 @@ emit_fiscal_document() -> orquestacion:
 | **Devoluciones** | `SaleReturn`, `SaleReturnItem` | Devoluciones parciales/totales con reversion de stock. |
 | **Presupuestos** | `Quotation`, `QuotationItem` | Documentos pre-venta convertibles a Sale. |
 | **Servicios** | `FieldReservation`, `FieldPrice` | Reservas deportivas y tarifas. |
-| **Configuracion** | `Currency`, `PaymentMethod`, `CompanySettings` | Monedas, metodos de pago y datos del negocio. |
+| **Configuracion** | `Currency`, `PaymentMethod`, `CompanySettings` | Monedas, metodos de pago, datos del negocio, margen, tamaño de papel y leyenda de Defensa del Consumidor global. |
 | **Billing** | `CompanyBillingConfig`, `FiscalDocument`, `DocumentLookupCache`, `PlatformBillingSettings` | Config fiscal por empresa, documentos emitidos, cache RUC/DNI y credenciales maestras de plataforma. |
 | **Auditoria** | `OwnerAuditLog` | Log de acciones del Owner backoffice. |
 
@@ -257,6 +281,8 @@ Sistema-de-Ventas/
 |   |   +-- fiscal_retry_worker.py  # Reintentos de docs fiscales
 |   |-- utils/               # Utilidades
 |   |   |-- pricing.py / pricing helpers # Integrados en services/pricing.py
+|   |   |-- print_helper.py          # Impresion nativa in-app (iframe srcdoc + print)
+|   |   |-- receipt_format.py         # Formato de papel: termico 58/80/57mm, ancho custom, A4
 |   |   |-- tax_presets.py           # Presets de tasas IGV/IVA por pais
 |   |   |-- stock.py                 # recalculate_stock_totals
 |   |   |-- payment.py               # Validaciones de pago
@@ -269,7 +295,7 @@ Sistema-de-Ventas/
 |   |   +-- ...                      # timezone, tenant, rate_limit, etc.
 |   |-- enums.py             # Enums: SaleStatus, ReturnReason, PaymentMethodType, etc.
 |   +-- app.py               # Punto de entrada y rutas
-|-- tests/                   # 1024 tests automatizados
+|-- tests/                   # 1101 tests automatizados
 |   |-- test_pricing_engine.py       # Motor de pricing y jerarquia
 |   |-- test_promotion_consumption.py# Consumo y cap de promociones
 |   |-- test_tax_service.py          # CRUD de tasas y presets
@@ -408,6 +434,9 @@ ENV=prod
 * Explosion de kits/combos con validacion de stock por componente.
 * Emision automatica de documento fiscal al seleccionar Boleta o Factura.
 * Desglose de impuesto en ticket de venta.
+* **Precio por sucursal:** productos transferidos conservan precio/margen propios; el precio del carrito se re-resuelve contra la BD al seleccionar (misma fuente de verdad que el cobro).
+* **Impresion nativa in-app:** vista previa e impresion del comprobante sin abrir el navegador, con el tamaño de papel configurado (termico o A4).
+* **Leyenda de Defensa del Consumidor** al pie del ticket segun la sucursal activa (override) o la configuracion global.
 * Validacion de caja abierta antes de operar.
 * **Atajos de teclado:** `/` foco en busqueda, `Esc` cerrar modal, `Enter` confirmar pago, `Ctrl+B` colapsar sidebar.
 * **Header sticky en mobile:** navegacion y buscador siempre visibles en pantallas pequeñas.
@@ -532,6 +561,9 @@ ENV=prod
 * Gestion de usuarios y roles (RBAC granular).
 * Monedas, unidades de medida y metodos de pago.
 * Tasas de impuesto por empresa con presets por pais.
+* **Impresion:** tamaño de papel (termico 58/80/57 mm, ancho personalizado en mm o A4) configurable global y por sucursal.
+* **Leyenda Defensa del Consumidor:** texto legal al pie del ticket, global y por sucursal (override), con presets por provincia (Argentina).
+* **Margen de ganancia:** global de empresa y opcional por sucursal; base para el auto-calculo del precio de venta.
 * Facturacion electronica (datos fiscales del usuario).
 * Suscripcion y plan.
 * **Diseño adaptativo:** tablas de Usuarios y Sucursales muestran cards apiladas en mobile (< 768 px) con badges de privilegios wrapping, sin scroll lateral.
@@ -585,7 +617,7 @@ python -m app.tasks.fiscal_retry_worker --dry-run
 ### Ejecutar tests
 
 ```bash
-# Suite completa (1024 tests)
+# Suite completa (1101 tests)
 python -m pytest -q
 
 # Motor de pricing
@@ -632,8 +664,9 @@ python -m pytest tests/test_security_fixes.py -v
 | Billing service (Strategy) | 45+ | Quota, Nubefact, retry, QR |
 | Seguridad (tenant isolation) | 20+ | FOR UPDATE, RBAC |
 | Ventas y creditos | 50+ | Flujos completos |
-| Otros modulos | 600+ | Inventario, caja, reportes |
-| **Total** | **1024** | |
+| Aislamiento tenant + precio por sucursal (v4.3) | 15+ | Cache segura, transferencias |
+| Otros modulos | 670+ | Inventario, caja, reportes, impresion |
+| **Total** | **1101** | |
 
 ### CI/CD
 
@@ -656,10 +689,11 @@ GitHub Actions ejecuta la suite completa en cada push/PR via `.github/workflows/
 
 ### Aislamiento Multi-Tenant
 
-* Todas las queries filtradas por `company_id` + `branch_id` via TenantMixin.
+* Todas las queries filtradas por `company_id` + `branch_id` via el nucleo **tuwayki-core** (`_apply_tenant_criteria` + `with_loader_criteria` sobre el evento `do_orm_execute`).
+* **Cache de sentencias segura:** los criterios de tenant se inyectan con variables de **closure** (rastreadas via `bindparam`), no con argumentos por defecto de lambda — evita que SQLAlchemy hornee el `branch_id`/`company_id` de la primera consulta en la cache de sentencias del engine (bug corregido en v4.3).
+* Contexto de tenant via `contextvars` (`set_tenant_context`), con `tenant_bypass()` para operaciones de plataforma.
 * Numeracion fiscal atomica con `SELECT ... FOR UPDATE`.
 * Credenciales fiscales separadas por empresa.
-* Contexto de tenant validado en cada operacion.
 * Tasas de impuesto con scope empresa (sin branch_id — regimen fiscal por empresa).
 
 ### RBAC y Autenticacion
@@ -721,7 +755,7 @@ Eventos: `view_landing`, `click_trial_cta`. Solo se cargan con consentimiento de
 | Backend/Estado | 90/100 | Limpio |
 | Frontend/UX | 91/100 | Mobile-first + Keyboard shortcuts |
 | Arquitectura | 93/100 | Bien estructurado |
-| Testing | 92/100 | 1024 tests |
+| Testing | 92/100 | 1101 tests |
 | Billing/Fiscal | 90/100 | Multi-pais |
 | Pricing/Comercial | 90/100 | Single source of truth |
 | Deploy/Infra | 89/100 | Docker multi-stage + Rolldown fix |

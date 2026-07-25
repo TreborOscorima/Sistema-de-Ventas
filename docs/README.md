@@ -1,6 +1,6 @@
 # Documentación del Sistema
 
-Este directorio concentra la documentación operativa y técnica del proyecto.
+Este directorio concentra la documentación operativa y técnica de **TUWAYKISHOP** (el ERP/POS de la marca **TUWAYKIAPP**).
 
 ## Documentos principales
 
@@ -9,6 +9,15 @@ Este directorio concentra la documentación operativa y técnica del proyecto.
 - `docs/CANARY_ROLLOUT_RUNBOOK.md`: despliegue gradual 10% -> 50% -> 100% con criterios de avance y rollback.
 - `docs/DOMAIN_SPLIT_RUNBOOK.md`: separación por dominio/subdominio (`tuwayki`, `sys`, `admin`) usando 1 repo y 3 superficies.
 - `docs/MARKETING_WEBSITE_PLAN.md`: estrategia web comercial (landing, embudo, tracking, KPIs y plan de lanzamiento).
+
+## Auditorías y reportes técnicos
+
+- `docs/AUDITORIA_INTEGRAL_2026-07-05.md`: auditoría integral del sistema.
+- `docs/CODE_AUDIT_REPORT.md`: reporte de auditoría de código.
+- `docs/PERFORMANCE_OPTIMIZATION_REPORT.md`: optimización de performance.
+- `docs/RESPONSIVE_AUDIT.md`: auditoría responsive/mobile-first.
+- `docs/REFLEX_094_UPGRADE_PLAN.md`: plan de upgrade a Reflex 0.9.4.
+- `docs/NGINX_PROXY_MANAGER.md`: configuración de Nginx Proxy Manager.
 
 ## Documentos de soporte en raíz
 
