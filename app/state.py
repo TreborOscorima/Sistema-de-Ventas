@@ -51,6 +51,24 @@ from app.utils.env import APP_SURFACE
 OWNER_ROOT_PATH: str = "/" if APP_SURFACE == "owner" else "/owner"
 OWNER_LOGIN_PATH: str = "/login" if APP_SURFACE == "owner" else "/owner/login"
 
+# Recuperación del race de hidratación de LocalStorage: si el estado llegó sin
+# token pero el navegador SÍ tiene uno persistido, recargar UNA vez por arranque
+# para forzar un HYDRATE limpio. No depende de la clave exacta de Reflex (escanea
+# cualquier clave de token). El guard de sessionStorage evita loops y se resetea
+# solo en cada arranque en frío.
+_AUTH_RECOVER_JS = (
+    "(function(){try{"
+    "if(sessionStorage.getItem('twk_auth_recover'))return;"
+    "var ks=Object.keys(localStorage),hit=false;"
+    "for(var i=0;i<ks.length;i++){var k=ks[i];"
+    "if(k.indexOf('token')!==-1&&k.indexOf('refresh')===-1){"
+    "var v=localStorage.getItem(k);"
+    "if(v&&v.length>30){hit=true;break;}}}"
+    "if(hit){sessionStorage.setItem('twk_auth_recover','1');"
+    "window.location.reload();}"
+    "}catch(e){}})();"
+)
+
 # Reexportar State
 class State(RootState):
     """
@@ -567,17 +585,8 @@ class State(RootState):
             # condition entre applyClientStorageDelta y onLoadInternalEvent.
             # Si localStorage sí tiene un token válido, recargar fuerza un nuevo
             # HYDRATE completo que lee localStorage correctamente.
-            _TOKEN_LS_KEY = (
-                "reflex___state____state"
-                ".app___states___root_state____root_state"
-                ".token_rx_state_"
-            )
-            yield rx.call_script(
-                f"(function(){{"
-                f"var t=localStorage.getItem('{_TOKEN_LS_KEY}');"
-                f"if(t&&t.length>20){{window.location.reload();}}"
-                f"}})();"
-            )
+            # Recuperación robusta del race de hidratación (ver _AUTH_RECOVER_JS).
+            yield rx.call_script(_AUTH_RECOVER_JS)
             return
         if getattr(self, "available_branches", None):
             return  # ya cargadas por otro camino
@@ -1005,11 +1014,18 @@ class State(RootState):
     @rx.event
     async def page_init_login(self):
         """on_load para /login. Redirige al dashboard si ya está autenticado."""
+        # Resolver el usuario desde el token ANTES de decidir (el dashboard lo hace
+        # pero login no lo hacía → en el arranque en frío de la PWA, que abre en
+        # /login, is_authenticated daba False aunque el token estuviera persistido).
+        self._resolve_current_user()
         if self.is_authenticated:
             # assign(): full-page nav → evita React Router lazy-load del chunk del
             # dashboard que, si falla, causa window.location.reload() → bucle infinito.
             yield rx.call_script("window.location.assign('/dashboard')")
             return
+        # No autenticado: puede ser el race de hidratación de LocalStorage (token
+        # persistido pero el estado llegó vacío). Recargar una vez para recuperarlo.
+        yield rx.call_script(_AUTH_RECOVER_JS)
         # No autenticado: reemplazar la entrada de historial actual con /login para que
         # "Atrás" desde /login vuelva directamente a la landing en vez de atravesar
         # páginas de la app que también muestran el formulario de login.

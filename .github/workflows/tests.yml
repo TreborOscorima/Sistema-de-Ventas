@@ -47,7 +47,7 @@ jobs:
       - name: Install tuwayki-core
         run: |
           python -m pip install \
-            git+https://github.com/TreborOscorima/tuwayki-core.git@ef1c30e33ac9aed6c1a8507de2a31382dedd69ec
+            git+https://github.com/TreborOscorima/tuwayki-core.git@199db469c90eab971a81e81c03cda22a0d6da702
 
       # Falla rápido y con mensaje claro si se agrega una función en tuwayki-core local
       # sin commitearla al repo público. Actualizar este listado al ampliar la API.

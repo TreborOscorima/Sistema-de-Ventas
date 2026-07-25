@@ -327,7 +327,12 @@ class AuthState(MixinState):
                 self.token, self.refresh_token = new_tokens
                 payload = decode_token(self.token)
             if not payload:
-                self.refresh_token = ""
+                # Solo limpiar el refresh si REALMENTE había uno y falló (token
+                # inválido/expirado). Si venía vacío, es el race de hidratación
+                # de LocalStorage: no reasignar "" para no clobbear el refresh
+                # token persistido en el navegador.
+                if self.refresh_token and new_tokens is None:
+                    self.refresh_token = ""
                 self._cached_user = self._guest_user()
                 self._cached_user_token = self.token
                 self._cached_user_time = now
