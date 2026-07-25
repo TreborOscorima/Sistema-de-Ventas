@@ -1194,6 +1194,11 @@ class CartMixin:
             if description.get("description") or description.get("barcode"):
                 self._fill_sale_item_from_product(description)
                 self.selected_product = dict(description)
+                # Re-resolvemos el precio contra la BD (misma función que el
+                # cobro). Imprescindible: el sale_price del dict puede llegar
+                # corrupto (Decimal->0) tras el round-trip al navegador, y
+                # además así el ítem respeta promos, listas de precio y tiers.
+                await self._apply_price_tier(description)
                 self.autocomplete_suggestions = []
                 self.autocomplete_results = []
                 self.autocomplete_selected_index = -1
@@ -1288,6 +1293,28 @@ class CartMixin:
                 self._fill_sale_item_from_product(product_override, keep_quantity=True)
         if product_override:
             await self._apply_price_tier(product_override)
+
+        # Robustez: si el usuario escribió y el desplegable tiene sugerencias
+        # pero no seleccionó ninguna (ni por click ni Enter), o un click veloz
+        # se adelantó al debounce del input, adoptamos la sugerencia resaltada
+        # (o la primera). Evita el falso "complete los campos" cuando hay una
+        # coincidencia clara en la sucursal activa.
+        if (
+            product_override is None
+            and not self.selected_product
+            and self.autocomplete_results
+        ):
+            idx = self.autocomplete_selected_index
+            if idx is None or idx < 0 or idx >= len(self.autocomplete_results):
+                idx = 0
+            candidate = self.autocomplete_results[idx]
+            if isinstance(candidate, dict) and (
+                candidate.get("description") or candidate.get("barcode")
+            ):
+                self._fill_sale_item_from_product(candidate, keep_quantity=True)
+                await self._apply_price_tier(candidate)
+                self.selected_product = dict(candidate)
+                product_override = candidate
 
         description = self.new_sale_item["description"].strip()
         barcode = str(self.new_sale_item.get("barcode", "") or "").strip()

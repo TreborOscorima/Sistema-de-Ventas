@@ -603,6 +603,10 @@ class CompanySettings(TenantMixin, SQLModel, table=True):
     address: str = Field(default="", nullable=False)
     phone: Optional[str] = Field(default=None)
     footer_message: Optional[str] = Field(default=None)
+    # Leyenda global de Defensa del Consumidor (Argentina). Default company-wide
+    # que aplica a todas las sucursales; cada sucursal puede overridear con
+    # Branch.consumer_defense_legend. Si ambas están vacías, no se imprime nada.
+    consumer_defense_legend: str = Field(default="", nullable=False, max_length=500)
     receipt_paper: str = Field(default="80", max_length=10, nullable=False)
     receipt_width: Optional[int] = Field(default=None)
     default_currency_code: str = Field(default="PEN", max_length=10, nullable=False)

@@ -54,6 +54,8 @@ class ConfigState(MixinState):
     address: str = ""
     phone: str = ""
     footer_message: str = ""
+    # Leyenda global de Defensa del Consumidor (Argentina); default de empresa.
+    consumer_defense_legend: str = ""
     receipt_paper: str = "80"
     # Ancho en mm cuando el papel es "Personalizado" (input del selector).
     receipt_paper_custom_mm: str = ""
@@ -244,6 +246,7 @@ class ConfigState(MixinState):
         self.address = ""
         self.phone = ""
         self.footer_message = ""
+        self.consumer_defense_legend = ""
         self.receipt_paper = "80"
         self.receipt_width = ""
         self.timezone = ""
@@ -274,6 +277,7 @@ class ConfigState(MixinState):
                 self.address = settings.address or ""
                 self.phone = settings.phone or ""
                 self.footer_message = settings.footer_message or ""
+                self.consumer_defense_legend = getattr(settings, "consumer_defense_legend", "") or ""
                 receipt_paper = (settings.receipt_paper or "80").strip()
                 if receipt_paper.upper() == "A4":
                     self.receipt_paper = "A4"
@@ -503,6 +507,16 @@ class ConfigState(MixinState):
     def set_footer_message(self, value: str):
         self.footer_message = value or ""
 
+    @rx.event
+    def set_consumer_defense_legend(self, value: str):
+        self.consumer_defense_legend = value or ""
+
+    @rx.event
+    def apply_company_consumer_legend_preset(self, legend: str):
+        # Solo aplica presets no vacíos (el "-- Presets --" no borra el texto).
+        if legend:
+            self.consumer_defense_legend = legend
+
     @rx.var
     def receipt_paper_mode(self) -> str:
         """Opción del dropdown: '80', '58', 'A4' o 'custom'."""
@@ -554,6 +568,7 @@ class ConfigState(MixinState):
         address = (self.address or "").strip()
         phone = (self.phone or "").strip()
         footer_message = (self.footer_message or "").strip()
+        consumer_legend = (self.consumer_defense_legend or "").strip()
         receipt_paper = (self.receipt_paper or "80").strip()
         if receipt_paper.upper() == "A4":
             receipt_paper = "A4"
@@ -603,6 +618,7 @@ class ConfigState(MixinState):
                     settings.address = address
                     settings.phone = phone or None
                     settings.footer_message = footer_message or None
+                    settings.consumer_defense_legend = consumer_legend
                     settings.receipt_paper = receipt_paper
                     settings.receipt_width = receipt_width_value
                     if hasattr(settings, 'business_vertical'):
@@ -624,6 +640,7 @@ class ConfigState(MixinState):
                             address=address,
                             phone=phone or None,
                             footer_message=footer_message or None,
+                            consumer_defense_legend=consumer_legend,
                             receipt_paper=receipt_paper,
                             receipt_width=receipt_width_value,
                             timezone=timezone_db_value,
@@ -643,6 +660,7 @@ class ConfigState(MixinState):
                         address=address,
                         phone=phone or None,
                         footer_message=footer_message or None,
+                        consumer_defense_legend=consumer_legend,
                         receipt_paper=receipt_paper,
                         receipt_width=receipt_width_value,
                         timezone=timezone_db_value,

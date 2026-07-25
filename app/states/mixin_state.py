@@ -604,8 +604,11 @@ class MixinState:
             "show_tax_on_receipt": show_tax,
             "default_tax_name": default_tax.tax_name if default_tax else "",
             "default_tax_rate_pct": float(default_tax.rate) if default_tax else 0.0,
+            # Resolución: override de sucursal (si tiene) -> global de empresa
+            # (CompanySettings) -> vacío.
             "consumer_defense_legend": (
-                branch.consumer_defense_legend if branch else ""
+                (branch.consumer_defense_legend if branch and branch.consumer_defense_legend else "")
+                or (getattr(settings, "consumer_defense_legend", "") if settings else "")
             ),
         }
 
