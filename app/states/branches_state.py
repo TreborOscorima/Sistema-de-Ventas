@@ -210,13 +210,28 @@ class BranchesState(MixinState):
                     except (TypeError, ValueError):
                         logger.warning("create_branch: user_id inválido: %r", user_id)
                 seed_new_branch_data(session, company_id, branch.id)
-                # Clonar CompanySettings de la sucursal canónica para la nueva
+                # Heredar los datos GLOBALES desde la MATRIZ (is_main). El
+                # teléfono NO se hereda (es del local) y la nueva sucursal nunca
+                # es matriz.
                 from app.models import CompanySettings
-                canonical = session.exec(
-                    select(CompanySettings)
-                    .where(CompanySettings.company_id == company_id)
-                    .order_by(CompanySettings.id)
+                main_branch = session.exec(
+                    select(Branch)
+                    .where(Branch.company_id == company_id)
+                    .where(Branch.is_main == True)  # noqa: E712
                 ).first()
+                canonical = None
+                if main_branch is not None:
+                    canonical = session.exec(
+                        select(CompanySettings)
+                        .where(CompanySettings.company_id == company_id)
+                        .where(CompanySettings.branch_id == main_branch.id)
+                    ).first()
+                if canonical is None:
+                    canonical = session.exec(
+                        select(CompanySettings)
+                        .where(CompanySettings.company_id == company_id)
+                        .order_by(CompanySettings.branch_id, CompanySettings.id)
+                    ).first()
                 existing_cs = session.exec(
                     select(CompanySettings)
                     .where(CompanySettings.company_id == company_id)
@@ -230,8 +245,9 @@ class BranchesState(MixinState):
                             company_name=canonical.company_name,
                             ruc=canonical.ruc,
                             address=canonical.address,
-                            phone=canonical.phone,
                             footer_message=canonical.footer_message,
+                            consumer_defense_legend=getattr(canonical, "consumer_defense_legend", "") or "",
+                            business_vertical=getattr(canonical, "business_vertical", "general"),
                             receipt_paper=canonical.receipt_paper,
                             receipt_width=canonical.receipt_width,
                             default_currency_code=canonical.default_currency_code,

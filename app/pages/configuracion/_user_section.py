@@ -717,7 +717,9 @@ def branch_section() -> rx.Component:
         ),
         class_name="flex flex-col gap-1",
       ),
-      rx.el.div(
+      rx.cond(
+        State.selected_country_code == "AR",
+        rx.el.div(
         rx.el.label(
           "Leyenda Defensa del Consumidor",
           class_name=TYPOGRAPHY["label"],
@@ -757,6 +759,8 @@ def branch_section() -> rx.Component:
           class_name=INPUT_STYLES["default"] + " resize-none",
         ),
         class_name="flex flex-col gap-1 sm:col-span-2 lg:col-span-3",
+        ),
+        rx.fragment(),
       ),
       rx.el.div(
         rx.el.button(

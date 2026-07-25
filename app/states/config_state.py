@@ -61,6 +61,10 @@ class ConfigState(MixinState):
     receipt_paper_custom_mm: str = ""
     receipt_width: str = ""
     timezone: str = ""
+    # True si la sucursal activa es la matriz (is_main). Los datos globales
+    # (razón social, RUC, domicilio fiscal, rubro, moneda) solo se editan desde
+    # la matriz; en sucursales secundarias se muestran heredados (solo lectura).
+    is_main_branch: bool = False
     company_form_key: int = 0
     show_upgrade_modal: bool = False
     show_pricing_modal: bool = False
@@ -148,6 +152,16 @@ class ConfigState(MixinState):
         if current and current not in options:
             options.insert(0, current)
         return options
+
+    @rx.var
+    def globals_locked(self) -> bool:
+        """True cuando los datos globales de empresa son de solo lectura.
+
+        Los datos de identidad (razón social, RUC, domicilio fiscal, rubro,
+        moneda) solo se editan desde la matriz; en sucursales secundarias se
+        muestran heredados y bloqueados.
+        """
+        return not self.is_main_branch
 
     def load_config_data(self):
         company_id = self._company_id()
@@ -250,6 +264,7 @@ class ConfigState(MixinState):
         self.receipt_paper = "80"
         self.receipt_width = ""
         self.timezone = ""
+        self.is_main_branch = False
         company_id = self._company_id()
         branch_id = self._branch_id()
         if not company_id:
@@ -257,66 +272,89 @@ class ConfigState(MixinState):
             return
         with rx.session() as session:
             session.info["tenant_bypass"] = True
-            settings = None
-            settings_stmt = select(CompanySettings).where(
-                CompanySettings.company_id == company_id
+            all_settings = session.exec(
+                select(CompanySettings)
+                .where(CompanySettings.company_id == company_id)
+                .order_by(CompanySettings.branch_id, CompanySettings.id)
+            ).all()
+            # Resolver sucursal MATRIZ (is_main -> fallback menor id).
+            main_branch = session.exec(
+                select(Branch)
+                .where(Branch.company_id == company_id)
+                .where(Branch.is_main == True)  # noqa: E712
+            ).first()
+            if main_branch is None:
+                main_branch = session.exec(
+                    select(Branch)
+                    .where(Branch.company_id == company_id)
+                    .order_by(Branch.id)
+                ).first()
+            main_bid = main_branch.id if main_branch else None
+            self.is_main_branch = bool(
+                branch_id and main_bid and int(branch_id) == int(main_bid)
             )
-            if branch_id:
-                settings = session.exec(
-                    settings_stmt.where(CompanySettings.branch_id == branch_id)
-                ).first()
-            if not settings:
-                settings = session.exec(
-                    settings_stmt.order_by(
-                        CompanySettings.branch_id, CompanySettings.id
-                    )
-                ).first()
-            if settings:
-                self.company_name = settings.company_name or ""
-                self.ruc = settings.ruc or ""
-                self.address = settings.address or ""
-                self.phone = settings.phone or ""
-                self.footer_message = settings.footer_message or ""
-                self.consumer_defense_legend = getattr(settings, "consumer_defense_legend", "") or ""
-                receipt_paper = (settings.receipt_paper or "80").strip()
+
+            # Fila GLOBAL (matriz) y fila de la sucursal ACTIVA.
+            main_cs = next(
+                (s for s in all_settings if main_bid and s.branch_id == main_bid), None
+            )
+            if main_cs is None:
+                main_cs = all_settings[0] if all_settings else None
+            active_cs = next(
+                (s for s in all_settings if branch_id and s.branch_id == branch_id), None
+            )
+            if active_cs is None:
+                active_cs = main_cs
+
+            # --- GLOBALES: se leen de la MATRIZ ---
+            if main_cs:
+                self.company_name = main_cs.company_name or ""
+                self.ruc = main_cs.ruc or ""
+                self.address = main_cs.address or ""
+                self.footer_message = main_cs.footer_message or ""
+                self.consumer_defense_legend = getattr(main_cs, "consumer_defense_legend", "") or ""
+                if getattr(main_cs, "default_currency_code", None):
+                    self.selected_currency_code = main_cs.default_currency_code
+                if getattr(main_cs, "country_code", None):
+                    self.selected_country_code = main_cs.country_code
+                if getattr(main_cs, "business_vertical", None):
+                    self.selected_business_vertical = main_cs.business_vertical
+
+            # --- POR SUCURSAL: se leen de la sucursal ACTIVA ---
+            if active_cs:
+                receipt_paper = (active_cs.receipt_paper or "80").strip()
                 if receipt_paper.upper() == "A4":
                     self.receipt_paper = "A4"
                 elif receipt_paper.isdigit():
                     self.receipt_paper = receipt_paper
                 else:
                     self.receipt_paper = "80"
-                # Reflejar en el input de ancho personalizado si no es un preset.
                 self.receipt_paper_custom_mm = (
                     self.receipt_paper
                     if self.receipt_paper.isdigit() and self.receipt_paper not in {"58", "80"}
                     else ""
                 )
                 self.receipt_width = (
-                    str(settings.receipt_width)
-                    if settings.receipt_width is not None
+                    str(active_cs.receipt_width)
+                    if active_cs.receipt_width is not None
                     else ""
                 )
-                # Cargar la moneda persistida del negocio
-                if hasattr(settings, 'default_currency_code') and settings.default_currency_code:
-                    self.selected_currency_code = settings.default_currency_code
-                # Cargar el país de operación
-                if hasattr(settings, 'country_code') and settings.country_code:
-                    self.selected_country_code = settings.country_code
-                # Cargar el rubro del negocio
-                if hasattr(settings, 'business_vertical') and settings.business_vertical:
-                    self.selected_business_vertical = settings.business_vertical
-                # Cargar la zona horaria (si existe)
-                if hasattr(settings, "timezone") and settings.timezone:
-                    self.timezone = settings.timezone
+                if getattr(active_cs, "timezone", None):
+                    self.timezone = active_cs.timezone
 
-            # Márgenes: empresa = primera sucursal (menor branch_id), rama = sucursal actual
-            all_settings = session.exec(
-                select(CompanySettings)
-                .where(CompanySettings.company_id == company_id)
-                .order_by(CompanySettings.branch_id)
-            ).all()
+            # --- Teléfono por local: Branch.phone de la sucursal activa ---
+            if branch_id:
+                active_branch = session.exec(
+                    select(Branch)
+                    .where(Branch.company_id == company_id)
+                    .where(Branch.id == branch_id)
+                ).first()
+                if active_branch is not None:
+                    self.phone = getattr(active_branch, "phone", "") or ""
+
+            # Márgenes: empresa = matriz, rama = override de la sucursal actual.
             if all_settings:
-                company_row = all_settings[0]
+                company_row = main_cs or all_settings[0]
                 self.company_profit_margin = (
                     fmt_input_num(float(company_row.default_profit_margin))
                     if company_row.default_profit_margin is not None
@@ -325,15 +363,14 @@ class ConfigState(MixinState):
             else:
                 self.company_profit_margin = ""
             self.branch_profit_margin = ""
-            if branch_id:
+            if branch_id and not self.is_main_branch:
                 branch_row = next(
                     (s for s in all_settings if s.branch_id == branch_id), None
                 )
                 if branch_row and branch_row.default_profit_margin is not None:
-                    # Solo mostrar override si es distinto del margen de empresa
-                    company_margin = all_settings[0].default_profit_margin if all_settings else None
-                    if branch_row.branch_id != all_settings[0].branch_id:
-                        self.branch_profit_margin = fmt_input_num(float(branch_row.default_profit_margin))
+                    self.branch_profit_margin = fmt_input_num(
+                        float(branch_row.default_profit_margin)
+                    )
         self.company_form_key += 1
 
     @rx.event
@@ -437,36 +474,60 @@ class ConfigState(MixinState):
                     )
                 )
 
-            # Limpiar métodos de pago de TODAS las sucursales de la empresa
+            # Sincronizar métodos de pago con el país nuevo SIN borrar los que
+            # ya tienen movimientos (FK con cashboxlog/salepayment lo impide).
+            # Los que no aplican al país se DESACTIVAN; los del país se activan
+            # o se crean si no existen.
             existing_methods = session.exec(
                 select(PaymentMethod)
                 .where(PaymentMethod.company_id == company_id)
             ).all()
-            for method in existing_methods:
-                session.delete(method)
+            new_methods = get_payment_methods_for_country(code)
+            new_codes = {m["code"] for m in new_methods}
+            existing_by_code: dict = {}
+            existing_by_method_id: dict = {}
+            for m in existing_methods:
+                existing_by_code[(m.branch_id, m.code)] = m
+                existing_by_method_id[(m.branch_id, m.method_id)] = m
+                # Desactivar (no borrar) los que no pertenecen al país nuevo.
+                if m.code not in new_codes:
+                    m.is_active = False
+                    m.enabled = False
+                    session.add(m)
 
-            # Obtener todas las sucursales activas
             branches = session.exec(
                 select(Branch).where(Branch.company_id == company_id)
             ).all()
-
-            # Insertar métodos de pago del nuevo país para cada sucursal
-            new_methods = get_payment_methods_for_country(code)
             for branch in branches:
                 for data in new_methods:
-                    method = PaymentMethod(
-                        name=data["name"],
-                        code=data["code"],
-                        is_active=True,
-                        allows_change=data["allows_change"],
-                        method_id=data["method_id"],
-                        description=data["description"],
-                        kind=data["kind"],
-                        enabled=True,
-                        company_id=company_id,
-                        branch_id=branch.id,
+                    existing = existing_by_code.get(
+                        (branch.id, data["code"])
+                    ) or existing_by_method_id.get(
+                        (branch.id, data["method_id"])
                     )
-                    session.add(method)
+                    if existing is not None:
+                        # Reactivar y alinear al preset del país (sin tocar las
+                        # claves únicas code/method_id para no chocar FK/UNIQUE).
+                        existing.name = data["name"]
+                        existing.allows_change = data["allows_change"]
+                        existing.description = data["description"]
+                        existing.kind = data["kind"]
+                        existing.is_active = True
+                        existing.enabled = True
+                        session.add(existing)
+                    else:
+                        session.add(PaymentMethod(
+                            name=data["name"],
+                            code=data["code"],
+                            is_active=True,
+                            allows_change=data["allows_change"],
+                            method_id=data["method_id"],
+                            description=data["description"],
+                            kind=data["kind"],
+                            enabled=True,
+                            company_id=company_id,
+                            branch_id=branch.id,
+                        ))
 
             session.commit()
 
@@ -610,25 +671,34 @@ class ConfigState(MixinState):
                 select(CompanySettings)
                 .where(CompanySettings.company_id == company_id)
             ).all()
+            currency_code = self.selected_currency_code or "PEN"
+            country = self.selected_country_code or "PE"
+            vertical = self.selected_business_vertical or "general"
             if settings_list:
                 has_branch_settings = False
                 for settings in settings_list:
+                    # GLOBALES (identidad de empresa): se escriben en todas las
+                    # filas para mantenerlas en sync. En sucursales secundarias
+                    # estos valores llegan heredados de la matriz (UI de solo
+                    # lectura), así que no pueden divergir.
                     settings.company_name = company_name
                     settings.ruc = ruc
                     settings.address = address
-                    settings.phone = phone or None
                     settings.footer_message = footer_message or None
                     settings.consumer_defense_legend = consumer_legend
-                    settings.receipt_paper = receipt_paper
-                    settings.receipt_width = receipt_width_value
+                    settings.default_currency_code = currency_code
+                    settings.country_code = country
                     if hasattr(settings, 'business_vertical'):
-                        settings.business_vertical = self.selected_business_vertical or "general"
-                    if branch_id:
-                        if settings.branch_id == branch_id:
-                            settings.timezone = timezone_db_value
-                            has_branch_settings = True
-                    else:
+                        settings.business_vertical = vertical
+                    # POR SUCURSAL (papel/ancho/zona horaria): solo la activa.
+                    is_active_row = (
+                        settings.branch_id == branch_id if branch_id else True
+                    )
+                    if is_active_row:
+                        settings.receipt_paper = receipt_paper
+                        settings.receipt_width = receipt_width_value
                         settings.timezone = timezone_db_value
+                        has_branch_settings = True
                     session.add(settings)
                 if branch_id and not has_branch_settings:
                     session.add(
@@ -638,15 +708,14 @@ class ConfigState(MixinState):
                             company_name=company_name,
                             ruc=ruc,
                             address=address,
-                            phone=phone or None,
                             footer_message=footer_message or None,
                             consumer_defense_legend=consumer_legend,
                             receipt_paper=receipt_paper,
                             receipt_width=receipt_width_value,
                             timezone=timezone_db_value,
-                            country_code=self.selected_country_code or "PE",
-                            default_currency_code=self.selected_currency_code or "PEN",
-                            business_vertical=self.selected_business_vertical or "general",
+                            country_code=country,
+                            default_currency_code=currency_code,
+                            business_vertical=vertical,
                         )
                     )
             else:
@@ -658,14 +727,26 @@ class ConfigState(MixinState):
                         company_name=company_name,
                         ruc=ruc,
                         address=address,
-                        phone=phone or None,
                         footer_message=footer_message or None,
                         consumer_defense_legend=consumer_legend,
                         receipt_paper=receipt_paper,
                         receipt_width=receipt_width_value,
                         timezone=timezone_db_value,
+                        country_code=country,
+                        default_currency_code=currency_code,
+                        business_vertical=vertical,
                     )
                 )
+            # Teléfono POR LOCAL: se guarda en Branch.phone de la sucursal activa.
+            if branch_id:
+                active_branch = session.exec(
+                    select(Branch)
+                    .where(Branch.company_id == company_id)
+                    .where(Branch.id == branch_id)
+                ).first()
+                if active_branch is not None:
+                    active_branch.phone = phone
+                    session.add(active_branch)
             session.commit()
         self.company_name = company_name
         self.ruc = ruc

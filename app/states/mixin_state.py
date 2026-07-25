@@ -549,6 +549,30 @@ class MixinState:
                         .where(Branch.company_id == company_id)
                         .where(Branch.id == effective_bid)
                     ).first()
+                # Datos GLOBALES de empresa (razón social, RUC, domicilio fiscal,
+                # rubro, moneda, país, mensaje de ticket y leyenda global) se
+                # resuelven desde la sucursal MATRIZ (is_main), no desde la
+                # activa, para que la identidad fiscal sea única en todo ticket.
+                main_settings = settings
+                main_branch = session.exec(
+                    select(Branch)
+                    .where(Branch.company_id == company_id)
+                    .where(Branch.is_main == True)  # noqa: E712
+                ).first()
+                if main_branch is None:
+                    main_branch = session.exec(
+                        select(Branch)
+                        .where(Branch.company_id == company_id)
+                        .order_by(Branch.id)
+                    ).first()
+                if main_branch is not None:
+                    _ms = session.exec(
+                        select(CompanySettings)
+                        .where(CompanySettings.company_id == company_id)
+                        .where(CompanySettings.branch_id == main_branch.id)
+                    ).first()
+                    if _ms is not None:
+                        main_settings = _ms
                 default_tax = session.exec(
                     select(CompanyTaxRate)
                     .where(CompanyTaxRate.company_id == company_id)
@@ -564,19 +588,25 @@ class MixinState:
         if not settings:
             return defaults
 
-        # Actualizar label según el país guardado en settings
-        if hasattr(settings, "country_code") and settings.country_code:
-            config = get_country_config(settings.country_code)
+        # Actualizar label según el país GLOBAL (matriz).
+        if getattr(main_settings, "country_code", None):
+            config = get_country_config(main_settings.country_code)
 
         branch_name = ""
         branch_address = ""
+        branch_phone = ""
         if branch:
             branch_name = branch.name or ""
             branch_address = branch.address or ""
+            branch_phone = getattr(branch, "phone", "") or ""
 
-        address = settings.address or ""
+        # Dirección del ticket: la del LOCAL (por sucursal); si no tiene, cae al
+        # domicilio fiscal GLOBAL (matriz).
+        address = (main_settings.address or "") if main_settings else ""
         if branch_address:
             address = branch_address
+        # Teléfono: el del LOCAL; fallback al teléfono legacy de settings.
+        phone_value = branch_phone or (settings.phone or "")
         timezone_value = ""
         if hasattr(settings, "timezone") and settings.timezone:
             timezone_value = settings.timezone
@@ -585,11 +615,14 @@ class MixinState:
 
         show_tax = bool(getattr(settings, "show_tax_on_receipt", True))
         result = {
-            "company_name": settings.company_name or "",
-            "ruc": settings.ruc or "",
+            # --- GLOBALES (matriz) ---
+            "company_name": (main_settings.company_name or "") if main_settings else "",
+            "ruc": (main_settings.ruc or "") if main_settings else "",
+            "footer_message": (main_settings.footer_message or "") if main_settings else "",
+            "country_code": getattr(main_settings, "country_code", None) or country_code,
+            # --- POR SUCURSAL ---
             "address": address,
-            "phone": settings.phone or "",
-            "footer_message": settings.footer_message or "",
+            "phone": phone_value,
             "receipt_paper": settings.receipt_paper or "",
             "receipt_width": (
                 settings.receipt_width
@@ -599,16 +632,14 @@ class MixinState:
             "tax_id_label": config.get("tax_id_label", "ID Fiscal"),
             "branch_name": branch_name,
             "branch_address": branch_address,
-            "country_code": getattr(settings, "country_code", None) or country_code,
             "timezone": timezone_value,
             "show_tax_on_receipt": show_tax,
             "default_tax_name": default_tax.tax_name if default_tax else "",
             "default_tax_rate_pct": float(default_tax.rate) if default_tax else 0.0,
-            # Resolución: override de sucursal (si tiene) -> global de empresa
-            # (CompanySettings) -> vacío.
+            # Leyenda: override de sucursal -> global de empresa (matriz) -> vacío.
             "consumer_defense_legend": (
                 (branch.consumer_defense_legend if branch and branch.consumer_defense_legend else "")
-                or (getattr(settings, "consumer_defense_legend", "") if settings else "")
+                or (getattr(main_settings, "consumer_defense_legend", "") if main_settings else "")
             ),
         }
 

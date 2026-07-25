@@ -25,7 +25,42 @@ def company_settings_section() -> rx.Component:
       class_name="space-y-1",
     ),
     rx.el.div(
+      rx.cond(
+        State.globals_locked,
+        rx.el.div(
+          rx.icon("info", class_name="h-4 w-4 text-amber-600 shrink-0 mt-0.5"),
+          rx.el.p(
+            "Los datos de identidad de la empresa (razón social, "
+            + State.tax_id_label
+            + ", domicilio fiscal, rubro y moneda) se editan desde la Casa "
+            "Central (matriz). Aquí se configuran los datos propios de esta "
+            "sucursal: teléfono, zona horaria, papel de impresión y leyenda.",
+            class_name="text-xs text-amber-700",
+          ),
+          class_name="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 mb-2",
+        ),
+        rx.fragment(),
+      ),
       rx.el.div(
+        rx.el.div(
+          rx.el.label("País de Operación", class_name=TYPOGRAPHY["label"]),
+          rx.el.select(
+            rx.foreach(
+              State.available_countries,
+              lambda c: rx.el.option(c["name"], value=c["code"]),
+            ),
+            value=State.selected_country_code,
+            on_change=State.set_country,
+            disabled=State.globals_locked,
+            class_name=SELECT_STYLES["default"],
+          ),
+          rx.el.p(
+            "Define la etiqueta fiscal (RUC / CUIT / NIT / RUT / RFC), el "
+            "formato del documento, la moneda y los métodos de pago sugeridos.",
+            class_name=TYPOGRAPHY["caption"],
+          ),
+          class_name="flex flex-col gap-1 md:col-span-2",
+        ),
         rx.el.div(
           rx.el.label(
             "Razón Social / Nombre de Empresa", class_name=TYPOGRAPHY["label"]
@@ -35,6 +70,7 @@ def company_settings_section() -> rx.Component:
             on_blur=State.set_company_name,
             placeholder="Ej: Tu Empresa SAC",
             key=State.company_form_key.to_string() + "-company_name",
+            disabled=State.globals_locked,
             class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1",
@@ -44,8 +80,13 @@ def company_settings_section() -> rx.Component:
           rx.el.input(
             default_value=State.ruc,
             on_blur=State.set_ruc,
-            placeholder="N° de Registro de Empresa",
+            placeholder=rx.cond(
+              State.tax_id_placeholder != "",
+              "Ej: " + State.tax_id_placeholder,
+              "N° de identificación tributaria",
+            ),
             key=State.company_form_key.to_string() + "-ruc",
+            disabled=State.globals_locked,
             class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1",
@@ -57,18 +98,23 @@ def company_settings_section() -> rx.Component:
             on_blur=State.set_address,
             placeholder="Ej: Av. Principal 123",
             key=State.company_form_key.to_string() + "-address",
+            disabled=State.globals_locked,
             class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1 md:col-span-2",
         ),
         rx.el.div(
-          rx.el.label("Teléfono / Celular", class_name=TYPOGRAPHY["label"]),
+          rx.el.label("Teléfono del Local", class_name=TYPOGRAPHY["label"]),
           rx.el.input(
             default_value=State.phone,
             on_blur=State.set_phone,
             placeholder="Ej: 999 999 999",
             key=State.company_form_key.to_string() + "-phone",
             class_name=INPUT_STYLES["default"],
+          ),
+          rx.el.p(
+            "Es propio de esta sucursal y se imprime en su ticket.",
+            class_name=TYPOGRAPHY["caption"],
           ),
           class_name="flex flex-col gap-1",
         ),
@@ -114,6 +160,7 @@ def company_settings_section() -> rx.Component:
             rx.el.option("Supermercado", value="supermercado"),
             value=State.selected_business_vertical,
             on_change=State.set_business_vertical,
+            disabled=State.globals_locked,
             class_name=SELECT_STYLES["default"],
           ),
           rx.el.p(
@@ -131,14 +178,16 @@ def company_settings_section() -> rx.Component:
             on_blur=State.set_footer_message,
             placeholder="Ej: Gracias por su compra",
             key=State.company_form_key.to_string() + "-footer_message",
+            disabled=State.globals_locked,
             class_name=INPUT_STYLES["default"],
           ),
           class_name="flex flex-col gap-1 md:col-span-2",
         ),
-        # Leyenda global de Defensa del Consumidor (Argentina). Default de empresa
-        # que aplica a todas las sucursales; cada sucursal puede overridear la suya
-        # en Configuración → Sucursales.
-        rx.el.div(
+        # Leyenda global de Defensa del Consumidor. Solo aplica y se muestra si
+        # el país de operación es Argentina; en otros países no corresponde.
+        rx.cond(
+          State.selected_country_code == "AR",
+          rx.el.div(
           rx.el.label(
             "Leyenda Defensa del Consumidor (global)", class_name=TYPOGRAPHY["label"]
           ),
@@ -157,6 +206,7 @@ def company_settings_section() -> rx.Component:
             rx.el.option("Mendoza — 0800-222-6678", value="Tel. 0800-222-6678 — Dirección de Defensa del Consumidor, Mendoza"),
             rx.el.option("Tucumán — (0381) 4311700", value="Tel. (0381) 4311700 — Dirección de Comercio Interior, Tucumán"),
             on_change=State.apply_company_consumer_legend_preset,
+            disabled=State.globals_locked,
             class_name=SELECT_STYLES["default"] + " text-sm mb-1",
           ),
           rx.el.textarea(
@@ -165,9 +215,12 @@ def company_settings_section() -> rx.Component:
             placeholder="Ej: Tel. gratuito CABA 147 — Defensa y Protección al Consumidor",
             key=State.company_form_key.to_string() + "-consumer-legend-" + State.consumer_defense_legend,
             rows=2,
+            disabled=State.globals_locked,
             class_name=INPUT_STYLES["default"] + " resize-none",
           ),
           class_name="flex flex-col gap-1 md:col-span-2",
+          ),
+          rx.fragment(),
         ),
         rx.el.div(
           rx.el.label("Papel de Impresión", class_name=TYPOGRAPHY["label"]),
@@ -269,6 +322,7 @@ def company_settings_section() -> rx.Component:
               max="9999",
               step="0.01",
               key=State.company_form_key.to_string() + "-company_margin",
+              disabled=State.globals_locked,
               class_name=INPUT_STYLES["default"],
             ),
             rx.el.span(

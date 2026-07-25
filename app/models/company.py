@@ -136,6 +136,26 @@ class Branch(SQLModel, table=True):
     )
     name: str = Field(nullable=False, index=True, max_length=150)
     address: str = Field(default="", nullable=False, max_length=500)
+    phone: str = Field(
+        default="",
+        nullable=False,
+        max_length=50,
+        description=(
+            "Teléfono/celular del local. Es por sucursal: cada local puede "
+            "tener el suyo y se imprime en el ticket de esa sucursal."
+        ),
+    )
+    is_main: bool = Field(
+        default=False,
+        sa_column=sqlalchemy.Column(
+            sqlalchemy.Boolean, nullable=False, server_default="0"
+        ),
+        description=(
+            "Marca la sucursal como Casa Central/matriz. Debe haber exactamente "
+            "una por empresa; es la fuente de verdad de los datos globales "
+            "(razón social, RUC, domicilio fiscal, rubro, moneda)."
+        ),
+    )
     consumer_defense_legend: str = Field(
         default="",
         nullable=False,
