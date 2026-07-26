@@ -810,3 +810,10 @@ A3/A4 (estados de sesión/plan), P2 (evitar inflar costos/deuda en prod).
   Verificado: Pack Deportivo ahora cobra **$45,68** (Ibuprofeno $0,68 + Polo $22,50 ×2).
   *(Si se le carga un Precio de Venta explícito al kit, ese manda como combo con descuento;
   el fallback solo actúa cuando el kit no tiene precio.)*
+- 🐞 **BUG (corregido):** las **promociones/cupones se aplicaban a los componentes del kit**
+  → **doble descuento** sobre un combo ya rebajado. Verificado: kit ($45,68) + cupón APERTURA
+  (20%) daba $36,54 (cada componente con −20%). Un combo NO debe recibir promos encima.
+  **Fix:** `_recompute_cart_prices` ahora **excluye los ítems con `kit_product_id`** de la
+  re-resolución de precio y promo (mantienen su precio de combo). Su subtotal igual cuenta
+  para el total del carrito. Verificado: kit + APERTURA aplicado → componentes sin descuento.
+  *(Un producto suelto en el mismo carrito sí recibe la promo; solo los kits quedan excluidos.)*

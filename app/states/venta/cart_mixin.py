@@ -1883,6 +1883,21 @@ class CartMixin:
             base_resolutions: list[tuple[Decimal, Decimal] | None] = []
             cart_subtotal_pre_promo = Decimal("0.00")
             for item in self.new_sale_items:
+                # Componente de kit/combo: mantiene su precio de combo (ya
+                # distribuido en _add_kit_to_cart). NO se re-resuelve ni recibe
+                # promos/cupones — un combo ya es el precio con descuento; aplicar
+                # otra promo encima sería doble descuento. Su subtotal igual cuenta
+                # para el total del carrito (y umbrales de otras promos).
+                if item.get("kit_product_id"):
+                    base_resolutions.append(None)
+                    try:
+                        cart_subtotal_pre_promo += (
+                            Decimal(str(item.get("price") or 0))
+                            * Decimal(str(item.get("quantity") or 0))
+                        )
+                    except (ArithmeticError, ValueError, TypeError):
+                        pass
+                    continue
                 product_id = item.get("product_id")
                 if not product_id:
                     base_resolutions.append(None)
