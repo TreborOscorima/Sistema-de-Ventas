@@ -662,7 +662,7 @@ def sidebar() -> rx.Component:
                                 rx.el.div(
                                     rx.el.span(
                                         "TUWAYKISHOP",
-                                        class_name="text-lg font-bold text-slate-900 tracking-tight truncate",
+                                        class_name="text-base font-bold text-slate-900 tracking-tight whitespace-nowrap",
                                     ),
                                     rx.cond(
                                         State.is_authenticated & State.subscription_snapshot["is_trial"],

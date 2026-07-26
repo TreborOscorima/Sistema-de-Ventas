@@ -13,7 +13,7 @@ from sqlmodel import select
 from app.models.sales import CompanySettings
 from app.models.taxes import CompanyTaxRate
 from app.services import tax_service
-from app.utils.formatting import fmt_input_num
+from app.utils.formatting import fmt_input_num, fmt_price
 from app.utils.tax_presets import COUNTRY_TAX_PRESETS, get_presets_for_country
 
 from .mixin_state import MixinState
@@ -81,12 +81,12 @@ class TaxConfigState(MixinState):
     @rx.var(cache=False)
     def preview_tax_amount(self) -> str:
         """Monto de impuesto para S/100.00 con la tasa default."""
-        return fmt_input_num(100.0 * self.default_tax_rate_decimal)
+        return fmt_price(100.0 * self.default_tax_rate_decimal)
 
     @rx.var(cache=False)
     def preview_total(self) -> str:
         """Total para S/100.00 con la tasa default."""
-        return fmt_input_num(100.0 * (1 + self.default_tax_rate_decimal))
+        return fmt_price(100.0 * (1 + self.default_tax_rate_decimal))
 
     @rx.var(cache=False)
     def editing_is_new(self) -> bool:

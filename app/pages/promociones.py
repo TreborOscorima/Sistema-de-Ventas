@@ -108,14 +108,14 @@ def _promo_row(p: rx.Var) -> rx.Component:
             rx.el.span(
                 rx.cond(
                     p["type"] == PromotionType.PERCENTAGE,
-                    p["discount_value_display"].to_string() + "%",
+                    p["discount_value_display"].to(str) + "%",
                     rx.cond(
                         p["type"] == PromotionType.FIXED_AMOUNT,
-                        State.currency_symbol + " " + p["discount_value_display"].to_string(),
+                        State.currency_symbol + " " + p["discount_value_display"].to(str),
                         rx.cond(
                             p["type"] == PromotionType.BUY_X_GET_Y,
                             p["min_quantity"].to_string() + "x" + (p["min_quantity"].to(int) - p["free_quantity"].to(int)).to_string(),
-                            "c/" + p["min_quantity"].to_string() + "u -" + p["discount_value_display"].to_string() + "%",
+                            "c/" + p["min_quantity"].to_string() + "u -" + p["discount_value_display"].to(str) + "%",
                         ),
                     ),
                 ),
@@ -208,14 +208,14 @@ def _promo_card(p: rx.Var) -> rx.Component:
             rx.el.span(
                 rx.cond(
                     p["type"] == PromotionType.PERCENTAGE,
-                    p["discount_value_display"].to_string() + "% off",
+                    p["discount_value_display"].to(str) + "% off",
                     rx.cond(
                         p["type"] == PromotionType.FIXED_AMOUNT,
-                        State.currency_symbol + " " + p["discount_value_display"].to_string() + " off",
+                        State.currency_symbol + " " + p["discount_value_display"].to(str) + " off",
                         rx.cond(
                             p["type"] == PromotionType.BUY_X_GET_Y,
                             p["min_quantity"].to_string() + "x" + (p["min_quantity"].to(int) - p["free_quantity"].to(int)).to_string(),
-                            "c/" + p["min_quantity"].to_string() + "u -" + p["discount_value_display"].to_string() + "%",
+                            "c/" + p["min_quantity"].to_string() + "u -" + p["discount_value_display"].to(str) + "%",
                         ),
                     ),
                 ),
