@@ -498,13 +498,19 @@ def _translate_payment_method(method: str) -> str:
 
 
 def _load_pm_names(session, company_id: int | None, branch_id: int | None) -> dict[int, str]:
-    """Carga un dict {payment_method.id → name} para resolver métodos custom (kind=other)."""
-    filters = [PaymentMethod.enabled == True]
+    """Carga un dict {payment_method.id → name} para mostrar cada método por su
+    nombre real. Incluye métodos deshabilitados: una venta histórica pagada con
+    un método luego desactivado (p. ej. tras cambiar de país) debe seguir
+    resolviendo su nombre."""
+    filters = []
     if company_id is not None:
         filters.append(PaymentMethod.company_id == company_id)
     if branch_id is not None:
         filters.append(PaymentMethod.branch_id == branch_id)
-    methods = session.exec(select(PaymentMethod).where(*filters)).all()
+    stmt = select(PaymentMethod)
+    if filters:
+        stmt = stmt.where(*filters)
+    methods = session.exec(stmt).all()
     return {m.id: m.name for m in methods if m.id is not None}
 
 
@@ -513,7 +519,14 @@ def _resolve_payment_display(payment, pm_by_id: dict[int, str]) -> str:
     method_type = getattr(payment, "method_type", None)
     pm_id = getattr(payment, "payment_method_id", None)
     method_val = (method_type.value if method_type else "") or "no especificado"
-    if method_val == "other" and pm_id and pm_id in pm_by_id:
+    # Nombre real por payment_method_id para cualquier método que no sea uno de
+    # los estándar (billeteras como Mercado Pago/Cuenta DNI/MODO/Yape/Plin y
+    # métodos custom de cualquier país). Los estándar usan su etiqueta traducida.
+    if (
+        pm_id
+        and pm_id in pm_by_id
+        and method_val not in ("cash", "debit", "credit", "transfer", "mixed")
+    ):
         return pm_by_id[pm_id]
     return _translate_payment_method(method_val)
 

@@ -38,7 +38,7 @@ from typing import Any, Dict
 from sqlmodel import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import CashboxLog, Client, Sale, SaleInstallment
+from app.models import CashboxLog, Client, PaymentMethod, Sale, SaleInstallment
 from app.utils.calculations import calculate_total
 from app.utils.tenant import tenant_context
 from app.utils.timezone import utc_now_naive
@@ -273,11 +273,28 @@ class CreditService:
 
             session.add(installment)
             session.add(client)
+            # Linkear el método por id (además de la etiqueta de texto) para que
+            # la cobranza quede atribuida por nombre real igual que las ventas.
+            pm_id_for_log = None
+            if method_label:
+                _ml = method_label.strip().lower()
+                _pm_rows = (
+                    await session.exec(
+                        select(PaymentMethod)
+                        .where(PaymentMethod.company_id == sale.company_id)
+                        .where(PaymentMethod.branch_id == sale.branch_id)
+                    )
+                ).all()
+                for _m in _pm_rows:
+                    if (_m.name or "").strip().lower() == _ml:
+                        pm_id_for_log = _m.id
+                        break
             session.add(
                 CashboxLog(
                     action="Cobranza",
                     amount=payment_amount,
                     payment_method=method_label,
+                    payment_method_id=pm_id_for_log,
                     notes=notes,
                     timestamp=utc_now_naive(),
                     user_id=user_id,

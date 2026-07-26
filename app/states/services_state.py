@@ -2016,7 +2016,9 @@ class ServicesState(MixinState):
                         company_id=company_id,
                         amount=amount,
                         method_type=method_type,
-                        payment_method_id=_pm_id_other_1 if method_type == PaymentMethodType.other else None,
+                        payment_method_id=_pm_id_other_1 if method_type in (
+                            PaymentMethodType.other, PaymentMethodType.wallet
+                        ) else None,
                         reference_code=f"Reserva {reservation_model.id}",
                         branch_id=branch_id,
                     )
@@ -2180,7 +2182,9 @@ class ServicesState(MixinState):
                         company_id=company_id,
                         amount=amount,
                         method_type=method_type,
-                        payment_method_id=_pm_id_other_2 if method_type == PaymentMethodType.other else None,
+                        payment_method_id=_pm_id_other_2 if method_type in (
+                            PaymentMethodType.other, PaymentMethodType.wallet
+                        ) else None,
                         reference_code=f"Reserva {reservation_model.id}",
                         branch_id=branch_id,
                     )

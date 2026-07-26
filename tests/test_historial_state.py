@@ -147,6 +147,7 @@ def test_build_report_entries_filters_by_method_and_user(monkeypatch):
 
     session = SequencedSession(
         [
+            [],  # _load_pm_names (carga de métodos de pago)
             [payment_cash, payment_debit],
             [(log_cash, "Alice"), (log_yape, "Bob")],
         ]
@@ -159,7 +160,7 @@ def test_build_report_entries_filters_by_method_and_user(monkeypatch):
     assert {entry["source"] for entry in entries} == {"Venta", "Cobranza"}
     assert all(entry["method_key"] == "cash" for entry in entries)
     assert all(entry["user"] == "Alice" for entry in entries)
-    assert "cashboxlog.is_voided" in str(session.statements[1])
+    assert "cashboxlog.is_voided" in str(session.statements[2])
 
 
 def test_build_report_entries_sales_only_skips_cancelled(monkeypatch):
@@ -196,11 +197,11 @@ def test_build_report_entries_sales_only_skips_cancelled(monkeypatch):
     )
     payment_cancelled.sale = sale_cancelled
 
-    session = SequencedSession([[payment_ok, payment_cancelled]])
+    session = SequencedSession([[], [payment_ok, payment_cancelled]])
     monkeypatch.setattr(rx, "session", lambda: session)
 
     entries = state._build_report_entries()
 
     assert len(entries) == 1
     assert entries[0]["reference"] == "Venta #1"
-    assert session.calls == 1
+    assert session.calls == 2

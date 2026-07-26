@@ -194,12 +194,9 @@ class PaymentMixin:
         if kind == "card":
             return f"{method} - {self.payment_card_type}"
         if kind == "wallet":
-            provider = (
-                self.payment_wallet_provider
-                or self.payment_wallet_choice
-                or "Proveedor no especificado"
-            )
-            return f"{method} - {provider}"
+            # El nombre del método (Mercado Pago, Cuenta DNI, MODO, etc.) ya es
+            # el proveedor: no agregamos un sub-proveedor Yape/Plin.
+            return method or "Billetera Digital"
         if kind == "mixed":
             non_cash_kind = (self.payment_mixed_non_cash_kind or "").lower()
             parts = []

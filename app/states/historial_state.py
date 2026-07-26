@@ -65,6 +65,10 @@ REPORT_SOURCE_OPTIONS = [
     ["Ventas", "Ventas"],
     ["Cobranzas", "Cobranzas"],
 ]
+# Métodos "estándar" con bucket fijo en las stats de Historial. Cualquier otro
+# (billeteras, custom de cualquier país) se agrupa por payment_method_id y se
+# muestra con su nombre real.
+_STD_STATS_KEYS = {"cash", "debit", "credit", "transfer", "mixed"}
 REPORT_CASHBOX_ACTIONS = {
     "Cobranza",
     "Cobro de Cuota",
@@ -392,6 +396,7 @@ class HistorialState(MixinState):
             return rows
         with rx.session() as session:
             session.info["tenant_bypass"] = True
+            pm_names = self._load_pm_names(session, company_id, branch_id)
             if source_filter in {"Todos", "Ventas"}:
                 payment_query = (
                     select(SalePayment)
@@ -434,6 +439,17 @@ class HistorialState(MixinState):
                         method_key = "other"
                     if method_filter != "Todos" and method_key != method_filter:
                         continue
+                    # Nombre real por payment_method_id (billeteras/custom); el
+                    # method_key se mantiene para el filtro.
+                    _pmid = getattr(payment, "payment_method_id", None)
+                    if (
+                        method_key not in _STD_STATS_KEYS
+                        and _pmid
+                        and _pmid in pm_names
+                    ):
+                        _sale_method_label = pm_names[_pmid]
+                    else:
+                        _sale_method_label = self._normalize_wallet_label(method_key)
                     amount = Decimal(str(getattr(payment, "amount", 0) or 0))
                     timestamp = (
                         getattr(payment, "created_at", None)
@@ -455,7 +471,7 @@ class HistorialState(MixinState):
                             else "",
                             "source": "Venta",
                             "method_key": method_key,
-                            "method_label": self._normalize_wallet_label(method_key),
+                            "method_label": _sale_method_label,
                             "amount": fmt_price(self._round_currency(amount)),
                             "user": user_name,
                             "reference": reference,
@@ -692,7 +708,7 @@ class HistorialState(MixinState):
             if not key:
                 continue
             pm_id = getattr(payment, "payment_method_id", None)
-            if key == "other" and pm_id and pm_names:
+            if key not in _STD_STATS_KEYS and pm_id and pm_names:
                 custom_name = pm_names.get(pm_id)
                 if custom_name:
                     key = f"other_{pm_id}"
@@ -717,7 +733,7 @@ class HistorialState(MixinState):
             if not key:
                 continue
             pm_id = getattr(payment, "payment_method_id", None)
-            if key == "other" and pm_id and pm_names:
+            if key not in _STD_STATS_KEYS and pm_id and pm_names:
                 custom_name = pm_names.get(pm_id)
                 if custom_name:
                     key = f"other_{pm_id}"
@@ -1037,9 +1053,11 @@ class HistorialState(MixinState):
         return enabled_kinds
 
     def _load_pm_names(self, session, company_id: int, branch_id: int) -> dict[int, str]:
+        # Cargamos TODOS los métodos (activos e inactivos): una venta histórica
+        # pagada con un método luego deshabilitado (p. ej. tras cambiar de país)
+        # debe seguir mostrando su nombre real.
         methods = session.exec(
             select(PaymentMethod)
-            .where(PaymentMethod.enabled == True)
             .where(PaymentMethod.company_id == company_id)
             .where(PaymentMethod.branch_id == branch_id)
         ).all()
@@ -1056,7 +1074,7 @@ class HistorialState(MixinState):
             "plin": {"icon": "qr-code", "color": "cyan"},
             "transfer": {"icon": "landmark", "color": "orange"},
             "mixed": {"icon": "layers", "color": "amber"},
-            "other": {"icon": "circle-help", "color": "gray"},
+            "other": {"icon": "wallet", "color": "teal"},
         }
         order_index = {
             "cash": 0,
@@ -1068,12 +1086,61 @@ class HistorialState(MixinState):
             "mixed": 6,
             "other": 7,
         }
-        cards: list[dict] = []
 
-        def _add_card(kind: str, label: str, stats_key: str) -> None:
-            if kind not in enabled_kinds:
+        # Acumulamos por NOMBRE visible para evitar cards duplicadas: un mismo
+        # método puede llegar por dos fuentes (p. ej. "Yape" legacy sin id +
+        # "Yape" con id). Se suman en una sola card.
+        merged: Dict[str, Dict[str, Any]] = {}
+
+        def _accumulate(kind: str, label: str, amount: Any) -> None:
+            label = (label or "").strip()
+            if not label:
                 return
-            amount = stats.get(stats_key, 0.0)
+            entry = merged.get(label)
+            if entry is None:
+                entry = {"amount": 0.0, "kind": kind}
+                merged[label] = entry
+            entry["amount"] += float(amount or 0)
+            # Preferir un kind con estilo/orden conocido (no "other") para el ícono.
+            if entry["kind"] == "other" and kind != "other":
+                entry["kind"] = kind
+
+        # Estándar (se muestran aunque estén en 0 si el kind está habilitado).
+        for _k, _lbl, _sk in (
+            ("cash", "Efectivo", "efectivo"),
+            ("credit", "T. Credito", "credito"),
+            ("debit", "T. Debito", "debito"),
+            ("transfer", "Transferencia", "transferencia"),
+        ):
+            if _k in enabled_kinds:
+                _accumulate(_k, _lbl, stats.get(_sk, 0.0))
+        if "mixed" in enabled_kinds:
+            _accumulate("mixed", "Pago Mixto", stats.get("mixto", 0.0))
+        # Yape/Plin legacy (pagos sin payment_method_id): se fusionan con la card
+        # dinámica homónima si existe.
+        _accumulate("yape", "Yape", stats.get("yape", 0.0))
+        _accumulate("plin", "Plin", stats.get("plin", 0.0))
+        # Dinámicos por payment_method_id → nombre real (cualquier país/custom).
+        if pm_names:
+            for stats_key, amount in stats.items():
+                if not stats_key.startswith("other_"):
+                    continue
+                try:
+                    pm_id = int(stats_key[6:])
+                except ValueError:
+                    continue
+                custom_name = pm_names.get(pm_id)
+                if custom_name:
+                    _accumulate("other", custom_name, amount)
+
+        _standard_kinds = {"cash", "credit", "debit", "transfer", "mixed"}
+        cards: list[dict] = []
+        for label, entry in merged.items():
+            kind = entry["kind"]
+            amount = entry["amount"]
+            # Ocultar cards en 0 salvo los estándar principales.
+            if not amount and kind not in _standard_kinds:
+                continue
             style = styles.get(kind, styles["other"])
             cards.append(
                 {
@@ -1084,36 +1151,6 @@ class HistorialState(MixinState):
                     "_sort_key": kind,
                 }
             )
-
-        _add_card("cash", "Efectivo", "efectivo")
-        _add_card("yape", "Yape", "yape")
-        _add_card("plin", "Plin", "plin")
-        _add_card("credit", "T. Credito", "credito")
-        _add_card("debit", "T. Debito", "debito")
-        _add_card("transfer", "Transferencia", "transferencia")
-        if "mixed" in enabled_kinds:
-            _add_card("mixed", "Pago Mixto", "mixto")
-
-        if pm_names:
-            for stats_key, amount in stats.items():
-                if not stats_key.startswith("other_"):
-                    continue
-                try:
-                    pm_id = int(stats_key[6:])
-                except ValueError:
-                    continue
-                custom_name = pm_names.get(pm_id)
-                if not custom_name or not amount:
-                    continue
-                cards.append(
-                    {
-                        "name": custom_name,
-                        "amount": fmt_price(float(amount)),
-                        "icon": "circle-dollar-sign",
-                        "color": "teal",
-                        "_sort_key": stats_key,
-                    }
-                )
 
         cards.sort(
             key=lambda card: (
@@ -1204,7 +1241,12 @@ class HistorialState(MixinState):
                 key = self._payment_method_key(method_type)
                 if not key:
                     continue
-                if key == "other" and pm_id and pm_id in pm_names:
+                # Cualquier método que no sea uno de los 4 estándar (efectivo,
+                # débito, crédito, transferencia) ni mixto se agrupa por su
+                # payment_method_id → card con nombre real. Esto cubre billeteras
+                # (Mercado Pago, Cuenta DNI, MODO, Yape, Plin) y métodos custom
+                # de cualquier país, sin hardcodear.
+                if key not in _STD_STATS_KEYS and pm_id and pm_id in pm_names:
                     custom_key = f"other_{pm_id}"
                     if custom_key not in stats:
                         stats[custom_key] = Decimal("0.00")
@@ -1271,7 +1313,7 @@ class HistorialState(MixinState):
                         continue
                     allocated = refund_by_sale[sid] * (Decimal(str(paid or 0)) / total_paid)
                     key = self._payment_method_key(method_type)
-                    if key == "other" and pm_id and pm_id in pm_names:
+                    if key not in _STD_STATS_KEYS and pm_id and pm_id in pm_names:
                         custom_key = f"other_{pm_id}"
                         if custom_key in stats:
                             stats[custom_key] -= allocated

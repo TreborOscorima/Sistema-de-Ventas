@@ -706,35 +706,10 @@ def _payment_form_body(variant: str) -> tuple:
         rx.fragment(),
     )
 
-    wallet_option = rx.cond(
-        State.payment_method_kind == "wallet",
-        rx.el.div(
-            rx.el.label(wallet_label, class_name=card_label_class),
-            rx.el.div(
-                rx.el.button(
-                    "Yape",
-                    on_click=lambda: State.choose_wallet_provider("Yape"),
-                    class_name=rx.cond(
-                        State.payment_wallet_choice == "Yape",
-                        yape_btn_active,
-                        yape_btn_inactive,
-                    ),
-                ),
-                rx.el.button(
-                    "Plin",
-                    on_click=lambda: State.choose_wallet_provider("Plin"),
-                    class_name=rx.cond(
-                        State.payment_wallet_choice == "Plin",
-                        plin_btn_active,
-                        plin_btn_inactive,
-                    ),
-                ),
-                class_name="flex gap-2",
-            ),
-            class_name=wallet_section_class,
-        ),
-        rx.fragment(),
-    )
+    # El sub-selector "Billetera: Yape/Plin" quedó obsoleto: cada billetera
+    # (Mercado Pago, Cuenta DNI, MODO, Yape, Plin, etc.) ya es un botón de método
+    # propio, así que no se elige un sub-proveedor.
+    wallet_option = rx.fragment()
 
     mixed_option = rx.cond(
         State.payment_method_kind == "mixed",

@@ -486,9 +486,17 @@ class ConfigState(MixinState):
             new_codes = {m["code"] for m in new_methods}
             existing_by_code: dict = {}
             existing_by_method_id: dict = {}
+            existing_by_name: dict = {}
             for m in existing_methods:
                 existing_by_code[(m.branch_id, m.code)] = m
                 existing_by_method_id[(m.branch_id, m.method_id)] = m
+                # Match por nombre (case-insensitive) para no duplicar cuando el
+                # usuario ya tenía un método con el mismo nombre creado a mano
+                # (p. ej. "Mercado Pago" con code UUID). setdefault → gana el
+                # primero, estable.
+                _nm = (m.name or "").strip().lower()
+                if _nm:
+                    existing_by_name.setdefault((m.branch_id, _nm), m)
                 # Desactivar (no borrar) los que no pertenecen al país nuevo.
                 if m.code not in new_codes:
                     m.is_active = False
@@ -500,10 +508,12 @@ class ConfigState(MixinState):
             ).all()
             for branch in branches:
                 for data in new_methods:
-                    existing = existing_by_code.get(
-                        (branch.id, data["code"])
-                    ) or existing_by_method_id.get(
-                        (branch.id, data["method_id"])
+                    existing = (
+                        existing_by_code.get((branch.id, data["code"]))
+                        or existing_by_method_id.get((branch.id, data["method_id"]))
+                        or existing_by_name.get(
+                            (branch.id, (data["name"] or "").strip().lower())
+                        )
                     )
                     if existing is not None:
                         # Reactivar y alinear al preset del país (sin tocar las
