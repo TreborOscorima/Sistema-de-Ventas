@@ -368,6 +368,25 @@ ejemplo — para que aparezca en producción hay que elegir un preset en Datos d
 
 ---
 
+## 13. Reconciliación de stock y caja (§4) — 2026-07-26
+
+### Stock (empresa #1, `stockmovement` vs `product.stock`)
+- ✅ **Transferencias balancean**: Σ(Transferencia Ingreso) `+54` + Σ(Transferencia Salida) `−54` = **0** ⇒ no crean ni destruyen stock.
+- ✅ **Sin stock negativo** (confirmado Fase 1 B1/B2).
+- ⚠️ **`stockmovement` es un log de auditoría PARCIAL, no un libro mayor completo** (confirma y cuantifica lo notado en Fase 1). En **16 de 38 productos** la suma de movimientos **excede** el stock actual (baseline negativo). Ej. Gatorade (id 2): 5 Ingresos +1 Anulación = neto `+71`, pero stock `49` → faltan 22 unidades **sin movimiento asociado** (editadas directo por recuento físico / edición de producto). Overall baseline = `+506` (stock inicial cargado directo). **No es bug de integridad** (el stock es válido); es un **hueco de trazabilidad**. ✅ **RESUELTO (2026-07-26):** ahora la edición manual del stock genera un `StockMovement` tipo "Re Ajuste Inventario" con el delta (helper `build_stock_adjustment_movement` en `app/utils/stock.py`, llamado desde `save_edited_product`). Verificado en vivo (editar 5→8 crea +3; 8→5 crea −3) y con 5 tests nuevos. *(Los huecos históricos previos no se reconstruyen retroactivamente; de acá en más todo cambio queda trazado.)*
+
+### Caja (empresa #1, `cashboxsession.closing_amount` vs `cashboxlog`)
+Fórmula real (verificada en `_close_mixin.py`): `closing_amount = apertura + Σ(CASHBOX_INCOME_ACTIONS) − Σ(CASHBOX_EXPENSE_ACTIONS)`, por sesión (ventana `opening_time..closing_time` + `user_id`). `INCOME`=Venta/Adelanto/Reserva/Cobranza/Inicial Credito/…; `EXPENSE`=Devolucion/gasto_caja_chica.
+- ✅ **Sesiones recientes (id 44-55): 12/12 reconcilian EXACTO** (dif `0.00`), incluida la venta Mercado Pago $6.000 (sesión 51) y la venta de prueba $4,80 (sesión 55) ⇒ **la lógica de cierre actual es correcta de punta a punta.**
+- ℹ️ **Sesiones viejas (id<44): 19 con diferencias** (redondas: 50/70/100/450/890…), todas del período de desarrollo/semilla (Ene-Jun). El `closing_amount` es un **snapshot histórico**; no reconcilia contra la fórmula actual por evolución del set de acciones + manipulación de datos semilla. **No es un problema productivo.**
+- ✅ **3 sesiones abiertas, una por sucursal** (branch 2/3/37) — ninguna sucursal con 2+ abiertas.
+- ℹ️ **Arqueo físico** (`counted_amount`) registrado en solo **1 de 55** sesiones (id 46: esperado 39,58 vs contado 39,00 → faltante 0,58). El conteo por denominación casi no se usó en estos datos (uso, no bug).
+- ✅ Integridad referencial de caja/pagos confirmada en Fase 1 (A4/A5/A10/B5).
+
+**Veredicto §4:** numeración fiscal impecable; reconciliación de la **operación actual** correcta (stock con transferencias balanceadas y caja reciente 12/12); las únicas observaciones son el **hueco de trazabilidad del log de stock** (mejora sugerida, no bug) y descuadres en **datos viejos de desarrollo** (no productivos).
+
+---
+
 ## 4. Verificaciones de integridad de datos (SQL) — cross-cutting
 
 - [x] ✅ **Ventas = Pagos:** para ventas contado completadas, `SUM(salepayment)` = `sale.total_amount` — 0 anomalías (A1).
@@ -380,8 +399,8 @@ ejemplo — para que aparezca en producción hay que elegir un preset en Datos d
 - [x] ✅ **Globales unificados:** ningún `companysettings` con razón social/RUC divergente de la matriz (B10).
 - [x] ✅ **Cuotas:** sin sobrepago `paid_amount > amount` (B3).
 - [x] ✅ **Cross-tenant en caja/items:** `salepayment`/`saleitem`/`cashboxlog` alineados con su venta (A2, A3, B5).
-- [ ] **Numeración fiscal** atómica y sin huecos/duplicados — *(pendiente)*.
-- [ ] **Reconciliación completa de stock y caja** (fórmula de movimientos) — *(pendiente, spot-check OK)*.
+- [x] ✅ **Numeración fiscal** atómica y sin huecos/duplicados (2026-07-26). Empresa #1: 0 duplicados de (empresa,sucursal,tipo,serie,número), 0 `full_number` duplicado, 0 autorizados sin número. **Global (todas las empresas):** 0 duplicados entre comprobantes autorizados. La empresa #1 no tiene comprobantes **autorizados** (los 4 están en error/pending; facturación electrónica no en uso productivo), por lo que no hay secuencia fiscal consumida con huecos.
+- [x] ✅ **Reconciliación de stock y caja** (2026-07-26) — ver detalle en §13.
 
 ---
 

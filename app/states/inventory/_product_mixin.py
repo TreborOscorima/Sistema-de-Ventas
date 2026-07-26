@@ -1040,11 +1040,29 @@ class ProductMixin:
                     product.barcode = barcode
                     product.description = description
                     product.category = (product_data.get("category", "GENERAL") or "GENERAL").strip().upper()
+                    # Trazabilidad: capturar stock previo para registrar ajuste manual.
+                    _old_stock_val = product.stock
                     product.stock = (
                         self.variants_stock_total
                         if self.show_variants
                         else product_data.get("stock", 0)
                     )
+                    # Si el stock se editó a mano (producto sin variantes) y cambió,
+                    # registrar un StockMovement de ajuste (cierra hueco de trazabilidad).
+                    if not self.show_variants:
+                        from app.utils.stock import build_stock_adjustment_movement
+                        from app.utils.timezone import utc_now_naive as _mov_now
+                        _adj_mov = build_stock_adjustment_movement(
+                            product_id=product.id,
+                            old_stock=_old_stock_val,
+                            new_stock=product.stock,
+                            user_id=self.current_user.get("id"),
+                            company_id=company_id,
+                            branch_id=branch_id,
+                            timestamp=_mov_now(),
+                        )
+                        if _adj_mov is not None:
+                            session.add(_adj_mov)
                     product.unit = product_data.get("unit", "Unidad")
                     product.purchase_price = product_data.get("purchase_price", 0)
                     product.default_supplier_id = product_data.get("default_supplier_id") or None

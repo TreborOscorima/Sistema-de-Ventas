@@ -29,7 +29,52 @@ from typing import Any, Callable
 from sqlalchemy import func
 from sqlmodel import select
 
-from app.models import Product, ProductBatch, ProductVariant
+from app.models import Product, ProductBatch, ProductVariant, StockMovement
+
+ADJUSTMENT_MOVEMENT_TYPE = "Re Ajuste Inventario"
+
+
+def _to_decimal(value: Any):
+    """Convierte un valor a Decimal de forma segura (0 si no es parseable)."""
+    from decimal import Decimal
+    try:
+        return Decimal(str(value if value is not None else 0))
+    except (ArithmeticError, ValueError, TypeError):
+        return Decimal(0)
+
+
+def build_stock_adjustment_movement(
+    *,
+    product_id: int,
+    old_stock: Any,
+    new_stock: Any,
+    user_id: int | None,
+    company_id: int,
+    branch_id: int,
+    timestamp,
+    description: str = "Ajuste manual de stock (edición de producto)",
+) -> "StockMovement | None":
+    """Crea un StockMovement de ajuste cuando el stock cambió por edición directa.
+
+    Cierra el hueco de trazabilidad: cada cambio manual de stock (que no pasa por
+    venta/ingreso/transferencia) debe quedar registrado como movimiento.
+
+    Returns:
+        StockMovement con `quantity = new - old` (con signo), o None si no hubo cambio.
+    """
+    delta = _to_decimal(new_stock) - _to_decimal(old_stock)
+    if delta == 0:
+        return None
+    return StockMovement(
+        product_id=product_id,
+        user_id=user_id,
+        type=ADJUSTMENT_MOVEMENT_TYPE,
+        quantity=delta,
+        description=description,
+        timestamp=timestamp,
+        company_id=company_id,
+        branch_id=branch_id,
+    )
 
 
 async def async_recalculate_stock_totals(

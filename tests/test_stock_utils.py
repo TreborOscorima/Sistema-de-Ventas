@@ -193,3 +193,53 @@ class TestRecalculateStockTotals:
         )
 
         assert result == set()
+
+
+# ── Tests: build_stock_adjustment_movement (trazabilidad de ajuste manual) ──
+import datetime as _dt
+
+from app.utils.stock import build_stock_adjustment_movement, ADJUSTMENT_MOVEMENT_TYPE
+
+_TS = _dt.datetime(2026, 7, 26, 12, 0, 0)
+
+
+def _adj(old, new):
+    return build_stock_adjustment_movement(
+        product_id=33, old_stock=old, new_stock=new,
+        user_id=1, company_id=1, branch_id=2, timestamp=_TS,
+    )
+
+
+def test_adjustment_positive_delta():
+    mov = _adj(5, 8)
+    assert mov is not None
+    assert mov.type == ADJUSTMENT_MOVEMENT_TYPE
+    assert mov.quantity == Decimal("3")
+    assert mov.product_id == 33 and mov.company_id == 1 and mov.branch_id == 2
+    assert mov.user_id == 1 and mov.timestamp == _TS
+
+
+def test_adjustment_negative_delta():
+    mov = _adj(8, 5)
+    assert mov is not None
+    assert mov.quantity == Decimal("-3")
+
+
+def test_adjustment_no_change_returns_none():
+    assert _adj(5, 5) is None
+    assert _adj(Decimal("5.0000"), 5) is None
+
+
+def test_adjustment_decimal_quantities():
+    mov = _adj(Decimal("2.5"), Decimal("4.75"))
+    assert mov is not None
+    assert mov.quantity == Decimal("2.25")
+
+
+def test_adjustment_handles_none_and_bad_values():
+    # old None => tratado como 0; delta = 7
+    mov = _adj(None, 7)
+    assert mov is not None and mov.quantity == Decimal("7")
+    # valor no parseable => tratado como 0 (sin excepción)
+    mov2 = _adj("", 3)
+    assert mov2 is not None and mov2.quantity == Decimal("3")

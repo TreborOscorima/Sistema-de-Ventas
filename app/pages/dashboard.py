@@ -276,7 +276,7 @@ def _top_products_list() -> rx.Component:
           rx.el.p(
             rx.el.span(
               State.currency_symbol,
-              rx.text(p["revenue_fmt"]),
+              rx.el.span(p["revenue_fmt"]),
               class_name="inline-flex items-baseline gap-1 whitespace-nowrap",
             ),
             class_name="font-semibold text-slate-900 tabular-nums",
@@ -364,7 +364,7 @@ def _category_chart() -> rx.Component:
                 rx.el.span(cat["category"], class_name="flex-1 text-sm text-slate-900 truncate"),
                 rx.el.span(
                   State.currency_symbol,
-                  rx.text(cat["total_fmt"]),
+                  rx.el.span(cat["total_fmt"]),
                   class_name="w-28 text-sm text-slate-900 font-medium text-right tabular-nums inline-flex items-baseline justify-end gap-1 whitespace-nowrap",
                 ),
                 rx.el.span(
