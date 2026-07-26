@@ -137,7 +137,7 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 |---|---|---|---|
 | V1 | Búsqueda por descripción (autocompletado) + selección | Precio se completa (incl. transferidos) | ✅ |
 | V2 | Escaneo/ingreso por código de barras | Agrega con precio | ✅ |
-| V3 | Kits/combos (explosión + validación stock por componente) | Correcto | ⬜ (toggle existe; requiere producto kit) |
+| V3 | Kits/combos (explosión + validación stock por componente) | ✅ | Kit de prueba explotó en Coca Cola $2,08 + Agua $3,92 = $6,00 (precio proporcional); + fix del path búsqueda+Añadir |
 | V4 | Selector de variante y lote | Elección manual funciona | ✅ (autocompletado ofrece "Zapatillas (39 Azul)/(40 Verde)") |
 | V5 | Precio: lista de cliente → tier → base | Jerarquía respetada | ✅ (motor + PR1; listas auto-aplicadas) |
 | V6 | Promociones automáticas (preview en carrito) | Descuento aplicado | ✅ (cupón APERTURA: $2,55→$2,04 en carrito) |
@@ -783,7 +783,7 @@ Se ejercitaron en vivo los casos ⬜ que sí eran probables:
 | **C11** Unidades de medida | ✅ | CRUD con 13 unidades + flag "Permite decimales" (kg/g/l=Sí; unidad/caja=No) |
 | **V4** Selector de variante en POS | ✅ | El autocompletado ofrece "Zapatillas de Futbol (39 Azul)" y "(40 Verde)" — se elige la variante al buscar |
 | **V5** Precio por lista de cliente | ✅ | Motor de pricing + PR1 (listas "Mayoristas VIP" con precios especiales auto-aplicados) |
-| **V3** Kit/combo | ⬜ | Toggle "Kit/Combo" existe; requiere un producto kit configurado para ejercitar la venta |
+| **V3** Kit/combo | ✅ | Se creó un kit de prueba (Coca Cola + Agua mineral). Al venderlo, **explota en sus componentes** con el precio del kit ($6,00) **distribuido proporcionalmente** (Coca $2,08 + Agua $3,92), cada componente etiquetado "KIT: …". La validación de stock por componente y la deducción individual están en `_add_kit_to_cart` (líneas 574-604) y en los saleitem exploded. **Bug encontrado y corregido:** el path **búsqueda + Añadir** (`add_item_to_sale`) no detectaba kits (los bloqueaba por su stock propio = 0, "Sin stock"); se agregó la detección de kit igual que en `_process_barcode` (escaneo). Kit de prueba eliminado tras la verificación |
 
 **Hallazgo importante (no-bug):** al agregar un producto sin cupón, la promo "Apertura de
 Tienda" (20% all) **no se auto-aplica** — es correcto, porque tiene `coupon_code="APERTURA"`

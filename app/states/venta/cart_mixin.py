@@ -1384,6 +1384,53 @@ class CartMixin:
             if product is None and results:
                 product = results[0]
 
+        # Detectar kit: expandir en componentes (igual que el escaneo por código).
+        # Sin esto, el kit se trataría como producto normal y quedaría bloqueado
+        # por su stock propio (0), impidiendo venderlo desde la búsqueda + Añadir.
+        if product is not None:
+            _kprod_id = (
+                (product.get("product_id") or product.get("id"))
+                if isinstance(product, dict)
+                else self._product_value(
+                    product, "product_id", self._product_value(product, "id", None)
+                )
+            )
+            _kis_variant = (
+                product.get("is_variant")
+                if isinstance(product, dict)
+                else self._product_value(product, "is_variant", False)
+            )
+            if _kprod_id and not _kis_variant:
+                _kit_exists = False
+                try:
+                    from app.utils.tenant import set_tenant_context
+                    set_tenant_context(int(company_id), int(branch_id))
+                    async with get_async_session() as _ksession:
+                        _kit_exists = bool(
+                            (
+                                await _ksession.exec(
+                                    sql_select(ProductKit.id)
+                                    .where(
+                                        ProductKit.kit_product_id == int(_kprod_id),
+                                        ProductKit.company_id == int(company_id),
+                                        ProductKit.branch_id == int(branch_id),
+                                    )
+                                    .limit(1)
+                                )
+                            ).first()
+                        )
+                except Exception:
+                    logging.exception(
+                        "[POS] Error verificando kit (add_item) para producto %s",
+                        _kprod_id,
+                    )
+                    _kit_exists = False
+                finally:
+                    from app.utils.tenant import set_tenant_context
+                    set_tenant_context(None, None)
+                if _kit_exists:
+                    return await self._add_kit_to_cart(product, company_id, branch_id)
+
         if product:
             if not self.new_sale_item["description"] or self.new_sale_item["price"] <= 0:
                 self._fill_sale_item_from_product(product, keep_quantity=True)
