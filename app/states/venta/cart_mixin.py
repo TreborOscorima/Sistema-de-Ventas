@@ -581,6 +581,10 @@ class CartMixin:
                 int(company_id), int(branch_id),
                 session=session,
             )
+            # get_available_stock_bulk resetea el tenant context global (patrón
+            # S1-02); re-establecerlo para las operaciones de DB siguientes de
+            # esta sesión (ej. session.get(ProductVariant) para el label).
+            set_tenant_context(int(company_id), int(branch_id))
             for comp in components:
                 p = product_map[comp.component_product_id]
                 vid = int(comp.component_variant_id) if comp.component_variant_id else None

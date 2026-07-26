@@ -793,4 +793,18 @@ Verificado también el filtro de día de semana (bitmask Lun=1..Dom=64) y vigenc
 
 **Sigue sin poder ejercitarse (motivo intrínseco):** U3/U4 (1 plan / password), V12+F1-F6
 (facturación electrónica no configurada), PT5 (impresora física), O1-O3 (app admin :3002),
-A3/A4 (estados de sesión/plan), P2 (evitar inflar costos/deuda en prod), V3 (falta producto kit).
+A3/A4 (estados de sesión/plan), P2 (evitar inflar costos/deuda en prod).
+
+### Kits reales — hallazgos al probar "Pack Deportivo Básico" (2026-07-26)
+- 🐞 **BUG (corregido):** los kits con **componentes-variante** eran **invendibles** —
+  `_add_kit_to_cart` fallaba con `RuntimeError: Tenant company_id faltante` porque
+  `get_available_stock_bulk` resetea el tenant context global y el `session.get(ProductVariant)`
+  posterior corría sin contexto. **Fix:** re-setear `set_tenant_context()` tras el bulk.
+  Verificado: "Pack Deportivo Básico" (Ibuprofeno + Polo variante 45 + Polo variante 46)
+  ahora explota correctamente.
+- ⚠️ **Hallazgo (decisión de producto):** "Pack Deportivo Básico" se vende a **$0,00**
+  porque su `sale_price` es NULL y `purchase_price` 0 → el precio del kit resuelve a 0 y
+  se distribuye $0 a cada componente (aunque los componentes tienen precio dinámico:
+  Ibuprofeno ~$0,68, Polo ~$22,50). El código usa el `sale_price` explícito del kit
+  (`_add_kit_to_cart` línea 538). **Opciones:** (a) setear un Precio Venta al kit, o
+  (b) fallback: cuando el kit no tiene precio, cobrar la suma de precios de componentes.
