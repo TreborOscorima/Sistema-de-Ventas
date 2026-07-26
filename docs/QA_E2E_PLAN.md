@@ -187,8 +187,8 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 
 | # | Caso | Esperado | Estado |
 |---|---|---|---|
-| S1 | Crear reserva (agenda) | Registrada | ✅ |
-| S2 | Adelanto + pago final (mixto/billetera) | Pagos con `payment_method_id`; impacta caja | ✅ |
+| S1 | Crear reserva (agenda) | Registrada | ✅ (E2E vivo 2026-07-26 — ver §15) |
+| S2 | Adelanto + pago final (mixto/billetera) | Pagos con `payment_method_id`; impacta caja | ✅ (adelanto→caja + saldo vía POS→paid — §15) |
 | S3 | Constancia de reserva (ticket) | Imprime | ✅ |
 
 ### 3.13 Presupuestos / Cotizaciones
@@ -859,3 +859,46 @@ Complementa lo ya probado en §10/§13: **`percentage` + cupón** (APERTURA, V6)
 Las 5 promos de prueba `QA %` (ids 6–10) se **eliminaron** de `promotion` (+ filas
 `promotion_product`) tras la verificación. Las 5 promos reales de la empresa (ids 1–5)
 quedaron intactas. Ninguna promo de prueba llegó a tener ventas asociadas.
+
+---
+
+## 15. Servicios / Reservas (alquiler de canchas) — E2E en vivo (2026-07-26)
+
+Módulo = reserva de **canchas de fútbol/vóley** (`fieldreservation`). Recorrido completo
+del ciclo de vida en la empresa real #1 (CASA MATRIZ), con verificación en BD.
+
+### Ciclo de vida verificado
+| Paso | Acción | Resultado en BD | ✓ |
+|---|---|---|---|
+| 1 | Crear reserva con **adelanto parcial** (Cancha 1 Día $50, adelanto $20, Efectivo) | `fieldreservation` id 108: `status=pending`, total 50, paid 20 → **saldo $30** | ✅ |
+| 2 | Adelanto en efectivo | `cashboxlog` "Adelanto" $20 (venta #494) — impacta caja | ✅ |
+| 3 | Botón **Pagar** de la reserva pendiente | Enruta al POS con banner "Cobro de Servicio": Total $50 · Adelanto $20 · **Saldo a Cobrar $30** | ✅ |
+| 4 | Confirmar el cobro del saldo (Efectivo $30) | Venta #495 "Alquiler Cancha 1 Día" + `cashboxlog` "Venta" $30; reserva → **`paid`** (paid 50/50) | ✅ |
+| 5 | Bloqueo de slot | El horario 06:00–07:00 pasa a **"Reservado"** (no re-seleccionable) | ✅ |
+| 6 | Autocompletado de precio | Elegir "futbol - Cancha 1 Día" autocompleta Campo + **Monto total $50** desde `field_price` | ✅ |
+
+### Hallazgos
+- 🐞 **BUG cosmético (corregido):** el modal **Detalle de reserva** mostraba TOTAL y PAGADO
+  con **comillas literales** (`$ "50.00"`) — mismo patrón `.to_string()` (JSON.stringify)
+  ya visto en promos. **Fix:** `_modals.py` líneas 175/184 → `.to(str)`. *(Requiere rebuild
+  de Docker para verse en vivo.)* Ver gotcha en [[stack-gotchas]].
+- ⚠️ **A verificar (no confirmado como bug):** el "Saldo" del modal Detalle (`_modals.py:193`)
+  usa `selected_reservation_balance`, que depende de `reservation_payment_id` (contexto de
+  pago), no del id de la reserva abierta con "Ver". Para la reserva pagada mostró `$ 0`
+  (correcto por coincidencia). Conviene revisar que muestre el saldo correcto al "Ver" una
+  reserva **pendiente** sin haber entrado al flujo de pago.
+- ℹ️ **Observación de diseño:** el modal Detalle de una reserva **pagada** no ofrece cancelar
+  (solo Imprimir/Cerrar). `cancel_reservation` marca `CANCELLED` con motivo obligatorio pero
+  **no revierte** automáticamente los pagos en caja (el reembolso se maneja aparte). No se
+  ejercitó cancelación/reembolso en vivo para no complicar la limpieza.
+
+### Nota de automatización
+Los inputs de texto del modal de reserva usan **`on_blur`** (no `on_change`), así que la
+automatización debe disparar el evento `blur` para que el estado se comita; el `<select>` de
+deporte sí usa `on_change`. No es un defecto de la app (un usuario real que sale del campo
+dispara el blur).
+
+### Limpieza
+Se **eliminaron** la reserva de prueba (id 108), las ventas #494 (adelanto) y #495 (saldo),
+sus `saleitem` y los `cashboxlog` 666/667. `MAX(sale.id)` volvió a **493** → sin hueco en la
+numeración. Empresa real sin residuos de la prueba.

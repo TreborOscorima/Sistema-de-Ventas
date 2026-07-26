@@ -172,7 +172,7 @@ def reservation_modal() -> rx.Component:
                   rx.el.span("Total", class_name="text-xs uppercase text-slate-500"),
                   rx.el.span(
                     State.currency_symbol,
-                    State.modal_reservation["total_amount"].to_string(),
+                    State.modal_reservation["total_amount"].to(str),
                     class_name="text-sm font-semibold text-slate-900",
                   ),
                   class_name="flex flex-col gap-1",
@@ -181,7 +181,7 @@ def reservation_modal() -> rx.Component:
                   rx.el.span("Pagado", class_name="text-xs uppercase text-slate-500"),
                   rx.el.span(
                     State.currency_symbol,
-                    State.modal_reservation["paid_amount"].to_string(),
+                    State.modal_reservation["paid_amount"].to(str),
                     class_name="text-sm font-semibold text-slate-900",
                   ),
                   class_name="flex flex-col gap-1",
