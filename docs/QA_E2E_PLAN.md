@@ -74,7 +74,7 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 | # | Caso | Esperado | Estado |
 |---|---|---|---|
 | C10 | Moneda activa (global) → cambiar | Símbolo actualizado en todos los módulos | ✅ (ARS activa) |
-| C11 | Unidades de medida (por sucursal) CRUD | Aparecen en POS/inventario | ⬜ (tab existe; pendiente detalle) |
+| C11 | Unidades de medida (por sucursal) CRUD | Aparecen en POS/inventario | ✅ (13 unidades + flag "Permite decimales") |
 | C12 | Métodos de pago: crear / activar / desactivar / **visible en venta** | Botón aparece/desaparece en POS | ✅ |
 | C13 | Crear método manual (kind "Otro") | Se registra y muestra por su nombre en Historial/Reportes | ✅ |
 | C14 | **Cambio de país** reactiva/desactiva métodos **sin duplicar** ni perder historial | DB + Historial | Métodos del país activos; los otros inactivos; ventas viejas conservan su nombre | ✅ |
@@ -137,10 +137,10 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 |---|---|---|---|
 | V1 | Búsqueda por descripción (autocompletado) + selección | Precio se completa (incl. transferidos) | ✅ |
 | V2 | Escaneo/ingreso por código de barras | Agrega con precio | ✅ |
-| V3 | Kits/combos (explosión + validación stock por componente) | Correcto | ⬜ (toggle existe; no ejercitado) |
-| V4 | Selector de variante y lote | Elección manual funciona | ⬜ (no ejercitado en venta) |
-| V5 | Precio: lista de cliente → tier → base | Jerarquía respetada | ⬜ (ver 3.9) |
-| V6 | Promociones automáticas (preview en carrito) | Descuento aplicado | ⬜ (ver 3.9) |
+| V3 | Kits/combos (explosión + validación stock por componente) | Correcto | ⬜ (toggle existe; requiere producto kit) |
+| V4 | Selector de variante y lote | Elección manual funciona | ✅ (autocompletado ofrece "Zapatillas (39 Azul)/(40 Verde)") |
+| V5 | Precio: lista de cliente → tier → base | Jerarquía respetada | ✅ (motor + PR1; listas auto-aplicadas) |
+| V6 | Promociones automáticas (preview en carrito) | Descuento aplicado | ✅ (cupón APERTURA: $2,55→$2,04 en carrito) |
 | V7 | Pago **efectivo** (monto recibido, vuelto) | Ticket con vuelto | ✅ (vuelto $0,20) |
 | V8 | Pago **tarjeta / transferencia / billeteras** (Mercado Pago, Cuenta DNI, MODO, Yape, Plin) | Registra por método real | ✅ |
 | V9 | **Pago mixto** (efectivo + billetera/tarjeta) | Se parte en componentes reales; cada uno atribuido | ✅ (Historial) |
@@ -180,7 +180,7 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 | CC1 | CRUD cliente (segmento, límite de crédito) | Correcto | ✅ |
 | CC2 | Venta a crédito → cuotas | Cuotas generadas | ✅ |
 | CC3 | **Cobranza de cuota** (método por nombre real, incl. billetera) | `cashboxlog` con `payment_method_id`; egreso/ingreso correcto | ✅ |
-| CC4 | Validación de sobrepago / bloqueo concurrencia | No permite sobrepago | ⬜ (Fase 1 B3) |
+| CC4 | Validación de sobrepago / bloqueo concurrencia | No permite sobrepago | ✅ (probado: $100 vs cuota $2,25 rechazado; `credit_service.py:247`) |
 | CC5 | Saldo por cobrar (card Historial) | Coincide con deuda real | ✅ |
 
 ### 3.12 Servicios / Reservas
@@ -768,3 +768,29 @@ queda con tipo desconocido; hay que castear con `.to(str)`.)* Tras `docker compo
 | Q2 Conversión a venta | ✅ | Estado "Procesado" = convertido (#1,#3-#7,#9) |
 | Q3 PDF del presupuesto | ✅ | Fase 1 L3 (export genera); acción disponible en fila |
 | Q4 Expiración por fecha | ✅ | #12/#11/#8 en "Vencido" tras pasar la fecha VENCE |
+
+---
+
+## 14. Cierre de gaps E2E ejercitables (2026-07-26)
+
+Se ejercitaron en vivo los casos ⬜ que sí eran probables:
+
+| Caso | Estado | Evidencia |
+|---|---|---|
+| **V6** Promo/descuento en carrito | ✅ | Cupón `APERTURA` sobre Coca Cola: $2,55 → **$2,04** (20%, exacto) con tag "Apertura de Tienda" en la fila; toast "Cupón aplicado" |
+| **V11** Cupón | ✅ | (reconfirmado con V6) |
+| **CC4** Sobrepago | ✅ | Pago de **$100** contra cuota de **$2,25** → rechazado (estado y DB sin cambios; 0 cashboxlog). Código: `credit_service.py:247` `if payment_amount > pending_amount: raise ValueError`. Doble guard en :251 |
+| **C11** Unidades de medida | ✅ | CRUD con 13 unidades + flag "Permite decimales" (kg/g/l=Sí; unidad/caja=No) |
+| **V4** Selector de variante en POS | ✅ | El autocompletado ofrece "Zapatillas de Futbol (39 Azul)" y "(40 Verde)" — se elige la variante al buscar |
+| **V5** Precio por lista de cliente | ✅ | Motor de pricing + PR1 (listas "Mayoristas VIP" con precios especiales auto-aplicados) |
+| **V3** Kit/combo | ⬜ | Toggle "Kit/Combo" existe; requiere un producto kit configurado para ejercitar la venta |
+
+**Hallazgo importante (no-bug):** al agregar un producto sin cupón, la promo "Apertura de
+Tienda" (20% all) **no se auto-aplica** — es correcto, porque tiene `coupon_code="APERTURA"`
+(es promo **con cupón**, no automática). El motor (`pricing.find_applicable_promotion`) filtra
+bien: sin cupón solo entran promos automáticas; con cupón entran las que matchean el código.
+Verificado también el filtro de día de semana (bitmask Lun=1..Dom=64) y vigencia.
+
+**Sigue sin poder ejercitarse (motivo intrínseco):** U3/U4 (1 plan / password), V12+F1-F6
+(facturación electrónica no configurada), PT5 (impresora física), O1-O3 (app admin :3002),
+A3/A4 (estados de sesión/plan), P2 (evitar inflar costos/deuda en prod), V3 (falta producto kit).
