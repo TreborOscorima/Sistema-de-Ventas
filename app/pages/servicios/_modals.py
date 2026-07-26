@@ -495,6 +495,7 @@ def reservation_delete_modal() -> rx.Component:
         class_name="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 modal-overlay"
       ),
       rx.radix.primitives.dialog.content(
+        rx.radix.primitives.dialog.title("Eliminar reserva", class_name="sr-only"),
         rx.el.div(
           rx.el.h3("Eliminar reserva", class_name=TYPOGRAPHY["section_title"]),
           rx.el.p(

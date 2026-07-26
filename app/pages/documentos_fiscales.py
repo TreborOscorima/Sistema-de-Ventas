@@ -405,6 +405,7 @@ def _fiscal_doc_detail_modal() -> rx.Component:
                 class_name="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
             ),
             rx.radix.primitives.dialog.content(
+                rx.radix.primitives.dialog.title("Detalle del documento fiscal", class_name="sr-only"),
                 rx.el.div(
                     # ── Header ──────────────────────────────────────
                     rx.el.div(

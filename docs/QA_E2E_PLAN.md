@@ -322,9 +322,11 @@ secciones**; lo crítico y reciente quedó verificado **en vivo** con transaccio
 | 2 | Menor (a11y) | Modales Radix sin `DialogTitle` (warning de consola) | ⬜ anotado (no funcional) |
 | 3 | Menor (cosmético) | Decimales inconsistentes en UI (`$4.8`, vista previa de impuestos) | **✅ corregido y verificado** — total POS mobile usa `sale_total_display`; `preview_tax_amount`/`preview_total` usan `fmt_price` (`21.00`/`121.00`) |
 | 4 | Menor (UX) | Marca truncada en sidebar (`TUWAYKISH…`) | **✅ corregido y verificado** — `text-base` + `whitespace-nowrap` en `sidebar.py`; muestra "TUWAYKISHOP" completo |
-| 5 | Menor (a11y) | Modales Radix sin `DialogTitle` (warning consola) | ⬜ anotado (no funcional) |
+| 5 | Menor (a11y) | Modales Radix sin `DialogTitle` (warning consola) | **✅ corregido** — `dialog.title` (sr-only) en los 5 `dialog.content` (historial, documentos fiscales, servicios, config ×2); consola limpia |
+| 5b | Menor (UX) | Chips de categorías con scroll horizontal en Inventario | **✅ corregido** — modo compacto ahora `flex-wrap` (2 filas) en vez de `overflow-x` |
 | 6 | Entorno (no-app) | Websocket del dev-server con "Connection Error" intermitente y ~8 s de latencia | ⬜ vigilar estabilidad del socket en dev |
-| 7 | Diseño | Sin modo oscuro (ignora `prefers-color-scheme`) | ⬜ decisión de producto |
+| 7 | Diseño | Sin modo oscuro (ignora `prefers-color-scheme`) | ⬜ **feature grande** (no un fix); requiere proyecto/decisión de producto |
+| 8 | Menor (cosmético) | Card "Valor Inventario" apila `$` sobre el número en card angosta (envuelve en el espacio) | ⬜ anotado (componente compartido; riesgo de overflow al forzar nowrap) |
 
 ### Deploy de las correcciones
 Los 3 fixes (comillas en promos, decimales de moneda, marca del sidebar) se commitearon

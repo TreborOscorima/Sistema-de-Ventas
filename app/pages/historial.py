@@ -227,6 +227,8 @@ def sale_detail_modal() -> rx.Component:
         class_name="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 modal-overlay"
       ),
       rx.radix.primitives.dialog.content(
+        # Título accesible (lectores de pantalla); no visible.
+        rx.radix.primitives.dialog.title("Detalle de venta", class_name="sr-only"),
         # ── Header fijo ──────────────────────────────────────────
         rx.el.div(
           rx.el.div(

@@ -544,6 +544,7 @@ def _delete_user_confirm_modal() -> rx.Component:
 def branch_users_modal() -> rx.Component:
   return rx.dialog.root(
     rx.dialog.content(
+      rx.dialog.title("Acceso por Sucursal", class_name="sr-only"),
       rx.el.div(
         rx.el.div(
           rx.el.h3(

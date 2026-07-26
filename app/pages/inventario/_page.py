@@ -156,7 +156,7 @@ def inventario_page() -> rx.Component:
         class_name=rx.cond(
           State.categories_panel_expanded,
           "flex flex-wrap gap-2 max-h-44 overflow-y-auto pr-1",
-          "flex flex-nowrap gap-2 overflow-x-auto whitespace-nowrap pb-1",
+          "flex flex-wrap gap-2 max-h-[4.75rem] overflow-y-auto pr-1 pb-1",
         ),
       ),
       rx.cond(
@@ -165,7 +165,7 @@ def inventario_page() -> rx.Component:
           rx.cond(
             State.categories_panel_expanded,
             "Vista expandida de categorías.",
-            "Vista compacta: desliza horizontalmente para ver más.",
+            "Vista compacta: toca \"Ver todas\" para expandir.",
           ),
           class_name=f"{TYPOGRAPHY['caption']} mt-2",
         ),

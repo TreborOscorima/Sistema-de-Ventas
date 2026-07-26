@@ -433,6 +433,7 @@ def company_settings_section() -> rx.Component:
       # ── Modal de confirmación ─────────────────────────────────────────────
       rx.dialog.root(
         rx.dialog.content(
+          rx.dialog.title("Normalizar productos", class_name="sr-only"),
           rx.el.div(
             rx.el.div(
               rx.icon("triangle-alert", class_name="h-8 w-8 text-amber-500"),
