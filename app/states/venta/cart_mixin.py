@@ -615,6 +615,14 @@ class CartMixin:
                 for c in components
             )
 
+            # Kit sin Precio de Venta propio (sale_price NULL/0): cobrar la SUMA
+            # de los precios efectivos de sus componentes en vez de regalarlo ($0).
+            # total_weight ya es esa suma (precio efectivo × cantidad por componente).
+            if kit_price <= 0 and total_weight > 0:
+                kit_price = Decimal(str(total_weight)).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+
             items_added = []
             remaining_price = kit_price
 
