@@ -157,8 +157,8 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 |---|---|---|---|
 | PR1 | Lista de precios asignada a cliente | Se aplica en POS/presupuesto | ✅ |
 | PR2 | Precio por volumen (PriceTier) | Se aplica al superar cantidad | ✅ (UI) |
-| PR3 | Promo PERCENTAGE / FIXED_AMOUNT / BUY_X_GET_Y / NTH_UNIT | Cada tipo correcto | ✅ |
-| PR4 | Scope (todos/categoría/producto), horario, monto mínimo, cap | Respetados | ✅ |
+| PR3 | Promo PERCENTAGE / FIXED_AMOUNT / BUY_X_GET_Y / NTH_UNIT | Cada tipo correcto | ✅ (4/4 en vivo 2026-07-26 — ver §14) |
+| PR4 | Scope (todos/categoría/producto), horario, monto mínimo, cap | Respetados | ✅ (3/3 ámbitos en vivo — ver §14) |
 | PR5 | Consumo/contador de usos (`max_uses`) | Se agota correctamente | ✅ |
 | PR6 | Impuesto desglosado pre/post en ticket y etiqueta | Correcto | ✅ |
 
@@ -817,3 +817,45 @@ A3/A4 (estados de sesión/plan), P2 (evitar inflar costos/deuda en prod).
   re-resolución de precio y promo (mantienen su precio de combo). Su subtotal igual cuenta
   para el total del carrito. Verificado: kit + APERTURA aplicado → componentes sin descuento.
   *(Un producto suelto en el mismo carrito sí recibe la promo; solo los kits quedan excluidos.)*
+
+---
+
+## 14. Motor de promociones — cobertura completa en vivo (2026-07-26)
+
+Ronda dedicada a ejercitar **los 4 tipos × los 3 ámbitos** del motor de promociones en el
+POS sobre la empresa real #1 (sucursal CASA MATRIZ). Cada caso con matemática verificada
+leyendo el carrito renderizado. Sábado 2026-07-26 (día válido para las promos con máscara
+`V S D`).
+
+| # | Tipo (`promotion_type`) | Ámbito (`scope`) | Cupón/Auto | Prueba en vivo | ✓ |
+|---|---|---|---|---|---|
+| P1 | `percentage` | `all` | auto | Coca Cola $2,55 → **$2,17** (×0,85) · componentes de kit **excluidos** (sin tag) | ✅ |
+| P2 | `fixed_amount` | `product` | auto | Coca Cola $2,55 → **$1,55** (−$1,00 fijo) | ✅ |
+| P3 | `percentage` | `category` (MEDICINA) | auto | Pasta Dental $3,75 → **$3,38** (×0,90) · Arroz (ABARROTES, control) **sin descuento** | ✅ |
+| P4 | `buy_x_get_y` (3x2) | `product` (Cerveza Quilmes) | auto | Cerveza ×3 → subtotal **$12,00** en vez de $18,00 (1 unidad gratis) — promo real "Findes Largos" | ✅ |
+| P5 | `nth_unit_discount` (c/3u −50%) | `all` | auto | Agua mineral ×3 → **$12,00** (2 llenas $9,60 + 1 al 50% $2,40; blended $4,00/u) | ✅ |
+
+Complementa lo ya probado en §10/§13: **`percentage` + cupón** (APERTURA, V6) y la
+**exclusión de kits/combos** en carrito mixto.
+
+**Cómo se lee `nth_unit_discount` y `buy_x_get_y` en el motor** (`pricing.py`):
+- `nth_unit_discount`: `min_quantity` = tamaño de grupo, `discount_value` = % en la última
+  unidad de cada grupo. Solo aplica si `quantity ≥ min_quantity` (línea 250).
+- `buy_x_get_y`: `min_quantity` = "lleva X", `free_quantity` = unidades gratis por grupo.
+
+### Hallazgos colaterales (no-bug)
+- **El formulario "Nueva Promoción" funciona correctamente** — confirmado creando una promo
+  limpia end-to-end por la UI (`percentage`/`all`, quedó como id efímero y se borró). P1 y P2
+  también se crearon íntegramente por la UI. Las promos P3 (categoría) y P5 (nth-unit) se
+  **sembraron vía SQL** solo por **fricción de la automatización de navegador** (el clic por
+  coordenada erraba el botón cuando el formulario crecía con los campos condicionales), **no
+  por un defecto del sistema**. El `finally` de `save_promotion` resetea `is_loading`, así que
+  una validación fallida **no** deja el formulario bloqueado.
+- **El motor lee las promociones frescas de la BD** en cada `_recompute_cart_prices` — las
+  promos insertadas por SQL aplicaron en el POS **sin reiniciar** el contenedor (sin caché
+  rancio de promociones).
+
+### Limpieza
+Las 5 promos de prueba `QA %` (ids 6–10) se **eliminaron** de `promotion` (+ filas
+`promotion_product`) tras la verificación. Las 5 promos reales de la empresa (ids 1–5)
+quedaron intactas. Ninguna promo de prueba llegó a tener ventas asociadas.
