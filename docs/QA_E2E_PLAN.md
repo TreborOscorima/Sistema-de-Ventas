@@ -326,6 +326,11 @@ secciones**; lo crítico y reciente quedó verificado **en vivo** con transaccio
 | 6 | Entorno (no-app) | Websocket del dev-server con "Connection Error" intermitente y ~8 s de latencia | ⬜ vigilar estabilidad del socket en dev |
 | 7 | Diseño | Sin modo oscuro (ignora `prefers-color-scheme`) | ⬜ decisión de producto |
 
+### Deploy de las correcciones
+Los 3 fixes (comillas en promos, decimales de moneda, marca del sidebar) se commitearon
+en **`412139b`** y se pushearon a **`main`** + **`docker-deploy-prod`**. El pre-push hook
+corrió la suite completa: **1115 tests ✅**. Verificados en vivo tras el rebuild del contenedor.
+
 ### No ejercitado en esta fase (motivo)
 - **Facturación electrónica (F1-F6):** no configurada en este tenant (cubierta por Fase 1 L1).
 - **Owner Backoffice (O1-O3):** app `admin` separada (:3002), login aparte.
