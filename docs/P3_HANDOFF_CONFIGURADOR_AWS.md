@@ -4,6 +4,26 @@
 > para completar la Fase P3 (escalado + infraestructura). Fecha: 2026-07-27.
 > Sistema: **TUWAYKISHOP / Sistema de Ventas** (`sys.tuwayki.app`, `admin.tuwayki.app`, `tuwayki.app`).
 
+## ⚠️ Recomendación para la instancia ACTUAL (t3.medium compartida)
+
+La instancia es una **t3.medium (2 vCPU / 4 GB RAM, burstable), compartida** con Food + Clínicas +
+otros. En ese contexto y sin plan de subir la instancia (costos):
+
+- **NO activar réplicas del POS (paso ③)** — otra réplica (+1 GB) compite por RAM/CPU con los demás
+  sistemas → riesgo de OOM que los afecta a todos, y throttling de CPU burstable. **Descartado en esta
+  caja** (el código queda listo y default-OFF para una futura instancia dedicada).
+- **NO levantar el monitoreo Tier 2 local (paso ⑤)** — suma ~500–800 MB; usar **Tier 1** (externo, 0 RAM).
+- **Priorizar lo de costo cero**: ⓪ specs, ① backups, ② uptime Tier 1.
+- **Read-replica (paso ④)**: sólo si los reportes molestan al primario, y **en RDS** (fuera de la caja),
+  no co-locada. Cuesta $ de RDS.
+- El grueso del rendimiento **ya se ganó gratis** con los índices (P1) y el tuning de MySQL (P2), ambos
+  en prod. Eso es lo apropiado para una caja ajustada.
+
+> En resumen para esta instancia: hacer **① + ②** (gratis, alta señal) y parar ahí, salvo que la carga
+> de reportes justifique una read-replica en RDS (④). Los pasos ③ y ⑤ quedan para una instancia dedicada.
+
+---
+
 ## Contexto en 30 segundos
 
 - El servidor de prod es **compartido** (corre Ventas + Food + Clínicas + otros). Datos aislados (cada
@@ -132,14 +152,14 @@ Pasos (server):
 
 ---
 
-## Orden recomendado
+## Orden recomendado (para la t3.medium compartida actual)
 
-1. **⓪ Specs** (5 min) → nos dice qué es viable.
-2. **① Backups** (verificar/instalar cron) — resiliencia, sin costo.
-3. **② Uptime Tier 1** — alerta básica, sin costo.
-4. **④ Read-replica RDS** — la mejora de mayor impacto para reportes **sin robar RAM local**.
-5. **③ Réplicas del POS** — solo si la RAM alcanza (o tras subir la instancia).
-6. **⑤ Monitoreo Tier 2** — cuando haya margen o host aparte.
+1. **⓪ Specs** (5 min) → confirmar RAM libre (`free -h`), pero el prior es "sin margen para más".
+2. **① Backups** (verificar/instalar cron) — resiliencia, **costo 0**. ← hacer.
+3. **② Uptime Tier 1** — alerta básica, **costo 0**. ← hacer.
+4. **④ Read-replica en RDS** — *sólo si* los reportes molestan al primario (cuesta $ de RDS, 0 RAM local).
+5. **③ Réplicas del POS** — **NO en esta instancia** (ver recomendación arriba); para una instancia dedicada.
+6. **⑤ Monitoreo Tier 2** — **NO en esta instancia**; usar Tier 1, o un host de monitoreo aparte.
 
 > **Todo lo del código ya está mergeado en `main`.** Cada activación de acá es reversible y opcional; el
 > sistema opera hoy sin ninguna de ellas. Dudas técnicas puntuales: los runbooks `docs/P3_STEP*.md`.
