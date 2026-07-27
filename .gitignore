@@ -27,3 +27,9 @@ testing_session_log.md
 
 # Vendor local para builds Docker (tuwayki-core se instala desde _vendor/)
 _vendor/
+
+# Material de marketing / documentos no versionados
+*.docx
+
+# Volcados accidentales de salida (ej. `... 2>0`)
+/0
