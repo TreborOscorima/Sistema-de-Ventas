@@ -1,0 +1,58 @@
+# Reglas de alerta Prometheus (Fase P3 §3.5). Umbrales conservadores; ajustar
+# según la realidad de prod. Requiere Alertmanager (o Grafana alerting) para
+# notificar; las reglas evalúan igual y se ven en la UI de Prometheus.
+groups:
+  - name: tuwayki-infra
+    rules:
+      # ── Disponibilidad ──────────────────────────────────────────────
+      - alert: TargetDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Target caído: {{ $labels.job }} / {{ $labels.instance }}"
+
+      - alert: AppHealthDown
+        expr: probe_success == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Superficie no responde 2xx: {{ $labels.instance }}"
+
+      # ── Host ────────────────────────────────────────────────────────
+      - alert: HostMemoryLow
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.10
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "RAM libre del host < 10% (relevante para agregar réplicas)"
+
+      - alert: HostDiskLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.10
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "Disco raíz del host < 10% libre"
+
+      # ── Contenedores ────────────────────────────────────────────────
+      - alert: ContainerMemoryNearLimit
+        expr: (container_memory_usage_bytes{name=~"tuwayki_.+"} / container_spec_memory_limit_bytes{name=~"tuwayki_.+"}) > 0.90
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Contenedor {{ $labels.name }} > 90% de su límite de memoria (riesgo OOM)"
+
+      # ── MySQL ───────────────────────────────────────────────────────
+      - alert: MySQLDown
+        expr: mysql_up == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "MySQL no responde al exporter"
+
+      - alert: MySQLConnectionsHigh
+        expr: mysql_global_status_threads_connected / mysql_global_variables_max_connections > 0.80
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Conexiones MySQL > 80% de max_connections (revisar pool/réplicas)"
