@@ -356,10 +356,10 @@ corrió la suite completa: **1115 tests ✅**. Verificados en vivo tras el rebui
 | # | Prueba | Estado | Nota |
 |---|---|---|---|
 | 1 | Impresión térmica física (58/80mm) | ⏸️ Pendiente hardware | **Contenido/layout ✅** verificado: se generó el ticket 58mm real con `ReceiptService.generate_receipt_html` (empresa, CUIT, dirección/tel del local, ítems, TOTAL, método por nombre real, mensaje, leyenda AR). Falta solo lo físico (alineación/corte/legibilidad en papel) |
-| 2 | Impresión A4 en impresora real | ⏸️ Pendiente hardware | El selector A4 existe (PT3); layout físico a validar con impresora |
-| 3 | Escáner de código de barras real | ⏸️ Pendiente hardware | El flujo de escaneo por código está probado por software (V2/transferencia por barcode); falta el lector físico |
-| 4 | Celular/tablet real (PWA) | ⏸️ Pendiente dispositivo | Responsive verificado a 375px (sin scroll lateral) y sesión persiste (A2); falta instalación/uso en equipo real |
-| 5 | Percepción de estética / UX | ✅ Hecho | Pasada de UX sobre ~18 pantallas. **Fortalezas:** sistema de color coherente, cards modernas, buena jerarquía, POS pensado para cajero (atajos inline), estados vacíos/skeletons/badges cuidados. **2 de alto impacto CORREGIDOS:** decimales de moneda uniformes + marca no truncada. **`$` apilado: RESUELTO** — barrido 2026-07-26 en dashboard (Top Productos, geometría misma-línea), inventario (Valor), caja, historial, presupuestos → 0 símbolos `$` en línea propia (desktop y 375px); el fix `rx.text`→`rx.el.span` inline-flex ya cubría todo. a11y `DialogTitle` corregido (commit 52caa). Pendiente opcional restante: chips de categorías con scroll horizontal, modo oscuro |
+| 2 | Impresión A4 en impresora real | ⏸️ Pendiente hardware | **Contenido A4 ✅** (2026-07-26): `paper="a4"` genera `@page {size:A4; margin:16mm}` con el comprobante completo. Archivo `comprobante_A4.html` entregado. Falta solo lo físico |
+| 3 | Escáner de código de barras real | ⏸️ Pendiente hardware | El flujo de escaneo por código está probado por software (V2/transferencia + toda la QA de promos/kits vía `venta_barcode_input` form-submit); un lector USB es keyboard-wedge equivalente. Falta el lector físico |
+| 4 | Celular/tablet real (PWA) | ⏸️ Pendiente dispositivo | **PWA verificada ✅** (2026-07-26): SW `/sw.js` **activado** (scope `/`, handlers install/activate/fetch + caché), manifest válido (`standalone`, íconos 192/512, start_url `/login`), banner `beforeinstallprompt`, theme-color/apple-capable. Cumple criterios de instalabilidad. Responsive 375px OK. Falta instalar/usar en equipo real |
+| 5 | Percepción de estética / UX | ✅ Hecho | Pasada de UX sobre ~18 pantallas. **Fortalezas:** sistema de color coherente, cards modernas, buena jerarquía, POS pensado para cajero (atajos inline), estados vacíos/skeletons/badges cuidados. **2 de alto impacto CORREGIDOS:** decimales de moneda uniformes + marca no truncada. **`$` apilado: RESUELTO** — barrido 2026-07-26 en dashboard (Top Productos, geometría misma-línea), inventario (Valor), caja, historial, presupuestos → 0 símbolos `$` en línea propia (desktop y 375px); el fix `rx.text`→`rx.el.span` inline-flex ya cubría todo. a11y `DialogTitle` corregido (commit 52caa). **Chips de categorías: RESUELTO** — verificado en vivo 2026-07-26 a 375px: 15 chips en `flex-wrap` (10 filas), `horizontalScroll:false`; el fix #22 (`flex-nowrap overflow-x-auto`→`flex-wrap overflow-y-auto`) ya cubría todo; no queda scroll horizontal en ningún módulo. Pendiente opcional restante: modo oscuro |
 | 6 | Flujo con operador real (cajero) | ⬜ Pendiente | Usabilidad con un cajero real |
 
 **Extra resuelto en Fase 3:** **H5 (reimpresión)** → confirmado disponible vía POS
@@ -1007,3 +1007,36 @@ cambio de clave (`:2206`) y registro (`register_state.py:161/375`), además de b
 **Limpieza:** todos los productos/variantes/lotes/movimientos/categoría `QA-*` creados en #3
 fueron eliminados (0 residuos). Nota de aislamiento: se confirmó que el tenant #3 soporta estos
 escritos pese a sus quirks de datos conocidos (ver §11 hallazgos B4/B9).
+
+---
+
+## 19. Fase 3 — Hardware/operador: verificación SW + checklist físico (2026-07-26)
+
+El asistente opera vía navegador y shell aislados: **no puede imprimir en tu impresora, escanear
+con un lector físico ni instalar en un teléfono real**. Todo lo verificable por software se
+completó; abajo el checklist para que **vos** ejecutes lo físico.
+
+### Ya verificado por software (no requiere tu acción)
+- **Ticket térmico** 80mm y 58mm: contenido correcto (cabecera, ítems monospace alineados,
+  Subtotal/IGV 18%/TOTAL, método+vuelto, pie), `@page {size:80mm auto}`. Archivos
+  `ticket_80mm.html` / `ticket_58mm.html` entregados.
+- **Comprobante A4**: `@page {size:A4; margin:16mm}`, archivo `comprobante_A4.html` entregado.
+- **Impresión** se dispara con `window.print()` sobre el HTML (nativo PWA); el usuario elige la
+  impresora física en el diálogo del navegador. Config de papel en Configuración → Empresa
+  (`58` / `80` / `A4` / `custom mm`).
+- **Escáner**: el POS lee por `venta_barcode_input` (form-submit al Enter). Un lector USB actúa
+  como teclado → escribe el código y envía Enter, exactamente el flujo ya ejercitado.
+- **PWA**: SW activo con caché offline + manifest instalable (ver §12 fila 4).
+
+### Checklist físico para el usuario ☐
+1. ☐ **Térmica 80mm/58mm**: abrir `ticket_80mm.html` (o hacer una venta real y usar Imprimir) →
+   Ctrl+P → seleccionar la impresora térmica → verificar alineación de columnas, corte de papel
+   y legibilidad. Ajustar ancho en Configuración si el texto se corta.
+2. ☐ **A4**: abrir `comprobante_A4.html` → Ctrl+P → impresora normal → verificar márgenes/escala.
+3. ☐ **Escáner USB**: conectar el lector, enfocar el campo de código del POS, escanear un producto
+   real → debe agregarse al carrito al instante (equivale a teclear el código + Enter).
+4. ☐ **PWA en móvil real**: abrir la URL en Chrome/Safari del teléfono → "Agregar a pantalla de
+   inicio" / banner de instalación → abrir como app (standalone) → hacer una venta de prueba →
+   verificar que la sesión persiste al reabrir.
+5. ☐ **Operador cajero real**: que un cajero haga un turno de prueba (apertura de caja, ventas
+   con distintos métodos, cobro de reserva, cierre con arqueo) y reportar fricciones de usabilidad.
