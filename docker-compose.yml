@@ -38,9 +38,23 @@ services:
       - --long_query_time=1
       - --log_slow_extra=ON
       - --log-error-verbosity=3
+      # max_connections=200 soporta ~6 réplicas de sys ((2+N)×25 conns < 200).
+      # Máx histórico usado: ~30. No subir (más conns = más RAM por-conexión).
       - --max_connections=200
+      # buffer_pool: pendiente de dimensionar según DB real de prod + RAM del host
+      # (ver docs/P3_HORIZONTAL_SCALING_DESIGN.md §3.3). 384M dentro del cap de 1G.
       - --innodb_buffer_pool_size=384M
+      # O_DIRECT: InnoDB no usa la page cache del SO → sin doble-buffering (data
+      # cacheada 2 veces dentro del cgroup de 1G). Hace el buffer pool más efectivo.
+      - --innodb_flush_method=O_DIRECT
+      # Durabilidad de ventas: NO tocar (1 = fsync por commit).
       - --innodb_flush_log_at_trx_commit=1
+      # Redo más grande: el POS escribe ventas de continuo; 100M (default) provoca
+      # checkpoints frecuentes bajo ráfagas de escritura. 512M los suaviza (costo=disco).
+      - --innodb_redo_log_capacity=536870912
+      # io_capacity para almacenamiento SSD (cloud). Si prod fuera HDD, bajar a 200.
+      - --innodb_io_capacity=1000
+      - --innodb_io_capacity_max=2000
     deploy:
       resources:
         limits:

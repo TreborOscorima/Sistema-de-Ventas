@@ -67,10 +67,23 @@ El resto del `location` (Upgrade/Connection, timeouts largos para websocket) ya 
 `ops/nginx/tuwayki-domain-split.conf`.
 
 ### 3.3 MySQL: aritmética de conexiones + tuning
-- **Límite duro**: `N_réplicas × 25 < max_connections`. Con `max_connections=151` (default) → **N ≤ 5**.
-  Antes de escalar: subir `max_connections` (p.ej. **300**) y/o **bajar `DB_POOL_SIZE`** por instancia
-  (p.ej. 10+5=15) según cuántas réplicas.
-- `innodb_buffer_pool_size` = **50–70 % de la RAM** del host de BD (que el working set entre en memoria).
+Estado real (auditado 2026-07-27, MySQL **8.0.46**, contenedor capado a **1G RAM**): `max_connections`
+ya está en **200** (no el default 151) y `innodb_buffer_pool_size=384M`. Máx histórico de conexiones
+usadas: **~30**.
+- **Aritmética de conexiones**: `(2 superficies fijas + N réplicas de sys) × 25 < max_connections`.
+  Con **200** → **N ≤ 6** réplicas de sys. Suficiente para el plan (2 réplicas) con margen. Sólo subir
+  `max_connections` (y/o bajar `DB_POOL_SIZE` por instancia) si se apunta a >6 réplicas.
+- **Tuning aplicado (config-as-code en `docker-compose.yml`, validado en contenedor descartable):**
+  - `innodb_flush_method=O_DIRECT` — evita el doble-buffering InnoDB↔page-cache del SO dentro del cgroup
+    de 1G → el buffer pool de 384M rinde más (memory-efficient, no cuesta RAM extra).
+  - `innodb_redo_log_capacity=512M` (era 100M) — el POS escribe ventas de continuo; redo chico fuerza
+    checkpoints frecuentes bajo ráfagas. Costo: disco.
+  - `innodb_io_capacity=1000` / `max=2000` (era 200) — asume **SSD** (cloud). Si prod fuera HDD, bajar a 200.
+  - `innodb_flush_log_at_trx_commit=1` — **sin cambios** (durabilidad de ventas por commit).
+- **Pendiente (necesita datos de prod)**: dimensionar `innodb_buffer_pool_size` = idealmente que entre el
+  working set. Requiere el **tamaño real de la BD de prod** + la **RAM del host** (para subir a la vez el
+  `deploy.resources.limits.memory` del contenedor MySQL, hoy 1G). Regla: buffer pool ≈ min(tamaño BD ×1,2,
+  50–70% de la RAM asignable a MySQL). Con ≥1G de buffer pool, subir `innodb_buffer_pool_instances`.
 - **Réplica de lectura**: las queries pesadas (dashboard/reportes de `owner`/`report_state`) a una
   **réplica de solo-lectura**; el POS (escritura) sigue en el primario. Requiere: replicación MySQL +
   un segundo engine/URL de solo-lectura y ruteo de lectura en el código de reportes (cambio acotado,
