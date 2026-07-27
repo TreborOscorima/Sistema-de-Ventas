@@ -258,11 +258,12 @@ docker exec -i tuwayki_mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroo
 - **CI verde**: aplica la migración en BD MySQL limpia + 1128 tests OK.
 - **PR [#3](https://github.com/TreborOscorima/Sistema-de-Ventas/pull/3) MERGEADO a `main`** (commit `160adae`).
 
-### ⏳ En vuelo al momento del handoff
-- El merge a `main` disparó la CI en `main`; al pasar, dispara `deploy-prod.yml` **automáticamente**:
-  SSH al server AWS → **backup automático** (`mysqldump`+gzip+S3) → build → `docker compose up` →
-  el **`docker-entrypoint.sh` corre `alembic upgrade head`** → la migración `u6v7w8x9` se aplica a prod →
-  health checks de `tuwayki.app` / `sys.tuwayki.app` / `admin.tuwayki.app`.
+### ✅ Deploy a prod COMPLETADO (2026-07-27 05:27)
+- `deploy-prod.yml` run `30239655323` = **success** (3m19s). Log: `Backup OK (20K)`, `Ping OK`
+  en las 3 superficies, `DEPLOY DOCKER PROD COMPLETADO`.
+- Health público verificado: `sys.tuwayki.app` y `admin.tuwayki.app` → `status:ok, db:ok, redis:ok`.
+- Migración `u6v7w8x9` aplicada vía `docker-entrypoint.sh` (`alembic upgrade head`, fail-fast →
+  containers healthy = migración OK). **P1 (fix index_merge) cerrado en producción.**
 
 ### ▶️ Cómo verificar que el deploy terminó OK (primer paso al retomar)
 ```bash
