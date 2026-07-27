@@ -279,11 +279,42 @@ que las queries del POS usan `ix_sale_tenant_status_timestamp`.
 - La migración es reversible: `alembic downgrade -1` recrea los índices.
 - El entrypoint es fail-fast: si la migración falla, el contenedor no arranca (no corrompe datos).
 
+### ✅ Barrido P1 más amplio — HECHO y VALIDADO en staging (2026-07-27, NO en prod aún)
+El barrido (paso 2 de abajo) se ejecutó con la BD real (staging = fiel a prod) como fuente de
+verdad, no la metadata del modelo. Dos migraciones nuevas, encima de `u6v7w8x9`:
+
+- **`v7w8x9y0`** — dropea **31** `ix_*_company_id` single-column redundantes en el resto de tablas
+  multi-tenant (además de `sale`/`saleitem`/`product` de `u6v7w8x9`). Incluye 20 tablas cubiertas por
+  compuestos normales + 11 cubiertas por constraints **UNIQUE `(company_id,…)`** (`user`, `role`,
+  `unit`, `category`, `client`, `supplier`, `paymentmethod`, `pricetier`, `productkit`,
+  `companysettings`, `companybillingconfig`). Misma guarda que `u6v7w8x9` (sólo dropea si otro índice
+  lidera con `company_id`). Se **mantienen** a propósito: `branch`, `fieldprice`, `purchaseitem`,
+  `purchaseorderitem` (el single es el único cover de la FK).
+- **`w8x9y0z1`** — corrige un **drift modelo↔BD**: `CashboxSession` declara
+  `ix_cashboxsession_tenant_user_open (company_id, branch_id, user_id, is_open)` pero **ninguna
+  migración lo había creado en prod**. La query caliente de caja (buscar la sesión abierta del cajero,
+  `app/states/cash/_close_mixin.py`) filtra esas 4 columnas. La migración **crea** el compuesto y luego
+  dropea el single `ix_cashboxsession_company_id` (ya cubierto). **EXPLAIN ANALYZE con 40k sesiones:
+  84,5 ms (scan) → 0,29 ms (index lookup), ~290x.**
+
+También se limpió del modelo el índice explícito redundante `ix_companytaxrate_company` en
+`app/models/taxes.py` (lo cubre `ix_companytaxrate_company_active`).
+
+Validación en staging: `downgrade u6v7w8x9` → `upgrade head` limpio, 0 singles redundantes restantes
+(salvo los 4 permitidos), FKs intactas, ambas migraciones idempotentes y reversibles. Suite: **1128
+passed** (los 4 fallos de `test_e2e.py` son de Playwright, requieren servidor vivo — ambientales).
+
+**Nota drift (no accionado, bajo valor):** varios modelos declaran singles secundarios
+(`ix_promotion_name`, `ix_quotation_status`, `ix_user_email`, …) que ninguna migración creó; sus
+compuestos covering ya existen, así que crearlos sólo sumaría overhead de escritura. Los índices de FK
+"faltantes" son artefacto de nombre (MySQL los crea como `fk_*`/`<col>_id`). Ver reporte de drift si
+se retoma.
+
 ### 📌 Pendiente (próximos pasos, en orden)
-1. **Verificar el deploy** (arriba) y anotar acá el resultado con números de prod.
-2. **P1 — barrido más amplio**: revisar si otras tablas `TenantMixin` (`stockmovement`, `cashboxlog`,
-   `salepayment`, etc.) tienen el mismo `ix_*_company_id` redundante → posible migración de seguimiento.
-   El fix actual sólo cubre `sale`/`saleitem`/`product` (las 3 calientes medidas).
+1. **Verificar el deploy** de P1 (arriba) — hecho: run `30239655323` = success. ✅
+2. **Deploy del barrido (`v7w8x9y0` + `w8x9y0z1`) a prod** — validado en staging, **pendiente OK del
+   usuario** (igual que `u6v7w8x9`). Recomendado backup antes. Al mergear a `main`, el
+   `docker-entrypoint.sh` aplica `alembic upgrade head` (fail-fast).
 3. **P2 — prueba de carga real**: construir el harness de latencia bajo carga de websockets Reflex
    (§4). **No existe aún.** Es el mayor pendiente de tooling.
 4. **P3 — infra**: réplicas del contenedor + balanceador, réplica de lectura MySQL, monitoreo (§5).

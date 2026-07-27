@@ -17,7 +17,9 @@ class CompanyTaxRate(SQLModel, table=True):
     __tablename__ = "companytaxrate"
 
     __table_args__ = (
-        sqlalchemy.Index("ix_companytaxrate_company", "company_id"),
+        # ix_companytaxrate_company (single-column) eliminado por redundante:
+        # ix_companytaxrate_company_active ya lidera con company_id y cubre la
+        # FK. Ver migración v7w8x9y0 (Fase P1, index_merge fix).
         sqlalchemy.Index(
             "ix_companytaxrate_company_active", "company_id", "is_active"
         ),
