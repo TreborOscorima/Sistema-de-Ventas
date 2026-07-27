@@ -190,18 +190,31 @@ lo mitiga P3 (réplicas + balanceo).
 > contención de CPU del lado cliente que infla las latencias (sobre todo las de conexión). Esto es la
 > **forma relativa** de la curva (objetivo de Fase A), NO el número absoluto de concurrentes seguros.
 
-- [~] **Escenarios autenticados** (cajero/supervisor): **implementados** en `ws_load.py` como secuencias
-      (setup `login` una vez + loop de eventos, con latencia por-paso). Nombres de evento resueltos del
-      `State` real de Reflex y verificados que existen: `…app___state____state.login`,
-      `.add_product_to_sale_by_id`, `.confirm_sale`. Validado el mecanismo multi-paso contra el mock.
-      **Falta para correrlos de verdad** (necesita entorno de PRUEBA, NO `sistema_ventas`):
-      1. Backend Reflex apuntando a un **schema descartable** sembrado con empresa/sucursal/usuario/producto.
-      2. **Credenciales** de prueba conocidas (el login limita por identificador+IP → usar usuarios
-         distintos por VU o relajar el rate-limit en el entorno de prueba).
-      3. **Verificar el flujo POS** contra una sesión autenticada viva: `confirm_sale` probablemente
-         requiere método de pago seleccionado en el estado → puede faltar un paso intermedio en el loop
-         del cajero. Los NOMBRES están; el payload/secuencia exacta se confirma recién con un run real.
-      Correr el cajero SIEMPRE contra el schema descartable (escribe ventas).
+- [x] **Escenarios autenticados** (cajero/supervisor): **implementados y CORRIDOS end-to-end**
+      (2026-07-27) contra un backend de prueba (`sistema_loadtest`). El cajero crea **ventas reales**:
+      login → `add_product_to_sale_by_id` → `select_payment_method` → `set_cash_amount` → `confirm_sale`.
+      Auth persiste en la conexión websocket (no hace falta emular cookies). Nombres de evento derivados
+      con `format_event_handler` (OJO: los handlers viven en `RootState`, no en la subclase `State` →
+      prefijo `reflex___state____state.app___states___root_state____root_state`, NO el de
+      `State.get_full_name()`). Setup: `scripts/seed_loadtest_tenant.py` (empresa trial + sucursal + rol
+      superadmin + usuario + producto + método de pago + **caja abierta**) + backend clonado en Docker
+      contra el schema descartable.
+
+  **Resultado (local, confundido por artefactos — NO capacidad de prod):**
+
+  | users | p95 | errs | rps | nota |
+  |---:|---:|---:|---:|---|
+  | 5  | 1285 ms | 0 | 7 | warmup en frío |
+  | 10 | 34 ms | 0 | 71 | sano |
+  | 25 | 7215 ms | 50 | 1,4 | degradación severa |
+  | 50 | 11016 ms | 37 | 2,4 | colapso |
+
+  Confounders que dominan los números: (1) **contención de lock**: todos los VUs venden el MISMO
+  producto y comparten la MISMA caja → `confirm_sale` se serializa (peor caso); (2) cliente+server+MySQL+
+  Redis en la MISMA máquina; (3) warmup. **Señal limpia**: ~10 cajeros autenticados concurrentes van
+  cómodos (p95 34 ms) en el backend single-process local; es un **piso**, no la capacidad de prod.
+  Para una curva limpia: sembrar **varios productos** (uno por VU, evita el lock patológico), descartar
+  warmup, y separar cliente/servidor (Fase B).
 - [ ] **Fase B — números absolutos representativos**: ⚠️ el servidor AWS de prueba
       ([[infra_servidor_prueba_aws]]) es **free-tier saturado**: apenas levanta y se cae bajo carga →
       **NO sirve** como target (sería él mismo el cuello de botella). Alternativas honestas: (a) correr

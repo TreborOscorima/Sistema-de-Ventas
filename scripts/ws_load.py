@@ -64,7 +64,11 @@ except ImportError:  # pragma: no cover
 EVENT_PATH = "/_event"
 NAMESPACE = "/_event"
 # Evento de estado que dispara el frontend al cargar la página (hydrate real).
-ON_LOAD_INTERNAL = "reflex___state____on_load_internal_state.on_load_internal"
+# OJO: el nombre registrado (format_event_handler) lleva el prefijo
+# 'reflex___state____state.' — no es sólo '...on_load_internal_state.on_load_internal'.
+ON_LOAD_INTERNAL = (
+    "reflex___state____state.reflex___state____on_load_internal_state.on_load_internal"
+)
 
 # Hosts de producción: el harness se niega a golpearlos salvo --unsafe.
 PROD_MARKERS = ("tuwayki.app", "tuwayki.com")
@@ -73,11 +77,14 @@ _STATE_NAME_CACHE: str | None = None
 
 
 def resolve_state_name(override: str = "") -> str:
-    """Nombre completo del State de Reflex (para nombrar eventos de handlers).
+    """Prefijo de nombre de los handlers del app (para nombrar eventos).
 
-    Los escenarios autenticados lo necesitan. Se resuelve importando
-    ``app.state.State`` (pesado) SÓLO cuando hace falta; se puede forzar con
-    ``--state-name`` para tests/mocks sin cargar la app.
+    Los handlers NO viven en la subclase ``State`` sino en ``RootState`` (donde se
+    mezclan los mixins), así que el nombre registrado por Reflex
+    (``format_event_handler``) es ``<RootState full>.<handler>`` — distinto de
+    ``State.get_full_name()``. Resolvemos el prefijo derivándolo de un handler real
+    vía ``format_event_handler``. Import perezoso (requiere env de la app); se puede
+    forzar con ``--state-name`` para tests/mocks sin cargar la app.
     """
     global _STATE_NAME_CACHE
     if override:
@@ -85,8 +92,10 @@ def resolve_state_name(override: str = "") -> str:
     if _STATE_NAME_CACHE is not None:
         return _STATE_NAME_CACHE
     try:
+        from reflex.utils.format import format_event_handler
         from app.state import State  # import perezoso: requiere env de la app
-        _STATE_NAME_CACHE = State.get_full_name()
+        # prefijo = nombre registrado de un handler conocido, sin el sufijo del método.
+        _STATE_NAME_CACHE = format_event_handler(State.login).rsplit(".", 1)[0]
     except Exception as exc:  # noqa: BLE001
         print(f"ERROR: no pude resolver el nombre del State ({type(exc).__name__}: {exc}).\n"
               "Pasá --state-name explícito o corré con el env de la app.", file=sys.stderr)
@@ -128,15 +137,31 @@ def build_scenario(name: str, args: argparse.Namespace) -> tuple[list[Step], lis
                               {"name": ON_LOAD_INTERNAL, "payload": {}, "router_data": _router_data()})]
 
     if name == "cajero":
+        # Secuencia real del POS (verificada contra sesión viva): agregar producto(s)
+        # -> elegir método de pago -> ingresar efectivo -> confirmar. confirm_sale
+        # exige caja abierta + pago válido (monto efectivo >= total); ver
+        # payment_mixin._validate_payment_before_confirm.
         pids = [int(x) for x in args.product_ids.split(",") if x.strip()] or [1]
         loop = [Step(f"add_product[{pid}]", "event", {
             "name": f"{sn}.add_product_to_sale_by_id",
             "payload": {"product_id": pid},
             "router_data": _router_data(),
         }) for pid in pids]
-        loop.append(Step("confirm_sale", "event", {
-            "name": f"{sn}.confirm_sale", "payload": {}, "router_data": _router_data(),
-        }))
+        loop += [
+            Step("select_payment", "event", {
+                "name": f"{sn}.select_payment_method",
+                "payload": {"method": args.pay_method},
+                "router_data": _router_data(),
+            }),
+            Step("set_cash", "event", {
+                "name": f"{sn}.set_cash_amount",
+                "payload": {"value": args.cash_amount},
+                "router_data": _router_data(),
+            }),
+            Step("confirm_sale", "event", {
+                "name": f"{sn}.confirm_sale", "payload": {}, "router_data": _router_data(),
+            }),
+        ]
         return [login], loop
 
     raise ValueError(f"escenario desconocido: {name}")
@@ -341,6 +366,8 @@ async def main() -> None:
     parser.add_argument("--login-user", default=os.getenv("WS_LOGIN_USER", ""))
     parser.add_argument("--login-pass", default=os.getenv("WS_LOGIN_PASS", ""))
     parser.add_argument("--product-ids", default="1", help="IDs de producto (coma) para cajero.")
+    parser.add_argument("--pay-method", default="Efectivo", help="Método de pago (cajero).")
+    parser.add_argument("--cash-amount", default="100", help="Monto efectivo (cajero, >= total).")
     parser.add_argument("--state-name", default="",
                         help="Fuerza el nombre del State (evita importar la app; para tests).")
     args = parser.parse_args()
