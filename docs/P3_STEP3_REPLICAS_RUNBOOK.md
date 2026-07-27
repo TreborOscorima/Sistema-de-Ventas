@@ -32,6 +32,16 @@ docker ps --format '{{.Names}}\t{{.Status}}' | grep tuwayki_sys
 docker exec tuwayki_sys_2 curl -fsS http://localhost:3000/api/ping
 ```
 
+> ### ⚠️ GOTCHA con el deploy (`--remove-orphans`)
+> `scripts/deploy-prod.sh` corre `docker compose up -d --remove-orphans` **solo con `docker-compose.yml`**
+> (sin el override). Si activaste `tuwayki_sys_2` y luego corre un deploy normal, **`--remove-orphans`
+> ELIMINA `tuwayki_sys_2`** (lo ve como huérfano) → volvés a 1 réplica sin darte cuenta.
+> **Solución**: una vez en modo multi-réplica, el deploy debe incluir SIEMPRE el override. Opciones:
+> - exportar `COMPOSE_FILE=docker-compose.yml:docker-compose.scale.yml` en el entorno del deploy (compose
+>   lo respeta automáticamente), o
+> - parchear la invocación del deploy para pasar `-f docker-compose.yml -f docker-compose.scale.yml`.
+> Mientras no se resuelva esto, NO activar réplicas en prod (o el siguiente deploy las tira).
+
 ## 2. NPM: upstream con sticky (manual, en la UI)
 
 En Nginx Proxy Manager → Proxy Host de `sys.tuwayki.app` → pestaña **Advanced** → *Custom Nginx
