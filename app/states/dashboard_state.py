@@ -107,10 +107,49 @@ class DashboardState(MixinState):
     last_refresh: str = ""
     _last_dashboard_load_ts: float = rx.field(default=0.0, is_var=False)
     _DASHBOARD_TTL: float = rx.field(default=120.0, is_var=False)
+    # Empresa/sucursal para la que se cargaron las métricas actuales. El TTL de
+    # abajo se invalida si cambia (evita mostrar datos de otra empresa tras
+    # cambiar de sesión dentro de la ventana del TTL).
+    _last_dashboard_tenant: str = rx.field(default="", is_var=False)
 
     def set_loading(self, loading: bool):
         """Establece el estado de carga."""
         self.dashboard_loading = loading
+
+    def _reset_dashboard_metrics(self) -> None:
+        """Resetea todas las métricas a sus defaults.
+
+        Se llama al detectar un cambio de empresa/sucursal, para que el dashboard
+        nunca muestre números de una sesión anterior si una sección de carga
+        fallara o quedara a medias.
+        """
+        self.period_sales = 0.0
+        self.period_sales_count = 0
+        self.period_reservations_count = 0
+        self.period_prev_sales = 0.0
+        self.today_sales = 0.0
+        self.today_sales_count = 0
+        self.week_sales = 0.0
+        self.week_sales_count = 0
+        self.month_sales = 0.0
+        self.month_sales_count = 0
+        self.avg_ticket = 0.0
+        self.total_clients = 0
+        self.active_credits = 0
+        self.pending_debt = 0.0
+        self.low_stock_count = 0
+        self.period_gross_margin = 0.0
+        self.period_total_cost = 0.0
+        self.period_margin_percent = 0.0
+        self.alerts = []
+        self.alert_count = 0
+        self.dash_sales_by_day = []
+        self.dash_sales_by_category = []
+        self.dash_top_products = []
+        self.dash_payment_breakdown = []
+        self.dash_expiring_batches = []
+        self.expiring_batches_count = 0
+        self.expired_batches_count = 0
 
     def _load_dashboard_data(self) -> None:
         """Carga todos los datos del dashboard sin manejar UI state.
@@ -227,9 +266,20 @@ class DashboardState(MixinState):
         """Carga el dashboard en segundo plano con TTL para evitar recargas innecesarias."""
         import time as _time
         async with self:
+            # El TTL sólo aplica si NO cambió la empresa/sucursal. Si cambió (p.ej.
+            # se inició sesión en otra empresa), invalidamos el cache: reseteamos las
+            # métricas de la empresa anterior y recalculamos para la actual.
+            tenant_key = f"{self._company_id()}:{self._branch_id()}"
+            tenant_changed = tenant_key != self._last_dashboard_tenant
             now_ts = _time.time()
-            if (now_ts - self._last_dashboard_load_ts) < self._DASHBOARD_TTL:
-                return  # TTL vigente, no recargar
+            if (
+                not tenant_changed
+                and (now_ts - self._last_dashboard_load_ts) < self._DASHBOARD_TTL
+            ):
+                return  # TTL vigente y misma empresa → no recargar
+            if tenant_changed:
+                self._reset_dashboard_metrics()
+                self._last_dashboard_tenant = tenant_key
             self._last_dashboard_load_ts = now_ts
             self.dashboard_loading = True
             try:
