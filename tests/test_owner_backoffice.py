@@ -1710,3 +1710,163 @@ class TestAdjustLimitsServicesMirror:
 
         assert company.has_reservations_module is True
         assert company.has_services_module is True
+
+
+class TestReactivationGuardAndRenew:
+    """Fixes Owner A/B: guarda de reactivación con período vencido + renovación."""
+
+    @pytest.mark.asyncio
+    async def test_reactivate_expired_paid_blocked(self, session):
+        # Empresa paga con suscripción vencida y suspendida.
+        company = _make_company(
+            plan_type=PlanType.STANDARD,
+            subscription_status=SubscriptionStatus.SUSPENDED,
+            is_active=False,
+            trial_ends_at=None,
+            subscription_ends_at=datetime.now() - timedelta(days=40),
+        )
+        session.get.return_value = company
+        with pytest.raises(OwnerServiceError, match="Renovar Suscripción"):
+            await OwnerService.change_status(
+                session,
+                company_id=1,
+                new_status=SubscriptionStatus.ACTIVE,
+                actor_user_id=99,
+                actor_email="owner@test.com",
+                reason="Pago recibido",
+            )
+        # No debe haber tocado el estado.
+        assert company.subscription_status == SubscriptionStatus.SUSPENDED
+        assert company.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_reactivate_expired_trial_blocked(self, session):
+        company = _make_company(
+            plan_type=PlanType.TRIAL,
+            subscription_status=SubscriptionStatus.SUSPENDED,
+            is_active=False,
+            trial_ends_at=datetime.now() - timedelta(days=5),
+        )
+        session.get.return_value = company
+        with pytest.raises(OwnerServiceError, match="Extender Prueba"):
+            await OwnerService.change_status(
+                session,
+                company_id=1,
+                new_status=SubscriptionStatus.ACTIVE,
+                actor_user_id=99,
+                actor_email="owner@test.com",
+                reason="Reactivar",
+            )
+
+    @pytest.mark.asyncio
+    async def test_reactivate_paid_with_future_end_ok(self, session):
+        # Suspensión manual antes del vencimiento → reactivar SÍ debe permitirse.
+        company = _make_company(
+            plan_type=PlanType.STANDARD,
+            subscription_status=SubscriptionStatus.SUSPENDED,
+            is_active=False,
+            trial_ends_at=None,
+            subscription_ends_at=datetime.now() + timedelta(days=100),
+        )
+        session.get.return_value = company
+        result = await OwnerService.change_status(
+            session,
+            company_id=1,
+            new_status=SubscriptionStatus.ACTIVE,
+            actor_user_id=99,
+            actor_email="owner@test.com",
+            reason="Resuelto el problema, reactivar",
+        )
+        assert result["subscription_status"] == SubscriptionStatus.ACTIVE
+        assert company.is_active is True
+
+    @pytest.mark.asyncio
+    async def test_renew_expired_paid_extends_from_today(self, session):
+        company = _make_company(
+            plan_type=PlanType.STANDARD,
+            subscription_status=SubscriptionStatus.SUSPENDED,
+            is_active=False,
+            trial_ends_at=None,
+            subscription_ends_at=datetime.now() - timedelta(days=40),
+        )
+        session.get.return_value = company
+        await OwnerService.renew_subscription(
+            session,
+            company_id=1,
+            months=12,
+            actor_user_id=99,
+            actor_email="owner@test.com",
+            reason="Pago recibido — renovación",
+        )
+        assert company.subscription_status == SubscriptionStatus.ACTIVE
+        assert company.is_active is True
+        # Renovó desde hoy (no desde la fecha vencida): ~ +360 días.
+        delta_days = (company.subscription_ends_at - datetime.now()).days
+        assert 355 <= delta_days <= 361
+        audit_logs = [o for o in session.added if isinstance(o, OwnerAuditLog)]
+        assert audit_logs[0].action == "renew_subscription"
+
+    @pytest.mark.asyncio
+    async def test_renew_future_stacks_on_existing(self, session):
+        end = datetime.now() + timedelta(days=30)
+        company = _make_company(
+            plan_type=PlanType.PROFESSIONAL,
+            subscription_status=SubscriptionStatus.ACTIVE,
+            is_active=True,
+            trial_ends_at=None,
+            subscription_ends_at=end,
+        )
+        session.get.return_value = company
+        await OwnerService.renew_subscription(
+            session,
+            company_id=1,
+            months=3,
+            actor_user_id=99,
+            actor_email="owner@test.com",
+            reason="Renovación anticipada",
+        )
+        # Apila sobre el vencimiento futuro: ~ end + 90 días.
+        delta_days = (company.subscription_ends_at - end).days
+        assert 88 <= delta_days <= 92
+
+    @pytest.mark.asyncio
+    async def test_renew_rejects_trial(self, session, company):
+        # company fixture default = trial
+        session.get.return_value = company
+        with pytest.raises(OwnerServiceError, match="Extender Prueba"):
+            await OwnerService.renew_subscription(
+                session,
+                company_id=1,
+                months=12,
+                actor_user_id=99,
+                actor_email="owner@test.com",
+                reason="Renovar",
+            )
+
+    @pytest.mark.asyncio
+    async def test_renew_requires_reason(self, session):
+        company = _make_company(plan_type=PlanType.STANDARD, trial_ends_at=None)
+        session.get.return_value = company
+        with pytest.raises(OwnerServiceError, match="motivo es obligatorio"):
+            await OwnerService.renew_subscription(
+                session,
+                company_id=1,
+                months=12,
+                actor_user_id=99,
+                actor_email="owner@test.com",
+                reason="   ",
+            )
+
+    @pytest.mark.asyncio
+    async def test_renew_months_out_of_range(self, session):
+        company = _make_company(plan_type=PlanType.STANDARD, trial_ends_at=None)
+        session.get.return_value = company
+        with pytest.raises(OwnerServiceError, match="meses"):
+            await OwnerService.renew_subscription(
+                session,
+                company_id=1,
+                months=0,
+                actor_user_id=99,
+                actor_email="owner@test.com",
+                reason="Renovar",
+            )

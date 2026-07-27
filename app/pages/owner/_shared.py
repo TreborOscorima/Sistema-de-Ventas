@@ -123,6 +123,7 @@ def _owner_action_icon_button(
     tone_class = {
         "indigo": "text-indigo-600 hover:bg-indigo-100 active:bg-indigo-200",
         "slate": "text-slate-600 hover:bg-slate-100 active:bg-slate-200",
+        "emerald": "text-emerald-600 hover:bg-emerald-100 active:bg-emerald-200",
     }.get(tone, "text-indigo-600 hover:bg-indigo-100 active:bg-indigo-200")
 
     return rx.el.div(

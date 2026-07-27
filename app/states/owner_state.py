@@ -844,7 +844,7 @@ class OwnerState:
         actor = self._owner_actor_info()
         action = self.owner_modal_action
         company_id = self.owner_modal_company_id
-        valid_actions = {"change_plan", "change_status", "extend_trial", "adjust_limits"}
+        valid_actions = {"change_plan", "change_status", "extend_trial", "adjust_limits", "renew_subscription"}
 
         if action not in valid_actions:
             logger.warning(
@@ -991,6 +991,22 @@ class OwnerState:
                     )
                     yield rx.toast(
                         f"Trial extendido {days} días.", duration=4000
+                    )
+
+                elif action == "renew_subscription":
+                    try:
+                        r_months = int(self.owner_form_subscription_months)
+                    except (ValueError, TypeError):
+                        r_months = 12
+                    await OwnerService.renew_subscription(
+                        session,
+                        company_id=company_id,
+                        months=r_months,
+                        reason=full_reason,
+                        **actor,
+                    )
+                    yield rx.toast(
+                        f"Suscripción renovada {r_months} meses.", duration=4000
                     )
 
                 elif action == "adjust_limits":

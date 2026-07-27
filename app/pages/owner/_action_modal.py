@@ -48,6 +48,14 @@ _REASON_PRESETS = {
         "Ajuste temporal por evento especial",
         "Corrección de límites configurados incorrectamente",
     ],
+    "renew_subscription": [
+        "Pago recibido — renovación de suscripción",
+        "Renovación de contrato anual",
+        "Renovación por adelantado solicitada por el cliente",
+        "Cortesía comercial — período adicional",
+        "Regularización tras suspensión por falta de pago",
+        "Corrección de fecha de vencimiento",
+    ],
 }
 
 
@@ -315,6 +323,66 @@ def _form_extend_trial() -> rx.Component:
         rx.el.div(class_name="border-t border-slate-100"),
         # Motivos
         _reason_selector("extend_trial"),
+        class_name="flex flex-col gap-4",
+    )
+
+
+def _form_renew_subscription() -> rx.Component:
+    return rx.el.div(
+        # Info actual
+        rx.el.div(
+            _info_pill("Plan", State.owner_form_current_plan, "blue"),
+            _info_pill("Estado actual", State.owner_form_current_status, "amber"),
+            class_name="flex gap-2 flex-wrap",
+        ),
+        # Separator
+        rx.el.div(class_name="border-t border-slate-100"),
+        # Duración de la renovación
+        rx.el.div(
+            rx.el.label("Renovar por", class_name=TYPOGRAPHY["label"]),
+            rx.el.div(
+                *[
+                    rx.el.button(
+                        label,
+                        on_click=State.owner_set_form_subscription_months(val),
+                        class_name=rx.cond(
+                            State.owner_form_subscription_months == val,
+                            f"px-3 py-1.5 text-xs font-medium {RADIUS['md']} bg-indigo-100 text-indigo-700 border border-indigo-300",
+                            f"px-3 py-1.5 text-xs font-medium {RADIUS['md']} bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100 cursor-pointer",
+                        ),
+                    )
+                    for label, val in [
+                        ("1 mes", "1"),
+                        ("3 meses", "3"),
+                        ("6 meses", "6"),
+                        ("12 meses", "12"),
+                        ("24 meses", "24"),
+                    ]
+                ],
+                class_name="flex gap-2 flex-wrap",
+            ),
+            rx.el.p(
+                "Si la suscripción venció, el nuevo período cuenta desde hoy; si "
+                "sigue vigente, se apila sobre el vencimiento actual.",
+                class_name="text-xs text-slate-400",
+            ),
+            class_name="flex flex-col gap-2",
+        ),
+        # Nota informativa
+        rx.el.div(
+            rx.icon("circle-check", class_name="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5"),
+            rx.el.p(
+                "La empresa quedará activa con la suscripción vigente tras renovar.",
+                class_name="text-xs text-slate-500",
+            ),
+            class_name="flex items-start gap-1.5",
+        ),
+        # Fecha + Notas
+        _date_and_notes_section(),
+        # Separator
+        rx.el.div(class_name="border-t border-slate-100"),
+        # Motivos
+        _reason_selector("renew_subscription"),
         class_name="flex flex-col gap-4",
     )
 
@@ -797,6 +865,7 @@ def _action_modal() -> rx.Component:
                                 ("change_plan", rx.icon("repeat", class_name="h-5 w-5 text-indigo-600")),
                                 ("change_status", rx.icon("toggle-right", class_name="h-5 w-5 text-indigo-600")),
                                 ("extend_trial", rx.icon("calendar-plus", class_name="h-5 w-5 text-amber-600")),
+                                ("renew_subscription", rx.icon("calendar-check", class_name="h-5 w-5 text-emerald-600")),
                                 ("adjust_limits", rx.icon("sliders-horizontal", class_name="h-5 w-5 text-emerald-600")),
                                 rx.icon("settings", class_name="h-5 w-5 text-slate-600"),
                             ),
@@ -809,6 +878,7 @@ def _action_modal() -> rx.Component:
                                     ("change_plan", "Cambiar Plan"),
                                     ("change_status", "Cambiar Estado"),
                                     ("extend_trial", "Extender Prueba"),
+                                    ("renew_subscription", "Renovar Suscripción"),
                                     ("adjust_limits", "Ajustar Límites"),
                                     "Acción",
                                 ),
@@ -837,6 +907,7 @@ def _action_modal() -> rx.Component:
                     ("change_plan", _form_change_plan()),
                     ("change_status", _form_change_status()),
                     ("extend_trial", _form_extend_trial()),
+                    ("renew_subscription", _form_renew_subscription()),
                     ("adjust_limits", _form_adjust_limits()),
                     rx.fragment(),
                 ),

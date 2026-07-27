@@ -691,6 +691,30 @@ class OwnerService:
                 f"Permitidas desde '{current_val}': {allowed_labels}"
             )
 
+        # Reactivar solo el ESTADO no renueva un período vencido: el guard de
+        # login (auth_state) re-suspendería la empresa al instante, dando un
+        # "éxito" engañoso. Si trial/suscripción está vencida, se bloquea y se
+        # dirige a la acción que sí renueva el período.
+        if new_val == "active":
+            now = utc_now_naive()
+            if company.plan_type == PlanType.TRIAL:
+                if not company.trial_ends_at or company.trial_ends_at < now:
+                    raise OwnerServiceError(
+                        "El período de prueba está vencido; reactivar el estado no lo "
+                        "renueva (al iniciar sesión se volvería a suspender). "
+                        "Usá 'Extender Prueba'."
+                    )
+            elif not company.subscription_ends_at or company.subscription_ends_at < now:
+                _venc = (
+                    company.subscription_ends_at.strftime("%Y-%m-%d")
+                    if company.subscription_ends_at else "sin fecha"
+                )
+                raise OwnerServiceError(
+                    f"La suscripción venció ({_venc}); reactivar el estado no renueva el "
+                    "período pagado (al iniciar sesión se volvería a suspender). "
+                    "Usá 'Renovar Suscripción'."
+                )
+
         before = _company_snapshot(company)
 
         company.subscription_status = new_val
@@ -790,6 +814,71 @@ class OwnerService:
         logger.info(
             f"Owner {actor_email} extendió trial de {company.name} "
             f"en {extra_days} días"
+        )
+        return after
+
+    @staticmethod
+    async def renew_subscription(
+        session: AsyncSession,
+        *,
+        company_id: int,
+        months: int,
+        actor_user_id: Optional[int],
+        actor_email: str,
+        reason: str,
+        ip_address: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Renueva/extiende la suscripción de un plan de pago por N meses.
+
+        Análogo a ``extend_trial`` pero para planes pagos: extiende
+        ``subscription_ends_at`` (desde hoy si ya venció, o apilando sobre el
+        vencimiento futuro vigente) y reactiva la empresa. Resuelve el hueco de
+        no poder renovar un plan pago al mismo plan sin cambiarlo.
+        """
+        if not reason or not reason.strip():
+            raise OwnerServiceError("El motivo es obligatorio.")
+
+        if months < 1 or months > 120:
+            raise OwnerServiceError("Los meses deben estar entre 1 y 120.")
+
+        company = await session.get(Company, company_id)
+        if not company:
+            raise OwnerServiceError(f"Empresa {company_id} no encontrada.")
+
+        if company.plan_type == PlanType.TRIAL:
+            raise OwnerServiceError(
+                "Las empresas en prueba usan 'Extender Prueba', no 'Renovar Suscripción'."
+            )
+
+        before = _company_snapshot(company)
+
+        # Renovar desde hoy si ya venció; si sigue vigente, apilar sobre el
+        # vencimiento futuro existente (no perder días pagados).
+        now = utc_now_naive()
+        base = max(company.subscription_ends_at or now, now)
+        company.subscription_ends_at = base + timedelta(days=months * 30)
+        company.is_active = True
+        company.subscription_status = SubscriptionStatus.ACTIVE
+
+        after = _company_snapshot(company)
+
+        session.add(company)
+        await _write_audit(
+            session,
+            actor_user_id=actor_user_id,
+            actor_email=actor_email,
+            target_company=company,
+            action="renew_subscription",
+            before=before,
+            after=after,
+            reason=reason.strip(),
+            ip_address=ip_address,
+        )
+        await session.commit()
+
+        logger.info(
+            "Owner %s renovó suscripción de %s por %s meses",
+            actor_email, company.name, months,
         )
         return after
 

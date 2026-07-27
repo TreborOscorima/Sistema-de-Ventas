@@ -196,6 +196,14 @@ def _company_actions(company: rx.Var) -> rx.Component:
             State.owner_active_product_tab == "ventas",
             rx.fragment(
                 _owner_action_icon_button(
+                    "calendar-check",
+                    "Renovar Suscripción",
+                    on_click=State.owner_open_modal(
+                        "renew_subscription", company["id"], company["name"]
+                    ),
+                    tone="emerald",
+                ),
+                _owner_action_icon_button(
                     "sliders-horizontal",
                     "Ajustar Límites",
                     on_click=State.owner_open_modal(
