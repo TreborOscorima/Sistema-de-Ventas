@@ -99,6 +99,12 @@ usadas: **~30**.
   `volatile-lru`) para no crecer sin techo.
 
 ### 3.5 Monitoreo + alertas (el gap real)
+
+> **Ejecución: [`docs/P3_STEP5_MONITORING_RUNBOOK.md`](P3_STEP5_MONITORING_RUNBOOK.md)** +
+> `docker-compose.monitoring.yml` + `ops/monitoring/` (Prometheus/Grafana/exporters, validado con
+> `promtool`). Dos tiers: **Tier 1** uptime externo hosted (costo RAM 0, hacer ya); **Tier 2** stack
+> Prometheus opt-in (~500–800 MB, si hay RAM).
+
 Existe health interno, **falta observabilidad externa**. Mínimo viable:
 - **Uptime externo** sobre `/api/health` de las 3 superficies (alerta si `status!=ok` o `db/redis` caen).
 - **Métricas**: CPU/mem por contenedor, **saturación del pool** (conexiones activas vs 25), latencia,

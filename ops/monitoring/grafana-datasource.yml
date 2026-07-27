@@ -1,0 +1,9 @@
+# Provisión automática del datasource Prometheus en Grafana (Fase P3 §3.5).
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://tuwayki_prometheus:9090
+    isDefault: true
+    editable: false

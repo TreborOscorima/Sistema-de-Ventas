@@ -1,0 +1,118 @@
+# =============================================================================
+# docker-compose.monitoring.yml — Stack de observabilidad OPT-IN (Fase P3 §3.5)
+#
+# Prometheus + Grafana + exporters (node/cadvisor/mysqld/blackbox). Todo con
+# límites de recursos para no competir con el POS. Se une a internal_net para
+# alcanzar tuwayki_mysql.
+#
+# Uso (en el server, junto al stack principal ya corriendo):
+#   docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d \
+#     prometheus grafana node_exporter cadvisor mysqld_exporter blackbox_exporter
+#
+# ⚠️ RAM: este stack agrega ~500–800 MB. En un host chico (2 GB) NO conviene —
+#    usar el Tier 1 (uptime externo hosted, sin costo de RAM). Ver el runbook.
+#
+# Requiere en .env:
+#   GRAFANA_ADMIN_PASSWORD   — password del admin de Grafana
+#   MYSQL_EXPORTER_PASSWORD  — password del usuario 'exporter' de MySQL (crear:
+#     CREATE USER 'exporter'@'%' IDENTIFIED BY '...' WITH MAX_USER_CONNECTIONS 3;
+#     GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%';)
+# =============================================================================
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: tuwayki_prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d       # retención corta = menos disco
+      - --storage.tsdb.retention.size=1GB
+    volumes:
+      - ./ops/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    deploy:
+      resources:
+        limits: { memory: 400M, cpus: "0.5" }
+    networks: [internal_net]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: tuwayki_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD requerido}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3009:3000"   # solo localhost; exponer vía NPM o túnel SSH
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./ops/monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml:ro
+    deploy:
+      resources:
+        limits: { memory: 200M, cpus: "0.5" }
+    depends_on: [prometheus]
+    networks: [internal_net]
+
+  node_exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: tuwayki_node_exporter
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    deploy:
+      resources:
+        limits: { memory: 64M, cpus: "0.2" }
+    networks: [internal_net]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: tuwayki_cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    deploy:
+      resources:
+        limits: { memory: 128M, cpus: "0.3" }
+    networks: [internal_net]
+
+  mysqld_exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: tuwayki_mysqld_exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "exporter:${MYSQL_EXPORTER_PASSWORD:?MYSQL_EXPORTER_PASSWORD requerido}@(tuwayki_mysql:3306)/"
+    command:
+      - --collect.info_schema.innodb_metrics
+      - --collect.global_status
+      - --collect.global_variables
+    deploy:
+      resources:
+        limits: { memory: 64M, cpus: "0.2" }
+    networks: [internal_net]
+
+  blackbox_exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: tuwayki_blackbox_exporter
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: { memory: 64M, cpus: "0.2" }
+    networks: [internal_net]
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+# internal_net ya está definida en docker-compose.yml (bridge). Al combinar con
+# -f docker-compose.yml, estos servicios se unen a la misma red y ven tuwayki_mysql.
