@@ -276,9 +276,9 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 
 | # | Caso | Esperado | Estado |
 |---|---|---|---|
-| O1 | Gestión de empresas/planes/estados | Correcto | ⬜ (app admin :3002, aparte) |
-| O2 | Platform Billing (credenciales maestras) | Guarda cifrado | ⬜ (app admin :3002, aparte) |
-| O3 | Auditoría de acciones (log) | Registra | ⬜ (app admin :3002, aparte) |
+| O1 | Gestión de empresas/planes/estados | Correcto | ✅ (2026-07-27, en vivo en :3002 — ver §20): reactivación y renovación de suscripción probadas end-to-end |
+| O2 | Platform Billing (credenciales maestras) | Guarda cifrado | ⬜ (app admin :3002; no ejercitado) |
+| O3 | Auditoría de acciones (log) | Registra | ✅ (2026-07-27): `owner_audit_log` registró la acción `renew_subscription` con su motivo — ver §20 |
 
 ### 3.22 PWA / Sesión / Auth
 
@@ -287,7 +287,7 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 | A1 | Login / logout (redirige a landing) | Correcto | ✅ (login) |
 | A2 | **Cerrar y reabrir la PWA** con sesión iniciada | Mantiene sesión | ✅ |
 | A3 | Refresh token / expiración | Renueva sin desloguear | ⬜ (por diseño) |
-| A4 | Trial / suscripción vencida | Pantallas correspondientes | ⬜ (plan activo) |
+| A4 | Trial / suscripción vencida | Pantallas correspondientes | ✅ (2026-07-27): login de empresa `standard` vencida → auto-suspende y muestra la pantalla **"Cuenta suspendida"** (ver §20) |
 
 ### §5 Cross-cutting (todos los módulos)
 | Ítem | Estado | Evidencia |
@@ -1040,3 +1040,44 @@ completó; abajo el checklist para que **vos** ejecutes lo físico.
    verificar que la sesión persiste al reabrir.
 5. ☐ **Operador cajero real**: que un cajero haga un turno de prueba (apertura de caja, ventas
    con distintos métodos, cobro de reserva, cierre con arqueo) y reportar fricciones de usabilidad.
+
+---
+
+## 20. Owner Backoffice — reactivación de plan pago vencido (fixes A/B, 2026-07-27)
+
+Durante el intento de reactivar la empresa de test #3 (Beta Alpha) se encontraron y
+corrigieron **dos defectos** del backoffice (:3002, servicio Docker `tuwayki_admin`).
+Commit `116ccc6`. Verificados **en vivo** con la sesión del propietario.
+
+### Contexto del hallazgo (comportamiento previo)
+Una empresa `standard` con `subscription_ends_at` vencida (Beta Alpha, venció 2026-06-17):
+- Al iniciar sesión como su usuario, el guard de `auth_state` la **auto-suspende** y muestra
+  la pantalla "Cuenta suspendida" (comportamiento correcto → **valida A4**).
+- "Cambiar Estado → Activo" solo cambiaba el flag pero **no** extendía `subscription_ends_at`,
+  así que el login la re-suspendía al instante (éxito engañoso).
+- No había forma de renovar al mismo plan: "Cambiar Plan → standard" se rechaza (ya es standard)
+  y "Extender Prueba" es solo trial.
+
+### Fix A — bloquear reactivación engañosa (`OwnerService.change_status`)
+Al pasar a `active`, si el período está vencido (`subscription_ends_at` pasada/None para plan
+pago, o `trial_ends_at` para trial), **se bloquea** con un mensaje que dirige a la acción correcta.
+**Verificado en vivo:** con Empresa Alpha vencida+suspendida, "Cambiar Estado → Activo" mostró el
+toast *"Error: La suscripción venció (2026-06-17); reactivar el estado no renueva el período
+pagado… Usá 'Renovar Suscripción'."* y la BD **no cambió** (siguió suspendida).
+
+### Fix B — nueva acción "Renovar Suscripción" (`OwnerService.renew_subscription`)
+Botón verde en cada fila de empresa (pestaña Ventas) → modal con meses (1/3/6/12/24) + motivo.
+Extiende `subscription_ends_at` (desde hoy si venció, o apila sobre el vencimiento vigente),
+reactiva la empresa y registra auditoría.
+**Verificado en vivo:** renovar Empresa Alpha por 12 meses movió `subscription_ends_at`
+2026-06-17 → **2027-07-22** (hoy + 360 d), `status=active`, y creó el `owner_audit_log`
+`action=renew_subscription` con el motivo.
+
+### Cobertura de tests
++8 en `tests/test_owner_backoffice.py` (`TestReactivationGuardAndRenew`): guarda de reactivación
+por vencimiento (pago/trial), reactivación válida con fecha futura, renovación desde-hoy y
+apilada, y validaciones (trial rechazado, motivo obligatorio, rango de meses). **1128 passed.**
+
+### Datos
+Empresa #3 (Beta Alpha) y #2 (Empresa Alpha) quedaron **activas con vencimiento futuro**
+(2027) para poder usarse en pruebas. `beta@test.com` / `alpha@test.com` ya pueden iniciar sesión.
