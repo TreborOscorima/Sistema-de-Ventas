@@ -24,6 +24,7 @@ from app.services.report_service import (
     generate_promotions_report,
     generate_price_lists_report,
 )
+from app.utils.db_read import read_session
 from .mixin_state import MixinState
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,9 @@ def _run_report_sync(params: dict):
     start_date = params["start_date"]
     end_date = params["end_date"]
 
-    with rx.session() as session:
+    # Reporte = SOLO lectura → usa la réplica de lectura si está configurada
+    # (DB_READ_URL), o el primario si no. Descarga los scans pesados del POS (P3 §3.4).
+    with read_session() as session:
         session.info["tenant_bypass"] = True
 
         if MAX_REPORT_ROWS > 0:
