@@ -167,9 +167,39 @@ WS_TARGET=http://localhost:8000 \
       un evento de estado real; los escenarios autenticados (cajero/supervisor) requieren login +
       contexto de tenant → extender el harness con esa secuencia (pendiente).
 - [ ] **Tráfico HTTP/API** (no-websocket): **k6** o **Locust** si hiciera falta (endpoints REST).
-- [ ] **DECISIÓN PENDIENTE — entorno objetivo**: contra qué instancia se corre la carga. NO prod.
-      Opciones: stack Docker dedicado apuntando a un schema de prueba, o el servidor AWS de prueba
-      (ver [[infra_servidor_prueba_aws]]). Definir antes de tomar números reales.
+
+### Resultados Fase A — local (relativos), 2026-07-27
+Harness `ws_load.py` escenario `ping` contra `tuwayki_sys` (app Reflex real en Docker local, `:3001`),
+rampa 10→200, 20 s/nivel, think 200 ms:
+
+| users | evento p50 | evento p95 | evento p99 | evento max | conn_p95 | rps | err | disc |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10  | 3,2  | 4,6  | 14,0 | 136  | 587   | 45  | 0 | 0 |
+| 50  | 9,9  | 16,2 | 192  | 697  | 1098  | 216 | 0 | 0 |
+| 100 | 12,9 | 33,2 | 376  | 4158 | 4668  | 344 | 0 | 0 |
+| 200 | 12,6 | 33,0 | 213  | 1297 | 1826  | 823 | 0 | 0 |
+
+**Lectura**: el **procesamiento de eventos aguanta bien** — p95 del round-trip ≤ **33 ms hasta 200
+conexiones**, muy por debajo del SLO de 400 ms; **0 errores / 0 desconexiones** en todos los niveles.
+El **punto de estrés es el establecimiento de conexión**: `conn_p95` salta a **~4,7 s con 100 clientes
+conectándose a la vez** (tormenta de upgrades websocket + registro de token en Redis). En uso normal los
+clientes conectan gradualmente; el riesgo real es una **tormenta de reconexión** tras reinicio/deploy →
+lo mitiga P3 (réplicas + balanceo).
+
+> **Caveat**: los N clientes async corren en un solo proceso Python en la MISMA máquina que el server →
+> contención de CPU del lado cliente que infla las latencias (sobre todo las de conexión). Esto es la
+> **forma relativa** de la curva (objetivo de Fase A), NO el número absoluto de concurrentes seguros.
+
+- [ ] **Escenarios autenticados** (cajero/supervisor): ejercitar el pipeline con BD real, no sólo `ping`.
+      El cajero escribe ventas → correr contra un **schema descartable**, no `sistema_ventas`.
+- [ ] **Fase B — números absolutos representativos**: ⚠️ el servidor AWS de prueba
+      ([[infra_servidor_prueba_aws]]) es **free-tier saturado**: apenas levanta y se cae bajo carga →
+      **NO sirve** como target (sería él mismo el cuello de botella). Alternativas honestas: (a) correr
+      el harness desde **otra máquina** contra el Docker local (elimina la contención cliente-server);
+      (b) una instancia cloud **dimensionada como prod**, efímera, sólo para una corrida; (c) inferir la
+      capacidad desde las specs reales de prod + la curva relativa de Fase A. El valor accionable de P2
+      (efecto de las optimizaciones + estabilidad bajo carga sostenida) ya se obtiene en local; el
+      **absoluto** queda diferido hasta tener infra prod-like.
 - [ ] **Métricas objetivo (SLO propuestos)**:
   - Latencia de evento POS (p95) **< 400 ms** con carga objetivo.
   - Confirmar venta (p95) **< 1 s**.
