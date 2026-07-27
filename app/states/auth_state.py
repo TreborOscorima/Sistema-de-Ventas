@@ -2281,6 +2281,11 @@ class AuthState(MixinState):
         self.active_branch_name = ""
         self.password_change_error = ""
         self.invalidate_user_cache()
+        # Limpiar métricas del dashboard para no arrastrar datos de esta sesión
+        # a la próxima (defensa extra; el dashboard además invalida por tenant).
+        if hasattr(self, "_reset_dashboard_metrics"):
+            self._reset_dashboard_metrics()
+            self._last_dashboard_tenant = ""
         if hasattr(self, "cashbox_is_open_cached"):
             self.cashbox_is_open_cached = False
         # Limpiar sesión del Owner Backoffice si estaba activa
