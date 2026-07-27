@@ -144,11 +144,32 @@ completed, uniforme) y (b) **150 empresas / 225k ventas / 788k items, mix realis
 
 Objetivo: medir el punto real de degradación de latencia.
 
+**Tooling creado (2026-07-27): `scripts/ws_load.py`** — harness de latencia bajo carga de
+websockets Reflex. Abre N conexiones socket.io reales contra `/_event` (handshake con `token`,
+namespace `/_event`), emite eventos y cronometra el round-trip emit→delta. Dos escenarios:
+`ping` (probe del event-loop, sin auth/estado/BD) e `hydrate` (dispara el evento de estado real
+`…on_load_internal` → mide el pipeline completo). Rampa configurable, reporta p50/p95/p99, rps,
+errores, desconexiones y veredicto SLO; salida opcional JSON. Guarda contra apuntar a producción
+(`tuwayki.app/.com`) salvo `--unsafe`. Validado end-to-end contra un servidor socket.io que imita
+el montaje de Reflex (mecánica de protocolo correcta; faltan los números contra un backend real).
+Requiere `aiohttp` (agregado a `requirements-dev.txt`).
+
+```bash
+# Levantar un backend Reflex de PRUEBA (NUNCA prod) y apuntar el harness ahí:
+WS_TARGET=http://localhost:8000 \
+  ./.venv/Scripts/python.exe scripts/ws_load.py --scenario ping \
+    --ramp 10,50,100,200 --duration 30 --out-json build/ws_p2.json
+```
+
+- [x] **Herramienta** para el websocket de Reflex — `scripts/ws_load.py` (arriba).
 - [ ] **Definir escenarios** representativos: "cajero" (escanear N productos + cobrar),
-      "supervisor" (dashboard + reportes), "alta de producto".
-- [ ] **Herramienta**: para el tráfico HTTP/API, **k6** o **Locust**. Para el websocket de
-      Reflex (event handlers), un script que abra N websockets y dispare eventos
-      (`hydrate` + eventos de estado) — ojo: Reflex no se testea con un simple `ab`.
+      "supervisor" (dashboard + reportes), "alta de producto". El escenario `hydrate` ya ejercita
+      un evento de estado real; los escenarios autenticados (cajero/supervisor) requieren login +
+      contexto de tenant → extender el harness con esa secuencia (pendiente).
+- [ ] **Tráfico HTTP/API** (no-websocket): **k6** o **Locust** si hiciera falta (endpoints REST).
+- [ ] **DECISIÓN PENDIENTE — entorno objetivo**: contra qué instancia se corre la carga. NO prod.
+      Opciones: stack Docker dedicado apuntando a un schema de prueba, o el servidor AWS de prueba
+      (ver [[infra_servidor_prueba_aws]]). Definir antes de tomar números reales.
 - [ ] **Métricas objetivo (SLO propuestos)**:
   - Latencia de evento POS (p95) **< 400 ms** con carga objetivo.
   - Confirmar venta (p95) **< 1 s**.
@@ -191,7 +212,8 @@ Objetivo: medir el punto real de degradación de latencia.
 >   `smoke/small/medium/full`, bulk-insert por core, guard de BD-segura, prefijo `SEEDVOL-`.
 > - ✅ **EXPLAIN de queries calientes** — `scripts/explain_hot_queries.py` (creado y validado).
 > - ✅ **Concurrencia (corrección)** — `scripts/stress_concurrency.py` (preexistente).
-> - ⏳ **Falta**: harness de **latencia bajo carga** de websockets Reflex (§4).
+> - ✅ **Latencia bajo carga (websocket)** — `scripts/ws_load.py` (creado y validado, §4). Falta
+>   correrlo contra un backend real (decisión de entorno pendiente) y añadir escenarios autenticados.
 
 ---
 
