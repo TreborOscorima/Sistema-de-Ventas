@@ -246,6 +246,10 @@ lo mitiga P3 (réplicas + balanceo).
 
 ## 5. Fase P3 — Escalado horizontal + infraestructura
 
+> **Diseño detallado y anclado en el stack real: [`docs/P3_HORIZONTAL_SCALING_DESIGN.md`](P3_HORIZONTAL_SCALING_DESIGN.md)**
+> (réplicas de `sys` + nginx sticky, aritmética de conexiones MySQL + réplica de lectura, Redis sizing,
+> monitoreo; con lo que YA existe en `ops/`). Los ítems de abajo son el checklist original.
+
 - [ ] **Multi-worker / multi-instancia**: correr el backend con varias réplicas detrás de
       **nginx** (o el NPM ya presente). Validar que el estado en Redis permite que un cliente
       sea atendido por cualquier instancia (sticky sessions vs stateless).
