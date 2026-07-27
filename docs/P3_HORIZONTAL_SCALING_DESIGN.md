@@ -88,10 +88,11 @@ usadas: **~30**.
   working set. Requiere el **tamaño real de la BD de prod** + la **RAM del host** (para subir a la vez el
   `deploy.resources.limits.memory` del contenedor MySQL, hoy 1G). Regla: buffer pool ≈ min(tamaño BD ×1,2,
   50–70% de la RAM asignable a MySQL). Con ≥1G de buffer pool, subir `innodb_buffer_pool_instances`.
-- **Réplica de lectura**: las queries pesadas (dashboard/reportes de `owner`/`report_state`) a una
-  **réplica de solo-lectura**; el POS (escritura) sigue en el primario. Requiere: replicación MySQL +
-  un segundo engine/URL de solo-lectura y ruteo de lectura en el código de reportes (cambio acotado,
-  no en el hot-path del POS).
+- **Réplica de lectura** (paso 4): las queries pesadas (reportes de `report_state`) a una **réplica de
+  solo-lectura**; el POS (escritura) sigue en el primario. **Ruteo de lectura en la app: HECHO**
+  (`app/utils/db_read.py::read_session()`, default = primario; ya usado por `_run_report_sync`). Falta
+  provisionar la réplica — en **host compartido, recomendado FUERA de la caja (AWS RDS read replica)**.
+  Runbook: [`docs/P3_STEP4_READ_REPLICA_RUNBOOK.md`](P3_STEP4_READ_REPLICA_RUNBOOK.md).
 
 ### 3.4 Redis: sizing + expiración
 - Dimensionar memoria para **N sesiones de estado** concurrentes (cada token = un blob de estado).
