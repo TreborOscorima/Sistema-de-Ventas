@@ -51,6 +51,8 @@ async def main() -> None:
     ap.add_argument("--db-url", default=os.getenv("SEED_DB_URL", ""))
     ap.add_argument("--user", default="cajero")
     ap.add_argument("--password", default="Cajero.2026")
+    ap.add_argument("--products", type=int, default=1,
+                    help="Cantidad de productos a sembrar (uno por VU evita lock contention).")
     ap.add_argument("--unsafe", action="store_true")
     args = ap.parse_args()
 
@@ -93,14 +95,17 @@ async def main() -> None:
         await s.flush()
         s.add(UserBranch(user_id=user.id, branch_id=branch.id))
 
-        product = Product(
-            barcode=f"LT-{stamp}", description="Producto LoadTest", category="LoadTest",
-            unit="Unidad", stock=Decimal("500000"),
-            purchase_price=Decimal("1.00"), sale_price=Decimal("2.00"),
-            company_id=company.id, branch_id=branch.id,
-        )
-        s.add(product)
-        await s.flush()
+        product_ids: list[int] = []
+        for i in range(max(1, args.products)):
+            product = Product(
+                barcode=f"LT-{stamp}-{i}", description=f"Producto LoadTest {i}",
+                category="LoadTest", unit="Unidad", stock=Decimal("500000"),
+                purchase_price=Decimal("1.00"), sale_price=Decimal("2.00"),
+                company_id=company.id, branch_id=branch.id,
+            )
+            s.add(product)
+            await s.flush()
+            product_ids.append(product.id)
 
         s.add(PaymentMethod(
             company_id=company.id, branch_id=branch.id, name="Efectivo", code="cash",
@@ -119,7 +124,7 @@ async def main() -> None:
         print(f"company_id={company.id}")
         print(f"branch_id={branch.id}")
         print(f"user_id={user.id}")
-        print(f"product_id={product.id}")
+        print(f"products={len(product_ids)} product_ids={product_ids[0]}-{product_ids[-1]}")
         print(f"login_user={args.user}")
         print(f"login_pass={args.password}")
 

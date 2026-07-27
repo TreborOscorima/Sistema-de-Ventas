@@ -200,21 +200,31 @@ lo mitiga P3 (réplicas + balanceo).
       superadmin + usuario + producto + método de pago + **caja abierta**) + backend clonado en Docker
       contra el schema descartable.
 
-  **Resultado (local, confundido por artefactos — NO capacidad de prod):**
+  **Resultado — corrida LIMPIA** (60 productos, uno por VU → sin lock patológico; warmup de 8 s
+  descartado; 20 s de medición; think 500 ms). Verificado que hace trabajo real: **234 ventas
+  committeadas**, 26 productos distintos vendidos.
 
-  | users | p95 | errs | rps | nota |
-  |---:|---:|---:|---:|---|
-  | 5  | 1285 ms | 0 | 7 | warmup en frío |
-  | 10 | 34 ms | 0 | 71 | sano |
-  | 25 | 7215 ms | 50 | 1,4 | degradación severa |
-  | 50 | 11016 ms | 37 | 2,4 | colapso |
+  | users | p50 | p95 | p99 | errs | rps |
+  |---:|---:|---:|---:|---:|---:|
+  | 5  | 44 ms   | 1130 ms  | 1177 ms  | 0  | 12,8 |
+  | 10 | 144 ms  | 2268 ms  | 2542 ms  | 0  | 12,9 |
+  | 25 | 1180 ms | 7620 ms  | 10067 ms | 0  | 13,9 |
+  | 50 | 7253 ms | 19355 ms | 19406 ms | 50 | 9,9  |
 
-  Confounders que dominan los números: (1) **contención de lock**: todos los VUs venden el MISMO
-  producto y comparten la MISMA caja → `confirm_sale` se serializa (peor caso); (2) cliente+server+MySQL+
-  Redis en la MISMA máquina; (3) warmup. **Señal limpia**: ~10 cajeros autenticados concurrentes van
-  cómodos (p95 34 ms) en el backend single-process local; es un **piso**, no la capacidad de prod.
-  Para una curva limpia: sembrar **varios productos** (uno por VU, evita el lock patológico), descartar
-  warmup, y separar cliente/servidor (Fase B).
+  Per-paso @50: `login`=19,4 s, `add_product`=10,2 s, `select_payment`=10,6 s, `confirm_sale`=2,4 s,
+  `set_cash`=176 ms. La curva es **monótona** (la de la 1ª corrida, con 1 solo producto, tenía
+  `confirm_sale` fallando rápido → throughput inflado y engañoso; ésta es la honesta).
+
+  **Interpretación honesta**: cada evento del POS hace queries reales (login carga usuario+rol+settings+
+  config+caja; `add_product` y `select_payment` leen BD) y **todo corre en UNA máquina** (cliente async +
+  backend single-process + MySQL + Redis co-locados). Por eso los **absolutos son pesimistas** y degradan
+  temprano — NO es la capacidad de prod. Lo defendible:
+  1. El **transporte/event-loop** aguanta bien (Fase A `ping`: p95 ≤33 ms hasta 200 conexiones).
+  2. El techo real es el **costo por-handler atado a BD + saturación del proceso único** bajo carga
+     concurrente co-locada → confirma la hipótesis de que **P3 (réplicas horizontales + réplica de
+     lectura MySQL) es lo que mueve la aguja**, no más tuning del proceso único.
+  3. Los absolutos representativos siguen requiriendo infra prod-like separada (**Fase B**, bloqueada por
+     el AWS free-tier). El harness y la metodología quedan listos para esa corrida.
 - [ ] **Fase B — números absolutos representativos**: ⚠️ el servidor AWS de prueba
       ([[infra_servidor_prueba_aws]]) es **free-tier saturado**: apenas levanta y se cae bajo carga →
       **NO sirve** como target (sería él mismo el cuello de botella). Alternativas honestas: (a) correr

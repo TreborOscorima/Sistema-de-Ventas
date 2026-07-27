@@ -115,8 +115,28 @@ def _router_data() -> dict:
     return {"pathname": "/", "query": {}}
 
 
-def build_scenario(name: str, args: argparse.Namespace) -> tuple[list[Step], list[Step]]:
-    """Devuelve (pasos_setup, pasos_loop) para el escenario dado."""
+def _parse_ids(spec: str) -> list[int]:
+    """Acepta '1,2,3' o un rango '5-64' (o mezcla) → lista de ids."""
+    out: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            a, b = part.split("-", 1)
+            out.extend(range(int(a), int(b) + 1))
+        else:
+            out.append(int(part))
+    return out or [1]
+
+
+def build_scenario(name: str, args: argparse.Namespace,
+                   index: int = 0) -> tuple[list[Step], list[Step]]:
+    """Devuelve (pasos_setup, pasos_loop) para el escenario dado.
+
+    ``index`` = índice del usuario virtual: en el cajero se usa para asignarle un
+    producto distinto (round-robin) y evitar contención de lock en una sola fila.
+    """
     if name == "ping":
         return [], [Step("ping", "ping")]
 
@@ -141,12 +161,13 @@ def build_scenario(name: str, args: argparse.Namespace) -> tuple[list[Step], lis
         # -> elegir método de pago -> ingresar efectivo -> confirmar. confirm_sale
         # exige caja abierta + pago válido (monto efectivo >= total); ver
         # payment_mixin._validate_payment_before_confirm.
-        pids = [int(x) for x in args.product_ids.split(",") if x.strip()] or [1]
-        loop = [Step(f"add_product[{pid}]", "event", {
+        all_pids = _parse_ids(args.product_ids)
+        pid = all_pids[index % len(all_pids)]  # un producto por VU (round-robin)
+        loop = [Step("add_product", "event", {
             "name": f"{sn}.add_product_to_sale_by_id",
             "payload": {"product_id": pid},
             "router_data": _router_data(),
-        }) for pid in pids]
+        })]
         loop += [
             Step("select_payment", "event", {
                 "name": f"{sn}.select_payment_method",
@@ -188,6 +209,7 @@ class VirtualUser:
         self.setup = setup
         self.loop = loop
         self.think = think_ms / 1000.0
+        self.record_after = 0.0  # perf_counter a partir del cual se miden latencias
         self.token = uuid.uuid4().hex
         self.sio = socketio.AsyncClient(reconnection=False, logger=False, engineio_logger=False)
         self.result = UserResult()
@@ -235,13 +257,17 @@ class VirtualUser:
             else:
                 await self.sio.emit("event", step.payload, namespace=NAMESPACE)
             errored = await asyncio.wait_for(self._waiter, timeout=20)
+            measuring = time.perf_counter() >= self.record_after
             if errored:
-                self.result.errors += 1
+                if measuring:
+                    self.result.errors += 1
                 return False
-            self.result.record(step.label, (time.perf_counter() - t0) * 1000)
+            if measuring:  # descartar muestras de warmup
+                self.result.record(step.label, (time.perf_counter() - t0) * 1000)
             return True
         except asyncio.TimeoutError:
-            self.result.errors += 1
+            if time.perf_counter() >= self.record_after:
+                self.result.errors += 1
             return False
         finally:
             self._waiter = None
@@ -322,13 +348,19 @@ def _summarize(users: int, results: list[UserResult], wall_s: float) -> LevelSta
     )
 
 
-async def _run_level(target: str, setup: list[Step], loop: list[Step],
-                     users: int, duration: int, think_ms: int) -> LevelStats:
-    vusers = [VirtualUser(target, setup, loop, think_ms) for _ in range(users)]
+async def _run_level(target: str, args: argparse.Namespace, users: int) -> LevelStats:
+    vusers = []
+    for i in range(users):
+        setup, loop = build_scenario(args.scenario, args, index=i)
+        vusers.append(VirtualUser(target, setup, loop, args.think_ms))
     t0 = time.perf_counter()
-    deadline = t0 + duration
+    record_after = t0 + args.warmup
+    deadline = record_after + args.duration
+    for u in vusers:
+        u.record_after = record_after
     results = await asyncio.gather(*(u.run(deadline) for u in vusers))
-    return _summarize(users, results, time.perf_counter() - t0)
+    # ventana de medición = duración efectiva (sin warmup) para el rps
+    return _summarize(users, results, args.duration)
 
 
 def _print_table(rows: list[LevelStats], slo_p95: float) -> None:
@@ -357,7 +389,9 @@ async def main() -> None:
     parser.add_argument("--scenario", choices=["ping", "hydrate", "supervisor", "cajero"],
                         default="ping")
     parser.add_argument("--ramp", default="10,50,100,200")
-    parser.add_argument("--duration", type=int, default=30, help="Segundos por nivel.")
+    parser.add_argument("--duration", type=int, default=30, help="Segundos de MEDICIÓN por nivel.")
+    parser.add_argument("--warmup", type=int, default=5,
+                        help="Segundos de warmup descartados antes de medir (por nivel).")
     parser.add_argument("--think-ms", type=int, default=200)
     parser.add_argument("--slo-p95", type=float, default=400.0)
     parser.add_argument("--out-json", default="")
@@ -384,16 +418,16 @@ async def main() -> None:
               file=sys.stderr)
         sys.exit(2)
 
-    setup, loop = build_scenario(args.scenario, args)
+    setup0, loop0 = build_scenario(args.scenario, args, index=0)
     levels = [int(x) for x in args.ramp.split(",") if x.strip()]
     print(f"Target={target}  escenario={args.scenario}  ramp={levels}  "
-          f"duration={args.duration}s  think={args.think_ms}ms  "
-          f"setup={[s.label for s in setup]}  loop={[s.label for s in loop]}")
+          f"warmup={args.warmup}s+medición={args.duration}s  think={args.think_ms}ms  "
+          f"setup={[s.label for s in setup0]}  loop={[s.label for s in loop0]}")
 
     rows: list[LevelStats] = []
     for users in levels:
         print(f"  -> nivel {users} usuarios ...", flush=True)
-        stats = await _run_level(target, setup, loop, users, args.duration, args.think_ms)
+        stats = await _run_level(target, args, users)
         rows.append(stats)
         if stats.connect_fail == users:
             print(f"    todas las conexiones fallaron en nivel {users}; aborto la rampa.")
