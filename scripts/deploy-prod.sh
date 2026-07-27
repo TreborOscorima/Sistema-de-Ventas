@@ -68,6 +68,21 @@ cd "$APP_DIR"
 info "Deploy Docker prod en: $APP_DIR"
 info "Branch: $BRANCH | tuwayki-core: ${TUWAYKI_CORE_SHA:0:12}"
 
+# ─── Escalado horizontal opt-in (P3 §3.1) ─────────────────────────────────────
+# SCALE_SYS=1 → incluye docker-compose.scale.yml (2ª réplica tuwayki_sys_2) en
+# TODOS los comandos compose vía COMPOSE_FILE. Así el override es parte del
+# proyecto y `--remove-orphans` NO borra sys_2. Default OFF (1 sola réplica).
+# Se togglea con la variable de repo SCALE_SYS (GitHub → Settings → Variables) —
+# sin SSH ni cambio de código. Requiere ADEMÁS la config de NPM (ver
+# docs/P3_STEP3_REPLICAS_RUNBOOK.md) y capacidad de RAM en el host.
+SCALE_SYS="${SCALE_SYS:-0}"
+if [ "$SCALE_SYS" = "1" ]; then
+    export COMPOSE_FILE="docker-compose.yml:docker-compose.scale.yml"
+    info "SCALE_SYS=1 → réplicas activas (COMPOSE_FILE=$COMPOSE_FILE)"
+else
+    info "SCALE_SYS=0 → una sola réplica de sys (default)"
+fi
+
 # ─── Prerrequisitos ───────────────────────────────────────────────────────────
 command -v git    >/dev/null 2>&1 || fail "git no encontrado"
 command -v docker >/dev/null 2>&1 || fail "docker no encontrado"
@@ -218,6 +233,10 @@ ok "tuwayki-core @ ${TUWAYKI_CORE_SHA:0:12}"
 
 # ─── 4. Build + deploy ────────────────────────────────────────────────────────
 SERVICES=(tuwayki_landing tuwayki_sys tuwayki_admin)
+# Con escalado activo, sys_2 también se buildea y se espera healthy.
+if [ "$SCALE_SYS" = "1" ]; then
+    SERVICES+=(tuwayki_sys_2)
+fi
 
 if $SKIP_BUILD; then
     warn "Build omitido (--skip-build)"

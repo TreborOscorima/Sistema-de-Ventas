@@ -19,28 +19,37 @@ Redis (`StateManagerRedis` + pub/sub lost-and-found), así que la correctitud no
 transporte se estabiliza. Nota: NAT (varios cajeros misma IP pública) caen en la misma instancia; si
 molesta, cambiar a hash por cookie del token.
 
-## 1. Levantar la 2ª réplica (repo)
+## 1. Levantar la 2ª réplica
 
+### Opción A — automatizada vía GitHub Actions (recomendada)
+El deploy soporta un **toggle**: la variable de repo **`SCALE_SYS`** (GitHub → Settings → *Secrets and
+variables* → *Actions* → **Variables** → New variable `SCALE_SYS = 1`). Con eso, `deploy-prod.sh`
+exporta `COMPOSE_FILE=docker-compose.yml:docker-compose.scale.yml`, buildea y espera healthy a
+`tuwayki_sys_2`, y `--remove-orphans` **ya no la borra** (es parte del proyecto). Default (variable
+ausente o vacía) = **1 sola réplica**, sin cambios.
+
+Pasos:
+1. Crear la variable de repo `SCALE_SYS = 1`.
+2. Disparar un deploy (push a `main`, o Actions → deploy-prod → Run workflow). El deploy levanta y
+   healthchequea `tuwayki_sys_2` solo.
+3. Aplicar la config de NPM (§2). **Orden seguro**: la réplica puede correr *antes* de NPM (queda
+   idle, sin tráfico); recién cuando NPM apunta al pool empieza a recibir.
+
+### Opción B — manual en el server (one-off / prueba)
 ```bash
-# en el server, en el repo, con la 2ª réplica:
 docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d
+docker exec tuwayki_sys_2 curl -fsS http://localhost:3000/api/ping   # verificar healthy
 ```
-Esto arranca `tuwayki_sys_2` (misma imagen/env/red que `tuwayki_sys`, volúmenes `.web`/`.bun` propios).
-Verificar que quede **healthy** antes de tocar NPM:
-```bash
-docker ps --format '{{.Names}}\t{{.Status}}' | grep tuwayki_sys
-docker exec tuwayki_sys_2 curl -fsS http://localhost:3000/api/ping
-```
+> Si activás por esta vía SIN poner `SCALE_SYS=1`, el próximo deploy automático borra `sys_2`
+> (`--remove-orphans`). Para persistir, usá la Opción A.
 
-> ### ⚠️ GOTCHA con el deploy (`--remove-orphans`)
-> `scripts/deploy-prod.sh` corre `docker compose up -d --remove-orphans` **solo con `docker-compose.yml`**
-> (sin el override). Si activaste `tuwayki_sys_2` y luego corre un deploy normal, **`--remove-orphans`
-> ELIMINA `tuwayki_sys_2`** (lo ve como huérfano) → volvés a 1 réplica sin darte cuenta.
-> **Solución**: una vez en modo multi-réplica, el deploy debe incluir SIEMPRE el override. Opciones:
-> - exportar `COMPOSE_FILE=docker-compose.yml:docker-compose.scale.yml` en el entorno del deploy (compose
->   lo respeta automáticamente), o
-> - parchear la invocación del deploy para pasar `-f docker-compose.yml -f docker-compose.scale.yml`.
-> Mientras no se resuelva esto, NO activar réplicas en prod (o el siguiente deploy las tira).
+⚠️ **Capacidad**: `tuwayki_sys_2` consume hasta **1G RAM / 1 CPU** (mismo límite que `sys`). Confirmar
+que el host de prod tiene margen antes de activar (con MySQL 1G + sys + admin + landing + Redis + NPM).
+
+> ### ✅ `--remove-orphans` — resuelto por el toggle `SCALE_SYS`
+> `deploy-prod.sh` corre `docker compose up -d --remove-orphans`. Con `SCALE_SYS=1`, el script exporta
+> `COMPOSE_FILE` con el override → `tuwayki_sys_2` es parte del proyecto y **no se borra**. Con
+> `SCALE_SYS=0` (default) el deploy usa solo el base (1 réplica). Ya no hay que parchear nada a mano.
 
 ## 2. NPM: upstream con sticky (manual, en la UI)
 
