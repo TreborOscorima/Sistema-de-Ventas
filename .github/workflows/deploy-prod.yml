@@ -82,7 +82,7 @@ jobs:
           username: ${{ secrets.DEPLOY_SSH_USER }}
           key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
           command_timeout: 40m
-          envs: OWNER_TOTP_SECRET
+          envs: OWNER_TOTP_SECRET,SCALE_SYS
           script: |
             set -euo pipefail
             APP_DIR="${{ secrets.DEPLOY_APP_DIR }}"
@@ -95,6 +95,10 @@ jobs:
             bash scripts/deploy-prod.sh
         env:
           OWNER_TOTP_SECRET: ${{ secrets.OWNER_TOTP_SECRET }}
+          # Toggle de escalado horizontal (P3 §3.1). Variable de repo (Settings →
+          # Secrets and variables → Actions → Variables). "1" = 2 réplicas de sys;
+          # vacío/ausente = 1 réplica (default seguro). Ver docs/P3_STEP3_REPLICAS_RUNBOOK.md.
+          SCALE_SYS: ${{ vars.SCALE_SYS }}
 
       - name: Deploy OK
         if: success()
