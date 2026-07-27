@@ -1078,6 +1078,26 @@ reactiva la empresa y registra auditoría.
 por vencimiento (pago/trial), reactivación válida con fecha futura, renovación desde-hoy y
 apilada, y validaciones (trial rechazado, motivo obligatorio, rango de meses). **1128 passed.**
 
+### Conversión de trial vencido → plan pago (`change_plan`) — verificado en vivo 2026-07-27
+Para una empresa con **Trial Vencido** que se quiere pasar a un plan pago, la acción correcta es
+**"Cambiar Plan"** (NO "Cambiar Estado" ni "Renovar Suscripción", que rechaza trials). `change_plan`
+a un plan no-trial hace todo de una vez: `subscription_status=active` + `is_active=true`,
+`subscription_ends_at = hoy + meses×30`, **limpia `trial_ends_at`** y aplica los límites/módulos
+del nuevo plan. Como queda pago con vencimiento futuro, el login **no** la re-suspende.
+
+**Demo (Omega SAC, id 4):** "Cambiar Plan → Estándar → 12 meses":
+`trial → standard`, `trial_ends_at 2026-02-17 → NULL`, `subscription_ends_at NULL → 2027-07-22`,
+`max_users 3 → 5` (límite del plan aplicado), `status=active`, audit `change_plan`. Quedó convertida.
+
+### Suspender: funciona para cualquier plan
+`change_status → suspended` (`subscription_status=suspended` + `is_active=false`) **no depende del
+plan** — vale para trial/standard/professional/enterprise. Transiciones válidas hacia suspendido
+(`VALID_STATUS_TRANSITIONS`): `active→suspended`, `warning→suspended`, `past_due→suspended`. El
+fix A solo tocó la reactivación (→active); suspender quedó intacto. Únicos límites: motivo
+obligatorio y no se puede re-suspender una ya suspendida (redundante). El usuario de una empresa
+suspendida ve la pantalla "Cuenta suspendida" al iniciar sesión, sin importar su plan.
+
 ### Datos
-Empresa #3 (Beta Alpha) y #2 (Empresa Alpha) quedaron **activas con vencimiento futuro**
-(2027) para poder usarse en pruebas. `beta@test.com` / `alpha@test.com` ya pueden iniciar sesión.
+Empresas de test quedaron **activas con vencimiento futuro (2027)**: #3 Beta Alpha y #2 Empresa
+Alpha (standard, renovadas) y #4 Omega SAC (convertida trial→standard). `beta@test.com`,
+`alpha@test.com` y `omega@test.com` ya pueden iniciar sesión.
