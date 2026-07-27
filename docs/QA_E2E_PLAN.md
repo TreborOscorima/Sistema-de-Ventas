@@ -297,7 +297,7 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 | Consola sin errores | ⚠️ | Sin errores funcionales de JS; **sí** un warning a11y recurrente de Radix ("`DialogContent` requires a `DialogTitle`") en los modales |
 | Red sin 4xx/5xx | ✅ | Requests observados 200 OK; sin 4xx/5xx inesperados |
 | Performance | ⚠️ | Operaciones OK; el websocket del dev-server introdujo ~8 s de latencia puntual (transferencia) — inestabilidad de entorno, no de la app |
-| Seguridad (rate-limit, XSS, no datos en URL) | ⬜ | No ejercitado en vivo; cubierto por diseño/Fase 1 |
+| Seguridad (rate-limit, XSS, no datos en URL) | ✅ | Revisión de código 2026-07-26 (ver §16): rate-limit fail-closed + bcrypt, XSS mitigado (React + `html.escape` en tickets), RBAC server-side en 3 capas, sin fugas en logs/URL. Sin vulnerabilidades nuevas |
 
 ---
 
@@ -902,3 +902,42 @@ dispara el blur).
 Se **eliminaron** la reserva de prueba (id 108), las ventas #494 (adelanto) y #495 (saldo),
 sus `saleitem` y los `cashboxlog` 666/667. `MAX(sale.id)` volvió a **493** → sin hueco en la
 numeración. Empresa real sin residuos de la prueba.
+
+---
+
+## 16. Revisión de seguridad (código + sondeo) — 2026-07-26
+
+Pase de confirmación con ojos frescos sobre 4 ejes. Confirma las auditorías Round 1-3.
+**Sin vulnerabilidades nuevas.**
+
+### 1. Autenticación / rate-limit (`utils/rate_limit.py`, `auth_state.py:1900`)
+- ✅ Rate-limit **fail-closed** en prod: si Redis cae y `ALLOW_MEMORY_RATE_LIMIT_FALLBACK=0`
+  (así está en compose), **bloquea** en vez de degradar a memoria. Clave `username|ip`.
+- ✅ **5 intentos / 15 min** de bloqueo (`MAX_LOGIN_ATTEMPTS=5`, `LOGIN_LOCKOUT_MINUTES=15`).
+- ✅ Se verifica el rate-limit **antes** de tocar la contraseña; `bcrypt.checkpw` (constant-time);
+  limpia intentos al éxito, registra al fallo.
+- ✅ JWT firmado (`AUTH_SECRET_KEY`) con `token_version` → revocación de sesiones.
+- ✅ Owner backoffice con **TOTP (2FA)**.
+- Observaciones menores (no accionables): posible enumeración de usuarios por timing (bcrypt
+  solo corre para usuarios existentes); rate-limit por `username|ip` no frena fuerza bruta
+  distribuida por-usuario desde muchas IPs (tradeoff aceptable para no bloquear usuarios legítimos).
+
+### 2. XSS
+- ✅ React escapa por defecto (sin `dangerouslySetInnerHTML` con datos de usuario).
+- ✅ El HTML de tickets (`receipt_service.py:617`) aplica `html.escape` a todo el texto y
+  valida el data-URI del logo.
+- ✅ `sanitize_name/dni/phone/text/reason` en los inputs (defensa en profundidad).
+
+### 3. Fugas en logs / URL
+- ✅ Ningún log imprime contraseña/token/hash (el único log cercano registra `email[:20]` parcial).
+- ✅ Sin datos sensibles en query-strings.
+- ✅ Los 7 `print()` de `app/` están **todos dentro de docstrings** (ejemplos), no son código ejecutable.
+
+### 4. RBAC (autorización)
+- ✅ **3 capas, todas server-side** (los event handlers de Reflex corren en backend):
+  1. Guarda de ruta `on_load=ensure_view_*` → redirige a `/` si no autenticado, a `/dashboard`
+     si falta el privilegio de vista.
+  2. Decorador `@require_permission("...")` / `@require_cashbox_open()` en mutaciones.
+  3. Chequeo inline en eventos críticos — ej. `confirm_sale` exige `create_ventas` +
+     suscripción activa + caja abierta.
+- ✅ `current_user.privileges` proviene del token/sesión validado, no del cliente → no falsificable.
