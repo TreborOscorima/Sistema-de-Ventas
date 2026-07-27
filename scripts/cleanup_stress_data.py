@@ -62,13 +62,14 @@ async def main() -> None:
             await conn.execute(
                 text(
                     "SELECT id FROM company "
-                    "WHERE name LIKE 'STRESS-%' OR ruc LIKE 'STRESS%'"
+                    "WHERE name LIKE 'STRESS-%' OR ruc LIKE 'STRESS%' "
+                    "OR name LIKE 'SEEDVOL-%' OR ruc LIKE 'SEEDVOL%'"
                 )
             )
         ).scalars().all()
 
         if not stress_ids:
-            print("No hay empresas STRESS-* para limpiar.")
+            print("No hay empresas STRESS-* / SEEDVOL-* para limpiar.")
             await engine.dispose()
             return
 
