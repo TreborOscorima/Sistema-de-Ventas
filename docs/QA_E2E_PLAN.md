@@ -941,3 +941,32 @@ Pase de confirmación con ojos frescos sobre 4 ejes. Confirma las auditorías Ro
   3. Chequeo inline en eventos críticos — ej. `confirm_sale` exige `create_ventas` +
      suscripción activa + caja abierta.
 - ✅ `current_user.privileges` proviene del token/sesión validado, no del cliente → no falsificable.
+
+---
+
+## 17. Robustez POS — precedencia de pricing combinada (2026-07-26)
+
+Verificación de cómo interactúan **lista de precios + promoción + cupón + kit** en un mismo
+carrito. Precedencia establecida por código (`sale_service.py:_resolve_item_base_price` +
+`_apply_promotions`) y confirmada en vivo.
+
+### Reglas de precedencia (confirmadas)
+1. **Precio base** por prioridad: **lista de precios del cliente** > `PriceTier` (volumen) >
+   `product.sale_price` > precio por margen (`resolve_effective_price`).
+2. **Una sola promoción** se aplica **sobre** ese precio base, eligiendo la más específica por
+   jerarquía: **`cupón` > `producto` > `categoría` > `todos`** (`pricing.py:173`). Dos promos
+   **no** se apilan entre sí.
+3. **Lista + promo SÍ se acumulan**: la lista fija el base y la promo lo descuenta encima.
+4. **Kits**: sus componentes quedan **aislados** de lista y de promo (mantienen el precio de combo).
+5. **`max_uses`**: se consume **solo al confirmar la venta** (`_consume_promotions_for_sale`,
+   `sale_service.py:987`), con guarda `current_uses >= max_uses`; el preview del carrito NO lo consume.
+
+### Prueba en vivo (cliente Mateo Díaz → lista "Mayoristas VIP", promo 10% en Coca Cola)
+| Ítem | Base | Con promo | Tags | ✓ |
+|---|---|---|---|---|
+| Coca Cola 500ml (suelto) | **$2.30** (lista, tachado; catálogo $2.55) | **$2.07** (×0.90) | "Mayoristas VIP" + "QA Stack 10 Coca" | ✅ |
+| Ibuprofeno (KIT) | $0.68 | $0.68 (sin lista ni promo) | KIT | ✅ |
+| Polo Sport (KIT) ×2 | $22.50 | $22.50 (sin lista ni promo) | KIT | ✅ |
+
+Redondeo correcto ($2.30 × 0.90 = $2.07), tachado muestra el precio de lista, subtotal 2×$2.07=$4.14.
+Sin venta confirmada; promo de prueba (`QA Stack 10 Coca`) eliminada tras la verificación.
