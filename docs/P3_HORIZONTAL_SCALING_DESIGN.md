@@ -41,6 +41,10 @@ hash por cookie del token Reflex (`hash $cookie_...`), que reparte mejor. Empeza
 
 ## 3. Cambios concretos
 
+> **Ejecución del paso 3 (réplicas + NPM sticky): [`docs/P3_STEP3_REPLICAS_RUNBOOK.md`](P3_STEP3_REPLICAS_RUNBOOK.md)**
+> + override `docker-compose.scale.yml` (2ª réplica, validada localmente: `sys_2` bootea healthy contra
+> MySQL+Redis compartidos). La config de NPM (upstream `ip_hash`) es manual en la UI de NPM.
+
 ### 3.1 Réplicas del POS (`tuwayki_sys`)
 El `container_name: tuwayki_sys` fijo **impide** escalar (`docker compose` no puede correr 2 contenedores
 con el mismo nombre). Opciones:
