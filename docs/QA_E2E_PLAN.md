@@ -87,7 +87,7 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 | U1 | Crear usuario, asignar rol y sucursal(es) | Login OK; ve solo lo permitido | ✅ |
 | U2 | Permisos granulares (crear ventas, ver historial, ver etiquetas, billing…) | Acciones bloqueadas si no tiene permiso | ✅ |
 | U3 | Guards por plan (compras, presupuestos, facturación) | Pantalla "acceso denegado" si el plan no lo incluye | ⬜ (no verificable en vivo; 1 plan) |
-| U4 | Forzar cambio de contraseña / validaciones de password | Cumple política configurada | ⬜ (no ejercitado) |
+| U4 | Forzar cambio de contraseña / validaciones de password | Cumple política configurada | ✅ (2026-07-26, ver §18): política min 8 + mayúscula + dígito; enforced en crear/editar usuario, cambio de clave y registro |
 
 ### 3.4 Sucursales y Multi-tenant
 
@@ -108,7 +108,7 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 | I4 | Atributos dinámicos (EAV) | Se guardan y muestran | ✅ |
 | I5 | Categorías (normalización MAYÚSCULAS) | Filtros correctos | ✅ |
 | I6 | Ajuste físico (por SKU/descripción) | Movimiento de stock registrado | ✅ |
-| I7 | Importación masiva CSV/Excel | Valida, mapea columnas, ajusta stock | ✅ (botón; carga no ejercitada) |
+| I7 | Importación masiva CSV/Excel | Valida, mapea columnas, ajusta stock | ✅ (2026-07-26, ver §18): parser real ejercitado (BOM, alias ES, delimitador `;`); upsert por barcode + StockMovement + protección de stock-derivado, ejercitado a nivel modelo en tenant #3 |
 | I8 | Umbral de stock bajo por producto | Card "Stock Bajo" y alertas | ✅ |
 | I9 | **Exportar inventario valorizado** | Excel con margen bruto correcto | ✅ (Fase 1 L3) |
 | I10 | Precio/margen **independiente por sucursal** | Editar en NONO no afecta MATRIZ | ✅ (Fase 1) |
@@ -118,7 +118,7 @@ Orden recomendado: **L1 → L2 → L3 → L4 → L5** (de lo más barato/rápido
 | # | Caso | Esperado | Estado |
 |---|---|---|---|
 | P1 | Documento de compra (serie/número, proveedor) | Ajusta stock y costos | ✅ (registro con datos reales) |
-| P2 | Ingreso con variantes y lotes | UI dinámica correcta | ⬜ (no ejercitado en prod) |
+| P2 | Ingreso con variantes y lotes | UI dinámica correcta | ✅ (2026-07-26, ver §18): variantes talla/color con stock derivado (Σ=8) y lotes con orden FEFO por vencimiento, ejercitado a nivel modelo en tenant #3 |
 | P3 | Reposición automática (stock ≤ umbral) | Genera OC por proveedor preferido | ✅ |
 | P4 | Ciclo de OC (borrador→enviado→convertido/cancelado) | Estados correctos | ✅ |
 
@@ -970,3 +970,40 @@ carrito. Precedencia establecida por código (`sale_service.py:_resolve_item_bas
 
 Redondeo correcto ($2.30 × 0.90 = $2.07), tachado muestra el precio de lista, subtotal 2×$2.07=$4.14.
 Sin venta confirmada; promo de prueba (`QA Stack 10 Coca`) eliminada tras la verificación.
+
+---
+
+## 18. U4 / I7 / P2 — ejercicio en empresa de test #3 (2026-07-26)
+
+Tres casos ⬜ cerrados. La empresa #1 (real) está ligada a la sesión activa; por aislamiento
+multi-tenant no se puede operar la #3 desde ella y no se ingresan credenciales, así que
+I7/P2 se ejercitaron a **nivel de código/modelo** sobre el tenant **#3 (Beta Alpha S.A.,
+sucursal 4)**. La escritura vía UI (evento Reflex) queda disponible si se inicia sesión como
+`beta@test.com`.
+
+### U4 — Política de contraseñas ✅ (agnóstica de empresa)
+`validate_password` (tuwayki-core) con política `min 8 + mayúscula + dígito` (especial opcional,
+env-configurable). Ejercitada empíricamente:
+`''`→vacía · `abc`→corta · `abcdefgh`→falta mayúscula · `Abcdefgh`→falta número ·
+`Abcdefg1`/`Segura2026`→válida. **Enforced** en crear/editar usuario (`auth_state.py:2611`),
+cambio de clave (`:2206`) y registro (`register_state.py:161/375`), además de bloquear
+`password == username` y exigir confirmación.
+
+### I7 — Importación masiva ✅
+- **Parser real** (`_export_mixin._parse_import_file`) ejercitado: maneja **BOM** (utf-8-sig),
+  **alias de columnas en español** (Código/Descripción del producto/Categoría/Precio Venta/Costo),
+  celdas vacías, y **auto-detección de delimitador** (`,` y `;` vía `csv.Sniffer`).
+- **Upsert** (lógica de `confirm_import`, ejercitada a nivel modelo en #3): upsert por `barcode`,
+  auto-creación de categoría, `StockMovement` tipo `Importacion` por el delta, y **protección del
+  stock derivado** (productos con variantes/lotes en `managed_pids` → no se pisa su stock).
+  Gated por `edit_inventario`. Resultado en #3: 2 productos + categoría + 2 movimientos.
+
+### P2 — Ingreso con variantes y lotes ✅ (tenant #3)
+- **Variantes** talla/color: 2 SKUs (S/Rojo=5, M/Azul=3) → **stock derivado del producto = 8**
+  (invariante `stock = Σ variantes`).
+- **Lotes FEFO**: 2 lotes → stock derivado = 25; orden por vencimiento ascendente correcto
+  (LOTE próximo 16/08 **antes** del lejano 23/01/2027).
+
+**Limpieza:** todos los productos/variantes/lotes/movimientos/categoría `QA-*` creados en #3
+fueron eliminados (0 residuos). Nota de aislamiento: se confirmó que el tenant #3 soporta estos
+escritos pese a sus quirks de datos conocidos (ver §11 hallazgos B4/B9).
