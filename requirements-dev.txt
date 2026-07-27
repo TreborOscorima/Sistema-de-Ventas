@@ -1,4 +1,5 @@
 -r requirements.txt
+aiohttp==3.13.2  # transport websocket para socketio.AsyncClient (harness de carga P2, scripts/ws_load.py)
 aiosqlite==0.22.1
 iniconfig==2.3.0
 playwright==1.58.0

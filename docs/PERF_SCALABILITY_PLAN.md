@@ -144,11 +144,95 @@ completed, uniforme) y (b) **150 empresas / 225k ventas / 788k items, mix realis
 
 Objetivo: medir el punto real de degradación de latencia.
 
+**Tooling creado (2026-07-27): `scripts/ws_load.py`** — harness de latencia bajo carga de
+websockets Reflex. Abre N conexiones socket.io reales contra `/_event` (handshake con `token`,
+namespace `/_event`), emite eventos y cronometra el round-trip emit→delta. Dos escenarios:
+`ping` (probe del event-loop, sin auth/estado/BD) e `hydrate` (dispara el evento de estado real
+`…on_load_internal` → mide el pipeline completo). Rampa configurable, reporta p50/p95/p99, rps,
+errores, desconexiones y veredicto SLO; salida opcional JSON. Guarda contra apuntar a producción
+(`tuwayki.app/.com`) salvo `--unsafe`. Validado end-to-end contra un servidor socket.io que imita
+el montaje de Reflex (mecánica de protocolo correcta; faltan los números contra un backend real).
+Requiere `aiohttp` (agregado a `requirements-dev.txt`).
+
+```bash
+# Levantar un backend Reflex de PRUEBA (NUNCA prod) y apuntar el harness ahí:
+WS_TARGET=http://localhost:8000 \
+  ./.venv/Scripts/python.exe scripts/ws_load.py --scenario ping \
+    --ramp 10,50,100,200 --duration 30 --out-json build/ws_p2.json
+```
+
+- [x] **Herramienta** para el websocket de Reflex — `scripts/ws_load.py` (arriba).
 - [ ] **Definir escenarios** representativos: "cajero" (escanear N productos + cobrar),
-      "supervisor" (dashboard + reportes), "alta de producto".
-- [ ] **Herramienta**: para el tráfico HTTP/API, **k6** o **Locust**. Para el websocket de
-      Reflex (event handlers), un script que abra N websockets y dispare eventos
-      (`hydrate` + eventos de estado) — ojo: Reflex no se testea con un simple `ab`.
+      "supervisor" (dashboard + reportes), "alta de producto". El escenario `hydrate` ya ejercita
+      un evento de estado real; los escenarios autenticados (cajero/supervisor) requieren login +
+      contexto de tenant → extender el harness con esa secuencia (pendiente).
+- [ ] **Tráfico HTTP/API** (no-websocket): **k6** o **Locust** si hiciera falta (endpoints REST).
+
+### Resultados Fase A — local (relativos), 2026-07-27
+Harness `ws_load.py` escenario `ping` contra `tuwayki_sys` (app Reflex real en Docker local, `:3001`),
+rampa 10→200, 20 s/nivel, think 200 ms:
+
+| users | evento p50 | evento p95 | evento p99 | evento max | conn_p95 | rps | err | disc |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 10  | 3,2  | 4,6  | 14,0 | 136  | 587   | 45  | 0 | 0 |
+| 50  | 9,9  | 16,2 | 192  | 697  | 1098  | 216 | 0 | 0 |
+| 100 | 12,9 | 33,2 | 376  | 4158 | 4668  | 344 | 0 | 0 |
+| 200 | 12,6 | 33,0 | 213  | 1297 | 1826  | 823 | 0 | 0 |
+
+**Lectura**: el **procesamiento de eventos aguanta bien** — p95 del round-trip ≤ **33 ms hasta 200
+conexiones**, muy por debajo del SLO de 400 ms; **0 errores / 0 desconexiones** en todos los niveles.
+El **punto de estrés es el establecimiento de conexión**: `conn_p95` salta a **~4,7 s con 100 clientes
+conectándose a la vez** (tormenta de upgrades websocket + registro de token en Redis). En uso normal los
+clientes conectan gradualmente; el riesgo real es una **tormenta de reconexión** tras reinicio/deploy →
+lo mitiga P3 (réplicas + balanceo).
+
+> **Caveat**: los N clientes async corren en un solo proceso Python en la MISMA máquina que el server →
+> contención de CPU del lado cliente que infla las latencias (sobre todo las de conexión). Esto es la
+> **forma relativa** de la curva (objetivo de Fase A), NO el número absoluto de concurrentes seguros.
+
+- [x] **Escenarios autenticados** (cajero/supervisor): **implementados y CORRIDOS end-to-end**
+      (2026-07-27) contra un backend de prueba (`sistema_loadtest`). El cajero crea **ventas reales**:
+      login → `add_product_to_sale_by_id` → `select_payment_method` → `set_cash_amount` → `confirm_sale`.
+      Auth persiste en la conexión websocket (no hace falta emular cookies). Nombres de evento derivados
+      con `format_event_handler` (OJO: los handlers viven en `RootState`, no en la subclase `State` →
+      prefijo `reflex___state____state.app___states___root_state____root_state`, NO el de
+      `State.get_full_name()`). Setup: `scripts/seed_loadtest_tenant.py` (empresa trial + sucursal + rol
+      superadmin + usuario + producto + método de pago + **caja abierta**) + backend clonado en Docker
+      contra el schema descartable.
+
+  **Resultado — corrida LIMPIA** (60 productos, uno por VU → sin lock patológico; warmup de 8 s
+  descartado; 20 s de medición; think 500 ms). Verificado que hace trabajo real: **234 ventas
+  committeadas**, 26 productos distintos vendidos.
+
+  | users | p50 | p95 | p99 | errs | rps |
+  |---:|---:|---:|---:|---:|---:|
+  | 5  | 44 ms   | 1130 ms  | 1177 ms  | 0  | 12,8 |
+  | 10 | 144 ms  | 2268 ms  | 2542 ms  | 0  | 12,9 |
+  | 25 | 1180 ms | 7620 ms  | 10067 ms | 0  | 13,9 |
+  | 50 | 7253 ms | 19355 ms | 19406 ms | 50 | 9,9  |
+
+  Per-paso @50: `login`=19,4 s, `add_product`=10,2 s, `select_payment`=10,6 s, `confirm_sale`=2,4 s,
+  `set_cash`=176 ms. La curva es **monótona** (la de la 1ª corrida, con 1 solo producto, tenía
+  `confirm_sale` fallando rápido → throughput inflado y engañoso; ésta es la honesta).
+
+  **Interpretación honesta**: cada evento del POS hace queries reales (login carga usuario+rol+settings+
+  config+caja; `add_product` y `select_payment` leen BD) y **todo corre en UNA máquina** (cliente async +
+  backend single-process + MySQL + Redis co-locados). Por eso los **absolutos son pesimistas** y degradan
+  temprano — NO es la capacidad de prod. Lo defendible:
+  1. El **transporte/event-loop** aguanta bien (Fase A `ping`: p95 ≤33 ms hasta 200 conexiones).
+  2. El techo real es el **costo por-handler atado a BD + saturación del proceso único** bajo carga
+     concurrente co-locada → confirma la hipótesis de que **P3 (réplicas horizontales + réplica de
+     lectura MySQL) es lo que mueve la aguja**, no más tuning del proceso único.
+  3. Los absolutos representativos siguen requiriendo infra prod-like separada (**Fase B**, bloqueada por
+     el AWS free-tier). El harness y la metodología quedan listos para esa corrida.
+- [ ] **Fase B — números absolutos representativos**: ⚠️ el servidor AWS de prueba
+      ([[infra_servidor_prueba_aws]]) es **free-tier saturado**: apenas levanta y se cae bajo carga →
+      **NO sirve** como target (sería él mismo el cuello de botella). Alternativas honestas: (a) correr
+      el harness desde **otra máquina** contra el Docker local (elimina la contención cliente-server);
+      (b) una instancia cloud **dimensionada como prod**, efímera, sólo para una corrida; (c) inferir la
+      capacidad desde las specs reales de prod + la curva relativa de Fase A. El valor accionable de P2
+      (efecto de las optimizaciones + estabilidad bajo carga sostenida) ya se obtiene en local; el
+      **absoluto** queda diferido hasta tener infra prod-like.
 - [ ] **Métricas objetivo (SLO propuestos)**:
   - Latencia de evento POS (p95) **< 400 ms** con carga objetivo.
   - Confirmar venta (p95) **< 1 s**.
@@ -191,7 +275,8 @@ Objetivo: medir el punto real de degradación de latencia.
 >   `smoke/small/medium/full`, bulk-insert por core, guard de BD-segura, prefijo `SEEDVOL-`.
 > - ✅ **EXPLAIN de queries calientes** — `scripts/explain_hot_queries.py` (creado y validado).
 > - ✅ **Concurrencia (corrección)** — `scripts/stress_concurrency.py` (preexistente).
-> - ⏳ **Falta**: harness de **latencia bajo carga** de websockets Reflex (§4).
+> - ✅ **Latencia bajo carga (websocket)** — `scripts/ws_load.py` (creado y validado, §4). Falta
+>   correrlo contra un backend real (decisión de entorno pendiente) y añadir escenarios autenticados.
 
 ---
 
