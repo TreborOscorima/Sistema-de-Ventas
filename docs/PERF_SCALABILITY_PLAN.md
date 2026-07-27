@@ -241,3 +241,53 @@ docker exec -i tuwayki_mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroo
 > Nota Windows: la password se lee de `.env` en memoria (nunca se imprime). Escalas de volumen:
 > `full` (§3) ≈ **175M filas** — sólo en un host dedicado con disco; para validar índices,
 > `medium` (~3,5M filas, ~10k ventas/empresa) ya es representativo del plan por-tenant.
+
+---
+
+## 9. Estado de ejecución y continuación (HANDOFF — actualizado 2026-07-27)
+
+> Para retomar en otra sesión/cuenta. Lee esto primero.
+
+### ✅ Hecho y verificado
+- **Tooling** (`seed_volume.py`, `explain_hot_queries.py`, `cleanup_stress_data.py`) creado y validado.
+- **Hallazgo P1** confirmado con datos realistas (150 empresas / 225k ventas) + `EXPLAIN ANALYZE`:
+  el `index_merge` de índices single-column bypasea el compuesto covering → query del POS **105 ms**.
+- **Migración de remediación** `alembic/versions/u6v7w8x9_drop_redundant_company_id_indexes.py`:
+  dropea `ix_sale/saleitem/product_company_id` (redundantes). Validada en staging: **105 ms → 0,22 ms**,
+  idempotente, reversible, FKs intactas.
+- **CI verde**: aplica la migración en BD MySQL limpia + 1128 tests OK.
+- **PR [#3](https://github.com/TreborOscorima/Sistema-de-Ventas/pull/3) MERGEADO a `main`** (commit `160adae`).
+
+### ⏳ En vuelo al momento del handoff
+- El merge a `main` disparó la CI en `main`; al pasar, dispara `deploy-prod.yml` **automáticamente**:
+  SSH al server AWS → **backup automático** (`mysqldump`+gzip+S3) → build → `docker compose up` →
+  el **`docker-entrypoint.sh` corre `alembic upgrade head`** → la migración `u6v7w8x9` se aplica a prod →
+  health checks de `tuwayki.app` / `sys.tuwayki.app` / `admin.tuwayki.app`.
+
+### ▶️ Cómo verificar que el deploy terminó OK (primer paso al retomar)
+```bash
+gh run list --workflow deploy-prod.yml --limit 3          # ¿última corrida = success?
+gh run view <run-id> --log | grep -iE "Backup OK|Migraciones aplicadas|DEPLOY .*COMPLETADO"
+curl -sf https://sys.tuwayki.app/api/health               # debe responder con "surface"
+```
+Confirmar en la BD de prod (vía SSH al server, o pedirle al usuario) que los 3 índices ya NO existen y
+que las queries del POS usan `ix_sale_tenant_status_timestamp`.
+
+### 🔙 Rollback (si el deploy falló)
+- El backup ya fue tomado por `deploy-prod.sh` (en `<APP_DIR>/backups/db_*.sql.gz` + S3).
+- La migración es reversible: `alembic downgrade -1` recrea los índices.
+- El entrypoint es fail-fast: si la migración falla, el contenedor no arranca (no corrompe datos).
+
+### 📌 Pendiente (próximos pasos, en orden)
+1. **Verificar el deploy** (arriba) y anotar acá el resultado con números de prod.
+2. **P1 — barrido más amplio**: revisar si otras tablas `TenantMixin` (`stockmovement`, `cashboxlog`,
+   `salepayment`, etc.) tienen el mismo `ix_*_company_id` redundante → posible migración de seguimiento.
+   El fix actual sólo cubre `sale`/`saleitem`/`product` (las 3 calientes medidas).
+3. **P2 — prueba de carga real**: construir el harness de latencia bajo carga de websockets Reflex
+   (§4). **No existe aún.** Es el mayor pendiente de tooling.
+4. **P3 — infra**: réplicas del contenedor + balanceador, réplica de lectura MySQL, monitoreo (§5).
+
+### 🧹 Limpieza
+- Staging `sistema_staging` (Docker MySQL 33306) tiene 150 empresas SEEDVOL + la migración aplicada.
+  Borrar cuando no se use: `DROP DATABASE sistema_staging;` (ver §8 paso 5). **No afecta prod.**
+- Rama `perf/p1-audit-tooling` ya mergeada; se puede borrar.
