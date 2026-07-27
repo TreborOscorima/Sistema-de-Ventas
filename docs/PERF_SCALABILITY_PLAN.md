@@ -241,3 +241,85 @@ docker exec -i tuwayki_mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroo
 > Nota Windows: la password se lee de `.env` en memoria (nunca se imprime). Escalas de volumen:
 > `full` (§3) ≈ **175M filas** — sólo en un host dedicado con disco; para validar índices,
 > `medium` (~3,5M filas, ~10k ventas/empresa) ya es representativo del plan por-tenant.
+
+---
+
+## 9. Estado de ejecución y continuación (HANDOFF — actualizado 2026-07-27)
+
+> Para retomar en otra sesión/cuenta. Lee esto primero.
+
+### ✅ Hecho y verificado
+- **Tooling** (`seed_volume.py`, `explain_hot_queries.py`, `cleanup_stress_data.py`) creado y validado.
+- **Hallazgo P1** confirmado con datos realistas (150 empresas / 225k ventas) + `EXPLAIN ANALYZE`:
+  el `index_merge` de índices single-column bypasea el compuesto covering → query del POS **105 ms**.
+- **Migración de remediación** `alembic/versions/u6v7w8x9_drop_redundant_company_id_indexes.py`:
+  dropea `ix_sale/saleitem/product_company_id` (redundantes). Validada en staging: **105 ms → 0,22 ms**,
+  idempotente, reversible, FKs intactas.
+- **CI verde**: aplica la migración en BD MySQL limpia + 1128 tests OK.
+- **PR [#3](https://github.com/TreborOscorima/Sistema-de-Ventas/pull/3) MERGEADO a `main`** (commit `160adae`).
+
+### ✅ Deploy a prod COMPLETADO (2026-07-27 05:27)
+- `deploy-prod.yml` run `30239655323` = **success** (3m19s). Log: `Backup OK (20K)`, `Ping OK`
+  en las 3 superficies, `DEPLOY DOCKER PROD COMPLETADO`.
+- Health público verificado: `sys.tuwayki.app` y `admin.tuwayki.app` → `status:ok, db:ok, redis:ok`.
+- Migración `u6v7w8x9` aplicada vía `docker-entrypoint.sh` (`alembic upgrade head`, fail-fast →
+  containers healthy = migración OK). **P1 (fix index_merge) cerrado en producción.**
+
+### ▶️ Cómo verificar que el deploy terminó OK (primer paso al retomar)
+```bash
+gh run list --workflow deploy-prod.yml --limit 3          # ¿última corrida = success?
+gh run view <run-id> --log | grep -iE "Backup OK|Migraciones aplicadas|DEPLOY .*COMPLETADO"
+curl -sf https://sys.tuwayki.app/api/health               # debe responder con "surface"
+```
+Confirmar en la BD de prod (vía SSH al server, o pedirle al usuario) que los 3 índices ya NO existen y
+que las queries del POS usan `ix_sale_tenant_status_timestamp`.
+
+### 🔙 Rollback (si el deploy falló)
+- El backup ya fue tomado por `deploy-prod.sh` (en `<APP_DIR>/backups/db_*.sql.gz` + S3).
+- La migración es reversible: `alembic downgrade -1` recrea los índices.
+- El entrypoint es fail-fast: si la migración falla, el contenedor no arranca (no corrompe datos).
+
+### ✅ Barrido P1 más amplio — HECHO y VALIDADO en staging (2026-07-27, NO en prod aún)
+El barrido (paso 2 de abajo) se ejecutó con la BD real (staging = fiel a prod) como fuente de
+verdad, no la metadata del modelo. Dos migraciones nuevas, encima de `u6v7w8x9`:
+
+- **`v7w8x9y0`** — dropea **31** `ix_*_company_id` single-column redundantes en el resto de tablas
+  multi-tenant (además de `sale`/`saleitem`/`product` de `u6v7w8x9`). Incluye 20 tablas cubiertas por
+  compuestos normales + 11 cubiertas por constraints **UNIQUE `(company_id,…)`** (`user`, `role`,
+  `unit`, `category`, `client`, `supplier`, `paymentmethod`, `pricetier`, `productkit`,
+  `companysettings`, `companybillingconfig`). Misma guarda que `u6v7w8x9` (sólo dropea si otro índice
+  lidera con `company_id`). Se **mantienen** a propósito: `branch`, `fieldprice`, `purchaseitem`,
+  `purchaseorderitem` (el single es el único cover de la FK).
+- **`w8x9y0z1`** — corrige un **drift modelo↔BD**: `CashboxSession` declara
+  `ix_cashboxsession_tenant_user_open (company_id, branch_id, user_id, is_open)` pero **ninguna
+  migración lo había creado en prod**. La query caliente de caja (buscar la sesión abierta del cajero,
+  `app/states/cash/_close_mixin.py`) filtra esas 4 columnas. La migración **crea** el compuesto y luego
+  dropea el single `ix_cashboxsession_company_id` (ya cubierto). **EXPLAIN ANALYZE con 40k sesiones:
+  84,5 ms (scan) → 0,29 ms (index lookup), ~290x.**
+
+También se limpió del modelo el índice explícito redundante `ix_companytaxrate_company` en
+`app/models/taxes.py` (lo cubre `ix_companytaxrate_company_active`).
+
+Validación en staging: `downgrade u6v7w8x9` → `upgrade head` limpio, 0 singles redundantes restantes
+(salvo los 4 permitidos), FKs intactas, ambas migraciones idempotentes y reversibles. Suite: **1128
+passed** (los 4 fallos de `test_e2e.py` son de Playwright, requieren servidor vivo — ambientales).
+
+**Nota drift (no accionado, bajo valor):** varios modelos declaran singles secundarios
+(`ix_promotion_name`, `ix_quotation_status`, `ix_user_email`, …) que ninguna migración creó; sus
+compuestos covering ya existen, así que crearlos sólo sumaría overhead de escritura. Los índices de FK
+"faltantes" son artefacto de nombre (MySQL los crea como `fk_*`/`<col>_id`). Ver reporte de drift si
+se retoma.
+
+### 📌 Pendiente (próximos pasos, en orden)
+1. **Verificar el deploy** de P1 (arriba) — hecho: run `30239655323` = success. ✅
+2. **Deploy del barrido (`v7w8x9y0` + `w8x9y0z1`) a prod** — validado en staging, **pendiente OK del
+   usuario** (igual que `u6v7w8x9`). Recomendado backup antes. Al mergear a `main`, el
+   `docker-entrypoint.sh` aplica `alembic upgrade head` (fail-fast).
+3. **P2 — prueba de carga real**: construir el harness de latencia bajo carga de websockets Reflex
+   (§4). **No existe aún.** Es el mayor pendiente de tooling.
+4. **P3 — infra**: réplicas del contenedor + balanceador, réplica de lectura MySQL, monitoreo (§5).
+
+### 🧹 Limpieza
+- Staging `sistema_staging` (Docker MySQL 33306) tiene 150 empresas SEEDVOL + la migración aplicada.
+  Borrar cuando no se use: `DROP DATABASE sistema_staging;` (ver §8 paso 5). **No afecta prod.**
+- Rama `perf/p1-audit-tooling` ya mergeada; se puede borrar.
