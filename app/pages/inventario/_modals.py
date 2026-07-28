@@ -147,7 +147,7 @@ def import_modal() -> rx.Component:
           rx.el.p(
             State.import_stats["margin_missing"].to_string(),
             " fila(s) sin precio de venta y sin margen global configurado: quedarían en $0. "
-            "Cargá un precio en esas filas, o configurá el margen en Configuración.",
+            "Carga un precio en esas filas, o configura el margen en Configuración.",
             class_name="text-xs text-red-700",
           ),
           class_name="flex gap-2 bg-red-50 border border-red-200 rounded-lg p-3",
@@ -240,7 +240,7 @@ def import_modal() -> rx.Component:
             rx.el.p(
               "Obligatorias: codigo y descripcion. ",
               rx.el.span("precio venta es opcional", class_name="font-medium text-indigo-600"),
-              ": si lo dejás vacío, se calcula con tu margen global.",
+              ": si lo dejas vacío, se calcula con tu margen global.",
               class_name="text-xs text-slate-500 mt-1",
             ),
             class_name="flex-1",
