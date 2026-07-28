@@ -33,6 +33,18 @@ from app.utils.exports import (
 
 logger = logging.getLogger(__name__)
 
+# Plantilla de importación (encabezados + filas de ejemplo). Compartida por las
+# descargas CSV y XLSX. Los encabezados coinciden con los alias de _parse_import_file.
+_IMPORT_TEMPLATE_HEADERS = [
+    "codigo", "descripcion", "categoria", "stock", "unidad", "precio compra", "precio venta",
+]
+_IMPORT_TEMPLATE_ROWS = [
+    # 1ª fila: precio de venta explícito.
+    ["7791234567890", "Coca Cola 500ml", "Bebidas", "50", "Unidad", "8.50", "12.00"],
+    # 2ª fila: precio de venta VACÍO → se calcula con el margen global configurado.
+    ["DUR-001", "Tornillo 3/8", "Ferreteria", "500", "Unidad", "0.10", ""],
+]
+
 
 class ExportMixin:
     """Exportación a Excel e importación masiva CSV/Excel de inventario."""
@@ -276,7 +288,10 @@ class ExportMixin:
         self.import_modal_open = True
         self.import_preview_rows = []
         self.import_errors = []
-        self.import_stats = {"new": 0, "updated": 0, "errors": 0, "total": 0}
+        self.import_stats = {
+            "new": 0, "updated": 0, "errors": 0, "total": 0,
+            "stock_locked": 0, "margin_missing": 0,
+        }
         self.import_processing = False
         self.import_file_name = ""
 
@@ -286,6 +301,49 @@ class ExportMixin:
         self.import_preview_rows = []
         self.import_errors = []
         self.import_file_name = ""
+
+    @rx.event
+    def download_import_template_csv(self):
+        """Descarga la plantilla en CSV (encabezados esperados + filas de ejemplo).
+
+        Los encabezados coinciden con los alias que acepta ``_parse_import_file``.
+        Nota: Excel en locale español puede mostrar el CSV en una sola columna
+        (usa ``;`` como separador de listas); el importador lo carga igual. Para
+        editar cómodo en Excel, usar la plantilla Excel.
+        """
+        contenido = "\n".join(
+            [",".join(_IMPORT_TEMPLATE_HEADERS)]
+            + [",".join(fila) for fila in _IMPORT_TEMPLATE_ROWS]
+        )
+        # utf-8-sig (BOM) → Excel abre el CSV respetando los acentos.
+        return rx.download(
+            data=contenido.encode("utf-8-sig"),
+            filename="plantilla_importar_productos.csv",
+        )
+
+    @rx.event
+    def download_import_template_xlsx(self):
+        """Descarga la plantilla en Excel (.xlsx) — se abre siempre en columnas."""
+        import openpyxl
+        from openpyxl.styles import Font
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Productos"
+        ws.append(_IMPORT_TEMPLATE_HEADERS)
+        for celda in ws[1]:
+            celda.font = Font(bold=True)
+        for fila in _IMPORT_TEMPLATE_ROWS:
+            ws.append(fila)
+        anchos = [16, 26, 16, 8, 10, 14, 12]
+        for i, ancho in enumerate(anchos, start=1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = ancho
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        return rx.download(
+            data=buffer.getvalue(),
+            filename="plantilla_importar_productos.xlsx",
+        )
 
     @rx.event
     async def handle_import_upload(self, files: list[rx.UploadFile]):
@@ -351,6 +409,10 @@ class ExportMixin:
         update_count = 0
         error_count = 0
         locked_count = 0
+        margin_missing = 0  # P.Venta vacía pero sin margen global → quedaría en $0
+        # Margen global vigente del tenant (sucursal → empresa). Si es 0, dejar la
+        # columna P.Venta vacía daría precio $0 (se avisa en el preview).
+        global_margin = float(getattr(self, "effective_profit_margin_decimal", 0.0) or 0.0)
 
         for idx, row in enumerate(rows, start=2):
             barcode = str(row.get("barcode", "") or "").strip()
@@ -365,10 +427,14 @@ class ExportMixin:
                 error_count += 1
                 continue
 
+            # P.Venta VACÍA → precio dinámico por margen (sale_price = NULL al
+            # importar). Con un número (incluido 0) → precio explícito.
+            raw_sale = row.get("sale_price", None)
+            price_from_margin = raw_sale is None or str(raw_sale).strip() == ""
             try:
                 stock = float(row.get("stock", 0) or 0)
                 purchase_price = float(row.get("purchase_price", 0) or 0)
-                sale_price = float(row.get("sale_price", 0) or 0)
+                sale_price = 0.0 if price_from_margin else float(raw_sale)
             except (ValueError, TypeError):
                 errors.append(f"Fila {idx} ({barcode}): valores numéricos inválidos.")
                 error_count += 1
@@ -379,6 +445,11 @@ class ExportMixin:
                 new_count += 1
             else:
                 update_count += 1
+
+            # Sólo un producto NUEVO sin precio y sin margen quedaría en $0. En un
+            # producto EXISTENTE, precio vacío = preservar su precio actual (no $0).
+            if is_new and price_from_margin and global_margin <= 0:
+                margin_missing += 1
 
             # Producto existente cuyo stock lo gobiernan variantes/lotes:
             # se actualizan los demás campos pero NO el stock.
@@ -395,6 +466,7 @@ class ExportMixin:
                 "unit": str(row.get("unit", "Unidad") or "Unidad").strip(),
                 "purchase_price": purchase_price,
                 "sale_price": sale_price,
+                "price_from_margin": price_from_margin,
                 "status": "Nuevo" if is_new else "Actualizar",
                 "stock_locked": stock_locked,
             })
@@ -407,6 +479,7 @@ class ExportMixin:
             "errors": error_count,
             "total": len(rows),
             "stock_locked": locked_count,
+            "margin_missing": margin_missing,
         }
 
     def _parse_import_file(self, filename: str, data: bytes) -> list[dict]:
@@ -543,7 +616,12 @@ class ExportMixin:
                     stock = Decimal(str(row.get("stock", 0) or 0))
                     unit = row.get("unit", "Unidad") or "Unidad"
                     purchase_price = Decimal(str(row.get("purchase_price", 0) or 0))
-                    sale_price = Decimal(str(row.get("sale_price", 0) or 0))
+                    # P.Venta vacía en el archivo → NULL → precio dinámico por margen
+                    # (la cascada de precios usa precio_compra × (1 + margen global)).
+                    if row.get("price_from_margin"):
+                        sale_price = None
+                    else:
+                        sale_price = Decimal(str(row.get("sale_price", 0) or 0))
 
                     # Auto-crear categoría si no existe
                     if category_name not in existing_categories:
@@ -563,7 +641,11 @@ class ExportMixin:
                         product.category = category_name
                         product.unit = unit
                         product.purchase_price = purchase_price
-                        product.sale_price = sale_price
+                        # Precio: sólo se pisa si el archivo trae un precio EXPLÍCITO.
+                        # Si P.Venta vino vacía en un producto EXISTENTE, NO se toca su
+                        # precio actual → preserva el custom/margen que ya tenía.
+                        if not row.get("price_from_margin"):
+                            product.sale_price = sale_price
 
                         if product.id in managed_pids:
                             # Stock gobernado por variantes/lotes → NO se pisa,

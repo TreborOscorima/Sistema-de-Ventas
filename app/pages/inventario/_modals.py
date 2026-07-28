@@ -139,6 +139,21 @@ def import_modal() -> rx.Component:
         ),
         rx.fragment(),
       ),
+      # Aviso: filas con P.Venta vacía pero sin margen global → quedarían en $0
+      rx.cond(
+        State.import_stats["margin_missing"].to(int) > 0,
+        rx.el.div(
+          rx.icon("triangle-alert", class_name="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5"),
+          rx.el.p(
+            State.import_stats["margin_missing"].to_string(),
+            " fila(s) sin precio de venta y sin margen global configurado: quedarían en $0. "
+            "Cargá un precio en esas filas, o configurá el margen en Configuración.",
+            class_name="text-xs text-red-700",
+          ),
+          class_name="flex gap-2 bg-red-50 border border-red-200 rounded-lg p-3",
+        ),
+        rx.fragment(),
+      ),
       # Tabla preview
       rx.cond(
         State.import_preview_rows.length() > 0,
@@ -188,7 +203,19 @@ def import_modal() -> rx.Component:
                       ),
                       class_name="py-2 px-3 text-sm text-right",
                     ),
-                    rx.el.td(row["sale_price"].to_string(), class_name="py-2 px-3 text-sm text-right font-mono"),
+                    rx.el.td(
+                      rx.cond(
+                        row["price_from_margin"].to(bool),
+                        rx.cond(
+                          row["status"] == "Nuevo",
+                          rx.el.span("Según margen", class_name="text-xs text-indigo-500 italic"),
+                          rx.el.span("Sin cambio", class_name="text-xs text-slate-400 italic",
+                                     title="Precio vacío en un producto existente: se conserva su precio actual"),
+                        ),
+                        rx.el.span(row["sale_price"].to_string()),
+                      ),
+                      class_name="py-2 px-3 text-sm text-right font-mono",
+                    ),
                     class_name="border-b border-slate-100",
                   ),
                 ),
@@ -204,12 +231,37 @@ def import_modal() -> rx.Component:
       rx.cond(
         State.import_file_name == "",
         rx.el.div(
-          rx.el.h4("Columnas esperadas", class_name="text-xs font-semibold text-slate-600 mb-1"),
-          rx.el.p(
-            "codigo/barcode, descripcion, categoria, stock, unidad, costo/precio compra, precio/precio venta",
-            class_name="text-xs text-slate-500",
+          rx.el.div(
+            rx.el.h4("Columnas esperadas", class_name="text-xs font-semibold text-slate-600 mb-1"),
+            rx.el.p(
+              "codigo/barcode, descripcion, categoria, stock, unidad, costo/precio compra, precio/precio venta",
+              class_name="text-xs text-slate-500",
+            ),
+            rx.el.p(
+              "Obligatorias: codigo y descripcion. ",
+              rx.el.span("precio venta es opcional", class_name="font-medium text-indigo-600"),
+              ": si lo dejás vacío, se calcula con tu margen global.",
+              class_name="text-xs text-slate-500 mt-1",
+            ),
+            class_name="flex-1",
           ),
-          class_name="bg-slate-50 border border-slate-200 rounded-lg p-3",
+          rx.el.div(
+            rx.el.span("Plantilla:", class_name="text-xs font-medium text-slate-500 mr-1"),
+            rx.el.button(
+              rx.icon("file-text", class_name="h-4 w-4"),
+              "CSV",
+              on_click=State.download_import_template_csv,
+              class_name=BUTTON_STYLES["ghost"] + " whitespace-nowrap shrink-0",
+            ),
+            rx.el.button(
+              rx.icon("file-spreadsheet", class_name="h-4 w-4"),
+              "Excel",
+              on_click=State.download_import_template_xlsx,
+              class_name=BUTTON_STYLES["ghost"] + " whitespace-nowrap shrink-0",
+            ),
+            class_name="flex items-center gap-2 shrink-0",
+          ),
+          class_name="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3",
         ),
         rx.fragment(),
       ),
