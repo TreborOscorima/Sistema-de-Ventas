@@ -149,6 +149,14 @@ class User(SQLModel, table=True):
     token_version: int = Field(default=0)
     is_platform_owner: bool = Field(default=False, description="Owner de la plataforma SaaS")
 
+    # Preferencia de impresión POR USUARIO (autoservicio del cajero). NULL/vacío
+    # = hereda el tamaño configurado en la sucursal. Permite que cada cajero
+    # imprima en el tamaño de SU impresora (58 / 80 / A4 / ancho custom en mm)
+    # sin afectar a los demás cajeros ni a la configuración de la sucursal.
+    # La cascada de resolución es: usuario → sucursal → default (80).
+    receipt_paper: Optional[str] = Field(default=None, max_length=10)
+    receipt_width: Optional[int] = Field(default=None)
+
     company_id: int = Field(
         foreign_key="company.id",
         index=True,

@@ -412,7 +412,48 @@ class MixinState:
         lines.extend(f"{indent}{line}" for line in value_lines[1:])
         return lines
 
+    def _user_receipt_paper(self) -> str:
+        """Preferencia de papel del cajero logueado ('' = hereda de la sucursal).
+
+        Lee ``_cached_user`` (backend var refrescada por ``_resolve_current_user``)
+        en lugar del rx.var cacheado ``current_user``: así un cambio de preferencia
+        aplica de inmediato en la sesión actual sin depender de un cambio de token.
+        """
+        user = getattr(self, "_cached_user", None)
+        if isinstance(user, dict):
+            return (user.get("receipt_paper") or "").strip()
+        return ""
+
+    def _user_receipt_width(self) -> int | None:
+        """Override opcional de ancho (caracteres) del cajero, o None si hereda."""
+        user = getattr(self, "_cached_user", None)
+        if isinstance(user, dict):
+            raw = user.get("receipt_width")
+            if isinstance(raw, int):
+                return raw
+            if isinstance(raw, str) and raw.strip().isdigit():
+                return int(raw.strip())
+        return None
+
     def _receipt_width(self, branch_id: int | None = None) -> int:
+        # Cascada de ancho: preferencia del usuario (ancho explícito, o derivado
+        # de SU papel) → configuración de la sucursal → default.
+        user_width = self._user_receipt_width()
+        if user_width:
+            return max(MIN_RECEIPT_WIDTH, min(user_width, MAX_RECEIPT_WIDTH))
+        user_paper = self._user_receipt_paper()
+        if user_paper:
+            from app.utils.receipt_format import normalize_paper
+            fmt = normalize_paper(user_paper)
+            if fmt == "58":
+                w = 32
+            elif fmt in {"80", "a4"}:
+                w = DEFAULT_RECEIPT_WIDTH
+            elif fmt.isdigit():
+                w = round(int(fmt) * 0.53)
+            else:
+                w = DEFAULT_RECEIPT_WIDTH
+            return max(MIN_RECEIPT_WIDTH, min(w, MAX_RECEIPT_WIDTH))
         settings = self._company_settings_snapshot(branch_id=branch_id)
         raw_width = settings.get("receipt_width")
         width_raw = os.getenv("RECEIPT_WIDTH", "").strip()
@@ -441,8 +482,11 @@ class MixinState:
         return max(MIN_RECEIPT_WIDTH, min(width, MAX_RECEIPT_WIDTH))
 
     def _receipt_paper_mm(self, branch_id: int | None = None) -> int:
-        settings = self._company_settings_snapshot(branch_id=branch_id)
-        paper = (settings.get("receipt_paper") or "").strip().lower()
+        # Cascada: preferencia del usuario → sucursal → env.
+        paper = self._user_receipt_paper().lower()
+        if not paper:
+            settings = self._company_settings_snapshot(branch_id=branch_id)
+            paper = (settings.get("receipt_paper") or "").strip().lower()
         if not paper:
             paper = os.getenv("RECEIPT_PAPER", "").strip().lower()
         if paper in {"58", "58mm", "58-mm"}:
@@ -467,6 +511,10 @@ class MixinState:
             override = getattr(self, "receipt_print_paper_override", "") or ""
             if override:
                 return normalize_paper(override)
+        # Preferencia del cajero (autoservicio) antes que la config de sucursal.
+        user_paper = self._user_receipt_paper()
+        if user_paper:
+            return normalize_paper(user_paper)
         settings = self._company_settings_snapshot(branch_id=branch_id)
         paper = (settings.get("receipt_paper") or "").strip()
         if not paper:

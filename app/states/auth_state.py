@@ -412,6 +412,13 @@ class AuthState(MixinState):
                         "is_platform_owner": bool(
                             getattr(user, "is_platform_owner", False)
                         ),
+                        # Preferencia de impresión del cajero ("" = hereda sucursal).
+                        "receipt_paper": (getattr(user, "receipt_paper", None) or ""),
+                        "receipt_width": (
+                            str(user.receipt_width)
+                            if getattr(user, "receipt_width", None) is not None
+                            else ""
+                        ),
                     }
             else:
                 self._cached_user = self._guest_user()
@@ -1121,12 +1128,15 @@ class AuthState(MixinState):
         return {
             "id": None,
             "company_id": None,
+            "branch_id": None,
             "username": MSG.ROLE_GUEST,
             "email": "",
             "role": MSG.ROLE_GUEST,
             "privileges": EMPTY_PRIVILEGES.copy(),
             "must_change_password": False,
             "is_platform_owner": False,
+            "receipt_paper": "",
+            "receipt_width": "",
         }
 
     def _normalize_privileges(self, privileges: Dict[str, bool]) -> Privileges:

@@ -3,6 +3,18 @@
     display: none !important;
 }
 
+/* El toast SIEMPRE debe verse sobre cualquier modal/overlay.
+   El z-index tiene que ir en el CONTENEDOR [data-sonner-toaster] (no en el
+   toast individual): es el elemento que compite en el contexto de apilamiento
+   raíz contra los modales de la app, que llegan hasta z-[100]. Sonner ya trae
+   999999999, pero lo forzamos al máximo con !important para blindarlo ante
+   cualquier override de tema/Radix que pudiera bajarlo. Sin esto, el mensaje
+   de error de validación queda tapado por el modal abierto y el usuario no
+   puede leer en qué se equivocó. */
+[data-sonner-toaster] {
+    z-index: 2147483647 !important;
+}
+
 html, body {
     overflow-x: hidden;
 }

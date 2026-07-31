@@ -261,10 +261,14 @@ class NewUser(TypedDict):
 class User(TypedDict):
     id: int | None
     company_id: int | None
+    branch_id: int | None
     username: str
     email: str
     role: str
     privileges: Privileges
     must_change_password: bool
     is_platform_owner: bool
+    # Preferencia de impresión por usuario ("" = hereda de la sucursal).
+    receipt_paper: str
+    receipt_width: str
 

@@ -1,6 +1,15 @@
 import reflex as rx
 from app.state import State
-from app.components.ui import RADIUS, SHADOWS, TRANSITIONS, modal_container
+from app.components.ui import (
+    RADIUS,
+    SHADOWS,
+    TRANSITIONS,
+    BUTTON_STYLES,
+    INPUT_STYLES,
+    SELECT_STYLES,
+    TYPOGRAPHY,
+    modal_container,
+)
 from app.constants import CASH_SUBSECTIONS, SERVICES_SUBSECTIONS
 
 
@@ -593,6 +602,20 @@ def _sidebar_auth_footer() -> rx.Component:
             ),
             class_name="p-4",
         ),
+        # Preferencias de impresión (autoservicio): cada cajero elige el tamaño
+        # de papel de SU impresora. Accesible por cualquier usuario logueado,
+        # sin necesitar permisos de administrador.
+        rx.el.button(
+            rx.icon("printer", class_name="h-5 w-5"),
+            rx.cond(State.sidebar_open, rx.el.span("Impresión"), rx.fragment()),
+            on_click=State.open_print_prefs,
+            title=rx.cond(State.sidebar_open, "", "Preferencias de impresión"),
+            class_name=rx.cond(
+                State.sidebar_open,
+                f"flex items-center gap-3 w-full text-left px-4 py-3 text-slate-600 hover:bg-slate-100 {TRANSITIONS['fast']}",
+                f"flex items-center justify-center w-full px-2 py-3 text-slate-600 hover:bg-slate-100 {TRANSITIONS['fast']}",
+            ),
+        ),
         # Botón logout — pasa por logout_check_cashbox para advertir si hay caja abierta
         rx.el.button(
             rx.icon("log-out", class_name="h-5 w-5"),
@@ -642,10 +665,82 @@ def cashbox_logout_warning_modal() -> rx.Component:
     )
 
 
+def print_prefs_modal() -> rx.Component:
+    """Modal autoservicio: cada cajero elige el tamaño de papel de SU impresora.
+
+    La preferencia se guarda en su usuario y solo afecta a sus propios tickets;
+    la configuración de la sucursal y de los demás cajeros no se toca.
+    """
+    return modal_container(
+        is_open=State.profile_prefs_open,
+        on_close=State.close_print_prefs,
+        title="Preferencias de impresión",
+        description=(
+            "Elegí el tamaño de papel de tu impresora. Solo afecta a tus tickets; "
+            "los demás usuarios de la sucursal no cambian."
+        ),
+        max_width="max-w-md",
+        children=[
+            rx.el.div(
+                rx.el.label("Tamaño de papel", class_name=TYPOGRAPHY["label"]),
+                rx.el.select(
+                    rx.el.option("Usar configuración de la sucursal", value=""),
+                    rx.el.option("58 mm (térmica angosta)", value="58"),
+                    rx.el.option("80 mm (térmica estándar)", value="80"),
+                    rx.el.option("A4 (hoja completa)", value="A4"),
+                    rx.el.option("Personalizado (mm)", value="custom"),
+                    value=State.profile_receipt_paper,
+                    on_change=State.set_profile_receipt_paper,
+                    class_name=SELECT_STYLES["default"],
+                ),
+                rx.cond(
+                    State.profile_receipt_paper == "custom",
+                    rx.el.div(
+                        rx.el.input(
+                            placeholder="Ej: 76",
+                            type="number",
+                            value=State.profile_receipt_paper_custom_mm,
+                            on_change=State.set_profile_receipt_paper_custom_mm,
+                            class_name=INPUT_STYLES["default"],
+                        ),
+                        rx.el.p(
+                            "Ancho del papel térmico en milímetros (40–120).",
+                            class_name="text-xs text-slate-400",
+                        ),
+                        class_name="mt-2 flex flex-col gap-1",
+                    ),
+                    rx.fragment(),
+                ),
+                rx.el.p(
+                    "La impresora física se sigue eligiendo en el diálogo de "
+                    "impresión del sistema; esto ajusta el formato del ticket a tu papel.",
+                    class_name="text-xs text-slate-400 mt-2",
+                ),
+                class_name="flex flex-col gap-1",
+            ),
+        ],
+        footer=rx.el.div(
+            rx.el.button(
+                "Cancelar",
+                on_click=State.close_print_prefs,
+                class_name=BUTTON_STYLES["ghost"],
+            ),
+            rx.el.button(
+                rx.icon("save", class_name="h-4 w-4"),
+                "Guardar",
+                on_click=State.save_print_prefs,
+                class_name=BUTTON_STYLES["primary_sm"],
+            ),
+            class_name="flex items-center justify-end gap-3",
+        ),
+    )
+
+
 def sidebar() -> rx.Component:
     """Componente principal del sidebar con navegación y contenido condicional."""
     return rx.fragment(
         cashbox_logout_warning_modal(),
+        print_prefs_modal(),
         # Sidebar principal
         rx.el.div(
             rx.el.div(
