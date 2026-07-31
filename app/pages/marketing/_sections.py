@@ -535,7 +535,7 @@ def _screenshots_section() -> rx.Component:
                         ),
                         rx.el.div(
                             rx.el.span(
-                                "tuwaykiapp.com",
+                                "sys.tuwayki.app",
                                 class_name="text-xs text-slate-400 font-mono",
                             ),
                             class_name="flex-1 mx-3 bg-white rounded-md px-3 py-1 text-center border border-slate-200",

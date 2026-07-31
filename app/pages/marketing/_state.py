@@ -69,10 +69,10 @@ TRUST_BADGES = [
 INDUSTRIES = [
     ("store",          "Tiendas y retail",      "POS + stock + caja"),
     ("dumbbell",       "Canchas deportivas",     "Reservas + cobros"),
-    ("wrench",         "Talleres y servicios",   "Órdenes + historial"),
+    ("gift",           "Bazares y regalería",    "Alta variedad"),
     ("truck",          "Distribuidoras",         "Inventario intensivo"),
-    ("utensils",       "Gastronomía",            "Ventas + caja rápida"),
-    ("scissors",       "Salones y estética",     "Turnos + facturación"),
+    ("shopping-basket", "Minimarkets y kioscos",  "Ventas + caja rápida"),
+    ("hammer",         "Ferreterías",            "Miles de productos"),
     ("building-2",     "Multi-sucursal",         "Control centralizado"),
     ("package",        "Bodegas",                "Stock + Kardex"),
 ]
@@ -186,10 +186,10 @@ USE_CASES = [
         "accent": "emerald",
     },
     {
-        "icon": "wrench",
-        "title": "Servicios y Talleres",
-        "description": "Órdenes de trabajo, cobro por servicio finalizado y seguimiento de clientes recurrentes con historial.",
-        "features": ["Órdenes de servicio", "Cobro parcial y final", "Historial de clientes"],
+        "icon": "truck",
+        "title": "Distribuidoras y Mayoristas",
+        "description": "Alto volumen de inventario con listas de precios por cliente, ventas al por mayor y cuentas corrientes con seguimiento de saldos.",
+        "features": ["Listas de precios por cliente", "Cuentas corrientes y saldos", "Stock por bodega en tiempo real"],
         "accent": "amber",
     },
     {
