@@ -1759,11 +1759,15 @@ class TestMonthlyQuotaEdgeCases:
 
     def _make_config(self, current=0, limit=500, reset_date=None):
         from app.models.billing import CompanyBillingConfig
-        from datetime import date
+        from app.utils.timezone import utc_now_naive
         config = CompanyBillingConfig(company_id=1)
         config.current_billing_count = current
         config.max_billing_limit = limit
-        config.billing_count_reset_date = reset_date or date.today()
+        # Usar la MISMA base temporal que _check_monthly_quota (utc_now_naive),
+        # no date.today(): en el borde de fin de mes la fecha local y la UTC
+        # caen en meses distintos y se dispararía un reset mensual espurio que
+        # pone el contador en 0 y vuelve el test no-determinista.
+        config.billing_count_reset_date = reset_date or utc_now_naive()
         return config
 
     def test_exactly_at_limit_rejected(self):
