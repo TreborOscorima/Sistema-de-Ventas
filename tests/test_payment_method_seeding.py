@@ -58,6 +58,52 @@ def test_pago_mixto_is_universal_across_countries():
         assert "Pago Mixto" in names, f"Falta 'Pago Mixto' en {code}"
 
 
+def test_all_supported_countries_have_full_config_and_methods():
+    """Cada país soportado debe tener config completa + métodos (universal +
+    billeteras propias + Pago Mixto)."""
+    from tuwayki_core.countries import SUPPORTED_COUNTRIES, COUNTRY_PAYMENT_METHODS
+    import zoneinfo
+
+    expected = {"PE", "AR", "EC", "CO", "CL", "MX", "BO", "UY", "PY", "VE"}
+    assert set(SUPPORTED_COUNTRIES) == expected
+    # Todo país soportado tiene billeteras propias definidas.
+    assert set(COUNTRY_PAYMENT_METHODS) == expected
+    required = {
+        "name", "currency", "currency_symbol", "timezone",
+        "tax_id_label", "personal_id_label", "denominations",
+    }
+    for code, cfg in SUPPORTED_COUNTRIES.items():
+        assert required <= set(cfg), f"{code} sin campos: {required - set(cfg)}"
+        zoneinfo.ZoneInfo(cfg["timezone"])  # zona horaria válida
+        assert cfg["denominations"], f"{code} sin denominaciones"
+        names = {m["name"] for m in get_payment_methods_for_country(code)}
+        assert "Pago Mixto" in names, f"{code} sin Pago Mixto"
+        assert "Efectivo" in names, f"{code} sin Efectivo"
+
+
+def test_new_countries_have_local_wallets():
+    """Los países agregados deben traer sus billeteras locales sembradas."""
+    expected_wallets = {
+        "BO": {"Tigo Money", "QR Simple"},
+        "UY": {"Mercado Pago", "Prex"},
+        "PY": {"Tigo Money", "Billetera Personal"},
+        "VE": {"Pago Móvil", "Biopago"},
+    }
+    for code, wallets in expected_wallets.items():
+        names = {m["name"] for m in get_payment_methods_for_country(code)}
+        assert wallets <= names, f"{code} faltan billeteras: {wallets - names}"
+
+
+def test_tax_preset_countries_are_all_supported():
+    """Consistencia: todo país con preset de impuestos debe ser País de
+    Operación soportado (habría cazado la brecha original BO/UY/PY)."""
+    from app.utils.tax_presets import COUNTRY_TAX_PRESETS
+    from tuwayki_core.countries import SUPPORTED_COUNTRIES
+
+    orphans = set(COUNTRY_TAX_PRESETS) - set(SUPPORTED_COUNTRIES)
+    assert not orphans, f"Países con impuestos pero sin config de país: {orphans}"
+
+
 def test_reserved_credit_sale_name_detection():
     assert is_reserved_payment_method(name="Crédito / Fiado") is True
     assert is_reserved_payment_method(name="Venta al crédito") is True

@@ -223,6 +223,7 @@ def impuestos_section() -> rx.Component:
     ("UY", "🇺🇾 Uruguay (IVA 22%/10%)"),
     ("PY", "🇵🇾 Paraguay (IVA 10%/5%)"),
     ("MX", "🇲🇽 México (IVA 16%)"),
+    ("VE", "🇻🇪 Venezuela (IVA 16%)"),
   ]
 
   return rx.el.div(
