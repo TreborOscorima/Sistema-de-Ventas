@@ -396,6 +396,14 @@ class PaymentMixin:
         if kind == "plin":
             self.payment_wallet_choice = "Plin"
             self.payment_wallet_provider = "Plin"
+        elif kind == "wallet":
+            # Billetera país-específica (MODO, Cuenta DNI, Mercado Pago, Nequi...):
+            # el proveedor ES el nombre del método, no un sub-proveedor Yape/Plin.
+            # Antes se hardcodeaba "Yape", lo que hacía que la venta se
+            # registrara con el payment_method_id de Yape en vez del real.
+            wallet_name = (method.get("name", "") if method else "") or "Yape"
+            self.payment_wallet_choice = wallet_name
+            self.payment_wallet_provider = wallet_name
         else:
             self.payment_wallet_choice = "Yape"
             self.payment_wallet_provider = "Yape"

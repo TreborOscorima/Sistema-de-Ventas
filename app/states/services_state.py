@@ -15,7 +15,7 @@ from app.enums import SaleStatus, ReservationStatus, PaymentMethodType
 from app.utils.payment import (
     normalize_payment_method_kind,
     card_method_type,
-    wallet_method_type,
+    wallet_method_type_scoped,
 )
 from app.utils.sanitization import (
     escape_like,
@@ -229,7 +229,7 @@ class ServicesState(MixinState):
         return card_method_type(card_type)
 
     def _wallet_method_type(self, provider: str) -> PaymentMethodType:
-        return wallet_method_type(provider)
+        return wallet_method_type_scoped(provider)
 
     def _build_reservation_payments(
         self, total: float

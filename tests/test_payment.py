@@ -5,11 +5,40 @@ from app.utils.payment import (
     normalize_payment_method_kind,
     card_method_type,
     wallet_method_type,
+    wallet_method_type_scoped,
     payment_method_code,
     payment_method_label,
     normalize_wallet_label,
     payment_category,
 )
+
+
+class TestWalletMethodTypeScoped:
+    """Regresión: billeteras país-específicas NO deben colapsar a Yape.
+
+    Bug real: MODO/Cuenta DNI (Argentina) se registraban con el
+    payment_method_id de Yape porque wallet_method_type() defaultea a yape.
+    El helper scoped devuelve `other` para que el id se resuelva por nombre.
+    """
+
+    def test_yape_plin_keep_specific_type(self):
+        assert wallet_method_type_scoped("Yape") == PaymentMethodType.yape
+        assert wallet_method_type_scoped("yape") == PaymentMethodType.yape
+        assert wallet_method_type_scoped("Plin") == PaymentMethodType.plin
+
+    def test_argentine_wallets_map_to_other_not_yape(self):
+        for provider in ("MODO", "Cuenta DNI", "Mercado Pago"):
+            result = wallet_method_type_scoped(provider)
+            assert result == PaymentMethodType.other, (
+                f"{provider} debería mapear a 'other', no a {result}"
+            )
+            assert result != PaymentMethodType.yape
+
+    def test_future_country_wallets_map_to_other(self):
+        # Colombia (Nequi/Daviplata), Bolivia, etc.: cualquier billetera
+        # desconocida cae en 'other' → se resuelve por nombre/ID real.
+        for provider in ("Nequi", "Daviplata", "QR Simple", ""):
+            assert wallet_method_type_scoped(provider) == PaymentMethodType.other
 
 
 class TestNormalizePaymentMethodKind:

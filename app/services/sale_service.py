@@ -76,7 +76,7 @@ from app.utils.tenant import set_tenant_context
 from app.utils.payment import (
     normalize_payment_method_kind as _method_type_from_kind,
     card_method_type as _card_method_type,
-    wallet_method_type as _wallet_method_type,
+    wallet_method_type_scoped as _wallet_method_type,
     payment_method_code as _payment_method_code,
 )
 from app.utils.timezone import format_local_datetime, utc_now_naive
@@ -2389,6 +2389,16 @@ class SaleService:
                         _method_type_from_kind(kind)
                     )
                 cashbox_method_id = resolve_payment_method_id(main_payment_code)
+                if cashbox_method_id is None:
+                    # Billetera/método país-específico (MODO, Cuenta DNI, etc.):
+                    # el enum no lo representa, así que resolvemos el ID real por
+                    # nombre contra la tabla (mismo criterio que el SalePayment).
+                    _cb_name = (payment_method or "").strip().lower()
+                    if _cb_name:
+                        for _m in all_methods:
+                            if (_m.name or "").strip().lower() == _cb_name:
+                                cashbox_method_id = _m.id
+                                break
                 action_label = MSG.ACTION_SALE
                 summary_items: list[str] = []
                 if reservation is not None:
