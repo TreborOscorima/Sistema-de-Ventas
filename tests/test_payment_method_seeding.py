@@ -44,6 +44,20 @@ def test_country_payment_methods_exclude_reserved_credit_sale():
     assert "Crédito / Fiado" not in names
 
 
+def test_pago_mixto_is_universal_across_countries():
+    """Regresión: 'Pago Mixto' debe existir para TODO país.
+
+    tuwayki_core no lo incluye en los universales; sin el wrapper de db_seeds,
+    cambiar de país lo desactiva y los pagos mixtos quedan indisponibles.
+    """
+    for code in ("PE", "AR", "CO", "CL", "MX", "EC"):
+        methods = get_payment_methods_for_country(code)
+        codes = {(m.get("code") or "").lower() for m in methods}
+        names = {m["name"] for m in methods}
+        assert "mixed" in codes, f"Falta Pago Mixto (code=mixed) en {code}"
+        assert "Pago Mixto" in names, f"Falta 'Pago Mixto' en {code}"
+
+
 def test_reserved_credit_sale_name_detection():
     assert is_reserved_payment_method(name="Crédito / Fiado") is True
     assert is_reserved_payment_method(name="Venta al crédito") is True

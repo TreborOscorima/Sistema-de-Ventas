@@ -19,8 +19,30 @@ from tuwayki_core.countries import (  # noqa: F401
     RESERVED_PAYMENT_METHOD_NAME_KEYS,
     CURRENCY_CATALOG,
     is_reserved_payment_method,
-    get_payment_methods_for_country,
+    get_payment_methods_for_country as _core_get_payment_methods_for_country,
 )
+
+# "Pago Mixto" es UNIVERSAL (todo país lo necesita) pero tuwayki_core no lo
+# incluye en UNIVERSAL_PAYMENT_METHODS. Sin esto, al cambiar de país set_country
+# lo desactiva (no está en la lista del país) y los pagos mixtos dejan de estar
+# disponibles. Se agrega acá, en la capa Ventas, para no tocar el core (Food).
+_MIXED_PAYMENT_METHOD = {
+    "name": "Pago Mixto",
+    "code": "mixed",
+    "method_id": "mixed",
+    "description": "Combinación",
+    "kind": PaymentMethodType.mixed,
+    "allows_change": False,
+}
+
+
+def get_payment_methods_for_country(country_code: str) -> list[dict]:
+    """Universal + país + Pago Mixto (universal faltante en el core)."""
+    methods = _core_get_payment_methods_for_country(country_code)
+    if not any((m.get("code") or "").lower() == "mixed" for m in methods):
+        methods.append(dict(_MIXED_PAYMENT_METHOD))
+    return methods
+
 
 # Por defecto: Perú (para compatibilidad con instalaciones existentes)
 DEFAULT_PAYMENT_METHODS = get_payment_methods_for_country("PE")
