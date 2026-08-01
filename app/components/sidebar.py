@@ -676,7 +676,7 @@ def print_prefs_modal() -> rx.Component:
         on_close=State.close_print_prefs,
         title="Preferencias de impresión",
         description=(
-            "Elegí el tamaño de papel de tu impresora. Solo afecta a tus tickets; "
+            "Elige el tamaño de papel de tu impresora. Solo afecta a tus tickets; "
             "los demás usuarios de la sucursal no cambian."
         ),
         max_width="max-w-md",
