@@ -1192,7 +1192,9 @@ class ConfigState(MixinState):
         return f"{config.get('currency_name', 'Moneda')} ({config.get('currency', 'USD')})"
 
     def _format_currency(self, value: float) -> str:
-        return f"{self.currency_symbol}{self._round_currency(value):.2f}"
+        from tuwayki_core.utils.formatting import format_number
+        code = getattr(self, "selected_currency_code", "") or ""
+        return f"{self.currency_symbol}{format_number(value, code)}"
 
     @rx.event
     def set_currency(self, code: str):

@@ -195,7 +195,7 @@ class PromotionsState(MixinState):
                 "scope_label": scope_label,
                 "discount_value": float(p.discount_value or 0),
                 "discount_value_display": (
-                    fmt_price(float(p.discount_value or 0))
+                    self._fmt_amount(float(p.discount_value or 0))
                     if p.promotion_type == PromotionType.FIXED_AMOUNT
                     else str(int(float(p.discount_value or 0)))
                     if float(p.discount_value or 0) == int(float(p.discount_value or 0))

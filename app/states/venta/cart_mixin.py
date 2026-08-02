@@ -201,11 +201,11 @@ class CartMixin:
 
     @rx.var(cache=False)
     def sale_subtotal_display(self) -> str:
-        return fmt_price(self.sale_subtotal)
+        return self._fmt_amount(self.sale_subtotal)
 
     @rx.var(cache=False)
     def products_cart_subtotal_display(self) -> str:
-        return fmt_price(self.products_cart_subtotal)
+        return self._fmt_amount(self.products_cart_subtotal)
 
     @rx.var(cache=False)
     def sale_price_form_display(self) -> str:
@@ -240,7 +240,7 @@ class CartMixin:
 
     @rx.var(cache=False)
     def sale_total_display(self) -> str:
-        return fmt_price(self.sale_total)
+        return self._fmt_amount(self.sale_total)
 
     def _apply_item_rounding(self, item: TransactionItem):
         unit = item.get("unit", "")

@@ -238,7 +238,7 @@ class CloseMixin:
         totals_list = [
             {
                 "method": item.get("method", MSG.FALLBACK_NOT_SPECIFIED),
-                "amount": fmt_price(self._round_currency(item.get("total", 0))),
+                "amount": self._fmt_amount(self._round_currency(item.get("total", 0))),
             }
             for item in summary
             if item.get("total", 0) > 0
@@ -564,13 +564,13 @@ class CloseMixin:
                         "payment_label": method_label,
                         "payment_details": payment_detail,
                         "concept": concept,
-                        "amount": fmt_price(self._round_currency(log.amount or 0)),
-                        "total": fmt_price(float(log.amount or 0)),
+                        "amount": self._fmt_amount(self._round_currency(log.amount or 0)),
+                        "total": self._fmt_amount(float(log.amount or 0)),
                         "is_deleted": False,
                         "payment_breakdown": [
                             {
                                 "label": method_label,
-                                "amount": fmt_price(self._round_currency(log.amount or 0)),
+                                "amount": self._fmt_amount(self._round_currency(log.amount or 0)),
                             }
                         ],
                         "payment_kind": "",
@@ -613,7 +613,7 @@ class CloseMixin:
                     "time": time_label,
                     "user": username or MSG.FALLBACK_UNKNOWN,
                     "concept": concept,
-                    "amount": fmt_price(self._round_currency(log.amount or 0)),
+                    "amount": self._fmt_amount(self._round_currency(log.amount or 0)),
                     "amount_raw": float(log.amount or 0),
                     "action": log.action or "",
                 })
@@ -812,6 +812,7 @@ class CloseMixin:
                     action=action_label,
                     amount=amount,
                     payment_method=payment_label,
+                    payment_method_id=_pm_id_other,
                     notes=description,
                     timestamp=timestamp,
                     sale_id=new_sale.id,

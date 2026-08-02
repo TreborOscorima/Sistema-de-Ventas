@@ -45,7 +45,7 @@ def reservation_mobile_card(reservation: rx.Var[dict]) -> rx.Component:
       rx.el.div(
         rx.el.span("Total", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
-          State.currency_symbol, reservation["total_amount"],
+          State.currency_symbol, reservation["total_disp"],
           class_name=TYPOGRAPHY["mono_value"],
         ),
         class_name="flex flex-col",
@@ -53,7 +53,7 @@ def reservation_mobile_card(reservation: rx.Var[dict]) -> rx.Component:
       rx.el.div(
         rx.el.span("Pagado", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
-          State.currency_symbol, reservation["paid_amount"],
+          State.currency_symbol, reservation["paid_disp"],
           class_name=TYPOGRAPHY["mono_value"],
         ),
         class_name="flex flex-col",
@@ -62,7 +62,7 @@ def reservation_mobile_card(reservation: rx.Var[dict]) -> rx.Component:
         rx.el.span("Saldo", class_name=TYPOGRAPHY["caption"]),
         rx.el.span(
           State.currency_symbol,
-          reservation["balance_display"],
+          reservation["balance_disp"],
           class_name=TYPOGRAPHY["mono_value"],
         ),
         class_name="flex flex-col",
@@ -152,11 +152,11 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
     ),
     rx.el.td(
       rx.el.div(
-        rx.el.span(State.currency_symbol, reservation["total_amount"], class_name="font-semibold"),
+        rx.el.span(State.currency_symbol, reservation["total_disp"], class_name="font-semibold"),
         rx.el.span(
           "Pagado ",
           State.currency_symbol,
-          reservation["paid_amount"],
+          reservation["paid_disp"],
           class_name="text-xs text-slate-600",
         ),
         class_name="flex flex-col gap-1",
@@ -243,7 +243,7 @@ def reservation_row(reservation: rx.Var[dict]) -> rx.Component:
     rx.el.td(
       rx.el.span(
         State.currency_symbol,
-        reservation["balance_display"],
+        reservation["balance_disp"],
         class_name="font-semibold",
       ),
       class_name="py-3 px-4 text-right hidden md:table-cell",

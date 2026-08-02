@@ -135,8 +135,8 @@ class SearchMixin:
             "purchase_price": product.purchase_price,
             "sale_price": product.sale_price,
             "variant_has_own_price": False,
-            "purchase_price_display": fmt_price(float(product.purchase_price or 0)),
-            "sale_price_display": fmt_price(float(resolve_effective_price(
+            "purchase_price_display": self._fmt_amount(float(product.purchase_price or 0)),
+            "sale_price_display": self._fmt_amount(float(resolve_effective_price(
                 product, global_margin=getattr(self, "effective_profit_margin_decimal", 0.0)
             ))),
             "custom_profit_margin": product.custom_profit_margin,
@@ -182,8 +182,8 @@ class SearchMixin:
             "unit": product.unit,
             "purchase_price": product.purchase_price,
             "sale_price": effective_sale_price,
-            "purchase_price_display": fmt_price(float(product.purchase_price or 0)),
-            "sale_price_display": fmt_price(float(effective_sale_price)),
+            "purchase_price_display": self._fmt_amount(float(product.purchase_price or 0)),
+            "sale_price_display": self._fmt_amount(float(effective_sale_price)),
             "custom_profit_margin": product.custom_profit_margin,
             "default_supplier_id": product.default_supplier_id,
             "stock_total_display": fmt_price(stock_total),
@@ -535,8 +535,8 @@ class SearchMixin:
         self.inventory_in_stock_count = in_stock_count
         self.inventory_low_stock_count = low_stock_count
         self.inventory_out_of_stock_count = out_of_stock_count
-        self.inventory_total_value = fmt_price(total_value)
-        self.inventory_page_total = fmt_price(page_total)
+        self.inventory_total_value = self._fmt_amount(total_value)
+        self.inventory_page_total = self._fmt_amount(page_total)
 
     @rx.event
     def refresh_inventory_cache(self):

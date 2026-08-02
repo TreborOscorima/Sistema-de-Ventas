@@ -772,11 +772,11 @@ class ReorderState(MixinState):
 
     @rx.var
     def reorder_confirm_total_str(self) -> str:
-        return f"{self.reorder_confirm_total:.2f}"
+        return self._fmt_amount(self.reorder_confirm_total)
 
     @rx.var
     def po_edit_total_str(self) -> str:
-        return f"{float(self.po_edit_total):.2f}"
+        return self._fmt_amount(float(self.po_edit_total))
 
 
 __all__ = ["ReorderState"]

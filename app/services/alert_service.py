@@ -228,11 +228,24 @@ def get_low_stock_alerts(
     return alerts
 
 
-def _format_alert_currency(amount: Decimal, currency_symbol: str | None) -> str:
+def _format_alert_currency(
+    amount: Decimal, currency_symbol: str | None, code: str | None = None
+) -> str:
     symbol = (currency_symbol or "").strip()
     if symbol:
         symbol = f"{symbol} "
-    return format_currency(float(amount or 0), symbol or "S/ ")
+    return format_currency(float(amount or 0), symbol or "S/ ", code)
+
+
+def _currency_code_for_country(country_code: str | None) -> str | None:
+    """Deriva el código de moneda (ARS, PYG, …) desde el código de país."""
+    if not country_code:
+        return None
+    try:
+        from app.utils.db_seeds import get_country_config
+        return get_country_config(country_code).get("currency")
+    except Exception:
+        return None
 
 
 def get_installment_alerts(
@@ -254,6 +267,7 @@ def get_installment_alerts(
     """
     _require_tenant(company_id, branch_id)
     alerts = []
+    _currency_code = _currency_code_for_country(country_code)
     today, _ = local_day_bounds_utc_naive(
         None,
         country_code,
@@ -298,7 +312,7 @@ def get_installment_alerts(
                 title=MSG.ALERT_OVERDUE_INSTALLMENTS,
                 message=(
                     f"{overdue_count} cuota(s) vencida(s) por "
-                    f"{_format_alert_currency(overdue_amount, currency_symbol)}"
+                    f"{_format_alert_currency(overdue_amount, currency_symbol, _currency_code)}"
                 ),
                 count=overdue_count,
                 details={"total_amount": float(overdue_amount)}
@@ -338,7 +352,7 @@ def get_installment_alerts(
                 message=(
                     f"{due_soon_count} cuota(s) vence(n) en los próximos "
                     f"{INSTALLMENT_DUE_DAYS} días "
-                    f"({_format_alert_currency(due_soon_amount, currency_symbol)})"
+                    f"({_format_alert_currency(due_soon_amount, currency_symbol, _currency_code)})"
                 ),
                 count=due_soon_count,
                 details={"total_amount": float(due_soon_amount)}

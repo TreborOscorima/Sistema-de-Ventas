@@ -7,6 +7,7 @@ contables y financieras con el nivel de detalle requerido.
 import functools
 import io
 import re
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Any
@@ -29,7 +30,8 @@ from app.enums import SaleStatus, PaymentMethodType
 from app.i18n import MSG
 from app.utils.tenant import tenant_bypass, tenant_context
 from app.utils.exports import _safe_decimal, _sanitize_excel_value
-from app.utils.formatting import fmt_input_num
+from app.utils.formatting import fmt_input_num, format_number, currency_decimals
+from app.utils.db_seeds import get_country_config
 from app.utils.pricing import resolve_effective_price
 from app.utils.timezone import format_local_datetime, to_local_datetime, utc_now_naive
 
@@ -43,8 +45,21 @@ def _with_tenant_reset(fn):
     """
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        with tenant_context(kwargs.get("company_id"), kwargs.get("branch_id")):
-            return fn(*args, **kwargs)
+        # Fija la moneda del reporte (para decimales/separadores locales) desde
+        # el country_code, y la restaura al salir para no filtrar entre requests.
+        country = kwargs.get("country_code")
+        currency_code = None
+        if country:
+            try:
+                currency_code = get_country_config(country).get("currency")
+            except Exception:
+                currency_code = None
+        token = _report_currency_code.set(currency_code)
+        try:
+            with tenant_context(kwargs.get("company_id"), kwargs.get("branch_id")):
+                return fn(*args, **kwargs)
+        finally:
+            _report_currency_code.reset(token)
     return wrapper
 
 
@@ -101,19 +116,26 @@ THICK_BORDER_BOTTOM = Border(
 )
 
 
+# Código de moneda del reporte en curso (set por cada generador desde country_code).
+# ContextVar → seguro entre requests concurrentes; permite que los formateadores
+# respeten decimales/separadores locales sin cablear el código en cada llamada.
+_report_currency_code: ContextVar[str | None] = ContextVar(
+    "_report_currency_code", default=None
+)
+
+
 def _round_currency(value: float | Decimal) -> Decimal:
-    """Redondea a 2 decimales para moneda."""
-    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    """Redondea a los decimales de la moneda del reporte (0 para guaraní/CLP)."""
+    decimals = currency_decimals(_report_currency_code.get())
+    quantum = Decimal(1).scaleb(-decimals)
+    return Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
 
 
 def _format_currency(value: float | Decimal, currency_symbol: str | None = None) -> str:
-    """Formatea valor como moneda."""
+    """Formatea valor como moneda, locale-aware (decimales + separadores por país)."""
     symbol = (currency_symbol or "").strip()
-    if symbol:
-        symbol = f"{symbol} "
-    else:
-        symbol = "S/ "
-    return f"{symbol}{_round_currency(value):,.2f}"
+    symbol = f"{symbol} " if symbol else "S/ "
+    return f"{symbol}{format_number(value, _report_currency_code.get())}"
 
 
 def _currency_label(currency_symbol: str | None) -> str:
@@ -123,7 +145,9 @@ def _currency_label(currency_symbol: str | None) -> str:
 
 def _currency_format(currency_symbol: str | None) -> str:
     symbol = _currency_label(currency_symbol).replace('"', "")
-    return f'"{symbol}"#,##0.00'
+    decimals = currency_decimals(_report_currency_code.get())
+    number = "#,##0" + ("." + "0" * decimals if decimals else "")
+    return f'"{symbol}"{number}'
 
 
 def _report_now(

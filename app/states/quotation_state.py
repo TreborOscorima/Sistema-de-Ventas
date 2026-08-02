@@ -423,7 +423,7 @@ class QuotationState(MixinState):
 
     @rx.var(cache=False)
     def quot_items_subtotal_str(self) -> str:
-        return fmt_price(self.quot_items_subtotal)
+        return self._fmt_amount(self.quot_items_subtotal)
 
     @rx.var(cache=False)
     def quot_discount_amount(self) -> float:
@@ -432,7 +432,7 @@ class QuotationState(MixinState):
 
     @rx.var(cache=False)
     def quot_discount_amount_str(self) -> str:
-        return fmt_price(self.quot_discount_amount)
+        return self._fmt_amount(self.quot_discount_amount)
 
     @rx.var(cache=False)
     def quot_cart_total(self) -> float:
@@ -441,7 +441,7 @@ class QuotationState(MixinState):
 
     @rx.var(cache=False)
     def quot_cart_total_str(self) -> str:
-        return fmt_price(self.quot_cart_total)
+        return self._fmt_amount(self.quot_cart_total)
 
     # ─── Guardar presupuesto ─────────────────────────────────────────
 
@@ -1088,7 +1088,7 @@ class QuotationState(MixinState):
 
         items_summary = [
             f"{float(qi.quantity or 0):.0f}x {qi.product_name_snapshot or '—'} — "
-            f"{self.currency_symbol}{float(qi.unit_price or 0):.2f}"
+            f"{self._format_currency(float(qi.unit_price or 0))}"
             for qi in db_items
         ]
 

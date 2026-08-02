@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
 import base64
+import functools
 import html
 import io
 import re
@@ -100,9 +101,10 @@ class ReceiptService:
         )
 
     @staticmethod
-    def _format_currency(value: Any, currency_symbol: str) -> str:
-        rounded = ReceiptService._round_currency(value)
-        return f"{currency_symbol}{float(rounded):.2f}"
+    def _format_currency(value: Any, currency_symbol: str, code: str | None = None) -> str:
+        # Locale-aware: decimales/separadores según la moneda (0 dec. guaraní/CLP).
+        from tuwayki_core.utils.formatting import format_number
+        return f"{currency_symbol}{format_number(value, code)}"
 
     @staticmethod
     def _wrap_receipt_lines(text: str, width: int) -> List[str]:
@@ -610,9 +612,10 @@ class ReceiptService:
         except (TypeError, ValueError):
             branch_id = None
 
-        receipt_lines = ReceiptService._build_receipt_lines(
-            data, company, ReceiptService._format_currency
+        _fmt = functools.partial(
+            ReceiptService._format_currency, code=data.get("currency_code")
         )
+        receipt_lines = ReceiptService._build_receipt_lines(data, company, _fmt)
         receipt_text = chr(10).join(receipt_lines)
         safe_receipt_text = html.escape(receipt_text)
         _, _, logo_data_uri = ReceiptService._resolve_logo_assets(
@@ -697,8 +700,11 @@ class ReceiptService:
         data_for_pdf = dict(data)
         data_for_pdf["width"] = target_width
 
+        _fmt_pdf = functools.partial(
+            format_currency_screen, code=data.get("currency_code")
+        )
         receipt_lines = ReceiptService._build_receipt_lines(
-            data_for_pdf, company, format_currency_screen
+            data_for_pdf, company, _fmt_pdf
         )
 
         logo_path, logo_bytes, _ = ReceiptService._resolve_logo_assets(

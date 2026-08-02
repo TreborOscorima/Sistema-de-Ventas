@@ -136,7 +136,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
 
     @rx.var(cache=False)
     def credit_available_display(self) -> str:
-        return fmt_price(self.selected_client_credit_available)
+        return self._fmt_amount(self.selected_client_credit_available)
 
     @rx.var(cache=True)
     def credit_financed_amount(self) -> float:
@@ -154,7 +154,7 @@ class VentaState(MixinState, CartMixin, PaymentMixin, ReceiptMixin, RecentMovesM
 
     @rx.var(cache=False)
     def credit_financed_display(self) -> str:
-        return fmt_price(self.credit_financed_amount)
+        return self._fmt_amount(self.credit_financed_amount)
 
     @rx.var(cache=True)
     def credit_installment_amount(self) -> float:

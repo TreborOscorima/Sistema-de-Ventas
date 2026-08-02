@@ -166,7 +166,7 @@ class IngresoState(MixinState):
 
     @rx.var(cache=False)
     def entry_total_display(self) -> str:
-        return fmt_price(self.entry_total)
+        return self._fmt_amount(self.entry_total)
 
     @rx.var(cache=True)
     def purchase_supplier_rows(self) -> List[Dict[str, Any]]:

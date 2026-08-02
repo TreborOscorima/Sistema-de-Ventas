@@ -230,7 +230,7 @@ class SessionMixin:
 
     @rx.var(cache=True)
     def cashbox_opening_amount_display(self) -> str:
-        return f"{self.cashbox_opening_amount:.2f}"
+        return self._fmt_amount(self.cashbox_opening_amount)
 
     @rx.var(cache=True)
     def cashbox_is_open(self) -> bool:

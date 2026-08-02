@@ -23,11 +23,13 @@ class ReservationStatus(str, Enum):
     paid = "paid"
     cancelled = "cancelled"
     refunded = "refunded"
+    deleted = "deleted"
 
     PENDING = pending
     PAID = paid
     CANCELLED = cancelled
     REFUNDED = refunded
+    DELETED = deleted
 
 
 class SportType(str, Enum):

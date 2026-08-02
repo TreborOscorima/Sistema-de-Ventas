@@ -192,7 +192,7 @@ class PurchasesState(MixinState):
                     "doc_label": doc_label,
                     "supplier_name": supplier.name if supplier else "",
                     "supplier_tax_id": supplier.tax_id if supplier else "",
-                    "total_amount": fmt_price(float(purchase.total_amount or 0)),
+                    "total_amount": self._fmt_amount(float(purchase.total_amount or 0)),
                     "currency_code": purchase.currency_code or "",
                     "user": user.username if user else "Sistema",
                     "items_count": len(purchase.items or []),
@@ -306,8 +306,8 @@ class PurchasesState(MixinState):
                         "category": item.category_snapshot,
                         "quantity": fmt_input_num(item.quantity or 0),
                         "unit": item.unit,
-                        "unit_cost": fmt_price(item.unit_cost or 0),
-                        "subtotal": fmt_price(item.subtotal or 0),
+                        "unit_cost": self._fmt_amount(item.unit_cost or 0),
+                        "subtotal": self._fmt_amount(item.subtotal or 0),
                     }
                 )
 
@@ -325,7 +325,7 @@ class PurchasesState(MixinState):
                 else "",
                 "supplier_name": supplier.name if supplier else "",
                 "supplier_tax_id": supplier.tax_id if supplier else "",
-                "total_amount": fmt_price(float(purchase.total_amount or 0)),
+                "total_amount": self._fmt_amount(float(purchase.total_amount or 0)),
                 "currency_code": purchase.currency_code or "",
                 "user": user.username if user else "Sistema",
                 "items_count": len(items),
@@ -844,7 +844,7 @@ class PurchasesState(MixinState):
 
         add_notes_section(ws, row, [
             f"Total de documentos: {len(records)}",
-            f"Total invertido ({currency_label}): {total_compras:,.2f}",
+            f"Total invertido ({currency_label}): {self._fmt_amount(total_compras)}",
             "Filtros aplicados: " + (
                 f"Búsqueda='{self.purchase_search_term}'" if self.purchase_search_term else "Ninguno"
             ),

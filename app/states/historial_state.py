@@ -472,7 +472,8 @@ class HistorialState(MixinState):
                             "source": "Venta",
                             "method_key": method_key,
                             "method_label": _sale_method_label,
-                            "amount": fmt_price(self._round_currency(amount)),
+                            "amount": self._fmt_amount(self._round_currency(amount)),
+                            "amount_raw": float(self._round_currency(amount)),
                             "user": user_name,
                             "reference": reference,
                         }
@@ -519,7 +520,8 @@ class HistorialState(MixinState):
                             "method_label": self._normalize_wallet_label(
                                 getattr(log, "payment_method", "") or method_key
                             ),
-                            "amount": fmt_price(self._round_currency(amount)),
+                            "amount": self._fmt_amount(self._round_currency(amount)),
+                            "amount_raw": float(self._round_currency(amount)),
                             "user": user_name,
                             "reference": (log.notes or "").strip()
                             or "Cobranza registrada",
@@ -927,12 +929,12 @@ class HistorialState(MixinState):
                         if sale.timestamp
                         else "",
                         "client_name": client_name,
-                        "total": fmt_price(total_amount),
+                        "total": self._fmt_amount(total_amount),
                         "payment_method": payment_method,
                         "payment_details": self._payment_details_text(payment_details),
                         "user": user_name,
                         "return_status": ret_status,
-                        "total_refunded": fmt_price(self._round_currency(refunded)),
+                        "total_refunded": self._fmt_amount(self._round_currency(refunded)),
                     }
                 )
             return rows
@@ -989,7 +991,7 @@ class HistorialState(MixinState):
                     "total": Decimal("0.00"),
                 }
             totals[key]["count"] += 1
-            totals[key]["total"] += Decimal(str(entry.get("amount", 0) or 0))
+            totals[key]["total"] += Decimal(str(entry.get("amount_raw", 0) or 0))
 
         summary: list[dict] = []
         for key in REPORT_METHOD_KEYS:
@@ -999,7 +1001,7 @@ class HistorialState(MixinState):
                     {
                         "method_label": item["method_label"],
                         "count": item["count"],
-                        "total": fmt_price(self._round_currency(item["total"])),
+                        "total": self._fmt_amount(self._round_currency(item["total"])),
                     }
                 )
         for key, value in totals.items():
@@ -1008,7 +1010,7 @@ class HistorialState(MixinState):
                     {
                         "method_label": value["method_label"],
                         "count": value["count"],
-                        "total": fmt_price(self._round_currency(value["total"])),
+                        "total": self._fmt_amount(self._round_currency(value["total"])),
                     }
                 )
 
@@ -1145,7 +1147,7 @@ class HistorialState(MixinState):
             cards.append(
                 {
                     "name": label,
-                    "amount": fmt_price(amount),
+                    "amount": self._fmt_amount(amount),
                     "icon": style["icon"],
                     "color": style["color"],
                     "_sort_key": kind,
@@ -1428,7 +1430,7 @@ class HistorialState(MixinState):
                 "date": day.strftime("%Y-%m-%d")
                 if hasattr(day, "strftime")
                 else str(day or ""),
-                "total": fmt_price(self._round_currency(total or 0)),
+                "total": self._fmt_amount(self._round_currency(total or 0)),
             }
             for day, total in sales_day_rows
         ]
@@ -1719,7 +1721,7 @@ class HistorialState(MixinState):
                     "timestamp": self._format_company_datetime(ret.timestamp) if ret.timestamp else "",
                     "reason": reason_label,
                     "items": ", ".join(items_summary),
-                    "refund": fmt_price(self._round_currency(float(ret.refund_amount or 0))),
+                    "refund": self._fmt_amount(self._round_currency(float(ret.refund_amount or 0))),
                 })
             self.selected_sale_returns = returns_list
 
@@ -1734,15 +1736,15 @@ class HistorialState(MixinState):
                     retained_items.append({
                         "description": item.product_name_snapshot,
                         "quantity": fmt_input_num(available_qty),
-                        "unit_price": fmt_price(unit_price_val),
-                        "subtotal": fmt_price(self._round_currency(available_qty * unit_price_val)),
+                        "unit_price": self._fmt_amount(unit_price_val),
+                        "subtotal": self._fmt_amount(self._round_currency(available_qty * unit_price_val)),
                     })
                 if returned_qty > 0:
                     returned_items.append({
                         "description": item.product_name_snapshot,
                         "quantity": fmt_input_num(returned_qty),
-                        "unit_price": fmt_price(unit_price_val),
-                        "subtotal": fmt_price(self._round_currency(returned_qty * unit_price_val)),
+                        "unit_price": self._fmt_amount(unit_price_val),
+                        "subtotal": self._fmt_amount(self._round_currency(returned_qty * unit_price_val)),
                     })
             self.selected_sale_items_retained = retained_items
             self.selected_sale_items_returned_detail = returned_items
@@ -1791,22 +1793,22 @@ class HistorialState(MixinState):
                 ),
                 "payment_method": payment_method,
                 "payment_details": self._payment_details_text(payment_details),
-                "total": fmt_price(total_amount),
-                "total_refunded": fmt_price(total_refunded),
-                "net_total": fmt_price(net_total),
+                "total": self._fmt_amount(total_amount),
+                "total_refunded": self._fmt_amount(total_refunded),
+                "net_total": self._fmt_amount(net_total),
                 "has_returns": len(sale_returns) > 0,
                 "return_status": detail_return_status,
                 # Desglose financiero
-                "subtotal_bruto": fmt_price(subtotal_bruto),
-                "total_discount": fmt_price(total_discount),
+                "subtotal_bruto": self._fmt_amount(subtotal_bruto),
+                "total_discount": self._fmt_amount(total_discount),
                 "has_discount": total_discount > 0,
                 "show_tax": show_tax and tax_rate_pct > 0,
                 "tax_name": tax_name,
                 "tax_rate_pct": f"{tax_rate_pct:.0f}",
-                "tax_amount": fmt_price(tax_amount),
-                "subtotal_neto": fmt_price(subtotal_neto),
+                "tax_amount": self._fmt_amount(tax_amount),
+                "subtotal_neto": self._fmt_amount(subtotal_neto),
                 "has_retained_items": len(retained_items) > 0,
-                "retained_total": fmt_price(net_total),
+                "retained_total": self._fmt_amount(net_total),
             }
         self.sale_detail_modal_open = True
 
@@ -1841,11 +1843,11 @@ class HistorialState(MixinState):
 
     @rx.var(cache=False)
     def credit_outstanding_display(self) -> str:
-        return fmt_price(self.credit_outstanding)
+        return self._fmt_amount(self.credit_outstanding)
 
     @rx.var(cache=False)
     def total_credit_display(self) -> str:
-        return fmt_price(self.total_credit)
+        return self._fmt_amount(self.total_credit)
 
     @rx.event
     def export_to_excel(self):
@@ -2663,7 +2665,7 @@ class HistorialState(MixinState):
                     "available_qty": available,
                     "return_qty": available,
                     "at_max": True,
-                    "refund_line": fmt_price(round(available * unit_price, 2)),
+                    "refund_line": self._fmt_amount(round(available * unit_price, 2)),
                 })
             if not items:
                 return rx.toast("Todos los ítems ya fueron devueltos.", duration=3000)
@@ -3082,10 +3084,10 @@ class HistorialState(MixinState):
                     "items_display": "\n".join(items_detail) if items_detail else "Sin ítems",
                     "items_summary": ", ".join(items_detail) if items_detail else "Sin ítems",
                     "items_count": len(items_detail),
-                    "refund_amount": fmt_price(refund_amt),
+                    "refund_amount": self._fmt_amount(refund_amt),
                     "user": user_lookup.get(int(ret.user_id), "Desconocido") if ret.user_id else "Desconocido",
                     "is_group_start": is_group_start,
-                    "group_sale_total": fmt_price(round(sale_refund_totals.get(sid, 0.0), 2)),
+                    "group_sale_total": self._fmt_amount(round(sale_refund_totals.get(sid, 0.0), 2)),
                 })
 
             self.returns_report_rows = rows

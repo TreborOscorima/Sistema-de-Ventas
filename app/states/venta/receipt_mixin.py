@@ -250,6 +250,7 @@ class ReceiptMixin:
             "payment_summary": payment_summary,
             "reservation_context": reservation_context,
             "currency_symbol": self.currency_symbol,
+            "currency_code": getattr(self, "selected_currency_code", "") or "",
             "width": receipt_width,
             "paper_width_mm": paper_width_mm,
             "paper": self._receipt_paper_value(
@@ -453,6 +454,7 @@ class ReceiptMixin:
             "payment_summary": payment_summary,
             "reservation_context": reservation_context,
             "currency_symbol": self.currency_symbol,
+            "currency_code": getattr(self, "selected_currency_code", "") or "",
             "width": receipt_width,
             "paper_width_mm": paper_width_mm,
             "paper": self._receipt_paper_value(branch_id=branch_id),

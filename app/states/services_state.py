@@ -29,7 +29,7 @@ from app.utils.sanitization import (
 from .types import FieldReservation, ServiceLogEntry, ReservationReceipt, FieldPrice, FieldPriceGroup
 from .mixin_state import MixinState
 from app.utils.dates import get_today_str, get_current_week_str, get_current_month_str
-from app.utils.formatting import fmt_input_num, fmt_price
+from app.utils.formatting import fmt_input_num, fmt_price, format_number
 from app.utils.print_helper import build_print_script
 from app.utils.receipt_format import receipt_style
 from app.utils.exports import (
@@ -78,6 +78,7 @@ _EMPTY_RESERVATION: FieldReservation = {
     "field_name": "", "start_datetime": "", "end_datetime": "",
     "advance_amount": "0.00", "total_amount": "0.00", "paid_amount": "0.00",
     "balance_display": "0.00",
+    "advance_disp": "0", "total_disp": "0", "paid_disp": "0", "balance_disp": "0",
     "status": "", "created_at": "", "cancellation_reason": "", "delete_reason": "",
     "created_by": "",
 }
@@ -157,6 +158,10 @@ class ServicesState(MixinState):
             else str(reservation.sport)
         )
         status_ui = self._reservation_status_to_ui(reservation.status)
+        _code = getattr(self, "selected_currency_code", "") or ""
+        _total = float(reservation.total_amount or 0)
+        _paid = float(reservation.paid_amount or 0)
+        _balance = _total - _paid
         return {
             "id": str(reservation.id),
             "client_name": reservation.client_name,
@@ -167,12 +172,14 @@ class ServicesState(MixinState):
             "field_name": reservation.field_name,
             "start_datetime": reservation.start_datetime.strftime("%Y-%m-%d %H:%M"),
             "end_datetime": reservation.end_datetime.strftime("%Y-%m-%d %H:%M"),
-            "advance_amount": fmt_price(float(reservation.paid_amount or 0)),
-            "total_amount": fmt_price(float(reservation.total_amount or 0)),
-            "paid_amount": fmt_price(float(reservation.paid_amount or 0)),
-            "balance_display": fmt_price(
-                float(reservation.total_amount or 0) - float(reservation.paid_amount or 0)
-            ),
+            "advance_amount": fmt_price(_paid),
+            "total_amount": fmt_price(_total),
+            "paid_amount": fmt_price(_paid),
+            "balance_display": fmt_price(_balance),
+            "advance_disp": format_number(_paid, _code),
+            "total_disp": format_number(_total, _code),
+            "paid_disp": format_number(_paid, _code),
+            "balance_disp": format_number(_balance, _code),
             "status": status_ui,
             "created_at": self._format_company_datetime(
                 reservation.created_at,
@@ -191,10 +198,12 @@ class ServicesState(MixinState):
             "paid": "pagado",
             "cancelled": "cancelado",
             "refunded": "reembolsado",
+            "deleted": "eliminado",
             "pendiente": "pendiente",
             "pagado": "pagado",
             "cancelado": "cancelado",
             "reembolsado": "reembolsado",
+            "eliminado": "eliminado",
         }
         return mapping.get(value, value or "pendiente")
 
@@ -213,6 +222,8 @@ class ServicesState(MixinState):
             "cancelado": ReservationStatus.CANCELLED,
             "refunded": ReservationStatus.REFUNDED,
             "reembolsado": ReservationStatus.REFUNDED,
+            "deleted": ReservationStatus.DELETED,
+            "eliminado": ReservationStatus.DELETED,
         }
         return mapping.get(value)
 
@@ -409,6 +420,12 @@ class ServicesState(MixinState):
             db_status = self._reservation_status_to_db(self.reservation_filter_status)
             if db_status is not None:
                 query = query.where(FieldReservationModel.status == db_status)
+        else:
+            # "Todos" oculta las eliminadas (soft-delete); solo se ven con el
+            # filtro explícito "Eliminado".
+            query = query.where(
+                FieldReservationModel.status != ReservationStatus.DELETED
+            )
 
         if self.reservation_search:
             search = f"%{escape_like(self.reservation_search.strip())}%"
@@ -488,7 +505,8 @@ class ServicesState(MixinState):
 
     @rx.var(cache=False)
     def selected_reservation_balance_display(self) -> str:
-        return fmt_price(self.selected_reservation_balance)
+        code = getattr(self, "selected_currency_code", "") or ""
+        return format_number(self.selected_reservation_balance, code)
 
     reservation_payment_amount: str = ""
     reservation_cancel_selection: str = ""
@@ -1450,7 +1468,7 @@ class ServicesState(MixinState):
                 existing_row = session.exec(
                     select(FieldReservationModel)
                     .where(FieldReservationModel.sport == self.field_rental_sport)
-                    .where(FieldReservationModel.status.notin_([ReservationStatus.CANCELLED]))
+                    .where(FieldReservationModel.status.notin_([ReservationStatus.CANCELLED, ReservationStatus.DELETED]))
                     .where(FieldReservationModel.start_datetime == start_dt)
                     .where(FieldReservationModel.company_id == company_id)
                     .where(FieldReservationModel.branch_id == branch_id)
@@ -1576,7 +1594,7 @@ class ServicesState(MixinState):
                 conflict = session.exec(
                     select(FieldReservationModel.id)
                     .where(FieldReservationModel.sport == self.field_rental_sport)
-                    .where(FieldReservationModel.status != ReservationStatus.CANCELLED)
+                    .where(FieldReservationModel.status.notin_([ReservationStatus.CANCELLED, ReservationStatus.DELETED]))
                     .where(FieldReservationModel.start_datetime < end_dt)
                     .where(FieldReservationModel.end_datetime > start_dt)
                     .where(FieldReservationModel.company_id == company_id)
@@ -1611,6 +1629,7 @@ class ServicesState(MixinState):
                 session.commit()
                 session.refresh(new_reservation)
                 status_ui = self._reservation_status_to_ui(new_reservation.status)
+                _nr_code = getattr(self, "selected_currency_code", "") or ""
                 reservation: FieldReservation = {
                     "id": str(new_reservation.id),
                     "client_name": new_reservation.client_name,
@@ -1635,6 +1654,12 @@ class ServicesState(MixinState):
                     "paid_amount": fmt_price(float(new_reservation.paid_amount or 0)),
                     "balance_display": fmt_price(
                         float(new_reservation.total_amount or 0) - float(new_reservation.paid_amount or 0)
+                    ),
+                    "advance_disp": format_number(float(new_reservation.paid_amount or 0), _nr_code),
+                    "total_disp": format_number(float(new_reservation.total_amount or 0), _nr_code),
+                    "paid_disp": format_number(float(new_reservation.paid_amount or 0), _nr_code),
+                    "balance_disp": format_number(
+                        float(new_reservation.total_amount or 0) - float(new_reservation.paid_amount or 0), _nr_code
                     ),
                     "status": status_ui,
                     "created_at": self._display_now().strftime(
@@ -2051,6 +2076,7 @@ class ServicesState(MixinState):
                     action=log_action,
                     amount=applied_amount,
                     payment_method=payment_label,
+                    payment_method_id=_pm_id_other_1,
                     notes=log_notes,
                     timestamp=self._utc_now(),
                     user_id=user_id,
@@ -2218,6 +2244,7 @@ class ServicesState(MixinState):
                     action=log_action,
                     amount=applied_amount,
                     payment_method=payment_label,
+                    payment_method_id=_pm_id_other_2,
                     notes=log_notes,
                     timestamp=self._utc_now(),
                     user_id=user_id,
@@ -2308,10 +2335,39 @@ class ServicesState(MixinState):
 
     @rx.event
     def confirm_reservation_delete(self):
-        # Lógica de eliminación (actualizar status a CANCELLED o borrar)
-        # Por ahora solo cerramos el modal para evitar errores si no se actualiza lógica
+        if not self.current_user["privileges"]["manage_reservations"]:
+            return rx.toast("No tiene permisos.", duration=3000)
+        block = self._require_active_subscription()
+        if block:
+            return block
+        company_id = self._company_id()
+        branch_id = self._branch_id()
+        if not company_id or not branch_id:
+            return rx.toast("Empresa no definida.", duration=3000)
+        reason = sanitize_reason(self.reservation_delete_reason or "").strip()
+        if not reason:
+            return rx.toast("Ingrese el sustento de eliminación.", duration=3000)
+        with rx.session() as session:
+            session.info["tenant_bypass"] = True
+            reservation_model = session.exec(
+                select(FieldReservationModel)
+                .where(FieldReservationModel.id == self.reservation_delete_selection)
+                .where(FieldReservationModel.company_id == company_id)
+                .where(FieldReservationModel.branch_id == branch_id)
+                .with_for_update()
+            ).first()
+            if not reservation_model:
+                return rx.toast("Reserva no encontrada.", duration=3000)
+            # Soft-delete: marca como eliminada, guarda el sustento y libera el
+            # horario (las vistas activas y el planificador excluyen 'deleted').
+            reservation_model.status = ReservationStatus.DELETED
+            reservation_model.delete_reason = reason
+            session.add(reservation_model)
+            session.commit()
+
+        self.load_reservations()
         self.close_reservation_delete_modal()
-        return rx.toast("Eliminación en mantenimiento.", duration=3000)
+        return rx.toast("Reserva eliminada.", duration=3000)
 
     @rx.event
     def cancel_reservation(self):
@@ -2402,7 +2458,7 @@ class ServicesState(MixinState):
             query = (
                 select(FieldReservationModel.start_datetime, FieldReservationModel.end_datetime)
                 .where(FieldReservationModel.sport == sport)
-                .where(FieldReservationModel.status != ReservationStatus.CANCELLED)
+                .where(FieldReservationModel.status.notin_([ReservationStatus.CANCELLED, ReservationStatus.DELETED]))
                 .where(FieldReservationModel.start_datetime >= start_date)
                 .where(FieldReservationModel.start_datetime <= end_date)
                 .where(FieldReservationModel.company_id == company_id)
@@ -2425,7 +2481,7 @@ class ServicesState(MixinState):
             conflict = session.exec(
                 select(FieldReservationModel.id)
                 .where(FieldReservationModel.sport == sport)
-                .where(FieldReservationModel.status != ReservationStatus.CANCELLED)
+                .where(FieldReservationModel.status.notin_([ReservationStatus.CANCELLED, ReservationStatus.DELETED]))
                 .where(FieldReservationModel.start_datetime < slot_end)
                 .where(FieldReservationModel.end_datetime > slot_start)
                 .where(FieldReservationModel.company_id == company_id)
@@ -2451,6 +2507,7 @@ class ServicesState(MixinState):
         total_amount = self._safe_amount(reservation.get("total_amount", 0))
         paid_amount = self._safe_amount(reservation.get("paid_amount", 0))
         balance = max(total_amount - paid_amount, 0)
+        _rc_code = getattr(self, "selected_currency_code", "") or ""
         start_time = reservation["start_datetime"].split(" ")[1] if " " in reservation["start_datetime"] else ""
         end_time = reservation["end_datetime"].split(" ")[1] if " " in reservation["end_datetime"] else ""
 
@@ -2463,9 +2520,9 @@ class ServicesState(MixinState):
             "deporte": reservation.get("sport_label", reservation["sport"]),
             "campo": reservation["field_name"],
             "horario": f"{reservation['start_datetime'].split(' ')[0]} {start_time} - {end_time}",
-            "monto_adelanto": f"{paid_amount:.2f}",
-            "monto_total": f"{total_amount:.2f}",
-            "saldo": f"{balance:.2f}",
+            "monto_adelanto": format_number(paid_amount, _rc_code),
+            "monto_total": format_number(total_amount, _rc_code),
+            "saldo": format_number(balance, _rc_code),
             "estado": status_val,
         }
 
@@ -2499,6 +2556,12 @@ class ServicesState(MixinState):
             "total_amount":   total,
             "paid_amount":    paid,
             "balance_display": bal,
+            # Preserva los display locale-aware si vienen; si no (dicts legacy),
+            # cae al número plano para no dejar la llave ausente en el TypedDict.
+            "advance_disp":  r.get("advance_disp", adv),
+            "total_disp":    r.get("total_disp", total),
+            "paid_disp":     r.get("paid_disp", paid),
+            "balance_disp":  r.get("balance_disp", bal),
         }  # type: ignore[return-value]
 
     def _find_reservation_by_id(self, res_id: str) -> FieldReservation | None:

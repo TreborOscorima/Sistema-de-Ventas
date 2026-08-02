@@ -39,7 +39,7 @@ fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="${APP_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 BRANCH="${BRANCH:-docker-deploy-prod}"
-TUWAYKI_CORE_SHA="${TUWAYKI_CORE_SHA:-da4f1c572d565a91bc6d953a6a29891765d41d0d}"
+TUWAYKI_CORE_SHA="${TUWAYKI_CORE_SHA:-ef852f2329fab5a77403101beb71710295d97187}"
 TUWAYKI_CORE_REPO="${TUWAYKI_CORE_REPO:-https://github.com/TreborOscorima/tuwayki-core.git}"
 HEALTH_WAIT_MAX="${HEALTH_WAIT_MAX:-80}"
 BACKUP_KEEP="${BACKUP_KEEP:-5}"

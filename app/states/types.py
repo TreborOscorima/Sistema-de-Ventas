@@ -93,6 +93,13 @@ class FieldReservation(TypedDict):
     total_amount: str
     paid_amount: str
     balance_display: str
+    # Versiones formateadas para mostrar (locale-aware: decimales/separadores
+    # según la moneda activa). Los campos *_amount/*_display se mantienen como
+    # número plano float-parseable para cálculos; estos *_disp son solo display.
+    advance_disp: str
+    total_disp: str
+    paid_disp: str
+    balance_disp: str
     status: str
     created_at: str
     cancellation_reason: str

@@ -818,7 +818,18 @@ class MixinState:
         return f"{config.get('currency_name', 'Moneda')} ({config.get('currency', 'USD')})"
 
     def _format_currency(self, value: float) -> str:
-        return f"{self.currency_symbol}{self._round_currency(value):.2f}"
+        # Locale-aware: decimales y separadores según la moneda activa
+        # (guaraní/CLP sin decimales; punto o coma de miles según el país).
+        from tuwayki_core.utils.formatting import format_number
+        code = getattr(self, "selected_currency_code", "") or ""
+        return f"{self.currency_symbol}{format_number(value, code)}"
+
+    def _fmt_amount(self, value: float) -> str:
+        # Número locale-aware SIN símbolo, para la UI/dicts que anteponen el
+        # símbolo por separado (mismas reglas por moneda que _format_currency).
+        from tuwayki_core.utils.formatting import format_number
+        code = getattr(self, "selected_currency_code", "") or ""
+        return format_number(value, code)
 
     def _currency_symbol_clean(self) -> str:
         """Símbolo de moneda sin espacios para headers/formatos."""
@@ -826,9 +837,18 @@ class MixinState:
         return symbol or "$"
 
     def _currency_excel_format(self) -> str:
-        """Formato de moneda para Excel usando el símbolo activo."""
+        """Formato de moneda para Excel: símbolo y decimales según la moneda activa.
+
+        Los separadores de miles/decimales los aplica Excel según la configuración
+        regional del visor; aquí controlamos la cantidad de decimales (0 para
+        guaraní/CLP, 2 para el resto).
+        """
+        from tuwayki_core.utils.formatting import currency_decimals
         symbol = self._currency_symbol_clean().replace('"', "")
-        return f'"{symbol}"#,##0.00'
+        code = getattr(self, "selected_currency_code", "") or ""
+        decimals = currency_decimals(code)
+        number = "#,##0" + ("." + "0" * decimals if decimals else "")
+        return f'"{symbol}"{number}'
 
     def _unit_allows_decimal(self, unit: str) -> bool:
         # Accediendo a decimal_units desde RootState

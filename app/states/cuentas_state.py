@@ -173,7 +173,7 @@ class CuentasState(MixinState):
             "name": client.name,
             "dni": client.dni,
             "phone": client.phone,
-            "current_debt": fmt_price(float(current_debt or 0)),
+            "current_debt": self._fmt_amount(float(current_debt or 0)),
         }
 
     def _sanitize_report_name(self, value: str) -> str:
@@ -283,9 +283,9 @@ class CuentasState(MixinState):
                     "id": installment.get("id"),
                     "number": installment.get("number"),
                     "due_date": due_date_display,
-                    "amount": fmt_price(float(amount)),
-                    "paid_amount": fmt_price(float(paid_amount)),
-                    "pending_amount": fmt_price(float(pending_amount)),
+                    "amount": self._fmt_amount(float(amount)),
+                    "paid_amount": self._fmt_amount(float(paid_amount)),
+                    "pending_amount": self._fmt_amount(float(pending_amount)),
                     "has_pending": pending_amount > 0,
                     "status": status,
                     "status_label": self._installment_status_label(status),
@@ -425,7 +425,7 @@ class CuentasState(MixinState):
                     "name": client.name,
                     "dni": client.dni,
                     "phone": client.phone,
-                    "current_debt": fmt_price(float(client.current_debt or 0)),
+                    "current_debt": self._fmt_amount(float(client.current_debt or 0)),
                 }
             rows.append(
                 {
@@ -434,9 +434,9 @@ class CuentasState(MixinState):
                     "client_name": client.name if client else MSG.FALLBACK_CLIENT_NOT_REGISTERED,
                     "client_dni": client.dni if client else "-",
                     "due_date": due_date_display,
-                    "amount": fmt_price(float(amount)),
-                    "paid_amount": fmt_price(float(paid_amount)),
-                    "pending_amount": fmt_price(float(pending_amount)),
+                    "amount": self._fmt_amount(float(amount)),
+                    "paid_amount": self._fmt_amount(float(paid_amount)),
+                    "pending_amount": self._fmt_amount(float(pending_amount)),
                     "has_pending": pending_amount > 0,
                     "status": status_raw,
                     "status_label": self._installment_status_label(status_raw),

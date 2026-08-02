@@ -173,9 +173,9 @@ class ClientesState(MixinState):
                     "dni": dni,
                     "phone": phone,
                     "address": address,
-                    "credit_limit": fmt_price(float(credit_limit or 0)),
-                    "current_debt": fmt_price(float(current_debt or 0)),
-                    "credit_available": fmt_price(float(available or 0)),
+                    "credit_limit": self._fmt_amount(float(credit_limit or 0)),
+                    "current_debt": self._fmt_amount(float(current_debt or 0)),
+                    "credit_available": self._fmt_amount(float(available or 0)),
                     "segment": segment,
                 }
             )
@@ -505,7 +505,7 @@ class ClientesState(MixinState):
                 "id": client.id,
                 "name": client.name,
                 "sale_count": sale_count,
-                "current_debt": fmt_price(current_debt),
+                "current_debt": self._fmt_amount(current_debt),
                 "can_delete": can_delete,
             }
         self.client_delete_modal_open = True

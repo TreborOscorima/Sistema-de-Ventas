@@ -677,7 +677,7 @@ class DashboardState(MixinState):
             if net_qty <= 0 and net_rev <= 0:
                 continue  # producto totalmente devuelto → excluir del top
             short_name = name[:25] + "..." if len(name) > 25 else name
-            top.append({"name": short_name, "quantity": net_qty, "revenue": net_rev, "revenue_fmt": f"{net_rev:.2f}"})
+            top.append({"name": short_name, "quantity": net_qty, "revenue": net_rev, "revenue_fmt": self._fmt_amount(net_rev)})
         top.sort(key=lambda x: x["revenue"], reverse=True)
         self.dash_top_products = top[:10]
 
@@ -889,7 +889,7 @@ class DashboardState(MixinState):
             {
                 "category": r["category"],
                 "total": round(r["_net"], 2),
-                "total_fmt": f"{r['_net']:.2f}",
+                "total_fmt": self._fmt_amount(r['_net']),
                 "percentage": round(r["_net"] / total_sales * 100, 1) if total_sales > 0 else 0,
             }
             for r in result_list
@@ -970,31 +970,31 @@ class DashboardState(MixinState):
 
     @rx.var(cache=True)
     def formatted_today_sales(self) -> str:
-        return f"{self.currency_symbol}{self.today_sales:,.2f}"
+        return self._format_currency(self.today_sales)
 
     @rx.var(cache=True)
     def formatted_week_sales(self) -> str:
-        return f"{self.currency_symbol}{self.week_sales:,.2f}"
+        return self._format_currency(self.week_sales)
 
     @rx.var(cache=True)
     def formatted_month_sales(self) -> str:
-        return f"{self.currency_symbol}{self.month_sales:,.2f}"
+        return self._format_currency(self.month_sales)
 
     @rx.var(cache=True)
     def formatted_avg_ticket(self) -> str:
-        return f"{self.currency_symbol}{self.avg_ticket:,.2f}"
+        return self._format_currency(self.avg_ticket)
 
     @rx.var(cache=True)
     def formatted_pending_debt(self) -> str:
-        return f"{self.currency_symbol}{self.pending_debt:,.2f}"
+        return self._format_currency(self.pending_debt)
 
     @rx.var(cache=True)
     def formatted_period_sales(self) -> str:
-        return f"{self.currency_symbol}{self.period_sales:,.2f}"
+        return self._format_currency(self.period_sales)
 
     @rx.var(cache=True)
     def formatted_gross_margin(self) -> str:
-        return f"{self.currency_symbol}{self.period_gross_margin:,.2f}"
+        return self._format_currency(self.period_gross_margin)
 
     @rx.var(cache=True)
     def formatted_margin_percent(self) -> str:
@@ -1007,7 +1007,7 @@ class DashboardState(MixinState):
 
     @rx.var(cache=True)
     def formatted_category_total(self) -> str:
-        return f"{self.currency_symbol}{self.category_total_sales:,.2f}"
+        return self._format_currency(self.category_total_sales)
 
     @rx.event
     def export_categories_excel(self):
