@@ -42,6 +42,16 @@ def _product_tabs() -> rx.Component:
                     f"{base_cls} {inactive_cls}",
                 ),
             ),
+            rx.el.button(
+                rx.icon("heart-pulse", class_name="h-4 w-4"),
+                "TUWAYKILIFE",
+                on_click=State.owner_set_product_tab("life"),
+                class_name=rx.cond(
+                    State.owner_active_product_tab == "life",
+                    f"{base_cls} {active_cls}",
+                    f"{base_cls} {inactive_cls}",
+                ),
+            ),
             class_name="flex",
         ),
         class_name="border-b border-slate-200 mb-5",

@@ -25,6 +25,8 @@ from app.models.company import PlanType, ProductType, SubscriptionStatus
 from app.models.owner import OwnerAuditLog
 from app.services import food_owner_client
 from app.services.food_owner_client import FoodOwnerClientError
+from app.services import life_owner_client
+from app.services.life_owner_client import LifeOwnerClientError
 from app.services.owner_service import OwnerService, OwnerServiceError
 from app.utils.crypto import encrypt_credential, encrypt_text
 from app.utils.fiscal_validators import (
@@ -521,8 +523,8 @@ class OwnerState:
 
     @rx.event
     async def owner_set_product_tab(self, tab: str):
-        """Cambia entre clientes de Sistema de Ventas y TUWAYKIFOOD."""
-        if tab not in (ProductType.VENTAS, ProductType.FOOD):
+        """Cambia entre clientes de Sistema de Ventas, TUWAYKIFOOD y TUWAYKILIFE."""
+        if tab not in (ProductType.VENTAS, ProductType.FOOD, ProductType.LIFE):
             return
         self.owner_active_product_tab = tab
         self.owner_page = 1
@@ -539,10 +541,15 @@ class OwnerState:
         self.owner_loading = True
         yield
         try:
-            if self.owner_active_product_tab == ProductType.FOOD:
-                # TUWAYKIFOOD vive en food_db (base separada) — se consulta
-                # por HTTP, no hay Company local que filtrar.
-                items, total = await food_owner_client.list_companies(
+            if self.owner_active_product_tab in (ProductType.FOOD, ProductType.LIFE):
+                # TUWAYKIFOOD / TUWAYKILIFE viven en bases separadas — se
+                # consultan por HTTP, no hay Company local que filtrar.
+                _client = (
+                    life_owner_client
+                    if self.owner_active_product_tab == ProductType.LIFE
+                    else food_owner_client
+                )
+                items, total = await _client.list_companies(
                     search=self.owner_search.strip(),
                     page=self.owner_page,
                     per_page=self.owner_per_page,
@@ -864,19 +871,22 @@ class OwnerState:
             actor_email,
         )
 
-        if self.owner_active_product_tab == ProductType.FOOD:
+        if self.owner_active_product_tab in (ProductType.FOOD, ProductType.LIFE):
+            _is_life = self.owner_active_product_tab == ProductType.LIFE
+            _client = life_owner_client if _is_life else food_owner_client
+            _product_label = "TUWAYKILIFE" if _is_life else "TUWAYKIFOOD"
             if action not in ("change_status", "extend_trial", "change_plan"):
                 self.owner_loading = False
-                yield rx.toast("Esta acción no está disponible para TUWAYKIFOOD.", duration=3500)
+                yield rx.toast(f"Esta acción no está disponible para {_product_label}.", duration=3500)
                 return
             try:
-                before = await food_owner_client.get_company_detail(company_id)
+                before = await _client.get_company_detail(company_id)
                 if action == "change_plan":
                     new_plan = self.owner_form_plan
                     if new_plan not in ("trial", "standard", "profesional"):
                         self.owner_loading = False
                         yield rx.toast(
-                            "Plan inválido para TUWAYKIFOOD (trial, standard o profesional).",
+                            f"Plan inválido para {_product_label} (trial, standard o profesional).",
                             duration=3500,
                         )
                         return
@@ -885,21 +895,21 @@ class OwnerState:
                     except (ValueError, TypeError):
                         sub_months = 12
                     expires_days = sub_months * 30 if new_plan != "trial" else 0
-                    after = await food_owner_client.set_plan(company_id, new_plan, expires_days)
+                    after = await _client.set_plan(company_id, new_plan, expires_days)
                     action_label = "change_plan"
                     toast_msg = f"Plan actualizado a {new_plan.capitalize()}."
                 elif action == "change_status":
                     if self.owner_form_status not in ("active", "suspended"):
                         self.owner_loading = False
                         yield rx.toast(
-                            "Estado inválido para TUWAYKIFOOD (solo Activo o Suspendido).",
+                            f"Estado inválido para {_product_label} (solo Activo o Suspendido).",
                             duration=3500,
                         )
                         return
                     if self.owner_form_status == "active":
-                        after = await food_owner_client.activate(company_id)
+                        after = await _client.activate(company_id)
                     else:
-                        after = await food_owner_client.suspend(company_id)
+                        after = await _client.suspend(company_id)
                     action_label = "activate" if self.owner_form_status == "active" else "suspend"
                     toast_msg = "Estado actualizado correctamente."
                 else:
@@ -907,7 +917,7 @@ class OwnerState:
                         days = int(self.owner_form_extra_days)
                     except (ValueError, TypeError):
                         days = 7
-                    after = await food_owner_client.extend_trial(company_id, days)
+                    after = await _client.extend_trial(company_id, days)
                     action_label = "extend_trial"
                     toast_msg = f"Trial extendido {days} días."
 
@@ -918,7 +928,7 @@ class OwnerState:
                             actor_email=actor["actor_email"],
                             target_company_id=company_id,
                             target_company_name=self.owner_modal_company_name,
-                            target_product_type=ProductType.FOOD,
+                            target_product_type=self.owner_active_product_tab,
                             action=action_label,
                             before_snapshot=json.dumps(before or {}, ensure_ascii=False, default=str),
                             after_snapshot=json.dumps(after or {}, ensure_ascii=False, default=str),
@@ -926,17 +936,17 @@ class OwnerState:
                         )
                         session.add(log)
                         await session.commit()
-            except FoodOwnerClientError as e:
+            except (FoodOwnerClientError, LifeOwnerClientError) as e:
                 logger.warning(
-                    "FoodOwnerClientError action=%s company_id=%s actor=%s: %s",
-                    action, company_id, actor_email, e,
+                    "OwnerClientError product=%s action=%s company_id=%s actor=%s: %s",
+                    self.owner_active_product_tab, action, company_id, actor_email, e,
                 )
                 self.owner_form_error = str(e)
                 self.owner_loading = False
                 yield rx.toast(f"Error: {e}", duration=5000)
                 return
             except Exception:
-                logger.exception("Error ejecutando acción owner sobre TUWAYKIFOOD")
+                logger.exception("Error ejecutando acción owner sobre %s", _product_label)
                 self.owner_form_error = "Error inesperado. Revise los logs del servidor."
                 self.owner_loading = False
                 yield rx.toast("Error inesperado. Revise los logs del servidor.", duration=5000)

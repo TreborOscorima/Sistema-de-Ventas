@@ -35,6 +35,8 @@ services:
       PUBLIC_FOOD_URL: "http://localhost:3003"
       FOOD_API_URL: "http://host.docker.internal:3003"
       FOOD_ADMIN_API_SECRET: "${FOOD_ADMIN_API_SECRET}"
+      LIFE_API_URL: "http://host.docker.internal:3004"
+      LIFE_ADMIN_API_SECRET: "${LIFE_ADMIN_API_SECRET}"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
       # Anular valores del .env local que romperían Docker:
       DB_HOST: tuwayki_mysql
@@ -51,6 +53,8 @@ services:
       PUBLIC_FOOD_URL: "http://localhost:3003"
       FOOD_API_URL: "http://host.docker.internal:3003"
       FOOD_ADMIN_API_SECRET: "${FOOD_ADMIN_API_SECRET}"
+      LIFE_API_URL: "http://host.docker.internal:3004"
+      LIFE_ADMIN_API_SECRET: "${LIFE_ADMIN_API_SECRET}"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
       DB_HOST: tuwayki_mysql
       ENV: prod
@@ -66,6 +70,8 @@ services:
       PUBLIC_FOOD_URL: "http://localhost:3003"
       FOOD_API_URL: "http://host.docker.internal:3003"
       FOOD_ADMIN_API_SECRET: "${FOOD_ADMIN_API_SECRET}"
+      LIFE_API_URL: "http://host.docker.internal:3004"
+      LIFE_ADMIN_API_SECRET: "${LIFE_ADMIN_API_SECRET}"
       ALLOW_MEMORY_RATE_LIMIT_FALLBACK: "1"
       DB_HOST: tuwayki_mysql
       ENV: prod

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 class ProductType(str, Enum):
     VENTAS = "ventas"
     FOOD = "food"
+    LIFE = "life"
 
 
 class PlanType(str, Enum):
