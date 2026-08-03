@@ -37,6 +37,17 @@ def _producto_selector() -> rx.Component:
                 "flex-1 inline-flex items-center justify-center rounded-lg border-2 border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-500 hover:border-slate-300",
             ),
         ),
+        rx.el.button(
+            rx.icon("heart-pulse", class_name="h-4 w-4 mr-1.5"),
+            "TUWAYKILIFE",
+            type="button",
+            on_click=State.set_register_producto("life"),
+            class_name=rx.cond(
+                State.register_producto == "life",
+                "flex-1 inline-flex items-center justify-center rounded-lg border-2 border-teal-600 bg-teal-50 px-3 py-2.5 text-sm font-semibold text-teal-700",
+                "flex-1 inline-flex items-center justify-center rounded-lg border-2 border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-500 hover:border-slate-300",
+            ),
+        ),
         class_name="flex gap-2 mb-6",
     )
 
@@ -48,10 +59,18 @@ def _success_block() -> rx.Component:
             State.register_success_message,
             class_name="mt-3 text-sm text-slate-700 text-center",
         ),
-        rx.el.a(
-            "Ir a iniciar sesión en TUWAYKIFOOD",
-            href=State.food_login_url,
-            class_name="mt-5 inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600 w-full",
+        rx.cond(
+            State.register_producto == "life",
+            rx.el.a(
+                "Ir a iniciar sesión en TUWAYKILIFE",
+                href=State.life_login_url,
+                class_name="mt-5 inline-flex items-center justify-center rounded-xl bg-teal-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-teal-700 w-full",
+            ),
+            rx.el.a(
+                "Ir a iniciar sesión en TUWAYKIFOOD",
+                href=State.food_login_url,
+                class_name="mt-5 inline-flex items-center justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600 w-full",
+            ),
         ),
         class_name="flex flex-col items-center py-4",
     )
@@ -234,7 +253,11 @@ def _registro_form() -> rx.Component:
                     rx.cond(
                         State.register_producto == "food",
                         "Crear cuenta TUWAYKIFOOD",
-                        "Comenzar Prueba Gratis",
+                        rx.cond(
+                            State.register_producto == "life",
+                            "Crear cuenta TUWAYKILIFE",
+                            "Comenzar Prueba Gratis",
+                        ),
                     ),
                 ),
                 type="submit",

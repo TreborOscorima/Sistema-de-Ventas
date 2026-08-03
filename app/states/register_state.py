@@ -53,7 +53,7 @@ class RegisterState(MixinState):
 
     @rx.event
     def set_register_producto(self, value: str):
-        if value not in ("ventas", "food"):
+        if value not in ("ventas", "food", "life"):
             return
         self.register_producto = value
         self.register_error = ""
@@ -61,8 +61,8 @@ class RegisterState(MixinState):
     @rx.event
     def on_load_registro(self):
         producto = self.router.page.params.get("producto", "")
-        if producto == "food":
-            self.register_producto = "food"
+        if producto in ("food", "life"):
+            self.register_producto = producto
         self.register_error = ""
         self.register_success = False
 
@@ -70,6 +70,11 @@ class RegisterState(MixinState):
     def food_login_url(self) -> str:
         base = (os.getenv("PUBLIC_FOOD_URL") or "").strip().rstrip("/")
         return f"{base}/admin/login" if base else "#"
+
+    @rx.var
+    def life_login_url(self) -> str:
+        base = (os.getenv("PUBLIC_LIFE_URL") or "").strip().rstrip("/")
+        return f"{base}/login" if base else "#"
 
     def _trial_days(self) -> int:
         raw_value = (os.getenv("TRIAL_DAYS") or "15").strip()
@@ -88,6 +93,10 @@ class RegisterState(MixinState):
 
         if self.register_producto == "food":
             await self._handle_food_registration(form_data)
+            return
+
+        if self.register_producto == "life":
+            await self._handle_life_registration(form_data)
             return
 
         company_name = sanitize_name(form_data.get("company_name") or "").strip()
@@ -381,6 +390,73 @@ class RegisterState(MixinState):
         from app.services.food_api_client import register_food_company
 
         result = await register_food_company(
+            company_name=company_name,
+            email=email,
+            password=password,
+            confirm_password=confirm_password,
+            phone=contact_phone,
+        )
+        self.is_registering = False
+        if result["ok"]:
+            self.register_success = True
+            self.register_success_message = result["data"].get(
+                "message", "Cuenta creada. Ya puedes iniciar sesion."
+            )
+            self.register_error = ""
+        else:
+            self.register_error = result["error"]
+
+    async def _handle_life_registration(self, form_data: dict):
+        """Registro de una clínica nueva en TUWAYKILIFE via HTTP.
+
+        No escribe nada en ventas_db -- TUWAYKILIFE es un repo y una base
+        de datos completamente separados, sin conexión directa. Ver
+        app/services/life_api_client.py.
+        """
+        company_name = sanitize_name(form_data.get("company_name") or "").strip()
+        email = (form_data.get("email") or "").strip().lower()
+        contact_phone_country = sanitize_phone(
+            form_data.get("contact_phone_country") or ""
+        ).strip()
+        contact_phone_number = sanitize_phone(
+            form_data.get("contact_phone_number") or ""
+        ).strip()
+        if contact_phone_country and not contact_phone_country.startswith("+"):
+            contact_phone_country = f"+{contact_phone_country.lstrip('+')}"
+        local_phone_digits = "".join(ch for ch in contact_phone_number if ch.isdigit())
+        contact_phone = (
+            f"{contact_phone_country} {local_phone_digits}"
+            if contact_phone_country and local_phone_digits
+            else ""
+        )
+        password = form_data.get("password") or ""
+        confirm_password = form_data.get("confirm_password") or ""
+
+        if not company_name:
+            self.register_error = "El nombre de la clínica es obligatorio."
+            self.is_registering = False
+            return
+        if not email or not validate_email(email):
+            self.register_error = "Ingrese un correo valido."
+            self.is_registering = False
+            return
+        if not contact_phone:
+            self.register_error = "El numero de contacto es obligatorio."
+            self.is_registering = False
+            return
+        if password != confirm_password:
+            self.register_error = "Las contrasenas no coinciden."
+            self.is_registering = False
+            return
+        is_valid, error = validate_password(password)
+        if not is_valid:
+            self.register_error = error
+            self.is_registering = False
+            return
+
+        from app.services.life_api_client import register_life_company
+
+        result = await register_life_company(
             company_name=company_name,
             email=email,
             password=password,

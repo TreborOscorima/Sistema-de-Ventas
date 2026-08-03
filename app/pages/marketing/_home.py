@@ -4,7 +4,7 @@ import reflex as rx
 
 from app.constants import WHATSAPP_NUMBER
 
-from ._state import _life_href, _site_href
+from ._state import _site_href
 from ._scripts import (
     _global_styles,
     _sw_cleanup_script,
@@ -363,7 +363,7 @@ def _product_card_life() -> rx.Component:
             ),
             class_name="flex h-full flex-col p-8 sm:p-10",
         ),
-        href=_life_href("/login"),
+        href=_site_href("/life"),
         on_click=rx.call_script(_track_event_script("click_product_life", "home_selector")),
         class_name=(
             "group relative block rounded-3xl border-2 border-slate-200 bg-white "

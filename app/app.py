@@ -56,7 +56,7 @@ from app.pages.login import login_page
 from app.pages.periodo_prueba_finalizado import periodo_prueba_finalizado_page
 from app.pages.cuenta_suspendida import cuenta_suspendida_page
 from app.pages.registro import registro_page
-from app.pages.marketing import marketing_page, home_page, food_page
+from app.pages.marketing import marketing_page, home_page, food_page, life_page
 from app.pages.terminos import terminos_page
 from app.pages.privacidad import privacidad_page
 from app.pages.cookies import cookies_page
@@ -397,6 +397,9 @@ def page_home() -> rx.Component:
 def page_food() -> rx.Component:
     return food_page()
 
+def page_life() -> rx.Component:
+    return life_page()
+
 def page_terminos() -> rx.Component:
     return terminos_page()
 
@@ -499,6 +502,11 @@ FOOD_DESCRIPTION = (
     "Carta digital con QR, gestión de mesas, pedidos por tablet y comanda automática en cocina. "
     "Todo conectado con la caja del turno."
 )
+LIFE_TITLE = "TUWAYKILIFE | Sistema para clínicas y consultorios"
+LIFE_DESCRIPTION = (
+    "Agenda y turnos, historia clínica, pacientes, punto de cobro y caja para clínicas de "
+    "todas las especialidades. Multi-especialidad y multi-sucursal, 100% en la nube."
+)
 HOME_TITLE = "TUWAYKIAPP | Software de gestión para comercios, restaurantes y más"
 HOME_DESCRIPTION = "TUWAYKIAPP desarrolla software de gestión en la nube para cada industria: TUWAYKISHOP (ventas y multi-sucursal) y TUWAYKIFOOD (restaurantes y restobares). Un sistema para cada tipo de negocio."
 
@@ -549,6 +557,20 @@ def _register_landing_routes():
                 indexable=True,
                 title=FOOD_TITLE,
                 description=FOOD_DESCRIPTION,
+            ),
+        )
+        # Landing TUWAYKILIFE (sistema para clínicas)
+        app.add_page(
+            page_life,
+            route="/life",
+            title=LIFE_TITLE,
+            description=LIFE_DESCRIPTION,
+            image=LANDING_IMAGE,
+            meta=_landing_meta(
+                f"{PUBLIC_SITE_URL}/life/",
+                indexable=True,
+                title=LIFE_TITLE,
+                description=LIFE_DESCRIPTION,
             ),
         )
     else:

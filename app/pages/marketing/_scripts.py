@@ -92,6 +92,28 @@ def _jsonld_food_app() -> dict:
     }
 
 
+def _jsonld_life_app() -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TUWAYKILIFE",
+        "alternateName": ["Tuwaykilife", "TUWAYKI LIFE"],
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web",
+        "description": (
+            "TUWAYKILIFE es el sistema para clínicas y consultorios de TUWAYKIAPP: "
+            "agenda y turnos, historia clínica, pacientes, punto de cobro y caja, "
+            "multi-especialidad y multi-sucursal."
+        ),
+        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/life/",
+        "publisher": {
+            "@type": "Organization",
+            "name": "TUWAYKIAPP",
+            "url": PUBLIC_SITE_URL or "https://tuwayki.app",
+        },
+    }
+
+
 def _jsonld_faq(items: list[tuple[str, str]]) -> dict:
     return {
         "@context": "https://schema.org",
@@ -146,6 +168,20 @@ def food_jsonld_components() -> list[rx.Component]:
         _jsonld_script(_jsonld_breadcrumbs([
             ("Inicio", f"{base}/"),
             ("TUWAYKIFOOD", f"{base}/food/"),
+        ])),
+    ]
+
+
+def life_jsonld_components() -> list[rx.Component]:
+    from ._life_sections import LIFE_FAQ_ITEMS as _life_faq
+    base = PUBLIC_SITE_URL or "https://tuwayki.app"
+    return [
+        _jsonld_script(_jsonld_organization()),
+        _jsonld_script(_jsonld_life_app()),
+        _jsonld_script(_jsonld_faq(_life_faq)),
+        _jsonld_script(_jsonld_breadcrumbs([
+            ("Inicio", f"{base}/"),
+            ("TUWAYKILIFE", f"{base}/life/"),
         ])),
     ]
 
