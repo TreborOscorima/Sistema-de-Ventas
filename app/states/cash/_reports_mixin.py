@@ -88,9 +88,9 @@ class ReportsMixin:
             if sale.get("is_deleted"):
                 continue
             total_operations += 1
-            total_amount = float(sale.get("total", 0) or 0)
+            total_amount = self._coerce_amount(sale.get("total", 0))
             # amount_paid = pago inicial + cuotas abonadas (amount = solo pago inicial)
-            paid_amount = float(sale.get("amount_paid", sale.get("amount", 0)) or 0)
+            paid_amount = self._coerce_amount(sale.get("amount_paid", sale.get("amount", 0)))
             payment_condition = (sale.get("payment_condition") or "").strip().lower()
             payment_type = (sale.get("payment_type") or "").strip().lower()
             is_credit = (
@@ -103,10 +103,7 @@ class ReportsMixin:
             # Descontar devoluciones del flujo de caja real (créditos no generan CashboxLog → refund=0)
             refund_exec = 0.0
             if sale.get("has_return"):
-                try:
-                    refund_exec = float(str(sale.get("refund_amount", "0") or "0").replace(",", ""))
-                except (ValueError, TypeError):
-                    refund_exec = 0.0
+                refund_exec = self._coerce_amount(sale.get("refund_amount", 0))
             net_amount = max(0.0, total_amount - refund_exec)
             # Crédito totalmente devuelto sin CashboxLog → excluir de facturado/pendiente
             if is_credit and sale.get("is_returned"):
@@ -191,14 +188,8 @@ class ReportsMixin:
                 amount_paid = sale.get("amount_paid")
                 if amount_paid is None:
                     amount_paid = sale.get("amount", 0)
-                try:
-                    amount_paid_value = float(amount_paid or 0)
-                except (TypeError, ValueError):
-                    amount_paid_value = 0.0
-                try:
-                    total_amount_value = float(sale.get("total", 0) or 0)
-                except (TypeError, ValueError):
-                    total_amount_value = 0.0
+                amount_paid_value = self._coerce_amount(amount_paid)
+                total_amount_value = self._coerce_amount(sale.get("total", 0))
                 if total_amount_value > 0 and amount_paid_value >= total_amount_value:
                     payment_details = "Crédito (Completado)"
                 elif amount_paid_value > 0:
@@ -232,7 +223,7 @@ class ReportsMixin:
                     unit_price = item.get("sale_price")
                 if unit_price is None:
                     unit_price = item.get("subtotal")
-                price_display = self._format_currency(float(unit_price or 0))
+                price_display = self._format_currency(self._coerce_amount(unit_price))
                 item_parts.append(f"{name} (x{quantity}) - {price_display}")
             details = "\n".join(item_parts) if item_parts else "Sin detalle"
 
@@ -240,10 +231,7 @@ class ReportsMixin:
             refund_raw = 0.0
             estado_sale = ""
             if sale.get("has_return"):
-                try:
-                    refund_raw = float(str(sale.get("refund_amount", "0") or "0").replace(",", ""))
-                except (ValueError, TypeError):
-                    refund_raw = 0.0
+                refund_raw = self._coerce_amount(sale.get("refund_amount", 0))
                 return_type = sale.get("return_type", "")
                 estado_sale = "Devuelta" if return_type == "total" else "Dev. Parcial"
             elif sale.get("is_returned"):
@@ -255,9 +243,9 @@ class ReportsMixin:
             ws.cell(row=row, column=3, value=method_raw)
             ws.cell(row=row, column=4, value=method_label)
             ws.cell(row=row, column=5, value=payment_details)
-            _total_num = float(str(sale.get("total", 0) or 0).replace(",", ""))
+            _total_num = self._coerce_amount(sale.get("total", 0))
             # Monto cobrado = pago inicial + cuotas abonadas (refleja lo realmente recibido)
-            _paid_num = float(sale.get("amount_paid", 0) or 0)
+            _paid_num = self._coerce_amount(sale.get("amount_paid", 0))
             ws.cell(row=row, column=6, value=_total_num).number_format = currency_format
             ws.cell(row=row, column=7, value=_paid_num).number_format = currency_format
             ws.cell(row=row, column=8, value=details)
@@ -790,7 +778,7 @@ class ReportsMixin:
                         "Detalle", payment_detail, receipt_width
                     )
                 )
-            receipt_lines.append(row("Total:", self._format_currency(sale['total'])))
+            receipt_lines.append(row("Total:", self._format_currency(self._coerce_amount(sale['total']))))
             receipt_lines.append(line())
             seq -= 1
 
@@ -847,8 +835,8 @@ class ReportsMixin:
         closing_total = 0.0
         for log in logs:
             action = (log.get("action") or "").strip().lower()
-            opening_amount = float(log.get("opening_amount", 0) or 0)
-            closing_amount = float(log.get("closing_total", 0) or 0)
+            opening_amount = self._coerce_amount(log.get("opening_amount", 0))
+            closing_amount = self._coerce_amount(log.get("closing_total", 0))
             if action == "apertura":
                 opening_count += 1
                 opening_total += opening_amount
@@ -913,8 +901,8 @@ class ReportsMixin:
                 else str(action).replace("_", " ").strip().title()
             )
 
-            opening_amount = float(log.get("opening_amount", 0) or 0)
-            closing_amount = float(log.get("closing_total", 0) or 0)
+            opening_amount = self._coerce_amount(log.get("opening_amount", 0))
+            closing_amount = self._coerce_amount(log.get("closing_total", 0))
 
             if action == "apertura":
                 total_aperturas += opening_amount
@@ -922,7 +910,7 @@ class ReportsMixin:
                 total_cierres += closing_amount
 
             totals_detail = ", ".join(
-                f"{item.get('method', 'Otro')}: {self._format_currency(item.get('amount', 0))}"
+                f"{item.get('method', 'Otro')}: {self._format_currency(self._coerce_amount(item.get('amount', 0)))}"
                 for item in log.get("totals_by_method", [])
                 if item.get("amount", 0)
             ) or "Sin desglose"
@@ -985,23 +973,6 @@ class ReportsMixin:
         currency_format = self._currency_excel_format()
         company_name = getattr(self, "company_name", "") or "EMPRESA"
         today = self._current_local_display_date()
-
-        def _parse_numeric(value: Any) -> float:
-            if value is None:
-                return 0.0
-            raw = str(value)
-            match = re.search(r"([0-9]+(?:[.,][0-9]{3})*(?:[.,][0-9]+)?)", raw)
-            if not match:
-                return 0.0
-            num = match.group(1)
-            if "," in num and "." in num:
-                num = num.replace(",", "")
-            elif "," in num and "." not in num:
-                num = num.replace(",", ".")
-            try:
-                return float(num)
-            except ValueError:
-                return 0.0
 
         egresos = [m for m in movements if m.get("movement_type") == "egreso"]
         ingresos = [m for m in movements if m.get("movement_type") == "ingreso"]
@@ -1067,8 +1038,8 @@ class ReportsMixin:
         row += 1
 
         for item in movements:
-            quantity = _parse_numeric(item.get("formatted_quantity", "0"))
-            cost = _parse_numeric(item.get("formatted_cost", "0"))
+            quantity = self._coerce_amount(item.get("quantity", 0))
+            cost = self._coerce_amount(item.get("cost", 0))
             tipo = "Ingreso" if item.get("movement_type") == "ingreso" else "Egreso"
 
             ws.cell(row=row, column=1, value=item.get("timestamp", ""))
@@ -1250,7 +1221,7 @@ class ReportsMixin:
                 f"{item.get('quantity', 0)} {item.get('unit', '')} x "
                 f"{self._format_currency(item.get('price', 0))}"
             )
-            right_text = self._format_currency(float(item.get("subtotal", 0)))
+            right_text = self._format_currency(self._coerce_amount(item.get("subtotal", 0)))
             available = max(receipt_width - len(right_text) - 1, 1)
             left_lines = self._wrap_receipt_lines(left_text, available)
             if left_lines:

@@ -831,6 +831,45 @@ class MixinState:
         code = getattr(self, "selected_currency_code", "") or ""
         return format_number(value, code)
 
+    def _coerce_amount(self, value: Any) -> float:
+        """Inverso tolerante de _fmt_amount: convierte a float un número o un
+        string ya formateado con los separadores de la moneda ACTIVA.
+
+        Necesario para re-parsear montos que la UI guarda como texto de display
+        (ej. recibos/Excel). En locales con coma decimal (AR/UY/CO/BO/VE) o miles
+        con punto (PYG/CLP), un float()/Decimal() directo sobre "3.042,45" revienta
+        (ValueError/InvalidOperation) o —con el viejo hack .replace(",","")—
+        corrompe el valor. Como el string fue formateado con el mismo código de
+        moneda activo, revertir con su spec es exacto y sin ambigüedad.
+        """
+        if value is None:
+            return 0.0
+        if isinstance(value, bool):
+            return 0.0
+        if isinstance(value, (int, float, Decimal)):
+            return float(value)
+        s = str(value).strip()
+        if not s:
+            return 0.0
+        from tuwayki_core.utils.formatting import currency_spec
+        spec = currency_spec(getattr(self, "selected_currency_code", "") or "")
+        ts = spec.get("thousands_sep", ",")
+        ds = spec.get("decimal_sep", ".")
+        keep = set("0123456789-")
+        if ts:
+            keep.add(ts)
+        if ds:
+            keep.add(ds)
+        cleaned = "".join(c for c in s if c in keep)
+        if ts:
+            cleaned = cleaned.replace(ts, "")
+        if ds and ds != ".":
+            cleaned = cleaned.replace(ds, ".")
+        try:
+            return float(cleaned or 0)
+        except (ValueError, TypeError):
+            return 0.0
+
     def _currency_symbol_clean(self) -> str:
         """Símbolo de moneda sin espacios para headers/formatos."""
         symbol = (self.currency_symbol or "").strip()

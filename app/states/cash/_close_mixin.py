@@ -460,7 +460,7 @@ class CloseMixin:
                         "Detalle", payment_detail, receipt_width
                     )
                 )
-            receipt_lines.append(row("Total:", self._format_currency(sale['total'])))
+            receipt_lines.append(row("Total:", self._format_currency(self._coerce_amount(sale['total']))))
             receipt_lines.append(line())
             seq -= 1
 

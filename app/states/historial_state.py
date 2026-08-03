@@ -2313,7 +2313,7 @@ class HistorialState(MixinState):
                 ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
                 ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
                 ws.cell(row=row, column=3, value=entry.get("method_label", MSG.FALLBACK_NOT_SPECIFIED))
-                ws.cell(row=row, column=4, value=entry.get("amount", 0) or 0).number_format = currency_format
+                ws.cell(row=row, column=4, value=entry.get("amount_raw", 0) or 0).number_format = currency_format
                 ws.cell(row=row, column=5, value=entry.get("user", MSG.FALLBACK_SYSTEM))
                 ws.cell(row=row, column=6, value=entry.get("reference", "") or MSG.FALLBACK_NO_REFERENCE)
 
@@ -2356,7 +2356,7 @@ class HistorialState(MixinState):
                 }
             summary_totals[key]["count"] += 1
             summary_totals[key]["total"] += Decimal(
-                str(entry.get("amount", 0) or 0)
+                str(entry.get("amount_raw", 0) or 0)
             )
 
         wb, ws = create_excel_workbook("Resumen por Método")
@@ -2454,7 +2454,7 @@ class HistorialState(MixinState):
             detail_ws.cell(row=row, column=1, value=entry.get("timestamp_display", ""))
             detail_ws.cell(row=row, column=2, value=entry.get("source", "Venta"))
             detail_ws.cell(row=row, column=3, value=entry.get("method_label", MSG.FALLBACK_NOT_SPECIFIED))
-            detail_ws.cell(row=row, column=4, value=entry.get("amount", 0) or 0).number_format = currency_format
+            detail_ws.cell(row=row, column=4, value=entry.get("amount_raw", 0) or 0).number_format = currency_format
             detail_ws.cell(row=row, column=5, value=entry.get("user", MSG.FALLBACK_SYSTEM))
             detail_ws.cell(row=row, column=6, value=entry.get("reference", "") or MSG.FALLBACK_NO_REFERENCE)
 
@@ -2503,12 +2503,9 @@ class HistorialState(MixinState):
                         # Extraer numero (maneja comas y decimales)
                         match = re.search(r"([0-9]+(?:[.,][0-9]{3})*(?:[.,][0-9]+)?)", part)
                         if match:
-                            num_str = match.group(1)
-                            if "," in num_str and "." in num_str:
-                                num_str = num_str.replace(",", "")
-                            elif "," in num_str and "." not in num_str:
-                                num_str = num_str.replace(",", ".")
-                            return Decimal(num_str)
+                            # Parseo locale-aware según la moneda activa (evita el
+                            # viejo hack en-US que corrompía montos con coma decimal).
+                            return Decimal(str(self._coerce_amount(match.group(1))))
                     except IndexError:
                         continue
         except Exception:
@@ -3188,7 +3185,7 @@ class HistorialState(MixinState):
                 ret.get("reason", ""),
                 ret.get("items_summary", ""),
                 ret.get("items_count", 0),
-                ret.get("refund_amount", 0),
+                self._coerce_amount(ret.get("refund_amount", 0)),
                 ret.get("user", ""),
             ])
 
