@@ -4,7 +4,7 @@ import reflex as rx
 
 from app.constants import WHATSAPP_NUMBER
 
-from ._state import _site_href
+from ._state import _life_href, _site_href
 from ._scripts import (
     _global_styles,
     _sw_cleanup_script,
@@ -314,12 +314,12 @@ def _product_card_food() -> rx.Component:
 
 
 def _product_card_life() -> rx.Component:
-    """Tarjeta 'Próximamente' del sistema de gestión para salud (TUWAYKILIFE)."""
-    chips = ["Turnos", "Historia clínica", "Pacientes", "Agenda", "Facturación"]
-    return rx.el.div(
+    """Tarjeta del sistema de gestión para salud (TUWAYKILIFE) — enlaza al login."""
+    chips = ["Turnos", "Historia clínica", "Pacientes", "Agenda", "Multi-sucursal"]
+    return rx.el.a(
         rx.el.span(
             rx.icon("sparkles", class_name="h-3.5 w-3.5"),
-            "Próximamente",
+            "Nuevo",
             class_name="absolute right-5 top-5 inline-flex items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-teal-700",
         ),
         rx.el.div(
@@ -340,7 +340,7 @@ def _product_card_life() -> rx.Component:
             ),
             rx.el.p(
                 "Gestión de turnos, historias clínicas, pacientes y agenda médica. "
-                "Para clínicas, consultorios y centros de salud.",
+                "Para clínicas, consultorios y centros de salud de todas las especialidades.",
                 class_name="mt-4 text-sm leading-relaxed text-slate-600",
             ),
             rx.el.div(
@@ -355,15 +355,20 @@ def _product_card_life() -> rx.Component:
             ),
             rx.el.div(
                 rx.el.span(
-                    rx.icon("clock", class_name="h-4 w-4"),
-                    "Disponible pronto",
-                    class_name="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-5 py-2.5 text-sm font-semibold text-slate-500",
+                    "Ver sistema",
+                    rx.icon("arrow-right", class_name="h-4 w-4"),
+                    class_name="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors group-hover:bg-teal-700",
                 ),
                 class_name="mt-8",
             ),
             class_name="flex h-full flex-col p-8 sm:p-10",
         ),
-        class_name="relative rounded-3xl border-2 border-dashed border-slate-300 bg-white",
+        href=_life_href("/login"),
+        on_click=rx.call_script(_track_event_script("click_product_life", "home_selector")),
+        class_name=(
+            "group relative block rounded-3xl border-2 border-slate-200 bg-white "
+            "transition-all duration-200 hover:border-teal-400 hover:shadow-xl hover:-translate-y-1"
+        ),
     )
 
 

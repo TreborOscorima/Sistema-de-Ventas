@@ -13,6 +13,7 @@ META_PIXEL_ID = (os.getenv("META_PIXEL_ID") or "").strip()
 PUBLIC_SITE_URL = (os.getenv("PUBLIC_SITE_URL") or "").strip().rstrip("/")
 PUBLIC_APP_URL = (os.getenv("PUBLIC_APP_URL") or "").strip().rstrip("/")
 PUBLIC_FOOD_URL = (os.getenv("PUBLIC_FOOD_URL") or "").strip().rstrip("/")
+PUBLIC_LIFE_URL = (os.getenv("PUBLIC_LIFE_URL") or "https://life.tuwayki.app").strip().rstrip("/")
 
 
 # ── State ────────────────────────────────────────────────────
@@ -52,6 +53,13 @@ def _food_href(path: str = "/") -> str:
     if PUBLIC_FOOD_URL:
         return f"{PUBLIC_FOOD_URL}{normalized}"
     return f"#tuwaykifood"
+
+
+def _life_href(path: str = "/") -> str:
+    normalized = path if path.startswith("/") else f"/{path}"
+    if PUBLIC_LIFE_URL:
+        return f"{PUBLIC_LIFE_URL}{normalized}"
+    return f"#tuwaykilife"
 
 
 def _wa_link(message: str) -> str:
