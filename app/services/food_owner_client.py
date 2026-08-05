@@ -136,3 +136,19 @@ async def set_plan(company_id: int, plan: str, expires_days: int = 365) -> dict:
         json={"plan": plan, "expires_days": expires_days},
     )
     return data
+
+
+async def list_users(company_id: int) -> list[dict]:
+    """Cuentas cuya contraseña se puede resetear (en Food, la del dueño)."""
+    data = await _request("GET", f"/api/admin/companies/{company_id}/users")
+    return data.get("items", [])
+
+
+async def reset_password(company_id: int, actor: str = "") -> dict:
+    """Resetea la contraseña del dueño. Devuelve {temp_password, username}."""
+    data = await _request(
+        "POST",
+        f"/api/admin/companies/{company_id}/reset-password",
+        json={"actor": actor},
+    )
+    return data

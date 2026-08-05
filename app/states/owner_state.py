@@ -1132,6 +1132,27 @@ class OwnerState:
         self.owner_reset_users = []
         self.owner_reset_loading = True
         yield
+        # FOOD: los usuarios administrables viven en la app del producto (otra base);
+        # se listan por HTTP. SHOP los tiene en la base local. (LIFE: fase próxima.)
+        if self.owner_active_product_tab == ProductType.FOOD:
+            try:
+                items = await food_owner_client.list_users(company_id)
+                self.owner_reset_users = [
+                    {
+                        "id": str(u.get("id", company_id)),
+                        "username": u.get("username", ""),
+                        "email": u.get("username", ""),
+                        "role_name": u.get("role", "Dueño"),
+                        "is_active": "true",
+                    }
+                    for u in items
+                ]
+                self.owner_reset_loading = False
+                yield
+            except FoodOwnerClientError as e:
+                self.owner_reset_loading = False
+                yield rx.toast(f"Error: {e}", duration=5000)
+            return
         try:
             async with AsyncSessionLocal() as session:
                 with tenant_bypass():
@@ -1173,6 +1194,29 @@ class OwnerState:
         self.owner_reset_target_username = ""
         self.owner_reset_result_visible = False
         yield
+
+        # FOOD: el reset lo hace la app del producto por HTTP y devuelve la clave
+        # temporal (se muestra una sola vez). (LIFE: fase próxima.)
+        if self.owner_active_product_tab == ProductType.FOOD:
+            try:
+                data = await food_owner_client.reset_password(
+                    self.owner_reset_company_id, actor=actor_email,
+                )
+                _record_owner_action(actor_email)
+                self.owner_reset_temp_password = (data.get("temp_password") or "").strip()
+                self.owner_reset_target_username = data.get("username") or username
+                self.owner_reset_result_visible = True
+                self.owner_reset_users = [dict(item) for item in self.owner_reset_users]
+                self.owner_reset_loading = False
+                yield
+                yield rx.toast(
+                    f"Contraseña reseteada para {self.owner_reset_target_username}.",
+                    duration=4000,
+                )
+            except FoodOwnerClientError as e:
+                self.owner_reset_loading = False
+                yield rx.toast(f"Error: {e}", duration=5000)
+            return
 
         actor = self._owner_actor_info()
         try:

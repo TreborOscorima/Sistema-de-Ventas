@@ -222,14 +222,6 @@ def _company_actions(company: rx.Var) -> rx.Component:
                     tone="slate",
                 ),
                 _owner_action_icon_button(
-                    "key-round",
-                    "Resetear Contraseña",
-                    on_click=State.owner_open_reset_modal(
-                        company["id"], company["name"]
-                    ),
-                    tone="slate",
-                ),
-                _owner_action_icon_button(
                     "file-text",
                     "Billing / Facturación",
                     on_click=State.owner_open_billing_modal(
@@ -237,6 +229,20 @@ def _company_actions(company: rx.Var) -> rx.Component:
                     ),
                     tone="indigo",
                 ),
+            ),
+            rx.fragment(),
+        ),
+        # Resetear Contraseña: disponible para SHOP y FOOD (LIFE en su fase).
+        rx.cond(
+            (State.owner_active_product_tab == "ventas")
+            | (State.owner_active_product_tab == "food"),
+            _owner_action_icon_button(
+                "key-round",
+                "Resetear Contraseña",
+                on_click=State.owner_open_reset_modal(
+                    company["id"], company["name"]
+                ),
+                tone="slate",
             ),
             rx.fragment(),
         ),
