@@ -25,8 +25,8 @@ Acciones ricas gateadas a SHOP en `app/pages/owner/_companies_section.py`
 | Cambiar Estado (activar/suspender) | ✅ | ✅ | ✅ | ya existe |
 | Extender Prueba | ✅ | ✅ | ✅ | ya existe |
 | Renovar / Planes | ✅ | ⚠️ solo `set_plan` en client, sin UI | ⚠️ | falta UI + modal |
-| Resetear Contraseña | ✅ | ❌ | ❌ | **falta endpoint + client + UI** |
-| Listar Usuarios (para reset) | ✅ | ❌ | ❌ | **falta** |
+| Resetear Contraseña | ✅ | ✅ | ✅ | listo (Fase 1) |
+| Listar Usuarios (para reset) | ✅ | ✅ (el dueño) | ✅ (multi-usuario) | listo (Fase 1) |
 | Ajustar Límites + Módulos | ✅ | ❌ | ❌ | falta (definir módulos por producto) |
 | Billing / Facturación | ✅ (Nubefact PE / AFIP AR) | ❌ en panel* | ❌ | falta (*FOOD ya tiene Nubefact propio) |
 | Sucursales (gestión) | ✅ | ⚠️ solo conteo | ⚠️ | a definir |
@@ -53,8 +53,12 @@ Los cambios de esa clave ya quedan auditados (`cambio_credenciales_admin`).
 
 ## Plan por fases (propuesto)
 
-- **Fase 1 — Resetear Contraseña (FOOD + LIFE).** Lo más urgente (hoy nos bloqueó).
-  Endpoint reset + listar admin, client, rutear modal, des-gatear botón. Acotado.
+- **Fase 1 — Resetear Contraseña (FOOD + LIFE). ✅ HECHA.**
+  Endpoints reset + listar cuentas, client, ruteo del modal, botón des-gateado.
+  FOOD: una cuenta de dueño (`ConfigImpresora`). LIFE: multi-usuario real
+  (tabla `usuarios`, se elige la cuenta por `user_id`; se resetea con
+  `User.set_password`). El panel guarda su propia auditoría; FOOD además audita
+  internamente (`reset_password_owner`) y LIFE deja traza en el log.
 - **Fase 2 — Renovar / Planes.** `set_plan` ya existe en el client; falta el modal
   y el catálogo de planes por producto (que cada app exponga sus planes).
 - **Fase 3 — Ajustar Límites + Módulos.** Definir el catálogo de módulos de cada

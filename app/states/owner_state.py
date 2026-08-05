@@ -1153,6 +1153,26 @@ class OwnerState:
                 self.owner_reset_loading = False
                 yield rx.toast(f"Error: {e}", duration=5000)
             return
+        # LIFE: clínica multi-usuario en otra base; se listan por HTTP (admin primero).
+        if self.owner_active_product_tab == ProductType.LIFE:
+            try:
+                items = await life_owner_client.list_users(company_id)
+                self.owner_reset_users = [
+                    {
+                        "id": str(u.get("id", "")),
+                        "username": u.get("username", ""),
+                        "email": u.get("username", ""),
+                        "role_name": u.get("role", "Usuario"),
+                        "is_active": "true",
+                    }
+                    for u in items
+                ]
+                self.owner_reset_loading = False
+                yield
+            except LifeOwnerClientError as e:
+                self.owner_reset_loading = False
+                yield rx.toast(f"Error: {e}", duration=5000)
+            return
         try:
             async with AsyncSessionLocal() as session:
                 with tenant_bypass():
@@ -1214,6 +1234,29 @@ class OwnerState:
                     duration=4000,
                 )
             except FoodOwnerClientError as e:
+                self.owner_reset_loading = False
+                yield rx.toast(f"Error: {e}", duration=5000)
+            return
+
+        # LIFE: el reset lo hace la app del producto por HTTP para la cuenta
+        # elegida (user_id) y devuelve la clave temporal (se muestra una vez).
+        if self.owner_active_product_tab == ProductType.LIFE:
+            try:
+                data = await life_owner_client.reset_password(
+                    self.owner_reset_company_id, user_id=user_id, actor=actor_email,
+                )
+                _record_owner_action(actor_email)
+                self.owner_reset_temp_password = (data.get("temp_password") or "").strip()
+                self.owner_reset_target_username = data.get("username") or username
+                self.owner_reset_result_visible = True
+                self.owner_reset_users = [dict(item) for item in self.owner_reset_users]
+                self.owner_reset_loading = False
+                yield
+                yield rx.toast(
+                    f"Contraseña reseteada para {self.owner_reset_target_username}.",
+                    duration=4000,
+                )
+            except LifeOwnerClientError as e:
                 self.owner_reset_loading = False
                 yield rx.toast(f"Error: {e}", duration=5000)
             return

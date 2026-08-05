@@ -232,10 +232,11 @@ def _company_actions(company: rx.Var) -> rx.Component:
             ),
             rx.fragment(),
         ),
-        # Resetear Contraseña: disponible para SHOP y FOOD (LIFE en su fase).
+        # Resetear Contraseña: disponible para SHOP, FOOD y LIFE.
         rx.cond(
             (State.owner_active_product_tab == "ventas")
-            | (State.owner_active_product_tab == "food"),
+            | (State.owner_active_product_tab == "food")
+            | (State.owner_active_product_tab == "life"),
             _owner_action_icon_button(
                 "key-round",
                 "Resetear Contraseña",

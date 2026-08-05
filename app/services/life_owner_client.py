@@ -133,3 +133,26 @@ async def set_plan(company_id: int, plan: str, expires_days: int = 365) -> dict:
         json={"plan": plan, "expires_days": expires_days},
     )
     return data
+
+
+async def list_users(company_id: int) -> list[dict]:
+    """Cuentas de la clínica cuya contraseña se puede resetear (admin primero)."""
+    data = await _request("GET", f"/api/admin/companies/{company_id}/users")
+    return data.get("items", [])
+
+
+async def reset_password(company_id: int, user_id: str = "", actor: str = "") -> dict:
+    """Resetea la contraseña de una cuenta de la clínica.
+
+    Devuelve {temp_password, username}. `user_id` elige la cuenta; si viene vacío,
+    Life resetea el primer ADMIN de la clínica.
+    """
+    payload: dict = {"actor": actor}
+    if user_id not in (None, ""):
+        payload["user_id"] = user_id
+    data = await _request(
+        "POST",
+        f"/api/admin/companies/{company_id}/reset-password",
+        json=payload,
+    )
+    return data
