@@ -135,6 +135,16 @@ async def set_plan(company_id: int, plan: str, expires_days: int = 365) -> dict:
     return data
 
 
+async def renew_subscription(company_id: int, months: int = 12) -> dict:
+    """Renueva un plan pago extendiendo su vencimiento `months` meses."""
+    data = await _request(
+        "POST",
+        f"/api/admin/companies/{company_id}/renew",
+        json={"months": months},
+    )
+    return data
+
+
 async def list_users(company_id: int) -> list[dict]:
     """Cuentas de la clínica cuya contraseña se puede resetear (admin primero)."""
     data = await _request("GET", f"/api/admin/companies/{company_id}/users")

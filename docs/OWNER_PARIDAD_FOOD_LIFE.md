@@ -24,7 +24,7 @@ Acciones ricas gateadas a SHOP en `app/pages/owner/_companies_section.py`
 |---|---|---|---|---|
 | Cambiar Estado (activar/suspender) | ✅ | ✅ | ✅ | ya existe |
 | Extender Prueba | ✅ | ✅ | ✅ | ya existe |
-| Renovar / Planes | ✅ | ⚠️ solo `set_plan` en client, sin UI | ⚠️ | falta UI + modal |
+| Renovar / Planes | ✅ | ✅ (Fase 2) | ✅ (Fase 2) | listo |
 | Resetear Contraseña | ✅ | ✅ | ✅ | listo (Fase 1) |
 | Listar Usuarios (para reset) | ✅ | ✅ (el dueño) | ✅ (multi-usuario) | listo (Fase 1) |
 | Ajustar Límites + Módulos | ✅ | ❌ | ❌ | falta (definir módulos por producto) |
@@ -59,8 +59,18 @@ Los cambios de esa clave ya quedan auditados (`cambio_credenciales_admin`).
   (tabla `usuarios`, se elige la cuenta por `user_id`; se resetea con
   `User.set_password`). El panel guarda su propia auditoría; FOOD además audita
   internamente (`reset_password_owner`) y LIFE deja traza en el log.
-- **Fase 2 — Renovar / Planes.** `set_plan` ya existe en el client; falta el modal
-  y el catálogo de planes por producto (que cada app exponga sus planes).
+- **Fase 2 — Renovar / Planes (FOOD + LIFE). ✅ HECHA.**
+  - **Cambiar Plan** ya funcionaba por `set_plan`; se corrigió el desplegable del
+    modal para LIFE (mostraba los planes de SHOP: professional/enterprise). FOOD y
+    LIFE comparten catálogo real: `trial / standard / profesional`.
+  - **Renovar Suscripción**: endpoint nuevo `POST /api/admin/companies/{id}/renew`
+    en ambas apps + `renew_subscription(company_id, months)` en los clients. Mantiene
+    el plan y extiende `plan_expires_at` desde `max(hoy, vencimiento actual)`
+    (`months` × 30 días). Trial no se renueva por acá (409 → usar Cambiar Plan o
+    Extender Prueba). El botón "Renovar Suscripción" quedó des-gateado para FOOD/LIFE.
+  - Nota: el catálogo de planes hoy es **estático por producto** (definido en el
+    código de cada app). Un endpoint dinámico `GET /api/admin/plans` queda diferido
+    (los planes son idénticos entre FOOD y LIFE, no justifica aún el dinamismo).
 - **Fase 3 — Ajustar Límites + Módulos.** Definir el catálogo de módulos de cada
   software (FOOD: mozos, caja, cocina, mostrador, delivery, reservas, inventario…;
   LIFE: los suyos) y exponerlo por owner API; UI de toggles por pestaña.

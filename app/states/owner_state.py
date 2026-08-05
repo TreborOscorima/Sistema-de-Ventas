@@ -875,7 +875,7 @@ class OwnerState:
             _is_life = self.owner_active_product_tab == ProductType.LIFE
             _client = life_owner_client if _is_life else food_owner_client
             _product_label = "TUWAYKILIFE" if _is_life else "TUWAYKIFOOD"
-            if action not in ("change_status", "extend_trial", "change_plan"):
+            if action not in ("change_status", "extend_trial", "change_plan", "renew_subscription"):
                 self.owner_loading = False
                 yield rx.toast(f"Esta acción no está disponible para {_product_label}.", duration=3500)
                 return
@@ -912,6 +912,14 @@ class OwnerState:
                         after = await _client.suspend(company_id)
                     action_label = "activate" if self.owner_form_status == "active" else "suspend"
                     toast_msg = "Estado actualizado correctamente."
+                elif action == "renew_subscription":
+                    try:
+                        r_months = int(self.owner_form_subscription_months)
+                    except (ValueError, TypeError):
+                        r_months = 12
+                    after = await _client.renew_subscription(company_id, r_months)
+                    action_label = "renew_subscription"
+                    toast_msg = f"Suscripción renovada {r_months} meses."
                 else:
                     try:
                         days = int(self.owner_form_extra_days)

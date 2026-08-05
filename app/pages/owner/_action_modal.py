@@ -147,7 +147,9 @@ def _form_change_plan() -> rx.Component:
         rx.el.div(
             rx.el.label("Nuevo Plan", class_name=TYPOGRAPHY["label"]),
             rx.cond(
-                State.owner_active_product_tab == "food",
+                (State.owner_active_product_tab == "food")
+                | (State.owner_active_product_tab == "life"),
+                # FOOD y LIFE comparten el mismo catálogo: trial/standard/profesional.
                 rx.el.select(
                     rx.el.option("Prueba", value="trial"),
                     rx.el.option("Estándar", value="standard"),

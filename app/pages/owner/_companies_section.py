@@ -202,17 +202,25 @@ def _company_actions(company: rx.Var) -> rx.Component:
             ),
             tone="slate",
         ),
+        # Renovar Suscripción: disponible para SHOP, FOOD y LIFE.
+        rx.cond(
+            (State.owner_active_product_tab == "ventas")
+            | (State.owner_active_product_tab == "food")
+            | (State.owner_active_product_tab == "life"),
+            _owner_action_icon_button(
+                "calendar-check",
+                "Renovar Suscripción",
+                on_click=State.owner_open_modal(
+                    "renew_subscription", company["id"], company["name"]
+                ),
+                tone="emerald",
+            ),
+            rx.fragment(),
+        ),
+        # Ajustar Límites + Billing: por ahora solo SHOP (Fases 3 y 4).
         rx.cond(
             State.owner_active_product_tab == "ventas",
             rx.fragment(
-                _owner_action_icon_button(
-                    "calendar-check",
-                    "Renovar Suscripción",
-                    on_click=State.owner_open_modal(
-                        "renew_subscription", company["id"], company["name"]
-                    ),
-                    tone="emerald",
-                ),
                 _owner_action_icon_button(
                     "sliders-horizontal",
                     "Ajustar Límites",
