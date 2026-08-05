@@ -453,7 +453,142 @@ def _module_card(
     )
 
 
+def _dyn_module_row(m: rx.Var[dict[str, str]]) -> rx.Component:
+    """Fila de módulo del catálogo dinámico (FOOD/LIFE) con toggle."""
+    _off = m["coming_soon"] == "true"
+    return rx.el.div(
+        rx.el.div(
+            rx.el.span(m["label"], class_name="text-sm font-medium text-slate-800"),
+            rx.cond(
+                _off,
+                rx.el.span(
+                    "Próximamente",
+                    class_name=f"text-xs font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 {RADIUS['sm']}",
+                ),
+                rx.fragment(),
+            ),
+            class_name="flex items-center gap-2",
+        ),
+        rx.el.label(
+            rx.el.input(
+                type="checkbox",
+                checked=(m["habilitado"] == "true"),
+                on_change=State.owner_toggle_module(m["key"]),
+                disabled=_off,
+                class_name="sr-only peer",
+            ),
+            rx.el.div(
+                class_name=(
+                    "relative w-9 h-5 bg-slate-200 peer-focus:outline-none "
+                    f"peer-focus:ring-2 peer-focus:ring-indigo-300 {RADIUS['full']} peer "
+                    "peer-checked:after:translate-x-full peer-checked:after:border-white "
+                    "after:content-[''] after:absolute after:top-[2px] after:start-[2px] "
+                    f"after:bg-white after:border-slate-300 after:border after:{RADIUS['full']} "
+                    f"after:h-4 after:w-4 after:{TRANSITIONS['fast']} peer-checked:bg-indigo-600 "
+                    "peer-disabled:opacity-40 peer-disabled:cursor-not-allowed"
+                ),
+            ),
+            class_name="inline-flex items-center cursor-pointer flex-shrink-0",
+        ),
+        class_name=rx.cond(
+            m["habilitado"] == "true",
+            f"flex items-center justify-between p-3 border border-indigo-200 bg-indigo-50/30 {RADIUS['lg']}",
+            f"flex items-center justify-between p-3 border border-slate-200 bg-white {RADIUS['lg']}",
+        ),
+    )
+
+
+def _dyn_limit_row(l: rx.Var[dict[str, str]]) -> rx.Component:
+    """Fila de límite del catálogo dinámico (FOOD/LIFE). Vacío = sin límite."""
+    return rx.el.div(
+        rx.el.label(l["label"], class_name=TYPOGRAPHY["label"]),
+        rx.debounce_input(
+            rx.input(
+                type="number",
+                min="1",
+                placeholder="Sin límite",
+                value=l["valor"],
+                on_change=lambda v: State.owner_set_module_limit(l["key"], v),
+                class_name=INPUT_STYLES["default"],
+            ),
+            debounce_timeout=250,
+        ),
+        class_name="flex flex-col gap-1.5",
+    )
+
+
+def _form_adjust_limits_dynamic() -> rx.Component:
+    """Ajustar Límites/Módulos para FOOD/LIFE (catálogo traído del producto)."""
+    return rx.el.div(
+        rx.el.div(
+            _info_pill("Plan", State.owner_form_current_plan, "blue"),
+            _info_pill("Estado", State.owner_form_current_status, "slate"),
+            class_name="flex gap-2 flex-wrap",
+        ),
+        rx.el.div(class_name="border-t border-slate-100"),
+        rx.cond(
+            State.owner_modules_loading,
+            rx.el.div(
+                rx.icon("loader-circle", class_name="h-5 w-5 text-slate-400 animate-spin"),
+                rx.el.span("Cargando módulos...", class_name=TYPOGRAPHY["body_secondary"]),
+                class_name="flex items-center gap-2 justify-center py-6",
+            ),
+            rx.fragment(
+                # Límites
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("sliders-horizontal", class_name="h-4 w-4 text-indigo-600"),
+                        rx.el.span("Límites", class_name="text-sm font-semibold text-slate-800"),
+                        class_name="flex items-center gap-1.5",
+                    ),
+                    rx.el.p(
+                        "Deja el campo vacío para no imponer un límite.",
+                        class_name="text-xs text-slate-400 mt-0.5",
+                    ),
+                    rx.el.div(
+                        rx.foreach(State.owner_modules_limits, _dyn_limit_row),
+                        class_name="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+                rx.el.div(class_name="border-t border-slate-100"),
+                # Módulos
+                rx.el.div(
+                    rx.el.div(
+                        rx.icon("puzzle", class_name="h-4 w-4 text-indigo-600"),
+                        rx.el.span("Módulos", class_name="text-sm font-semibold text-slate-800"),
+                        class_name="flex items-center gap-1.5",
+                    ),
+                    rx.el.p(
+                        "Activa o desactiva módulos para esta empresa. Lo que definas acá "
+                        "manda sobre el plan.",
+                        class_name="text-xs text-slate-400 mt-0.5",
+                    ),
+                    rx.el.div(
+                        rx.foreach(State.owner_modules_catalog, _dyn_module_row),
+                        class_name="flex flex-col gap-2 mt-2",
+                    ),
+                    class_name="flex flex-col gap-1",
+                ),
+            ),
+        ),
+        _date_and_notes_section(),
+        rx.el.div(class_name="border-t border-slate-100"),
+        _reason_selector("adjust_limits"),
+        class_name="flex flex-col gap-4",
+    )
+
+
 def _form_adjust_limits() -> rx.Component:
+    """Dispatch: SHOP usa el form fijo; FOOD/LIFE el catálogo dinámico."""
+    return rx.cond(
+        State.owner_active_product_tab == "ventas",
+        _form_adjust_limits_shop(),
+        _form_adjust_limits_dynamic(),
+    )
+
+
+def _form_adjust_limits_shop() -> rx.Component:
     return rx.el.div(
         # Info actual
         rx.el.div(

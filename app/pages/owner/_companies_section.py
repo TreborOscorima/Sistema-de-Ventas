@@ -217,26 +217,31 @@ def _company_actions(company: rx.Var) -> rx.Component:
             ),
             rx.fragment(),
         ),
-        # Ajustar Límites + Billing: por ahora solo SHOP (Fases 3 y 4).
+        # Ajustar Límites/Módulos: disponible para SHOP, FOOD y LIFE.
+        rx.cond(
+            (State.owner_active_product_tab == "ventas")
+            | (State.owner_active_product_tab == "food")
+            | (State.owner_active_product_tab == "life"),
+            _owner_action_icon_button(
+                "sliders-horizontal",
+                "Ajustar Límites",
+                on_click=State.owner_open_modal(
+                    "adjust_limits", company["id"], company["name"]
+                ),
+                tone="slate",
+            ),
+            rx.fragment(),
+        ),
+        # Billing / Facturación: por ahora solo SHOP (Fase 4).
         rx.cond(
             State.owner_active_product_tab == "ventas",
-            rx.fragment(
-                _owner_action_icon_button(
-                    "sliders-horizontal",
-                    "Ajustar Límites",
-                    on_click=State.owner_open_modal(
-                        "adjust_limits", company["id"], company["name"]
-                    ),
-                    tone="slate",
+            _owner_action_icon_button(
+                "file-text",
+                "Billing / Facturación",
+                on_click=State.owner_open_billing_modal(
+                    company["id"], company["name"]
                 ),
-                _owner_action_icon_button(
-                    "file-text",
-                    "Billing / Facturación",
-                    on_click=State.owner_open_billing_modal(
-                        company["id"], company["name"]
-                    ),
-                    tone="indigo",
-                ),
+                tone="indigo",
             ),
             rx.fragment(),
         ),

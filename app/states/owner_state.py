@@ -302,6 +302,14 @@ class OwnerState:
     owner_form_notes: str = ""  # Notas adicionales opcionales
     owner_form_subscription_months: str = "12"  # Duración de suscripción en meses
 
+    # ─── Ajustar Límites/Módulos por producto (FOOD/LIFE, catálogo dinámico) ──
+    # Cada app expone su catálogo; el panel lo renderiza por pestaña.
+    # catálogo: [{key, label, coming_soon("true"/"false"), habilitado("true"/"false")}]
+    owner_modules_catalog: list[dict[str, str]] = []
+    # límites: [{key, label, valor}]  (valor "" = sin límite)
+    owner_modules_limits: list[dict[str, str]] = []
+    owner_modules_loading: bool = False
+
     # Info de contexto pre-cargada (solo lectura en UI)
     owner_form_current_plan: str = ""
     owner_form_current_status: str = ""
@@ -669,7 +677,7 @@ class OwnerState:
     # ─── Modal de acciones ─────────────────────────────
 
     @rx.event
-    def owner_open_modal(self, action: str, company_id: int, company_name: str):
+    async def owner_open_modal(self, action: str, company_id: int, company_name: str):
         """Abre modal para una acción sobre una empresa."""
         self.owner_modal_open = True
         self.owner_modal_action = action
@@ -719,6 +727,40 @@ class OwnerState:
                 self.owner_form_trial_ends_at = c.get("trial_ends_at", "") or ""
                 break
 
+        # FOOD/LIFE: el catálogo de módulos + límites vive en la app del producto;
+        # se trae por HTTP y se renderiza dinámicamente (SHOP usa las vars fijas).
+        self.owner_modules_catalog = []
+        self.owner_modules_limits = []
+        if action == "adjust_limits" and self.owner_active_product_tab in (
+            ProductType.FOOD, ProductType.LIFE
+        ):
+            _is_life = self.owner_active_product_tab == ProductType.LIFE
+            _client = life_owner_client if _is_life else food_owner_client
+            self.owner_modules_loading = True
+            try:
+                data = await _client.list_modules(company_id)
+                self.owner_modules_catalog = [
+                    {
+                        "key": m.get("key", ""),
+                        "label": m.get("label", ""),
+                        "coming_soon": "true" if m.get("coming_soon") else "false",
+                        "habilitado": "true" if m.get("habilitado") else "false",
+                    }
+                    for m in data.get("catalogo", [])
+                ]
+                self.owner_modules_limits = [
+                    {
+                        "key": l.get("key", ""),
+                        "label": l.get("label", ""),
+                        "valor": "" if l.get("valor") in (None, "") else str(l.get("valor")),
+                    }
+                    for l in data.get("limites", [])
+                ]
+            except (FoodOwnerClientError, LifeOwnerClientError) as e:
+                self.owner_form_error = str(e)
+            finally:
+                self.owner_modules_loading = False
+
     @rx.event
     def owner_close_modal(self):
         """Cierra el modal."""
@@ -760,6 +802,25 @@ class OwnerState:
     @rx.event
     def owner_set_form_max_branches(self, value: str | float | int):
         self.owner_form_max_branches = _normalize_non_negative_int_input(value)
+
+    @rx.event
+    def owner_toggle_module(self, key: str):
+        """Alterna un módulo del catálogo dinámico (FOOD/LIFE). Ignora 'próximamente'."""
+        nuevos = []
+        for m in self.owner_modules_catalog:
+            if m.get("key") == key and m.get("coming_soon") != "true":
+                m = {**m, "habilitado": "false" if m.get("habilitado") == "true" else "true"}
+            nuevos.append(m)
+        self.owner_modules_catalog = nuevos
+
+    @rx.event
+    def owner_set_module_limit(self, key: str, value: str | float | int):
+        """Setea un límite del catálogo dinámico (FOOD/LIFE). '' = sin límite."""
+        val = _normalize_non_negative_int_input(value)
+        self.owner_modules_limits = [
+            {**l, "valor": val} if l.get("key") == key else l
+            for l in self.owner_modules_limits
+        ]
 
     @rx.event
     def owner_set_form_has_reservations(self, value: bool):
@@ -875,7 +936,7 @@ class OwnerState:
             _is_life = self.owner_active_product_tab == ProductType.LIFE
             _client = life_owner_client if _is_life else food_owner_client
             _product_label = "TUWAYKILIFE" if _is_life else "TUWAYKIFOOD"
-            if action not in ("change_status", "extend_trial", "change_plan", "renew_subscription"):
+            if action not in ("change_status", "extend_trial", "change_plan", "renew_subscription", "adjust_limits"):
                 self.owner_loading = False
                 yield rx.toast(f"Esta acción no está disponible para {_product_label}.", duration=3500)
                 return
@@ -920,6 +981,16 @@ class OwnerState:
                     after = await _client.renew_subscription(company_id, r_months)
                     action_label = "renew_subscription"
                     toast_msg = f"Suscripción renovada {r_months} meses."
+                elif action == "adjust_limits":
+                    modulos = {
+                        m["key"]: (m.get("habilitado") == "true")
+                        for m in self.owner_modules_catalog
+                        if m.get("coming_soon") != "true"
+                    }
+                    limites = {l["key"]: l.get("valor", "") for l in self.owner_modules_limits}
+                    after = await _client.set_modules(company_id, modulos, limites, actor=actor_email)
+                    action_label = "adjust_limits"
+                    toast_msg = "Módulos y límites actualizados."
                 else:
                     try:
                         days = int(self.owner_form_extra_days)

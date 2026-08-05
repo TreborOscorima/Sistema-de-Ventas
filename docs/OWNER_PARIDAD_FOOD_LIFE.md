@@ -27,7 +27,7 @@ Acciones ricas gateadas a SHOP en `app/pages/owner/_companies_section.py`
 | Renovar / Planes | ✅ | ✅ (Fase 2) | ✅ (Fase 2) | listo |
 | Resetear Contraseña | ✅ | ✅ | ✅ | listo (Fase 1) |
 | Listar Usuarios (para reset) | ✅ | ✅ (el dueño) | ✅ (multi-usuario) | listo (Fase 1) |
-| Ajustar Límites + Módulos | ✅ | ❌ | ❌ | falta (definir módulos por producto) |
+| Ajustar Límites + Módulos | ✅ | ✅ (Fase 3) | ✅ (Fase 3) | listo |
 | Billing / Facturación | ✅ (Nubefact PE / AFIP AR) | ❌ en panel* | ❌ | falta (*FOOD ya tiene Nubefact propio) |
 | Sucursales (gestión) | ✅ | ⚠️ solo conteo | ⚠️ | a definir |
 | Sync Expirados | ✅ | ✅ | ✅ | ya existe |
@@ -71,9 +71,11 @@ Los cambios de esa clave ya quedan auditados (`cambio_credenciales_admin`).
   - Nota: el catálogo de planes hoy es **estático por producto** (definido en el
     código de cada app). Un endpoint dinámico `GET /api/admin/plans` queda diferido
     (los planes son idénticos entre FOOD y LIFE, no justifica aún el dinamismo).
-- **Fase 3 — Ajustar Límites + Módulos.** Definir el catálogo de módulos de cada
-  software (FOOD: mozos, caja, cocina, mostrador, delivery, reservas, inventario…;
-  LIFE: los suyos) y exponerlo por owner API; UI de toggles por pestaña.
+- **Fase 3 — Ajustar Límites + Módulos (FOOD + LIFE). ✅ HECHA.** Capa nueva de
+  "módulos habilitados por empresa" (tabla `*_modulos_empresa`) + límites por
+  empresa. Override del owner manda sobre el plan (FOOD) / rol (LIFE). Owner API
+  `GET/POST /modules` en cada app; modal "Ajustar Límites" dinámico por producto
+  en el panel. Ver detalle abajo.
 - **Fase 4 — Billing / Facturación por software.** Según país/integrador de cada
   producto (FOOD ya tiene su Nubefact integrador propio; ver si se centraliza o
   queda en cada app).
@@ -87,3 +89,80 @@ y se despliega. Texto de producto en **español neutro**.
 - `D:\PROYECTOS\Sistema-de-Ventas` — Owner Panel (hub, UI + clients + state).
 - `D:\PROYECTOS\Sistema-para-Food` — app FOOD (endpoints owner).
 - `D:\PROYECTOS\Sistema-Gestion-Clinica` — app LIFE (endpoints owner).
+
+---
+
+## Fase 3 — Ajustar Límites + Módulos (diseño acordado)
+
+### Cómo gatea cada app hoy (relevado)
+
+- **SHOP**: columnas `has_X_module` por empresa + `max_users`/`max_branches`.
+- **FOOD**: gatea **por plan** (`plan_service.plan_permite`), sin flags por empresa.
+  Catálogo central: `app/components/modulos.py`. Enforcement en
+  `food_state.py` (`PAGINAS_PREMIUM`), nav de staff y quick-links del dono.
+- **LIFE**: **no gatea por plan** (el plan solo controla vencimiento/login). Los
+  módulos se filtran por **rol** dentro de la clínica (`permisos_rol` →
+  `BaseState.modulos_permitidos` → sidebar). Catálogo: `services/configuracion.py`
+  (`_SYSTEM_MODULES`, 15 módulos).
+
+**Conclusión:** ni FOOD ni LIFE tienen "módulos habilitados **por empresa**". Fase 3
+crea esa capa (persistencia + enforcement + owner API + UI).
+
+### Decisiones tomadas
+
+1. **Persistencia:** tabla `*_modulos_empresa` por app `(company_id, modulo,
+   habilitado, timestamps)`. Sin migración por cada módulo nuevo. Los **límites**
+   (escalares) van como columnas en la tabla company/clinica.
+2. **Semántica:** **override total del owner** manda sobre el plan/rol. El plan
+   define el *default* inicial; una vez que el owner togglea, gana el override.
+3. **FOOD Reservas/Delivery:** se muestran en el panel como **"Próximamente"**
+   (deshabilitados) — están en el catálogo pero aún sin página.
+4. **Alcance:** módulos **+ límites** (paridad completa con SHOP).
+
+### Catálogo — FOOD
+
+- **Core (no toggleable):** Mozos, Caja, Mostrador, Cocina, Impresión, Carta,
+  Reportes (básico), Usuarios, Configuración.
+- **Toggleable:** Inventario, Promociones (+Cupones), Cuentas/Fiado (CC), Clientes,
+  Reportes avanzados.
+- **Próximamente:** Reservas, Delivery.
+- **Límites:** `max_usuarios`, `max_mesas` (defaults ya en `plan_service`), +
+  `max_sucursales` (FOOD ya es multi-sucursal).
+
+### Catálogo — LIFE
+
+- **Core (no toggleable):** Dashboard, Pacientes, Historia Clínica, Calendario,
+  Turnos, Cobro/POS, Caja, Reportes, Configuración.
+- **Toggleable:** Profesionales, Servicios, Cuentas Ctes., Compras, Inventario,
+  Promociones.
+- **Límites (nuevos, hoy LIFE no tiene):** `max_usuarios`, `max_sedes`.
+
+### Enforcement (override sobre plan/rol)
+
+- Helper `modulo_habilitado(company_id, modulo)` por app: si hay fila de override
+  → usa `habilitado`; si no → default del plan (FOOD) / true (LIFE).
+- **FOOD:** cablear el helper en `PAGINAS_PREMIUM` (gate de ruta), visibilidad de
+  nav y quick-links del dono. El límite se aplica en alta de usuarios/mesas.
+- **LIFE:** el módulo se ve si `(rol lo permite)` **AND** `(owner lo habilitó)`.
+  El límite se aplica en alta de usuarios/sedes.
+
+### Owner API por app (auth `X-Admin-Secret`)
+
+- `GET /api/admin/companies/{id}/modules` → `{catalogo:[{key,label,toggleable,
+  coming_soon,default}], habilitados:[...], limites:{...}}`.
+- `POST /api/admin/companies/{id}/modules` → `{modulos:{key:bool}, limites:{...}}`.
+
+### Panel (Sistema-de-Ventas)
+
+- `food_owner_client` / `life_owner_client`: `list_modules`, `set_modules`.
+- `owner_state`: rama FOOD/LIFE para `adjust_limits` (hoy solo SHOP).
+- `_action_modal._form_adjust_limits`: renderizar módulos + límites **por
+  producto** (hoy hardcodea los de SHOP) y des-gatear el botón "Ajustar Límites".
+
+### Orden de trabajo sugerido
+
+1. FOOD: modelo + migración tabla módulos + columnas límite → helper enforcement →
+   owner API → verificación curl.
+2. LIFE: ídem (introduce límites desde cero).
+3. Panel: clients → owner_state → modal por producto → des-gatear botón.
+4. Rebuild + verificación en vivo + commit/deploy (los 3 repos).

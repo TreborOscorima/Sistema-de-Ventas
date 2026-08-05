@@ -145,6 +145,20 @@ async def renew_subscription(company_id: int, months: int = 12) -> dict:
     return data
 
 
+async def list_modules(company_id: int) -> dict:
+    """Catálogo de módulos toggleables + límites, con su estado por clínica."""
+    return await _request("GET", f"/api/admin/companies/{company_id}/modules")
+
+
+async def set_modules(company_id: int, modulos: dict, limites: dict, actor: str = "") -> dict:
+    """Guarda el override de módulos + los límites por clínica."""
+    return await _request(
+        "POST",
+        f"/api/admin/companies/{company_id}/modules",
+        json={"modulos": modulos, "limites": limites, "actor": actor},
+    )
+
+
 async def list_users(company_id: int) -> list[dict]:
     """Cuentas de la clínica cuya contraseña se puede resetear (admin primero)."""
     data = await _request("GET", f"/api/admin/companies/{company_id}/users")
