@@ -30,8 +30,9 @@ Acciones ricas gateadas a SHOP en `app/pages/owner/_companies_section.py`
 | Ajustar Límites + Módulos | ✅ | ✅ (Fase 3) | ✅ (Fase 3) | listo |
 | Billing / Facturación | ✅ (Nubefact PE / AFIP AR) | ⛔ N/A | ⛔ N/A | no aplica: FOOD/LIFE no tienen e-invoicing |
 | Conteos usuarios/sucursales | ✅ | ✅ (Fase 5) | ✅ (Fase 5) | reales + "usados/máx" |
+| Estado efectivo (Trial Vencido) | ✅ | ✅ (fix) | ✅ (fix) | badge por fecha, igual que SHOP |
 | Gestión CRUD usuarios/sucursales | ❌ (ni SHOP) | ❌ | ❌ | tarea del admin del tenant, no del owner |
-| Sync Expirados | ✅ | ✅ | ✅ | ya existe |
+| Sync Expirados | ✅ | ⛔ oculto | ⛔ oculto | SHOP-only; FOOD/LIFE bloquean por fecha en su app |
 | Auditoría de acciones | ✅ | ✅ (el panel audita) | ✅ | ya existe |
 
 `food_owner_client` hoy: `list_companies`, `get_company_detail`, `activate`,
@@ -93,6 +94,20 @@ Los cambios de esa clave ya quedan auditados (`cambio_credenciales_admin`).
   usuarios/sedes en LIFE) + el límite efectivo; el panel muestra "usados / máx"
   (∞ cuando no hay límite) en las columnas y en el modal de Ajustar Límites.
   CRUD completo desde el panel queda **fuera de alcance** (overreach del owner).
+- **Fix post-Fase 5 — Estado efectivo "Trial Vencido" (FOOD + LIFE). ✅ HECHA.**
+  El panel mostraba "active" para empresas FOOD/LIFE con el trial ya vencido por
+  fecha, mientras SHOP calcula el estado efectivo (`owner_service._effective_status`).
+  Se replicó esa semántica del lado del panel para los productos consultados por
+  HTTP: nuevo helper `app/services/_owner_effective_status.py`
+  (`effective_status()` + parser de fechas) cableado en los normalizadores de
+  `food_owner_client` y `life_owner_client` (reemplaza un `if` muerto que dejaba
+  `effective_status = "active"` siempre). Regla, igual que SHOP: trial sin fecha o
+  con fecha pasada → `trial_expired` ("Trial Vencido"); plan de pago vencido →
+  `suspended`. Además, el botón **"Sincronizar Expirados"** se ocultó fuera de la
+  pestaña Ventas: operaba solo sobre la base de SHOP y era un no-op engañoso en
+  FOOD/LIFE (que bloquean el acceso por fecha en su propia app,
+  `suscripcion_service.evaluar_bloqueo`). Solo cambió el repo del panel; 17 tests
+  nuevos. Commit `44cdc2c`, verificado en local y en producción.
 
 Cada fase: se construye, se prueba en Docker local (rebuild + verificación en vivo)
 y se despliega. Texto de producto en **español neutro**.
