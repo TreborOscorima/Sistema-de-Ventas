@@ -76,28 +76,35 @@ def _search_bar() -> rx.Component:
             class_name="relative w-full sm:w-80",
         ),
         rx.el.div(
-            rx.el.button(
-                rx.cond(
-                    State.owner_loading,
-                    rx.icon("loader-circle", class_name="h-4 w-4 mr-1.5 animate-spin"),
-                    rx.icon("refresh-cw", class_name="h-4 w-4 mr-1.5"),
-                ),
-                "Sincronizar Expirados",
-                on_click=State.owner_sync_expired,
-                disabled=State.owner_loading,
-                class_name=rx.cond(
-                    State.owner_loading,
-                    (
-                        "inline-flex items-center justify-center w-full sm:w-auto px-3 py-1.5 text-xs font-medium "
-                        f"{RADIUS['md']} bg-orange-50/70 text-orange-500 border border-orange-200 "
-                        "cursor-not-allowed opacity-80"
+            rx.cond(
+                # Solo SHOP: la sincronización opera sobre la base del panel.
+                # FOOD/LIFE bloquean el acceso por fecha en su propia app, así
+                # que aquí sería un no-op engañoso.
+                State.owner_active_product_tab == "ventas",
+                rx.el.button(
+                    rx.cond(
+                        State.owner_loading,
+                        rx.icon("loader-circle", class_name="h-4 w-4 mr-1.5 animate-spin"),
+                        rx.icon("refresh-cw", class_name="h-4 w-4 mr-1.5"),
                     ),
-                    (
-                        "inline-flex items-center justify-center w-full sm:w-auto px-3 py-1.5 text-xs font-medium "
-                        f"{RADIUS['md']} bg-orange-50 text-orange-700 border border-orange-200 "
-                        "hover:bg-orange-100 transition-colors cursor-pointer"
+                    "Sincronizar Expirados",
+                    on_click=State.owner_sync_expired,
+                    disabled=State.owner_loading,
+                    class_name=rx.cond(
+                        State.owner_loading,
+                        (
+                            "inline-flex items-center justify-center w-full sm:w-auto px-3 py-1.5 text-xs font-medium "
+                            f"{RADIUS['md']} bg-orange-50/70 text-orange-500 border border-orange-200 "
+                            "cursor-not-allowed opacity-80"
+                        ),
+                        (
+                            "inline-flex items-center justify-center w-full sm:w-auto px-3 py-1.5 text-xs font-medium "
+                            f"{RADIUS['md']} bg-orange-50 text-orange-700 border border-orange-200 "
+                            "hover:bg-orange-100 transition-colors cursor-pointer"
+                        ),
                     ),
                 ),
+                rx.fragment(),
             ),
             rx.el.span(
                 State.owner_companies_total,

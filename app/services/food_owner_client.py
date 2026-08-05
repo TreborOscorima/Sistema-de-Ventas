@@ -12,6 +12,8 @@ import os
 
 import httpx
 
+from app.services._owner_effective_status import effective_status as _effective_status
+
 logger = logging.getLogger(__name__)
 
 FOOD_API_TIMEOUT_SECONDS = 10
@@ -35,10 +37,13 @@ def _normalize_food_company(raw: dict) -> dict:
     (_company_row / _company_mobile_card) -- con placeholders seguros para
     los campos que Food no tiene (planes, módulos, usuarios/sucursales)."""
     plan = raw.get("plan") or "trial"
-    is_trial = plan == "trial"
     status = "active" if raw.get("is_active") else "suspended"
-    if is_trial and raw.get("trial_ends_at"):
-        status = "active" if raw.get("is_active") else "suspended"
+    effective = _effective_status(
+        plan=plan,
+        is_active=bool(raw.get("is_active")),
+        trial_ends_at=raw.get("trial_ends_at"),
+        plan_expires_at=raw.get("plan_expires_at"),
+    )
     return {
         "id": raw.get("id"),
         "name": raw.get("name", ""),
@@ -48,7 +53,7 @@ def _normalize_food_company(raw: dict) -> dict:
         "plan_type": plan,
         "plan": plan,
         "subscription_status": status,
-        "effective_status": status,
+        "effective_status": effective,
         "current_users": raw.get("current_users", 0),
         "max_users": raw.get("max_usuarios", 0),
         "current_branches": raw.get("current_sucursales", 0),
