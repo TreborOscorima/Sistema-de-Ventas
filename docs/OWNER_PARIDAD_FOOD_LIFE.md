@@ -28,8 +28,9 @@ Acciones ricas gateadas a SHOP en `app/pages/owner/_companies_section.py`
 | Resetear Contraseña | ✅ | ✅ | ✅ | listo (Fase 1) |
 | Listar Usuarios (para reset) | ✅ | ✅ (el dueño) | ✅ (multi-usuario) | listo (Fase 1) |
 | Ajustar Límites + Módulos | ✅ | ✅ (Fase 3) | ✅ (Fase 3) | listo |
-| Billing / Facturación | ✅ (Nubefact PE / AFIP AR) | ❌ en panel* | ❌ | falta (*FOOD ya tiene Nubefact propio) |
-| Sucursales (gestión) | ✅ | ⚠️ solo conteo | ⚠️ | a definir |
+| Billing / Facturación | ✅ (Nubefact PE / AFIP AR) | ⛔ N/A | ⛔ N/A | no aplica: FOOD/LIFE no tienen e-invoicing |
+| Conteos usuarios/sucursales | ✅ | ✅ (Fase 5) | ✅ (Fase 5) | reales + "usados/máx" |
+| Gestión CRUD usuarios/sucursales | ❌ (ni SHOP) | ❌ | ❌ | tarea del admin del tenant, no del owner |
 | Sync Expirados | ✅ | ✅ | ✅ | ya existe |
 | Auditoría de acciones | ✅ | ✅ (el panel audita) | ✅ | ya existe |
 
@@ -76,10 +77,22 @@ Los cambios de esa clave ya quedan auditados (`cambio_credenciales_admin`).
   empresa. Override del owner manda sobre el plan (FOOD) / rol (LIFE). Owner API
   `GET/POST /modules` en cada app; modal "Ajustar Límites" dinámico por producto
   en el panel. Ver detalle abajo.
-- **Fase 4 — Billing / Facturación por software.** Según país/integrador de cada
-  producto (FOOD ya tiene su Nubefact integrador propio; ver si se centraliza o
-  queda en cada app).
-- **Fase 5 — Usuarios / Sucursales.** Gestión (no solo conteo) si aplica a cada producto.
+- **Fase 4 — Billing / Facturación. ⛔ NO APLICA (relevado).** El Billing de SHOP
+  es facturación electrónica real (Nubefact/SUNAT PE + AFIP AR: `afip_wsaa.py`,
+  `afip_wsfe.py`, `billing_service.py`, certificados/tokens). **FOOD y LIFE no
+  tienen e-invoicing** (verificado por grep: cero nubefact/sunat/afip/emisión).
+  FOOD solo imprime un ticket interno (RUC + IGV en `ConfigImpresora`); LIFE solo
+  guarda `documento_fiscal`/`direccion_fiscal`. No hay integración que el panel
+  pueda configurar. Construir e-invoicing en cada app es una feature de producto
+  aparte, no paridad de panel. Billing queda **SHOP-only**.
+- **Fase 5 — Usuarios / Sucursales. ✅ HECHA (reframe).** SHOP **no** gestiona
+  usuarios/sucursales desde el panel (solo conteos + límites + reset) — la "gestión"
+  del roadmap no existe en ningún producto; es tarea del admin del propio tenant.
+  Lo único real: FOOD/LIFE reportaban conteos **hardcodeados** (0 usuarios / 1
+  sucursal). Ahora reportan conteos reales (usuarios/mesas/sucursales en FOOD;
+  usuarios/sedes en LIFE) + el límite efectivo; el panel muestra "usados / máx"
+  (∞ cuando no hay límite) en las columnas y en el modal de Ajustar Límites.
+  CRUD completo desde el panel queda **fuera de alcance** (overreach del owner).
 
 Cada fase: se construye, se prueba en Docker local (rebuild + verificación en vivo)
 y se despliega. Texto de producto en **español neutro**.

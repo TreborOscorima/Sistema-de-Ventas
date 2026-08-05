@@ -176,6 +176,17 @@ def _company_modules(company: rx.Var) -> rx.Component:
     )
 
 
+def _usage_span(current: rx.Var, maximo: rx.Var) -> rx.Component:
+    """Muestra "usados / máx". Cuando el máximo es 0 (ilimitado) muestra ∞."""
+    maximo_int = maximo.to(int)
+    return rx.el.span(
+        current,
+        " / ",
+        rx.cond(maximo_int > 0, maximo_int.to_string(), "∞"),
+        class_name="text-sm text-slate-700 tabular-nums",
+    )
+
+
 def _company_actions(company: rx.Var) -> rx.Component:
     return rx.el.div(
         _owner_action_icon_button(
@@ -290,21 +301,11 @@ def _company_row(company: rx.Var) -> rx.Component:
         rx.el.td(_plan_badge(company["plan_type"]), class_name="px-4 py-3"),
         rx.el.td(_status_badge(company["effective_status"]), class_name="px-4 py-3"),
         rx.el.td(
-            rx.el.span(
-                company["current_users"],
-                "/",
-                company["max_users"],
-                class_name="text-sm text-slate-700 tabular-nums",
-            ),
+            _usage_span(company["current_users"], company["max_users"]),
             class_name="px-4 py-3",
         ),
         rx.el.td(
-            rx.el.span(
-                company["current_branches"],
-                "/",
-                company["max_branches"],
-                class_name="text-sm text-slate-700 tabular-nums",
-            ),
+            _usage_span(company["current_branches"], company["max_branches"]),
             class_name="px-4 py-3",
         ),
         rx.el.td(_company_due_value(company), class_name="px-4 py-3"),
@@ -352,22 +353,12 @@ def _company_mobile_card(company: rx.Var) -> rx.Component:
             ),
             rx.el.div(
                 rx.el.span("Usuarios", class_name="text-xs text-slate-400 uppercase tracking-wide"),
-                rx.el.span(
-                    company["current_users"],
-                    "/",
-                    company["max_users"],
-                    class_name="text-sm text-slate-700 tabular-nums",
-                ),
+                _usage_span(company["current_users"], company["max_users"]),
                 class_name="flex flex-col gap-1",
             ),
             rx.el.div(
                 rx.el.span("Sucursales", class_name="text-xs text-slate-400 uppercase tracking-wide"),
-                rx.el.span(
-                    company["current_branches"],
-                    "/",
-                    company["max_branches"],
-                    class_name="text-sm text-slate-700 tabular-nums",
-                ),
+                _usage_span(company["current_branches"], company["max_branches"]),
                 class_name="flex flex-col gap-1",
             ),
             rx.el.div(

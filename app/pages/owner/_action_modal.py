@@ -501,7 +501,14 @@ def _dyn_module_row(m: rx.Var[dict[str, str]]) -> rx.Component:
 def _dyn_limit_row(l: rx.Var[dict[str, str]]) -> rx.Component:
     """Fila de límite del catálogo dinámico (FOOD/LIFE). Vacío = sin límite."""
     return rx.el.div(
-        rx.el.label(l["label"], class_name=TYPOGRAPHY["label"]),
+        rx.el.div(
+            rx.el.label(l["label"], class_name=TYPOGRAPHY["label"]),
+            rx.el.span(
+                l["usados"] + " en uso",
+                class_name="text-xs text-slate-400",
+            ),
+            class_name="flex items-baseline justify-between gap-2",
+        ),
         rx.debounce_input(
             rx.input(
                 type="number",

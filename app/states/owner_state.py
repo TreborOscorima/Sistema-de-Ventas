@@ -753,6 +753,7 @@ class OwnerState:
                         "key": l.get("key", ""),
                         "label": l.get("label", ""),
                         "valor": "" if l.get("valor") in (None, "") else str(l.get("valor")),
+                        "usados": str(l.get("usados", 0)),
                     }
                     for l in data.get("limites", [])
                 ]
