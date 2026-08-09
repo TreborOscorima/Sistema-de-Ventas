@@ -116,6 +116,18 @@ config = rx.Config(
         rx.plugins.TailwindV3Plugin(
             config={
                 "plugins": ["@tailwindcss/typography@0.5.19"],
+                # Reflex 0.9.x compila los componentes compartidos (header, layout, etc.)
+                # a `.web/app_components/**`, que NO está en el content-glob por defecto
+                # (`./app/**`, `./utils/**`). Sin esto, las clases usadas SOLO en esos
+                # componentes (p. ej. `md:inline-flex` de los CTA Ingresar/Registro del
+                # header de la landing) no se generan y quedan ocultas. Al pasar `content`
+                # explícito reemplazamos el default, así que incluimos todo el set.
+                "content": [
+                    "./app/**/*.{js,ts,jsx,tsx}",
+                    "./app_components/**/*.{js,ts,jsx,tsx}",
+                    "./components/**/*.{js,ts,jsx,tsx}",
+                    "./utils/**/*.{js,ts,jsx,tsx}",
+                ],
                 "theme": {
                     "extend": {
                         "fontFamily": {
