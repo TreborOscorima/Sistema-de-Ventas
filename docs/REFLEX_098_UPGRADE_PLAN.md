@@ -538,13 +538,22 @@ Todas secuenciales. FASE 8 puede correr en paralelo a FASE 9 (es solo verificaci
 
 ```
 Fecha última sesión: 2026-08-09 (FASE 1-6 completas + E2E 5/5 + fix venv)
-Última fase completada: FASE 6 COMPLETA — E2E 5/5 PASS (rendering + hidratacion + ws round-trip + auth-guard)
-   commits 3f286a4 (upgrade) + 70a2247 (doc) en rama chore/reflex-0.9.8; venv shims regenerados a D:
+Última fase completada: FASE 6 COMPLETA — E2E publico 5/5 + E2E AUTENTICADO Docker 0.9.8 20/20
+   (login real + dashboard/recharts + 17 modulos, contra tuwayki_sys reconstruido en 3001)
+   commits 3f286a4 (upgrade) + 70a2247 + ed6b577 (docs) en rama chore/reflex-0.9.8
 Próxima acción: FASE 7 (merge+push, lo hace Trebor) → 9/10 (deploy ordenado, SHOP último)
-   Pendiente opcional: E2E autenticado profundo (test 5 del suite) requiere E2E_USER/PASSWORD (login real)
-Resultado E2E (runner standalone, frontend 3010 / backend 8000):
-   [PASS] backend /api/ping=pong  [PASS] login renderiza  [PASS] login invalido->error (ws round-trip)
+   Nota: tuwayki_sys ya corre 0.9.8 local; landing/admin quedan en imagen vieja hasta el deploy completo
+Resultado E2E publico (runner standalone dev, frontend 3010):
+   [PASS] /api/ping  [PASS] login renderiza  [PASS] login invalido->error (ws round-trip)
    [PASS] /venta sin auth->login  [PASS] /caja sin auth->login   => 5/5
+Resultado E2E AUTENTICADO (Docker 0.9.8 real, single-origin localhost:3001, DB real):
+   [PASS] login admin  [PASS] dashboard recharts OK (6 charts)
+   [PASS] 17 modulos autenticados sin errores de consola:
+     venta, caja, inventario, ingreso, compras, reposicion, clientes, cuentas,
+     historial, reportes, servicios, presupuestos, documentos-fiscales,
+     configuracion, listas-precios, etiquetas, promociones   => 20/20
+   NOTA: tuwayki_sys (3001) quedo corriendo la imagen 0.9.8; landing/admin siguen en
+   la imagen vieja hasta que se reconstruya el stack completo en el deploy real.
 Hash de rollback: cef73ab5a4c2ed0b8eb1dd981ec307018104e853
 Resultado FASE 1-5:
   - Reflex 0.9.8 + radix 0.9.7 instalado; pip check OK; reflex compile OK (74 pág, 134s)
