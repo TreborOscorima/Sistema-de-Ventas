@@ -91,7 +91,7 @@ def _totp_verification_form() -> rx.Component:
                     class_name="mb-6",
                 ),
                 rx.el.button(
-                    rx.icon("check-circle", class_name="h-4 w-4"),
+                    rx.icon("circle-check", class_name="h-4 w-4"),
                     "Verificar",
                     type="submit",
                     class_name=f"w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 text-white font-medium {RADIUS['lg']} hover:bg-slate-700 {TRANSITIONS['fast']}",
