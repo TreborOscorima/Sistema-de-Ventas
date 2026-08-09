@@ -228,7 +228,7 @@ def _product_card_ventas() -> rx.Component:
             ),
             rx.el.p(
                 "Punto de venta, inventario, caja, reservas y reportes en una sola plataforma. "
-                "Para tiendas, canchas, talleres y negocios multi-sucursal.",
+                "Para tiendas, canchas, ferreterías y negocios multi-sucursal.",
                 class_name="mt-4 text-sm leading-relaxed text-slate-600",
             ),
             rx.el.div(
@@ -251,7 +251,7 @@ def _product_card_ventas() -> rx.Component:
             ),
             class_name="flex h-full flex-col p-8 sm:p-10",
         ),
-        href=_site_href("/ventas"),
+        href=_site_href("/shop"),
         on_click=rx.call_script(_track_event_script("click_product_ventas", "home_selector")),
         class_name=(
             "group block rounded-3xl border-2 border-slate-200 bg-white "
@@ -566,7 +566,7 @@ def _home_footer() -> rx.Component:
                 rx.el.div(
                     _footer_col(
                         "Productos",
-                        _footer_link("TUWAYKISHOP — Ventas", _site_href("/ventas")),
+                        _footer_link("TUWAYKISHOP — Ventas", _site_href("/shop")),
                         _footer_link("TUWAYKIFOOD — Restobares", _site_href("/food")),
                     ),
                     _footer_col(

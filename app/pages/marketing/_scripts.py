@@ -52,9 +52,9 @@ def _jsonld_ventas_app() -> dict:
         "description": (
             "TUWAYKISHOP es el sistema de ventas de TUWAYKIAPP: punto de venta, "
             "inventario, caja, reservas y reportes en una sola plataforma. Para "
-            "tiendas, canchas, talleres y negocios multi-sucursal."
+            "tiendas, canchas, ferreterías y negocios multi-sucursal."
         ),
-        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/ventas/",
+        "url": f"{PUBLIC_SITE_URL or 'https://tuwayki.app'}/shop/",
         "publisher": {
             "@type": "Organization",
             "name": "TUWAYKIAPP",
@@ -153,7 +153,7 @@ def ventas_jsonld_components() -> list[rx.Component]:
         _jsonld_script(_jsonld_faq(FAQ_ITEMS)),
         _jsonld_script(_jsonld_breadcrumbs([
             ("Inicio", f"{base}/"),
-            ("Sistema de Ventas", f"{base}/ventas/"),
+            ("Sistema de Ventas", f"{base}/shop/"),
         ])),
     ]
 
@@ -210,7 +210,7 @@ def home_jsonld_components() -> list[rx.Component]:
                     "@type": "ListItem",
                     "position": 1,
                     "name": "TUWAYKISHOP — Sistema de Ventas",
-                    "url": f"{base}/ventas/",
+                    "url": f"{base}/shop/",
                 },
                 {
                     "@type": "ListItem",

@@ -709,7 +709,7 @@ class QuotationState(MixinState):
     @rx.event
     @require_permission("create_ventas")
     async def convert_quotation_to_cart(self, quotation_id: int):
-        """Carga los ítems del presupuesto en el carrito POS y redirige a /ventas.
+        """Carga los ítems del presupuesto en el carrito POS y redirige a /venta.
 
         Al confirmar la venta, confirm_sale() llama a mark_converted() para
         vincular el presupuesto a la sale resultante.
