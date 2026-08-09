@@ -515,7 +515,7 @@ git push origin HEAD:main HEAD:docker-deploy-prod
 | 2 | 3 | `requirements.txt` | `pip freeze` completo contamina la lista curada de producción con dev-deps (pytest, playwright, pandas…). | Restaurar original y editar solo las 12 líneas de Reflex a mano. | ✅ Resuelto |
 | 3 | 4 | `app/pages/owner/_page.py:94` | Icono `check-circle` inválido en lucide 1.0.3 → caía a `circle_help`. | Cambiado a `circle-check` (nombre válido, coherente con el resto). | ✅ Corregido |
 | 4 | — | `.claude/launch.json` | 4 `runtimeExecutable` con ruta vieja `C:\...\Sistema-de-Ventas\.venv`. | Reemplazadas por `D:\PROYECTOS\...`. (Archivo local, no trackeado.) | ✅ Corregido |
-| 5 | 6 | Smoke websocket (dev) | Round-trip interactivo no confirmado en puertos alternos (3010/8010, porque Docker ocupa 3000): desajuste de origen/`api_url`. | Artefacto de puertos, NO del upgrade. Rendering + backend + eventos `page_init` OK. Validación interactiva real = Docker (FASE 9/10) o `reflex run` en 3000/8000. | ⚪ Artefacto |
+| 5 | 6 | Smoke websocket (dev) | "Connection Error" en pruebas manuales → parecía fallo de ws en puertos alternos. | **RESUELTO**: era el token viejo en `localStorage` (navegador manual reutilizado). Playwright con navegador limpio → ws round-trip OK. `/_event` sí se proxea en 3010. | ✅ Resuelto |
 | — | 1/5 | `tests/test_e2e.py` (×4) | Fallan por Playwright sin navegador/servidor. **Pre-existente** (mismo fallo antes y después del upgrade). | N/A — infra, no del upgrade. | ⚪ Baseline |
 | — | — | core editable local | `import tuwayki_core` resuelve a `D:\PROYECTOS\tuwayki-core` (repo canónico), no a `_vendor/`. Docker usa `_vendor`; CI usa git SHA. | Solo dato — sin acción. | ℹ️ Nota |
 
@@ -537,11 +537,14 @@ Todas secuenciales. FASE 8 puede correr en paralelo a FASE 9 (es solo verificaci
 ## Dónde quedamos (actualizar al final de cada sesión)
 
 ```
-Fecha última sesión: 2026-08-09 (FASE 1-5 + commit + smoke parcial + fix venv)
-Última fase completada: FASE 6 parcial (rendering OK; interactivo pendiente de puertos/login)
-   commit 3f286a4 en rama chore/reflex-0.9.8; venv shims regenerados a D:
-Próxima acción: FASE 6 interactivo (Trebor libera 3000 + login) o directo a FASE 7
-   FASE 7 (merge+push, lo hace Trebor) → 9/10 (deploy ordenado, SHOP último)
+Fecha última sesión: 2026-08-09 (FASE 1-6 completas + E2E 5/5 + fix venv)
+Última fase completada: FASE 6 COMPLETA — E2E 5/5 PASS (rendering + hidratacion + ws round-trip + auth-guard)
+   commits 3f286a4 (upgrade) + 70a2247 (doc) en rama chore/reflex-0.9.8; venv shims regenerados a D:
+Próxima acción: FASE 7 (merge+push, lo hace Trebor) → 9/10 (deploy ordenado, SHOP último)
+   Pendiente opcional: E2E autenticado profundo (test 5 del suite) requiere E2E_USER/PASSWORD (login real)
+Resultado E2E (runner standalone, frontend 3010 / backend 8000):
+   [PASS] backend /api/ping=pong  [PASS] login renderiza  [PASS] login invalido->error (ws round-trip)
+   [PASS] /venta sin auth->login  [PASS] /caja sin auth->login   => 5/5
 Hash de rollback: cef73ab5a4c2ed0b8eb1dd981ec307018104e853
 Resultado FASE 1-5:
   - Reflex 0.9.8 + radix 0.9.7 instalado; pip check OK; reflex compile OK (74 pág, 134s)
