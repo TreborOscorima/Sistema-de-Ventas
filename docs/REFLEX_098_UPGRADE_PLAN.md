@@ -542,7 +542,7 @@ Fecha última sesión: 2026-08-09 (FASE 1-6 completas + E2E 5/5 + fix venv)
    (login real + dashboard/recharts + 17 modulos, contra tuwayki_sys reconstruido en 3001)
    commits 3f286a4 (upgrade) + 70a2247 + ed6b577 (docs) en rama chore/reflex-0.9.8
 Próxima acción: FASE 7 (merge+push, lo hace Trebor) → 9/10 (deploy ordenado, SHOP último)
-   Nota: tuwayki_sys ya corre 0.9.8 local; landing/admin quedan en imagen vieja hasta el deploy completo
+   Stack SHOP local 100% en 0.9.8 (landing+sys+admin healthy, reflex 0.9.8 verificado en los 3)
 Resultado E2E publico (runner standalone dev, frontend 3010):
    [PASS] /api/ping  [PASS] login renderiza  [PASS] login invalido->error (ws round-trip)
    [PASS] /venta sin auth->login  [PASS] /caja sin auth->login   => 5/5
@@ -552,8 +552,8 @@ Resultado E2E AUTENTICADO (Docker 0.9.8 real, single-origin localhost:3001, DB r
      venta, caja, inventario, ingreso, compras, reposicion, clientes, cuentas,
      historial, reportes, servicios, presupuestos, documentos-fiscales,
      configuracion, listas-precios, etiquetas, promociones   => 20/20
-   NOTA: tuwayki_sys (3001) quedo corriendo la imagen 0.9.8; landing/admin siguen en
-   la imagen vieja hasta que se reconstruya el stack completo en el deploy real.
+   STACK LOCAL COMPLETO EN 0.9.8: landing(3000)+sys(3001)+admin(3002) reconstruidos y
+   healthy, los 3 con reflex 0.9.8 verificado. /api/ping=200 en los 3. mysql/redis intactos.
 Hash de rollback: cef73ab5a4c2ed0b8eb1dd981ec307018104e853
 Resultado FASE 1-5:
   - Reflex 0.9.8 + radix 0.9.7 instalado; pip check OK; reflex compile OK (74 pág, 134s)
