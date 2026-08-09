@@ -511,10 +511,13 @@ git push origin HEAD:main HEAD:docker-deploy-prod
 
 | # | Fase | Archivo/Componente | Síntoma | Fix aplicado | Estado |
 |---|---|---|---|---|---|
-| 1 | 1 | venv (`pip.exe`/`reflex.exe`) | Shims `.exe` rotos (exit 1) por venv creado en ruta vieja `C:\...` y proyecto movido a `D:\`. | Usar `.venv\Scripts\python.exe -m <tool>` (inmune a relocalización). | ✅ Workaround |
+| 1 | 1 | venv (`pip.exe`/`reflex.exe`) | Shims `.exe` rotos (exit 1) por venv creado en ruta vieja `C:\...` y proyecto movido a `D:\`. | **Regenerados** con `pip install --force-reinstall --no-deps <pkg>` (reescribe el `.exe` con ruta D:). alembic revertido a pin 1.18.4 tras el reinstall. Los 4 shims (pip/reflex/pytest/alembic) OK desde D:. | ✅ Resuelto |
 | 2 | 3 | `requirements.txt` | `pip freeze` completo contamina la lista curada de producción con dev-deps (pytest, playwright, pandas…). | Restaurar original y editar solo las 12 líneas de Reflex a mano. | ✅ Resuelto |
 | 3 | 4 | `app/pages/owner/_page.py:94` | Icono `check-circle` inválido en lucide 1.0.3 → caía a `circle_help`. | Cambiado a `circle-check` (nombre válido, coherente con el resto). | ✅ Corregido |
+| 4 | — | `.claude/launch.json` | 4 `runtimeExecutable` con ruta vieja `C:\...\Sistema-de-Ventas\.venv`. | Reemplazadas por `D:\PROYECTOS\...`. (Archivo local, no trackeado.) | ✅ Corregido |
+| 5 | 6 | Smoke websocket (dev) | Round-trip interactivo no confirmado en puertos alternos (3010/8010, porque Docker ocupa 3000): desajuste de origen/`api_url`. | Artefacto de puertos, NO del upgrade. Rendering + backend + eventos `page_init` OK. Validación interactiva real = Docker (FASE 9/10) o `reflex run` en 3000/8000. | ⚪ Artefacto |
 | — | 1/5 | `tests/test_e2e.py` (×4) | Fallan por Playwright sin navegador/servidor. **Pre-existente** (mismo fallo antes y después del upgrade). | N/A — infra, no del upgrade. | ⚪ Baseline |
+| — | — | core editable local | `import tuwayki_core` resuelve a `D:\PROYECTOS\tuwayki-core` (repo canónico), no a `_vendor/`. Docker usa `_vendor`; CI usa git SHA. | Solo dato — sin acción. | ℹ️ Nota |
 
 ---
 
@@ -534,11 +537,17 @@ Todas secuenciales. FASE 8 puede correr en paralelo a FASE 9 (es solo verificaci
 ## Dónde quedamos (actualizar al final de cada sesión)
 
 ```
-Fecha última sesión: 2026-08-09 (creación del plan)
-Última fase completada: NINGUNA — documento recién creado
-Próxima acción: FASE 1 — snapshot + tests línea base
-   (pero en el orden de FLOTA, SHOP va ÚLTIMO: primero FOOD, luego LIFE)
-Hash de rollback: (pendiente FASE 1.1)
+Fecha última sesión: 2026-08-09 (FASE 1-5 + commit + smoke parcial + fix venv)
+Última fase completada: FASE 6 parcial (rendering OK; interactivo pendiente de puertos/login)
+   commit 3f286a4 en rama chore/reflex-0.9.8; venv shims regenerados a D:
+Próxima acción: FASE 6 interactivo (Trebor libera 3000 + login) o directo a FASE 7
+   FASE 7 (merge+push, lo hace Trebor) → 9/10 (deploy ordenado, SHOP último)
+Hash de rollback: cef73ab5a4c2ed0b8eb1dd981ec307018104e853
+Resultado FASE 1-5:
+  - Reflex 0.9.8 + radix 0.9.7 instalado; pip check OK; reflex compile OK (74 pág, 134s)
+  - pytest: 1274 passed, 1 skipped, 4 failed (e2e Playwright, pre-existentes por infra)
+  - Fix aplicado: icono check-circle->circle-check (owner/_page.py). Ver Incidencias.
+  - venv: usar `python -m <tool>` (shims .exe rotos por relocalización C:->D:)
 Notas:
   - ROLLOUT DE FLOTA en 3 sesiones paralelas. Orden: core → FOOD → LIFE → SHOP → deploy.
     Plan maestro en Sistema-para-Food/PLAN_ACTUALIZACION_REFLEX.md
