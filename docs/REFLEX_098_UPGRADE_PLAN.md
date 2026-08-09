@@ -516,6 +516,8 @@ git push origin HEAD:main HEAD:docker-deploy-prod
 | 3 | 4 | `app/pages/owner/_page.py:94` | Icono `check-circle` inválido en lucide 1.0.3 → caía a `circle_help`. | Cambiado a `circle-check` (nombre válido, coherente con el resto). | ✅ Corregido |
 | 4 | — | `.claude/launch.json` | 4 `runtimeExecutable` con ruta vieja `C:\...\Sistema-de-Ventas\.venv`. | Reemplazadas por `D:\PROYECTOS\...`. (Archivo local, no trackeado.) | ✅ Corregido |
 | 5 | 6 | Smoke websocket (dev) | "Connection Error" en pruebas manuales → parecía fallo de ws en puertos alternos. | **RESUELTO**: era el token viejo en `localStorage` (navegador manual reutilizado). Playwright con navegador limpio → ws round-trip OK. `/_event` sí se proxea en 3010. | ✅ Resuelto |
+| 6 | 6 | `rxconfig.py` — TailwindV3Plugin (content-glob) | **REGRESIÓN 0.9.x**: los botones "Ingresar/Registro" del header de la landing (`/shop`, `/food`, `/life`) quedaban `display:none` en desktop. Causa: Reflex 0.9.x compila los componentes compartidos a `.web/app_components/**`, dir que NO está en el content-glob por defecto (`./app/**`, `./utils/**`). La clase `md:inline-flex` usada SOLO en el header nunca se generaba en el CSS. | Se pasa `content` explícito incluyendo `./app_components/**` y `./components/**`. Verificado: `md\:inline-flex` ahora sí en el CSS y los 3 detail-pages muestran login+registro en desktop. Menú móvil (details/summary) ya funcionaba. Commit `67fe7ee`. | ✅ Corregido |
+| — | 8 | **FLOTA**: FOOD y LIFE | La incidencia #6 es del build 0.9.x compartido → **FOOD y LIFE muy probablemente tienen el mismo content-glob incompleto**. Si usan clases responsivas SOLO en componentes de `app_components/`, quedarán ocultas. | Cada sesión debe añadir `./app_components/**` (y `./components/**`) al `content` de su `TailwindV3Plugin` y rebuildear. **Pendiente de coordinar.** | ⚠️ A verificar en FOOD/LIFE |
 | — | 1/5 | `tests/test_e2e.py` (×4) | Fallan por Playwright sin navegador/servidor. **Pre-existente** (mismo fallo antes y después del upgrade). | N/A — infra, no del upgrade. | ⚪ Baseline |
 | — | — | core editable local | `import tuwayki_core` resuelve a `D:\PROYECTOS\tuwayki-core` (repo canónico), no a `_vendor/`. Docker usa `_vendor`; CI usa git SHA. | Solo dato — sin acción. | ℹ️ Nota |
 
@@ -537,12 +539,17 @@ Todas secuenciales. FASE 8 puede correr en paralelo a FASE 9 (es solo verificaci
 ## Dónde quedamos (actualizar al final de cada sesión)
 
 ```
-Fecha última sesión: 2026-08-09 (FASE 1-6 completas + E2E 5/5 + fix venv)
-Última fase completada: FASE 6 COMPLETA — E2E publico 5/5 + E2E AUTENTICADO Docker 0.9.8 20/20
-   (login real + dashboard/recharts + 17 modulos, contra tuwayki_sys reconstruido en 3001)
-   commits 3f286a4 (upgrade) + 70a2247 + ed6b577 (docs) en rama chore/reflex-0.9.8
+Fecha última sesión: 2026-08-09 (FASE 1-6 + E2E END-TO-END total 3 servicios + fix landing #6)
+Última fase completada: FASE 6 COMPLETA — E2E END-TO-END de TODO el stack SHOP en 0.9.8:
+   - Landing(3000): publico, hidratación OK, /shop /food /life muestran login+registro (fix #6)
+   - Sys(3001): login real + dashboard(6 recharts) + 17 módulos autenticados => 20/20
+   - Admin/Owner(3002): login owner + 4 secciones + 7 empresas + modales abren/cierran => 11/11
+   - Interactivo Sys: búsqueda, combobox, modal "Ver desglose", reportes (5 rangos + generar) OK
+   - 0 errores de consola en los 3 servicios. Overlays/modales (motivo del upgrade) confirmados.
+   commits 3f286a4 + 70a2247 + ed6b577 + 84ca1ec + 9fb46bc + 67fe7ee (fix landing) en chore/reflex-0.9.8
 Próxima acción: FASE 7 (merge+push, lo hace Trebor) → 9/10 (deploy ordenado, SHOP último)
    Stack SHOP local 100% en 0.9.8 (landing+sys+admin healthy, reflex 0.9.8 verificado en los 3)
+   PENDIENTE FLOTA: avisar a FOOD/LIFE del fix #6 (content-glob app_components) — ver Incidencias
 Resultado E2E publico (runner standalone dev, frontend 3010):
    [PASS] /api/ping  [PASS] login renderiza  [PASS] login invalido->error (ws round-trip)
    [PASS] /venta sin auth->login  [PASS] /caja sin auth->login   => 5/5
