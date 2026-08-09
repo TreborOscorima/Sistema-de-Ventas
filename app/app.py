@@ -589,21 +589,21 @@ def _register_landing_routes():
     app.add_page(
         page_terminos,
         route="/terminos",
-        title="TUWAYKIAPP | Términos y Condiciones",
+        title="TUWAYKIAPP | Términos y condiciones",
         description="Términos y condiciones de uso de TUWAYKIAPP.",
         meta=_landing_meta(f"{PUBLIC_SITE_URL}/terminos/", indexable=_legal_indexable),
     )
     app.add_page(
         page_privacidad,
         route="/privacidad",
-        title="TUWAYKIAPP | Política de Privacidad",
+        title="TUWAYKIAPP | Política de privacidad",
         description="Política de privacidad de TUWAYKIAPP.",
         meta=_landing_meta(f"{PUBLIC_SITE_URL}/privacidad/", indexable=_legal_indexable),
     )
     app.add_page(
         page_cookies,
         route="/cookies",
-        title="TUWAYKIAPP | Política de Cookies",
+        title="TUWAYKIAPP | Política de cookies",
         description="Política de cookies de TUWAYKIAPP.",
         meta=_landing_meta(f"{PUBLIC_SITE_URL}/cookies/", indexable=_legal_indexable),
     )
@@ -625,12 +625,12 @@ def _register_app_routes():
     _add_private_page(
         page_periodo_prueba_finalizado,
         route="/periodo-prueba-finalizado",
-        title="TUWAYKISHOP | Periodo de Prueba Finalizado",
+        title="TUWAYKISHOP | Periodo de prueba finalizado",
     )
     _add_private_page(
         page_cuenta_suspendida,
         route="/cuenta-suspendida",
-        title="TUWAYKISHOP | Cuenta Suspendida",
+        title="TUWAYKISHOP | Cuenta suspendida",
     )
     _add_private_page(
         page_registro,
@@ -642,7 +642,7 @@ def _register_app_routes():
     _add_private_page(
         page_ingreso,
         route="/ingreso",
-        title="TUWAYKISHOP | Compras e Ingresos",
+        title="TUWAYKISHOP | Compras e ingresos",
         on_load=State.page_init_ingreso,
     )
     _add_private_page(
@@ -654,7 +654,7 @@ def _register_app_routes():
     _add_private_page(
         page_reposicion,
         route="/reposicion",
-        title="TUWAYKISHOP | Órdenes de Compra",
+        title="TUWAYKISHOP | Órdenes de compra",
         on_load=State.page_init_reposicion,
     )
     _add_private_page(
@@ -666,7 +666,7 @@ def _register_app_routes():
     _add_private_page(
         page_caja,
         route="/caja",
-        title="TUWAYKISHOP | Gestión de Caja",
+        title="TUWAYKISHOP | Gestión de caja",
         on_load=State.page_init_caja,
     )
     _add_private_page(
@@ -678,7 +678,7 @@ def _register_app_routes():
     _add_private_page(
         page_cuentas,
         route="/cuentas",
-        title="TUWAYKISHOP | Cuentas Corrientes",
+        title="TUWAYKISHOP | Cuentas corrientes",
         on_load=State.page_init_cuentas,
     )
     _add_private_page(
@@ -726,7 +726,7 @@ def _register_app_routes():
     _add_private_page(
         page_documentos_fiscales,
         route="/documentos-fiscales",
-        title="TUWAYKISHOP | Documentos Fiscales",
+        title="TUWAYKISHOP | Documentos fiscales",
         on_load=State.page_init_documentos_fiscales,
     )
     _add_private_page(
@@ -744,7 +744,7 @@ def _register_app_routes():
     _add_private_page(
         page_listas_precios,
         route="/listas-precios",
-        title="TUWAYKISHOP | Listas de Precios",
+        title="TUWAYKISHOP | Listas de precios",
         on_load=State.page_init_listas_precios,
     )
     _add_private_page(
