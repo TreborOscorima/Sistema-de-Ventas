@@ -582,6 +582,16 @@ Notas:
 
 ---
 
+## Deuda técnica / follow-ups (post-0.9.8, NO bloquean el rollout)
+
+| # | Tema | Detalle | Decisión sugerida |
+|---|---|---|---|
+| DT-1 | **Unificar plugin de Tailwind → v4** | Inconsistencia de flota: **SHOP usa `TailwindV3Plugin`**, **FOOD y LIFE usan `TailwindV4Plugin`**. La versión de Reflex sí quedó alineada (0.9.8); el plugin de Tailwind no. No bloquea nada (los 3 andan al 100%). | **Iniciativa separada, DESPUÉS de que 0.9.8 esté en prod.** Rama propia por sistema, migrar SHOP v3→v4, y **E2E visual completo** (riesgo de regresión de estilos en toda la app). No mezclar con este upgrade de versión. Unificar hacia v4 (donde ya están 2 de 3). |
+| DT-2 | **Drift de SHA de `tuwayki-core`** | SHOP CI `@ef852f2` vs FOOD `@64850c8`; LIFE sin `_vendor`. Pre-existente, higiene aparte. | Re-pinnear los 3 al mismo SHA canónico de forma coordinada, en su propia tarea. |
+| DT-3 | **content-glob `app_components`** | Regresión 0.9.x ya **corregida en los 3** (SHOP `67fe7ee` real; LIFE `9b80fbf` y FOOD `f9bb1be` como blindaje). Ver [Incidencias](#registro-de-incidencias) #6. | Cerrado. Solo queda que FOOD/LIFE incluyan su commit en el merge y no lo dupliquen. |
+
+---
+
 ## Referencia rápida
 
 ```powershell
